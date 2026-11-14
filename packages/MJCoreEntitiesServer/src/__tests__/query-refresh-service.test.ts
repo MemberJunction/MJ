@@ -17,6 +17,9 @@ import { QueryRefreshUnavailableMessage, UserCanRefreshQueries, UserCanSeeQueryS
 import type { QueryRefreshProvider } from '../custom/query-refresh/refreshTypes';
 import type { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
 import type { ChildRowWriteSummary, QueryExtractionResult } from '../custom/query-extraction';
+import { ExpectedConsole } from './helpers/expected-console';
+
+ExpectedConsole.Install([/^\[QueryExtractionService\] refresh of query \"Top Customers\" failed: (a child-row write failed|the refresh of query \"Top Customers\" could not be saved)$/]);
 
 /** A test double: the members a test gives, typed as the whole interface. */
 function double<T>(value: Partial<T>): T {

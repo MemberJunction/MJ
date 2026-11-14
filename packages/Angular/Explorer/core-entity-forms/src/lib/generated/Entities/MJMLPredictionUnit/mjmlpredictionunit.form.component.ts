@@ -24,7 +24,8 @@ export class MJMLPredictionUnitFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJMLPredictionUnits', sectionName: 'ML Prediction Units', isExpanded: false },
             { sectionKey: 'mJMLTrainingSnapshots', sectionName: 'ML Training Snapshots', isExpanded: false },
-            { sectionKey: 'mJMLTrainingPipelines', sectionName: 'ML Training Pipelines', isExpanded: false }
+            { sectionKey: 'mJMLTrainingPipelines', sectionName: 'ML Training Pipelines', isExpanded: false },
+            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false }
         ]);
     }
 }

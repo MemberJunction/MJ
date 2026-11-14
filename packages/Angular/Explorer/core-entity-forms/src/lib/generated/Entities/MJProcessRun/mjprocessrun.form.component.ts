@@ -23,7 +23,8 @@ export class MJProcessRunFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
-            { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false }
+            { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
+            { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false }
         ]);
     }
 }

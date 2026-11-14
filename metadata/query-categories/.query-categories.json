@@ -118,5 +118,16 @@
       "lastModified": "2026-04-11T22:21:09.550Z",
       "checksum": "dbe0cc1ccebcec6e1b3c3baaf7f80199f029d71bf0bbca156bf2be526437c1ec"
     }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio",
+      "ParentID": "@lookup:MJ: Query Categories.Name=MJ",
+      "Description": "Predictive Studio queries for the model lifecycle gate: the publish locks and model version allocation run inside the gate's transaction.",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "1FCA9C31-3AD9-4725-AD70-8BD3201EB674"
+    }
   }
 ]

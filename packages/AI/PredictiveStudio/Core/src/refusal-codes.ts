@@ -26,6 +26,12 @@ const REFUSAL_CODES = [
   'BUDGET_EXCEEDED',
   /** A pipeline that declares a time index is bound to a protocol whose holdout does not respect time (seeded-random). */
   'TIME_HOLDOUT_REQUIRED',
+  /** A model's registered artifact file has no row or no stored object, so it cannot score (`artifact-missing`). */
+  'ARTIFACT_MISSING',
+  /** A model's stored artifact bytes do not hash to its registered `ArtifactSha256` (`artifact-hash-mismatch`). */
+  'ARTIFACT_HASH_MISMATCH',
+  /** A model row has no registered `ArtifactSha256`, so its artifact cannot be verified and is not served (`artifact-unverified`). */
+  'ARTIFACT_UNVERIFIED',
 ] as const;
 
 /** Why a Train or Score request was refused. */

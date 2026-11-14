@@ -15,6 +15,7 @@ import type { BaselineSpec, Budgets, CalibrationMethod, Interval, MetricKey, Met
 import type { GateDecision, PairedComparison } from './gate';
 import type {
   CandidateSpec,
+  CodeVersion,
   LeakageFlag,
   SliceResult,
   StoredTrainerResult,
@@ -239,6 +240,14 @@ export class TrainerResultSchemas {
   public static readonly IncumbentDiff: z.ZodType<NonNullable<TrainerCompleted['incumbentDiff']>> = incumbentDiff;
   /** The gate's decision. */
   public static readonly GateDecision: z.ZodType<GateDecision> = z.discriminatedUnion('outcome', [gateModel, gateKeepSimple, gateNoSignal]);
+  /** A gate decision that ships the model. */
+  public static readonly GateModel: z.ZodType<Extract<GateDecision, { readonly outcome: 'model' }>> = gateModel;
+  /** A gate decision that keeps the best simple baseline. */
+  public static readonly GateKeepSimple: z.ZodType<Extract<GateDecision, { readonly outcome: 'keep-simple-baseline' }>> = gateKeepSimple;
+  /** A gate decision that ships nothing. */
+  public static readonly GateNoSignal: z.ZodType<Extract<GateDecision, { readonly outcome: 'no-signal' }>> = gateNoSignal;
+  /** The code a run executed. */
+  public static readonly CodeVersion: z.ZodType<CodeVersion> = codeVersion;
   /** One leakage-audit finding. */
   public static readonly LeakageFlag: z.ZodType<LeakageFlag> = leakageFlag;
   /** The primary score on one slice. */

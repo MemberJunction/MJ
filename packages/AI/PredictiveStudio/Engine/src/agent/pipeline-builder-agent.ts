@@ -17,7 +17,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import { ImportanceDisplay, EvaluationLineage, TrustVerdicts, type GateOutcome, type ModelingPlanSpec, type OutcomeTitleText, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
+import { ImportanceDisplay, EvaluationLineage, TrustVerdicts, type Actor, type GateOutcome, type ModelingPlanSpec, type OutcomeTitleText, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioPipelineBuilder, type BuildGateDecision, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
 export type { MLLeaderboardEntryPayload };
@@ -33,11 +33,12 @@ export interface PredictiveStudioBuildOutcome {
   headline?: string;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   published: boolean;
   /**
-   * True when the model stays in Draft only because this build does not publish: it clears the bar, so the user may ask
-   * for it to be published (Promote ML Model, Draft → Validated → Published).
+   * True when the model is not published only because this build does not publish: it clears the bar (kept in Draft, or
+   * evaluated to Validated or KeepBaseline through the lifecycle gate), so the user may ask for it to be published
+   * (Promote ML Model: `evaluate` for a Draft model, then `publish`).
    */
   readyToPublish: boolean;
-  /** When not published, the plain reason (the stored gate decision's reason, leakage, a calibration hold, kept in Draft, or the promotion gate's refusal); else null. */
+  /** When not published, the plain reason (the stored gate decision's reason, leakage, a calibration hold, kept in Draft, evaluated, or the lifecycle gate's refusal); else null. */
   heldReason: string | null;
   /** A clean error message when the build failed; else null. */
   errorMessage: string | null;
@@ -134,7 +135,7 @@ export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
   if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
   // a published build always carries its verdict's title (only a verdict that lets a user act on it publishes)
   if (o.published) return `Done — I built and published your prediction (${o.trustTitle}). It's now in your Predictions.${warningText}`;
-  if (o.readyToPublish) return `Done — I built and trained your prediction (${o.trustTitle}). It is in Draft and clears the bar to publish; it is published only when you ask.${warningText}`;
+  if (o.readyToPublish) return `Done — I built and trained your prediction (${o.trustTitle}). It clears the bar to publish; it is published only when you ask.${warningText}`;
   const heldMessage = o.heldReason
     ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
     : 'it needs review before it can be published.';
@@ -368,7 +369,8 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     let result: BuildPredictionResult;
     try {
       const autoPublish = PredictiveStudioPipelineBuilderAgent.AutoPublishOf(params);
-      result = await this.createBuilder().Build({ spec: PredictiveStudioPipelineBuilderAgent.PlanOf(payload), provider, user, autoPublish });
+      const initiator: Actor = this.AgentRun ? { kind: 'agent', agentRunId: this.AgentRun.ID } : { kind: 'human', userId: user.ID };
+      result = await this.createBuilder().Build({ spec: PredictiveStudioPipelineBuilderAgent.PlanOf(payload), provider, user, autoPublish, initiator });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilderAgent: build threw: ${errorMessage}`);

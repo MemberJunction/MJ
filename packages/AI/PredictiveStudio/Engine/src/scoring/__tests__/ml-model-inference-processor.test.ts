@@ -22,7 +22,8 @@ import {
   MatrixToFeatureRows,
   type MLInferenceResultPayload,
 } from '../ml-model-inference-processor';
-import { ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../model-readiness';
+import { ArtifactUnavailableError, ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../model-readiness';
+import { SnapshotHash } from '../../snapshot/snapshot-hash';
 import { InMemoryArtifactLoader } from '../artifact-loader';
 import type { MJRecordProcessEntity_IRecordProcessChallengerConfig } from '@memberjunction/core-entities';
 import {
@@ -30,7 +31,7 @@ import {
   type ShadowFeatureValueAuditRecord,
   type ShadowScoreEnvelope,
 } from '../shadow-scoring';
-import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../types';
+import type { ArtifactBytesRead, IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../types';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import { TrainingEngine } from '../../training/training-engine';
 import { TrainingRefusedError } from '../../training/training-refusal';
@@ -80,6 +81,20 @@ class FakeMLModel {
   public PipelineID = 'pipe-members';
   public Status: MJMLModelEntity['Status'] = 'Published';
   public ArtifactFileID: string | null = 'file-1';
+  /** The registered SHA-256 of the bytes `buildDeps` stores under `file-1`. */
+  public ArtifactSha256: string | null = SnapshotHash.Sha256Hex(new TextEncoder().encode('fake-model-bytes'));
+  public ArtifactStatus: MJMLModelEntity['ArtifactStatus'] = 'verified';
+  public ArtifactCheckedAt: Date | null = null;
+  /** What each `Save()` call saw: the status and artifact status it wrote. */
+  public Saves: Array<{ Status: MJMLModelEntity['Status']; ArtifactStatus: MJMLModelEntity['ArtifactStatus'] }> = [];
+  /** When set, `Save()` fails and `LatestResult.CompleteMessage` carries this message. */
+  public SaveFailure: string | null = null;
+  public LatestResult: { CompleteMessage: string } | null = null;
+  public async Save(): Promise<boolean> {
+    this.Saves.push({ Status: this.Status, ArtifactStatus: this.ArtifactStatus });
+    this.LatestResult = this.SaveFailure === null ? null : { CompleteMessage: this.SaveFailure };
+    return this.SaveFailure === null;
+  }
   public FittedPreprocessing: string | null = JSON.stringify(FROZEN_PREPROCESSING);
   public FeatureSchema = JSON.stringify(FROZEN_SCHEMA);
   public ProblemType: 'classification' | 'regression' = 'classification';
@@ -364,9 +379,9 @@ describe('MLModelInferenceProcessor — lifecycle status gate', () => {
       const { deps, sidecar } = buildDeps(model);
       let artifactLoads = 0;
       deps.artifactLoader = {
-        async load(): Promise<Uint8Array | null> {
+        async load(): Promise<ArtifactBytesRead> {
           artifactLoads++;
-          return new Uint8Array([1, 2, 3]);
+          return { Kind: 'read', Bytes: new Uint8Array([1, 2, 3]) };
         },
       };
       const processor = buildProcessor(deps);
@@ -432,6 +447,104 @@ describe('MLModelInferenceProcessor — lifecycle status gate', () => {
 // Models trained on a Prediction Unit: assembled as of each row's decision date by the same assembler as training.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// The artifact is loaded through the registry: only a verified load scores (S7.1).
+// ---------------------------------------------------------------------------
+
+describe('MLModelInferenceProcessor — verified artifact load', () => {
+  const otherBytes = new TextEncoder().encode('bytes of another model');
+
+  it('refuses scoring with the artifact refusal and records the artifact status', async () => {
+    const savedModel = new FakeMLModel();
+    const { deps, sidecar, artifacts } = buildDeps(savedModel);
+    artifacts.Set('file-1', otherBytes);
+    const processor = buildProcessor(deps);
+    await expect(processor.Preflight(CTX)).rejects.toMatchObject({ Refusal: { kind: 'artifact-hash-mismatch' } });
+    expect(savedModel.ArtifactStatus).toBe('hash-mismatch');
+    expect(savedModel.ArtifactCheckedAt).toBeInstanceOf(Date);
+    // The save changed the artifact status only; the lifecycle status is the gate's to write.
+    expect(savedModel.Saves).toEqual([{ Status: 'Published', ArtifactStatus: 'hash-mismatch' }]);
+    expect(sidecar.Requests).toHaveLength(0);
+  });
+
+  it('names both hashes in the refusal, and the model, its file and both hashes in its message', async () => {
+    const model = new FakeMLModel();
+    const { deps, artifacts } = buildDeps(model);
+    artifacts.Set('file-1', otherBytes);
+    const refusal = { kind: 'artifact-hash-mismatch', expected: model.ArtifactSha256, actual: SnapshotHash.Sha256Hex(otherBytes) };
+    const attempt = buildProcessor(deps).Preflight(CTX);
+    await expect(attempt).rejects.toBeInstanceOf(ArtifactUnavailableError);
+    await expect(attempt).rejects.toMatchObject({ Refusal: refusal, Source: 'MLModelInferenceProcessor', ModelID: 'model-1', FileID: 'file-1' });
+    await expect(attempt).rejects.toThrow(
+      `MLModelInferenceProcessor: ML Model 'model-1': its stored model artifact file 'file-1' does not match its registered SHA-256 ` +
+        `(registered ${model.ArtifactSha256}, stored bytes hash to ${SnapshotHash.Sha256Hex(otherBytes)})`,
+    );
+  });
+
+  it('names the model and its file in the missing and unverified messages', async () => {
+    const lost = new FakeMLModel();
+    lost.ArtifactFileID = 'file-gone';
+    await expect(buildProcessor(buildDeps(lost).deps).Preflight(CTX)).rejects.toThrow(
+      "MLModelInferenceProcessor: ML Model 'model-1': its model artifact file 'file-gone' is missing from storage",
+    );
+    const unregistered = new FakeMLModel();
+    unregistered.ArtifactSha256 = null;
+    await expect(buildProcessor(buildDeps(unregistered).deps).Preflight(CTX)).rejects.toThrow(
+      "MLModelInferenceProcessor: ML Model 'model-1' has no registered artifact SHA-256 for its artifact file 'file-1'",
+    );
+  });
+
+  it('refuses a model whose artifact object is gone as artifact-missing with its file, and records missing', async () => {
+    const model = new FakeMLModel();
+    model.ArtifactFileID = 'file-gone';
+    const { deps, sidecar } = buildDeps(model);
+    await expect(buildProcessor(deps).Preflight(CTX)).rejects.toMatchObject({ Refusal: { kind: 'artifact-missing', fileId: 'file-gone' } });
+    expect(model.ArtifactStatus).toBe('missing');
+    expect(sidecar.Requests).toHaveLength(0);
+  });
+
+  it('refuses a model with no registered hash as artifact-unverified, and records unverified', async () => {
+    const model = new FakeMLModel();
+    model.ArtifactSha256 = null;
+    const { deps } = buildDeps(model);
+    await expect(buildProcessor(deps).Preflight(CTX)).rejects.toMatchObject({ Refusal: { kind: 'artifact-unverified', modelId: 'model-1' } });
+    expect(model.ArtifactStatus).toBe('unverified');
+  });
+
+  it('fails every record of a model whose artifact does not verify, without calling the sidecar', async () => {
+    const model = new FakeMLModel();
+    const { deps, sidecar, artifacts } = buildDeps(model);
+    artifacts.Set('file-1', otherBytes);
+    const errors = ConsoleCapture.Errors();
+    const results = await buildProcessor(deps).ProcessBatch([memberRecord('a', 3, 1, 'NYC')], CTX);
+    expect(results.map((r) => r.Status)).toEqual(['Failed']);
+    expect(results[0].ErrorMessage).toContain('does not match its registered SHA-256');
+    expect(sidecar.Requests).toHaveLength(0);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining('MLModelInferenceProcessor: batch scoring failed:')]);
+  });
+
+  it('logs a failed artifact-status save with its CompleteMessage and still refuses with the artifact refusal', async () => {
+    const model = new FakeMLModel();
+    model.SaveFailure = 'permission denied on MJ: ML Models';
+    const { deps, artifacts } = buildDeps(model);
+    artifacts.Set('file-1', otherBytes);
+    const errors = ConsoleCapture.Errors();
+    await expect(buildProcessor(deps).Preflight(CTX)).rejects.toMatchObject({ Refusal: { kind: 'artifact-hash-mismatch' } });
+    expect(ConsoleCapture.Lines(errors)).toEqual([
+      expect.stringContaining("recording ArtifactStatus 'hash-mismatch' on ML Model 'model-1' failed: permission denied on MJ: ML Models"),
+    ]);
+  });
+
+  it('scores a verified artifact without writing the model row', async () => {
+    const model = new FakeMLModel();
+    const { deps } = buildDeps(model);
+    const processor = buildProcessor(deps);
+    await processor.Preflight(CTX);
+    expect((await processor.ProcessBatch([memberRecord('a', 3, 1, 'NYC')], CTX))[0].Status).toBe('Succeeded');
+    expect(model.Saves).toEqual([]);
+  });
+});
+
 describe('MLModelInferenceProcessor — Prediction Unit models', () => {
   const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
   const entityIDs: Record<string, string> = { Years: UnitYearsWorld.YearsEntity.ID, People: UnitYearsWorld.PeopleEntity.ID };
@@ -460,7 +573,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     const unused = async (): Promise<never> => { throw new Error('not used by assembly'); };
     return {
       entityFactory: { getEntityObject: unused },
-      recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, resolveAlgorithmIDForDriver: async () => null },
+      recordLoader: { loadPipeline: async () => pipeline, resolveAlgorithmIDForDriver: async () => null },
       artifactStore: { save: unused, delete: unused, AssertWritable: unused },
       contextUser: user,
       provider,
@@ -726,7 +839,7 @@ describe('MLModelInferenceProcessor — a fixed decision date that advances each
     const unused = async (): Promise<never> => { throw new Error('not used by assembly'); };
     const deps: TrainingDeps = {
       entityFactory: { getEntityObject: unused },
-      recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, resolveAlgorithmIDForDriver: async () => null },
+      recordLoader: { loadPipeline: async () => pipeline, resolveAlgorithmIDForDriver: async () => null },
       artifactStore: { save: unused, delete: unused, AssertWritable: unused },
       contextUser: user, provider, predictionUnits: units, assemblyMetadata: metadata, dataAccess,
       now: () => new Date(`${TRAIN_DAY}T09:00:00Z`),
@@ -1056,7 +1169,7 @@ describe('MLModelInferenceProcessor — shadow scoring integration (D3, D10, D13
     deps.sidecar = {
       predict: async (req: PredictRequest): Promise<PredictResponse> => {
         await new Promise((r) => setTimeout(r, 80));
-        return { predictions: (req.rows ?? []).map(() => ({ score: 0.75, class: 'renew' })) };
+        return { predictions: (req.rows ?? []).map(() => ({ score: 0.75, class: 'renew', probabilities: null })), classOrder: null };
       },
     };
 
@@ -1258,6 +1371,7 @@ describe('MLModelInferenceProcessor — shadow scoring integration (D3, D10, D13
       },
     };
 
+    const errors = ConsoleCapture.Errors();
     const championResult = await proc.ProcessRecord(
       {
         EntityID: 'ent-members',
@@ -1273,6 +1387,9 @@ describe('MLModelInferenceProcessor — shadow scoring integration (D3, D10, D13
     expect(payload.class).toBe('renew');
 
     await shadowCoordinator.FlushInFlight();
+    expect(ConsoleCapture.Lines(errors)).toEqual([
+      "ShadowScoringCoordinator: challenger failed for record 'mem-real-1' (model='model-challenger-2'): SHADOW_TIMEOUT: Challenger exceeded MaxLatencyMs (20ms)",
+    ]);
 
     // Challenger timed out and was recorded as Role = 'Challenger'
     expect(auditRecords).toHaveLength(1);

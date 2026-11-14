@@ -48,7 +48,10 @@ vi.mock('../custom/approvalStamp', () => ({
 
 import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
 import { SyncParameters } from '../custom/query-extraction/sync';
-import { MJQueryParameterEntity as ParameterClass, MJQueryFieldEntity as FieldClass, MJQueryEntityEntity as QueryEntityClass } from '@memberjunction/core-entities';
+import { MJQueryParameterEntity as ParameterClass, MJQueryFieldEntity as FieldClass, MJQueryEntityEntity as QueryEntityClass, QueryEngine } from '@memberjunction/core-entities';
+import { ExpectedConsole } from './helpers/expected-console';
+
+ExpectedConsole.Install([]);
 
 // ─── Metadata fixture ──────────────────────────────────────────────────────
 
@@ -181,6 +184,8 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+    // The query engine is not loaded through a database here; saving reads its (stubbed) queries without loading it.
+    vi.spyOn(QueryEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
     // Re-applied per test: the shared vitest config restores mocks after each one.
     vi.spyOn(BaseEntity.prototype, 'CheckPermissions').mockReturnValue(true);
     opLog = [];

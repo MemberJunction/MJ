@@ -224,7 +224,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (499 classes)
+// @memberjunction/core-entities (504 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -552,8 +552,12 @@ import {
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -718,6 +722,7 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -1209,7 +1214,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (84 classes)
+// @memberjunction/core-entities-server (85 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1261,6 +1266,7 @@ import {
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLEvaluationProtocolEntityServer,
+    MJMLModelPublishRecordEntityServer,
     MJMLPredictionUnitEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMLTrainingSnapshotEntityServer,
@@ -1956,19 +1962,23 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
-    MJMagicLinkInviteAllowedDomainEntity,
-    MJMagicLinkInviteAllowedPathEntity,
-    MJMagicLinkInviteApplicationEntity,
-    MJMagicLinkInviteEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMagicLinkInviteAllowedDomainEntity,
+    MJMagicLinkInviteAllowedPathEntity,
+    MJMagicLinkInviteApplicationEntity,
+    MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
     MJMaterializedResultEntity,
@@ -2126,6 +2136,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -2164,15 +2175,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ApolloGetListAccountsAction,
     ApolloGetListContactsAction,
     ApolloGetListsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     ApolloMoveListAccountsAction,
     ApolloMoveListContactsAction,
     ApolloSearchPeopleAction,
     CreateBusinessCentralJournalEntryAction,
     CreateJournalEntryAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     CreateQuickBooksJournalEntryAction,
     GetAccountBalancesAction,
     GetBusinessCentralAccountBalancesAction,
@@ -2368,15 +2379,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
     DocumentToolLibrary,
@@ -2521,6 +2532,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLEvaluationProtocolEntityServer,
+    MJMLModelPublishRecordEntityServer,
     MJMLPredictionUnitEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMLTrainingSnapshotEntityServer,
@@ -2571,16 +2583,16 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
     ConfigureAgentUserPolicyAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     CopyObjectAction,
     CreateDirectoryAction,
     CreateDocumentAction,
@@ -2775,16 +2787,16 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
     MJWorkQueueMessageEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     MJWorkQueueSubscriptionEntityServer,
     MJWorkQueueTopicEntityServer,
     MJWorkQueueTransportEntityServer,
     WorkQueueDiscardDeliveryServerOperation,
     WorkQueueGetBacklogServerOperation,
     WorkQueueGetSubscriptionStatsServerOperation,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     WorkQueueListDeadLettersServerOperation,
     WorkQueueListPartitionsServerOperation,
     WorkQueueReplayDeadLetterServerOperation,
@@ -2807,7 +2819,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1205;
+export const CLASS_REGISTRATIONS_COUNT = 1211;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

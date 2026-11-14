@@ -3,7 +3,7 @@ import {
   type MJMLModelEntity,
   type MJMLTrainingRunEntity,
   PredictiveStudioPromoteModelOperation,
-  type PredictiveStudioModelTargetStatus,
+  type PredictiveStudioModelTransition,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, SafeJSONParse, type UUIDMap } from '@memberjunction/global';
 import { TrustVerdicts, type ModelMetrics } from '@memberjunction/predictive-studio-core';
@@ -66,6 +66,8 @@ export class HarnessModels {
       Algorithm: algoDriver,
       Status: m.Status,
       TrainingRowCount: m.TrainingRowCount,
+      ArtifactStatus: m.ArtifactStatus,
+      ArtifactSha256: m.ArtifactSha256,
       HoldoutRowCount: HarnessModels.parseHoldoutRowCount(m.Lineage),
       Metrics: HarnessModels.parseMetrics(m.Metrics),
       HoldoutMetrics: HarnessModels.parseMetrics(m.HoldoutMetrics),
@@ -152,29 +154,28 @@ export class HarnessModels {
     return modelsRes.Results.map((m) => HarnessModels.toCandidateModel(m, runsByModelID.Get(m.ID), algosByID));
   }
 
-  /** Promote a model via `PredictiveStudio.PromoteModel` and return whether it transitioned and its status after. */
+  /**
+   * Apply one lifecycle transition via `PredictiveStudio.PromoteModel` and report whether the gate applied it, the
+   * model's status after it (read from the model row, a typed source) and the gate's refusal. An operation error (an
+   * input the operation refuses, a gate that throws) is thrown with its message.
+   */
   public static async Promote(
     ctx: RunContext,
     modelId: string,
-    target: PredictiveStudioModelTargetStatus,
+    transition: PredictiveStudioModelTransition,
     reason: string,
   ): Promise<PromoteAttempt> {
     const r = await new PredictiveStudioPromoteModelOperation().Execute(
-      { modelId, targetStatus: target, reason },
+      { modelId, transition, reason },
       { provider: ctx.Provider, user: ctx.User },
     );
-    // A promotion that applied leaves the model at the target status (the operation's documented contract); any other
-    // outcome reads the status from the model itself, so the status always comes from a typed source.
-    if (r.Success && r.Output?.promoted) {
-      return { Promoted: true, Status: target };
+    if (!r.Success || !r.Output) {
+      throw new Error(`PromoteModel ${transition} of ML Model ${modelId} failed: ${r.ErrorMessage || 'no message'}`);
     }
     const m = await ctx.Provider.GetEntityObject<MJMLModelEntity>('MJ: ML Models', ctx.User);
     if (!(await m.Load(modelId))) {
-      throw new Error(`ML Model ${modelId} not found after Promote: ${r.ErrorMessage || 'no message'}`);
+      throw new Error(`ML Model ${modelId} not found after PromoteModel ${transition}`);
     }
-    return {
-      Promoted: false,
-      Status: m.Status,
-    };
+    return { Applied: r.Output.applied, Status: m.Status, Refusal: r.Output.refusal || null };
   }
 }

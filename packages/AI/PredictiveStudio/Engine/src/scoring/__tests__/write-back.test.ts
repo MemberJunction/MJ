@@ -15,6 +15,7 @@ import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../type
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult } from '../../feature-assembly';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import { SnapshotHash } from '../../snapshot/snapshot-hash';
 
 /** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
 const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
@@ -47,6 +48,8 @@ class FakeMLModel {
   public ID = 'model-1';
   public Status: MJMLModelEntity['Status'] = 'Published';
   public ArtifactFileID: string | null = 'file-1';
+  /** The registered SHA-256 of the bytes `buildInner` stores under `file-1`. */
+  public ArtifactSha256: string | null = SnapshotHash.Sha256Hex(new TextEncoder().encode('bytes'));
   public FittedPreprocessing: string | null = JSON.stringify({});
   public FeatureSchema = JSON.stringify(FROZEN_SCHEMA);
   public ProblemType: 'classification' | 'regression' = 'classification';

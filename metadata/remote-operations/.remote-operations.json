@@ -327,7 +327,7 @@
       "Name": "Promote ML Model",
       "OperationKey": "PredictiveStudio.PromoteModel",
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
-      "Description": "Transition an MJ: ML Models row through its lifecycle (Validated / Published / Archived). Enforces the leakage sign-off gate — a model flagged for possible target leakage cannot be promoted unless signOff=true. Lifecycle-only: never edits metrics or artifact, only Status. Returns whether the model was promoted and its new status. Delegates to the ProductionModelPromotionGate in @memberjunction/predictive-studio-engine.",
+      "Description": "Apply one lifecycle transition to an MJ: ML Models row through the Predictive Studio lifecycle gate: evaluate (Draft to Validated or KeepBaseline from the training run's stored gate decision), publish (Validated or KeepBaseline to Published, re-verified from the stored rows, with the publish record written), archive (to Archived, reason required) or rollback (Archived to Published for a model published before, reason required). A leakage-flagged model is published only with an approving sign-off record (signOffId). The caller is the initiator; an interactive user is recorded as the approver. Returns whether the transition was applied, the model's status, and the gate's refusal when it was not. Delegates to LifecycleGate in @memberjunction/predictive-studio-engine.",
       "InputTypeName": "PredictiveStudioPromoteModelInput",
       "InputTypeDefinition": "@file:types/predictive-studio-promote-model.input.ts",
       "InputTypeIsArray": false,

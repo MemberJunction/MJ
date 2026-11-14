@@ -1,49 +1,63 @@
 import { describe, it, expect } from 'vitest';
 import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import type { UserInfo } from '@memberjunction/core';
+import type { Actor, PairedComparison, TransitionRefusal } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioPromoteModelAction } from '../promote-model.action';
-import type {
-  IModelPromotionGate,
-  PromoteModelRequest,
-  PromoteModelOutcome,
-} from '../promote-model.action';
-import { ProductionModelPromotionGate } from '../promote-model.gate';
+import { LifecycleGate } from '../../registry/lifecycle-gate';
+import type { EvaluateOutcome, EvaluateSubject, GateApplyResult, GateContext, PublishOutcome, PublishRequest } from '../../registry/gate-context';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
- * Unit tests for the Promote ML Model action + its leakage sign-off gate. NO live
- * DB. Two layers are covered:
- *
- * 1. The ACTION (with a mock gate): param validation (ModelID + TargetStatus),
- *    correctly-mapped delegation, and outcome→result mapping — including the
- *    leakage-refusal mapping.
- * 2. The GATE itself (with its `loadModel` / `resolveThreshold` seams overridden):
- *    the real sign-off enforcement — refuses a leakage-flagged model without
- *    sign-off, allows it WITH sign-off, and transitions lifecycle-only.
+ * Unit tests for the Promote ML Model action over the lifecycle gate. NO live DB: the gate is a `LifecycleGate` fake
+ * injected through `CreateLifecycleGate`. Covered: param validation (`ModelID`, `Transition`, before any gate call), the
+ * transition → gate method mapping with `Reason`, and every gate outcome → result code. The gate's own refusals are
+ * pinned by `registry/__tests__/lifecycle-gate.test.ts`.
  */
 
-// ---------------------------------------------------------------------------
-// Layer 1 — the action, with a captured-call mock gate.
-// ---------------------------------------------------------------------------
+const M = '6F1C2B3A-0000-4000-8000-0000000000A1';
+const OLD = '6F1C2B3A-0000-4000-8000-0000000000A0';
+const comparison: PairedComparison = { value: -0.01, ci: [-0.03, 0.01], beats: false };
+const USER = { ID: '6F1C2B3A-0000-4000-8000-0000000000F1', Email: 'test@example.com' } as UserInfo;
 
-class MockGate implements IModelPromotionGate {
-  public LastRequest: PromoteModelRequest | null = null;
-  public CallCount = 0;
-  constructor(private readonly outcome: PromoteModelOutcome) {}
-  public async promote(request: PromoteModelRequest): Promise<PromoteModelOutcome> {
-    this.CallCount++;
-    this.LastRequest = request;
-    return this.outcome;
+/** One gate call the fake saw: the method, the model, and the purpose (Publish) or reason (Archive). */
+type GateCall = readonly [method: 'Evaluate' | 'Publish' | 'Archive', modelId: string, detail?: string | null];
+
+/** A gate fake that records every call and applies it, or refuses it with `refusal`, or throws from Publish. */
+class FakeGate extends LifecycleGate {
+  public readonly Calls: GateCall[] = [];
+  constructor(private readonly refusal: TransitionRefusal | null, private readonly publishThrows: string | null = null) {
+    super();
+  }
+  public override async Evaluate(subject: EvaluateSubject, _actor: Actor, _ctx: GateContext): Promise<EvaluateOutcome> {
+    const modelId = 'modelId' in subject ? subject.modelId : subject.trainingRunId;
+    this.Calls.push(['Evaluate', modelId]);
+    return this.refusal === null ? { Kind: 'evaluated', ModelID: modelId, From: 'Draft', To: 'Validated' } : { Kind: 'refused', Refusal: this.refusal };
+  }
+  public override async Publish(request: PublishRequest, _ctx: GateContext): Promise<PublishOutcome> {
+    this.Calls.push(['Publish', request.modelId, request.purpose]);
+    if (this.publishThrows !== null) throw new Error(this.publishThrows);
+    if (this.refusal === null) return { Kind: 'published', ModelID: request.modelId, PublishRecordID: 'R1', Replaces: null, Approver: 'user' };
+    return { Kind: 'withheld', ModelID: request.modelId, Status: 'Validated', Refusal: this.refusal, Transient: false, RefusalRecordID: 'R2' };
+  }
+  public override async Archive(modelId: string, reason: string, _actor: Actor, _ctx: GateContext): Promise<GateApplyResult> {
+    this.Calls.push(['Archive', modelId, reason]);
+    return this.refusal === null ? { Ok: true, ModelID: modelId, From: 'Validated', To: 'Archived', Archived: null } : { Ok: false, Refusal: this.refusal };
   }
 }
 
+/** A gate that applies every call. */
+const RecordingGate = (): FakeGate => new FakeGate(null);
+/** A gate that refuses every call with `refusal`. */
+const RefusingGate = (refusal: TransitionRefusal): FakeGate => new FakeGate(refusal);
+/** A gate whose Publish throws `message` (a lock timeout, a lost connection). */
+const ThrowingGate = (message: string): FakeGate => new FakeGate(null, message);
+
 class TestablePromoteAction extends PredictiveStudioPromoteModelAction {
-  constructor(private readonly gate: IModelPromotionGate) {
+  constructor(private readonly gate: LifecycleGate) {
     super();
   }
-  protected override createGate(): IModelPromotionGate {
+  protected override CreateLifecycleGate(): LifecycleGate {
     return this.gate;
   }
   public run(params: RunActionParams): Promise<ActionResultSimple> {
@@ -52,371 +66,76 @@ class TestablePromoteAction extends PredictiveStudioPromoteModelAction {
 }
 
 function params(list: ActionParam[]): RunActionParams {
-  return { Params: list } as RunActionParams;
+  return { Params: list, ContextUser: USER } as RunActionParams;
 }
-function out(p: RunActionParams, name: string): unknown {
+function out(p: RunActionParams, name: string): ActionParam['Value'] {
   return p.Params.find((x) => x.Name === name)?.Value;
 }
 
 describe('PredictiveStudioPromoteModelAction — validation', () => {
-  it('fails when ModelID is missing', async () => {
-    const gate = new MockGate({ kind: 'promoted', newStatus: 'Published' });
-    const result = await new TestablePromoteAction(gate).run(
-      params([{ Name: 'TargetStatus', Type: 'Input', Value: 'Published' }]),
-    );
-    expect(result.Success).toBe(false);
-    expect(result.ResultCode).toBe('VALIDATION_ERROR');
-    expect(gate.CallCount).toBe(0);
+  it('fails when ModelID is missing, and never calls the gate', async () => {
+    const gate = RecordingGate();
+    const result = await new TestablePromoteAction(gate).run(params([{ Name: 'Transition', Type: 'Input', Value: 'publish' }]));
+    expect([result.Success, result.ResultCode, gate.Calls.length]).toEqual([false, 'VALIDATION_ERROR', 0]);
   });
 
-  it('fails when TargetStatus is missing or invalid', async () => {
-    const gate = new MockGate({ kind: 'promoted', newStatus: 'Published' });
+  it('refuses a missing or unknown Transition with VALIDATION_ERROR and never calls the gate', async () => {
+    for (const value of [undefined, 'Published']) {
+      const gate = RecordingGate();
+      const r = await new TestablePromoteAction(gate).run(params([{ Name: 'ModelID', Type: 'Input', Value: M }, ...(value ? [{ Name: 'Transition', Type: 'Input' as const, Value: value }] : [])]));
+      expect([r.ResultCode, gate.Calls.length]).toEqual(['VALIDATION_ERROR', 0]);
+    }
+  });
+
+  it('refuses a run with no context user (the initiator) before any gate call', async () => {
+    const gate = RecordingGate();
+    const r = await new TestablePromoteAction(gate).run({ Params: [{ Name: 'ModelID', Type: 'Input', Value: M }, { Name: 'Transition', Type: 'Input', Value: 'publish' }] } as RunActionParams);
+    expect([r.ResultCode, gate.Calls.length]).toEqual(['VALIDATION_ERROR', 0]);
+  });
+});
+
+describe('PredictiveStudioPromoteModelAction — the gate call and its result codes', () => {
+  it('passes Transition and Reason to the gate and maps an applied outcome to SUCCESS with the Status output', async () => {
+    const gate = RecordingGate();
+    const p = params([{ Name: 'ModelID', Type: 'Input', Value: M }, { Name: 'Transition', Type: 'Input', Value: 'archive' }, { Name: 'Reason', Type: 'Input', Value: 'superseded' }]);
+    const r = await new TestablePromoteAction(gate).run(p);
+    expect([r.ResultCode, gate.Calls]).toEqual(['SUCCESS', [['Archive', M, 'superseded']]]);
+    expect(out(p, 'Status')).toBe('Archived');
+  });
+
+  it('maps evaluate to Evaluate, publish to Publish (purpose publish) and rollback to Publish (purpose rollback)', async () => {
+    const gate = RecordingGate();
     const action = new TestablePromoteAction(gate);
-    const missing = await action.run(params([{ Name: 'ModelID', Type: 'Input', Value: 'm1' }]));
-    expect(missing.ResultCode).toBe('VALIDATION_ERROR');
-    const invalid = await action.run(
-      params([
-        { Name: 'ModelID', Type: 'Input', Value: 'm1' },
-        { Name: 'TargetStatus', Type: 'Input', Value: 'Draft' }, // Draft is not a promotable target
-      ]),
-    );
-    expect(invalid.ResultCode).toBe('VALIDATION_ERROR');
-    expect(gate.CallCount).toBe(0);
-  });
-});
-
-describe('PredictiveStudioPromoteModelAction — outcome mapping', () => {
-  it('maps a promoted outcome to SUCCESS + Status output and threads sign-off through', async () => {
-    const gate = new MockGate({ kind: 'promoted', newStatus: 'Validated' });
-    const p = params([
-      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-      { Name: 'TargetStatus', Type: 'Input', Value: 'validated' }, // case-insensitive
-      { Name: 'SignOff', Type: 'Input', Value: true },
-    ]);
-    const result = await new TestablePromoteAction(gate).run(p);
-
-    expect(gate.LastRequest).toMatchObject({ modelId: 'model-1', targetStatus: 'Validated', signOff: true });
-    expect(result.Success).toBe(true);
-    expect(out(p, 'Status')).toBe('Validated');
-  });
-
-  it('maps a leakage refusal to LEAKAGE_SIGNOFF_REQUIRED with a clear message', async () => {
-    const gate = new MockGate({ kind: 'refused-leakage', topFeature: 'cancelled_flag', topShare: 0.92 });
-    const p = params([
-      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-      { Name: 'TargetStatus', Type: 'Input', Value: 'Published' },
-    ]);
-    const result = await new TestablePromoteAction(gate).run(p);
-
-    expect(result.Success).toBe(false);
-    expect(result.ResultCode).toBe('LEAKAGE_SIGNOFF_REQUIRED');
-    expect(result.Message).toContain('cancelled_flag');
-    expect(result.Message).toContain('SignOff=true');
-    expect(out(p, 'Status')).toBeUndefined();
-  });
-
-  it('threads SignOff + Reason through and surfaces the audit note on success (string "true"/"1")', async () => {
-    const gate = new MockGate({ kind: 'promoted', newStatus: 'Validated', signOffNote: 'override audit note' });
-    const p = params([
-      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-      { Name: 'TargetStatus', Type: 'Input', Value: 'Validated' },
-      { Name: 'SignOff', Type: 'Input', Value: 'true' }, // string coercion → true
-      { Name: 'Reason', Type: 'Input', Value: 'legitimate feature' },
-    ]);
-    const result = await new TestablePromoteAction(gate).run(p);
-
-    expect(gate.LastRequest).toMatchObject({ modelId: 'model-1', signOff: true, reason: 'legitimate feature' });
-    expect(result.Success).toBe(true);
-    expect(out(p, 'SignOffNote')).toBe('override audit note');
-    expect(result.Message).toContain('override audit note');
-  });
-
-  it('coerces SignOff="1" to true', async () => {
-    const gate = new MockGate({ kind: 'promoted', newStatus: 'Validated' });
-    const p = params([
-      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-      { Name: 'TargetStatus', Type: 'Input', Value: 'Validated' },
-      { Name: 'SignOff', Type: 'Input', Value: '1' },
-      { Name: 'Reason', Type: 'Input', Value: 'ok' },
-    ]);
-    await new TestablePromoteAction(gate).run(p);
-    expect(gate.LastRequest?.signOff).toBe(true);
-  });
-
-  it('maps a signoff-reason-required outcome to SIGNOFF_REASON_REQUIRED', async () => {
-    const gate = new MockGate({ kind: 'signoff-reason-required', topFeature: 'cancelled_flag', topShare: 0.92 });
-    const p = params([
-      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-      { Name: 'TargetStatus', Type: 'Input', Value: 'Validated' },
-      { Name: 'SignOff', Type: 'Input', Value: true },
-    ]);
-    const result = await new TestablePromoteAction(gate).run(p);
-    expect(result.Success).toBe(false);
-    expect(result.ResultCode).toBe('SIGNOFF_REASON_REQUIRED');
-    expect(result.Message).toContain('Reason');
-    expect(out(p, 'Status')).toBeUndefined();
-  });
-
-  it('maps not-found and save-failed outcomes', async () => {
-    const notFound = await new TestablePromoteAction(new MockGate({ kind: 'not-found' })).run(
-      params([
-        { Name: 'ModelID', Type: 'Input', Value: 'missing' },
-        { Name: 'TargetStatus', Type: 'Input', Value: 'Archived' },
-      ]),
-    );
-    expect(notFound.ResultCode).toBe('MODEL_NOT_FOUND');
-
-    const saveFailed = await new TestablePromoteAction(new MockGate({ kind: 'save-failed', message: 'FK violation' })).run(
-      params([
-        { Name: 'ModelID', Type: 'Input', Value: 'm1' },
-        { Name: 'TargetStatus', Type: 'Input', Value: 'Archived' },
-      ]),
-    );
-    expect(saveFailed.ResultCode).toBe('SAVE_FAILED');
-    expect(saveFailed.Message).toContain('FK violation');
-  });
-
-  it('maps a calibration hold to CALIBRATION_HOLD, naming the slope or that it could not be measured, with no sign-off route', async () => {
-    const run = (slope: number | null) => new TestablePromoteAction(new MockGate({ kind: 'refused-calibration', slope })).run(
-      params([
-        { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-        { Name: 'TargetStatus', Type: 'Input', Value: 'Validated' },
-        { Name: 'SignOff', Type: 'Input', Value: true },
-      ]),
-    );
-    const measured = await run(0.5);
-    expect([measured.Success, measured.ResultCode]).toEqual([false, 'CALIBRATION_HOLD']);
-    expect(measured.Message).toContain('calibration slope 0.50');
-    expect(measured.Message).toContain('no sign-off overrides it');
-    expect((await run(null)).Message).toContain('could not be measured');
-  });
-
-  it('maps a model /predict does not serve to MODEL_NOT_SERVABLE with the gate\'s message', async () => {
-    const result = await new TestablePromoteAction(new MockGate({ kind: 'not-servable', message: 'forecast models are not served by /predict yet' })).run(
-      params([
-        { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-        { Name: 'TargetStatus', Type: 'Input', Value: 'Published' },
-      ]),
-    );
-    expect([result.Success, result.ResultCode, result.Message]).toEqual([false, 'MODEL_NOT_SERVABLE', 'forecast models are not served by /predict yet']);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Layer 2 — the REAL gate, with its load + threshold seams overridden so the
-// sign-off enforcement logic is exercised with no DB.
-// ---------------------------------------------------------------------------
-
-/** A field-bag model fake exposing exactly what the gate touches. */
-class FakeModel {
-  public ID = 'model-1';
-  public PipelineID: string | null = 'pipe-1';
-  public FeatureImportance: string | null = null;
-  /** No trainer Lineage by default (a model trained before the trainer recorded its keys). */
-  public Lineage: string | null = null;
-  /** Trained by default; set null to model a seeded/untrained row that "needs training". */
-  public ArtifactFileID: string | null = 'file-1';
-  public Status: 'Archived' | 'Draft' | 'Published' | 'Validated' = 'Draft';
-  public LatestResult: { CompleteMessage: string } | null = null;
-  public SaveCallCount = 0;
-  private saveOk: boolean;
-  constructor(featureImportance: Record<string, number>, saveOk = true) {
-    this.FeatureImportance = JSON.stringify(featureImportance);
-    this.saveOk = saveOk;
-  }
-  public async Save(): Promise<boolean> {
-    this.SaveCallCount++;
-    if (!this.saveOk) {
-      this.LatestResult = { CompleteMessage: 'save blew up' };
-      return false;
+    for (const transition of ['evaluate', 'publish', 'rollback']) {
+      const p = params([{ Name: 'ModelID', Type: 'Input', Value: M }, { Name: 'Transition', Type: 'Input', Value: transition }, { Name: 'Reason', Type: 'Input', Value: 'restore' }]);
+      expect((await action.run(p)).ResultCode).toBe('SUCCESS');
     }
-    this.LatestResult = { CompleteMessage: '' };
-    return true;
-  }
-}
-
-/** Real gate with load/threshold overridden; threshold fixed at 0.6. */
-class TestableGate extends ProductionModelPromotionGate {
-  constructor(private readonly model: FakeModel | null, private readonly threshold = 0.6) {
-    super();
-  }
-  protected override async loadModel(): Promise<MJMLModelEntity | null> {
-    return this.model as unknown as MJMLModelEntity | null;
-  }
-  protected override async resolveThreshold(): Promise<number> {
-    return this.threshold;
-  }
-}
-
-function req(over: Partial<PromoteModelRequest> = {}): PromoteModelRequest {
-  return {
-    modelId: 'model-1',
-    targetStatus: 'Published',
-    signOff: false,
-    contextUser: undefined as unknown as UserInfo,
-    provider: undefined as unknown as IMetadataProvider,
-    ...over,
-  };
-}
-
-describe('ProductionModelPromotionGate — leakage sign-off gate', () => {
-  it('refuses a leakage-flagged model when SignOff is false', async () => {
-    // cancelled_flag dominates (>0.6 share) → flagged.
-    const model = new FakeModel({ cancelled_flag: 0.92, tenure: 0.05, city: 0.03 });
-    const outcome = await new TestableGate(model).promote(req({ signOff: false }));
-
-    expect(outcome.kind).toBe('refused-leakage');
-    if (outcome.kind === 'refused-leakage') {
-      expect(outcome.topFeature).toBe('cancelled_flag');
-    }
-    // Never transitioned — the model was not saved.
-    expect(model.SaveCallCount).toBe(0);
-    expect(model.Status).toBe('Draft');
+    expect(gate.Calls).toEqual([['Evaluate', M], ['Publish', M, 'publish'], ['Publish', M, 'rollback']]);
   });
 
-  it('allows a leakage-flagged model when SignOff is true WITH a reason — lifecycle only + audit note', async () => {
-    const status = ConsoleCapture.Status();
-    const model = new FakeModel({ cancelled_flag: 0.92, tenure: 0.05, city: 0.03 });
-    const outcome = await new TestableGate(model).promote(
-      req({ signOff: true, reason: 'Reviewed; cancelled_flag is a legitimate feature here.', targetStatus: 'Validated' }),
-    );
-
-    expect(outcome.kind).toBe('promoted');
-    if (outcome.kind === 'promoted') {
-      expect(outcome.newStatus).toBe('Validated');
-      // The audit note captures the override + the supplied reason.
-      expect(outcome.signOffNote).toBeTruthy();
-      expect(outcome.signOffNote).toContain('overridden');
-      expect(outcome.signOffNote).toContain('legitimate feature');
-    }
-    expect(model.Status).toBe('Validated'); // only Status changed
-    expect(model.SaveCallCount).toBe(1);
-    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Leakage sign-off override for ML Model 'model-1'")]);
+  it.each<[TransitionRefusal, string]>([
+    [{ kind: 'unacknowledged-leakage-flags', flags: ['single-feature-auc'] }, 'LEAKAGE_FLAGGED'],
+    [{ kind: 'illegal-transition', from: 'draft', to: 'published' }, 'ILLEGAL_TRANSITION'],
+    [{ kind: 'reason-required' }, 'REASON_REQUIRED'],
+    [{ kind: 'does-not-beat-incumbent', incumbentModelId: OLD, comparison }, 'TRANSITION_REFUSED'],
+    [{ kind: 'model-not-found', modelId: M }, 'MODEL_NOT_FOUND'],
+    [{ kind: 'calibration-held', slope: 1.6 }, 'CALIBRATION_HOLD'],
+    [{ kind: 'not-servable', reason: 'forecast' }, 'MODEL_NOT_SERVABLE'],
+  ])('maps the refusal %o to %s', async (refusal, code) => {
+    const r = await new TestablePromoteAction(RefusingGate(refusal)).run(params([{ Name: 'ModelID', Type: 'Input', Value: M }, { Name: 'Transition', Type: 'Input', Value: 'publish' }]));
+    expect([r.Success, r.ResultCode]).toEqual([false, code]);
   });
 
-  it('refuses a sign-off override of a flagged model when no reason is supplied (audit trail required)', async () => {
-    const model = new FakeModel({ cancelled_flag: 0.92, tenure: 0.05, city: 0.03 });
-    const outcome = await new TestableGate(model).promote(req({ signOff: true, targetStatus: 'Validated' }));
-
-    expect(outcome.kind).toBe('signoff-reason-required');
-    if (outcome.kind === 'signoff-reason-required') {
-      expect(outcome.topFeature).toBe('cancelled_flag');
-    }
-    // Never transitioned — no reason means no auditable override.
-    expect(model.SaveCallCount).toBe(0);
-    expect(model.Status).toBe('Draft');
+  it('names the refusal kind and says what it means in the message of a TRANSITION_REFUSED', async () => {
+    const r = await new TestablePromoteAction(RefusingGate({ kind: 'publish-in-progress' })).run(params([{ Name: 'ModelID', Type: 'Input', Value: M }, { Name: 'Transition', Type: 'Input', Value: 'publish' }]));
+    expect([r.ResultCode, r.Message]).toEqual(['TRANSITION_REFUSED', expect.stringContaining('publish-in-progress')]);
+    expect(r.Message).toContain('Another publish of this pipeline or model holds its lock');
   });
 
-  it('refuses the override when the reason is whitespace-only', async () => {
-    const model = new FakeModel({ cancelled_flag: 0.92, tenure: 0.05, city: 0.03 });
-    const outcome = await new TestableGate(model).promote(req({ signOff: true, reason: '   ', targetStatus: 'Validated' }));
-    expect(outcome.kind).toBe('signoff-reason-required');
-    expect(model.SaveCallCount).toBe(0);
-  });
-
-  it('promotes a clean (non-flagged) model without requiring sign-off', async () => {
-    // Balanced importances → not dominant. Draft → Validated is a legal step.
-    const model = new FakeModel({ tenure: 0.3, events: 0.25, city: 0.25, recency: 0.2 });
-    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Validated' }));
-
-    expect(outcome.kind).toBe('promoted');
-    expect(model.Status).toBe('Validated');
-  });
-
-  it('rejects an illegal lifecycle jump (Draft → Published) without mutating/saving', async () => {
-    // Clean model so leakage doesn't short-circuit; Draft → Published skips Validated.
-    const model = new FakeModel({ tenure: 0.3, events: 0.25, city: 0.25, recency: 0.2 });
-    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Published' }));
-
-    expect(outcome.kind).toBe('invalid-transition');
-    if (outcome.kind === 'invalid-transition') {
-      expect(outcome.currentStatus).toBe('Draft');
-      expect(outcome.targetStatus).toBe('Published');
-    }
-    // No mutation, no save.
-    expect(model.Status).toBe('Draft');
-    expect(model.SaveCallCount).toBe(0);
-  });
-
-  it('refuses to publish a model with no trained artifact (needs training) without saving', async () => {
-    const model = new FakeModel({ tenure: 0.5, city: 0.5 });
-    model.ArtifactFileID = null;
-    model.Status = 'Validated';
-    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Published' }));
-    expect(outcome.kind).toBe('needs-training');
-    if (outcome.kind === 'needs-training') {
-      expect(outcome.message).toContain('needs training');
-    }
-    expect(model.Status).toBe('Validated');
-    expect(model.SaveCallCount).toBe(0);
-  });
-
-  it('still allows non-publishing transitions for a model with no artifact (e.g. Draft → Validated)', async () => {
-    const model = new FakeModel({ tenure: 0.5, city: 0.5 });
-    model.ArtifactFileID = null;
-    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Validated' }));
-    expect(outcome.kind).toBe('promoted');
-  });
-
-  it('reports an illegal Draft → Published jump as invalid-transition even when the model has no artifact', async () => {
-    const model = new FakeModel({ tenure: 0.5, city: 0.5 });
-    model.ArtifactFileID = null;
-    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Published' }));
-    expect(outcome.kind).toBe('invalid-transition');
-  });
-
-  it('returns not-found when the model does not load', async () => {
-    const outcome = await new TestableGate(null).promote(req());
-    expect(outcome.kind).toBe('not-found');
-  });
-
-  it("refuses a model whose Lineage leakage audit is dominant although its own importance is {} (a kept simple baseline)", async () => {
-    const status = ConsoleCapture.Status();
-    const model = new FakeModel({});
-    model.Lineage = JSON.stringify({ shippedMember: 'glm', trainingLeakageAudit: { topFeature: 'cancelled_flag', topShare: 0.92 } });
-    expect(await new TestableGate(model).promote(req({ targetStatus: 'Validated' }))).toEqual({ kind: 'refused-leakage', topFeature: 'cancelled_flag', topShare: 0.92 });
-    expect(model.SaveCallCount).toBe(0);
-    const signedOff = await new TestableGate(model).promote(req({ targetStatus: 'Validated', signOff: true, reason: 'cancelled_flag is set before the decision date.' }));
-    expect(signedOff.kind).toBe('promoted');
-    // the sign-off override is logged for audit
-    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining('leakage flag on feature "cancelled_flag" (92% share) overridden to Validated')]);
-  });
-
-  it("promotes a model whose recorded audit is under the pipeline's current threshold, or that records none", async () => {
-    const audited = new FakeModel({});
-    audited.Lineage = JSON.stringify({ trainingLeakageAudit: { topFeature: 'tenure', topShare: 0.55 } });
-    expect((await new TestableGate(audited).promote(req({ targetStatus: 'Validated' }))).kind).toBe('promoted');
-    const unaudited = new FakeModel({});
-    unaudited.Lineage = JSON.stringify({ trainingLeakageAudit: null });
-    expect((await new TestableGate(unaudited).promote(req({ targetStatus: 'Validated' }))).kind).toBe('promoted');
-  });
-
-  it('refuses a calibration-held model at Validated and Published whatever the sign-off, and never saves it', async () => {
-    const model = new FakeModel({ tenure: 0.5, city: 0.5 });
-    model.Lineage = JSON.stringify({ calibrationHold: { slope: 1.6 } });
-    expect(await new TestableGate(model).promote(req({ targetStatus: 'Validated' }))).toEqual({ kind: 'refused-calibration', slope: 1.6 });
-    model.Status = 'Validated';
-    expect(await new TestableGate(model).promote(req({ targetStatus: 'Published', signOff: true, reason: 'ok' }))).toEqual({ kind: 'refused-calibration', slope: 1.6 });
-    expect(model.SaveCallCount).toBe(0);
-  });
-
-  it("refuses to publish a model whose shipped artifact is a forecast's series forecaster, and still lets it reach Validated", async () => {
-    const model = new FakeModel({});
-    model.Lineage = JSON.stringify({ shippedMember: 'seasonalNaive', shippedDriver: 'seasonal-naive' });
-    expect((await new TestableGate(model).promote(req({ targetStatus: 'Validated' }))).kind).toBe('promoted');
-    const refused = await new TestableGate(model).promote(req({ targetStatus: 'Published' }));
-    expect(refused.kind).toBe('not-servable');
-    expect(refused.kind === 'not-servable' ? refused.message : '').toContain('forecast models are not served by /predict yet');
-    expect([model.Status, model.SaveCallCount]).toEqual(['Validated', 1]);
-  });
-
-  it('returns save-failed and surfaces the CompleteMessage', async () => {
-    const model = new FakeModel({ tenure: 0.5, city: 0.5 }, false);
-    model.Status = 'Published'; // Published → Archived is a legal transition that then fails on Save
-    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Archived' }));
-    expect(outcome.kind).toBe('save-failed');
-    if (outcome.kind === 'save-failed') {
-      expect(outcome.message).toContain('save blew up');
-    }
+  it('maps a gate that throws to PROMOTION_FAILED with the error text', async () => {
+    const errors = ConsoleCapture.Errors();
+    const r = await new TestablePromoteAction(ThrowingGate('lock timeout')).run(params([{ Name: 'ModelID', Type: 'Input', Value: M }, { Name: 'Transition', Type: 'Input', Value: 'publish' }]));
+    expect([r.Success, r.ResultCode, r.Message]).toEqual([false, 'PROMOTION_FAILED', expect.stringContaining('lock timeout')]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining('lock timeout')]);
   });
 });

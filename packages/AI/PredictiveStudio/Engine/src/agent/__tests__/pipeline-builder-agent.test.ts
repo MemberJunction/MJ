@@ -533,7 +533,7 @@ describe('PredictiveStudioPipelineBuilderAgent — publishing', () => {
     const payload = step.newPayload as PredictiveStudioBuilderPayload;
     expect([payload.BuildResult?.published, payload.BuildResult?.readyToPublish]).toEqual([false, true]);
     expect(payload.Markdown).toContain('(In Draft — ready to publish when you ask)');
-    expect(step.reasoning).toBe('Done — I built and trained your prediction (Ships — the model beats the flat guess). It is in Draft and clears the bar to publish; it is published only when you ask.');
+    expect(step.reasoning).toBe('Done — I built and trained your prediction (Ships — the model beats the flat guess). It clears the bar to publish; it is published only when you ask.');
   });
 
   it('names each catalog status', () => {

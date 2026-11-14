@@ -3,16 +3,18 @@
  * builder**: `PredictiveStudioPipelineBuilder.build(ModelingPlanSpec)` — the code (no-LLM) step that
  * turns the agent's approved, strongly-typed modeling plan into real metadata: it creates the
  * `MJ: ML Training Pipelines` row, binds its Prediction Unit and default Evaluation Protocol, trains one search over
- * the plan's experiments via the engine, and **publishes the model only if the trust verdict clears the bar** (the same
- * `TrustVerdicts.DeriveTrustVerdict` rendering of the training run's stored gate decision the business UI uses).
+ * the plan's experiments via the engine, and **evaluates the model through the lifecycle gate only if the trust verdict
+ * clears the bar** (the same `TrustVerdicts.DeriveTrustVerdict` rendering of the training run's stored gate decision the
+ * business UI uses). The build never publishes (M4b routes automatic publishing through the gate's automated publisher):
+ * a model that clears the bar is evaluated to Validated or KeepBaseline and is ready for a person to publish.
  *
  * This is what proves "the agent can BUILD NEW THINGS" without needing the full LLM loop — we feed the
  * builder a hand-authored plan (what the Goal Analyst / Data Scout / Experiment Designer sub-agents
  * would have accumulated) and assert the pipeline + model were created and the publish GATE behaved.
  *
  * The renewal model on AssociationDemo Memberships(Status) is intentionally near-chance, so the gate's
- * SAFETY path is exercised: a weak model is trained but NOT published (held with a plain reason), while
- * the publish-iff-trustworthy invariant is asserted either way.
+ * SAFETY path is exercised: a weak model is trained but NOT evaluated (held with a plain reason), while
+ * the evaluate-iff-trustworthy invariant is asserted either way.
  *
  * ## Why in-process (mirrors ps-inproc-operate-flow.ts)
  * Needs the real server-side training engine + the Python sidecar, so it uses `bootstrapAI()` (the real
@@ -92,7 +94,7 @@ async function main(): Promise<void> {
   try {
     algorithm = await EnsureDriverAlgorithm(provider, user, DRIVER_KEY, TAG);
 
-    banner('BUILD: PredictiveStudioPipelineBuilder.build(plan) — create pipeline → train → publish-gated-on-trust');
+    banner('BUILD: PredictiveStudioPipelineBuilder.build(plan) — create pipeline → train → evaluate-gated-on-trust');
     const t0 = Date.now();
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: buildPlan(), provider, user, autoPublish: true, sidecarVersion: TAG });
     console.log(`  Built in ${Date.now() - t0}ms — success=${result.success} pipelineId=${result.pipelineId} modelId=${result.modelId}`);
@@ -116,10 +118,12 @@ async function main(): Promise<void> {
     check(leaderboard.filter((r) => r.isWinner === true).length === 1, 'exactly one leaderboard row is the finalist');
     check(!JSON.stringify(leaderboard).includes('cvScore'), 'no leaderboard row carries a cvScore');
 
-    // The core invariant: a model is published IFF the trust verdict clears the bar AND no leakage flag.
-    const shouldPublish = !!result.trust?.CanAct && !result.leakageFlagged;
-    check(result.published === shouldPublish, `publish gate honored (published=${result.published} === canAct&&!leakage=${shouldPublish})`);
-    if (!result.published) check(!!result.heldReason, 'a held model carries a plain-language reason (the safety gate)');
+    // The core invariant: a model is evaluated (ready to publish) IFF the trust verdict clears the bar AND no leakage
+    // flag; the build itself never publishes (M4b).
+    const shouldEvaluate = !!result.trust?.CanAct && !result.leakageFlagged;
+    check(result.published === false, `the build publishes nothing (published=${result.published})`);
+    check(result.readyToPublish === shouldEvaluate, `evaluate gate honored (readyToPublish=${result.readyToPublish} === canAct&&!leakage=${shouldEvaluate})`);
+    check(!!result.heldReason, 'an unpublished model carries a plain-language reason (the safety gate, or that it awaits a person\'s publish)');
 
     // Verify the persisted pipeline + model status match the gate decision.
     if (result.pipelineId) {
@@ -132,8 +136,8 @@ async function main(): Promise<void> {
       const m = await new RunView().RunView<{ ID: string; Status: string }>(
         { EntityName: 'MJ: ML Models', ExtraFilter: `ID='${result.modelId}'`, Fields: ['ID', 'Status'], ResultType: 'simple', MaxRows: 1, BypassCache: true }, user,
       );
-      const expected = result.published ? 'Published' : 'Draft';
-      check(m.Results?.[0]?.Status === expected, `the persisted model Status is '${expected}' (matches the gate)`);
+      const expected = result.readyToPublish ? ['Validated', 'KeepBaseline'] : ['Draft'];
+      check(expected.includes(m.Results?.[0]?.Status || ''), `the persisted model Status is one of '${expected.join("', '")}' (matches the gate; got '${m.Results?.[0]?.Status}')`);
     }
 
     banner(failures === 0 ? 'AGENT-BUILDER PROOF COMPLETE — ALL CHECKS PASSED' : `AGENT-BUILDER PROOF — ${failures} CHECK(S) FAILED`);

@@ -14,17 +14,21 @@
  * ## What
  * {@link PipelineAutoTrainer} is the production {@link IModelAutoTrainer}. When a run
  * finds its model needs training it:
- *   1. **reuses** the newest Published, artifact-backed model of the pipeline whose
- *      bytes load on this server (so concurrent or repeated runs don't retrain), or
+ *   1. **reuses** the newest Published model of the pipeline whose artifact loads
+ *      `verified` through the artifact registry (so concurrent or repeated runs don't
+ *      retrain; a lost, changed or unregistered artifact is never reused), or
  *   2. **trains** the pipeline through the real {@link TrainingEngine} path and
- *      **publishes** the result through the promotion gate (Draft → Validated →
- *      Published — a leakage-flagged or calibration-held model, or one whose artifact
- *      `/predict` does not serve, is refused and stays Draft, exactly as a human-driven
- *      promotion would be);
+ *      **evaluates** the run through the lifecycle gate (`LifecycleGate.Evaluate({ trainingRunId })`:
+ *      Draft → Validated from the run's stored gate decision). It does not publish: until M4b routes
+ *      automatic publishing through the gate's automated publisher, the new model scores as a
+ *      Validated model. A model the gate refuses (a calibration hold, no stored decision), one it
+ *      evaluates to KeepBaseline (which does not score), and one whose training run flagged leakage
+ *      (published only after a person's sign-off) are not served: the run fails naming why;
  *   3. **repoints** the Record Process's `Configuration.modelId` and every scoring
  *      binding on that process (or on the superseded model) at the new model, and
  *      creates the declared binding when none exists yet;
- *   4. **archives** the superseded model when it was Published (it can't score).
+ *   4. **archives** the superseded model through the lifecycle gate (`LifecycleGate.Archive`, with a
+ *      reason); a model the lifecycle table cannot archive (a Draft) is left as it is.
  *
  * Nothing here runs unless a Record Process declares `autoTrain` — other apps and
  * processes keep the plain "needs training" refusal.
@@ -33,16 +37,22 @@
 import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { IsValidUUID, UUIDsEqual } from '@memberjunction/global';
+import type { Actor, LeakageFlag } from '@memberjunction/predictive-studio-core';
 
 import { TrainingDelegation } from '../operations/delegation';
-import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
-import type { IModelPromotionGate, PromoteModelOutcome } from '../actions/promote-model.action';
+import { LifecycleGate } from '../registry/lifecycle-gate';
+import { GateContexts } from '../registry/gate-seams';
+import { GateRefusals } from '../registry/gate-refusals';
+import type { GateContext } from '../registry/gate-context';
+import { StoredRuns } from '../registry/stored-publish-inputs';
 import { MetadataEntityFactory } from '../training/seams';
 import { TrainingEngine } from '../training/training-engine';
+import { ArtifactRegistry, type IArtifactRegistry } from '../registry/artifact-registry';
+import type { RegistryContext } from '../registry/registry-context';
 import { StorageProviderArtifactLoader } from './storage-provider-artifact-loader';
 import { UpsertScoringBinding } from './scoring-binding';
 import { ModelHasTrainedArtifact, ModelReadiness } from './model-readiness';
-import type { AutoTrainRequest, IArtifactLoader, IModelAutoTrainer } from './types';
+import type { AutoTrainRequest, IModelAutoTrainer } from './types';
 
 /** Signature of the train step (production: {@link TrainingDelegation.TrainModelViaEngine}); injectable for tests. */
 export type AutoTrainTrainFn = (pipelineId: string, provider: IMetadataProvider, user: UserInfo) => Promise<MJMLModelEntity>;
@@ -62,24 +72,31 @@ export class AutoTrainShippedNoModelError extends Error {
 export interface PipelineAutoTrainerOptions {
   /** Trains the pipeline and returns the new (Draft) model row. */
   train?: AutoTrainTrainFn;
-  /** The promotion gate used to publish (and archive the superseded model). */
-  gate?: IModelPromotionGate;
-  /** Reads artifact bytes — used to confirm a reusable model actually loads on this server. */
-  artifactLoader?: IArtifactLoader;
+  /** The lifecycle gate the trained run is evaluated through and the superseded model archived through. */
+  gate?: LifecycleGate;
+  /**
+   * The artifact registry a reusable model's artifact is loaded and verified through. Optional because a registry is
+   * built for one request's provider and user and the production auto-trainer is built once at startup with neither;
+   * when absent, each lookup builds `ArtifactRegistry.ForContext` over a `StorageProviderArtifactLoader` for its call.
+   */
+  registry?: IArtifactRegistry;
 }
 
+/** Who auto-train acts as at the lifecycle gate. */
+const AUTO_TRAIN_ACTOR: Actor = { kind: 'system', component: 'auto-train' };
+
 /**
- * Production {@link IModelAutoTrainer}: reuse-or-train, publish, repoint, archive.
+ * Production {@link IModelAutoTrainer}: reuse-or-train, evaluate, repoint, archive.
  */
 export class PipelineAutoTrainer implements IModelAutoTrainer {
   private readonly train: AutoTrainTrainFn;
-  private readonly gate: IModelPromotionGate;
-  private readonly artifactLoader: IArtifactLoader;
+  private readonly gate: LifecycleGate;
+  private readonly registry: IArtifactRegistry | null;
 
   constructor(options: PipelineAutoTrainerOptions = {}) {
     this.train = options.train || PipelineAutoTrainer.TrainThroughEngine;
-    this.gate = options.gate ?? new ProductionModelPromotionGate();
-    this.artifactLoader = options.artifactLoader ?? new StorageProviderArtifactLoader();
+    this.gate = options.gate || new LifecycleGate();
+    this.registry = options.registry || null;
   }
 
   /**
@@ -98,12 +115,13 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     if (!IsValidUUID(request.pipelineId)) {
       throw new Error(`Auto-train: '${request.pipelineId}' is not a valid ML Training Pipeline id.`);
     }
+    const ctx = GateContexts.ForRequest({ ContextUser: contextUser, Provider: provider });
     const reused = await this.findReusableModel(request.pipelineId, contextUser, provider);
-    const modelId = reused ?? (await this.trainAndPublish(request.pipelineId, contextUser, provider));
+    const modelId = reused || (await this.TrainAndEvaluate(request.pipelineId, ctx));
     await this.repoint(request, modelId, contextUser, provider);
-    await this.archiveSuperseded(request.currentModelId, modelId, contextUser, provider);
+    await this.ArchiveSupersededModel(request.currentModelId, modelId, ctx);
     LogStatus(
-      `Predictive Studio auto-train: pipeline '${request.pipelineId}' → ${reused ? 'reused' : 'trained + published'} model '${modelId}'` +
+      `Predictive Studio auto-train: pipeline '${request.pipelineId}' → ${reused ? 'reused' : 'trained + evaluated (Validated)'} model '${modelId}'` +
         (request.recordProcessId ? `; Record Process '${request.recordProcessId}' repointed.` : '.'),
     );
     return modelId;
@@ -112,16 +130,17 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
   // ----- reuse --------------------------------------------------------------
 
   /**
-   * The newest Published model of the pipeline whose artifact `/predict` serves and loads on this server, if any (a
-   * forecast's series forecaster published before the gate refused one is skipped).
+   * The newest Published model of the pipeline whose artifact `/predict` serves and whose artifact load is `verified`,
+   * if any (a forecast's series forecaster published before the gate refused one is skipped, and so is a model whose
+   * artifact is missing, changed or unregistered).
    */
   protected async findReusableModel(pipelineId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null> {
-    const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLModelEntity, 'ID' | 'ArtifactFileID' | 'Lineage'>>(
+    const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLModelEntity, 'ID' | 'ArtifactFileID' | 'ArtifactSha256' | 'Lineage'>>(
       {
         EntityName: 'MJ: ML Models',
         ExtraFilter: `PipelineID='${pipelineId}' AND Status='Published' AND ArtifactFileID IS NOT NULL`,
         OrderBy: 'Version DESC',
-        Fields: ['ID', 'ArtifactFileID', 'Lineage'],
+        Fields: ['ID', 'ArtifactFileID', 'ArtifactSha256', 'Lineage'],
         ResultType: 'simple',
         MaxRows: 5,
       },
@@ -130,35 +149,50 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     if (!result.Success) {
       return null;
     }
+    const ctx: RegistryContext = { ContextUser: contextUser, Provider: provider };
+    const registry = this.registry || ArtifactRegistry.ForContext(ctx, new StorageProviderArtifactLoader());
     for (const row of result.Results) {
       const servable = ModelHasTrainedArtifact(row) && ModelReadiness.IsServedByPredict(row);
-      if (servable && row.ArtifactFileID && (await this.artifactLoader.load(row.ArtifactFileID, contextUser, provider))) {
+      if (servable && (await registry.Load(row, ctx)).Status === 'verified') {
         return row.ID;
       }
     }
     return null;
   }
 
-  // ----- train + publish ----------------------------------------------------
+  // ----- train + evaluate ---------------------------------------------------
 
-  /** Train the pipeline (real TrainingEngine path) and publish the new model through the gate. */
-  protected async trainAndPublish(pipelineId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string> {
-    const model = await this.train(pipelineId, provider, contextUser);
-    for (const targetStatus of ['Validated', 'Published'] as const) {
-      const outcome = await this.gate.promote({ modelId: model.ID, targetStatus, signOff: false, contextUser, provider });
-      if (outcome.kind !== 'promoted') {
-        throw new Error(
-          `Auto-train: trained model '${model.ID}' from pipeline '${pipelineId}' but could not move it to ${targetStatus} ` +
-            `(${this.describeRefusal(outcome)}). It stays in ${model.Status ?? 'Draft'} for a human to review in Predictive Studio.`,
-        );
-      }
+  /**
+   * Train the pipeline (real TrainingEngine path) and evaluate its run through the lifecycle gate; nothing is published
+   * (M4b). The new model is served only when the gate moved it to Validated and its run flagged no leakage.
+   *
+   * @throws Error naming the model and why when the gate refused it, kept the baseline, or the run flagged leakage
+   */
+  protected async TrainAndEvaluate(pipelineId: string, ctx: GateContext): Promise<string> {
+    const model = await this.train(pipelineId, ctx.Provider, ctx.ContextUser);
+    const where = `Auto-train: trained model '${model.ID}' from pipeline '${pipelineId}'`;
+    if (!model.TrainingRunID) throw new Error(`${where} names no training run, so the lifecycle gate cannot evaluate it.`);
+    const outcome = await this.gate.Evaluate({ trainingRunId: model.TrainingRunID }, AUTO_TRAIN_ACTOR, ctx);
+    if (outcome.Kind !== 'evaluated') {
+      throw new Error(`${where} but the lifecycle gate did not evaluate it (${GateRefusals.Describe(outcome.Refusal)}). It stays in Draft for a person to review in Predictive Studio.`);
+    }
+    if (outcome.To !== 'Validated') {
+      throw new Error(`${where}: the lifecycle gate kept the simple baseline (${outcome.To}), which does not score until a person publishes it in Predictive Studio.`);
+    }
+    const flags = await this.ReadLeakageFlags(model.TrainingRunID, ctx);
+    if (flags.length > 0) {
+      throw new Error(`${where}: its training run flagged ${flags.join(', ')}, so it is not served until a person records a sign-off in Predictive Studio.`);
     }
     return model.ID;
   }
 
-  /** Plain description of a non-promoted outcome ({@link ProductionModelPromotionGate.DescribeRefusal}). */
-  protected describeRefusal(outcome: PromoteModelOutcome): string {
-    return ProductionModelPromotionGate.DescribeRefusal(outcome);
+  /**
+   * The leakage-flag kinds the training run stores (`ValidationResults.trainer.leakageFlags`). The gate refuses to
+   * publish such a model; auto-train, which serves the Validated model until M4b, refuses to serve it the same way.
+   */
+  protected async ReadLeakageFlags(trainingRunId: string, ctx: GateContext): Promise<readonly LeakageFlag['kind'][]> {
+    const run = await StoredRuns.Read(trainingRunId, ctx);
+    return [...new Set((run?.Trainer?.leakageFlags || []).map((f) => f.kind))];
   }
 
   // ----- repoint ------------------------------------------------------------
@@ -232,15 +266,23 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     return result.Success ? result.Results : [];
   }
 
-  /** Archive the superseded model when it was Published (best-effort — never fails the run). */
-  protected async archiveSuperseded(oldModelId: string | null, newModelId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+  /**
+   * Archive the superseded model through the lifecycle gate (best-effort — never fails the run). A model the lifecycle
+   * table cannot archive (a Draft, or one already Archived) and an ID that names no model are left alone; any other
+   * refusal is logged.
+   */
+  protected async ArchiveSupersededModel(oldModelId: string | null, newModelId: string, ctx: GateContext): Promise<void> {
     if (oldModelId === null || !IsValidUUID(oldModelId) || UUIDsEqual(oldModelId, newModelId)) {
       return;
     }
     try {
-      const outcome = await this.gate.promote({ modelId: oldModelId, targetStatus: 'Archived', signOff: false, contextUser, provider });
-      if (outcome.kind !== 'promoted' && outcome.kind !== 'invalid-transition' && outcome.kind !== 'not-found') {
-        LogError(`Auto-train: could not archive superseded model '${oldModelId}': ${this.describeRefusal(outcome)}`);
+      const result = await this.gate.Archive(oldModelId, `Superseded by auto-train's model ${newModelId}.`, AUTO_TRAIN_ACTOR, ctx);
+      if (result.Ok === true) return;
+      const refusal = result.Refusal;
+      if (!('kind' in refusal)) {
+        LogError(`Auto-train: could not archive superseded model '${oldModelId}': its artifact load was ${refusal.Load.Status}`);
+      } else if (refusal.kind !== 'illegal-transition' && refusal.kind !== 'model-not-found') {
+        LogError(`Auto-train: could not archive superseded model '${oldModelId}': ${GateRefusals.Describe(refusal)}`);
       }
     } catch (e) {
       LogError(`Auto-train: archiving superseded model '${oldModelId}' failed: ${e instanceof Error ? e.message : String(e)}`);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EvaluationProtocolRules, type EvaluationProtocolSpec, type PredictionUnitSpec } from '../index';
+import { EvaluationProtocol, EvaluationProtocolRules, type EvaluationProtocolSpec, type PredictionUnitSpec } from '../index';
 import { ProtocolEdits, type ProtocolEditForm } from '../protocol-edit';
 
 const unit: PredictionUnitSpec = {
@@ -41,6 +41,21 @@ describe('protocol editing (a new version from the previous one)', () => {
     expect(r.Draft.exclusions).toEqual(base.exclusions);
     expect(Object.keys(r.Draft)).not.toContain('id');
     expect(Object.keys(r.Draft)).not.toContain('authoredBy');
+  });
+  it('a default rollbackOn follows an edited margin (the absent-member default tracks the rule margin, §5.1)', () => {
+    expect(base.promotion.rollbackOn).toEqual({ kind: 'previous-beats-current', margin: 0, consecutivePeriods: 2 });
+    const r = edited({ Margin: 0.01 });
+    if (!r.Ok) throw new Error(r.Error);
+    expect(r.Draft.promotion.rollbackOn).toEqual({ kind: 'previous-beats-current', margin: 0.01, consecutivePeriods: 2 });
+  });
+  it('an explicitly authored rollbackOn, or null, is kept on a margin edit', () => {
+    const authored = { kind: 'previous-beats-current', margin: EvaluationProtocol.ToNonNegative(0.05), consecutivePeriods: 3 } as const;
+    for (const rollbackOn of [authored, null]) {
+      const from: EvaluationProtocolSpec = { ...base, promotion: { ...base.promotion, rollbackOn } };
+      const r = ProtocolEdits.ApplyProtocolEdits(from, { ...ProtocolEdits.ProtocolEditFormFrom(from), Margin: 0.01 });
+      if (!r.Ok) throw new Error(r.Error);
+      expect([r.Draft.promotion.margin, r.Draft.promotion.rollbackOn]).toEqual([0.01, rollbackOn]);
+    }
   });
   it('applies folds and repeats to the inner validation and trims the name', () => {
     const r = edited({ Folds: 7, Repeats: 2, Name: '  Visits protocol v2  ' });

@@ -18,6 +18,13 @@ describe('Wilson interval (z = 1.959963984540054)', () => {
 });
 
 describe('the seed rules', () => {
+  it('noise-publish-400 (G3.4) accepts 0–28 of 400, and 0–4 of a 40-seed subset (the same Wilson rule)', () => {
+    expect(SeedRule.AcceptanceRange('noise-publish-400', 400)).toEqual({ Min: 0, Max: 28 });
+    expect(SeedRule.Passes('noise-publish-400', 28, 400)).toBe(true);
+    expect(SeedRule.Passes('noise-publish-400', 29, 400)).toBe(false);
+    expect(SeedRule.AcceptanceRange('noise-publish-400', 40)).toEqual({ Min: 0, Max: 4 });
+  });
+
   it('noise-publish-60 (G0.2) accepts 0–6 of 60', () => {
     expect(SeedRule.AcceptanceRange('noise-publish-60', 60)).toEqual({ Min: 0, Max: 6 });
     expect(SeedRule.Passes('noise-publish-60', 6, 60)).toBe(true);

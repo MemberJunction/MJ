@@ -187,6 +187,11 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
         Reason: 'IT52 is parked (requiresEnv RUN_SEARCH_TESTS): the host lane has no lexical search provider; un-parking needs one provisioned or the unconfigured detection in the bundle fixed.'
     },
     {
+        CheckId: 'predictive-shadow-drift.PSD1',
+        Gate: 'pending-ruling',
+        Reason: 'awaits M6.8: its fixture publishes a model outside the lifecycle gate (PR 4 D4-94)'
+    },
+    {
         CheckId: 'prompt-eval-harness.PE7',
         Gate: 'fixture',
         Reason: 'Needs the prompt-eval corpus in the database; CI pushes only metadata and metadata-optional/integration-test, '

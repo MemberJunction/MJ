@@ -1,0 +1,116 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio: Lock Pipeline For Publish",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Lock this training pipeline so no other publish of it can run until my transaction ends, or tell me at once that another publish holds it.",
+      "Description": "Takes an update lock on one MJ: ML Training Pipelines row for the rest of the caller's transaction, serialising every publish of that pipeline. NOWAIT: when another transaction holds the lock it fails at once, and the Predictive Studio lifecycle gate waits up to 30 s by retrying.",
+      "SQL": "@file:SQL/predictive-studio-lock-pipeline.sql",
+      "TechnicalDescription": "SELECT ID FROM MLTrainingPipeline WITH (UPDLOCK, HOLDLOCK, NOWAIT) WHERE ID = PipelineID. Must run inside the caller's transaction on the caller's provider: the update and key-range locks are held until commit or rollback (a missing ID is range-locked too and returns no row). NOWAIT never waits: a held lock raises SQL Server error 1222 immediately; the lifecycle gate (LockPipelineAndModel) waits up to 30 s by retrying on 1222 with backoff, then refuses publish-in-progress (transient; D4-91). Single statement, as the platform's safety gate requires. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "B836D110-3B25-4D5D-8143-F9B4C60E92A5"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "PipelineID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the MJ: ML Training Pipelines row to lock.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "731C5192-A681-46F8-B510-08C777D5B149"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Lock Model For Publish",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Lock this model and tell me its current status, so I can check it is still in the state I expect before I change it, or tell me at once that another transition holds it.",
+      "Description": "Takes an update lock on one MJ: ML Models row for the rest of the caller's transaction and returns its Status; the Predictive Studio lifecycle gate refuses a transition unless it equals the expected from-state. NOWAIT: a held lock fails at once, and the lifecycle gate waits up to 30 s by retrying.",
+      "SQL": "@file:SQL/predictive-studio-lock-model.sql",
+      "TechnicalDescription": "SELECT Status FROM MLModel WITH (UPDLOCK, HOLDLOCK, NOWAIT) WHERE ID = ModelID. Must run inside the caller's transaction on the caller's provider, after the pipeline lock for a publish (D-020): the update and key-range locks are held until commit or rollback, so no other gate transition of the model interleaves. NOWAIT never waits: a held lock raises SQL Server error 1222 immediately; the lifecycle gate (LockPipelineAndModel) waits up to 30 s by retrying on 1222 with backoff, then refuses publish-in-progress (transient; D4-91). Returns one row when the model exists, none otherwise. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "D32FFABA-5191-4836-B769-EAEBB90779C0"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "ModelID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the MJ: ML Models row to lock and read.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9F645A4B-CE90-46F0-AAB9-61952C66FE52"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Next Model Version",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "What version number should the next model of this training pipeline get?",
+      "Description": "Returns the next MJ: ML Models version for one training pipeline (the highest existing version plus one, or 1 for a pipeline with no models), holding the pipeline's model range locked so concurrent trainings receive distinct versions. Runs after the caller holds the pipeline lock, so it does not wait.",
+      "SQL": "@file:SQL/predictive-studio-next-model-version.sql",
+      "TechnicalDescription": "SELECT COALESCE(MAX(Version), 0) + 1 AS NextVersion FROM MLModel WITH (UPDLOCK, HOLDLOCK) WHERE PipelineID = PipelineID. Must run inside the caller's transaction after Predictive Studio: Lock Pipeline For Publish has locked the pipeline: every allocation for the pipeline is serialised behind that lock, so this read never waits (no NOWAIT needed); the key-range locks on the pipeline's models are held until commit or rollback, so two allocations cannot read the same maximum. Always returns exactly one row. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "46A5A870-4507-4846-BCCB-9BC4B9B41A97"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "PipelineID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the MJ: ML Training Pipelines row whose next model version to allocate.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7D762D4F-434A-4BEE-B757-C4AABBD2ECFD"
+          }
+        }
+      ]
+    }
+  }
+]

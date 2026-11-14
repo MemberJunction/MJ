@@ -4,6 +4,7 @@ import { RecordProcessorRegistry } from '@memberjunction/record-set-processor-ba
 import { MLModelInferenceProcessor, ML_INFERENCE_WORK_TYPE } from '../ml-model-inference-processor';
 import { ML_INFERENCE_WORK_TYPES } from '../register';
 import { PredictiveStudioScoringStartup } from '../startup-register';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Tests for the startup sink (PS2-1). After `HandleStartup()` runs at boot, a saved
@@ -69,12 +70,16 @@ describe('PredictiveStudioScoringStartup', () => {
       },
     };
 
+    const errors = ConsoleCapture.Errors();
     const proc = RecordProcessorRegistry.Instance.Resolve({
       WorkType: ML_INFERENCE_WORK_TYPE,
       Configuration: JSON.stringify({ modelId: '11111111-1111-1111-1111-111111111111' }),
       RecordProcess: mockRp,
     }) as MLModelInferenceProcessor;
 
+    expect(ConsoleCapture.Lines(errors)).toEqual([
+      "Record Process '': failed to parse ChallengerConfiguration; ignoring challenger config: Unexpected token in JSON: {\"Enabled\":true,}",
+    ]);
     expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
     expect((proc as unknown as { challengerConfig?: unknown }).challengerConfig).toBeUndefined();
   });

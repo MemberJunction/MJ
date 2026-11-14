@@ -18,6 +18,7 @@ import {
   type FeatureStepGraph,
   type AsOfStrategy,
   type ValidationStrategy,
+  type StoredFile,
 } from '@memberjunction/predictive-studio-core';
 
 import { TrainerResultMalformedError } from '@memberjunction/predictive-studio-sidecar';
@@ -39,6 +40,7 @@ import type {
 } from '../../feature-assembly';
 import { MLModelInferenceProcessor } from '../../scoring/ml-model-inference-processor';
 import { InMemoryArtifactLoader } from '../../scoring/artifact-loader';
+import { SnapshotHash } from '../../snapshot/snapshot-hash';
 import type { MLInferenceDeps } from '../../scoring/types';
 import type { RecordProcessorContext } from '@memberjunction/record-set-processor-base';
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
@@ -166,7 +168,7 @@ function importanceOf(sourceColumn: string, value: number): SourceColumnImportan
 class FailingArtifactStore extends InMemoryArtifactStore {
   public readonly DeletedIDs: string[] = [];
   constructor(private readonly failingName: string) { super(); }
-  public override async save(bytes: Uint8Array, name: string): Promise<string> {
+  public override async save(bytes: Uint8Array, name: string): Promise<StoredFile> {
     if (name.includes(this.failingName)) throw new Error(`disk full writing ${name}`);
     return super.save(bytes, name);
   }
@@ -311,8 +313,11 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     const trained = models[0];
     trained.Status = 'Validated';
     trained.ArtifactFileID = 'file-1';
+    const modelBytes = new TextEncoder().encode('model-bytes');
+    // Scoring loads only a verified artifact: the loader holds other bytes than the run stored, so register their hash.
+    trained.ArtifactSha256 = SnapshotHash.Sha256Hex(modelBytes);
     const artifacts = new InMemoryArtifactLoader();
-    artifacts.Set('file-1', new TextEncoder().encode('model-bytes'));
+    artifacts.Set('file-1', modelBytes);
     const scoringDeps: MLInferenceDeps = {
       // The model row training wrote (it carries the pipeline ID), read back as scoring loads it: one deliberate
       // test-double cast at the seam, as this file's entity factory does (a field-bag fake is not a BaseEntity).
@@ -774,7 +779,7 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
     ['an artifact whose bytes do not match its SHA-256', (r: TrainerRequest): TrainerCompleted => {
       const c = cannedFor(r);
       return { ...c, artifacts: c.artifacts.map((a) => (a.candidate === 'glm' ? { ...a, sha256: 'd'.repeat(64) } : a)) };
-    }, /artifact 'glm': its bytes hash to [0-9a-f]{64}, not the stated dddd/],
+    }, /artifact 'glm': its bytes have sha256 [0-9a-f]{64}, not the stated sha256 dddd/],
     ['an artifact built for another feature schema', (r: TrainerRequest): TrainerCompleted => {
       const c = cannedFor(r);
       return { ...c, artifacts: c.artifacts.map((a) => (a.candidate === 'oneFeature' ? { ...a, featureSchemaHash: 'e'.repeat(64) } : a)) };
@@ -984,7 +989,7 @@ describe('TrainingEngine — the gate decision decides what ships', () => {
   it("names the pipeline's algorithm when the kept member's driver has no catalog row, and stores the shipped driver in the lineage", async () => {
     // The finalist candidate runs on its own algorithm row (`algo-xgb2`), so the row must name the pipeline's, not the finalist's.
     const { engine, deps, pipeline } = protocolHarness(cannedFor);
-    deps.recordLoader = new FakeRecordLoader(pipeline, 5, {});
+    deps.recordLoader = new FakeRecordLoader(pipeline, {});
     const candidates = [TrainerRequestBuilder.CandidateFromPipeline('xgb', 'algo-xgb2', 'xgboost', '{"max_depth":2}')];
     const { model } = await engine.trainModel({ pipelineId: pipeline.ID, candidates }, deps);
     expect(model?.AlgorithmID).toBe('algo-xgb');

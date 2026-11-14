@@ -6,6 +6,7 @@ import type { RecordRef } from '@memberjunction/record-set-processor-base';
 
 import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
 import { InMemoryArtifactLoader } from '../../scoring/artifact-loader';
+import { SnapshotHash } from '../../snapshot/snapshot-hash';
 import type { IMLModelLoader, ISidecarPredictor } from '../../scoring/types';
 
 /** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
@@ -198,6 +199,8 @@ class IndividualsModel {
   public ID = 'model-1';
   public Status: MJMLModelEntity['Status'] = 'Published';
   public ArtifactFileID: string | null = 'file-1';
+  /** The registered SHA-256 of the bytes each test stores under `file-1`. */
+  public ArtifactSha256: string | null = SnapshotHash.Sha256Hex(new TextEncoder().encode('bytes'));
   public FittedPreprocessing: string | null = '{}';
   public FeatureSchema = JSON.stringify(SCHEMA);
   public ProblemType: 'classification' | 'regression' = 'classification';

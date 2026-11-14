@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type sql from 'mssql';
 import { BootstrapIntegrationServer, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
+import { ConsoleCapture } from '../../__tests__/fixtures/console-capture';
 import { TruthCsv } from '../csv';
 import { TruthConnection } from '../connection';
 import { DatasetLoader, type DatasetLoadContext, type DatasetRow } from '../dataset-loader';
@@ -47,7 +48,9 @@ describe('per-dataset loader isolation (M4.4)', () => {
   let ctx: DatasetLoadContext;
 
   beforeAll(async () => {
-    server = await BootstrapIntegrationServer();
+    const boot = await ConsoleCapture.During('log', () => BootstrapIntegrationServer());
+    expect(ConsoleCapture.UnexpectedBootstrapLines(boot.Lines)).toEqual([]);
+    server = boot.Result;
     pool = await TruthConnection.OpenPool();
     ctx = { Provider: server.Provider, User: server.User, Pool: pool };
   });

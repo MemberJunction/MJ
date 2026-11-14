@@ -18,15 +18,17 @@
  * scores with this model.
  *
  * ## Idempotency
- * Mirrors {@link IntegrationActionGenerator}: the Action is found-or-created by its
- * deterministic Name, and its child params are deleted + recreated on every run so
- * they stay exactly in sync with the parent's contract.
+ * The Action is found by its `ModelID` input param — the generated child of the Score Record Set parent whose `ModelID`
+ * defaults to the model's id — never by its Name: the Name carries the pipeline's name, which can change after the
+ * model is published. Found-or-created that way, its Name, fields and child params are rewritten on every run so they
+ * stay exactly in sync with the model and the parent's contract.
  *
- * All saves are checked and failures are logged (never thrown up to the promote —
- * action generation is an enhancement, not part of the promotion contract).
+ * All saves are checked and failures are logged. The lifecycle gate calls this only after a transition commits
+ * (`LifecycleGate.SyncScoringAction`), so a failure here never rolls a publish back.
  */
 
 import { RunView, LogError, LogStatus, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type {
   MJMLModelEntity,
   MJActionEntity,
@@ -45,6 +47,9 @@ const PARENT_ACTION_NAME = 'Score Record Set';
 /** Font Awesome icon for generated scoring actions (matches the parent). */
 const SCORING_ICON_CLASS = 'fa-solid fa-gauge-high';
 
+/** The input param whose `DefaultValue` names the model a generated Action scores with. */
+const MODEL_ID_PARAM_NAME = 'ModelID';
+
 /** Shape of a single Action Param to (re)create. Mirrors the parent's contract. */
 interface ParamSpec {
   Name: string;
@@ -62,10 +67,9 @@ interface ParamSpec {
  */
 export class ModelScoringActionGenerator {
   /**
-   * Find-or-create the per-model scoring Action for `model` and reconcile its
-   * params. Idempotent on the deterministic Action Name. Logs and returns on any
-   * failure (the parent action is missing, a save fails) rather than throwing —
-   * callers must never let scoring-action generation break the promotion path.
+   * Find-or-create the per-model scoring Action for `model` (found by its `ModelID` param) and reconcile its name and
+   * params. Logs and returns on a failure it can name (the parent action is missing, a save fails); a failed read
+   * throws, and the lifecycle gate logs it after the transition it followed has committed.
    */
   public async GenerateForModel(
     model: MJMLModelEntity,
@@ -92,27 +96,17 @@ export class ModelScoringActionGenerator {
     LogStatus(`ModelScoringActionGenerator: ensured scoring action '${action.Name}' for model '${model.ID}'.`);
   }
 
-  /** @deprecated Use {@link GenerateForModel}. */
-  public async generateForModel(
-    model: MJMLModelEntity,
-    contextUser: UserInfo,
-    provider: IMetadataProvider,
-  ): Promise<void> {
-    return this.GenerateForModel(model, contextUser, provider);
-  }
-
   /**
-   * Disable the generated scoring Action for `model` (e.g. when the model is
-   * Archived) by flipping its Status to `Disabled`. A no-op when no generated
-   * action exists. Never throws.
+   * Disable the generated scoring Action for `model` (when it leaves `Published`) by flipping its Status to `Disabled`.
+   * The Action is found by its `ModelID` param, so a pipeline renamed since the publish still finds it. A no-op when no
+   * generated action exists.
    */
   public async DisableForModel(
     model: MJMLModelEntity,
     contextUser: UserInfo,
     provider: IMetadataProvider,
   ): Promise<void> {
-    const name = this.scoringActionName(model);
-    const existing = await this.findActionByName(name, provider, contextUser);
+    const existing = await this.FindActionForModel(model.ID, provider, contextUser);
     if (!existing) {
       return;
     }
@@ -122,21 +116,53 @@ export class ModelScoringActionGenerator {
     existing.Status = 'Disabled';
     if (!(await existing.Save())) {
       LogError(
-        `ModelScoringActionGenerator: failed to disable action '${name}': ` +
+        `ModelScoringActionGenerator: failed to disable action '${existing.Name}': ` +
           `${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`,
       );
       return;
     }
-    LogStatus(`ModelScoringActionGenerator: disabled scoring action '${name}' for archived model '${model.ID}'.`);
+    LogStatus(`ModelScoringActionGenerator: disabled scoring action '${existing.Name}' for archived model '${model.ID}'.`);
   }
 
-  /** @deprecated Use {@link DisableForModel}. */
-  public async disableForModel(
-    model: MJMLModelEntity,
-    contextUser: UserInfo,
-    provider: IMetadataProvider,
-  ): Promise<void> {
-    return this.DisableForModel(model, contextUser, provider);
+  /**
+   * The generated scoring Action of `modelId`: the child Action whose `ModelID` input param defaults to the model's id
+   * and which runs the scoring driver; null when there is none.
+   *
+   * @throws Error when a read fails (a failed read is not "no Action": generating would then create a duplicate)
+   */
+  protected async FindActionForModel(modelId: string, provider: IMetadataProvider, contextUser: UserInfo): Promise<MJActionEntity | null> {
+    const rv = RunView.FromMetadataProvider(provider);
+    const params = await rv.RunView<Pick<MJActionParamEntity, 'ActionID' | 'DefaultValue'>>(
+      {
+        EntityName: 'MJ: Action Params',
+        ExtraFilter: `Name='${MODEL_ID_PARAM_NAME}' AND Type='Input' AND DefaultValue='${EscapeSQLString(modelId)}'`,
+        Fields: ['ActionID', 'DefaultValue'],
+        ResultType: 'simple',
+      },
+      contextUser,
+    );
+    if (!params.Success) throw new Error(`ModelScoringActionGenerator: reading the ModelID params of model '${modelId}' failed: ${params.ErrorMessage || 'unknown error'}`);
+    for (const param of params.Results.filter((p) => UUIDsEqual(p.DefaultValue, modelId))) {
+      const action = await this.findGeneratedAction(param.ActionID, provider, contextUser);
+      if (action !== null) return action;
+    }
+    return null;
+  }
+
+  /** The Action `actionId` when it is a generated scoring child (the scoring driver, under a parent); else null. */
+  private async findGeneratedAction(actionId: string, provider: IMetadataProvider, contextUser: UserInfo): Promise<MJActionEntity | null> {
+    const result = await RunView.FromMetadataProvider(provider).RunView<MJActionEntity>(
+      {
+        EntityName: 'MJ: Actions',
+        ExtraFilter: `ID='${EscapeSQLString(actionId)}' AND DriverClass='${EscapeSQLString(SCORE_RECORD_SET_DRIVER_CLASS)}' AND ParentID IS NOT NULL`,
+        MaxRows: 1,
+        SkipTotalRowCount: true,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!result.Success) throw new Error(`ModelScoringActionGenerator: reading Action '${actionId}' failed: ${result.ErrorMessage || 'unknown error'}`);
+    return result.Results[0] || null;
   }
 
   // ----- category ------------------------------------------------------------
@@ -154,7 +180,7 @@ export class ModelScoringActionGenerator {
     const existing = await rv.RunView<MJActionCategoryEntity>(
       {
         EntityName: 'MJ: Action Categories',
-        ExtraFilter: `Name='${this.escape(MODELS_CATEGORY_NAME)}'`,
+        ExtraFilter: `Name='${EscapeSQLString(MODELS_CATEGORY_NAME)}'`,
         MaxRows: 1,
         SkipTotalRowCount: true,
         ResultType: 'entity_object',
@@ -197,8 +223,8 @@ export class ModelScoringActionGenerator {
       {
         EntityName: 'MJ: Actions',
         ExtraFilter:
-          `Name='${this.escape(PARENT_ACTION_NAME)}' AND ` +
-          `DriverClass='${this.escape(SCORE_RECORD_SET_DRIVER_CLASS)}' AND ParentID IS NULL`,
+          `Name='${EscapeSQLString(PARENT_ACTION_NAME)}' AND ` +
+          `DriverClass='${EscapeSQLString(SCORE_RECORD_SET_DRIVER_CLASS)}' AND ParentID IS NULL`,
         MaxRows: 1,
         SkipTotalRowCount: true,
         ResultType: 'entity_object',
@@ -211,9 +237,9 @@ export class ModelScoringActionGenerator {
   // ----- action upsert (idempotent) -----------------------------------------
 
   /**
-   * Find-or-create the per-model scoring Action by its deterministic Name and
-   * apply its fields. The child reuses the parent's DriverClass (composition) and
-   * links via ParentID. Returns the saved row, or null on save failure (logged).
+   * Find-or-create the per-model scoring Action (found by its `ModelID` param) and apply its fields, its Name included.
+   * The child reuses the parent's DriverClass (composition) and links via ParentID. Returns the saved row, or null on
+   * save failure (logged).
    */
   protected async upsertScoringAction(
     model: MJMLModelEntity,
@@ -223,7 +249,7 @@ export class ModelScoringActionGenerator {
     contextUser: UserInfo,
   ): Promise<MJActionEntity | null> {
     const name = this.scoringActionName(model);
-    const existing = await this.findActionByName(name, provider, contextUser);
+    const existing = await this.FindActionForModel(model.ID, provider, contextUser);
     const action = existing ?? (await provider.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser));
     if (!existing) {
       action.NewRecord();
@@ -248,26 +274,6 @@ export class ModelScoringActionGenerator {
       return null;
     }
     return action;
-  }
-
-  /** Load an Action by exact Name (idempotency lookup), or null. */
-  protected async findActionByName(
-    name: string,
-    provider: IMetadataProvider,
-    contextUser: UserInfo,
-  ): Promise<MJActionEntity | null> {
-    const rv = RunView.FromMetadataProvider(provider);
-    const result = await rv.RunView<MJActionEntity>(
-      {
-        EntityName: 'MJ: Actions',
-        ExtraFilter: `Name='${this.escape(name)}'`,
-        MaxRows: 1,
-        SkipTotalRowCount: true,
-        ResultType: 'entity_object',
-      },
-      contextUser,
-    );
-    return result.Success && result.Results.length > 0 ? result.Results[0] : null;
   }
 
   // ----- param recreation ----------------------------------------------------
@@ -317,7 +323,7 @@ export class ModelScoringActionGenerator {
     const result = await rv.RunView<MJActionParamEntity>(
       {
         EntityName: 'MJ: Action Params',
-        ExtraFilter: `ActionID='${this.escape(actionID)}'`,
+        ExtraFilter: `ActionID='${EscapeSQLString(actionID)}'`,
         ResultType: 'entity_object',
       },
       contextUser,
@@ -437,10 +443,5 @@ export class ModelScoringActionGenerator {
   /** The model's version, defaulting to 1 when unset. */
   protected modelVersion(model: MJMLModelEntity): number {
     return model.Version ?? 1;
-  }
-
-  /** Single-quote-escape a value for safe SQL filter interpolation. */
-  private escape(value: string): string {
-    return value.replace(/'/g, "''");
   }
 }

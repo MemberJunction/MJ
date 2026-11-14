@@ -11,7 +11,7 @@ import { InMemoryArtifactLoader } from '../artifact-loader';
 import {
   ModelHasTrainedArtifact,
   ModelNeedsTrainingMessage,
-  ModelArtifactMissingMessage,
+  ArtifactUnavailableError,
   ModelNeedsTrainingError,
   ModelNotServableError,
   ModelReadiness,
@@ -20,10 +20,15 @@ import { AutoTrainShippedNoModelError, PipelineAutoTrainer } from '../auto-train
 import { TrainingDelegation } from '../../operations/delegation';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import type { AutoTrainRequest, IMLModelLoader, IModelAutoTrainer, ISidecarPredictor, MLInferenceDeps } from '../types';
-import type { IModelPromotionGate, PromoteModelOutcome, PromoteModelRequest } from '../../actions/promote-model.action';
+import type { Actor, LeakageFlag, TransitionRefusal } from '@memberjunction/predictive-studio-core';
+import { LifecycleGate } from '../../registry/lifecycle-gate';
+import type { EvaluateOutcome, EvaluateSubject, GateApplyResult, GateContext, PublishOutcome, PublishRequest } from '../../registry/gate-context';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult } from '../../feature-assembly';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import { ArtifactRegistry } from '../../registry/artifact-registry';
+import { InMemoryArtifactStore } from '../../training/artifact-store';
+import { SnapshotHash } from '../../snapshot/snapshot-hash';
 
 /** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
 const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
@@ -38,6 +43,13 @@ const NO_TRAINING_ROWS = { TrainingRowIDsOf: async (): Promise<ReadonlySet<strin
 
 const SCHEMA: FeatureSchemaEntry[] = [{ Name: 'tenure', Kind: 'numeric' }];
 
+/** The registered SHA-256 of the bytes each test stores under a file id (`setup` stores `file-1`, the auto-trainer `file-trained`). */
+const REGISTERED_SHA256: Record<string, string> = {
+  'file-1': SnapshotHash.Sha256Hex(new TextEncoder().encode('bytes')),
+  'file-trained': SnapshotHash.Sha256Hex(new TextEncoder().encode('trained-bytes')),
+  'file-elsewhere': SnapshotHash.Sha256Hex(new TextEncoder().encode('bytes stored on another host')),
+};
+
 /** A model fake exposing exactly what the processor reads. */
 class FakeModel {
   public Status: MJMLModelEntity['Status'] = 'Published';
@@ -51,7 +63,15 @@ class FakeModel {
     featureSteps: { Steps: [{ Id: 's1', Kind: 'select', Columns: ['tenure'] }] },
     asOfStrategy: { Mode: 'none' },
   });
-  constructor(public ID: string, public ArtifactFileID: string | null) {}
+  public ArtifactStatus: MJMLModelEntity['ArtifactStatus'] = 'verified';
+  public ArtifactCheckedAt: Date | null = null;
+  public ArtifactSha256: string | null;
+  constructor(public ID: string, public ArtifactFileID: string | null) {
+    this.ArtifactSha256 = ArtifactFileID === null ? null : REGISTERED_SHA256[ArtifactFileID] ?? null;
+  }
+  public async Save(): Promise<boolean> {
+    return true;
+  }
 }
 
 /** Loader fake keyed by model id. */
@@ -121,9 +141,8 @@ describe('model readiness helpers', () => {
     expect(ModelHasTrainedArtifact({ ID: 'm', ArtifactFileID: 'file-1' })).toBe(true);
   });
 
-  it('produces plain, actionable messages', () => {
+  it('produces a plain, actionable message', () => {
     expect(ModelNeedsTrainingMessage('m-1')).toMatch(/needs training/);
-    expect(ModelArtifactMissingMessage('m-1', 'f-1')).toMatch(/needs training on this server/);
   });
 });
 
@@ -174,10 +193,13 @@ describe('MLModelInferenceProcessor.Preflight — needs-training refusal', () =>
     expect((err as Error).message).toMatch(/needs training/);
   });
 
-  it('refuses a model whose artifact bytes are missing on this server', async () => {
+  it('refuses a model whose artifact bytes are missing on this server as artifact-missing, not "needs training"', async () => {
     const { deps } = setup([new FakeModel('model-1', 'file-elsewhere')]);
     const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler());
-    await expect(proc.Preflight(CTX)).rejects.toThrow(/needs training on this server/);
+    const attempt = proc.Preflight(CTX);
+    await expect(attempt).rejects.toBeInstanceOf(ArtifactUnavailableError);
+    await expect(attempt).rejects.toMatchObject({ Refusal: { kind: 'artifact-missing', fileId: 'file-elsewhere' } });
+    await expect(attempt).rejects.toThrow("MLModelInferenceProcessor: ML Model 'model-1': its model artifact file 'file-elsewhere' is missing from storage");
   });
 
   it('ignores autoTrain when no trainer is wired (plain refusal)', async () => {
@@ -212,6 +234,29 @@ describe('MLModelInferenceProcessor.Preflight — opt-in auto-train', () => {
     const proc = new MLModelInferenceProcessor({ modelId: '', deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
     await proc.Preflight(CTX);
     expect(trainer.Requests[0].currentModelId).toBeNull();
+  });
+
+  it('trains when the configured model\'s artifact is missing (artifact-missing), then scores with the trained model', async () => {
+    const { deps, map, artifacts } = setup([new FakeModel('model-1', 'file-elsewhere')]);
+    const trainer = new FakeAutoTrainer(map, artifacts);
+    const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
+    await proc.Preflight(CTX);
+    expect(trainer.Requests.map((r) => r.currentModelId)).toEqual(['model-1']);
+    expect((await proc.ProcessRecord(record('r1', 3), CTX)).Status).toBe('Succeeded');
+  });
+
+  it('does not train for an artifact that does not match its registered hash, or has none: a retrain must not paper over either', async () => {
+    const swapped = new FakeModel('model-1', 'file-1');
+    swapped.ArtifactSha256 = 'f'.repeat(64);
+    const unregistered = new FakeModel('model-2', 'file-1');
+    unregistered.ArtifactSha256 = null;
+    const { deps, map, artifacts } = setup([swapped, unregistered]);
+    const trainer = new FakeAutoTrainer(map, artifacts);
+    for (const [modelId, kind] of [['model-1', 'artifact-hash-mismatch'], ['model-2', 'artifact-unverified']] as const) {
+      const proc = new MLModelInferenceProcessor({ modelId, deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
+      await expect(proc.Preflight(CTX)).rejects.toMatchObject({ Refusal: { kind } });
+    }
+    expect(trainer.Requests).toHaveLength(0);
   });
 
   it('does not train for a model that is already trained', async () => {
@@ -250,25 +295,38 @@ describe('MLModelInferenceProcessor.Preflight — opt-in auto-train', () => {
 // PipelineAutoTrainer — reuse vs train+publish, with the DB-touching steps stubbed.
 // ---------------------------------------------------------------------------
 
-class RecordingGate implements IModelPromotionGate {
-  public Calls: Array<{ modelId: string; targetStatus: string }> = [];
-  constructor(private readonly refuse?: PromoteModelOutcome) {}
-  async promote(request: PromoteModelRequest): Promise<PromoteModelOutcome> {
-    this.Calls.push({ modelId: request.modelId, targetStatus: request.targetStatus });
-    if (this.refuse && request.targetStatus !== 'Archived') return this.refuse;
-    return { kind: 'promoted', newStatus: request.targetStatus };
+const NEW_RUN = '8A1C44F3-938C-4E65-B6DE-D621BC4C30AA';
+
+/** One lifecycle-gate call auto-train made. */
+interface AutoTrainGateCall { readonly Method: 'Evaluate' | 'Publish' | 'Archive'; readonly Subject: EvaluateSubject | { readonly modelId: string }; readonly Actor: Actor; readonly Reason?: string }
+
+/** A lifecycle gate fake recording each call; Evaluate refuses with `refusal` or evaluates to `to`, Archive always applies. */
+class RecordingGate extends LifecycleGate {
+  public readonly Calls: AutoTrainGateCall[] = [];
+  constructor(private readonly refusal?: TransitionRefusal, private readonly to: 'Validated' | 'KeepBaseline' = 'Validated') { super(); }
+  public override async Evaluate(subject: EvaluateSubject, actor: Actor, _ctx: GateContext): Promise<EvaluateOutcome> {
+    this.Calls.push({ Method: 'Evaluate', Subject: subject, Actor: actor });
+    return this.refusal === undefined ? { Kind: 'evaluated', ModelID: 'new-model', From: 'Draft', To: this.to } : { Kind: 'refused', Refusal: this.refusal };
+  }
+  public override async Publish(request: PublishRequest, _ctx: GateContext): Promise<PublishOutcome> {
+    this.Calls.push({ Method: 'Publish', Subject: { modelId: request.modelId }, Actor: request.initiator });
+    throw new Error('auto-train must not publish (M4b routes it through the automated publisher)');
+  }
+  public override async Archive(modelId: string, reason: string, actor: Actor, _ctx: GateContext): Promise<GateApplyResult> {
+    this.Calls.push({ Method: 'Archive', Subject: { modelId }, Actor: actor, Reason: reason });
+    return { Ok: true, ModelID: modelId, From: 'Published', To: 'Archived', Archived: null };
   }
 }
 
 class TestableAutoTrainer extends PipelineAutoTrainer {
   public Repointed: string[] = [];
   public TrainCount = 0;
-  constructor(gate: IModelPromotionGate, private readonly reusable: string | null) {
+  constructor(gate: LifecycleGate, private readonly reusable: string | null, private readonly flags: readonly LeakageFlag['kind'][] = []) {
     super({
       gate,
       train: async () => {
         this.TrainCount++;
-        return { ID: 'new-model', Status: 'Draft' } as unknown as MJMLModelEntity;
+        return { ID: 'new-model', Status: 'Draft', TrainingRunID: NEW_RUN } as unknown as MJMLModelEntity;
       },
     });
   }
@@ -278,7 +336,12 @@ class TestableAutoTrainer extends PipelineAutoTrainer {
   protected override async repoint(_r: AutoTrainRequest, modelId: string): Promise<void> {
     this.Repointed.push(modelId);
   }
+  protected override async ReadLeakageFlags(): Promise<readonly LeakageFlag['kind'][]> {
+    return this.flags;
+  }
 }
+
+const AUTO_TRAIN_ACTOR: Actor = { kind: 'system', component: 'auto-train' };
 
 const USER = undefined as unknown as UserInfo;
 const PROVIDER = undefined as unknown as IMetadataProvider;
@@ -286,7 +349,7 @@ const PIPE = '8A1C44F3-938C-4E65-B6DE-D621BC4C3001';
 const OLD = 'E93F0238-6902-4521-87D9-FE9A1201B001';
 
 describe('PipelineAutoTrainer', () => {
-  it('trains, publishes (Validated → Published), repoints, and archives the superseded model', async () => {
+  it('trains, evaluates the run (never publishes: the model stays Validated until M4b), repoints, and archives the superseded model', async () => {
     const status = ConsoleCapture.Status();
     const gate = new RecordingGate();
     const trainer = new TestableAutoTrainer(gate, null);
@@ -294,12 +357,11 @@ describe('PipelineAutoTrainer', () => {
     expect(id).toBe('new-model');
     expect(trainer.TrainCount).toBe(1);
     expect(gate.Calls).toEqual([
-      { modelId: 'new-model', targetStatus: 'Validated' },
-      { modelId: 'new-model', targetStatus: 'Published' },
-      { modelId: OLD, targetStatus: 'Archived' },
+      { Method: 'Evaluate', Subject: { trainingRunId: NEW_RUN }, Actor: AUTO_TRAIN_ACTOR },
+      { Method: 'Archive', Subject: { modelId: OLD }, Actor: AUTO_TRAIN_ACTOR, Reason: "Superseded by auto-train's model new-model." },
     ]);
     expect(trainer.Repointed).toEqual(['new-model']);
-    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Predictive Studio auto-train: pipeline '8A1C44F3-938C-4E65-B6DE-D621BC4C3001' \u2192 trained + published model 'new-model'.")]);
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Predictive Studio auto-train: pipeline '8A1C44F3-938C-4E65-B6DE-D621BC4C3001' \u2192 trained + evaluated (Validated) model 'new-model'.")]);
   });
 
   it('reuses an already-published, loadable model instead of retraining', async () => {
@@ -313,13 +375,21 @@ describe('PipelineAutoTrainer', () => {
     expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Predictive Studio auto-train: pipeline '8A1C44F3-938C-4E65-B6DE-D621BC4C3001' \u2192 reused model 'existing-model'.")]);
   });
 
-  it('refuses to publish a leakage-flagged model and says it needs human sign-off', async () => {
-    const gate = new RecordingGate({ kind: 'refused-leakage', topFeature: 'cancelled_flag', topShare: 0.95 });
-    const trainer = new TestableAutoTrainer(gate, null);
+  it('does not serve a model whose training run flagged leakage: it says a person must sign off, and repoints nothing', async () => {
+    const gate = new RecordingGate();
+    const trainer = new TestableAutoTrainer(gate, null, ['single-feature-auc']);
     await expect(
-      trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: null, recordProcessId: null }, USER, PROVIDER),
-    ).rejects.toThrow(/human sign-off/);
-    expect(trainer.Repointed).toHaveLength(0);
+      trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: OLD, recordProcessId: null }, USER, PROVIDER),
+    ).rejects.toThrow(/single-feature-auc.*sign-off/);
+    expect([trainer.Repointed, gate.Calls.map((c) => c.Method)]).toEqual([[], ['Evaluate']]);
+  });
+
+  it('a model the gate refuses to evaluate, or evaluates to KeepBaseline, is not served: the error names why, and nothing is repointed or archived', async () => {
+    for (const gate of [new RecordingGate({ kind: 'calibration-held', slope: 0.5 }), new RecordingGate(undefined, 'KeepBaseline')]) {
+      const trainer = new TestableAutoTrainer(gate, null);
+      await expect(trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: OLD, recordProcessId: null }, USER, PROVIDER)).rejects.toThrow(/new-model/);
+      expect([trainer.Repointed, gate.Calls.map((c) => c.Method)]).toEqual([[], ['Evaluate']]);
+    }
   });
 
   it('does not archive the reused model when the process already pointed at it (IDs compared as UUIDs, any letter case)', async () => {
@@ -349,8 +419,8 @@ describe('PipelineAutoTrainer.findReusableModel', () => {
     }
   }
   const rows = [
-    { ID: 'forecast-model', ArtifactFileID: 'file-forecast', Lineage: JSON.stringify({ shippedMember: 'seasonalNaive', shippedDriver: 'seasonal-naive' }) },
-    { ID: 'tabular-model', ArtifactFileID: 'file-tabular', Lineage: JSON.stringify({ shippedMember: 'xgb', shippedDriver: 'xgboost' }) },
+    { ID: 'forecast-model', ArtifactFileID: 'file-forecast', ArtifactSha256: SnapshotHash.Sha256Hex(new TextEncoder().encode('series')), Lineage: JSON.stringify({ shippedMember: 'seasonalNaive', shippedDriver: 'seasonal-naive' }) },
+    { ID: 'tabular-model', ArtifactFileID: 'file-tabular', ArtifactSha256: SnapshotHash.Sha256Hex(new TextEncoder().encode('tabular')), Lineage: JSON.stringify({ shippedMember: 'xgb', shippedDriver: 'xgboost' }) },
   ];
   const provider = {
     async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
@@ -363,7 +433,7 @@ describe('PipelineAutoTrainer.findReusableModel', () => {
     const artifacts = new InMemoryArtifactLoader();
     artifacts.Set('file-forecast', new TextEncoder().encode('series'));
     artifacts.Set('file-tabular', new TextEncoder().encode('tabular'));
-    expect(await new ReuseProbe({ artifactLoader: artifacts }).Reusable(provider)).toBe('tabular-model');
+    expect(await new ReuseProbe({ registry: new ArtifactRegistry(new InMemoryArtifactStore(), artifacts) }).Reusable(provider)).toBe('tabular-model');
   });
 });
 

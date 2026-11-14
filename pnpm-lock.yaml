@@ -1526,6 +1526,9 @@ importers:
         specifier: ^7.8.2
         version: 7.8.2
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.3.0-edge.0
+        version: link:../../../UnitTesting
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11

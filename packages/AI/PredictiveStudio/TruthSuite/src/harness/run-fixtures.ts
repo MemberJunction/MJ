@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { RunView, type UserInfo } from '@memberjunction/core';
-import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJMLTrainingPipelineEntity, PredictiveStudioModelTransition } from '@memberjunction/core-entities';
+import { GateRefusals } from '@memberjunction/predictive-studio';
 import { EscapeSQLString } from '@memberjunction/global';
 import { HarnessDatasets, type DatasetPool } from './datasets';
 import { HarnessPipelines, type AlgorithmRow } from './pipelines';
@@ -16,7 +17,7 @@ import { HarnessWorldTruth } from './world-truth';
 import { HarnessProvenance } from './provenance';
 import { HarnessSidecar } from './sidecar';
 import { W_WORLD_FEATURES, W_WORLD_DENY_FIELDS } from './w-world';
-import type { CandidateModel, LoadedDataset, PipelineSpec, TruthHarness } from './types';
+import type { CandidateModel, LoadedDataset, PipelineSpec, PromoteAttempt, TruthHarness } from './types';
 
 /** What every harness member closes over: one MJAPI connection, one mssql pool, the algorithm catalogue, the run id. */
 export interface RunContext {
@@ -44,7 +45,7 @@ export class RunFixtures {
   /** Every harness bound since the last cleanup, the current one last; cleanup closes them all. */
   private static bound: BoundHarness[] = [];
   private static w1Draft: Promise<CandidateModel> | null = null;
-  private static w1Validated: Promise<CandidateModel> | null = null;
+  private static w1Published: Promise<CandidateModel> | null = null;
 
   /**
    * The run's harness on a provider the caller already holds (an `mj test` check's client provider), built on first use
@@ -55,7 +56,7 @@ export class RunFixtures {
     let current = RunFixtures.bound[RunFixtures.bound.length - 1];
     if (current?.Provider !== provider) {
       RunFixtures.w1Draft = null;
-      RunFixtures.w1Validated = null;
+      RunFixtures.w1Published = null;
       current = { Provider: provider, Connection: RunFixtures.connect(provider, user) };
       RunFixtures.bound.push(current);
     }
@@ -72,7 +73,7 @@ export class RunFixtures {
     const bound = RunFixtures.bound;
     RunFixtures.bound = [];
     RunFixtures.w1Draft = null;
-    RunFixtures.w1Validated = null;
+    RunFixtures.w1Published = null;
     const failures: string[] = [];
     for (const b of bound) {
       failures.push(...(await RunFixtures.cleanupConnection(b, user)));
@@ -150,16 +151,50 @@ export class RunFixtures {
     return RunFixtures.w1Draft;
   }
 
-  /** Memoised W1 s42 Validated logistic-regression model, promoted via `h.Promote`. */
-  public static W1S42ValidatedModel(h: TruthHarness): Promise<CandidateModel> {
-    RunFixtures.w1Validated ||= (async (): Promise<CandidateModel> => {
+  /**
+   * Memoised W1 s42 logistic-regression model that scores: evaluated and then published through the lifecycle gate by
+   * the suite user ({@link PublishModel}). W1 s42's stored decision keeps the simple baseline, so `evaluate` alone
+   * leaves it `KeepBaseline`, which the scorer refuses; an interactive publish of `KeepBaseline` is allowed (§5.1).
+   */
+  public static W1S42PublishedModel(h: TruthHarness): Promise<CandidateModel> {
+    RunFixtures.w1Published ||= (async (): Promise<CandidateModel> => {
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
-      const id = await RunFixtures.TrainedModel(h, 'fixture W1 s42 validated', w1);
-      const promoted = await h.Promote(id, 'Validated', 'truth suite fixture: promote');
-      if (!promoted.Promoted) throw new Error(`could not promote fixture W1 s42 model (${promoted.Status})`);
+      const id = await RunFixtures.TrainedModel(h, 'fixture W1 s42 published', w1);
+      await RunFixtures.PublishModel(h, id, 'fixture W1 s42 published');
       return h.ReadModel(id);
     })();
-    return RunFixtures.w1Validated;
+    return RunFixtures.w1Published;
+  }
+
+  /**
+   * `evaluate` through the gate, asserting it applied and reached the training run's stored decision (`Validated` or
+   * `KeepBaseline`); throws naming the gate's answer otherwise. Returns the status reached. For a fixture that only
+   * inspects the model's status: a model that scores goes on to {@link PublishModel}.
+   */
+  public static async EvaluateModel(h: TruthHarness, modelId: string, tag: string): Promise<MJMLModelEntity['Status']> {
+    const evaluated = await h.Promote(modelId, 'evaluate', `truth suite fixture (${tag}): evaluate`);
+    RunFixtures.assertReached(evaluated, 'evaluate', modelId, tag, ['Validated', 'KeepBaseline']);
+    return evaluated.Status;
+  }
+
+  /** `evaluate`, then `publish` through the gate as the suite user, asserting the model reached `Published`; throws naming the gate's answer otherwise. */
+  public static async PublishModel(h: TruthHarness, modelId: string, tag: string): Promise<void> {
+    await RunFixtures.EvaluateModel(h, modelId, tag);
+    const published = await h.Promote(modelId, 'publish', `truth suite fixture (${tag}): publish so the gate's check can score it`);
+    RunFixtures.assertReached(published, 'publish', modelId, tag, ['Published']);
+  }
+
+  /** Throws unless the transition applied and left the model in one of `expected`, with the gate's refusal kind and words. */
+  private static assertReached(
+    attempt: PromoteAttempt, transition: PredictiveStudioModelTransition, modelId: string, tag: string, expected: readonly MJMLModelEntity['Status'][],
+  ): void {
+    if (attempt.Applied && expected.includes(attempt.Status)) return;
+    throw new Error(`${tag}: the ${transition} of ML Model ${modelId} left it ${attempt.Status}, not ${expected.join(' or ')} (the lifecycle gate's answer: ${RunFixtures.GateAnswer(attempt.Refusal)})`);
+  }
+
+  /** A gate refusal for a fixture's failure message: its kind and the gate's plain words, or "no refusal". */
+  public static GateAnswer(refusal: PromoteAttempt['Refusal']): string {
+    return refusal === null ? 'no refusal' : `${refusal.kind}: ${GateRefusals.Describe(refusal)}`;
   }
 
   /**
@@ -205,7 +240,7 @@ export class RunFixtures {
       RunBuilderAgent: (plan) => HarnessAgent.RunBuilderAgent(ctx, plan),
       ReadModel: (modelId) => HarnessModels.ReadModel(ctx, modelId),
       ModelsForPipelineNamePrefix: (prefix) => HarnessModels.ModelsForPipelineNamePrefix(ctx, prefix),
-      Promote: (modelId, target, reason) => HarnessModels.Promote(ctx, modelId, target, reason),
+      Promote: (modelId, transition, reason) => HarnessModels.Promote(ctx, modelId, transition, reason),
       Score: (modelId, req) => HarnessScoring.Score(ctx, modelId, req),
       ScoreViaRecordProcess: (modelId, dataset, extraFilter) =>
         HarnessScoring.ScoreViaRecordProcess(ctx, modelId, dataset, extraFilter),

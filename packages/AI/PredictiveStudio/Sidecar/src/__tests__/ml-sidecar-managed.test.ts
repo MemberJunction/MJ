@@ -80,6 +80,8 @@ class MockChildProcess extends EventEmitter {
 }
 
 const spawnedProcesses: MockChildProcess[] = [];
+/** The argument list of every spawn, in order (the interpreter's arguments: the server script and the port). */
+const spawnedArgs: string[][] = [];
 const spawnMock = vi.fn(() => {
   const proc = new MockChildProcess();
   spawnedProcesses.push(proc);
@@ -87,7 +89,10 @@ const spawnMock = vi.fn(() => {
 });
 
 vi.mock('node:child_process', () => ({
-  spawn: () => spawnMock(),
+  spawn: (_command: string, args: string[]) => {
+    spawnedArgs.push(args);
+    return spawnMock();
+  },
 }));
 
 
@@ -100,6 +105,7 @@ describe('MLSidecar (managed mode)', () => {
   beforeEach(() => {
     responseQueue.length = 0;
     spawnedProcesses.length = 0;
+    spawnedArgs.length = 0;
     spawnMock.mockClear();
     // A sidecar URL in the shell (a developer's or a runner's) would put every client below in remote mode.
     vi.stubEnv('PREDICTIVE_STUDIO_SIDECAR_URL', '');
@@ -186,5 +192,34 @@ describe('MLSidecar (managed mode)', () => {
     announcePort(spawnedProcesses[1], 9000);
     await retry;
     expect(s.IsRunning).toBe(true);
+  });
+
+  it('asks the service for an ephemeral port (0) by default', async () => {
+    const s = new MLSidecar();
+    const startPromise = s.Start();
+    await Promise.resolve();
+    queueHealthOk();
+    announcePort(spawnedProcesses[0], 5600);
+    await startPromise;
+
+    expect(spawnedArgs[0][1]).toBe('0');
+  });
+
+  it('asks the service for the port option when one is given, so a restart answers on the same URL', async () => {
+    const s = new MLSidecar({ port: 61968 });
+    const startPromise = s.Start();
+    await Promise.resolve();
+    queueHealthOk();
+    announcePort(spawnedProcesses[0], 61968);
+    await startPromise;
+
+    expect(spawnedArgs[0][1]).toBe('61968');
+    expect(s.Port).toBe(61968);
+  });
+
+  it('refuses a port that is not an integer from 0 to 65535, naming it', () => {
+    expect(() => new MLSidecar({ port: 70000 })).toThrow('MLSidecar: port 70000 is not an integer from 0 (ephemeral) to 65535');
+    expect(() => new MLSidecar({ port: 1.5 })).toThrow('port 1.5');
+    expect(() => new MLSidecar({ port: -1 })).toThrow('port -1');
   });
 });

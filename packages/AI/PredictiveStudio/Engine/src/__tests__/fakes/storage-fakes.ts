@@ -76,6 +76,12 @@ export function RegisterMemoryStorage(driverKey: string, account: MemoryStorageA
     public override async ObjectExists(objectName: string): Promise<boolean> {
       return account.Objects.has(objectName);
     }
+    /** A URL naming the account and the stored object's key (an in-memory account has no file path to point at). */
+    public override async CreatePreAuthDownloadUrl(objectName: string): Promise<string> {
+      account.Record(`download ${objectName}`);
+      if (!account.Objects.has(objectName)) throw new Error(`${account.Name}: no object ${objectName}`);
+      return `memory://${account.Name}/${objectName}`;
+    }
   }
   MJGlobal.Instance.ClassFactory.Register(FileStorageBase, MemoryStorage, driverKey);
 }

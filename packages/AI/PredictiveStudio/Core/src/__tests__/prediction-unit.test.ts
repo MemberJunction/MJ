@@ -90,3 +90,19 @@ describe('LabelDefinitionChanged', () => {
     expect(PredictionUnit.LabelDefinitionChanged(a.Value, c.Value)).toBe(false);
   });
 });
+
+describe('ParseActor', () => {
+  it("keeps a system actor's processRunId (the auto-train Initiator of a publish record, §5.1)", () => {
+    expect(PredictionUnit.ParseActor({ kind: 'system', component: 'auto-train', processRunId: 'PR-1' }))
+      .toEqual({ Ok: true, Value: { kind: 'system', component: 'auto-train', processRunId: 'PR-1' } });
+  });
+  it('refuses a system actor whose processRunId is present but not a non-empty string, naming processRunId', () => {
+    for (const processRunId of [42, null, '']) {
+      const r = PredictionUnit.ParseActor({ kind: 'system', component: 'auto-train', processRunId });
+      expect(r.Ok === false && r.Errors[0]).toContain('processRunId');
+    }
+  });
+  it('reads a system actor without processRunId as before', () => {
+    expect(PredictionUnit.ParseActor({ kind: 'system', component: 'auto-train' })).toEqual({ Ok: true, Value: { kind: 'system', component: 'auto-train' } });
+  });
+});

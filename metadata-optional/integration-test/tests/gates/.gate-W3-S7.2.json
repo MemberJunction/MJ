@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W3 -> S7.2",
+    "Description": "Gate G3.3 (owner PR 4, phase 3, dataset W3, criterion S7.2): on W3-leak-row s42, a status write to Published from each of the five paths outside the lifecycle gate is refused, 5 of 5, and the trained model keeps its status. The five writers are real calls against MJAPI (StatusWritePaths): the Explorer form's entity save through GraphQLDataProvider (UI), the raw UpdateMJMLModel mutation (GraphQL), MJ's Update Record Action through RunAction (engine call), the Model Development Agent's write tool, Write Entity Field(s), through RunAction (agent tool), and a one-off ActionScheduledJobDriver job running it through the scheduling engine (maintenance; deleted with its runs by ID). Each must be refused status-changed-outside-gate, and the model's MJ: Record Changes must hold no Status change without a gate publish record of the model within 30 s (the gate's lock timeout). Mutation: make StatusWriteRules.DecideStatusWrite allow Draft → Published without an authorisation → 0 of 5 refused.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G3.3\", \"owner:PR4\", \"phase:3\", \"dataset:W3\", \"criterion:S7.2\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1200000,
+    "ExpectedOutcomes": {
+      "summary": "Five out-of-gate Status writes to Published (UI, GraphQL, engine call, agent tool, maintenance) are refused status-changed-outside-gate, 5 of 5; the model keeps its status; 0 Status changes outside the gate."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w3-s7-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "734BCE71-BC85-4119-AB70-D0BB00F35EFF"
+  }
+}

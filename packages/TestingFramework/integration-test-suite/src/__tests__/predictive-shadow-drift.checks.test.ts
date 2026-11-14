@@ -5,7 +5,7 @@ import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core'
 import { ResourceTypeEngine, type MJResourceTypeEntity } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import type { ActionInfo } from '@memberjunction/actions-base';
+import type { ActionResult, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
 import {
     EVALUATE_DRIFT_DRIVER_CLASS,
     EvaluateFeatureAndPredictionDriftAction,
@@ -102,16 +102,17 @@ function buildInMemoryHarness() {
         return rec;
     };
 
+    const entities: ReadonlyArray<{ readonly ID: string; readonly Name: string }> = [
+        { ID: 'ent-members', Name: 'Members' },
+        { ID: 'ent-fv', Name: 'MJ: Feature Values' },
+    ];
     const provider = {
-        Entities: [
-            { ID: 'ent-members', Name: 'Members' },
-            { ID: 'ent-fv', Name: 'MJ: Feature Values' },
-        ],
+        Entities: entities,
         EntityByID(id: string) {
-            return this.Entities.find((e) => e.ID === id);
+            return entities.find((e) => e.ID === id);
         },
         EntityByName(name: string) {
-            return this.Entities.find((e) => e.Name === name);
+            return entities.find((e) => e.Name === name);
         },
         async GetEntityObject(entityName: string) {
             return makeEntity(entityName);
@@ -179,7 +180,7 @@ function buildInMemoryHarness() {
     );
 
     // The harness runs as an Owner (BootstrapIntegrationServer's resolveContextUser), not as the system user.
-    const user = new UserInfo(null, {
+    const user = new UserInfo(undefined, {
         ID: 'A6F3D2C1-4B5E-4F70-8A9B-0C1D2E3F4A5B',
         Name: 'Integration Owner',
         Email: 'integration-owner@example.com',
@@ -245,7 +246,7 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
         expect(member?.primaryKey.ID).not.toBe('C94F1A82-7E3B-4D6A-82C1-5B9E0F3A4D2E');
     });
 
-    it('PSD1 persists Role=Champion via MLModelInferenceProcessor + ShadowScoringCoordinator without manual RecordFeatureValues seeding in the check (R1)', async () => {
+    it('PSD1 skips, naming M6.8, before it writes any fixture (PR 4 D4-94: its champion is created Published, which the status guard refuses)', async () => {
         const source = fs.readFileSync(CHECKS_SOURCE, 'utf8');
         expect(source).not.toContain('RecordFeatureValues(');
 
@@ -253,7 +254,7 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
         const psd1 = PredictiveShadowDriftChecks.find((c) => c.Id === 'predictive-shadow-drift.PSD1');
         expect(psd1).toBeDefined();
 
-        await expect(psd1!.Fn(ctx)).resolves.toBeUndefined();
+        await expect(psd1!.Fn(ctx)).rejects.toMatchObject({ name: 'IntegrationCheckSkip', message: 'awaits M6.8: its fixture publishes a model outside the lifecycle gate (PR 4 D4-94)' });
     });
 
     it('PSD2 verifies real ActionEngineServer registration (no fallback action object) and exercises both MinSampleSize=100 InsufficientData and MinSampleSize=10 Critical drift (R6b, R6c)', async () => {
@@ -272,13 +273,13 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
                 DriverClass: EVALUATE_DRIFT_DRIVER_CLASS,
                 Type: 'Custom',
                 Status: 'Active',
-            } as unknown as ActionInfo,
+            } as unknown as MJActionEntityExtended,
         ]);
         const runActionSpy = vi
             .spyOn(ActionEngineServer.Instance, 'RunAction')
-            .mockImplementation(async (runParams) => {
-                const action = new EvaluateFeatureAndPredictionDriftAction();
-                return await action.Run(runParams);
+            .mockImplementation(async (runParams: RunActionParams): Promise<ActionResult> => {
+                const simple = await new EvaluateFeatureAndPredictionDriftAction().Run(runParams);
+                return { RunParams: runParams, Success: simple.Success, ResultCode: simple.ResultCode, Message: simple.Message, Params: runParams.Params };
             });
 
         await expect(psd2!.Fn(ctx)).resolves.toBeUndefined();

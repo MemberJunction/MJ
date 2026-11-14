@@ -32,8 +32,10 @@ import type {
   PredictRequest,
   ProblemType,
 } from '@memberjunction/predictive-studio-core';
+import { ArtifactRegistry } from '../registry/artifact-registry';
+import type { RegistryContext } from '../registry/registry-context';
 import {
-  ModelArtifactMissingMessage,
+  ArtifactUnavailableError,
   ModelHasTrainedArtifact,
   ModelNeedsTrainingError,
   ModelNeedsTrainingMessage,
@@ -542,6 +544,17 @@ export class ShadowScoringCoordinator {
   }
 }
 
+/**
+ * Thrown when a challenger is asked to score without an acting user: its artifact is read through the artifact registry
+ * as a user (`RegistryContext.ContextUser`), and a challenger never falls back to another one.
+ */
+export class ChallengerUserRequiredError extends Error {
+  constructor(public readonly ChallengerModelID: string) {
+    super(`MLModelChallengerScoreRunner: challenger ML Model '${ChallengerModelID}' cannot load its artifact without an acting user (none was given)`);
+    this.name = 'ChallengerUserRequiredError';
+  }
+}
+
 interface LoadedChallengerModel {
   modelId: string;
   artifactB64: string;
@@ -556,7 +569,9 @@ interface LoadedChallengerModel {
  *
  * Scores the frozen feature row captured from the champion run against `ChallengerModelID`
  * through the same `MLInferenceDeps` (modelLoader, artifactLoader, sidecar `/predict`) used by
- * `MLModelInferenceProcessor`, without touching the target business entity.
+ * `MLModelInferenceProcessor`, without touching the target business entity. The challenger's artifact is loaded
+ * through the artifact registry like the champion's: a load that is not `verified` refuses the challenger with
+ * {@link ArtifactUnavailableError}. Its `ArtifactStatus` is not written: the challenger is not the model being served.
  */
 export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
   private readonly artifactCache = new Map<string, { artifactFileId: string; artifactB64Promise: Promise<string> }>();
@@ -627,8 +642,9 @@ export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
     if (!model) {
       throw new ModelNeedsTrainingError(`MLModelChallengerScoreRunner: ML Model '${modelId}' not found`);
     }
-    this.assertStatusCanScore(modelId, model);
-    const artifactB64 = await this.ensureArtifactB64(modelId, model.ArtifactFileID, contextUser, provider);
+    const artifactFileId = this.assertStatusCanScore(modelId, model);
+    if (!contextUser) throw new ChallengerUserRequiredError(modelId);
+    const artifactB64 = await this.ensureArtifactB64(model, artifactFileId, { ContextUser: contextUser, Provider: provider });
     return {
       modelId: model.ID,
       artifactB64,
@@ -639,24 +655,17 @@ export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
     };
   }
 
-  private ensureArtifactB64(
-    modelId: string,
-    artifactFileId: string,
-    contextUser: UserInfo | undefined,
-    provider: IMetadataProvider,
-  ): Promise<string> {
+  /** The challenger's verified artifact as base64, loaded once per model and artifact file. */
+  private ensureArtifactB64(model: MJMLModelEntity, artifactFileId: string, ctx: RegistryContext): Promise<string> {
+    const modelId = model.ID;
     const cached = this.artifactCache.get(modelId);
     if (cached && cached.artifactFileId === artifactFileId) {
       return cached.artifactB64Promise;
     }
     const artifactB64Promise = (async () => {
-      const bytes = await this.deps.artifactLoader.load(artifactFileId, contextUser, provider);
-      if (!bytes) {
-        throw new ModelNeedsTrainingError(
-          `MLModelChallengerScoreRunner: ${ModelArtifactMissingMessage(modelId, artifactFileId)}`,
-        );
-      }
-      return Buffer.from(bytes).toString('base64');
+      const load = await ArtifactRegistry.ForContext(ctx, this.deps.artifactLoader).Load(model, ctx);
+      if (load.Status !== 'verified') throw ArtifactUnavailableError.For(load, 'MLModelChallengerScoreRunner', modelId, artifactFileId);
+      return Buffer.from(load.Bytes).toString('base64');
     })().catch((err: unknown) => {
       const current = this.artifactCache.get(modelId);
       if (current && current.artifactFileId === artifactFileId) {
@@ -668,20 +677,22 @@ export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
     return artifactB64Promise;
   }
 
-  private assertStatusCanScore(modelId: string, model: MJMLModelEntity): void {
+  /** Refuses a challenger whose status or missing artifact forbids scoring; returns the artifact file of one that may score. */
+  private assertStatusCanScore(modelId: string, model: MJMLModelEntity): string {
     const status: MJMLModelEntity['Status'] = model.Status;
+    const fileId = model.ArtifactFileID;
     switch (status) {
       case 'Draft':
-        if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
+        if (!ModelHasTrainedArtifact(model) || !fileId) {
           throw new ModelNeedsTrainingError(`MLModelChallengerScoreRunner: ${ModelNeedsTrainingMessage(modelId)}`);
         }
         throw new ModelNotScorableError(modelId, status);
       case 'Validated':
       case 'Published':
-        if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
+        if (!ModelHasTrainedArtifact(model) || !fileId) {
           throw new ModelNeedsTrainingError(`MLModelChallengerScoreRunner: ${ModelNeedsTrainingMessage(modelId)}`);
         }
-        return;
+        return fileId;
       default:
         throw new ModelNotScorableError(modelId, status);
     }

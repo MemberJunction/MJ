@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Model Monitoring",
+      "Description": "Monitors every Published Predictive Studio model once per period: joins the period's stored predictions to their known outcomes, computes the tracked performance metrics and drift, evaluates the retrain and rollback triggers, runs the challenger and parity checks, and writes one MJ: ML Monitoring Results row per model per period.",
+      "DriverClass": "PredictiveStudioModelMonitoringJobDriver",
+      "DomainRunEntity": "MJ: ML Monitoring Results",
+      "DomainRunEntityFKey": "ScheduledJobRunID",
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "321B6931-9F03-4AA1-AFDA-093DEDC763B0"
+    }
+  }
+]

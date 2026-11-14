@@ -34,6 +34,8 @@ const model = (over: Partial<CandidateModel>): CandidateModel => ({
   Algorithm: 'logistic_regression',
   Status: 'Draft',
   TrainingRowCount: 10,
+  ArtifactStatus: 'unverified',
+  ArtifactSha256: null,
   HoldoutRowCount: 2,
   Metrics: {},
   HoldoutMetrics: {},

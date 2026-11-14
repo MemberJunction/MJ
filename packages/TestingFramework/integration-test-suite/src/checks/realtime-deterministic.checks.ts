@@ -13,8 +13,8 @@
  *  - bridge driver-registry ClassFactory resolution WITHOUT starting anything (RD7 — LoopbackBridge),
  *  - the Predictive Studio deterministic legs NOT covered by predictive-studio.checks.ts (PS1–PS5):
  *    the ML Algorithms / Use Cases / Rankings guidance-matrix integrity (RD8) and the
- *    ProductionModelPromotionGate's deterministic refusal paths — non-UUID injection refusal,
- *    leakage refusal, sign-off-reason gate, and the lifecycle state machine (RD9),
+ *    LifecycleGate's deterministic refusal paths — non-UUID injection refusal, the illegal Draft → Published
+ *    jump, the unacknowledged leakage flag, and an archive without a reason (RD9),
  *  - live avatars (RD13): a tagged persona with a face on the session's vendor, bound to a tagged voiced agent, becomes the
  *    session's avatar request through the real session prep, on a run-scoped placeholder key (nothing is minted, no
  *    network), once that agent's own video setting (its TypeConfiguration) is on. With the agent's setting off it asks
@@ -85,7 +85,9 @@ import {
     MJMeetingParticipantEntity,
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLTrainingPipelineEntity,
+    MJMLTrainingRunEntity,
     MJUserEntity,
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -94,8 +96,19 @@ import { BaseRealtimeBridge } from '@memberjunction/ai-bridge-base';
 import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '@memberjunction/ai-bridge-server';
 import { HandoffOfferRegistry, LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, RoomAuthorizationService, OFFER_UNAVAILABLE } from '@memberjunction/livekit-room-server';
 import { InteractionLifecycleService } from '@memberjunction/telephony-adapters';
-import { ProductionModelPromotionGate, detectSingleFeatureDominance } from '@memberjunction/predictive-studio';
-import type { PromoteModelRequest } from '@memberjunction/predictive-studio';
+import { DetectSingleFeatureDominance, GateContexts, LifecycleGate } from '@memberjunction/predictive-studio';
+import {
+    EvaluationProtocol,
+    GateRules,
+    StatusWriteRules,
+    TRAINING_RUN_RESULTS_SCHEMA,
+    TrainingRunResultsParser,
+    type Actor,
+    type LeakageFlag,
+    type StoredGateRecord,
+    type StoredTrainerResult,
+    type TrainingRunResults,
+} from '@memberjunction/predictive-studio-core';
 import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, type IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -109,6 +122,151 @@ async function firstID(entity: string, user: UserInfo, extraFilter = ''): Promis
         { EntityName: entity, Fields: ['ID'], ExtraFilter: extraFilter, ResultType: 'simple', MaxRows: 1 }, user,
     );
     return r.Success ? r.Results?.[0]?.ID : undefined;
+}
+
+/** RD9's finished training run, as stored rows: the trainer's one leakage flag, on the fixture importance's dominant column. */
+const RD9_LEAKAGE_FLAG: LeakageFlag = { kind: 'single-feature-auc', sourceColumn: 'leaky_feature', heldOutAuc: 0.97 };
+/** RD9's dominance-flagged importance (the PR 3 importance shape the stored flag names). */
+const RD9_IMPORTANCE = { leaky_feature: 0.95, honest_feature: 0.05 };
+/** A fixture UUID: the stored trainer result names a run and an artifact file; the gate compares neither with a row. */
+const RD9_FIXTURE_ID = '0D9A0D9A-0000-4000-8000-0000000000D9';
+
+/** RD9's stored gate record: the finalist beats the dummy and the best simple member at margin 0, so it re-derives `model`. */
+const RD9_GATE: StoredGateRecord = {
+    evaluationProtocolId: RD9_FIXTURE_ID,
+    margin: 0,
+    primaryMetric: 'log-loss',
+    holdoutRows: 1205,
+    intervals: {
+        modelName: 'xgb',
+        modelVsDummy: { value: 0.068, lower: 0.05, upper: 0.085 },
+        modelVsBestSimple: { value: 0.006, lower: 0.002, upper: 0.01 },
+        memberVsDummy: { oneFeature: { value: 0.05, lower: 0.035, upper: 0.065 }, glm: { value: 0.065, lower: 0.048, upper: 0.082 } },
+        memberScores: { oneFeature: 0.47, glm: 0.455 },
+        deliveredMember: null,
+    },
+    guards: { taskKind: 'binary', holdoutClassCounts: { '0': 600, '1': 605 }, modelAucInterval: { level: 0.95, lower: 0.63, upper: 0.71 }, minMinorityClassRows: 20 },
+    transcribed: { outcome: 'model', branch: 'a:beats-best-simple', shipped: 'xgb', shippedRole: 'model', note: null },
+    decision: { outcome: 'model', branch: 'a:beats-best-simple', shipped: 'xgb', shippedRole: 'model', note: null },
+    guardRefusal: null,
+    reason: { code: 'model-beats-best-simple', text: 'The model beats the flat guess and the best simple baseline (glm) on log-loss.' },
+    incumbentDiff: null,
+    sliceCoverage: { missingSubgroups: [], missingPeriods: [], slicesWithoutInterval: 0 },
+};
+
+/** RD9's stored trainer result: the same comparisons as {@link RD9_GATE}, and the one leakage flag. */
+const RD9_TRAINER: StoredTrainerResult = {
+    status: 'completed', trainingRunId: RD9_FIXTURE_ID, computeSeconds: 12.5,
+    codeVersion: { psGitSha: 'rd9', sidecarVersion: 'rd9-fixture', libraryVersions: { python: '3.11.15' }, threads: 1, seed: 0 },
+    innerScores: [{ candidate: 'xgb', inner: { metric: 'log-loss', value: 0.45, interval: { level: 0.95, lower: 0.44, upper: 0.46 }, n: 3668 }, folds: 15, optimistic: true }],
+    finalist: 'xgb',
+    holdoutAccess: { accessedAt: '2026-11-12T00:00:00.000Z', count: 1, finalist: 'xgb' },
+    holdout: { primary: { metric: 'log-loss', value: 0.452, interval: { level: 0.95, lower: 0.432, upper: 0.472 }, n: 1205 }, secondary: [{ metric: 'auc', value: 0.67, interval: { level: 0.95, lower: 0.63, upper: 0.71 }, n: 1205 }] },
+    baselines: [
+        { baseline: { kind: 'dummy', name: 'base-rate' }, role: 'dummy', holdout: { metric: 'log-loss', value: 0.52, interval: { level: 0.95, lower: 0.5, upper: 0.54 }, n: 1205 } },
+        { baseline: { kind: 'one-feature', selection: 'best-single-feature-inner-cv' }, role: 'simple', holdout: { metric: 'log-loss', value: 0.47, interval: { level: 0.95, lower: 0.45, upper: 0.49 }, n: 1205 } },
+        { baseline: { kind: 'glm', family: 'logistic', penalty: 'l2' }, role: 'simple', holdout: { metric: 'log-loss', value: 0.455, interval: { level: 0.95, lower: 0.435, upper: 0.475 }, n: 1205 } },
+    ],
+    comparisons: {
+        modelVsDummy: { value: 0.068, ci: [0.05, 0.085], beats: true },
+        oneFeatureVsDummy: { value: 0.05, ci: [0.035, 0.065], beats: true },
+        glmVsDummy: { value: 0.065, ci: [0.048, 0.082], beats: true },
+        'modelVs:glm': { value: 0.006, ci: [0.002, 0.01], beats: true },
+        'modelVs:oneFeature': { value: 0.018, ci: [0.006, 0.03], beats: true },
+    },
+    gate: { outcome: 'model', branch: 'a:beats-best-simple', shipped: 'xgb', shippedRole: 'model', note: null },
+    artifacts: [{ candidate: 'xgb', sha256: 'f'.repeat(64), featureSchemaHash: 'f'.repeat(64), classOrder: ['0', '1'], fileId: RD9_FIXTURE_ID }],
+    incumbentDiff: null,
+    calibration: { method: 'auto', intercept: 0.01, slope: 0.97, reliability: [] },
+    slices: [],
+    operatingPoint: null,
+    cost: { computeSeconds: 12.5, tokens: 0, usd: 0, budget: { maxComputeSeconds: 3600, maxTokens: 0, maxCandidates: 10, hardStop: true }, stoppedByBudget: false },
+    importance: [], leakageFlags: [RD9_LEAKAGE_FLAG], predictionIntervalCoverage: [], residualDiagnostics: null, forecast: null, innerSplitContrast: null,
+};
+
+/** RD9's fixture rows: a pipeline, a finished run storing {@link RD9_GATE} and {@link RD9_TRAINER}, and a Draft model naming it. */
+class Rd9Fixture {
+    /** The run's `ValidationResults`: the completed v2 envelope. */
+    public static ValidationResults(): string {
+        const envelope: TrainingRunResults = {
+            schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
+            unitResolution: { rowsRead: 6025, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 6025, dataCutoff: '2026-01-01' },
+            trainer: RD9_TRAINER, trainerRequest: null, carve: null, gate: RD9_GATE,
+        };
+        return JSON.stringify(envelope);
+    }
+
+    /** Saves the pipeline, the finished run, the Draft model naming the run, then the run's `ResultingModelID`; each save checked. */
+    public static async Create(
+        pipeline: MJMLTrainingPipelineEntity, run: MJMLTrainingRunEntity, model: MJMLModelEntity,
+        a: { readonly AlgorithmID: string; readonly TargetEntityID: string; readonly ValidationResults: string }, user: UserInfo,
+    ): Promise<void> {
+        pipeline.NewRecord();
+        pipeline.Name = `mj-integration-test rd9 pipeline ${TAG}`;
+        pipeline.Status = 'Draft';
+        pipeline.TargetEntityID = a.TargetEntityID;
+        pipeline.TargetVariable = 'Renewed';
+        pipeline.ProblemType = 'classification';
+        pipeline.AlgorithmID = a.AlgorithmID;
+        Assert(await pipeline.Save(), `rd9 pipeline save failed: ${pipeline.LatestResult?.CompleteMessage}`);
+        run.NewRecord();
+        run.PipelineID = pipeline.ID;
+        run.AlgorithmID = a.AlgorithmID;
+        run.Status = 'Completed';
+        run.ValidationResults = a.ValidationResults;
+        Assert(await run.Save(), `rd9 training run save failed: ${run.LatestResult?.CompleteMessage}`);
+        model.NewRecord();
+        model.PipelineID = pipeline.ID;
+        model.TrainingRunID = run.ID;
+        model.Version = 1;
+        model.AlgorithmID = a.AlgorithmID;
+        model.FeatureSchema = JSON.stringify([{ Name: 'leaky_feature', Kind: 'numeric' }]);
+        model.FeatureImportance = JSON.stringify(RD9_IMPORTANCE);
+        model.TargetVariable = 'Renewed';
+        model.ProblemType = 'classification';
+        model.Status = 'Draft';
+        Assert(await model.Save(), `rd9 model save failed: ${model.LatestResult?.CompleteMessage}`);
+        run.ResultingModelID = model.ID;
+        Assert(await run.Save(), `rd9 training run ResultingModelID save failed: ${run.LatestResult?.CompleteMessage}`);
+    }
+
+    /** The model's persisted status, read past the cache. */
+    public static async Status(modelId: string, user: UserInfo): Promise<string> {
+        const r = await new RunView().RunView<Pick<MJMLModelEntity, 'Status'>>(
+            { EntityName: 'MJ: ML Models', ExtraFilter: `ID='${modelId}'`, Fields: ['Status'], ResultType: 'simple', BypassCache: true }, user,
+        );
+        Assert(r.Success, `rd9 model status read failed: ${r.ErrorMessage}`);
+        return String(r.Results[0]?.Status);
+    }
+
+    /** The model's `publish` records, read past the cache. */
+    public static async PublishCount(modelId: string, user: UserInfo): Promise<number> {
+        const r = await new RunView().RunView<Pick<MJMLModelPublishRecordEntity, 'ID'>>(
+            { EntityName: 'MJ: ML Model Publish Records', ExtraFilter: `ModelID='${modelId}' AND Kind='publish'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, user,
+        );
+        Assert(r.Success, `rd9 publish record read failed: ${r.ErrorMessage}`);
+        return r.Results.length;
+    }
+
+    /** Deletes, each Delete() checked (D4-62's order): the model's publish records, the model after clearing the run's ResultingModelID, the run, the pipeline. */
+    public static async Delete(pipeline: MJMLTrainingPipelineEntity, run: MJMLTrainingRunEntity, model: MJMLModelEntity, user: UserInfo): Promise<void> {
+        if (model.IsSaved) {
+            const records = await new RunView().RunView<MJMLModelPublishRecordEntity>(
+                { EntityName: 'MJ: ML Model Publish Records', ExtraFilter: `ModelID='${model.ID}'`, ResultType: 'entity_object', BypassCache: true }, user,
+            );
+            Assert(records.Success, `rd9 publish record read for cleanup failed: ${records.ErrorMessage}`);
+            for (const record of records.Results) {
+                Assert(await record.Delete(), `rd9 publish record ${record.ID} delete failed: ${record.LatestResult?.CompleteMessage}`);
+            }
+            if (run.IsSaved && run.ResultingModelID) {
+                run.ResultingModelID = null;
+                Assert(await run.Save(), `rd9 training run ResultingModelID clear failed: ${run.LatestResult?.CompleteMessage}`);
+            }
+            Assert(await model.Delete(), `rd9 model delete failed: ${model.LatestResult?.CompleteMessage}`);
+        }
+        if (run.IsSaved) Assert(await run.Delete(), `rd9 training run delete failed: ${run.LatestResult?.CompleteMessage}`);
+        if (pipeline.IsSaved) Assert(await pipeline.Delete(), `rd9 pipeline delete failed: ${pipeline.LatestResult?.CompleteMessage}`);
+    }
 }
 
 /**
@@ -1261,81 +1419,63 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
     },
     {
         Id: 'realtime-deterministic.RD9',
-        Name: 'RD9: ProductionModelPromotionGate refuses deterministically — non-UUID id, leakage, missing reason, illegal jump',
+        Name: 'RD9: the lifecycle gate refuses deterministically — non-UUID id, leakage, missing reason, illegal jump',
         Fn: async (ctx): Promise<void> => {
-            const gate = new ProductionModelPromotionGate();
-            type Promotable = PromoteModelRequest['targetStatus']; // derived, never hand-copied (rule 2c)
-            const promote = (modelId: string, targetStatus: Promotable, signOff: boolean, reason?: string) =>
-                gate.promote({ modelId, targetStatus, signOff, reason, contextUser: ctx.User, provider: ctx.Provider });
+            const gate = new LifecycleGate();
+            const gateCtx = GateContexts.ForRequest({ ContextUser: ctx.User, Provider: ctx.Provider });
+            const actor: Actor = { kind: 'human', userId: ctx.User.ID };
 
-            // Injection-refusal leg (no fixture needed): a non-UUID id must never reach a SQL filter.
-            const injected = await promote(`x' OR 1=1 --`, 'Validated', false);
-            AssertEqual(injected.kind, 'not-found', 'a non-UUID model id must be refused as not-found (never concatenated into SQL)');
+            // (1) Injection refusal (no fixture needed): a non-UUID id is model-not-found before any read.
+            const injected = await gate.Evaluate({ modelId: `x' OR 1=1 --` }, actor, gateCtx);
+            Assert(injected.Kind === 'refused' && injected.Refusal.kind === 'model-not-found', `a non-UUID model id must be refused model-not-found (got ${JSON.stringify(injected)})`);
 
             const algorithmID = await firstID('MJ: ML Algorithms', ctx.User);
             if (!algorithmID) {
-                console.warn('  ⚠ realtime-deterministic.RD9 fixture legs SKIPPED — no MJ: ML Algorithms seeded '
-                    + '(run `mj sync push --include=ml-algorithms`)');
-                return;
+                SkipCheck('no MJ: ML Algorithms seeded, so RD9\'s fixture legs cannot build a pipeline (run `mj sync push --include=ml-algorithms`); only the injection leg ran');
             }
             const targetEntityID = await firstID('MJ: Entities', ctx.User);
             Assert(!!targetEntityID, 'could not resolve a seed entity for the ML pipeline target');
 
-            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-            const importance = { leaky_feature: 0.95, honest_feature: 0.05 };
-            // Anti-vacuity: the SAME pure check the gate re-runs must flag this importance shape.
-            Assert(detectSingleFeatureDominance(importance, 0.6).Dominant,
-                'precondition: the fixture FeatureImportance must be dominance-flagged at threshold 0.6');
+            // Anti-vacuity: the stored gate record re-derives `model`, the envelope parses, and the importance is dominance-flagged.
+            const guarded = GateRules.DecideGuardedGate(RD9_GATE.intervals, EvaluationProtocol.ToNonNegative(RD9_GATE.margin), RD9_GATE.guards);
+            AssertEqual(guarded.Decision.outcome, 'model', 'precondition: the fixture gate record must re-derive decision model');
+            const validationResults = Rd9Fixture.ValidationResults();
+            Assert(TrainingRunResultsParser.ParseTrainingRunResults(validationResults).Ok, 'precondition: the fixture ValidationResults must parse as a completed ps-run-results/v2 envelope');
+            Assert(DetectSingleFeatureDominance(RD9_IMPORTANCE, 0.6).Dominant, 'precondition: the fixture FeatureImportance must be dominance-flagged at threshold 0.6');
 
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const pipeline = await md.GetEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', ctx.User);
-            pipeline.NewRecord();
-            pipeline.Name = `mj-integration-test rd9 pipeline ${TAG}`;
-            pipeline.Status = 'Draft';
-            pipeline.TargetEntityID = targetEntityID!;
-            pipeline.TargetVariable = 'Renewed';
-            pipeline.ProblemType = 'classification';
-            pipeline.AlgorithmID = algorithmID;
-            pipeline.LeakageGuard = JSON.stringify({ DenyFields: [], SingleFeatureDominanceThreshold: 0.6 });
+            const run = await md.GetEntityObject<MJMLTrainingRunEntity>('MJ: ML Training Runs', ctx.User);
             const model = await md.GetEntityObject<MJMLModelEntity>('MJ: ML Models', ctx.User);
             try {
-                Assert(await pipeline.Save(), `rd9 pipeline save failed: ${pipeline.LatestResult?.CompleteMessage}`);
-                model.NewRecord();
-                model.PipelineID = pipeline.ID;
-                model.Version = 1;
-                model.AlgorithmID = algorithmID;
-                model.FeatureSchema = JSON.stringify([{ Name: 'leaky_feature', Kind: 'numeric' }]);
-                model.FeatureImportance = JSON.stringify(importance);
-                model.TargetVariable = 'Renewed';
-                model.ProblemType = 'classification';
-                model.Status = 'Draft';
-                Assert(await model.Save(), `rd9 model save failed: ${model.LatestResult?.CompleteMessage}`);
+                await Rd9Fixture.Create(pipeline, run, model, { AlgorithmID: algorithmID, TargetEntityID: targetEntityID!, ValidationResults: validationResults }, ctx.User);
 
-                // Leakage gate: a flagged model must be refused without sign-off…
-                const refused = await promote(model.ID, 'Validated', false);
-                AssertEqual(refused.kind, 'refused-leakage', 'a dominance-flagged model must be refused without sign-off');
-                // …and a sign-off WITHOUT a justification must be refused too.
-                const noReason = await promote(model.ID, 'Validated', true);
-                AssertEqual(noReason.kind, 'signoff-reason-required', 'a leakage sign-off without a reason must be refused');
+                // (2) Illegal jump: the lifecycle table has no Draft → Published row, and Publish of the Draft model is withheld.
+                Assert(!StatusWriteRules.IsAuthorisedTransition('Draft', 'Published'), 'Draft → Published must not be in the lifecycle table');
+                const jump = await gate.Publish({ modelId: model.ID, purpose: 'publish', initiator: actor, signOffId: null, reason: null }, gateCtx);
+                Assert(jump.Kind === 'withheld' && jump.Refusal.kind === 'illegal-transition', `Publish of a Draft model must be withheld illegal-transition (got ${JSON.stringify(jump)})`);
+                AssertEqual(await Rd9Fixture.Status(model.ID, ctx.User), 'Draft', 'the illegal jump must leave the model Draft');
 
-                // Lifecycle state machine: Draft → Published is an illegal jump (with a signed-off
-                // reason so the leakage gate is satisfied and the TRANSITION rule is what refuses).
-                const jump = await promote(model.ID, 'Published', true, 'integration-test sign-off probe');
-                AssertEqual(jump.kind, 'invalid-transition', 'Draft → Published must be refused by the transition state machine');
-
-                // None of the refusals may have mutated the model.
-                const reload = await new RunView().RunView<MJMLModelEntity>(
-                    { EntityName: 'MJ: ML Models', ExtraFilter: `ID='${model.ID}'`, ResultType: 'entity_object', BypassCache: true }, ctx.User,
+                // (3) Leakage: Evaluate moves it to Validated (the gate's own authorised write); Publish is withheld on the stored flag.
+                const evaluated = await gate.Evaluate({ modelId: model.ID }, actor, gateCtx);
+                Assert(evaluated.Kind === 'evaluated' && evaluated.To === 'Validated', `Evaluate must move the model to Validated (got ${JSON.stringify(evaluated)})`);
+                const flagged = await gate.Publish({ modelId: model.ID, purpose: 'publish', initiator: actor, signOffId: null, reason: null }, gateCtx);
+                Assert(
+                    flagged.Kind === 'withheld' && flagged.Refusal.kind === 'unacknowledged-leakage-flags' && flagged.Refusal.flags.join(',') === 'single-feature-auc' && flagged.Transient === false,
+                    `Publish of a leakage-flagged model must be withheld unacknowledged-leakage-flags [single-feature-auc], not transient (got ${JSON.stringify(flagged)})`,
                 );
-                AssertEqual(String(reload.Results?.[0]?.Status), 'Draft', 'every refusal path must leave the model Status untouched');
+                AssertEqual(await Rd9Fixture.Status(model.ID, ctx.User), 'Validated', 'the leakage refusal must leave the model Validated');
+
+                // (4) Missing reason: an archive without a reason is refused before any write.
+                const archive = await gate.Archive(model.ID, '', actor, gateCtx);
+                Assert(archive.Ok === false && 'kind' in archive.Refusal && archive.Refusal.kind === 'reason-required', `an archive without a reason must be refused reason-required (got ${JSON.stringify(archive)})`);
+
+                AssertEqual(await Rd9Fixture.Status(model.ID, ctx.User), 'Validated', 'every refusal path must leave the model Validated');
+                AssertEqual(await Rd9Fixture.PublishCount(model.ID, ctx.User), 0, 'no publish record may be written for the model');
             } finally {
-                if (model.IsSaved) {
-                    await model.Delete().catch(() => undefined);
-                }
-                if (pipeline.IsSaved) {
-                    await pipeline.Delete().catch(() => undefined);
-                }
+                await Rd9Fixture.Delete(pipeline, run, model, ctx.User);
             }
-            console.log('      → all four deterministic refusal paths hold; model left immutable');
+            console.log('      → all four deterministic refusal paths hold on the lifecycle gate; the model never published');
         }
     },
     {

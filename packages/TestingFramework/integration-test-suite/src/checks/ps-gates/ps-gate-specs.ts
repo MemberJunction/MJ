@@ -74,7 +74,7 @@ export class PsGateSpecs {
   }
 
   /**
-   * The W1 s42 record-process scoring of the Validated fixture model (NA, 2024), memoised per harness run (`h.RunID`):
+   * The W1 s42 record-process scoring of the published fixture model (NA, 2024), memoised per harness run (`h.RunID`):
    * G0.4 and G0.5 read the same scoring. The details and lineage are plain data, so they stay valid after a bundle's
    * teardown. A failed scoring is not memoised, so the next gate retries it instead of reporting the first one's error.
    */
@@ -114,7 +114,7 @@ export class PsGateSpecs {
 
   private static async scoreW1RecordProcess(h: TruthHarness): Promise<W1RecordProcessScoring> {
     const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
-    const model = await RunFixtures.W1S42ValidatedModel(h);
+    const model = await RunFixtures.W1S42PublishedModel(h);
     const run = await h.ScoreViaRecordProcess(model.ModelID, w1, "Region = 'NA' AND [Year] = 2024");
     if (run.Status !== 'Completed') throw new Error(`record-process scoring ended ${run.Status}`);
     return {

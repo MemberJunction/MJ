@@ -8,7 +8,7 @@
  *
  *   PredictiveStudio.TrainModel    → MJAPI → TrainingEngine → Python sidecar (/train)
  *   PredictiveStudio.ScoreRecordSet→ MJAPI → MLModelInferenceProcessor → sidecar (/predict)
- *   PredictiveStudio.PromoteModel  → MJAPI → ProductionModelPromotionGate
+ *   PredictiveStudio.PromoteModel  → MJAPI → LifecycleGate (transition 'evaluate')
  *
  * Nothing about the ML is mocked. The ops are invoked exactly as any caller would:
  *   `await new SomeOperation().Execute(input, { provider, user })` — the call marshals
@@ -29,6 +29,7 @@
  */
 import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
+import { GateAnswer } from './lib/ps-promote';
 import { RequireCheck, ShippedModelID } from './lib/ps-train-output';
 import { BindUnitAndProtocol, DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
 import { Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
@@ -229,17 +230,21 @@ async function main(): Promise<void> {
       console.log(`    • record ${p.recordId?.slice(0, 8)}… → class='${p.class}' score=${p.score?.toFixed(4)}`);
     }
 
-    // ── 5. Promote (Draft → Validated) ───────────────────────────────────────
-    banner('5. PROMOTE (PredictiveStudio.PromoteModel)');
+    // ── 5. Evaluate (Draft → Validated or KeepBaseline, the stored decision) through the lifecycle gate ──
+    banner('5. EVALUATE (PredictiveStudio.PromoteModel, transition evaluate)');
     const promoteResult = await new PredictiveStudioPromoteModelOperation().Execute(
-      { modelId: shippedModelId, targetStatus: 'Validated', signOff: out.leakageFlagged, reason: 'ps-live-renewal-lifecycle smoke test' },
+      { modelId: shippedModelId, transition: 'evaluate', reason: 'ps-live-renewal-lifecycle smoke test' },
       { provider: route, user },
     );
     console.log(`  Execute() Success=${promoteResult.Success}${promoteResult.ErrorMessage ? ` Error=${promoteResult.ErrorMessage}` : ''}`);
     if (!promoteResult.Success || !promoteResult.Output) {
-      throw new Error(`Promotion failed: ${promoteResult.ErrorMessage}`);
+      throw new Error(`Evaluation failed: ${promoteResult.ErrorMessage}`);
     }
-    console.log(`  promoted=${promoteResult.Output.promoted} status=${promoteResult.Output.status}`);
+    console.log(`  applied=${promoteResult.Output.applied} status=${promoteResult.Output.status}${promoteResult.Output.refusal ? ` refusal=${promoteResult.Output.refusal.kind}` : ''}`);
+    const reached = promoteResult.Output.status;
+    if (!promoteResult.Output.applied || (reached !== 'Validated' && reached !== 'KeepBaseline')) {
+      throw new Error(`Evaluation left ML Model ${shippedModelId} ${reached} (the lifecycle gate's answer: ${GateAnswer(promoteResult.Output.refusal)})`);
+    }
 
     banner('LIFECYCLE COMPLETE');
     console.log(`  Total wall-clock: ${((Date.now() - t0) / 1000).toFixed(1)}s`);

@@ -15,7 +15,7 @@ import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
  *   (a) generating builds the child Action with the right shape + a ModelID param
  *       whose DefaultValue is the model id;
  *   (b) idempotency — generating twice neither duplicates the Action nor appends params;
- *   (c) disableForModel flips the generated Action's Status to 'Disabled';
+ *   (c) DisableForModel flips the generated Action's Status to 'Disabled', finding it by its ModelID param;
  *   (d) a missing parent action is handled gracefully (no throw, nothing created).
  */
 
@@ -196,11 +196,24 @@ function paramsFor(store: Store, actionID: string): Row[] {
 
 const USER = { Email: 'test@example.com' } as UserInfo;
 
+/** The generated child Action whose ModelID param defaults to `modelId` (the only link from an Action to its model). */
+function byModelID(store: Store, modelId: string): Row {
+  const param = store.rows['MJ: Action Params'].find((p) => p['Name'] === 'ModelID' && p['DefaultValue'] === modelId);
+  const action = actions(store).find((a) => param !== undefined && a['ID'] === param['ActionID']);
+  if (action === undefined) throw new Error(`no generated Action has ModelID ${modelId}`);
+  return action;
+}
+
+/** The model as it reads after its pipeline is renamed: the same row, its label (the `Pipeline` view field) changed. */
+function renamePipeline(model: MJMLModelEntity, name: string): MJMLModelEntity {
+  return fakeModel({ ID: model.ID, Pipeline: name, Version: model.Version });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('ModelScoringActionGenerator — generateForModel', () => {
+describe('ModelScoringActionGenerator — GenerateForModel', () => {
   it('creates a child Action with the right shape + a ModelID param defaulted to the model id', async () => {
     const status = ConsoleCapture.Status();
     const store = new Store();
@@ -208,7 +221,7 @@ describe('ModelScoringActionGenerator — generateForModel', () => {
     const provider = new FakeProvider(store);
     const model = fakeModel({ ID: 'model-uuid-1', Pipeline: 'Renewal Risk', Version: 3 });
 
-    await new ModelScoringActionGenerator().generateForModel(model, USER, asProvider(provider));
+    await new ModelScoringActionGenerator().GenerateForModel(model, USER, asProvider(provider));
 
     const children = actions(store);
     expect(children).toHaveLength(1);
@@ -248,7 +261,7 @@ describe('ModelScoringActionGenerator — generateForModel', () => {
     const provider = new FakeProvider(store);
     const model = { ID: 'bare-model', Pipeline: null } as unknown as MJMLModelEntity;
 
-    await new ModelScoringActionGenerator().generateForModel(model, USER, asProvider(provider));
+    await new ModelScoringActionGenerator().GenerateForModel(model, USER, asProvider(provider));
 
     expect(actions(store)[0]['Name']).toBe('Score with bare-model v1');
     expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with bare-model v1' for model 'bare-model'.")]);
@@ -262,8 +275,8 @@ describe('ModelScoringActionGenerator — generateForModel', () => {
     const model = fakeModel();
     const gen = new ModelScoringActionGenerator();
 
-    await gen.generateForModel(model, USER, asProvider(provider));
-    await gen.generateForModel(model, USER, asProvider(provider));
+    await gen.GenerateForModel(model, USER, asProvider(provider));
+    await gen.GenerateForModel(model, USER, asProvider(provider));
 
     const children = actions(store);
     expect(children).toHaveLength(1); // reused, not duplicated
@@ -273,7 +286,7 @@ describe('ModelScoringActionGenerator — generateForModel', () => {
   });
 });
 
-describe('ModelScoringActionGenerator — disableForModel', () => {
+describe('ModelScoringActionGenerator — DisableForModel', () => {
   it("sets the generated Action's Status to 'Disabled'", async () => {
     const status = ConsoleCapture.Status();
     const store = new Store();
@@ -282,12 +295,37 @@ describe('ModelScoringActionGenerator — disableForModel', () => {
     const model = fakeModel();
     const gen = new ModelScoringActionGenerator();
 
-    await gen.generateForModel(model, USER, asProvider(provider));
+    await gen.GenerateForModel(model, USER, asProvider(provider));
     expect(actions(store)[0]['Status']).toBe('Active');
 
-    await gen.disableForModel(model, USER, asProvider(provider));
+    await gen.DisableForModel(model, USER, asProvider(provider));
     expect(actions(store)[0]['Status']).toBe('Disabled');
     expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'"), expect.stringContaining("ModelScoringActionGenerator: disabled scoring action 'Score with Renewal Risk v3' for archived model 'model-uuid-1'.")]);
+  });
+
+  it('finds the scoring Action by model ID after the pipeline is renamed', async () => {
+    ConsoleCapture.Status();
+    const store = new Store();
+    seedParentAction(store);
+    const provider = asProvider(new FakeProvider(store));
+    const model = fakeModel();
+    const generator = new ModelScoringActionGenerator();
+    await generator.GenerateForModel(model, USER, provider);
+    await generator.DisableForModel(renamePipeline(model, 'Renamed'), USER, provider);
+    expect(byModelID(store, model.ID)['Status']).toBe('Disabled');
+  });
+
+  it('regenerating after a rename updates the same Action (found by model ID), never a second one', async () => {
+    ConsoleCapture.Status();
+    const store = new Store();
+    seedParentAction(store);
+    const provider = asProvider(new FakeProvider(store));
+    const model = fakeModel();
+    const generator = new ModelScoringActionGenerator();
+    await generator.GenerateForModel(model, USER, provider);
+    await generator.GenerateForModel(renamePipeline(model, 'Renamed'), USER, provider);
+    expect(actions(store).map((a) => a['Name'])).toEqual(['Score with Renamed v3']);
+    expect(byModelID(store, model.ID)['Status']).toBe('Active');
   });
 
   it('is a no-op when no generated Action exists', async () => {
@@ -296,7 +334,7 @@ describe('ModelScoringActionGenerator — disableForModel', () => {
     const provider = new FakeProvider(store);
 
     // Should not throw and should create nothing.
-    await new ModelScoringActionGenerator().disableForModel(fakeModel(), USER, asProvider(provider));
+    await new ModelScoringActionGenerator().DisableForModel(fakeModel(), USER, asProvider(provider));
     expect(actions(store)).toHaveLength(0);
   });
 });
@@ -308,7 +346,7 @@ describe('ModelScoringActionGenerator — missing parent', () => {
     const provider = new FakeProvider(store);
 
     await expect(
-      new ModelScoringActionGenerator().generateForModel(fakeModel(), USER, asProvider(provider)),
+      new ModelScoringActionGenerator().GenerateForModel(fakeModel(), USER, asProvider(provider)),
     ).resolves.toBeUndefined();
 
     // Nothing was created — neither an Action nor a category.

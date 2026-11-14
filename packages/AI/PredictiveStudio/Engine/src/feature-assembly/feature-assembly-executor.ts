@@ -420,21 +420,21 @@ export class FeatureAssemblyExecutor {
   private toPreprocessingOp(step: FeatureStep, guard: LeakageGuardEnforcer): PreprocessingOp | null {
     switch (step.Kind) {
       case 'impute':
-        if (!guard.isFieldAllowed(step.Column)) {
+        if (!guard.IsFieldAllowed(step.Column)) {
           return null;
         }
         return { op: 'impute', col: step.Column, strategy: step.Strategy, fillValue: step.FillValue };
       case 'standardize': {
-        const cols = guard.partitionColumns(step.Columns).allowed;
+        const cols = guard.PartitionColumns(step.Columns).allowed;
         return cols.length > 0 ? { op: 'standardize', cols } : null;
       }
       case 'onehot':
-        if (!guard.isFieldAllowed(step.Column)) {
+        if (!guard.IsFieldAllowed(step.Column)) {
           return null;
         }
         return { op: 'onehot', col: step.Column };
       case 'bin':
-        if (!guard.isFieldAllowed(step.Column)) {
+        if (!guard.IsFieldAllowed(step.Column)) {
           return null;
         }
         // Bin count travels in the recipe via the dedicated `bins` field; the
@@ -491,7 +491,7 @@ export class FeatureAssemblyExecutor {
     // Add as-of feature columns from dated sources (computed in the matrix builder).
     for (const ds of params.datedSources ?? []) {
       for (const f of ds.Features) {
-        if (!guard.isFieldAllowed(f.OutputColumn)) {
+        if (!guard.IsFieldAllowed(f.OutputColumn)) {
           continue;
         }
         if (plannedCols.has(f.OutputColumn)) {
@@ -515,7 +515,7 @@ export class FeatureAssemblyExecutor {
     emitters: ColumnEmitter[],
     plannedCols: Set<string>,
   ): void {
-    for (const col of guard.partitionColumns(columns).allowed) {
+    for (const col of guard.PartitionColumns(columns).allowed) {
       if (plannedCols.has(col)) {
         continue;
       }
@@ -535,7 +535,7 @@ export class FeatureAssemblyExecutor {
   ): void {
     for (let i = 0; i < step.Dims; i++) {
       const name = `emb_${i}`;
-      if (!guard.isFieldAllowed(name)) {
+      if (!guard.IsFieldAllowed(name)) {
         continue;
       }
       if (plannedCols.has(name)) {
@@ -570,7 +570,7 @@ export class FeatureAssemblyExecutor {
       return;
     }
     for (const col of cols) {
-      if (!guard.isFieldAllowed(col)) {
+      if (!guard.IsFieldAllowed(col)) {
         continue;
       }
       if (plannedCols.has(col)) {
@@ -592,7 +592,7 @@ export class FeatureAssemblyExecutor {
     plannedCols: Set<string>,
   ): void {
     for (const outName of Object.keys(step.OutputMapping)) {
-      if (!guard.isFieldAllowed(outName)) {
+      if (!guard.IsFieldAllowed(outName)) {
         continue;
       }
       if (plannedCols.has(outName)) {
@@ -626,7 +626,7 @@ export class FeatureAssemblyExecutor {
     plannedCols: Set<string>,
   ): void {
     const col = step.Output.FeatureName;
-    if (!guard.isFieldAllowed(col)) {
+    if (!guard.IsFieldAllowed(col)) {
       return;
     }
     if (plannedCols.has(col)) {
@@ -651,7 +651,7 @@ export class FeatureAssemblyExecutor {
   ): Promise<DatedIndex> {
     const index: DatedIndex = new Map();
     for (const ds of params.datedSources ?? []) {
-      if (!guard.isSourceAllowed(ds.EntityName)) {
+      if (!guard.IsSourceAllowed(ds.EntityName)) {
         continue;
       }
       const res = await dataAccess.fetchRows({ EntityName: ds.EntityName });

@@ -12,6 +12,8 @@
 
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 
+import { PredictiveStudioEvidenceGuard, PredictiveStudioStatusGuard } from './registry';
+
 // The self-managing Python-sidecar client `MLSidecar` lives in its own package,
 // `@memberjunction/predictive-studio-sidecar` — import it directly from there.
 // It is intentionally NOT re-exported here (CLAUDE.md rule 5: no cross-package re-exports).
@@ -42,6 +44,16 @@ export * from './feature-pipelines';
 
 // Training orchestration — TrainingEngine + its injected seams (§3/§4.3/§4.4/§8.2/§11).
 export * from './training';
+
+// Model registry — RegistryContext (the request's user and the provider every registry, gate and scoring call runs on)
+// and ArtifactRegistry (write-once artifact storage, and a verified ArtifactLoad on every load).
+export * from './registry';
+
+// The registry's PreSave guards, registered once per process by every process that loads the Engine (MJAPI among
+// them): the status guard (only the lifecycle gate changes MJ: ML Models.Status, re-derived on every publish) and the
+// evidence guard (stored evidence is write-once). Both are idempotent, across copies of this module too.
+PredictiveStudioStatusGuard.Register();
+PredictiveStudioEvidenceGuard.Register();
 
 // Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10).
 export * from './scoring';

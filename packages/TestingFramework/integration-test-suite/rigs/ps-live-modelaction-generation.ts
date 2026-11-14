@@ -1,20 +1,21 @@
 /**
  * ps-live-modelaction-generation.ts — headless, CLIENT-SIDE proof of **PS2-2**: when a Predictive
- * Studio model is promoted to **Published**, the promote gate auto-generates a per-model child
+ * Studio model is published, the lifecycle gate auto-generates a per-model child
  * Action `Score with <label> v<version>` that wraps the canonical "Score Record Set" action with
  * the model's id BAKED into the `ModelID` param's `DefaultValue`. Driven entirely over GraphQL
  * against an ALREADY-RUNNING MJAPI (http://localhost:4000), the same way a browser would.
  *
- * We never call the generator (`ModelScoringActionGenerator`) directly. It runs SERVER-SIDE inside
- * `ProductionModelPromotionGate.transition` whenever a model reaches Status `'Published'`. We
- * trigger it purely by promoting the model over the wire, then VERIFY the generated Action + its
- * baked `ModelID` default by reading `MJ: Actions` / `MJ: Action Params` back.
+ * We never call the generator (`ModelScoringActionGenerator`) directly. It runs SERVER-SIDE after
+ * `LifecycleGate.ApplyTransition`'s publish transaction commits (`LifecycleGate.SyncScoringAction`)
+ * whenever a model reaches Status `'Published'`. We trigger it purely by publishing the model over the
+ * wire, then VERIFY the generated Action + its baked `ModelID` default by reading `MJ: Actions` /
+ * `MJ: Action Params` back, and find it again by that `ModelID` default (how the gate finds it).
  *
  *   entity fields  →  PredictiveStudio.TrainModel   (MJAPI → TrainingEngine → sidecar /train)
- *                  →  PredictiveStudio.PromoteModel  Draft→Validated  (lifecycle only)
- *                  →  PredictiveStudio.PromoteModel  Validated→Published
- *                         → server-side: ProductionModelPromotionGate.syncScoringAction
- *                             → ModelScoringActionGenerator.generateForModel
+ *                  →  PredictiveStudio.PromoteModel  transition 'evaluate'  Draft→Validated or KeepBaseline
+ *                  →  PredictiveStudio.PromoteModel  transition 'publish'   Validated or KeepBaseline→Published
+ *                         → server-side, after the commit: LifecycleGate.SyncScoringAction
+ *                             → ModelScoringActionGenerator.GenerateForModel
  *                                 → creates Action 'Score with <pipeline> v<version>' + params
  *                  →  RunView MJ: Actions / MJ: Action Params  (verify the generated metadata)
  *
@@ -27,9 +28,10 @@
  * so invoking the action with only a Scope (no ModelID) scores with this model (ActionEngine seeds
  * params from their DefaultValue before invoke).
  *
- * PROMOTE PATH — the gate enforces `Draft → Validated → Published` (no Draft→Published jump), so we
- * promote STEPWISE. If the freshly-trained model is leakage-flagged, the gate refuses Published
- * unless `signOff=true` + a `reason`; we pass both defensively so it always reaches Published.
+ * PUBLISH PATH — the lifecycle gate moves a model only along the lifecycle table (no Draft→Published
+ * jump), so we send `evaluate` then `publish`. A model whose training run flagged leakage is withheld
+ * (`unacknowledged-leakage-flags`) until a person records a sign-off, which a rig cannot make: the
+ * rig then stops with the gate's refusal in its log.
  *
  * THROWAWAY rows it creates, all deleted in `finally` through `lib/ps-rig-lifecycle.ts`, children
  * first, every Delete() checked — a row it cannot delete fails the rig: the server-generated Action
@@ -63,6 +65,7 @@ import { ShippedModelID } from './lib/ps-train-output';
 import { PromoteModel } from './lib/ps-promote';
 import { BindUnitAndProtocol, DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
 import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import '@memberjunction/core-entities';
 import {
@@ -226,6 +229,18 @@ async function findActionsByName(user: UserInfo, name: string): Promise<MJAction
   return res.Results ?? [];
 }
 
+/** The IDs of the actions whose `ModelID` Input param defaults to `modelId` (how the lifecycle gate finds a model's Action). */
+async function findActionIdsByModelIDDefault(user: UserInfo, modelId: string): Promise<string[]> {
+  const res = await new RunView().RunView<Pick<MJActionParamEntity, 'ActionID'>>(
+    { EntityName: 'MJ: Action Params', Fields: ['ActionID'], ExtraFilter: `Name='ModelID' AND Type='Input' AND DefaultValue='${EscapeSQLString(modelId)}'`, ResultType: 'simple', BypassCache: true },
+    user,
+  );
+  if (!res.Success) {
+    throw new Error(`RunView MJ: Action Params by ModelID default failed: ${res.ErrorMessage}`);
+  }
+  return (res.Results || []).map((p) => p.ActionID);
+}
+
 /** Load all `MJ: Action Params` for an action (BypassCache). */
 async function findActionParams(user: UserInfo, actionId: string): Promise<MJActionParamEntity[]> {
   const rv = new RunView();
@@ -315,16 +330,16 @@ async function main(): Promise<void> {
     console.log(`  status         = ${out.status}`);
     console.log(`  leakageFlagged = ${out.leakageFlagged}`);
 
-    // ── 4. Promote stepwise to Published (Draft → Validated → Published) ───────
-    // The gate enforces ALLOWED_TRANSITIONS — no Draft→Published jump — so step through Validated.
-    // signOff=true + reason are passed defensively in case the model is leakage-flagged.
-    banner('4. PROMOTE STEPWISE → Published (PredictiveStudio.PromoteModel)');
-    const s1 = await PromoteModel(route, user, shippedModelId, 'Validated', `${TAG}: stepwise promotion for PS2-2 action-generation proof`);
-    console.log(`  Draft → Validated: promoted, status=${s1}`);
-    check(s1 === 'Validated', `step 1 status = Validated (got '${s1}')`);
-    const s2 = await PromoteModel(route, user, shippedModelId, 'Published', `${TAG}: stepwise promotion for PS2-2 action-generation proof`);
-    console.log(`  Validated → Published: promoted, status=${s2}`);
-    check(s2 === 'Published', `step 2 status = Published (got '${s2}')`);
+    // ── 4. Evaluate, then publish, through the lifecycle gate ─────────────────
+    // The lifecycle table has no Draft→Published jump, so the model is evaluated first (Draft → Validated or
+    // KeepBaseline, the training run's stored decision); publish then moves either to Published.
+    banner('4. EVALUATE → PUBLISH (PredictiveStudio.PromoteModel, transition evaluate then publish)');
+    const s1 = await PromoteModel(route, user, shippedModelId, 'evaluate', `${TAG}: evaluate for the PS2-2 action-generation proof`);
+    console.log(`  evaluate: applied, status=${s1}`);
+    check(s1 === 'Validated' || s1 === 'KeepBaseline', `evaluate status = the run's stored decision, Validated or KeepBaseline (got '${s1}')`);
+    const s2 = await PromoteModel(route, user, shippedModelId, 'publish', `${TAG}: publish for the PS2-2 action-generation proof`);
+    console.log(`  publish: applied, status=${s2}`);
+    check(s2 === 'Published', `publish status = Published (got '${s2}')`);
 
     // Re-read the published model for the authoritative Pipeline + Version the generator used.
     const model = await loadModelRow(user, shippedModelId);
@@ -347,6 +362,8 @@ async function main(): Promise<void> {
     check(action.ParentID === parentActionId, `action.ParentID matches the '${PARENT_ACTION_NAME}' parent (${parentActionId})`);
     check(action.Status === 'Active', `action.Status = 'Active' (got '${action.Status}')`);
     check(!!action.CategoryID, `action.CategoryID is set (category '${MODELS_CATEGORY_NAME}')`);
+    const byModelId = await findActionIdsByModelIDDefault(user, shippedModelId);
+    check(byModelId.length === 1 && UUIDsEqual(byModelId[0], action.ID), `the action is found by its ModelID default (found ${byModelId.length}: ${byModelId.join(', ')})`);
 
     // ── 6. Verify the baked ModelID default + the Scope/WriteBack params ───────
     banner('6. VERIFY BAKED ModelID DefaultValue (MJ: Action Params)');
@@ -382,13 +399,12 @@ async function main(): Promise<void> {
     console.log('  The baked ModelID DefaultValue (verified in step 6) is what makes a Scope-only invoke score with this model.');
 
     // ── 8. Idempotency ────────────────────────────────────────────────────────
-    // The generator is idempotent (find-or-create by deterministic Name; params deleted+recreated).
-    // A direct re-trigger would re-promote to Published, but the gate's ALLOWED_TRANSITIONS does NOT
-    // permit Published→Published (only Published→Archived), so we cannot re-promote to the same status.
-    // Instead we assert the single-publish result is already idempotent: exactly ONE action by name
+    // The generator is idempotent (find-or-create by the ModelID param; params deleted+recreated).
+    // A second publish of the same run is `already-published` (no transition, so no regeneration),
+    // so we assert the single-publish result is already idempotent: exactly ONE action by name
     // and no duplicate ModelID params.
     banner('8. IDEMPOTENCY (single action + no duplicate params)');
-    console.log('  NOTE: Published→Published is not an allowed transition, so we cannot re-trigger by re-promoting.');
+    console.log('  NOTE: a repeated publish is already-published (nothing transitions), so it does not re-trigger the generator.');
     const again = await findActionsByName(user, expectedName);
     check(again.length === 1, `still exactly ONE action named '${expectedName}' (found ${again.length})`);
     const modelIdParams = params.filter((p) => p.Name === 'ModelID');

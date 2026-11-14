@@ -1,213 +1,90 @@
 /**
  * @module actions/promote-model.action
  *
- * **Promote ML Model** action — the thin Action boundary over the model lifecycle
- * transition (plan §6.4 / §12). It lets an agent / workflow / UI move a model
- * through `Draft → Validated → Published → Archived`, **enforcing the leakage
- * sign-off gate**: a leakage-flagged model cannot be promoted without an explicit
- * human/agent `SignOff`.
+ * **Promote ML Model** action — the thin Action boundary over the {@link LifecycleGate} (PR 4 §5.3). It lets an agent,
+ * a workflow or the UI apply ONE lifecycle `Transition` to a model: `evaluate` (Draft → Validated or KeepBaseline from
+ * the training run's stored gate decision), `publish` (Validated or KeepBaseline → Published), `archive` (→ Archived,
+ * a `Reason` required) or `rollback` (Archived → Published for a model published before, a `Reason` required).
  *
- * Per CLAUDE.md "Actions are boundaries": this action does NOT mutate the model's
- * metrics, artifact, or any training payload — promotion is a **lifecycle-only**
- * transition (the model is immutable, §6.4). A calibration-held model is never moved to Validated or Published (no
- * sign-off overrides it), and a model whose artifact `/predict` does not serve is never published. It validates `ModelID` +
- * `TargetStatus`, delegates the leakage check + transition to an injectable
- * {@link IModelPromotionGate}, and maps the new status back.
+ * Per CLAUDE.md "Actions are boundaries": this action never writes the model; it validates `ModelID` and `Transition`,
+ * delegates to the gate through {@link ModelTransitionDelegation} (shared with the `PredictiveStudio.PromoteModel`
+ * operation) with the context user as the initiator, and maps the gate's answer to a result code. A leakage flag is
+ * acknowledged only by a person's sign-off record, which an action cannot make (D4-04), so a flagged model is refused
+ * `LEAKAGE_FLAGGED`.
  *
- * The gate is an injectable seam so unit tests substitute a mock with no live DB.
+ * The gate is created behind {@link PredictiveStudioPromoteModelAction.CreateLifecycleGate} so unit tests inject a fake.
  */
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, Metadata, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { LogError, Metadata } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
+import type { TransitionRefusal } from '@memberjunction/predictive-studio-core';
 
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
-import { ProductionModelPromotionGate } from './promote-model.gate';
+import { LifecycleGate } from '../registry/lifecycle-gate';
+import { GateContexts } from '../registry/gate-seams';
+import { GateRefusals } from '../registry/gate-refusals';
+import { ModelTransitionDelegation, type ModelTransitionResult } from '../operations/delegation';
 
 /** The driver-class key this action registers under (matches the metadata row). */
 export { PROMOTE_MODEL_DRIVER_CLASS } from './driver-classes';
 import { PROMOTE_MODEL_DRIVER_CLASS } from './driver-classes';
 
-/** The lifecycle statuses a model may be promoted/transitioned to. */
-export type PromotableStatus = 'Validated' | 'Published' | 'Archived';
-
-/** The set of valid target statuses (used for validation). */
-export const PROMOTABLE_STATUSES: readonly PromotableStatus[] = ['Validated', 'Published', 'Archived'];
-
-/** The model id + requested transition + sign-off, handed to the gate. */
-export interface PromoteModelRequest {
-  modelId: string;
-  targetStatus: PromotableStatus;
-  signOff: boolean;
-  /**
-   * Justification for a sign-off override. REQUIRED (non-empty) when `signOff`
-   * overrides a leakage-FLAGGED model — the gate refuses the override without a
-   * reason, then persists a sign-off audit note. Ignored when the model isn't
-   * flagged (sign-off has nothing to override).
-   */
-  reason?: string;
-  contextUser?: UserInfo;
-  /** The provider every read and write goes through (required: no fallback to the global provider). */
-  provider: IMetadataProvider;
-}
-
-/** Outcome of a promotion attempt. */
-export type PromoteModelOutcome =
-  | { kind: 'promoted'; newStatus: PromotableStatus; signOffNote?: string }
-  | { kind: 'refused-leakage'; topFeature?: string; topShare?: number }
-  | { kind: 'signoff-reason-required'; topFeature?: string; topShare?: number }
-  /** The model's family is hidden for its holdout calibration (its Lineage's `calibrationHold`); no sign-off overrides it. */
-  | { kind: 'refused-calibration'; slope: number | null }
-  /** The model's artifact is not served by the sidecar's `/predict` (a forecast's series forecaster), so it is not published. */
-  | { kind: 'not-servable'; message: string }
-  | { kind: 'invalid-transition'; currentStatus: string; targetStatus: PromotableStatus }
-  | { kind: 'needs-training'; message: string }
-  | { kind: 'not-found' }
-  | { kind: 'save-failed'; message: string };
+/** The result code of each refusal kind the action names on its own; every other kind is `TRANSITION_REFUSED`. */
+const REFUSAL_CODES: Partial<Record<TransitionRefusal['kind'], string>> = {
+  'unacknowledged-leakage-flags': 'LEAKAGE_FLAGGED',
+  'illegal-transition': 'ILLEGAL_TRANSITION',
+  'reason-required': 'REASON_REQUIRED',
+  'model-not-found': 'MODEL_NOT_FOUND',
+  'calibration-held': 'CALIBRATION_HOLD',
+  'not-servable': 'MODEL_NOT_SERVABLE',
+};
 
 /**
- * The single lifecycle-transition seam this action depends on — load the model,
- * enforce the leakage sign-off gate, and transition the status (lifecycle only).
- * The production implementation ({@link ProductionModelPromotionGate}) loads the
- * `MJ: ML Models` row, determines leakage from its frozen feature importance, and
- * saves only the `Status`; tests inject a deterministic fake.
- */
-export interface IModelPromotionGate {
-  /** Attempt the promotion, enforcing the leakage sign-off gate. */
-  promote(request: PromoteModelRequest): Promise<PromoteModelOutcome>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-}
-
-/**
- * Transitions a model's lifecycle status with the leakage sign-off gate enforced.
- * Output: `Status` (the new status string, on success).
+ * Applies one lifecycle transition to a model through the lifecycle gate. Output: `Status` (the model's new status, on
+ * success).
  */
 @RegisterClass(BaseAction, PROMOTE_MODEL_DRIVER_CLASS)
 export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioAction {
   /** @inheritdoc */
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+    const modelId = this.getStringParam(params, 'ModelID');
+    if (!modelId) {
+      return this.fail('VALIDATION_ERROR', 'ModelID parameter is required');
+    }
+    const transition = ModelTransitionDelegation.ParseTransition(this.getStringParam(params, 'Transition'));
+    if (transition === null) {
+      return this.fail('VALIDATION_ERROR', `Transition parameter is required and must be one of: ${ModelTransitionDelegation.Transitions.join(', ')}`);
+    }
+    if (!params.ContextUser) {
+      return this.fail('VALIDATION_ERROR', 'A context user is required: the lifecycle gate records who started the transition');
+    }
     try {
-      const modelId = this.getStringParam(params, 'ModelID');
-      if (!modelId) {
-        return this.fail('VALIDATION_ERROR', 'ModelID parameter is required');
-      }
-
-      const targetStatus = this.parseTargetStatus(params);
-      if (!targetStatus) {
-        return this.fail(
-          'VALIDATION_ERROR',
-          `TargetStatus parameter is required and must be one of: ${PROMOTABLE_STATUSES.join(', ')}`,
-        );
-      }
-
-      const signOff = this.getBooleanParam(params, 'SignOff', false);
-      const reason = this.getStringParam(params, 'Reason');
-
-      const gate = this.createGate();
-      const outcome = await gate.promote({
-        modelId,
-        targetStatus,
-        signOff,
-        reason,
-        contextUser: params.ContextUser,
-        provider: params.Provider || Metadata.Provider, // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
-      });
-
-      return this.mapOutcome(params, modelId, outcome);
+      const result = await ModelTransitionDelegation.Apply(
+        { ModelID: modelId, Transition: transition, Reason: this.getStringParam(params, 'Reason') || null, SignOffID: null, Initiator: { kind: 'human', userId: params.ContextUser.ID } },
+        GateContexts.ForRequest({ ContextUser: params.ContextUser, Provider: params.Provider || Metadata.Provider }), // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
+        this.CreateLifecycleGate(),
+      );
+      return this.MapResult(params, modelId, transition, result);
     } catch (e) {
       LogError(e);
-      return this.fail('PROMOTION_FAILED', `Promotion failed: ${e instanceof Error ? e.message : String(e)}`);
+      return this.fail('PROMOTION_FAILED', `The ${transition} of ML Model ${modelId} failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  /** Map the gate outcome to an {@link ActionResultSimple}. */
-  protected mapOutcome(params: RunActionParams, modelId: string, outcome: PromoteModelOutcome): ActionResultSimple {
-    switch (outcome.kind) {
-      case 'promoted':
-        this.addOutputParam(params, 'Status', outcome.newStatus);
-        if (outcome.signOffNote) {
-          this.addOutputParam(params, 'SignOffNote', outcome.signOffNote);
-        }
-        return this.ok(
-          params,
-          outcome.signOffNote
-            ? `Model ${modelId} transitioned to ${outcome.newStatus}. ${outcome.signOffNote}`
-            : `Model ${modelId} transitioned to ${outcome.newStatus}.`,
-        );
-      case 'refused-leakage':
-        return this.fail('LEAKAGE_SIGNOFF_REQUIRED', this.leakageRefusalMessage(modelId, outcome));
-      case 'signoff-reason-required':
-        return this.fail('SIGNOFF_REASON_REQUIRED', this.signOffReasonRequiredMessage(modelId, outcome));
-      case 'refused-calibration':
-        return this.fail('CALIBRATION_HOLD', ProductionModelPromotionGate.CalibrationRefusalMessage(modelId, outcome.slope));
-      case 'not-servable':
-        return this.fail('MODEL_NOT_SERVABLE', outcome.message);
-      case 'invalid-transition':
-        return this.fail(
-          'INVALID_TRANSITION',
-          `Model ${modelId} cannot move from '${outcome.currentStatus}' to '${outcome.targetStatus}'. ` +
-            'Allowed lifecycle: Draft → Validated → Published → Archived (with Published ↔ Archived).',
-        );
-      case 'needs-training':
-        return this.fail('MODEL_NEEDS_TRAINING', outcome.message);
-      case 'not-found':
-        return this.fail('MODEL_NOT_FOUND', `ML Model '${modelId}' was not found.`);
-      case 'save-failed':
-        return this.fail('SAVE_FAILED', `Failed to transition model '${modelId}': ${outcome.message}`);
+  /** The gate's result as an {@link ActionResultSimple}: `SUCCESS` with the `Status` output, or the refusal's code. */
+  protected MapResult(params: RunActionParams, modelId: string, transition: string, result: ModelTransitionResult): ActionResultSimple {
+    if (result.Applied === true) {
+      this.addOutputParam(params, 'Status', result.Status);
+      return this.ok(params, `Model ${modelId}: ${transition} applied; it is now ${result.Status}.`);
     }
+    const code = REFUSAL_CODES[result.Refusal.kind] || 'TRANSITION_REFUSED';
+    return this.fail(code, `Model ${modelId}: the lifecycle gate refused the ${transition} (${result.Refusal.kind}). ${GateRefusals.Describe(result.Refusal)}`);
   }
 
-  /** Compose the plain-language refusal message for a leakage-flagged model. */
-  protected leakageRefusalMessage(
-    modelId: string,
-    outcome: Extract<PromoteModelOutcome, { kind: 'refused-leakage' }>,
-  ): string {
-    const detail =
-      outcome.topFeature != null
-        ? ` One feature ("${outcome.topFeature}") accounts for ${(((outcome.topShare ?? 0) * 100)).toFixed(0)}% of the model's predictions, which often signals the model is accidentally peeking at the answer.`
-        : '';
-    return (
-      `Model ${modelId} was flagged for possible target leakage and cannot be promoted without sign-off.${detail} ` +
-      'A human must review the model and re-run this action with SignOff=true to confirm the result is legitimate.'
-    );
-  }
-
-  /**
-   * Compose the message when a sign-off override of a leakage-flagged model was
-   * requested WITHOUT a justification reason — the override is refused until one is
-   * supplied so the audit trail is never empty.
-   */
-  protected signOffReasonRequiredMessage(
-    modelId: string,
-    outcome: Extract<PromoteModelOutcome, { kind: 'signoff-reason-required' }>,
-  ): string {
-    const detail =
-      outcome.topFeature != null
-        ? ` (one feature, "${outcome.topFeature}", dominates this model's predictions)`
-        : '';
-    return (
-      `Model ${modelId} is leakage-flagged${detail} and SignOff=true was supplied without a Reason. ` +
-      'Overriding a leakage flag requires a non-empty Reason so the sign-off is auditable. ' +
-      'Re-run this action with both SignOff=true and a Reason explaining why the result is legitimate.'
-    );
-  }
-
-  // ----- param parsing -------------------------------------------------------
-
-  /** Parse + validate the `TargetStatus` param against the promotable set. */
-  protected parseTargetStatus(params: RunActionParams): PromotableStatus | undefined {
-    const raw = this.getStringParam(params, 'TargetStatus');
-    if (!raw) {
-      return undefined;
-    }
-    const match = PROMOTABLE_STATUSES.find((s) => s.toLowerCase() === raw.toLowerCase());
-    return match;
-  }
-
-  // ----- injectable gate seam (overridden in tests) --------------------------
-
-  /** Construct the production promotion gate. Overridable so tests inject a mock. */
-  protected createGate(): IModelPromotionGate {
-    return new ProductionModelPromotionGate();
+  /** The lifecycle gate the transition runs through (production: {@link LifecycleGate}). Overridable so tests inject a fake. */
+  protected CreateLifecycleGate(): LifecycleGate {
+    return new LifecycleGate();
   }
 }

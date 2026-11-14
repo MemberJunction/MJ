@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import type {
   MJFeatureValueEntity,
   MJMLModelEntity,
@@ -7,7 +7,11 @@ import type {
 } from '@memberjunction/core-entities';
 import type { PredictRequest, PredictResponse } from '@memberjunction/predictive-studio-core';
 import { InMemoryArtifactLoader } from '../artifact-loader';
+import { SnapshotHash } from '../../snapshot/snapshot-hash';
+import { ArtifactUnavailableError } from '../model-readiness';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 import {
+  ChallengerUserRequiredError,
   FeatureValueShadowAuditSink,
   MLModelChallengerScoreRunner,
   ShadowScoringCoordinator,
@@ -285,9 +289,13 @@ describe('ShadowScoringCoordinator', () => {
         DispatchedAt: '2026-11-02T12:00:00.000Z',
       };
 
+      const errors = ConsoleCapture.Errors();
       coordinator.DispatchShadowScore(envelope);
       await coordinator.FlushInFlight();
 
+      expect(ConsoleCapture.Lines(errors)).toEqual([
+        "ShadowScoringCoordinator: challenger failed for record 'Rec-Timeout-1' (model='Model-Challenger-V2'): SHADOW_TIMEOUT: Challenger exceeded MaxLatencyMs (25ms)",
+      ]);
       expect(observedSignalAborted).toBe(true);
       expect(auditRecords).toHaveLength(1);
       expect(auditRecords[0].Role).toBe('Challenger');
@@ -370,6 +378,7 @@ describe('ShadowScoringCoordinator', () => {
           DispatchedAt: '2026-11-02T12:00:00.000Z',
         });
 
+      const errors = ConsoleCapture.Errors();
       for (let i = 0; i < 4; i++) {
         dispatch(i);
       }
@@ -390,6 +399,12 @@ describe('ShadowScoringCoordinator', () => {
       await coordinator.FlushInFlight();
       expect(coordinator.InFlightCount).toBe(0);
       expect(maxObservedActiveCalls).toBe(4);
+      // One timeout line per started challenger; the four dropped dispatches never ran.
+      expect(ConsoleCapture.Lines(errors).sort()).toEqual(
+        [0, 1, 2, 3].map(
+          (i) => `ShadowScoringCoordinator: challenger failed for record 'rec-${i}' (model='Model-Challenger-V2'): SHADOW_TIMEOUT: Challenger exceeded MaxLatencyMs (15ms)`,
+        ),
+      );
     });
 
     it('persists champion audit row even when challenger task is dropped by in-flight cap (S5)', async () => {
@@ -407,7 +422,7 @@ describe('ShadowScoringCoordinator', () => {
         },
         EntityByName: () => ({ ID: 'Ent-Members' } as ReturnType<IMetadataProvider['EntityByName']>),
         RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }),
-        RunViews: async (views: unknown[]) =>
+        RunViews: async (views: RunViewParams[]) =>
           views.map(() => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' })),
       } as unknown as IMetadataProvider;
 
@@ -466,6 +481,7 @@ describe('ShadowScoringCoordinator', () => {
         ID: 'Model-Challenger-V2',
         Status: 'Validated',
         ArtifactFileID: 'challenger-file-1',
+        ArtifactSha256: SnapshotHash.Sha256Hex(new TextEncoder().encode('challenger-artifact')),
         FittedPreprocessing: JSON.stringify({ 'scale.tenure': { mean: 10, std: 2 } }),
         FeatureSchema: JSON.stringify([
           { Name: 'tenure', Kind: 'numeric' },
@@ -483,7 +499,7 @@ describe('ShadowScoringCoordinator', () => {
         sidecar: {
           predict: async (req: PredictRequest): Promise<PredictResponse> => {
             capturedRequests.push(req);
-            return { predictions: [{ score: 0.87, class: 'renew' }] };
+            return { predictions: [{ score: 0.87, class: 'renew', probabilities: null }], classOrder: null };
           },
         },
       };
@@ -497,7 +513,7 @@ describe('ShadowScoringCoordinator', () => {
         },
         EntityByName: () => ({ ID: 'Ent-Members' } as ReturnType<IMetadataProvider['EntityByName']>),
         RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }),
-        RunViews: async (views: unknown[]) =>
+        RunViews: async (views: RunViewParams[]) =>
           views.map(() => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' })),
       } as unknown as IMetadataProvider;
 
@@ -610,6 +626,11 @@ describe('ShadowScoringCoordinator', () => {
       const artifacts = new InMemoryArtifactLoader();
       artifacts.Set('challenger-artifact-v1', new TextEncoder().encode('bytes-v1'));
       artifacts.Set('challenger-artifact-v2', new TextEncoder().encode('bytes-v2'));
+      // Each artifact file's registered SHA-256, as the model row that names it records it.
+      const registeredSha256: Record<string, string> = {
+        'challenger-artifact-v1': SnapshotHash.Sha256Hex(new TextEncoder().encode('bytes-v1')),
+        'challenger-artifact-v2': SnapshotHash.Sha256Hex(new TextEncoder().encode('bytes-v2')),
+      };
 
       const deps: MLInferenceDeps = {
         modelLoader: {
@@ -622,6 +643,7 @@ describe('ShadowScoringCoordinator', () => {
               ID: 'Model-Challenger-V2',
               Status: 'Validated',
               ArtifactFileID: currentArtifactFileId,
+              ArtifactSha256: registeredSha256[currentArtifactFileId],
               FittedPreprocessing: '{}',
               FeatureSchema: JSON.stringify([{ Name: 'tenure', Kind: 'numeric' }]),
               ProblemType: 'classification',
@@ -630,15 +652,15 @@ describe('ShadowScoringCoordinator', () => {
           },
         },
         artifactLoader: {
-          load: async (fileId, contextUser) => {
+          load: async (fileId, contextUser, provider) => {
             observedArtifactLoads.push(fileId);
-            return artifacts.load(fileId, contextUser);
+            return artifacts.load(fileId, contextUser, provider);
           },
         },
         sidecar: {
           predict: async (req: PredictRequest): Promise<PredictResponse> => {
             capturedPredictArtifacts.push(req.artifact_b64);
-            return { predictions: [{ score: 0.8, class: 'renew' }] };
+            return { predictions: [{ score: 0.8, class: 'renew', probabilities: null }], classOrder: null };
           },
         },
       };
@@ -679,6 +701,7 @@ describe('ShadowScoringCoordinator', () => {
               ID: 'Model-Schema-Strict',
               Status: 'Validated',
               ArtifactFileID: 'file-1',
+              ArtifactSha256: SnapshotHash.Sha256Hex(new TextEncoder().encode('artifact-data')),
               FeatureSchema: JSON.stringify([
                 { Name: 'income', Kind: 'numeric' },
                 { Name: 'credit_score', Kind: 'numeric' },
@@ -687,7 +710,7 @@ describe('ShadowScoringCoordinator', () => {
         },
         artifactLoader: artifacts,
         sidecar: {
-          predict: async () => ({ predictions: [{ score: 0.9 }] }),
+          predict: async () => ({ predictions: [{ score: 0.9, probabilities: null }], classOrder: null }),
         },
       });
 
@@ -704,7 +727,7 @@ describe('ShadowScoringCoordinator', () => {
         DispatchedAt: '2026-11-02T12:00:00.000Z',
       };
 
-      await expect(runner.RunChallenger(envelope)).rejects.toThrow(
+      await expect(runner.RunChallenger(envelope, { ID: 'user-1' } as UserInfo)).rejects.toThrow(
         "Challenger model 'Model-Schema-Strict' schema has feature column(s) not in the champion's frozen feature row: credit_score",
       );
 
@@ -717,11 +740,15 @@ describe('ShadowScoringCoordinator', () => {
           return entity as T;
         },
       } as unknown as IMetadataProvider;
+      const errors = ConsoleCapture.Errors();
       await new ShadowScoringCoordinator({ ChallengerRunner: runner, AuditSink: new FeatureValueShadowAuditSink() }).ExecuteChallengerEnvelope(
         { ...envelope, EntityID: 'Ent-Members' },
         { ID: 'user-1' } as UserInfo,
         fakeProvider,
       );
+      expect(ConsoleCapture.Lines(errors)).toEqual([
+        "ShadowScoringCoordinator: challenger failed for record 'rec-missing-features' (model='Model-Schema-Strict'): Challenger model 'Model-Schema-Strict' schema has feature column(s) not in the champion's frozen feature row: credit_score",
+      ]);
       expect(createdEntities.map((e) => e.Reasoning)).toEqual([
         "SHADOW_ERROR: Challenger model 'Model-Schema-Strict' schema has feature column(s) not in the champion's frozen feature row: credit_score",
       ]);
@@ -741,6 +768,7 @@ describe('ShadowScoringCoordinator', () => {
         ChallengerRunner: { RunChallenger: async () => new Promise<ChallengerScoreOutput>((resolve) => setTimeout(() => resolve({ Score: 1 }), 60)) },
         AuditSink: new FeatureValueShadowAuditSink(),
       });
+      const errors = ConsoleCapture.Errors();
       await coordinator.ExecuteChallengerEnvelope(
         {
           EntityID: 'Ent-Members',
@@ -753,6 +781,135 @@ describe('ShadowScoringCoordinator', () => {
         fakeProvider,
       );
       expect(createdEntities.map((e) => e.Reasoning)).toEqual(['SHADOW_TIMEOUT: Challenger exceeded MaxLatencyMs (10ms)']);
+      expect(ConsoleCapture.Lines(errors)).toEqual([
+        "ShadowScoringCoordinator: challenger failed for record 'rec-slow' (model='Model-Challenger-V2'): SHADOW_TIMEOUT: Challenger exceeded MaxLatencyMs (10ms)",
+      ]);
+    });
+  });
+
+  describe('MLModelChallengerScoreRunner loads its artifact through the artifact registry', () => {
+    const challengerBytes = new TextEncoder().encode('challenger-artifact');
+    const user = { ID: 'user-1' } as UserInfo;
+    /** The provider slice the challenger's registry is built over; the in-memory loader never reads it (one deliberate test-double cast). */
+    const registryProvider = {} as unknown as IMetadataProvider;
+
+    /** A Validated challenger row that counts its saves, so a test can show the challenger's ArtifactStatus is never written. */
+    class ChallengerModelDouble {
+      public ID = 'Model-Challenger-V2';
+      public Status: MJMLModelEntity['Status'] = 'Validated';
+      public ArtifactFileID: string | null = 'challenger-file-1';
+      public ArtifactSha256: string | null = SnapshotHash.Sha256Hex(challengerBytes);
+      public ArtifactStatus: MJMLModelEntity['ArtifactStatus'] = 'verified';
+      public FittedPreprocessing = '{}';
+      public FeatureSchema = JSON.stringify([{ Name: 'tenure', Kind: 'numeric' }]);
+      public ProblemType: MJMLModelEntity['ProblemType'] = 'classification';
+      public TargetVariable = 'Renewed';
+      public SaveCount = 0;
+      public async Save(): Promise<boolean> {
+        this.SaveCount++;
+        return true;
+      }
+    }
+
+    /** The challenger runner over `artifacts`, recording every `/predict` it sends. */
+    function challengerRunner(model: ChallengerModelDouble, artifacts: InMemoryArtifactLoader, predicted: PredictRequest[]): MLModelChallengerScoreRunner {
+      return new MLModelChallengerScoreRunner({
+        // The loader hands back the row double: one deliberate test-double cast at the seam.
+        modelLoader: { loadModel: async () => model as unknown as MJMLModelEntity },
+        artifactLoader: artifacts,
+        sidecar: {
+          predict: async (req: PredictRequest): Promise<PredictResponse> => {
+            predicted.push(req);
+            return { predictions: [{ score: 0.9, class: 'renew', probabilities: null }], classOrder: null };
+          },
+        },
+      });
+    }
+
+    const envelope: ShadowScoreEnvelope = {
+      RecordProcessID: 'RP-7',
+      EntityID: 'Ent-Members',
+      EntityName: 'Members',
+      RecordID: 'Mem-7',
+      FeatureName: 'Renewed',
+      ChampionModelID: 'Model-Champion-V1',
+      ChallengerConfig: baseConfig,
+      FrozenFeatures: { tenure: 4 },
+      ChampionScore: 0.4,
+      ChampionLabel: 'lapse',
+      DispatchedAt: '2026-11-02T12:00:00.000Z',
+    };
+
+    it('refuses a challenger whose artifact object is gone with the typed artifact-missing error, naming the challenger, model and file', async () => {
+      const model = new ChallengerModelDouble();
+      const predicted: PredictRequest[] = [];
+      const attempt = challengerRunner(model, new InMemoryArtifactLoader(), predicted).RunChallenger(envelope, user, registryProvider);
+      await expect(attempt).rejects.toBeInstanceOf(ArtifactUnavailableError);
+      await expect(attempt).rejects.toMatchObject({
+        Refusal: { kind: 'artifact-missing', fileId: 'challenger-file-1' }, Source: 'MLModelChallengerScoreRunner', ModelID: 'Model-Challenger-V2', FileID: 'challenger-file-1',
+      });
+      await expect(attempt).rejects.toThrow("MLModelChallengerScoreRunner: ML Model 'Model-Challenger-V2': its model artifact file 'challenger-file-1' is missing from storage");
+      expect(predicted).toHaveLength(0);
+      // The challenger is not the served model: its row is never written.
+      expect([model.SaveCount, model.ArtifactStatus]).toEqual([0, 'verified']);
+    });
+
+    it('refuses a challenger whose stored bytes changed with the typed artifact-hash-mismatch error, naming both hashes', async () => {
+      const model = new ChallengerModelDouble();
+      const artifacts = new InMemoryArtifactLoader();
+      const swapped = new TextEncoder().encode('another model');
+      artifacts.Set('challenger-file-1', swapped);
+      const predicted: PredictRequest[] = [];
+      const attempt = challengerRunner(model, artifacts, predicted).RunChallenger(envelope, user, registryProvider);
+      await expect(attempt).rejects.toMatchObject({
+        Refusal: { kind: 'artifact-hash-mismatch', expected: SnapshotHash.Sha256Hex(challengerBytes), actual: SnapshotHash.Sha256Hex(swapped) },
+        Source: 'MLModelChallengerScoreRunner',
+      });
+      expect(predicted).toHaveLength(0);
+      expect([model.SaveCount, model.ArtifactStatus]).toEqual([0, 'verified']);
+    });
+
+    it("keeps the champion's audit row when the challenger's artifact does not verify, and records the challenger as errored", async () => {
+      const model = new ChallengerModelDouble();
+      const artifacts = new InMemoryArtifactLoader();
+      artifacts.Set('challenger-file-1', new TextEncoder().encode('another model'));
+      const createdEntities: SavedFeatureValueDouble[] = [];
+      const auditProvider = {
+        GetEntityObject: async <T>(): Promise<T> => {
+          const entity = new SavedFeatureValueDouble();
+          createdEntities.push(entity);
+          return entity as T;
+        },
+        EntityByName: () => ({ ID: 'Ent-Members' }) as ReturnType<IMetadataProvider['EntityByName']>,
+        RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }),
+        RunViews: async (views: RunViewParams[]) =>
+          views.map(() => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' })),
+      } as unknown as IMetadataProvider;
+      const predicted: PredictRequest[] = [];
+      const coordinator = new ShadowScoringCoordinator({ ChallengerRunner: challengerRunner(model, artifacts, predicted), AuditSink: new FeatureValueShadowAuditSink() });
+      const errors = ConsoleCapture.Errors();
+
+      await coordinator.DispatchShadowScore(envelope, user, auditProvider).ChampionAudit;
+      await coordinator.FlushInFlight();
+
+      const champion = createdEntities.find((e) => e.Role === 'Champion');
+      const challenger = createdEntities.find((e) => e.Role === 'Challenger');
+      expect([champion?.SaveCalled, champion?.MLModelID, champion?.ValueNumeric]).toEqual([true, 'Model-Champion-V1', 0.4]);
+      expect(challenger?.ValueNumeric).toBeNull();
+      expect(challenger?.Reasoning).toContain("SHADOW_ERROR: MLModelChallengerScoreRunner: ML Model 'Model-Challenger-V2': its stored model artifact file 'challenger-file-1' does not match");
+      expect(predicted).toHaveLength(0);
+      expect(model.SaveCount).toBe(0);
+      expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("challenger failed for record 'Mem-7' (model='Model-Challenger-V2'): MLModelChallengerScoreRunner:")]);
+    });
+
+    it('refuses a challenger asked to score without an acting user, naming the challenger, before reading its artifact', async () => {
+      const artifacts = new InMemoryArtifactLoader();
+      artifacts.Set('challenger-file-1', challengerBytes);
+      const predicted: PredictRequest[] = [];
+      const attempt = challengerRunner(new ChallengerModelDouble(), artifacts, predicted).RunChallenger(envelope, undefined, registryProvider);
+      await expect(attempt).rejects.toBeInstanceOf(ChallengerUserRequiredError);
+      await expect(attempt).rejects.toMatchObject({ ChallengerModelID: 'Model-Challenger-V2' });
+      expect(predicted).toHaveLength(0);
     });
   });
 });

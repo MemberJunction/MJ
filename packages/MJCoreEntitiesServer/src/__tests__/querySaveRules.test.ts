@@ -79,6 +79,10 @@ vi.mock('../custom/approvalStamp', () => ({
 }));
 
 import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
+import { QueryEngine } from '@memberjunction/core-entities';
+import { ExpectedConsole } from './helpers/expected-console';
+
+ExpectedConsole.Install([/^\[MJQueryEntityServer\] Query "Account Balances": The extracted child rows could not be written: the query is not saved through a database provider$/]);
 
 /** The generated base's constructor takes an EntityInfo; the stub takes none, so construct without arguments. */
 function createQuery(sql: string): MJQueryEntityServer {
@@ -88,6 +92,8 @@ function createQuery(sql: string): MJQueryEntityServer {
 }
 
 beforeEach(() => {
+    // The query engine is not loaded through a database here; saving reads its (stubbed) queries without loading it.
+    vi.spyOn(QueryEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
     writes.length = 0;
 });
 

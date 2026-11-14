@@ -4,7 +4,9 @@
  * the saved fakes, and the harness for a pipeline that points at the `UnitYearsWorld` Prediction Unit and is bound to
  * the `ProtocolRowFixture` protocol. No live database, no live sidecar.
  */
-import type { UserInfo, IMetadataProvider, BaseEntity } from '@memberjunction/core';
+import { vi } from 'vitest';
+import { EntityInfo, type UserInfo, type IMetadataProvider, type BaseEntity, type EntityTransactionScope, type RunQueryParams, type RunQueryResult, type RunViewParams } from '@memberjunction/core';
+import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import { UUIDsEqual } from '@memberjunction/global';
 import type {
   MJMLModelEntity,
@@ -24,7 +26,7 @@ import type {
   TrainerRequest,
   TrainerResult,
 } from '@memberjunction/predictive-studio-core';
-import { EvaluationProtocol } from '@memberjunction/predictive-studio-core';
+import { EvaluationProtocol, type JsonValue } from '@memberjunction/predictive-studio-core';
 import { TrainingEngine } from '../../training/training-engine';
 import { InMemoryArtifactStore } from '../../training/artifact-store';
 import type { IEntityFactory, IRecordLoader, ITrainerEvaluator, TrainModelResult, TrainingDeps } from '../../training/types';
@@ -89,6 +91,48 @@ export class FakeMLModel extends FakeEntity {
   public Version = 0;
   public AlgorithmID = '';
   public ArtifactFileID: string | null = null;
+  /** The registered SHA-256 of the model's artifact (the training engine records the stored file's). */
+  public ArtifactSha256: string | null = null;
+  /** The registry entry's lineage and delivery columns (§5.1), which the training engine records on a trainer model row. */
+  public TrainingRunID: string | null = null;
+  public TrainingSnapshotID: string | null = null;
+  public EvaluationProtocolID: string | null = null;
+  public PredictionUnitID: string | null = null;
+  public SnapshotHash: string | null = null;
+  public FeatureSchemaHash: string | null = null;
+  public CodeVersion: string | null = null;
+  public OutputSemantics: string | null = null;
+  public Delivery: string | null = null;
+  public ArtifactStatus: MJMLModelEntity['ArtifactStatus'] = 'unverified';
+  public ArtifactCheckedAt: Date | null = null;
+
+  /** `Delivery` read as the generated `DeliveryObject` accessor reads it ({@link FakeMLModel.ReadJSONField}). */
+  public get DeliveryObject(): MJMLModelEntity['DeliveryObject'] {
+    return FakeMLModel.ReadJSONField<NonNullable<MJMLModelEntity['DeliveryObject']>>('Delivery', this.Delivery);
+  }
+
+  /** `CodeVersion` read as the generated `CodeVersionObject` accessor reads it ({@link FakeMLModel.ReadJSONField}). */
+  public get CodeVersionObject(): MJMLModelEntity['CodeVersionObject'] {
+    return FakeMLModel.ReadJSONField<NonNullable<MJMLModelEntity['CodeVersionObject']>>('CodeVersion', this.CodeVersion);
+  }
+
+  /**
+   * Exactly what a generated `<Field>Object` accessor does (`BaseEntity.GetJSONFieldObject` → `JSONFieldBinding.GetValue`,
+   * `MJCore/src/generic/jsonFieldBinding.ts` `parseRaw`): null for a null or empty column, a throw naming the field for
+   * text that is not JSON, and otherwise the parsed value, typed as the field's JSONType with no shape check (the
+   * accessor's own `as TObject`; this one deliberate test-double cast mirrors it). The accessor validates nothing, which
+   * is why `RegistryEntries.Load` checks the value it returns against Core's zod schemas (`RegistrySchemas`).
+   */
+  public static ReadJSONField<T>(fieldName: string, raw: string | null): T | null {
+    if (raw === null || raw === '') return null;
+    let parsed: JsonValue;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      throw new Error(`JSON field '${fieldName}' does not contain valid JSON: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return parsed as unknown as T;
+  }
   public FittedPreprocessing: string | null = null;
   public FeatureSchema = '';
   public TargetVariable = '';
@@ -228,7 +272,7 @@ export class FakeEntityFactory implements IEntityFactory {
   }
 }
 
-/** Record-loader fake — returns a configured pipeline + next version, and resolves driver keys from a small catalog. */
+/** Record-loader fake — returns a configured pipeline, and resolves driver keys from a small catalog. */
 export class FakeRecordLoader implements IRecordLoader {
   /** The algorithm catalog by driver key: the two GLM drivers the baselines fit that have a catalog row. */
   public static readonly DefaultCatalog: Readonly<Record<string, string>> = { logistic_regression: 'algo-logreg', ridge: 'algo-ridge' };
@@ -236,7 +280,6 @@ export class FakeRecordLoader implements IRecordLoader {
   public readonly DriverLookups: string[] = [];
   constructor(
     private readonly pipeline: FakeMLPipeline | null,
-    private readonly nextVersion = 5,
     private readonly catalog: Readonly<Record<string, string>> = FakeRecordLoader.DefaultCatalog,
   ) {}
 
@@ -248,19 +291,52 @@ export class FakeRecordLoader implements IRecordLoader {
   async loadPipeline(_pipelineId: string, _u?: UserInfo, _p?: IMetadataProvider): Promise<MJMLTrainingPipelineEntity | null> {
     return this.pipeline as unknown as MJMLTrainingPipelineEntity | null;
   }
-
-  async nextModelVersion(_pipelineId: string, _u?: UserInfo, _p?: IMetadataProvider): Promise<number> {
-    return this.nextVersion;
-  }
 }
 
 /**
- * The provider slice training uses: `EntityByName` for the target's primary key (the training read is ordered by it).
- * Handed to the engine through one deliberate test-double cast at the seam boundary.
+ * The provider slice training uses: `EntityByName` for the target's primary key (the training read is ordered by it),
+ * and the transaction and stored-Query members the model-row save runs on (`ProviderTransactions.Run` around
+ * `ModelVersions.SaveUnderLock`: the pipeline lock, then `Predictive Studio: Next Model Version`, which answers
+ * {@link TrainingProviderFake.NextVersion}). Every transaction event and query is appended to {@link Log}.
  */
-export const fakeProvider = {
-  EntityByName: (name: string) => (name === 'Members' ? { PrimaryKeys: [{ Name: 'ID' }] } : undefined),
-} as unknown as IMetadataProvider;
+export class TrainingProviderFake extends DatabaseProviderStub {
+  /** The version `Predictive Studio: Next Model Version` answers. */
+  public NextVersion = 5;
+  /** `begin`, `commit`, `rollback` and `query <name>`, in order. */
+  public readonly Log: string[] = [];
+
+  /**
+   * Rows `RunView` answers, by entity name (the trainer reads the pipeline's Published model, D4-93); default none, so a
+   * run has no incumbent. Tests that set it reset it.
+   */
+  public ViewRows: Record<string, object[]> = {};
+
+  constructor() {
+    super();
+    this.RunView = vi.fn().mockImplementation(async (params: RunViewParams) => ({ Success: true, Results: this.ViewRows[params.EntityName || ''] || [], TotalRowCount: 0, ErrorMessage: '' }));
+  }
+
+  public override EntityByName(name: string): EntityInfo | undefined {
+    return name === 'Members' ? new EntityInfo({ ID: 'ENT-MEMBERS', Name: 'Members', Fields: [{ Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true }] }) : undefined;
+  }
+
+  public override async BeginEntityTransaction(): Promise<EntityTransactionScope> {
+    this.Log.push('begin');
+    return { IsNested: false, Commit: async () => { this.Log.push('commit'); }, Rollback: async () => { this.Log.push('rollback'); } };
+  }
+
+  public override async RunQuery(params: RunQueryParams): Promise<RunQueryResult> {
+    const name = params.QueryName || '';
+    this.Log.push(`query ${name}`);
+    const row = name === 'Predictive Studio: Next Model Version' ? { NextVersion: this.NextVersion } : { ID: 'pipeline' };
+    return { QueryID: '', QueryName: name, Success: true, Results: [row], RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '' };
+  }
+}
+
+/** The one training provider fake the shared harness uses. */
+export const trainingProvider = new TrainingProviderFake();
+/** {@link trainingProvider} as the engine's provider (a real `DatabaseProviderBase`: no cast). */
+export const fakeProvider: IMetadataProvider = trainingProvider;
 export const fakeUser = { ID: 'user-1', Email: 'trainer@example.com' } as UserInfo;
 
 

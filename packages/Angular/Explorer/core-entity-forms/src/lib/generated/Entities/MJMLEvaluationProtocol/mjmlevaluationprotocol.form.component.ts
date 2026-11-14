@@ -24,7 +24,8 @@ export class MJMLEvaluationProtocolFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMLTrainingSnapshots', sectionName: 'ML Training Snapshots', isExpanded: false },
             { sectionKey: 'mJMLEvaluationProtocols', sectionName: 'ML Evaluation Protocols', isExpanded: false },
             { sectionKey: 'mJMLTrainingRuns', sectionName: 'ML Training Runs', isExpanded: false },
-            { sectionKey: 'mJMLTrainingPipelines', sectionName: 'ML Training Pipelines', isExpanded: false }
+            { sectionKey: 'mJMLTrainingPipelines', sectionName: 'ML Training Pipelines', isExpanded: false },
+            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false }
         ]);
     }
 }

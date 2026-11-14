@@ -153,66 +153,74 @@
       <div class="ps-card">
         <div class="ps-card-body ps-row" style="align-items:center;flex-wrap:wrap;gap:8px">
           <span class="ps-muted ps-small" style="flex:1">{{ ActionHint }}</span>
-          @if (CanValidate) {
-            <button mjButton variant="secondary" size="sm" data-testid="ps-registry-validate" (click)="RequestPromote('Validated')">
-              <i class="fa-solid fa-circle-check"></i> Mark Validated
+          @if (Offers('evaluate')) {
+            <button mjButton [variant]="Presentation('evaluate').Primary ? 'primary' : 'secondary'" size="sm"
+              [attr.data-testid]="Presentation('evaluate').TestID" data-action="evaluate" (click)="RequestTransition('evaluate')">
+              <i [class]="Presentation('evaluate').Icon"></i> {{ Presentation('evaluate').Label }}
             </button>
           }
-          @if (CanPublish) {
-            <button mjButton variant="primary" size="sm" data-testid="ps-registry-promote" (click)="RequestPromote('Published')">
-              <i class="fa-solid fa-arrow-up"></i> Promote to Published
+          @if (Offers('publish')) {
+            <button mjButton [variant]="Presentation('publish').Primary ? 'primary' : 'secondary'" size="sm"
+              [attr.data-testid]="Presentation('publish').TestID" data-action="publish" (click)="RequestTransition('publish')">
+              <i [class]="Presentation('publish').Icon"></i> {{ Presentation('publish').Label }}
             </button>
           }
-          @if (CanArchive) {
-            <button mjButton variant="secondary" size="sm" data-testid="ps-registry-archive" (click)="RequestPromote('Archived')">
-              <i class="fa-solid fa-box-archive"></i> Archive
+          @if (Offers('rollback')) {
+            <button mjButton [variant]="Presentation('rollback').Primary ? 'primary' : 'secondary'" size="sm"
+              [attr.data-testid]="Presentation('rollback').TestID" data-action="rollback" (click)="RequestTransition('rollback')">
+              <i [class]="Presentation('rollback').Icon"></i> {{ Presentation('rollback').Label }}
+            </button>
+          }
+          @if (Offers('archive')) {
+            <button mjButton [variant]="Presentation('archive').Primary ? 'primary' : 'secondary'" size="sm"
+              [attr.data-testid]="Presentation('archive').TestID" data-action="archive" (click)="RequestTransition('archive')">
+              <i [class]="Presentation('archive').Icon"></i> {{ Presentation('archive').Label }}
             </button>
           }
         </div>
       </div>
     }
 
-    <!-- 7. Confirm Promotion Modal -->
-    @if (Pending) {
-      <div class="ps-modal-backdrop" (click)="CancelPromote()">
+    <!-- 7. Confirm Transition Modal -->
+    @if (Pending && PendingPresentation; as presentation) {
+      <div class="ps-modal-backdrop" (click)="CancelTransition()">
         <div class="ps-modal" (click)="$event.stopPropagation()" data-testid="ps-confirm-modal">
           <div class="ps-modal-head" [class.warn]="PendingVariant === 'warn'" [class.danger]="PendingVariant === 'danger'">
-            <span class="ico"><i [class]="PendingIcon"></i></span>
-            <h3>{{ PendingTitle }}</h3>
+            <span class="ico"><i [class]="presentation.Icon"></i></span>
+            <h3>{{ presentation.Label }}</h3>
           </div>
           <div class="ps-modal-body">
             <div [innerHTML]="PendingMessage"></div>
-            @if (Pending.leakageFlagged || Pending.targetStatus === 'Archived') {
-              <div class="ps-field" style="margin-top:12px">
-                <label>
-                  {{ Pending.leakageFlagged ? 'Leakage sign-off reason' : 'Reason (optional)' }}
-                  {{ Pending.leakageFlagged ? ' *' : '' }}
-                </label>
-                <textarea
-                  class="ps-input"
-                  rows="3"
-                  [(ngModel)]="PendingReason"
-                  [placeholder]="Pending.leakageFlagged ? 'Explain why this model is safe to publish despite the leakage flag…' : 'Add an optional note for the record…'"
-                  [disabled]="Busy"></textarea>
-              </div>
-            }
+            <div class="ps-field" style="margin-top:12px">
+              <label>
+                {{ presentation.ReasonRequired ? 'Reason *' : 'Reason (optional)' }}
+              </label>
+              <textarea
+                class="ps-input"
+                rows="3"
+                data-testid="ps-transition-reason"
+                [(ngModel)]="PendingReason"
+                [placeholder]="presentation.ReasonRequired ? 'Why this model is being ' + (Pending.Transition === 'archive' ? 'archived…' : 'rolled back to…') : 'Add an optional note for the record…'"
+                [disabled]="Busy"></textarea>
+            </div>
           </div>
           <div class="ps-modal-foot">
             <button
               mjButton
               [variant]="PendingVariant === 'danger' ? 'danger' : 'primary'"
               size="sm"
-              [disabled]="Busy || (Pending.leakageFlagged && !PendingReason.trim())"
-              (click)="ConfirmPromote(PendingReason.trim())">
+              data-testid="ps-transition-confirm"
+              [disabled]="!CanConfirm"
+              (click)="ConfirmTransition(PendingReason.trim())">
               @if (Busy) {
                 <i class="fa-solid fa-circle-notch fa-spin"></i>
               } @else {
-                <i [class]="PendingIcon"></i>
+                <i [class]="presentation.Icon"></i>
               }
-              {{ PendingConfirmLabel }}
+              {{ presentation.Label }}
             </button>
             <span class="ps-spacer" style="flex:1"></span>
-            <button mjButton variant="secondary" size="sm" [disabled]="Busy" (click)="CancelPromote()">
+            <button mjButton variant="secondary" size="sm" [disabled]="Busy" (click)="CancelTransition()">
               Cancel
             </button>
           </div>

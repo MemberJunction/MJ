@@ -11,6 +11,8 @@ export * from './harness/w-world';
 export * from './harness/world-truth';
 export * from './harness/provenance';
 export * from './harness/sidecar';
+export * from './harness/sidecar-files';
+export * from './harness/artifact-objects';
 export * from './fixtures/unit-fixtures';
 export * from './fixtures/w4-status-history';
 export * from './fixtures/c1-corpus-loader';

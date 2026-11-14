@@ -31,7 +31,7 @@
  * run) and the model stays `Draft`; every trainer model's Lineage records that leakage audit, so a kept baseline (whose
  * own importance is `{}`) is judged by it at promotion. A shipped finalist of a probability task whose holdout
  * calibration hides its family ({@link TrainerContract.CalibrationHidesFamily}) is held: a CALIBRATION HOLD note on
- * the run and a `calibrationHold` on its Lineage, which the promotion gate never lets through. The run stores the
+ * the run and a `calibrationHold` on its Lineage, which the lifecycle gate never lets through. The run stores the
  * trainer's result with its artifacts
  * as file references, never their bytes, the unit resolution counts, the holdout carve's summary, the gate record and
  * the request settings a retrain replays; the model Lineage names the unit version, the typed feature columns, the kept
@@ -43,7 +43,7 @@
  * is unit-testable with no live database and no live sidecar.
  */
 
-import { LogError, type IMetadataProvider } from '@memberjunction/core';
+import { LogError, LogStatusEx, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
@@ -87,10 +87,15 @@ import {
   type TaskType,
   type TrainerRequest,
   type ProtocolExclusions,
+  type StoredFile,
+  Delivery,
+  RegisteredDelivery,
+  type OutputSemantics,
+  type ReturnedArtifact,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
-import { detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
+import { DetectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
 import { RunViewDataAccess, type ICountingDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import { AsOfFeatureAssembler, type AsOfAssembledMatrix, type AsOfAssemblyResult } from '../feature-assembly/as-of/as-of-assembler';
@@ -113,6 +118,9 @@ import { TrainerRunRecorder, TrainerLineageRefusedError } from './trainer-result
 import { EvaluationProtocolSpecs, RunViewEvaluationProtocolStore, type LoadedProtocol } from './evaluation-protocol-store';
 import { ProtocolSearchGuard } from '../protocol/search-guard';
 import { ComputePricing } from './compute-cost';
+import { ModelVersionSaveError, ModelVersions } from '../registry/model-versions';
+import { StorageProviderArtifactLoader } from '../scoring/storage-provider-artifact-loader';
+import { TrainerIncumbents, type TrainerIncumbent } from './trainer-incumbent';
 import type {
   ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage, TrainerModelLineage, TrainingLeakageAudit, CalibrationHold,
 } from './types';
@@ -247,6 +255,8 @@ interface ShippedArtifact {
   readonly Name: string;
   /** The baseline member that ships; null when the finalist ships. */
   readonly Member: BaselineResult | null;
+  /** The run's stored gate decision that ships it; the model row's registered delivery is built over it. */
+  readonly Gate: Exclude<GateDecision, { readonly outcome: 'no-signal' }>;
 }
 
 /**
@@ -522,9 +532,10 @@ export class TrainingEngine {
   private async trainThroughTrainer(x: TrainerRunInputs): Promise<MJMLModelEntity | null> {
     const { Run: run, Resolved: resolved, Snapshot: snapshot, Training: training, Deps: deps } = x;
     const candidates = x.Input.candidates || [TrainerRequestBuilder.CandidateFromPipeline(resolved.algorithmDriverKey, resolved.pipeline.AlgorithmID, resolved.algorithmDriverKey, resolved.pipeline.Hyperparameters)];
-    // Each call pre-authorises fresh snapshot downloads: the first attempt sends one, every retry another.
+    const incumbent = await TrainingEngine.incumbentFor(x);
+    // Each call pre-authorises fresh snapshot (and incumbent) downloads: the first attempt sends one, every retry another.
     const issue = (): Promise<TrainerRequest> => TrainerRequestBuilder.BuildTrainerRequest({
-      TrainingRunID: run.ID, Snapshot: snapshot.Entity, Files: x.Files, Protocol: training.Protocol.Protocol, Task: x.Unit.label.outcome,
+      TrainingRunID: run.ID, Snapshot: snapshot.Entity, Files: x.Files, Incumbent: incumbent, Protocol: training.Protocol.Protocol, Task: x.Unit.label.outcome,
       Candidates: candidates, TimeoutSeconds: TrainingEngine.TimeoutSecondsFor(training.Protocol.Protocol, x.Input),
     });
     const request = await issue();
@@ -533,17 +544,29 @@ export class TrainingEngine {
     TrainingEngine.checkSelection(result);
     const gate = TrainingEngine.buildGateRecord(x, result);
     const shipped = TrainingEngine.shippedArtifact(gate.decision, result);
-    const fileIds = await this.storeTrainerArtifacts(run, result, deps);
+    const stored = await this.storeTrainerArtifacts(run, result, deps);
     let model: MJMLModelEntity | null = null;
     try {
       const outcome = this.trainerOutcome(x, result, candidates, shipped);
-      model = shipped === null ? null : await this.createTrainerModelRow(x, outcome, shipped, TrainingEngine.storedFileOf(fileIds, shipped.Name));
-      await this.completeTrainerRun(x, request, outcome, gate, fileIds, model);
+      model = shipped === null ? null : await this.createTrainerModelRow(x, outcome, shipped, TrainingEngine.storedFileOf(stored, shipped.Name));
+      await this.completeTrainerRun(x, request, outcome, gate, stored, model);
       return model;
     } catch (err) {
-      await TrainingEngine.discardStoredOutput(run, model, fileIds, deps);
+      await TrainingEngine.discardStoredOutput(run, model, stored, deps);
       throw err;
     }
+  }
+
+  /**
+   * The incumbent the run is compared with (D4-93): the pipeline's verified Published model when the bound protocol's
+   * rule is `current-published` ({@link TrainerIncumbents.Resolve}, the reads the lifecycle gate uses), resolved once
+   * per run on the run's provider; each request attempt issues a fresh download of its artifact. Null otherwise.
+   */
+  private static async incumbentFor(x: TrainerRunInputs): Promise<TrainerIncumbent | null> {
+    const deps = x.Deps;
+    const ctx = { ContextUser: deps.contextUser, Provider: deps.provider };
+    const resolution = await TrainerIncumbents.Resolve(x.Resolved.pipeline.ID, x.Training.Protocol.Protocol, ctx, deps.artifactLoader || new StorageProviderArtifactLoader());
+    return TrainerIncumbents.IncumbentOf(resolution, x.Run.ID);
   }
 
   /**
@@ -553,13 +576,13 @@ export class TrainingEngine {
    * features and hyperparameters are cleared too, so the Failed run never records a 'completed' result whose artifact
    * file references were just deleted. Each failure is logged; the caller rethrows the original error.
    */
-  private static async discardStoredOutput(run: MJMLTrainingRunEntity, model: MJMLModelEntity | null, fileIds: ReadonlyMap<string, string>, deps: TrainingDeps): Promise<void> {
+  private static async discardStoredOutput(run: MJMLTrainingRunEntity, model: MJMLModelEntity | null, stored: ReadonlyMap<string, StoredFile>, deps: TrainingDeps): Promise<void> {
     run.ResultingModelID = null;
     run.ValidationResults = null;
     run.FeaturesUsed = null;
     run.Hyperparameters = null;
     const stillReferenced = model === null ? null : await TrainingEngine.deleteModelRowOf(run, model);
-    const unreferenced = [...fileIds.values()].filter((id) => stillReferenced === null || !UUIDsEqual(id, stillReferenced));
+    const unreferenced = [...stored.values()].map((f) => f.fileId).filter((id) => stillReferenced === null || !UUIDsEqual(id, stillReferenced));
     await TrainingEngine.deleteArtifactFiles(run, unreferenced, deps);
   }
 
@@ -592,9 +615,10 @@ export class TrainingEngine {
    * and a held model's CALIBRATION HOLD note.
    */
   private async completeTrainerRun(
-    x: TrainerRunInputs, request: TrainerRequest, outcome: TrainerOutcome, gate: StoredGateRecord, fileIds: ReadonlyMap<string, string>, model: MJMLModelEntity | null,
+    x: TrainerRunInputs, request: TrainerRequest, outcome: TrainerOutcome, gate: StoredGateRecord, stored: ReadonlyMap<string, StoredFile>, model: MJMLModelEntity | null,
   ): Promise<void> {
     const run = x.Run;
+    const fileIds = new Map([...stored].map(([candidate, f]): [string, string] => [candidate, f.fileId]));
     const results: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: x.Counts,
       trainer: TrainerContract.ToStoredTrainerResult(outcome.Result, fileIds), trainerRequest: TrainerRequestBuilder.TrainerRequestConfigOf(request),
@@ -638,7 +662,7 @@ export class TrainingEngine {
     if (!result.artifacts.some((a) => a.candidate === decision.shipped)) {
       throw new Error(`TrainingEngine: the trainer returned no artifact for the shipped '${decision.shipped}' (returned: ${result.artifacts.map((a) => a.candidate).join(', ') || 'none'})`);
     }
-    return { Name: decision.shipped, Member: member };
+    return { Name: decision.shipped, Member: member, Gate: decision };
   }
 
   /** The simple baseline whose member name the decision kept. */
@@ -649,10 +673,10 @@ export class TrainingEngine {
   }
 
   /** The stored file of the shipped artifact (checked to be among the returned artifacts before they were stored). */
-  private static storedFileOf(fileIds: ReadonlyMap<string, string>, name: string): string {
-    const fileId = fileIds.get(name);
-    if (fileId === undefined) throw new Error(`TrainingEngine: no stored file for the shipped artifact '${name}'`);
-    return fileId;
+  private static storedFileOf(stored: ReadonlyMap<string, StoredFile>, name: string): StoredFile {
+    const file = stored.get(name);
+    if (file === undefined) throw new Error(`TrainingEngine: no stored file for the shipped artifact '${name}'`);
+    return file;
   }
 
   /**
@@ -706,7 +730,7 @@ export class TrainingEngine {
     const why = hold.slope === null
       ? `the calibration slope of the model's probabilities could not be measured on the held-back rows, so they cannot be shown to fall in the ${range} range`
       : `the model's probabilities are miscalibrated on the held-back rows (calibration slope ${hold.slope.toFixed(2)}, outside the ${range} range)`;
-    return `CALIBRATION HOLD: ${why}. Its family is hidden: the model is kept in Draft and the promotion gate will not move it to Validated or Published, with or without a sign-off.`;
+    return `CALIBRATION HOLD: ${why}. Its family is hidden: the model is kept in Draft and the lifecycle gate will not move it to Validated or Published, with or without a sign-off.`;
   }
 
   /**
@@ -761,7 +785,7 @@ export class TrainingEngine {
     }
     for (const a of result.artifacts) {
       const actual = SnapshotHash.Sha256Hex(decodeArtifact(a.bytesBase64));
-      if (actual !== a.sha256) throw new Error(`TrainingEngine: artifact '${a.candidate}': its bytes hash to ${actual}, not the stated ${a.sha256}`);
+      if (actual !== a.sha256) throw new Error(`TrainingEngine: artifact '${a.candidate}': its bytes have sha256 ${actual}, not the stated sha256 ${a.sha256}`);
       if (a.featureSchemaHash !== snapshot.Entity.FeatureSchemaHash) {
         throw new Error(`TrainingEngine: artifact '${a.candidate}' was built for feature schema ${a.featureSchemaHash}, not the snapshot's ${snapshot.Entity.FeatureSchemaHash}`);
       }
@@ -781,20 +805,37 @@ export class TrainingEngine {
   }
 
   /**
-   * Store every returned artifact's decoded bytes as an `MJ: Files` row; the file IDs by candidate. When any save
-   * fails, the artifacts already saved are deleted through the same store before the error is rethrown, so a failed run
-   * leaves no artifact nothing references.
+   * Store every returned artifact's decoded bytes, write-once, as an `MJ: Files` row, logging (verbose only) each stored
+   * key and the SHA-256 the store returned; the stored file by candidate. Each stored file's SHA-256 must equal the one
+   * its artifact declares (the hash the registry entry records): the declared hash was checked against the bytes before
+   * storing ({@link checkAnswerBelongsToRun}), so a difference here means the store wrote or reported other bytes. When
+   * any save fails or any hash differs, every artifact saved is deleted through the same store before the error is
+   * thrown, so a failed run leaves no artifact nothing references.
+   *
+   * @throws Error naming the candidate and both hashes when a stored file's SHA-256 is not the declared one
    */
-  private async storeTrainerArtifacts(run: MJMLTrainingRunEntity, result: TrainerCompleted, deps: TrainingDeps): Promise<ReadonlyMap<string, string>> {
-    const outcomes = await Promise.allSettled(result.artifacts.map(async (a): Promise<[string, string]> => {
-      const fileId = await deps.artifactStore.save(decodeArtifact(a.bytesBase64), `trainer-${run.ID}-${a.candidate}.json`);
-      return [a.candidate, fileId];
+  private async storeTrainerArtifacts(run: MJMLTrainingRunEntity, result: TrainerCompleted, deps: TrainingDeps): Promise<ReadonlyMap<string, StoredFile>> {
+    const outcomes = await Promise.allSettled(result.artifacts.map(async (a): Promise<[ReturnedArtifact, StoredFile]> => {
+      const stored = await deps.artifactStore.save(decodeArtifact(a.bytesBase64), `trainer-${run.ID}-${a.candidate}.json`);
+      return [a, stored];
     }));
     const saved = outcomes.flatMap((o) => (o.status === 'fulfilled' ? [o.value] : []));
     const failure = outcomes.find((o): o is PromiseRejectedResult => o.status === 'rejected');
-    if (failure === undefined) return new Map(saved);
-    await TrainingEngine.deleteArtifactFiles(run, saved.map(([, fileId]) => fileId), deps);
-    throw failure.reason instanceof Error ? failure.reason : new Error(String(failure.reason));
+    const error = failure === undefined ? TrainingEngine.storedHashMismatch(saved) : (failure.reason instanceof Error ? failure.reason : new Error(String(failure.reason)));
+    if (error === null) {
+      LogStatusEx({ message: `TrainingEngine: training run ${run.ID} stored ${saved.map(([a, f]) => `${a.candidate} at ${f.providerKey} (sha256 ${f.sha256})`).join(', ')}`, verboseOnly: true });
+      return new Map(saved.map(([a, f]) => [a.candidate, f]));
+    }
+    await TrainingEngine.deleteArtifactFiles(run, saved.map(([, f]) => f.fileId), deps);
+    throw error;
+  }
+
+  /** The error for the first stored file whose SHA-256 is not the one its artifact declares, or null when all match. */
+  private static storedHashMismatch(saved: ReadonlyArray<readonly [ReturnedArtifact, StoredFile]>): Error | null {
+    const mismatch = saved.find(([a, f]) => f.sha256 !== a.sha256);
+    if (mismatch === undefined) return null;
+    const [a, f] = mismatch;
+    return new Error(`TrainingEngine: artifact '${a.candidate}' was stored with sha256 ${f.sha256}, not its declared sha256 ${a.sha256}; every artifact of the run was deleted`);
   }
 
   /**
@@ -805,19 +846,22 @@ export class TrainingEngine {
    * `FeatureImportance` (`{}` when the trainer measured none, as for a forecast). For a kept baseline member: the
    * catalog algorithm of its driver ({@link shippedAlgorithmId}), its holdout score as `HoldoutMetrics`, and `{}` for
    * `Metrics` and `FeatureImportance` (a baseline has no inner score and no importance of its own; its Lineage's
-   * leakage audit carries the finalist's, {@link trainerLineage}).
+   * leakage audit carries the finalist's, {@link trainerLineage}). The row carries its registry entry
+   * ({@link applyRegistryEntry}): the shipped artifact's stored file and SHA-256, the lineage columns and the delivery
+   * registered over the run's stored gate decision ({@link registerDelivery}), built before the row is created.
+   *
+   * @throws Error when the delivery is refused or cannot be registered; no model row is saved
    */
-  private async createTrainerModelRow(x: TrainerRunInputs, outcome: TrainerOutcome, shipped: ShippedArtifact, artifactFileId: string): Promise<MJMLModelEntity> {
+  private async createTrainerModelRow(x: TrainerRunInputs, outcome: TrainerOutcome, shipped: ShippedArtifact, stored: StoredFile): Promise<MJMLModelEntity> {
     const { Resolved: resolved, Snapshot: snapshot, Deps: deps } = x;
     const result = outcome.Result;
+    const registered = TrainingEngine.registerDelivery(x, result, shipped, stored);
     const content = snapshot.Content;
     const split = LockedHoldoutSplitter.FromManifest(content, content.Header.labelColumn, resolved.problemType);
-    const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
     const model = await deps.entityFactory.getEntityObject<MJMLModelEntity>('MJ: ML Models', deps.contextUser);
     model.PipelineID = resolved.pipeline.ID;
-    model.Version = version;
     model.AlgorithmID = await this.shippedAlgorithmId(x, outcome, shipped);
-    model.ArtifactFileID = artifactFileId;
+    TrainingEngine.applyRegistryEntry(model, x, result, stored, registered);
     model.FittedPreprocessing = '{}';
     model.FeatureSchema = JSON.stringify(content.Header.featureSchema);
     model.TargetVariable = PredictionUnit.DescribeLabelRule(x.Unit);
@@ -831,8 +875,69 @@ export class TrainingEngine {
     model.TrainingDurationSec = Math.round(result.computeSeconds);
     model.TrainingRowCount = split.TrainingRowCount;
     model.Status = 'Draft';
-    await this.saveOrThrow(model, 'create ML Model');
+    await TrainingEngine.saveModelRowUnderLock(model, deps);
     return model;
+  }
+
+  /**
+   * Saves the new model row with its version allocated under the pipeline lock, in one provider transaction of its own
+   * ({@link ModelVersions.SaveNewRow}): two runs of one pipeline cannot take the same version
+   * (`UX_MLModel_PipelineVersion`). A row that cannot be saved fails the run as before.
+   *
+   * @throws EntityTransactionsUnsupportedError when the provider cannot open a transaction (training runs on the server)
+   * @throws PipelineLockTimeoutError when the pipeline stays locked for the whole lock wait
+   * @throws Error `TrainingEngine: failed to create ML Model: …` when the save fails
+   */
+  private static async saveModelRowUnderLock(model: MJMLModelEntity, deps: TrainingDeps): Promise<void> {
+    const ctx = { ContextUser: deps.contextUser, Provider: deps.provider };
+    try {
+      await ModelVersions.SaveNewRow(model, ctx);
+    } catch (error) {
+      if (error instanceof ModelVersionSaveError) throw new Error(`TrainingEngine: failed to create ML Model: ${error.SaveMessage}`);
+      throw error;
+    }
+  }
+
+  /**
+   * The registered delivery of what the run's stored gate decision ships: `Delivery.Create` over the trainer's returned
+   * artifacts and the unit's task (which refuses a missing or duplicated shipped artifact and a class order that is not
+   * the task's), registered with the shipped artifact's stored file (which refuses a stored hash that is not the
+   * delivered artifact's). Either refusal fails the run: a shipped artifact never gets a model row without a delivery.
+   *
+   * @throws Error naming the refusal (`DeliveryError.Kind`, or the registration's reason)
+   */
+  private static registerDelivery(x: TrainerRunInputs, result: TrainerCompleted, shipped: ShippedArtifact, stored: StoredFile): RegisteredDelivery {
+    const created = Delivery.Create(shipped.Gate, result.artifacts, x.Unit.label.outcome);
+    if (created.Ok === false) {
+      throw new Error(`TrainingEngine: the delivery of '${shipped.Name}' was refused (${created.Error.Kind}): ${JSON.stringify(created.Error)}`);
+    }
+    const registered = RegisteredDelivery.Register(created.Delivery, stored);
+    if (registered.Ok === false) throw new Error(`TrainingEngine: the delivery of '${shipped.Name}' could not be registered: ${registered.Reason}`);
+    return registered.Registered;
+  }
+
+  /**
+   * The registry entry's columns on a trainer model row (§5.1): the stored artifact file and its verified SHA-256, the
+   * lineage (run, snapshot and its hash, protocol and unit version rows, the feature schema hash, the trainer's code
+   * version), the output semantics (the unit's task), the registered delivery, and `ArtifactStatus = 'verified'` as of
+   * now: the stored hash was checked against the bytes the trainer returned and the registration checked it again.
+   */
+  private static applyRegistryEntry(model: MJMLModelEntity, x: TrainerRunInputs, result: TrainerCompleted, stored: StoredFile, registered: RegisteredDelivery): void {
+    const snapshot = x.Snapshot.Entity;
+    const semantics: OutputSemantics = { task: x.Unit.label.outcome };
+    model.ArtifactFileID = stored.fileId;
+    model.ArtifactSha256 = stored.sha256;
+    model.TrainingRunID = x.Run.ID;
+    model.TrainingSnapshotID = snapshot.ID;
+    model.SnapshotHash = snapshot.ContentHash;
+    model.FeatureSchemaHash = snapshot.FeatureSchemaHash;
+    model.EvaluationProtocolID = x.Training.Protocol.RowID;
+    model.PredictionUnitID = x.UnitLineage.predictionUnitId;
+    model.CodeVersion = JSON.stringify(result.codeVersion);
+    model.OutputSemantics = JSON.stringify(semantics);
+    model.Delivery = JSON.stringify(registered.View);
+    model.ArtifactStatus = 'verified';
+    model.ArtifactCheckedAt = new Date();
   }
 
   /**
@@ -841,7 +946,7 @@ export class TrainingEngine {
    * out-of-sample scoring (the holdout rows are scored once by the shipped artifact, which never trained on them) and the
    * kind of the importance the row stores: the finalist's held-out importance, or none for a kept baseline member (its
    * row stores `{}`). It names what shipped and that artifact's driver, the run's leakage audit (the finalist
-   * importance's top feature and share, whatever shipped: the promotion gate judges a kept baseline by it) and the
+   * importance's top feature and share, whatever shipped: the lifecycle gate judges a kept baseline by it) and the
    * calibration hold of a shipped finalist whose family is hidden.
    */
   private trainerLineage(x: TrainerRunInputs, outcome: TrainerOutcome, split: LockedHoldoutSplit, shipped: ShippedArtifact): ModelTrainingLineage & Partial<UnitModelLineage> & TrainerModelLineage {
@@ -1160,7 +1265,7 @@ export class TrainingEngine {
   /** Compose the plain-language run note, surfacing leakage suspicion loudly (§6.4). */
   private buildRunNotes(dominance: DominanceResult, evaluation: EvaluationRecord, modelCreated: boolean): string {
     const consequence = modelCreated
-      ? 'The model is kept in Draft and will NOT be auto-promoted: the promotion gate refuses it unless a promote request records a sign-off with a reason.'
+      ? 'The model is kept in Draft and is withheld by the lifecycle gate until a person records a sign-off for its leakage flags in Predictive Studio.'
       : 'No model was created from this run, so there is nothing to promote.';
     const base = dominance.Dominant
       ? `LEAKAGE WARNING: one field ("${dominance.TopFeature}") is doing almost all the predicting ` +
@@ -1180,7 +1285,7 @@ export class TrainingEngine {
 
   /** Run the single-feature-dominance check against the leakage threshold (§6.4). */
   private checkLeakage(importance: FeatureImportance, guard: LeakageGuard): DominanceResult {
-    return detectSingleFeatureDominance(importance, guard.SingleFeatureDominanceThreshold);
+    return DetectSingleFeatureDominance(importance, guard.SingleFeatureDominanceThreshold);
   }
 
   // region: model lineage ----------------------------------------------------------

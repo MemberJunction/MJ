@@ -1,0 +1,44 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Latest Feature Values",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "25545686-0E96-4B6F-B001-12B1AA70F450"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Latest Feature Values",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "BDB6B325-C7EA-4D1D-80A7-3DE0A97E150D"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Latest Feature Values",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "EC1270D3-8B29-4C77-B3C5-393B38E15386"
+    }
+  }
+]

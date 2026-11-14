@@ -16,11 +16,11 @@
 
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
-import type { IArtifactLoader } from './types';
+import type { ArtifactBytesRead, IArtifactLoader } from './types';
 
 /**
  * In-memory {@link IArtifactLoader} for unit tests. Holds artifact bytes keyed by
- * file id and returns them on {@link load}. No database, no MJStorage.
+ * file id and returns them on {@link load} (`absent` for an id it does not hold). No database, no MJStorage.
  *
  * Bridges the training-side `InMemoryArtifactStore`: pass its `Saved` map (keyed
  * by the returned file id, with `{ Bytes }`) so a model trained in-memory is
@@ -47,8 +47,9 @@ export class InMemoryArtifactLoader implements IArtifactLoader {
     this.store.set(fileId, bytes);
   }
 
-  /** @inheritdoc */
-  public async load(fileId: string, _contextUser: UserInfo, _provider: IMetadataProvider): Promise<Uint8Array | null> {
-    return this.store.get(fileId) ?? null;
+  /** @inheritdoc A file id with no bytes registered is `absent`. */
+  public async load(fileId: string, _contextUser: UserInfo, _provider: IMetadataProvider): Promise<ArtifactBytesRead> {
+    const bytes = this.store.get(fileId);
+    return bytes ? { Kind: 'read', Bytes: bytes } : { Kind: 'absent', FileID: fileId };
   }
 }

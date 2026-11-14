@@ -14,7 +14,9 @@
  *    `FeatureSchema`, `ProblemType`) + its pipeline assembly config are loaded
  *    **once per processor run** and reused across every record (the Python
  *    sidecar also warm-caches by model id — §3.1). The serialized artifact is
- *    fetched once via the injected {@link IArtifactLoader}.
+ *    fetched once through the artifact registry (`ArtifactRegistry.Load` over the
+ *    injected {@link IArtifactLoader}), which verifies it against the model's
+ *    registered SHA-256; a load that is not verified refuses the run.
  * 2. **Assemble features** via the SAME {@link FeatureAssemblyExecutor} as
  *    training, in the **on-demand / transform-only** context, using the model's
  *    FROZEN `FeatureSchema` + `FittedPreprocessing` (never re-fit — the anti-skew
@@ -75,6 +77,7 @@ import {
   type PredictionUnitSpec,
   type AssemblyRefusal,
   type UncoveredRowsCount,
+  type ArtifactLoad,
   LABEL_COLUMN,
   PredictionUnit,
 } from '@memberjunction/predictive-studio-core';
@@ -93,11 +96,12 @@ import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { TrainingEngine } from '../training/training-engine';
 import { TrainingRefusedError } from '../training/training-refusal';
 import { UnitModelLineageParser } from '../training/unit-model-lineage';
+import { ArtifactRegistry } from '../registry/artifact-registry';
 import { RunViewPipelineUnitLookup, RunViewTrainingRowsLookup } from './seams';
 import {
+  ArtifactUnavailableError,
   ModelHasTrainedArtifact,
   ModelNeedsTrainingMessage,
-  ModelArtifactMissingMessage,
   ModelNeedsTrainingError,
   ModelNotScorableError,
   ModelNotServableError,
@@ -207,24 +211,30 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    *
    * A dry run (`context.DryRun`) never auto-trains: training creates and publishes a model, repoints the
    * Record Process and archives the old model, none of which a compute-only run may do. It reports the
-   * {@link ModelNeedsTrainingError} instead.
+   * {@link ModelNeedsTrainingError} or {@link ArtifactUnavailableError} instead.
    *
    * @param context the run-level execution context (user + provider)
-   * @throws when the model is missing, has no trained artifact, or its artifact can't be loaded
+   * @throws ModelNeedsTrainingError when no model is configured, the model is not found, or it was never trained
+   * @throws ArtifactUnavailableError when the model's artifact load is not verified (missing, hash mismatch, unverified)
    */
   public async Preflight(context: RecordProcessorContext): Promise<void> {
     const model = await this.loadForPreflight(context);
     this.assertScopeEntity(model, context);
   }
 
-  /** Warm-load the model, training it first when it needs training and the run opted into auto-train. */
+  /**
+   * Warm-load the model, training it first when the run opted into auto-train and the model needs training: it was
+   * never trained ({@link ModelNeedsTrainingError}) or its artifact is lost (`artifact-missing`). A changed or
+   * unregistered artifact (`artifact-hash-mismatch`, `artifact-unverified`) is refused, never retrained over.
+   */
   private async loadForPreflight(context: RecordProcessorContext): Promise<LoadedModel> {
     try {
       return await this.ensureModel(context);
     } catch (err) {
       // Clear the memoized failure so a retry (or the auto-train below) re-attempts the load.
       this.resetModelCache();
-      if (!(err instanceof ModelNeedsTrainingError) || context.DryRun || !this.autoTrain || !this.autoTrainer) {
+      const trainable = err instanceof ModelNeedsTrainingError || (err instanceof ArtifactUnavailableError && err.Refusal.kind === 'artifact-missing');
+      if (!trainable || context.DryRun || !this.autoTrain || !this.autoTrainer) {
         throw err;
       }
     }
@@ -428,7 +438,11 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     return this.loadedModel;
   }
 
-  /** Resolve the `MJ: ML Models` row + its frozen contract + the artifact bytes. */
+  /**
+   * Resolve the `MJ: ML Models` row + its frozen contract + the artifact bytes, loaded through the artifact registry.
+   * Only a `verified` load scores; any other load is recorded on the model row and refused with
+   * {@link ArtifactUnavailableError} before any record is read.
+   */
   private async loadModel(context: RecordProcessorContext): Promise<LoadedModel> {
     if (!this.modelId) {
       throw new ModelNeedsTrainingError('MLModelInferenceProcessor: no ML Model is configured yet — the model needs training.');
@@ -438,11 +452,32 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
     }
     const artifactFileId = this.assertStatusCanScore(model);
-    const bytes = await this.deps.artifactLoader.load(artifactFileId, context.ContextUser, context.Provider);
-    if (!bytes) {
-      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, artifactFileId)}`);
+    const load = await ArtifactRegistry.ForContext(context, this.deps.artifactLoader).Load(model, context);
+    if (load.Status !== 'verified') {
+      await this.recordArtifactStatus(model, load);
+      throw ArtifactUnavailableError.For(load, 'MLModelInferenceProcessor', model.ID, artifactFileId);
     }
-    return this.buildLoadedModel(model, bytes, context);
+    return this.buildLoadedModel(model, load.Bytes, context);
+  }
+
+  /**
+   * Records what an unserved load found on the model row (`ArtifactStatus`, `ArtifactCheckedAt`), so the registry shows
+   * why the model does not score. The save changes no lifecycle `Status`. A failed save is logged with its
+   * `CompleteMessage` and never masks the refusal the caller throws next.
+   */
+  private async recordArtifactStatus(model: MJMLModelEntity, load: ArtifactLoad): Promise<void> {
+    const status = ArtifactRegistry.ArtifactStatusOf(load);
+    model.ArtifactStatus = status;
+    model.ArtifactCheckedAt = new Date();
+    let failure: string | null;
+    try {
+      failure = (await model.Save()) ? null : model.LatestResult?.CompleteMessage || 'unknown error';
+    } catch (e) {
+      failure = e instanceof Error ? e.message : String(e);
+    }
+    if (failure !== null) {
+      LogError(`MLModelInferenceProcessor: recording ArtifactStatus '${status}' on ML Model '${model.ID}' failed: ${failure}`);
+    }
   }
 
   /**
@@ -469,7 +504,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     }
   }
 
-  /** The model's trained artifact file; throws "needs training" when it has none. */
+  /** The model's trained artifact file; throws "needs training" when the row was never trained (it has none). */
   private requireArtifactFileId(model: MJMLModelEntity): string {
     const fileId = model.ArtifactFileID;
     if (!ModelHasTrainedArtifact(model) || fileId === null || fileId === '') {

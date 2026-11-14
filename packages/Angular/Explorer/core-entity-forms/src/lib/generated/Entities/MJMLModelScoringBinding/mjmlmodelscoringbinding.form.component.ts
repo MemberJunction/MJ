@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: ML Model Scoring Bindings') // Tell MemberJunction about this class
 @Component({
@@ -18,7 +19,8 @@ export class MJMLModelScoringBindingFormComponent extends BaseFormComponent {
             { sectionKey: 'bindingConfiguration', sectionName: 'Binding Configuration', isExpanded: true },
             { sectionKey: 'targetDestination', sectionName: 'Target Destination', isExpanded: true },
             { sectionKey: 'executionMetrics', sectionName: 'Execution Metrics', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false }
         ]);
     }
 }

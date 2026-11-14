@@ -48,14 +48,14 @@ describe('StorageProviderArtifactLoader', () => {
   it("loads through the row's provider", async () => {
     insert(localRow.ID, key);
     local.Objects.set(key, bytes);
-    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual(bytes);
+    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual({ Kind: 'read', Bytes: bytes });
   });
 
   it("reads through the row's provider, not the configured one", async () => {
     process.env.PS_STORAGE_PROVIDER = 'Local File System';
     insert(cloudRow.ID, key);
     cloud.Objects.set(key, bytes);
-    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual(bytes);
+    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual({ Kind: 'read', Bytes: bytes });
     expect(log).toEqual([`cloud.get ${key}`]);
     expect(local.Initializations).toBe(0);
   });
@@ -63,28 +63,28 @@ describe('StorageProviderArtifactLoader', () => {
   it('loads a legacy file from local disk', async () => {
     insert(localRow.ID, '');
     writeFileSync(LocalArtifactPath(baseDir, fileId), bytes);
-    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual(bytes);
+    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual({ Kind: 'read', Bytes: bytes });
     expect(log).toEqual([]);
   });
 
-  it('returns null for an unknown file id', async () => {
-    expect(await loader.load(fileId, TestUser, files.Provider())).toBeNull();
+  it('returns absent, naming the file, for an unknown file id', async () => {
+    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual({ Kind: 'absent', FileID: fileId });
   });
 
-  it('returns null for a legacy file whose bytes are gone', async () => {
+  it('returns absent for a legacy file whose bytes are gone', async () => {
     insert(localRow.ID, null);
-    expect(await loader.load(fileId, TestUser, files.Provider())).toBeNull();
+    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual({ Kind: 'absent', FileID: fileId });
   });
 
-  it('returns null for a stored object that is gone', async () => {
+  it('returns absent for a stored object that is gone', async () => {
     insert(localRow.ID, key);
-    expect(await loader.load(fileId, TestUser, files.Provider())).toBeNull();
+    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual({ Kind: 'absent', FileID: fileId });
   });
 
   it('reads the file row as the acting user it is given (the user is a required parameter, not refused at runtime)', async () => {
     insert(localRow.ID, key);
     local.Objects.set(key, bytes);
-    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual(bytes);
+    expect(await loader.load(fileId, TestUser, files.Provider())).toEqual({ Kind: 'read', Bytes: bytes });
     expect(files.ReadUsers).toEqual([TestUser]);
   });
 });
