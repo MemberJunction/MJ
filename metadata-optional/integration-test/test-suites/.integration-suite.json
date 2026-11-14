@@ -1572,6 +1572,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT174 - Conversation Delete Guard (client transport)",
+            "Sequence": 83,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "02D61BD5-5BE3-4648-A4EE-C2673E136547"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT167 - Graph Runtime Permissions",
             "Sequence": 49,
             "Status": "Active"

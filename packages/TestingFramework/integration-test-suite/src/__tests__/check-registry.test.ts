@@ -75,6 +75,7 @@ import { SelfAvatarClientChecks } from '../checks/self-avatar-client.checks';
 import { ViewPropertiesClientChecks } from '../checks/view-properties-client.checks';
 import { CalendarEventLinksChecks } from '../checks/calendar-event-links.checks';
 import { ConversationAuthorshipClientChecks } from '../checks/conversation-authorship-client.checks';
+import { ConversationDeleteClientChecks } from '../checks/conversation-delete-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
@@ -257,6 +258,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
         ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
         ['conversation-authorship-client', ConversationAuthorshipClientChecks, 13], // CA1-CA12 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message; CA11-CA12 only the server writes agent replies; CA13 the owner cannot hand the conversation to someone else (IT115)
+        ['conversation-delete-client', ConversationDeleteClientChecks, 3], // CD1-CD3 who may delete a conversation for everyone, over the wire via per-user API keys: View and Edit grantees refused, the owner deletes (IT174)
         ['metadata-sync-push', MetadataSyncPushChecks, 12], // MSP1-MSP12 sync push atomicity, in-transaction metadata reload, one row-level security filter, and declared folder overrides, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
@@ -396,6 +398,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'content-pipeline': 15,
         'content-vectorization': 10,
         'conversation-authorship-client': 13,
+        'conversation-delete-client': 3,
         'conversation-compaction': 23,
         'dataset-cache': 4,
         'diagnostics': 4,
@@ -609,7 +612,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(242);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(243);
     });
 });
 
@@ -721,6 +724,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-authorship-client.CA7',
         'conversation-authorship-client.CA8',
         'conversation-authorship-client.CA9',
+        'conversation-delete-client.CD1',
+        'conversation-delete-client.CD2',
+        'conversation-delete-client.CD3',
         'docs-slides-sheets-library.DSL3',
         'encrypted-read-client.ER1',
         'encrypted-read-client.ER2',

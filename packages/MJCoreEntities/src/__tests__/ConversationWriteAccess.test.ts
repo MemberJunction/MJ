@@ -5,15 +5,18 @@ vi.mock('../custom/ResourcePermissions/ResourcePermissionEngine', () => ({
         GetProviderInstance: () => ({
             Config: vi.fn().mockResolvedValue(undefined),
             GetUserAvailableResources: () => grants,
-            GetUserResourcePermissionLevel: (_typeId: string, recordId: string) => folderGrantLevels[recordId] ?? null,
+            // Conversation grants (the delete rule) answer from grantLevel; folder grants from folderGrantLevels.
+            GetUserResourcePermissionLevel: (typeId: string, recordId: string) =>
+                typeId === '81D4BC3D-9FEB-EF11-B01A-286B35C04427' ? grantLevel : folderGrantLevels[recordId] ?? null,
         }),
     },
 }));
 
 let grants: Array<{ ResourceRecordID: string; PermissionLevel: string }> = [];
+let grantLevel: 'View' | 'Edit' | 'Owner' | null = null;
 let folderGrantLevels: Record<string, 'View' | 'Edit' | 'Owner'> = {};
 
-import { UserMayWriteConversation } from '../custom/ConversationWriteAccess';
+import { ConversationDeleteAllowed, UserMayDeleteConversation, UserMayWriteConversation } from '../custom/ConversationWriteAccess';
 
 function provider(
     ownerId: string | null,
@@ -193,3 +196,45 @@ describe('UserMayWriteConversation', () => {
     });
 });
 
+describe('UserMayDeleteConversation', () => {
+    const db = { ProviderType: 'Database' } as never;
+    const shared = { ID: 'c1', UserID: 'owner' };
+    const withRole = (role: string) => ({ ID: 'u1', UserRoles: [{ Role: role }] }) as never;
+
+    it('allows the owner', async () => {
+        grantLevel = null;
+        expect((await UserMayDeleteConversation(db, user, { ID: 'c1', UserID: 'U1' })).Allowed).toBe(true);
+    });
+    it('allows an Owner-level grantee', async () => {
+        grantLevel = 'Owner';
+        expect((await UserMayDeleteConversation(db, user, shared)).Allowed).toBe(true);
+    });
+    it('refuses a View or an Edit grantee, with a reason', async () => {
+        for (const level of ['View', 'Edit'] as const) {
+            grantLevel = level;
+            const decision = await UserMayDeleteConversation(db, user, shared);
+            expect(decision.Allowed).toBe(false);
+            expect(decision.Reason).toMatch(/Owner access/);
+        }
+    });
+    it('refuses a user with no grant', async () => {
+        grantLevel = null;
+        expect((await UserMayDeleteConversation(db, user, shared)).Allowed).toBe(false);
+    });
+    it('allows a Developer or Integration user with no grant', async () => {
+        grantLevel = null;
+        expect((await UserMayDeleteConversation(db, withRole('Developer'), shared)).Allowed).toBe(true);
+        expect((await UserMayDeleteConversation(db, withRole(' integration '), shared)).Allowed).toBe(true);
+        expect((await UserMayDeleteConversation(db, withRole('UI'), shared)).Allowed).toBe(false);
+    });
+    it('allows a non-database provider (client side) without a lookup', async () => {
+        grantLevel = null;
+        expect((await UserMayDeleteConversation({ ProviderType: 'Network' } as never, user, shared)).Allowed).toBe(true);
+    });
+});
+
+describe('ConversationDeleteAllowed', () => {
+    it('refuses when there is no user', () => {
+        expect(ConversationDeleteAllowed('owner', null, 'Owner')).toBe(false);
+    });
+});
