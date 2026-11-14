@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
+  ArtifactSynthesisTargetKind,
   BuildArtifactVersionConfigurationWithPreview,
   MJArtifactEntity,
   MJArtifactTypeEntity,
@@ -126,6 +127,68 @@ export interface PublishToConnectedDriveOptions {
     FileID?: string | null;
   }) => Promise<Uint8Array>;
 }
+
+export interface SynthesizeArtifactFromSourcesOptions {
+  TargetKind: ArtifactSynthesisTargetKind;
+  Goal: string;
+  SourceArtifactIds: ReadonlyArray<string>;
+  CollectionID?: string | null;
+  Title?: string | null;
+  AgentHandle?: string | null;
+  LinkChartsAndRanges?: boolean;
+  CurrentUser: UserInfo;
+  Provider?: IMetadataProvider;
+}
+
+export interface SynthesizeArtifactFromSourcesResult {
+  Success: boolean;
+  AccessDenied?: boolean;
+  ErrorMessage?: string;
+  ArtifactID: string;
+  VersionID: string;
+  VersionNumber: number;
+  Title: string;
+  ArtifactTypeName: string;
+  LinkedChartCount: number;
+  SourceCount: number;
+  Warnings: string[];
+  UsedFallback: boolean;
+}
+
+const SYNTHESIZE_ARTIFACT_MUTATION = `
+  mutation SynthesizeArtifactFromSources(
+    $targetKind: String!
+    $goal: String!
+    $sourceArtifactIds: [String!]
+    $collectionId: String
+    $title: String
+    $agentHandle: String
+    $linkChartsAndRanges: Boolean
+  ) {
+    SynthesizeArtifactFromSources(
+      targetKind: $targetKind
+      goal: $goal
+      sourceArtifactIds: $sourceArtifactIds
+      collectionId: $collectionId
+      title: $title
+      agentHandle: $agentHandle
+      linkChartsAndRanges: $linkChartsAndRanges
+    ) {
+      Success
+      AccessDenied
+      ErrorMessage
+      ArtifactID
+      VersionID
+      VersionNumber
+      Title
+      ArtifactTypeName
+      LinkedChartCount
+      SourceCount
+      Warnings
+      UsedFallback
+    }
+  }
+`;
 
 export interface CreatedLibraryArtifactResult {
   Artifact: MJArtifactEntity;
@@ -480,6 +543,58 @@ export class LibraryCreationService {
       CurrentUser: options.CurrentUser,
       Provider: md,
     });
+  }
+
+  /**
+   * Calls the server-side `SynthesizeArtifactFromSources` mutation to read multiple governed artifacts,
+   * synthesize a brand-new `Presentation`, `Markdown Document`, or `Excel Spreadsheet` with live
+   * chart/range links, enforce `CanRead` / `CanEdit` permissions, and save v1.
+   */
+  public async SynthesizeArtifactFromSources(
+    options: SynthesizeArtifactFromSourcesOptions,
+  ): Promise<SynthesizeArtifactFromSourcesResult> {
+    const providerCandidate = options.Provider as Partial<GraphQLDataProvider> | undefined;
+    const gqlExecutor =
+      providerCandidate && typeof providerCandidate.ExecuteGQL === 'function'
+        ? providerCandidate.ExecuteGQL.bind(providerCandidate)
+        : GraphQLDataProvider.Instance.ExecuteGQL.bind(GraphQLDataProvider.Instance);
+
+    const variables = {
+      targetKind: options.TargetKind,
+      goal: options.Goal,
+      sourceArtifactIds: Array.from(options.SourceArtifactIds),
+      collectionId: options.CollectionID || null,
+      title: options.Title?.trim() || null,
+      agentHandle: options.AgentHandle?.trim() || null,
+      linkChartsAndRanges: options.LinkChartsAndRanges !== false,
+    };
+
+    const rawResponse = (await gqlExecutor(SYNTHESIZE_ARTIFACT_MUTATION, variables)) as {
+      SynthesizeArtifactFromSources?: Partial<SynthesizeArtifactFromSourcesResult> | null;
+    } | null;
+
+    const payload = rawResponse?.SynthesizeArtifactFromSources;
+    if (!payload) {
+      throw new Error('SynthesizeArtifactFromSources returned an empty response.');
+    }
+    if (!payload.Success || !payload.ArtifactID) {
+      throw new Error(payload.ErrorMessage || 'Artifact synthesis failed.');
+    }
+
+    return {
+      Success: true,
+      AccessDenied: Boolean(payload.AccessDenied),
+      ErrorMessage: payload.ErrorMessage,
+      ArtifactID: payload.ArtifactID,
+      VersionID: payload.VersionID ?? '',
+      VersionNumber: payload.VersionNumber ?? 1,
+      Title: payload.Title ?? options.Title?.trim() ?? 'Synthesized Artifact',
+      ArtifactTypeName: payload.ArtifactTypeName ?? 'Presentation',
+      LinkedChartCount: payload.LinkedChartCount ?? 0,
+      SourceCount: payload.SourceCount ?? options.SourceArtifactIds.length,
+      Warnings: Array.isArray(payload.Warnings) ? payload.Warnings : [],
+      UsedFallback: Boolean(payload.UsedFallback),
+    };
   }
 
   /**

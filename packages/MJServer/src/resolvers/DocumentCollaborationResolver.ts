@@ -1,15 +1,18 @@
 import { createHash } from 'node:crypto';
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
 import type { ChatMessage } from '@memberjunction/ai';
+import { BaseLLM, ChatMessageRole, ChatParams, GetAIAPIKey } from '@memberjunction/ai';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
+    ArtifactSynthesisEngine,
+    ArtifactSynthesisSourceInput,
     BuildArtifactVersionConfigurationWithPreview,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
@@ -17,7 +20,9 @@ import {
     MJArtifactEntity,
     MJArtifactTypeEntity,
     MJArtifactVersionEntity,
+    MJCollectionArtifactEntity,
     MJConversationDetailEntity,
+    MJEnvironmentEntityExtended,
     ParseArtifactVersionConfiguration,
     ResolveArtifactTypeThumbnailPolicy,
     ValidateFrozenBlockSnapshot
@@ -1448,6 +1453,575 @@ export class DocumentCollaborationResolver extends ResolverBase {
             VersionNumber: nextVersionNumber
         };
     }
+
+    /**
+     * Synthesizes a brand-new governed artifact (`Presentation`, `Markdown Document`, or `Excel Spreadsheet`)
+     * from multiple authorized source artifacts (and/or a Collection), preserving live chart/range embeds
+     * and enforcing strict `CanRead` on all sources plus `CanEdit` on any linked Collection.
+     */
+    @Mutation(() => SynthesizeArtifactResultOutput)
+    public async SynthesizeArtifactFromSources(
+        @Arg('targetKind', () => String) targetKind: string,
+        @Arg('goal', () => String) goal: string,
+        @Ctx() context: AppContext,
+        @Arg('sourceArtifactIds', () => [String], { nullable: true }) sourceArtifactIds?: string[] | null,
+        @Arg('collectionId', () => String, { nullable: true }) collectionId?: string | null,
+        @Arg('title', () => String, { nullable: true }) title?: string | null,
+        @Arg('agentHandle', () => String, { nullable: true }) agentHandle?: string | null,
+        @Arg('linkChartsAndRanges', () => Boolean, { nullable: true }) linkChartsAndRanges?: boolean | null
+    ): Promise<SynthesizeArtifactResultOutput> {
+        const user = this.GetUserFromPayload(context.userPayload) ?? context.userPayload?.userRecord;
+        const provider = this.resolveProvider(context);
+        if (!user || !provider) {
+            return {
+                Success: false,
+                ErrorMessage: 'Authenticated user and metadata provider are required.'
+            };
+        }
+
+        const normalizedKind = ArtifactSynthesisEngine.Instance.NormalizeTargetKind(targetKind);
+        const trimmedCollectionId = (collectionId ?? '').trim();
+        let collectionEnvironmentId: string | null = null;
+        const combinedSourceIds: string[] = [];
+        const seenIds = new Set<string>();
+
+        const addUniqueSourceId = (id: string): void => {
+            const clean = id.trim();
+            if (!clean) return;
+            const key = clean.toLowerCase();
+            if (!seenIds.has(key)) {
+                seenIds.add(key);
+                combinedSourceIds.push(clean);
+            }
+        };
+
+        for (const id of sourceArtifactIds ?? []) {
+            if (typeof id === 'string') {
+                addUniqueSourceId(id);
+            }
+        }
+
+        if (trimmedCollectionId) {
+            const colResult = await this.resolveCollectionForSynthesis(
+                provider,
+                user,
+                trimmedCollectionId,
+                combinedSourceIds.length === 0
+            );
+            if (!colResult.Allowed) {
+                return {
+                    Success: false,
+                    AccessDenied: colResult.AccessDenied,
+                    ErrorMessage: colResult.ErrorMessage
+                };
+            }
+            collectionEnvironmentId = colResult.EnvironmentID ?? null;
+            for (const colArtId of colResult.ArtifactIDs) {
+                addUniqueSourceId(colArtId);
+            }
+        }
+
+        if (combinedSourceIds.length === 0) {
+            return {
+                Success: false,
+                ErrorMessage: 'Select at least one readable source artifact or non-empty collection to synthesize.'
+            };
+        }
+
+        for (const srcId of combinedSourceIds) {
+            if (!IsValidUUID(srcId)) {
+                return {
+                    Success: false,
+                    ErrorMessage: `Invalid source artifact UUID '${srcId}'.`
+                };
+            }
+            const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, srcId, user);
+            if (!perms.CanRead) {
+                return {
+                    Success: false,
+                    AccessDenied: true,
+                    ErrorMessage: `Permission denied: User lacks CanRead permission on source artifact '${srcId}'.`
+                };
+            }
+        }
+
+        const { Sources, EnvironmentID, ErrorMessage } = await this.loadSynthesisSourceInputs(
+            provider,
+            user,
+            combinedSourceIds
+        );
+        if (Sources.length === 0) {
+            return {
+                Success: false,
+                ErrorMessage: ErrorMessage || 'No readable source artifacts could be loaded.'
+            };
+        }
+
+        const digests = Sources.map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigest(s));
+        const allowedSourceIds = digests.map((d) => d.ArtifactID);
+        const availableCharts = digests.flatMap((d) => d.EmbeddedCharts);
+        const linkCharts = linkChartsAndRanges !== false;
+        const cleanTitle = (title ?? '').trim();
+        const cleanGoal = (goal ?? '').trim();
+        const prompts = ArtifactSynthesisEngine.Instance.BuildSynthesisPrompts({
+            Digests: digests,
+            TargetKind: normalizedKind,
+            Goal: cleanGoal,
+            Title: cleanTitle || undefined,
+            LinkChartsAndRanges: linkCharts
+        });
+
+        let rawModelOutput = '';
+        let usedFallback = false;
+        let resolvedAgentRunId: string | null = null;
+        let resolvedAgentName: string | null = null;
+
+        const trimmedAgentHandle = (agentHandle ?? '').trim().replace(/^@+/, '').trim();
+        if (trimmedAgentHandle) {
+            const resolvedAgent = await this.resolveAgentByHandle(trimmedAgentHandle, user);
+            if (!resolvedAgent.Agent) {
+                return {
+                    Success: false,
+                    ErrorMessage:
+                        resolvedAgent.ErrorMessage || `No active AI agent matching '@${trimmedAgentHandle}' was found.`
+                };
+            }
+            await this.CheckAPIKeyScopeAuthorization('agent:execute', resolvedAgent.Agent.ID, context.userPayload);
+            try {
+                const agentRunner = new AgentRunner(provider);
+                const runRes = await agentRunner.RunAgent<Record<string, unknown> | string>({
+                    agent: resolvedAgent.Agent,
+                    conversationMessages: [
+                        {
+                            role: 'user',
+                            content: `${prompts.SystemPrompt}\n\n${prompts.UserPrompt}`
+                        }
+                    ],
+                    contextUser: user
+                });
+                if (!runRes.success) {
+                    return {
+                        Success: false,
+                        ErrorMessage: runRes.errorMessage || `AI agent '@${resolvedAgent.Agent.Name}' failed to synthesize.`
+                    };
+                }
+                resolvedAgentRunId = runRes.agentRun?.ID ?? null;
+                resolvedAgentName = resolvedAgent.Agent.Name ?? null;
+                rawModelOutput =
+                    typeof runRes.payload === 'string'
+                        ? runRes.payload
+                        : runRes.payload != null
+                          ? JSON.stringify(runRes.payload)
+                          : '';
+            } catch (agentErr) {
+                const msg = agentErr instanceof Error ? agentErr.message : String(agentErr);
+                LogError(`DocumentCollaborationResolver.SynthesizeArtifactFromSources agent error: ${msg}`);
+                return {
+                    Success: false,
+                    ErrorMessage: `AI agent synthesis error: ${msg}`
+                };
+            }
+        } else {
+            await this.CheckAPIKeyScopeAuthorization(
+                'artifact:edit',
+                combinedSourceIds[0],
+                context.userPayload
+            );
+            rawModelOutput = await this.runDirectSynthesisLlm(prompts.SystemPrompt, prompts.UserPrompt, user);
+        }
+
+        let normalized = rawModelOutput
+            ? ArtifactSynthesisEngine.Instance.NormalizeSynthesizedOutput({
+                  TargetKind: normalizedKind,
+                  RawOutput: rawModelOutput,
+                  FallbackTitle: cleanTitle || undefined,
+                  AllowedSourceArtifactIds: allowedSourceIds,
+                  AvailableChartRefs: availableCharts
+              })
+            : null;
+
+        if (!normalized) {
+            usedFallback = true;
+            normalized = ArtifactSynthesisEngine.Instance.BuildDeterministicFallbackSynthesis(
+                digests,
+                normalizedKind,
+                cleanTitle,
+                cleanGoal,
+                linkCharts
+            );
+        }
+
+        const persistOutcome = await this.persistSynthesizedArtifactRecord({
+            provider,
+            user,
+            normalized,
+            collectionId: trimmedCollectionId || null,
+            environmentId: EnvironmentID || collectionEnvironmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID,
+            sourceArtifactIds: allowedSourceIds,
+            agentRunId: resolvedAgentRunId,
+            agentName: resolvedAgentName
+        });
+
+        if (!persistOutcome.Success) {
+            return {
+                Success: false,
+                ErrorMessage: persistOutcome.ErrorMessage || 'Failed to persist synthesized artifact.'
+            };
+        }
+
+        return {
+            Success: true,
+            ArtifactID: persistOutcome.ArtifactID,
+            VersionID: persistOutcome.VersionID,
+            VersionNumber: 1,
+            Title: normalized.Title,
+            ArtifactTypeName: normalized.ArtifactTypeName,
+            LinkedChartCount: normalized.LinkedChartCount,
+            SourceCount: digests.length,
+            Warnings: normalized.Warnings,
+            UsedFallback: usedFallback
+        };
+    }
+
+    private async resolveCollectionForSynthesis(
+        provider: IMetadataProvider,
+        user: UserInfo,
+        collectionId: string,
+        loadCollectionArtifacts: boolean
+    ): Promise<{
+        Allowed: boolean;
+        AccessDenied?: boolean;
+        ErrorMessage?: string;
+        EnvironmentID?: string | null;
+        ArtifactIDs: string[];
+    }> {
+        if (!IsValidUUID(collectionId)) {
+            return { Allowed: false, ErrorMessage: `Invalid collectionId UUID '${collectionId}'.`, ArtifactIDs: [] };
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+        const colRes = await rv.RunView<{ ID: string; OwnerID?: string | null; EnvironmentID?: string | null }>(
+            {
+                EntityName: 'MJ: Collections',
+                ExtraFilter: `ID='${EscapeSQLString(collectionId)}'`,
+                Fields: ['ID', 'OwnerID', 'EnvironmentID'],
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            },
+            user
+        );
+        if (!colRes.Success || !colRes.Results?.length) {
+            return {
+                Allowed: false,
+                ErrorMessage: `Target collection '${collectionId}' was not found.`,
+                ArtifactIDs: []
+            };
+        }
+        const collection = colRes.Results[0];
+        const isOwner = Boolean(collection.OwnerID && UUIDsEqual(collection.OwnerID, user.ID));
+        if (!isOwner) {
+            const permRes = await rv.RunView<{ CanEdit?: boolean; CanRead?: boolean }>(
+                {
+                    EntityName: 'MJ: Collection Permissions',
+                    ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}' AND UserID='${EscapeSQLString(user.ID)}'`,
+                    Fields: ['CanEdit', 'CanRead'],
+                    MaxRows: 10,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            const canEdit = (permRes.Success && permRes.Results ? permRes.Results : []).some((r) => Boolean(r.CanEdit));
+            if (!canEdit) {
+                return {
+                    Allowed: false,
+                    AccessDenied: true,
+                    ErrorMessage: 'Permission denied: User lacks CanEdit permission on the target collection.',
+                    ArtifactIDs: []
+                };
+            }
+        }
+
+        const artifactIds: string[] = [];
+        if (loadCollectionArtifacts) {
+            const linkRes = await rv.RunView<{ ArtifactVersionID?: string | null }>(
+                {
+                    EntityName: 'MJ: Collection Artifacts',
+                    ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}'`,
+                    Fields: ['ArtifactVersionID'],
+                    MaxRows: 50,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            const verIds = Array.from(
+                new Set(
+                    (linkRes.Success && linkRes.Results ? linkRes.Results : [])
+                        .map((r) => (r.ArtifactVersionID ?? '').trim())
+                        .filter(Boolean)
+                )
+            );
+            if (verIds.length > 0) {
+                const inList = verIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+                const verRes = await rv.RunView<{ ArtifactID?: string | null }>(
+                    {
+                        EntityName: 'MJ: Artifact Versions',
+                        ExtraFilter: `ID IN (${inList})`,
+                        Fields: ['ArtifactID'],
+                        MaxRows: 50,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple'
+                    },
+                    user
+                );
+                for (const row of verRes.Success && verRes.Results ? verRes.Results : []) {
+                    const artId = (row.ArtifactID ?? '').trim();
+                    if (artId) artifactIds.push(artId);
+                }
+            }
+        }
+
+        return {
+            Allowed: true,
+            EnvironmentID: collection.EnvironmentID ?? null,
+            ArtifactIDs: artifactIds
+        };
+    }
+
+    private async loadSynthesisSourceInputs(
+        provider: IMetadataProvider,
+        user: UserInfo,
+        artifactIds: ReadonlyArray<string>
+    ): Promise<{ Sources: ArtifactSynthesisSourceInput[]; EnvironmentID: string | null; ErrorMessage?: string }> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const sources: ArtifactSynthesisSourceInput[] = [];
+        let firstEnvironmentId: string | null = null;
+
+        for (const artId of artifactIds) {
+            const artRes = await rv.RunView<{
+                ID: string;
+                Name?: string | null;
+                Description?: string | null;
+                EnvironmentID?: string | null;
+                Type?: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID='${EscapeSQLString(artId)}'`,
+                    Fields: ['ID', 'Name', 'Description', 'EnvironmentID', 'Type'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            if (!artRes.Success || !artRes.Results?.length) {
+                return { Sources: [], EnvironmentID: null, ErrorMessage: `Source artifact '${artId}' was not found.` };
+            }
+            const art = artRes.Results[0];
+            if (!firstEnvironmentId && art.EnvironmentID) {
+                firstEnvironmentId = art.EnvironmentID;
+            }
+
+            const verRes = await rv.RunView<{
+                ID: string;
+                VersionNumber?: number | null;
+                ContentMode?: MJArtifactVersionEntity['ContentMode'];
+                Content?: string | null;
+                Configuration?: string | null;
+                MimeType?: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID='${EscapeSQLString(artId)}'`,
+                    OrderBy: 'VersionNumber DESC',
+                    Fields: ['ID', 'VersionNumber', 'ContentMode', 'Content', 'Configuration', 'MimeType'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            const ver = verRes.Success && verRes.Results?.length ? verRes.Results[0] : undefined;
+            sources.push({
+                ArtifactID: art.ID,
+                Name: (art.Name ?? 'Untitled Artifact').trim(),
+                ArtifactType: (art.Type ?? 'Markdown Document').trim(),
+                VersionNumber: ver?.VersionNumber ?? undefined,
+                ContentMode: ver?.ContentMode,
+                Content: ver?.Content ?? null,
+                Configuration: ver?.Configuration ?? null,
+                Description: art.Description ?? null,
+                MimeType: ver?.MimeType ?? null
+            });
+        }
+
+        return { Sources: sources, EnvironmentID: firstEnvironmentId };
+    }
+
+    private async runDirectSynthesisLlm(
+        systemPrompt: string,
+        userPrompt: string,
+        user: UserInfo
+    ): Promise<string> {
+        try {
+            await AIEngine.Instance.Config(false, user);
+            const activeModels = (AIEngine.Instance.Models ?? []).filter(
+                (m) => m.AIModelType?.trim().toLowerCase() === 'llm' && m.IsActive && m.DriverClass
+            );
+            const keyReadyModels = activeModels.filter((m) => {
+                try {
+                    const key = GetAIAPIKey(m.DriverClass);
+                    return Boolean(key && key.trim().length > 0);
+                } catch {
+                    return false;
+                }
+            });
+            if (keyReadyModels.length === 0) {
+                return '';
+            }
+            const model =
+                keyReadyModels.find((m) => m.DriverClass === 'OpenAILLM') ||
+                keyReadyModels.find((m) => m.DriverClass === 'AnthropicLLM') ||
+                keyReadyModels.find((m) => m.DriverClass === 'GeminiLLM') ||
+                keyReadyModels[0];
+
+            const apiKey = GetAIAPIKey(model.DriverClass);
+            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+                BaseLLM,
+                model.DriverClass,
+                apiKey
+            );
+            if (!llm) {
+                return '';
+            }
+
+            const chatParams = new ChatParams();
+            chatParams.model = model.APIName;
+            chatParams.messages = [
+                { role: ChatMessageRole.system, content: systemPrompt },
+                { role: ChatMessageRole.user, content: userPrompt }
+            ];
+            const result = await llm.ChatCompletion(chatParams);
+            return result?.data?.choices?.[0]?.message?.content?.trim() ?? '';
+        } catch (err) {
+            LogError(
+                `DocumentCollaborationResolver.runDirectSynthesisLlm warning (falling back to deterministic synthesis): ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
+            return '';
+        }
+    }
+
+    private async persistSynthesizedArtifactRecord(params: {
+        provider: IMetadataProvider;
+        user: UserInfo;
+        normalized: {
+            ArtifactTypeName: string;
+            Title: string;
+            Description: string;
+            Content: string;
+        };
+        collectionId: string | null;
+        environmentId: string;
+        sourceArtifactIds: ReadonlyArray<string>;
+        agentRunId: string | null;
+        agentName: string | null;
+    }): Promise<{ Success: boolean; ArtifactID?: string; VersionID?: string; ErrorMessage?: string }> {
+        const { provider, user, normalized } = params;
+        await ArtifactMetadataEngine.Instance.Config(false, user, provider);
+        const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+        const artType = ArtifactMetadataEngine.Instance.FindArtifactType(normalized.ArtifactTypeName);
+        if (!artType) {
+            return {
+                Success: false,
+                ErrorMessage: `Artifact type '${normalized.ArtifactTypeName}' was not found or is disabled.`
+            };
+        }
+
+        const artifact = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', user);
+        artifact.NewRecord();
+        artifact.Name = normalized.Title;
+        artifact.Description = normalized.Description;
+        artifact.TypeID = artType.ID;
+        artifact.EnvironmentID = params.environmentId;
+        artifact.UserID = user.ID;
+
+        const savedArtifact = await artifact.Save();
+        if (!savedArtifact) {
+            return {
+                Success: false,
+                ErrorMessage: artifact.LatestResult?.CompleteMessage || 'Failed to save MJ: Artifacts record.'
+            };
+        }
+
+        const version = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+        version.NewRecord();
+        version.ArtifactID = artifact.ID;
+        version.VersionNumber = 1;
+        version.Name = normalized.Title;
+        version.Description = normalized.Description;
+        version.UserID = user.ID;
+        version.ContentMode = 'Text';
+        version.Content = normalized.Content;
+        version.ContentHash = createHash('sha256').update(normalized.Content, 'utf8').digest('hex');
+        version.ContentSizeBytes = Buffer.byteLength(normalized.Content, 'utf8');
+        version.Comments = params.agentName
+            ? `Synthesized by ${params.agentName} from ${params.sourceArtifactIds.length} artifact(s)`
+            : `AI synthesized from ${params.sourceArtifactIds.length} artifact(s)`;
+
+        const provenanceJson = JSON.stringify({
+            synthesizedFromArtifactIds: params.sourceArtifactIds,
+            agentRunId: params.agentRunId,
+            agentName: params.agentName
+        });
+        const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
+            provenanceJson,
+            normalized.Content,
+            artType.DriverClass ?? null,
+            normalized.Title,
+            {
+                ArtifactType: artType,
+                AllArtifactTypes: allTypes
+            }
+        );
+        if (enrichedConfig) {
+            version.Configuration = enrichedConfig;
+        }
+
+        const savedVersion = await version.Save();
+        if (!savedVersion) {
+            await artifact.Delete();
+            return {
+                Success: false,
+                ErrorMessage: version.LatestResult?.CompleteMessage || 'Failed to save MJ: Artifact Versions record.'
+            };
+        }
+
+        if (params.collectionId) {
+            const link = await provider.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', user);
+            link.NewRecord();
+            link.CollectionID = params.collectionId;
+            link.ArtifactVersionID = version.ID;
+            const savedLink = await link.Save();
+            if (!savedLink) {
+                await version.Delete();
+                await artifact.Delete();
+                return {
+                    Success: false,
+                    ErrorMessage: link.LatestResult?.CompleteMessage || 'Failed to link synthesized artifact into collection.'
+                };
+            }
+        }
+
+        return {
+            Success: true,
+            ArtifactID: artifact.ID,
+            VersionID: version.ID
+        };
+    }
 }
 
 @ObjectType()
@@ -1490,4 +2064,43 @@ export class ExecuteAnchoredCommentAgentMentionPayload {
 
     @Field(() => String, { nullable: true })
     public ErrorMessage?: string;
+}
+
+@ObjectType()
+export class SynthesizeArtifactResultOutput {
+    @Field(() => Boolean)
+    public Success!: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    public AccessDenied?: boolean;
+
+    @Field(() => String, { nullable: true })
+    public ErrorMessage?: string;
+
+    @Field(() => String, { nullable: true })
+    public ArtifactID?: string;
+
+    @Field(() => String, { nullable: true })
+    public VersionID?: string;
+
+    @Field(() => Int, { nullable: true })
+    public VersionNumber?: number;
+
+    @Field(() => String, { nullable: true })
+    public Title?: string;
+
+    @Field(() => String, { nullable: true })
+    public ArtifactTypeName?: string;
+
+    @Field(() => Int, { nullable: true })
+    public LinkedChartCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    public SourceCount?: number;
+
+    @Field(() => [String], { nullable: true })
+    public Warnings?: string[];
+
+    @Field(() => Boolean, { nullable: true })
+    public UsedFallback?: boolean;
 }
