@@ -5,6 +5,9 @@ import { RemoteOperationEngineBase } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
+import { LoadSynthesizeArtifactFromSourcesOperation } from '../operations/SynthesizeArtifactFromSourcesServerOperation.js';
+
+LoadSynthesizeArtifactFromSourcesOperation();
 
 /** PubSub topic carrying RemoteOpProgress envelopes for attached over-the-wire callers (RO-3). */
 const REMOTE_OP_PROGRESS_TOPIC = 'RemoteOperationProgress';

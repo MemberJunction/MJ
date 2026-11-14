@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RemoteOpProgress, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   ArtifactSynthesisTargetKind,
@@ -12,6 +12,8 @@ import {
   MJEnvironmentEntityExtended,
   SlideDeckEngine,
   SpreadsheetEngine,
+  SynthesizeArtifactFromSourcesInput,
+  SynthesizeArtifactFromSourcesOperation,
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
@@ -138,6 +140,7 @@ export interface SynthesizeArtifactFromSourcesOptions {
   LinkChartsAndRanges?: boolean;
   CurrentUser: UserInfo;
   Provider?: IMetadataProvider;
+  OnProgress?: (progress: RemoteOpProgress) => void;
 }
 
 export interface SynthesizeArtifactFromSourcesResult {
@@ -154,41 +157,6 @@ export interface SynthesizeArtifactFromSourcesResult {
   Warnings: string[];
   UsedFallback: boolean;
 }
-
-const SYNTHESIZE_ARTIFACT_MUTATION = `
-  mutation SynthesizeArtifactFromSources(
-    $targetKind: String!
-    $goal: String!
-    $sourceArtifactIds: [String!]
-    $collectionId: String
-    $title: String
-    $agentHandle: String
-    $linkChartsAndRanges: Boolean
-  ) {
-    SynthesizeArtifactFromSources(
-      targetKind: $targetKind
-      goal: $goal
-      sourceArtifactIds: $sourceArtifactIds
-      collectionId: $collectionId
-      title: $title
-      agentHandle: $agentHandle
-      linkChartsAndRanges: $linkChartsAndRanges
-    ) {
-      Success
-      AccessDenied
-      ErrorMessage
-      ArtifactID
-      VersionID
-      VersionNumber
-      Title
-      ArtifactTypeName
-      LinkedChartCount
-      SourceCount
-      Warnings
-      UsedFallback
-    }
-  }
-`;
 
 export interface CreatedLibraryArtifactResult {
   Artifact: MJArtifactEntity;
@@ -546,45 +514,40 @@ export class LibraryCreationService {
   }
 
   /**
-   * Calls the server-side `SynthesizeArtifactFromSources` mutation to read multiple governed artifacts,
-   * synthesize a brand-new `Presentation`, `Markdown Document`, or `Excel Spreadsheet` with live
-   * chart/range links, enforce `CanRead` / `CanEdit` permissions, and save v1.
+   * Executes the `Artifact.SynthesizeFromSources` remote operation (`SynthesizeArtifactFromSourcesOperation`)
+   * to read multiple governed artifacts, synthesize a brand-new `Presentation`, `Markdown Document`, or
+   * `Excel Spreadsheet` with live chart/range links, enforce `CanRead` / `CanEdit` permissions, stream
+   * progress updates, and save v1.
    */
   public async SynthesizeArtifactFromSources(
     options: SynthesizeArtifactFromSourcesOptions,
   ): Promise<SynthesizeArtifactFromSourcesResult> {
-    const providerCandidate = options.Provider as Partial<GraphQLDataProvider> | undefined;
-    const gqlExecutor =
-      providerCandidate && typeof providerCandidate.ExecuteGQL === 'function'
-        ? providerCandidate.ExecuteGQL.bind(providerCandidate)
-        : GraphQLDataProvider.Instance.ExecuteGQL.bind(GraphQLDataProvider.Instance);
-
-    const variables = {
-      targetKind: options.TargetKind,
-      goal: options.Goal,
-      sourceArtifactIds: Array.from(options.SourceArtifactIds),
-      collectionId: options.CollectionID || null,
-      title: options.Title?.trim() || null,
-      agentHandle: options.AgentHandle?.trim() || null,
-      linkChartsAndRanges: options.LinkChartsAndRanges !== false,
+    const op = new SynthesizeArtifactFromSourcesOperation();
+    const opInput: SynthesizeArtifactFromSourcesInput = {
+      TargetKind: options.TargetKind,
+      Goal: options.Goal,
+      SourceArtifactIds: Array.from(options.SourceArtifactIds),
+      CollectionId: options.CollectionID || null,
+      Title: options.Title?.trim() || null,
+      AgentHandle: options.AgentHandle?.trim() || null,
+      LinkChartsAndRanges: options.LinkChartsAndRanges !== false,
     };
 
-    const rawResponse = (await gqlExecutor(SYNTHESIZE_ARTIFACT_MUTATION, variables)) as {
-      SynthesizeArtifactFromSources?: Partial<SynthesizeArtifactFromSourcesResult> | null;
-    } | null;
+    const result = await op.Execute(opInput, {
+      provider: options.Provider ?? GraphQLDataProvider.Instance,
+      mode: 'attached',
+      onProgress: options.OnProgress,
+    });
 
-    const payload = rawResponse?.SynthesizeArtifactFromSources;
-    if (!payload) {
-      throw new Error('SynthesizeArtifactFromSources returned an empty response.');
-    }
-    if (!payload.Success || !payload.ArtifactID) {
-      throw new Error(payload.ErrorMessage || 'Artifact synthesis failed.');
+    if (!result.Success || !result.Output?.ArtifactID) {
+      throw new Error(result.ErrorMessage || 'Artifact synthesis failed.');
     }
 
+    const payload = result.Output;
     return {
       Success: true,
-      AccessDenied: Boolean(payload.AccessDenied),
-      ErrorMessage: payload.ErrorMessage,
+      AccessDenied: result.ResultCode === 'ACCESS_DENIED' || result.ResultCode === 'FORBIDDEN',
+      ErrorMessage: result.ErrorMessage,
       ArtifactID: payload.ArtifactID,
       VersionID: payload.VersionID ?? '',
       VersionNumber: payload.VersionNumber ?? 1,

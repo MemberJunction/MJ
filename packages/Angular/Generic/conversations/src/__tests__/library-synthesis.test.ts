@@ -1,8 +1,8 @@
 import '@angular/compiler';
 import { EventEmitter, SimpleChange } from '@angular/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { UserInfoEngine } from '@memberjunction/core-entities';
+import { IMetadataProvider, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpProgress, UserInfo } from '@memberjunction/core';
+import { ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY, UserInfoEngine } from '@memberjunction/core-entities';
 import {
   LibraryCreationService,
   SynthesizeArtifactFromSourcesResult,
@@ -50,24 +50,46 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
     vi.restoreAllMocks();
   });
 
-  it('LibraryCreationService.SynthesizeArtifactFromSources calls GraphQL mutation with expected variables and handles errors', async () => {
+  it('LibraryCreationService.SynthesizeArtifactFromSources routes via SynthesizeArtifactFromSourcesOperation, streams progress, and handles errors', async () => {
     const service = Object.create(LibraryCreationService.prototype) as LibraryCreationService;
-    const executeGQL = vi.fn(async () => ({
-      SynthesizeArtifactFromSources: {
-        Success: true,
-        ArtifactID: 'new-synth-art-1',
-        VersionID: 'new-synth-ver-1',
-        VersionNumber: 1,
-        Title: 'Executive Synthesis',
-        ArtifactTypeName: 'Presentation',
-        LinkedChartCount: 2,
-        SourceCount: 3,
-        Warnings: [],
-        UsedFallback: false,
+    const routeOperation = vi.fn(
+      async (
+        _operationKey: string,
+        _input: unknown,
+        options?: RemoteOpInvokeOptions,
+      ) => {
+        options?.onProgress?.({
+          OperationKey: ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY,
+          Status: 'Synthesizing',
+          Processed: 2,
+          Total: 4,
+          Message: 'Synthesizing presentation from 3 source(s)...',
+        });
+        return {
+          Success: true,
+          ResultCode: 'SUCCESS',
+          Output: {
+            ArtifactID: 'new-synth-art-1',
+            VersionID: 'new-synth-ver-1',
+            VersionNumber: 1,
+            Title: 'Executive Synthesis',
+            ArtifactTypeName: 'Presentation',
+            LinkedChartCount: 2,
+            SourceCount: 3,
+            Warnings: [],
+            UsedFallback: false,
+            AgentRunID: null,
+            AgentName: null,
+          },
+        };
       },
-    }));
+    );
 
-    const providerStub = { ExecuteGQL: executeGQL } as unknown as IMetadataProvider;
+    const providerStub = {
+      RouteOperation: routeOperation,
+    } as unknown as IMetadataProvider & IRemoteOperationProvider;
+    const receivedProgress: RemoteOpProgress[] = [];
+
     const result = await service.SynthesizeArtifactFromSources({
       TargetKind: 'presentation',
       Goal: 'Synthesize board KPIs',
@@ -77,32 +99,39 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
       LinkChartsAndRanges: true,
       CurrentUser: TEST_USER,
       Provider: providerStub,
+      OnProgress: (p) => receivedProgress.push(p),
     });
 
-    expect(executeGQL).toHaveBeenCalledTimes(1);
-    const [query, variables] = executeGQL.mock.calls[0] as unknown as [string, Record<string, unknown>];
-    expect(query).toContain('mutation SynthesizeArtifactFromSources');
-    expect(variables).toEqual({
-      targetKind: 'presentation',
-      goal: 'Synthesize board KPIs',
-      sourceArtifactIds: ['a1', 'a2', 'a3'],
-      collectionId: 'col-1',
-      title: 'Executive Synthesis',
-      agentHandle: null,
-      linkChartsAndRanges: true,
+    expect(routeOperation).toHaveBeenCalledTimes(1);
+    const [opKey, opInput, invokeOpts] = routeOperation.mock.calls[0];
+    expect(opKey).toBe(ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY);
+    expect(opInput).toEqual({
+      TargetKind: 'presentation',
+      Goal: 'Synthesize board KPIs',
+      SourceArtifactIds: ['a1', 'a2', 'a3'],
+      CollectionId: 'col-1',
+      Title: 'Executive Synthesis',
+      AgentHandle: null,
+      LinkChartsAndRanges: true,
     });
+    expect(invokeOpts).toEqual(
+      expect.objectContaining({
+        mode: 'attached',
+        provider: providerStub,
+      }),
+    );
+    expect(receivedProgress).toHaveLength(1);
+    expect(receivedProgress[0].Message).toBe('Synthesizing presentation from 3 source(s)...');
     expect(result.ArtifactID).toBe('new-synth-art-1');
     expect(result.LinkedChartCount).toBe(2);
 
     const denyProvider = {
-      ExecuteGQL: vi.fn(async () => ({
-        SynthesizeArtifactFromSources: {
-          Success: false,
-          AccessDenied: true,
-          ErrorMessage: 'Permission denied on restricted source',
-        },
+      RouteOperation: vi.fn(async () => ({
+        Success: false,
+        ResultCode: 'ACCESS_DENIED',
+        ErrorMessage: 'Permission denied on restricted source',
       })),
-    } as unknown as IMetadataProvider;
+    } as unknown as IMetadataProvider & IRemoteOperationProvider;
 
     await expect(
       service.SynthesizeArtifactFromSources({

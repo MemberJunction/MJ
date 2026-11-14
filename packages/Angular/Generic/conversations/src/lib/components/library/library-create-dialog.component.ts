@@ -478,7 +478,7 @@ const STARTER_TILES: ReadonlyArray<StarterTileOption> = [
           >
             @if (IsSubmitting) {
               <i class="fa-solid fa-spinner fa-spin"></i>
-              Creating…
+              {{ ActiveTab === 'synthesize' && SynthesisProgressMessage ? SynthesisProgressMessage : 'Creating…' }}
             } @else {
               <i class="fa-solid fa-plus"></i>
               {{ SubmitButtonLabel }}
@@ -907,6 +907,7 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
   public CustomContent = '';
 
   public IsSubmitting = false;
+  public SynthesisProgressMessage = '';
   public ErrorMessage = '';
 
   private readonly creationService = inject(LibraryCreationService);
@@ -1082,6 +1083,7 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
   public async Submit(): Promise<void> {
     if (!this.CanSubmit || this.IsSubmitting) return;
     this.IsSubmitting = true;
+    this.SynthesisProgressMessage = '';
     this.ErrorMessage = '';
     this.cdr.detectChanges();
 
@@ -1098,6 +1100,12 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
           LinkChartsAndRanges: this.LinkChartsAndRanges,
           CurrentUser: this.CurrentUser,
           Provider: this.ProviderToUse,
+          OnProgress: (progress) => {
+            if (progress.Message) {
+              this.SynthesisProgressMessage = progress.Message;
+              this.cdr.detectChanges();
+            }
+          },
         });
         this.notifications.CreateSimpleNotification(
           `Synthesized "${synthResult.Title}" (${synthResult.SourceCount} sources)`,
@@ -1150,6 +1158,7 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to create item.';
     } finally {
       this.IsSubmitting = false;
+      this.SynthesisProgressMessage = '';
       this.cdr.detectChanges();
     }
   }

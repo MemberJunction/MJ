@@ -1,9 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import type { IMetadataProvider, IRemoteOperationProvider } from '@memberjunction/core';
 import {
+    ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY,
     ArtifactSynthesisEngine,
     SYNTHESIS_TARGET_TYPE_NAME_MAP,
     SlideDeckEngine,
     SpreadsheetEngine,
+    SynthesizeArtifactFromSourcesOperation,
     DocumentLiveBlockEngine,
 } from '../index';
 
@@ -323,5 +326,45 @@ describe('ArtifactSynthesisEngine', () => {
         );
         expect(fallbackSheet.ArtifactTypeName).toBe('Excel Spreadsheet');
         expect(fallbackSheet.Content).toContain('Q1 Metrics');
+    });
+
+    it('SynthesizeArtifactFromSourcesOperation exposes typed contract and delegates Execute() to provider.RouteOperation', async () => {
+        const op = new SynthesizeArtifactFromSourcesOperation();
+        expect(op.OperationKey).toBe(ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY);
+        expect(op.ExecutionMode).toBe('LongRunning');
+        expect(op.RequiredScope).toBe('artifact:edit');
+        expect(op.RequiresSystemUser).toBe(false);
+
+        const routeSpy = vi.fn(async () => ({
+            Success: true,
+            ResultCode: 'SUCCESS',
+            Output: {
+                ArtifactID: 'art-out',
+                VersionID: 'ver-out',
+                VersionNumber: 1,
+                Title: 'Combined Brief',
+                ArtifactTypeName: 'Presentation',
+                LinkedChartCount: 1,
+                SourceCount: 2,
+                Warnings: [],
+                UsedFallback: false,
+            },
+        }));
+        const fakeProvider = {
+            RouteOperation: routeSpy,
+        } as unknown as IMetadataProvider & IRemoteOperationProvider;
+
+        const res = await op.Execute(
+            { TargetKind: 'presentation', Goal: 'Summarize metrics', SourceArtifactIds: ['a1', 'a2'] },
+            { provider: fakeProvider, mode: 'attached' },
+        );
+
+        expect(routeSpy).toHaveBeenCalledWith(
+            ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY,
+            { TargetKind: 'presentation', Goal: 'Summarize metrics', SourceArtifactIds: ['a1', 'a2'] },
+            expect.objectContaining({ provider: fakeProvider, mode: 'attached' }),
+        );
+        expect(res.Success).toBe(true);
+        expect(res.Output?.ArtifactID).toBe('art-out');
     });
 });
