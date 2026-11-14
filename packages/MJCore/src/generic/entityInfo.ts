@@ -4081,7 +4081,7 @@ export class EntityInfo extends BaseInfo {
      * Deferring creation until .Fields or a field-derived getter is accessed
      * saves allocating thousands of EntityFieldInfo objects at startup.
      */
-    public ensureFieldsLoaded(): void {
+    public EnsureFieldsLoaded(): void {
         if (this._fieldsLoaded) {
             return;
         }
@@ -4129,7 +4129,7 @@ export class EntityInfo extends BaseInfo {
 
     private _lazyHasIdField: boolean | undefined = undefined;
     get HasIdField(): boolean {
-        this.ensureFieldsLoaded();
+        this.EnsureFieldsLoaded();
         return this._lazyHasIdField ?? false;
     }
     set HasIdField(value: boolean) {
@@ -4147,7 +4147,7 @@ export class EntityInfo extends BaseInfo {
 
     private _lazyVirtualCount: number | undefined = undefined;
     get VirtualCount(): number {
-        this.ensureFieldsLoaded();
+        this.EnsureFieldsLoaded();
         return this._lazyVirtualCount ?? 0;
     }
     set VirtualCount(value: number) {
@@ -4185,7 +4185,7 @@ export class EntityInfo extends BaseInfo {
 
     private _lazyFloatCount: number | undefined = undefined;
     get FloatCount(): number {
-        this.ensureFieldsLoaded();
+        this.EnsureFieldsLoaded();
         return this._lazyFloatCount ?? 0;
     }
     set FloatCount(value: number) {
@@ -4747,7 +4747,7 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityFieldInfo[]} Array of all entity fields
      */
     get Fields(): EntityFieldInfo[] {
-        this.ensureFieldsLoaded();
+        this.EnsureFieldsLoaded();
         return this._fields;
     }
 
@@ -6223,7 +6223,7 @@ export class EntityInfo extends BaseInfo {
 
     private prepareSpecialFields(): void {
         this.prepareRelationshipCounts();
-        this.ensureFieldsLoaded();
+        this.EnsureFieldsLoaded();
     }
 
     /**
