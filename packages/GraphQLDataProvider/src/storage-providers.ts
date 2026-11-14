@@ -507,6 +507,22 @@ export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase 
     }
 
     /**
+     * Stores a structured object directly into IndexedDB via native structured cloning
+     * without JSON stringification.
+     */
+    public async SetObject<T>(key: string, value: T, category?: string): Promise<void> {
+        return this.SetItem<T>(key, value, category);
+    }
+
+    /**
+     * Retrieves a structured object directly from IndexedDB via native structured cloning
+     * without JSON parsing.
+     */
+    public async GetObject<T>(key: string, category?: string): Promise<T | null> {
+        return this.GetItem<T>(key, category);
+    }
+
+    /**
      * Batched read using a single IndexedDB transaction. The IndexedDB engine
      * serializes transactions on the same object store, so `Promise.all([...N gets])`
      * actually pays per-transaction setup overhead (~3–10ms each in most browsers).

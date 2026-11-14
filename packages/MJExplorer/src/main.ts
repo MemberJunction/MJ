@@ -1,5 +1,5 @@
 import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-import { AuthProviderCatalog, LoginScreenLoader } from '@memberjunction/ng-auth-services';
+import { AuthProviderCatalog, LoginScreenLoader } from '@memberjunction/ng-auth-services/preload';
 import { environment } from './environments/environment';
 
 async function initAndBootstrap() {

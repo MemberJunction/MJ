@@ -25,7 +25,7 @@ import {
 } from '@memberjunction/ng-auth-services';
 import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign, type LoginRegion, type PublicLoginScreen, type ThemeLogos } from '@memberjunction/theme-engine';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
-import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
+import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap/types';
 import { ValidateExplorerEnvironment } from './environment-validation';
 import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent, ShellComponent } from '@memberjunction/ng-explorer-core';
 import { NavigationService, AgentContextUpdate, RecordSourceContext, ThemeService } from '@memberjunction/ng-shared';

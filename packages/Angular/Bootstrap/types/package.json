@@ -1,0 +1,10 @@
+{
+  "name": "@memberjunction/ng-bootstrap/types",
+  "main": "../dist/fesm2022/memberjunction-ng-bootstrap-types.mjs",
+  "types": "../dist/types/memberjunction-ng-bootstrap-types.d.ts",
+  "ngPackage": {
+    "lib": {
+      "entryFile": "src/index.ts"
+    }
+  }
+}

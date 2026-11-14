@@ -512,6 +512,26 @@ describe('EntitySubClassGeneratorBase', () => {
             expect(result).toContain('Config_: z.');
             expect(result).not.toMatch(/(?<![_])Config: z\./);
         });
+
+        it('AssembleSchemaFile emits standalone Zod schema file without entity classes', () => {
+            const entity = {
+                Name: 'Actions',
+                ClassName: 'Action',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID' }],
+                Fields: [
+                    { Name: 'ID', CodeName: 'ID', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: false, ReadOnly: true, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: false, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: 'ID', RelatedEntity: '', DefaultValue: '', Description: '' },
+                    { Name: 'Name', CodeName: 'Name', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: false, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: 'Name', RelatedEntity: '', DefaultValue: '', Description: '' }
+                ]
+            };
+
+            const fileContent = generator.AssembleSchemaFile([entity as Parameters<typeof generator.AssembleSchemaFile>[0][0]]);
+            expect(fileContent).toContain('import { z } from "zod";');
+            expect(fileContent).toContain('export const ActionSchema = z.object({');
+            expect(fileContent).toContain('export type ActionEntityType = z.infer<typeof ActionSchema>;');
+            expect(fileContent).not.toContain('class ActionEntity');
+            expect(fileContent).not.toContain('@RegisterClass');
+            expect(fileContent).not.toContain('BaseEntity');
+        });
     });
     describe('generated validators', () => {
         type FieldSpec = { Name: string; Type: string; AllowsNull?: boolean; IsPrimaryKey?: boolean };
