@@ -245,6 +245,8 @@ export class EntitySubClassGeneratorBase {
       const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
       const schemasDir = path.join(directory, 'entities');
       MakeDir(schemasDir);
+      const standaloneSchemasDir = path.join(directory, 'schemas');
+      MakeDir(standaloneSchemasDir);
 
       const toEmit = SchemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
         fs.existsSync(path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`)),
@@ -261,6 +263,10 @@ export class EntitySubClassGeneratorBase {
         const content = await this.AssembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false);
         const filePath = path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`);
         this.emitFile(filePath, content, emit.writeIfChanged);
+
+        const schemaContent = this.AssembleSchemaFile(schemaEntities);
+        const schemaFilePath = path.join(standaloneSchemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`);
+        this.emitFile(schemaFilePath, schemaContent, emit.writeIfChanged);
       });
       EmitStats.AddAssembleMs(Date.now() - assembleStarted);
 
@@ -269,6 +275,7 @@ export class EntitySubClassGeneratorBase {
       if (pruned.length > 0) {
         logStatus(`   Removed ${pruned.length} orphaned entity schema file(s): ${pruned.join(', ')}`);
       }
+      PruneOrphanedSchemaFiles(standaloneSchemasDir, schemas);
 
       const barrel = BuildSchemaBarrel(
         schemas,
@@ -280,6 +287,9 @@ export class EntitySubClassGeneratorBase {
 `,
       );
       this.emitFile(path.join(directory, 'entity_subclasses.ts'), barrel, emit.writeIfChanged);
+
+      const schemaBarrel = BuildSchemaBarrel(schemas, 'schemas', '');
+      this.emitFile(path.join(directory, 'schemas.ts'), schemaBarrel, emit.writeIfChanged);
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -354,6 +364,16 @@ export class EntitySubClassGeneratorBase {
     includeLoadModule: boolean,
   ): Promise<string> {
     return this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, includeLoadModule);
+  }
+
+  /**
+   * Builds the standalone Zod schema file content for an entity list (e.g. for a database schema).
+   * Contains only `import { z } from "zod";` and the Zod schema definitions and entity types,
+   * without BaseEntity or class registrations.
+   */
+  public AssembleSchemaFile(entities: EntityInfo[]): string {
+    const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
+    return `import { z } from "zod";\n\n${zodContent}`;
   }
 
   /** Delegates so both generators share one set of defaults; override to change them. */
