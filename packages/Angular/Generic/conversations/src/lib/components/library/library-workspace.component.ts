@@ -44,6 +44,7 @@ import { CollectionPermission } from '../../services/collection-permission.servi
 import {
   CreatedLibraryArtifactResult,
   LibraryStarterKind,
+  SynthesizeArtifactFromSourcesResult,
 } from '../../services/library-creation.service';
 import { LibraryCreateDialogTab } from './library-create-dialog.component';
 import {
@@ -226,6 +227,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public IsCreateDialogOpen = false;
   public CreateDialogTab: LibraryCreateDialogTab = 'blank';
   public CreateDialogStarter: LibraryStarterKind = 'document';
+  public DefaultSynthesisArtifactIds: string[] = [];
 
   public IsExportDriveDialogOpen = false;
   public ExportingItem: LibraryItemSummary | null = null;
@@ -919,12 +921,29 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public OpenCreateBlankDialog(kind: LibraryStarterKind = 'document'): void {
     this.CreateDialogTab = 'blank';
     this.CreateDialogStarter = kind;
+    this.DefaultSynthesisArtifactIds = [];
     this.IsCreateDialogOpen = true;
     this.cdr.detectChanges();
   }
 
   public OpenUploadConvertDialog(): void {
     this.CreateDialogTab = 'upload';
+    this.DefaultSynthesisArtifactIds = [];
+    this.IsCreateDialogOpen = true;
+    this.cdr.detectChanges();
+  }
+
+  public OpenSynthesizeDialog(sourceArtifactIds?: ReadonlyArray<string>): void {
+    this.CreateDialogTab = 'synthesize';
+    if (sourceArtifactIds && sourceArtifactIds.length > 0) {
+      this.DefaultSynthesisArtifactIds = Array.from(sourceArtifactIds);
+    } else if (this.SelectedCollectionId) {
+      this.DefaultSynthesisArtifactIds = this.FilteredItems.map((i) => i.Id);
+    } else if (this.ActiveArtifactId) {
+      this.DefaultSynthesisArtifactIds = [this.ActiveArtifactId];
+    } else {
+      this.DefaultSynthesisArtifactIds = [];
+    }
     this.IsCreateDialogOpen = true;
     this.cdr.detectChanges();
   }
@@ -933,6 +952,14 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.IsCreateDialogOpen = false;
     await this.ReloadWorkspaceData();
     this.OpenArtifactStudio(result.Artifact.ID, {
+      fullCanvas: true,
+    });
+  }
+
+  public async OnArtifactSynthesized(result: SynthesizeArtifactFromSourcesResult): Promise<void> {
+    this.IsCreateDialogOpen = false;
+    await this.ReloadWorkspaceData();
+    this.OpenArtifactStudio(result.ArtifactID, {
       fullCanvas: true,
     });
   }

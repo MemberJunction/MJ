@@ -12,8 +12,10 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
+  ArtifactSynthesisTargetKind,
   MJArtifactTypeEntity,
   MJArtifactVersionEntity,
+  UserInfoEngine,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
@@ -24,6 +26,7 @@ import {
   LibraryDriveExportFormat,
   LibraryStarterKind,
   RemoteDriveFileExistsError,
+  SynthesizeArtifactFromSourcesResult,
 } from '../../services/library-creation.service';
 import {
   LibraryCollectionNode,
@@ -31,7 +34,36 @@ import {
   LibraryItemSummary,
 } from './library.models';
 
-export type LibraryCreateDialogTab = 'blank' | 'upload' | 'custom';
+export type LibraryCreateDialogTab = 'blank' | 'upload' | 'synthesize' | 'custom';
+
+const SETTING_LAST_SYNTHESIS_TARGET = 'Library/LastSynthesisTargetKind';
+
+interface SynthesisTargetOption {
+  Kind: ArtifactSynthesisTargetKind;
+  Label: string;
+  Icon: string;
+}
+
+const SYNTHESIS_TARGET_OPTIONS: ReadonlyArray<SynthesisTargetOption> = [
+  { Kind: 'presentation', Label: 'Presentation', Icon: 'fa-solid fa-person-chalkboard' },
+  { Kind: 'document', Label: 'Markdown Document', Icon: 'fa-solid fa-file-lines' },
+  { Kind: 'spreadsheet', Label: 'Excel Spreadsheet', Icon: 'fa-solid fa-table-cells' },
+];
+
+const SYNTHESIS_GOAL_PRESETS: ReadonlyArray<{ Label: string; Goal: string }> = [
+  {
+    Label: 'Executive Briefing',
+    Goal: 'Synthesize key insights, top risks, metrics, and actionable next steps for leadership.',
+  },
+  {
+    Label: 'Combined Memo',
+    Goal: 'Merge narratives and supporting quantitative evidence into a cohesive written brief.',
+  },
+  {
+    Label: 'KPI Rollup',
+    Goal: 'Consolidate recurring KPIs, figures, and highlights into a structured summary matrix.',
+  },
+];
 
 interface StarterTileOption {
   Kind: LibraryStarterKind;
@@ -113,6 +145,18 @@ const STARTER_TILES: ReadonlyArray<StarterTileOption> = [
             >
               <i class="fa-solid fa-cloud-arrow-up"></i>
               <span>Upload / Convert File</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="create-mode-tab"
+              [class.active]="ActiveTab === 'synthesize'"
+              [attr.aria-selected]="ActiveTab === 'synthesize'"
+              (click)="SwitchTab('synthesize')"
+              data-testid="library-create-tab-synthesize"
+            >
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Synthesize with AI</span>
             </button>
             <button
               type="button"
@@ -245,6 +289,124 @@ const STARTER_TILES: ReadonlyArray<StarterTileOption> = [
                 [(ngModel)]="Title"
                 placeholder="Defaults to filename..."
               />
+            </div>
+          }
+
+          @if (ActiveTab === 'synthesize') {
+            <div class="synth-panel" data-testid="library-synthesize-panel">
+              <div class="field-group">
+                <label class="field-label">Target Output Format</label>
+                <div class="synth-target-row">
+                  @for (opt of SynthesisTargetOptions; track opt.Kind) {
+                    <button
+                      type="button"
+                      class="synth-target-pill"
+                      [class.active]="SynthesisTargetKind === opt.Kind"
+                      (click)="SelectSynthesisTarget(opt.Kind)"
+                      [attr.data-testid]="'synth-target-' + opt.Kind"
+                    >
+                      <i [class]="opt.Icon"></i>
+                      <span>{{ opt.Label }}</span>
+                    </button>
+                  }
+                </div>
+              </div>
+
+              <div class="field-group">
+                <div class="synth-sources-header">
+                  <label class="field-label">
+                    Source Artifacts ({{ SelectedSourceIds.size }} selected)
+                  </label>
+                  <div class="synth-source-actions">
+                    <button
+                      type="button"
+                      class="synth-mini-link"
+                      (click)="SelectAllVisibleSources()"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      class="synth-mini-link"
+                      (click)="ClearSelectedSources()"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  class="field-input"
+                  [(ngModel)]="SourceSearchQuery"
+                  placeholder="Filter Library items to combine..."
+                  data-testid="library-synth-source-search"
+                />
+                <div class="synth-source-list" data-testid="library-synthesize-sources">
+                  @if (FilteredSynthesisSources.length === 0) {
+                    <div class="synth-empty">No matching artifacts in Library.</div>
+                  } @else {
+                    @for (item of FilteredSynthesisSources; track item.Id) {
+                      <label class="synth-source-item" [class.checked]="IsSourceSelected(item.Id)">
+                        <input
+                          type="checkbox"
+                          [checked]="IsSourceSelected(item.Id)"
+                          (change)="ToggleSourceSelection(item.Id)"
+                          [attr.data-testid]="'synth-source-' + item.Id"
+                        />
+                        <i [class]="item.Icon + ' synth-source-icon'"></i>
+                        <span class="synth-source-name">{{ item.Name }}</span>
+                        <span class="synth-source-meta">{{ item.TypeName }} · v{{ item.LatestVersionNumber }}</span>
+                      </label>
+                    }
+                  }
+                </div>
+              </div>
+
+              <div class="field-group">
+                <label class="field-label" for="lib-synth-title">Synthesized Artifact Title</label>
+                <input
+                  id="lib-synth-title"
+                  type="text"
+                  class="field-input"
+                  [(ngModel)]="Title"
+                  placeholder="e.g., Q2 Executive Strategy Deck"
+                  data-testid="library-synthesize-title-input"
+                />
+              </div>
+
+              <div class="field-group">
+                <div class="synth-sources-header">
+                  <label class="field-label" for="lib-synth-goal">Synthesis Goal / Prompt</label>
+                  <div class="synth-presets">
+                    @for (preset of SynthesisGoalPresets; track preset.Label) {
+                      <button
+                        type="button"
+                        class="synth-preset-chip"
+                        (click)="SynthesisGoal = preset.Goal"
+                      >
+                        {{ preset.Label }}
+                      </button>
+                    }
+                  </div>
+                </div>
+                <textarea
+                  id="lib-synth-goal"
+                  class="field-textarea"
+                  rows="3"
+                  [(ngModel)]="SynthesisGoal"
+                  placeholder="Describe how the selected sources should be combined..."
+                  data-testid="library-synthesize-goal-input"
+                ></textarea>
+              </div>
+
+              <label class="synth-checkbox-row">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="LinkChartsAndRanges"
+                  data-testid="library-synthesize-link-charts"
+                />
+                <span>Link live charts &amp; named ranges from selected Spreadsheets</span>
+              </label>
             </div>
           }
 
@@ -554,6 +716,148 @@ const STARTER_TILES: ReadonlyArray<StarterTileOption> = [
         color: var(--mj-text-muted);
       }
 
+      .synth-panel {
+        display: flex;
+        flex-direction: column;
+        gap: var(--mj-space-3);
+      }
+
+      .synth-target-row {
+        display: flex;
+        gap: var(--mj-space-2);
+        flex-wrap: wrap;
+      }
+
+      .synth-target-pill {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--mj-space-2);
+        padding: 8px 10px;
+        border-radius: var(--mj-radius-md);
+        border: 1.5px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
+        font-size: var(--mj-text-sm);
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .synth-target-pill.active {
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+        font-weight: 600;
+        background: color-mix(in srgb, var(--mj-brand-primary) 9%, var(--mj-bg-surface));
+      }
+
+      .synth-sources-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--mj-space-2);
+        flex-wrap: wrap;
+      }
+
+      .synth-source-actions,
+      .synth-presets {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        flex-wrap: wrap;
+      }
+
+      .synth-mini-link {
+        border: none;
+        background: transparent;
+        color: var(--mj-brand-primary);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 2px 4px;
+      }
+
+      .synth-preset-chip {
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface-card);
+        color: var(--mj-text-secondary);
+        border-radius: var(--mj-radius-sm);
+        font-size: 11px;
+        padding: 2px 8px;
+        cursor: pointer;
+      }
+
+      .synth-preset-chip:hover {
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+      }
+
+      .synth-source-list {
+        max-height: 170px;
+        overflow-y: auto;
+        border: 1px solid var(--mj-border-default);
+        border-radius: var(--mj-radius-md);
+        background: var(--mj-bg-surface);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .synth-source-item {
+        display: flex;
+        align-items: center;
+        gap: var(--mj-space-2-5);
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+        cursor: pointer;
+        font-size: var(--mj-text-sm);
+      }
+
+      .synth-source-item:last-child {
+        border-bottom: none;
+      }
+
+      .synth-source-item.checked {
+        background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+      }
+
+      .synth-source-icon {
+        color: var(--mj-brand-primary);
+        font-size: 13px;
+        flex-shrink: 0;
+      }
+
+      .synth-source-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--mj-text-primary);
+        font-weight: 500;
+      }
+
+      .synth-source-meta {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+        flex-shrink: 0;
+      }
+
+      .synth-empty {
+        padding: 14px;
+        text-align: center;
+        color: var(--mj-text-muted);
+        font-size: var(--mj-text-sm);
+      }
+
+      .synth-checkbox-row {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        font-size: var(--mj-text-sm);
+        color: var(--mj-text-secondary);
+        cursor: pointer;
+      }
+
       @media (max-width: 600px) {
         .starter-grid {
           grid-template-columns: 1fr;
@@ -571,13 +875,18 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
   @Input() InitialStarterKind: LibraryStarterKind = 'document';
   @Input() DefaultCollectionId: string | null = null;
   @Input() Collections: LibraryCollectionNode[] = [];
+  @Input() AvailableItems: LibraryItemSummary[] = [];
+  @Input() DefaultSelectedArtifactIds: string[] = [];
   @Input() EnvironmentId = '';
   @Input() CurrentUser!: UserInfo;
 
   @Output() Created = new EventEmitter<CreatedLibraryArtifactResult>();
+  @Output() Synthesized = new EventEmitter<SynthesizeArtifactFromSourcesResult>();
   @Output() Cancelled = new EventEmitter<void>();
 
   public readonly StarterTiles = STARTER_TILES;
+  public readonly SynthesisTargetOptions = SYNTHESIS_TARGET_OPTIONS;
+  public readonly SynthesisGoalPresets = SYNTHESIS_GOAL_PRESETS;
   public ActiveTab: LibraryCreateDialogTab = 'blank';
   public SelectedKind: LibraryStarterKind = 'document';
   public Title = 'Untitled Document';
@@ -586,6 +895,12 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
   public SelectedFile: File | null = null;
   public ConvertToEditable = true;
   public IsDragOver = false;
+
+  public SynthesisTargetKind: ArtifactSynthesisTargetKind = 'presentation';
+  public SynthesisGoal = 'Synthesize key insights, top metrics, and next steps from these artifacts.';
+  public SelectedSourceIds = new Set<string>();
+  public SourceSearchQuery = '';
+  public LinkChartsAndRanges = true;
 
   public ArtifactTypes: MJArtifactTypeEntity[] = [];
   public SelectedCustomTypeId = '';
@@ -603,19 +918,29 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
       this.ActiveTab = this.InitialTab;
       this.SelectedKind = this.InitialStarterKind;
       const starter = STARTER_TILES.find((t) => t.Kind === this.InitialStarterKind) ?? STARTER_TILES[0];
-      this.Title = this.ActiveTab === 'upload' ? '' : starter.DefaultName;
+      this.Title =
+        this.ActiveTab === 'upload'
+          ? ''
+          : this.ActiveTab === 'synthesize'
+            ? 'Synthesized Executive Brief'
+            : starter.DefaultName;
       this.Description = '';
       this.SelectedFile = null;
       this.ConvertToEditable = true;
       this.CustomContent = '';
       this.ErrorMessage = '';
       this.TargetCollectionId = this.DefaultCollectionId ?? '';
+      this.SourceSearchQuery = '';
+      this.LinkChartsAndRanges = true;
+      this.SelectedSourceIds = new Set(this.DefaultSelectedArtifactIds ?? []);
+      this.restoreSynthesisTargetPreference();
       void this.ensureArtifactTypesLoaded();
     }
   }
 
   public get DialogTitle(): string {
     if (this.ActiveTab === 'upload') return 'Upload or Convert File into Library';
+    if (this.ActiveTab === 'synthesize') return 'Synthesize New Artifact with AI';
     if (this.ActiveTab === 'custom') return 'Create Custom Library Item';
     return 'Create in Library';
   }
@@ -626,7 +951,52 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
         ? 'Convert & Open in Studio'
         : 'Upload to Library';
     }
+    if (this.ActiveTab === 'synthesize') {
+      return 'Synthesize & Open in Studio';
+    }
     return 'Create & Open in Studio';
+  }
+
+  public get FilteredSynthesisSources(): LibraryItemSummary[] {
+    const q = this.SourceSearchQuery.trim().toLowerCase();
+    if (!q) return this.AvailableItems;
+    return this.AvailableItems.filter(
+      (i) =>
+        i.Name.toLowerCase().includes(q) ||
+        i.TypeName.toLowerCase().includes(q) ||
+        (i.Description ?? '').toLowerCase().includes(q),
+    );
+  }
+
+  public IsSourceSelected(artifactId: string): boolean {
+    return this.SelectedSourceIds.has(artifactId);
+  }
+
+  public ToggleSourceSelection(artifactId: string): void {
+    if (this.SelectedSourceIds.has(artifactId)) {
+      this.SelectedSourceIds.delete(artifactId);
+    } else {
+      this.SelectedSourceIds.add(artifactId);
+    }
+  }
+
+  public SelectAllVisibleSources(): void {
+    for (const item of this.FilteredSynthesisSources) {
+      this.SelectedSourceIds.add(item.Id);
+    }
+  }
+
+  public ClearSelectedSources(): void {
+    this.SelectedSourceIds.clear();
+  }
+
+  public SelectSynthesisTarget(kind: ArtifactSynthesisTargetKind): void {
+    this.SynthesisTargetKind = kind;
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(SETTING_LAST_SYNTHESIS_TARGET, kind);
+    } catch {
+      // Ignore if UserInfoEngine is uninitialized in isolated unit tests
+    }
   }
 
   public get IsSelectedFileConvertible(): boolean {
@@ -652,12 +1022,19 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
 
   public get CanSubmit(): boolean {
     if (this.ActiveTab === 'blank') {
-      return this.Title.trim().length > 0;
+      return (this.Title ?? '').trim().length > 0;
     }
     if (this.ActiveTab === 'upload') {
       return this.SelectedFile !== null;
     }
-    return this.Title.trim().length > 0 && this.SelectedCustomTypeId.length > 0 && this.CustomContent.trim().length > 0;
+    if (this.ActiveTab === 'synthesize') {
+      return this.SelectedSourceIds.size > 0 && (this.SynthesisGoal ?? '').trim().length > 0;
+    }
+    return (
+      (this.Title ?? '').trim().length > 0 &&
+      (this.SelectedCustomTypeId ?? '').length > 0 &&
+      (this.CustomContent ?? '').trim().length > 0
+    );
   }
 
   public SwitchTab(tab: LibraryCreateDialogTab): void {
@@ -666,6 +1043,9 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
     if (tab === 'blank' && !this.Title.trim()) {
       const starter = STARTER_TILES.find((t) => t.Kind === this.SelectedKind) ?? STARTER_TILES[0];
       this.Title = starter.DefaultName;
+    }
+    if (tab === 'synthesize' && !this.Title.trim()) {
+      this.Title = 'Synthesized Executive Brief';
     }
   }
 
@@ -706,8 +1086,29 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
     this.cdr.detectChanges();
 
     try {
-      let created: CreatedLibraryArtifactResult;
       const collectionId = this.TargetCollectionId || null;
+
+      if (this.ActiveTab === 'synthesize') {
+        const synthResult = await this.creationService.SynthesizeArtifactFromSources({
+          TargetKind: this.SynthesisTargetKind,
+          Goal: this.SynthesisGoal,
+          SourceArtifactIds: Array.from(this.SelectedSourceIds),
+          CollectionID: collectionId,
+          Title: this.Title.trim() || null,
+          LinkChartsAndRanges: this.LinkChartsAndRanges,
+          CurrentUser: this.CurrentUser,
+          Provider: this.ProviderToUse,
+        });
+        this.notifications.CreateSimpleNotification(
+          `Synthesized "${synthResult.Title}" (${synthResult.SourceCount} sources)`,
+          'success',
+          3500,
+        );
+        this.Synthesized.emit(synthResult);
+        return;
+      }
+
+      let created: CreatedLibraryArtifactResult;
 
       if (this.ActiveTab === 'blank') {
         created = await this.creationService.CreateBlankArtifact({
@@ -780,6 +1181,17 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
       this.SelectedCustomTypeId = md.ID;
     }
     this.cdr.detectChanges();
+  }
+
+  private restoreSynthesisTargetPreference(): void {
+    try {
+      const saved = UserInfoEngine.Instance.GetSetting(SETTING_LAST_SYNTHESIS_TARGET);
+      if (saved === 'presentation' || saved === 'document' || saved === 'spreadsheet') {
+        this.SynthesisTargetKind = saved;
+      }
+    } catch {
+      // Ignore if UserInfoEngine is uninitialized in unit test
+    }
   }
 }
 

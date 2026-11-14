@@ -23,6 +23,7 @@ export * from './custom/DocumentLiveBlockEngine';
 export * from './custom/SlideDeckEngine';
 export * from './custom/SpreadsheetEngine';
 export * from './custom/ArtifactPreviewSnapshot';
+export * from './custom/ArtifactSynthesisEngine';
 export * from './custom/MJConversationBranchEntityExtended';
 export * from './custom/MJQueryEntityExtended';
 export * from './custom/QueryDiagnostics';
