@@ -10,8 +10,7 @@
 -- This forward migration restores both while preserving @Configuration parameters.
 -- =====================================================================================
 
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateArtifactType]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateArtifactType];
+DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateArtifactType];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateArtifactType]
@@ -73,8 +72,7 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactType] FROM [cdp_Int
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactType] TO [cdp_Developer], [cdp_Integration];
 GO
 
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateArtifactType]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateArtifactType];
+DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateArtifactType];
 GO
 
 CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateArtifactType
