@@ -93,8 +93,8 @@ const MINT_COLLABORATION_TICKET_MUTATION = `
 `;
 
 const COMMIT_ARTIFACT_INLINE_EDIT_MUTATION = `
-  mutation CommitArtifactInlineEdit($artifactId: String!, $content: String!, $saveVersion: Boolean) {
-    CommitArtifactInlineEdit(artifactId: $artifactId, content: $content, saveVersion: $saveVersion) {
+  mutation CommitArtifactInlineEdit($artifactId: String!, $content: String!, $saveVersion: Boolean, $thumbnailDataUrl: String) {
+    CommitArtifactInlineEdit(artifactId: $artifactId, content: $content, saveVersion: $saveVersion, thumbnailDataUrl: $thumbnailDataUrl) {
       Success
       VersionID
       VersionNumber
@@ -634,6 +634,12 @@ export class DocumentCollaborationSession {
   private readonly versionSaved$ = new Subject<{ versionId: string; versionNumber: number }>();
   private readonly mergeConflict$ = new Subject<CollaborationMergeConflictEvent>();
   private readonly liveSyncUnavailable$ = new BehaviorSubject<boolean>(false);
+  private readonly canUndo$ = new BehaviorSubject<boolean>(false);
+  private readonly canRedo$ = new BehaviorSubject<boolean>(false);
+  private undoManager: Y.UndoManager | null = null;
+  private readonly undoStateListener = (): void => {
+    this.syncUndoRedoSubjects();
+  };
 
   public get YDoc(): Y.Doc {
     return this.Doc;
@@ -710,6 +716,48 @@ export class DocumentCollaborationSession {
 
   public get MergeConflict$(): Observable<CollaborationMergeConflictEvent> {
     return this.mergeConflict$.asObservable();
+  }
+
+  public get CanUndo(): boolean {
+    return this.canUndo$.value;
+  }
+
+  public get CanRedo(): boolean {
+    return this.canRedo$.value;
+  }
+
+  public get CanUndo$(): Observable<boolean> {
+    return this.canUndo$.asObservable();
+  }
+
+  public get CanRedo$(): Observable<boolean> {
+    return this.canRedo$.asObservable();
+  }
+
+  public Undo(): boolean {
+    if (!this.CanMutateDocument || !this.undoManager || !this.undoManager.canUndo()) {
+      return false;
+    }
+    this.undoManager.undo();
+    this.syncUndoRedoSubjects();
+    return true;
+  }
+
+  public Redo(): boolean {
+    if (!this.CanMutateDocument || !this.undoManager || !this.undoManager.canRedo()) {
+      return false;
+    }
+    this.undoManager.redo();
+    this.syncUndoRedoSubjects();
+    return true;
+  }
+
+  /**
+   * Closes the current undo capture window so subsequent edits form a distinct undo step
+   * (e.g., when moving focus between blocks, cells, or slides).
+   */
+  public StopUndoCapture(): void {
+    this.undoManager?.stopCapturing();
   }
 
   public get Recoverable(): boolean {
@@ -850,6 +898,7 @@ export class DocumentCollaborationSession {
     });
 
     this.bindDocObservers(this.Doc);
+    this.initUndoManager(this.Doc);
 
     this.Awareness.on('change', () => {
       this.collaboratorsChanged$.next(this.GetCollaborators());
@@ -893,6 +942,60 @@ export class DocumentCollaborationSession {
     }
   }
 
+  private initUndoManager(doc: Y.Doc): void {
+    this.destroyUndoManager();
+    const scopes = [
+      this.ContentText,
+      doc.getMap<string>('slidesById'),
+      doc.getArray<string>('slideOrder'),
+      doc.getMap<string>('deckMeta'),
+      doc.getMap<string>('sheetCellsByCoord'),
+      doc.getMap<string>('worksheetsById'),
+      doc.getArray<string>('sheetOrder'),
+      doc.getMap<string>('workbookMeta'),
+    ];
+    this.undoManager = new Y.UndoManager(scopes, {
+      trackedOrigins: new Set<string>(['local']),
+      captureTimeout: 500,
+    });
+    this.undoManager.on('stack-item-added', this.undoStateListener);
+    this.undoManager.on('stack-item-popped', this.undoStateListener);
+    this.undoManager.on('stack-cleared', this.undoStateListener);
+    this.syncUndoRedoSubjects();
+  }
+
+  private destroyUndoManager(): void {
+    if (this.undoManager) {
+      this.undoManager.off('stack-item-added', this.undoStateListener);
+      this.undoManager.off('stack-item-popped', this.undoStateListener);
+      this.undoManager.off('stack-cleared', this.undoStateListener);
+      this.undoManager.destroy();
+      this.undoManager = null;
+    }
+    if (!this.destroyed) {
+      if (this.canUndo$.value) {
+        this.canUndo$.next(false);
+      }
+      if (this.canRedo$.value) {
+        this.canRedo$.next(false);
+      }
+    }
+  }
+
+  private syncUndoRedoSubjects(): void {
+    if (this.destroyed) {
+      return;
+    }
+    const nextCanUndo = this.undoManager?.canUndo() ?? false;
+    const nextCanRedo = this.undoManager?.canRedo() ?? false;
+    if (this.canUndo$.value !== nextCanUndo) {
+      this.canUndo$.next(nextCanUndo);
+    }
+    if (this.canRedo$.value !== nextCanRedo) {
+      this.canRedo$.next(nextCanRedo);
+    }
+  }
+
   /**
    * Replaces `YDoc` with a fresh `new Y.Doc()`, applies a server `'room-reset'` payload without
    * destroying `this.Awareness`, preserves any unsent local line edits on top of the reset baseline,
@@ -906,6 +1009,7 @@ export class DocumentCollaborationSession {
     const baseBeforeReset = this.lastSyncedRemoteContent;
 
     const previousDoc = this.Doc;
+    this.destroyUndoManager();
     this.detachDocObservers(previousDoc);
 
     const nextDoc = new Y.Doc();
@@ -960,6 +1064,7 @@ export class DocumentCollaborationSession {
     this.lastSyncedRemoteContent = resetBaseline;
 
     this.bindDocObservers(nextDoc);
+    this.initUndoManager(nextDoc);
 
     // Re-apply any unsynced local prose hunks on top of the reset baseline so local edits are never dropped
     if (
@@ -996,6 +1101,7 @@ export class DocumentCollaborationSession {
       return;
     }
     const previousDoc = this.Doc;
+    this.destroyUndoManager();
     this.detachDocObservers(previousDoc);
     const nextDoc = new Y.Doc();
     this.Doc = nextDoc;
@@ -1006,6 +1112,7 @@ export class DocumentCollaborationSession {
     this.hasUnsentLocalEdits = false;
     this.hasCompletedInitialSync = false;
     this.bindDocObservers(nextDoc);
+    this.initUndoManager(nextDoc);
     this.statusChanged$.next(this.status);
   }
 
@@ -1440,6 +1547,42 @@ export class DocumentCollaborationSession {
   }
 
   /**
+   * Applies a batch of spreadsheet cell updates and deletions inside a single `'local'`
+   * Yjs transaction so multi-cell paste or range clear forms one atomic undo/redo step.
+   */
+  public BatchUpdateSpreadsheetCells(
+    sheetId: string,
+    updates: ReadonlyArray<SpreadsheetCellSpec>,
+    deletes: ReadonlyArray<{ rowId: string; colId: string }> = [],
+    fullWorkbookFallback?: WorkbookSpec,
+  ): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    if (updates.length === 0 && deletes.length === 0) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getMap<string>('worksheetsById').size === 0 && fullWorkbookFallback) {
+        this.populateSpreadsheetCrdtIfWorkbook(
+          SpreadsheetEngine.Instance.SerializeWorkbook(fullWorkbookFallback),
+        );
+      }
+      const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+      for (const cell of updates) {
+        sheetCellsByCoord.set(`${sheetId}::${cell.RowID}::${cell.ColumnID}`, JSON.stringify(cell));
+      }
+      for (const del of deletes) {
+        sheetCellsByCoord.delete(`${sheetId}::${del.rowId}::${del.colId}`);
+      }
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
    * Surgically updates worksheet structural metadata (`Rows`, `Columns`, `LiveTables`, `Charts`,
    * `EmbeddedArtifacts`, `Sort`, `Filters`, `FrozenRows`, `FrozenColumns`) in `worksheetsById` (`Y.Map`)
    * without touching individual cell entries in `sheetCellsByCoord` (`Accept #1`).
@@ -1498,13 +1641,19 @@ export class DocumentCollaborationSession {
    * Sends a `save-version` control frame (`MSG_CONTROL = 2`) to the collaboration server
    * to compact the active room into a new immutable `MJ: Artifact Versions` record.
    */
-  public RequestSaveVersion(): boolean {
+  public RequestSaveVersion(thumbnailDataUrl?: string | null): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.canEdit) {
       return false;
     }
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MSG_CONTROL);
-    encoding.writeVarString(encoder, JSON.stringify({ action: 'save-version' }));
+    const framePayload: { action: 'save-version'; thumbnailDataUrl?: string } = {
+      action: 'save-version',
+    };
+    if (thumbnailDataUrl && thumbnailDataUrl.startsWith('data:image/')) {
+      framePayload.thumbnailDataUrl = thumbnailDataUrl;
+    }
+    encoding.writeVarString(encoder, JSON.stringify(framePayload));
     this.socket.send(encoding.toUint8Array(encoder));
     return true;
   }
@@ -1582,6 +1731,9 @@ export class DocumentCollaborationSession {
     this.versionSaved$.complete();
     this.mergeConflict$.complete();
     this.liveSyncUnavailable$.complete();
+    this.destroyUndoManager();
+    this.canUndo$.complete();
+    this.canRedo$.complete();
     this.Awareness.destroy();
     this.Doc.destroy();
     this.onDestroyed?.(this);
@@ -2424,6 +2576,22 @@ export class DocumentCollaborationService implements OnDestroy {
       Icon: 'fa-cube',
       BlockType: 'Artifact',
     },
+    {
+      Command: '/sheet-chart',
+      Label: 'Spreadsheet Chart',
+      Description: 'Embed a live chart from an MJ Spreadsheet workbook with version pinning',
+      Category: 'Embedded Artifact',
+      Icon: 'fa-chart-column',
+      BlockType: 'Artifact',
+    },
+    {
+      Command: '/sheet-range',
+      Label: 'Spreadsheet Range',
+      Description: 'Embed a live cell range (e.g. A1:D8) from an MJ Spreadsheet workbook',
+      Category: 'Embedded Artifact',
+      Icon: 'fa-table-cells',
+      BlockType: 'Artifact',
+    },
   ];
 
   /**
@@ -3127,6 +3295,7 @@ export class DocumentCollaborationService implements OnDestroy {
     content: string,
     saveVersion = true,
     providerOverride?: IMetadataProvider | null,
+    thumbnailDataUrl?: string | null,
   ): Promise<{
     HandledByServer: boolean;
     Success: boolean;
@@ -3143,6 +3312,7 @@ export class DocumentCollaborationService implements OnDestroy {
         artifactId,
         content,
         saveVersion,
+        ...(thumbnailDataUrl ? { thumbnailDataUrl } : {}),
       });
       const payload = gqlRes?.CommitArtifactInlineEdit;
       if (!payload) {

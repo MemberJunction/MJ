@@ -3,7 +3,29 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, RunViewParams, RunViewResult, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
 import { EscapeSQLString, ParseJSONRecursive, ParseJSONOptions, UUIDsEqual } from '@memberjunction/global';
-import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity, ConversationEngine, type ConversationScope } from '@memberjunction/core-entities';
+import {
+  ArtifactMetadataEngine,
+  BuildArtifactPreviewSnapshot,
+  BuildArtifactVersionConfigurationWithPreview,
+  BuildSvgThumbnailDataUrl,
+  ConversationEngine,
+  MergeArtifactVersionPreviewConfig,
+  MJArtifactEntity,
+  MJArtifactTypeEntity,
+  MJArtifactUseEntity,
+  MJArtifactVersionAttributeEntity,
+  MJArtifactVersionEntity,
+  MJCollectionArtifactEntity,
+  MJCollectionEntity,
+  MJConversationDetailArtifactEntity,
+  MJConversationDetailEntity,
+  MJConversationEntity,
+  ParseArtifactVersionConfiguration,
+  ResolveArtifactTypeThumbnailPolicy,
+  type ArtifactPreviewSnapshot,
+  type ArtifactTypeThumbnailPolicy,
+  type ConversationScope,
+} from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subject } from 'rxjs';
@@ -15,6 +37,17 @@ import { ArtifactFileService } from '../services/artifact-file.service';
 import { DocumentCollaborationService } from '../services/document-collaboration.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
+/** Emitted after any plugin save, server collaboration save, or version restore produces a persisted version. */
+export interface ArtifactVersionSavedEvent {
+  ArtifactID: string;
+  VersionID?: string;
+  VersionNumber: number;
+  Configuration?: string | null;
+  PreviewSnapshot?: ArtifactPreviewSnapshot | null;
+  ThumbnailDataUrl?: string | null;
+  UpdatedAt: Date;
+}
+
 /** Fields of the version list query: version metadata without Content. */
 const VERSION_LIST_FIELDS = [
   'ID',
@@ -23,6 +56,7 @@ const VERSION_LIST_FIELDS = [
   'Name',
   'Description',
   'Comments',
+  'Configuration',
   'UserID',
   'User',
   'ContentHash',
@@ -253,6 +287,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() shareRequested = this.ShareRequested; // Emits artifactId when share is clicked
+  @Output() VersionSaved = new EventEmitter<ArtifactVersionSavedEvent>();
   @Output() MaximizeToggled = new EventEmitter<void>();
 
   /**
@@ -1482,6 +1517,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           this.applyVersionScope(this.activeScope);
           this.SelectedVersionNumber = newestInDb.VersionNumber || dbMaxVersion;
           this.JsonContent = this.formatJSON(serializedContent);
+          this.emitVersionSavedEvent(
+            newestInDb.ID,
+            newestInDb.VersionNumber || dbMaxVersion,
+            serializedContent,
+            newestInDb.Configuration,
+          );
           this.cdr.detectChanges();
           return;
         }
@@ -1496,6 +1537,28 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       newVer.VersionNumber = nextVersionNum;
       newVer.Name = this.artifactVersion?.Name || this.Artifact.Name;
       newVer.Content = serializedContent;
+      const { TypeEntity, AllTypes, Policy } = this.resolveCurrentThumbnailPolicy();
+      const capturedThumb =
+        Policy.Enabled && Policy.Mode === 'Rendered'
+          ? await (this.PluginViewer?.PluginInstance?.CaptureRenderedThumbnail({
+              maskLiveDataBlocks: Policy.MaskLiveDataBlocks,
+            }) ?? Promise.resolve(null))
+          : null;
+      const mergedConfig = BuildArtifactVersionConfigurationWithPreview(
+        this.artifactVersion?.Configuration,
+        serializedContent,
+        TypeEntity?.DriverClass ?? null,
+        newVer.Name,
+        {
+          Policy,
+          ArtifactType: TypeEntity,
+          AllArtifactTypes: AllTypes,
+          CapturedThumbnailDataUrl: capturedThumb,
+        },
+      );
+      if (mergedConfig !== null) {
+        newVer.Configuration = mergedConfig;
+      }
       const saved = await newVer.Save();
       if (saved) {
         if (newVer.ID) {
@@ -1505,6 +1568,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         this.SelectedVersionNumber = nextVersionNum;
         this.AllVersions = [newVer, ...this.AllVersions];
         this.JsonContent = this.formatJSON(serializedContent);
+        this.emitVersionSavedEvent(
+          newVer.ID,
+          nextVersionNum,
+          serializedContent,
+          newVer.Configuration,
+        );
         this.cdr.detectChanges();
       } else {
         LogError(newVer.LatestResult?.Message || 'Failed to save new artifact version.');
@@ -1517,6 +1586,72 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     } catch (err) {
       LogError(err);
     }
+  }
+
+  private resolveCurrentThumbnailPolicy(): {
+    TypeEntity: MJArtifactTypeEntity | null;
+    AllTypes: ReadonlyArray<MJArtifactTypeEntity>;
+    Policy: ArtifactTypeThumbnailPolicy;
+  } {
+    const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+    const typeEntity =
+      (this.Artifact?.TypeID
+        ? allTypes.find((t) => UUIDsEqual(t.ID, this.Artifact?.TypeID))
+        : undefined) ??
+      (this.Artifact?.Type ? ArtifactMetadataEngine.Instance.FindArtifactType(this.Artifact.Type) : undefined) ??
+      null;
+    const policy = ResolveArtifactTypeThumbnailPolicy(
+      typeEntity ?? this.Artifact?.Type ?? null,
+      allTypes,
+      typeEntity?.DriverClass ?? null,
+    );
+    return { TypeEntity: typeEntity, AllTypes: allTypes, Policy: policy };
+  }
+
+  private emitVersionSavedEvent(
+    versionId: string | undefined,
+    versionNumber: number,
+    serializedContent: string | null | undefined,
+    rawConfig?: string | null,
+  ): void {
+    if (!this.Artifact?.ID) {
+      return;
+    }
+    const { TypeEntity, Policy } = this.resolveCurrentThumbnailPolicy();
+    if (!Policy.Enabled || Policy.Mode !== 'Rendered') {
+      const sanitizedConfig = MergeArtifactVersionPreviewConfig(rawConfig, null, null, true);
+      this.VersionSaved.emit({
+        ArtifactID: this.Artifact.ID,
+        VersionID: versionId,
+        VersionNumber: versionNumber,
+        Configuration: sanitizedConfig,
+        PreviewSnapshot: null,
+        ThumbnailDataUrl: null,
+        UpdatedAt: new Date(),
+      });
+      return;
+    }
+
+    const driverClass = TypeEntity?.DriverClass;
+    const parsedConfig = ParseArtifactVersionConfiguration(rawConfig);
+    const previewSnapshot =
+      parsedConfig?.previewSnapshot ??
+      BuildArtifactPreviewSnapshot(serializedContent, driverClass, this.Artifact.Name);
+    const thumbnailDataUrl =
+      parsedConfig?.thumbnailDataUrl ?? BuildSvgThumbnailDataUrl(previewSnapshot);
+    const mergedConfig =
+      rawConfig && parsedConfig?.previewSnapshot && parsedConfig?.thumbnailDataUrl
+        ? rawConfig
+        : MergeArtifactVersionPreviewConfig(rawConfig, previewSnapshot, thumbnailDataUrl);
+    this.VersionSaved.emit({
+      ArtifactID: this.Artifact.ID,
+      VersionID: versionId,
+      VersionNumber: versionNumber,
+      Configuration: mergedConfig,
+      PreviewSnapshot: previewSnapshot,
+      ThumbnailDataUrl: thumbnailDataUrl,
+      UpdatedAt: new Date(),
+    });
   }
 
   /** @deprecated Use {@link OnPluginLoaded}. */
@@ -2074,8 +2209,22 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       restoredVer.Description = `Restored from v${versionNumber}`;
       restoredVer.Comments = `Restored from v${versionNumber}`;
       restoredVer.Content = sourceVersion.Content;
-      if (sourceVersion.Configuration) {
-        restoredVer.Configuration = sourceVersion.Configuration;
+      const { TypeEntity, AllTypes, Policy } = this.resolveCurrentThumbnailPolicy();
+      const sourceParsedConfig = ParseArtifactVersionConfiguration(sourceVersion.Configuration);
+      const restoredConfig = BuildArtifactVersionConfigurationWithPreview(
+        sourceVersion.Configuration,
+        sourceVersion.Content,
+        TypeEntity?.DriverClass ?? null,
+        restoredVer.Name,
+        {
+          Policy,
+          ArtifactType: TypeEntity,
+          AllArtifactTypes: AllTypes,
+          CapturedThumbnailDataUrl: sourceParsedConfig?.thumbnailDataUrl ?? null,
+        },
+      );
+      if (restoredConfig !== null && restoredConfig !== undefined) {
+        restoredVer.Configuration = restoredConfig;
       }
 
       const saved = await restoredVer.Save();
@@ -2089,6 +2238,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         this.applyVersionScope(this.activeScope);
         this.JsonContent = this.formatJSON(restoredVer.Content || '{}');
         this.IsCompareMode = false;
+        this.emitVersionSavedEvent(
+          restoredVer.ID,
+          nextVersionNum,
+          restoredVer.Content,
+          restoredVer.Configuration,
+        );
         this.notificationService.CreateSimpleNotification(
           `Restored v${versionNumber} as new version v${nextVersionNum}`,
           'success',

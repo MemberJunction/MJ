@@ -6793,6 +6793,9 @@ importers:
       docx:
         specifier: ^9.5.1
         version: 9.6.1
+      html-to-image:
+        specifier: ^1.11.11
+        version: 1.11.13
       lib0:
         specifier: ^0.2.99
         version: 0.2.119
