@@ -55,7 +55,7 @@ import { CreateJsonSnapshot } from '../../snapshot-helpers';
           <iframe
             #htmlFrame
             [src]="htmlBlobUrl"
-            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals"
+            sandbox="allow-scripts allow-popups allow-modals"
             class="html-iframe"
             (load)="onIframeLoad()">
           </iframe>

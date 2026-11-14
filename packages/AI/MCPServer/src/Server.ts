@@ -20,7 +20,7 @@ import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'crypto';
 import { Readable } from 'stream';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
@@ -326,7 +326,14 @@ async function validateApiKey(
         const sharedApiKey = _config.apiKey;
         const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
 
-        if (configuredSystemApiKey && apiKey === configuredSystemApiKey) {
+        // SECURITY: compare the system API key in constant time. A plain `===` short-circuits on
+        // the first differing byte, leaking a timing side-channel that could be used to recover the
+        // key byte-by-byte. Hash both sides to fixed-length digests so timingSafeEqual never throws
+        // on length mismatch and the comparison is length-agnostic (same pattern as MJServer context.ts).
+        if (configuredSystemApiKey && timingSafeEqual(
+            createHash('sha256').update(String(configuredSystemApiKey)).digest(),
+            createHash('sha256').update(String(apiKey)).digest()
+        )) {
             return {
                 valid: true,
                 user: systemUser,
