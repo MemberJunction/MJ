@@ -49,6 +49,23 @@ import {
 import { DocumentImportExportService } from '../../services/document-import-export.service';
 import { ARTIFACT_AI_ASSISTANT_ENABLED, RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import { ComputeBoundedSequenceDiff } from '../../utils/line-diff';
+import type { ContextMenuItem, TouchContextMenuTrigger } from '../context-menu/context-menu.types';
+import {
+  ComputeElementContextMenuAnchor,
+  IsKeyboardContextMenuShortcut,
+  IsNativeContextMenuTarget,
+  ShouldBypassCustomContextMenu,
+  TouchContextMenuMonitor,
+} from '../context-menu/context-menu-position.util';
+import {
+  BuildDocsContextMenu,
+  type DocsCalloutType,
+  type DocsContextMenuCommand,
+  type DocsContextMenuSnapshot,
+  type DocsContextTarget,
+  type DocsLiveRecordLinkContext,
+  type DocsTableAlignment,
+} from './context-menus/docs-context-menu.helper';
 
 export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
 export type DocsEditingStyle = 'simple' | 'blocks';
@@ -189,7 +206,17 @@ interface DocsInlineToken {
   selector: 'mj-markdown-artifact-viewer',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="mj-docs-workspace" [ngClass]="cssClass" data-testid="mj-docs-workspace">
+    <div
+      class="mj-docs-workspace"
+      [ngClass]="cssClass"
+      data-testid="mj-docs-workspace"
+      (keydown)="OnDocsWorkspaceKeydown($event)"
+      (pointerdown)="OnDocsPointerDown($event)"
+      (pointermove)="OnDocsPointerMove($event)"
+      (pointerup)="OnDocsPointerUp($event)"
+      (pointercancel)="OnDocsPointerCancel($event)"
+      (click.capture)="OnDocsClickCapture($event)"
+    >
       <!-- Tier 1: Calm Progressive Disclosure Collaboration & Mode Toolbar -->
       <div class="mj-docs-toolbar" data-testid="mj-docs-toolbar">
         <div class="mj-docs-toolbar__left">
@@ -713,7 +740,9 @@ interface DocsInlineToken {
                     class="mj-docs-outline-item"
                     [class.mj-docs-outline-item--active]="IsOutlineItemActive(item)"
                     [style.padding-left.px]="(item.Level - 1) * 12 + 10"
+                    [attr.data-outline-id]="item.ID"
                     (click)="SelectOutlineItem(item)"
+                    (contextmenu)="OnDocsOutlineContextMenu($event, item)"
                   >
                     @if (item.Kind === 'heading') {
                       <i class="fas fa-hashtag mj-docs-outline-icon"></i>
@@ -849,6 +878,7 @@ interface DocsInlineToken {
                     [attr.data-segment-id]="seg.SegmentID"
                     [hidden]="IsSegmentHiddenByCollapsedHeading(seg)"
                     (focusin)="OnSegmentFocusIn(seg)"
+                    (contextmenu)="OnDocsSegmentContextMenu($event, seg)"
                   >
                     @if (GetAgentForSegment(seg); as segAgent) {
                       <mj-artifact-agent-region-indicator
@@ -1046,9 +1076,11 @@ interface DocsInlineToken {
                                           <th
                                             [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                             [attr.data-testid]="'table-header-' + seg.SegmentID + '-' + cIdx"
+                                            [style.text-align]="GetColumnTextAlign(table, cIdx)"
                                             [innerHTML]="RenderInlineEditableHtml(hdr)"
                                             (focus)="OnTableCellFocus(seg, 0, cIdx, true)"
                                             (blur)="UpdateTableHeaderCell(seg, cIdx, $event)"
+                                            (contextmenu)="OnDocsTableCellContextMenu($event, seg, 0, cIdx, true)"
                                           ></th>
                                         }
                                       </tr>
@@ -1060,9 +1092,11 @@ interface DocsInlineToken {
                                             <td
                                               [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                               [attr.data-testid]="'table-cell-' + seg.SegmentID + '-' + rIdx + '-' + cIdx"
+                                              [style.text-align]="GetColumnTextAlign(table, cIdx)"
                                               [innerHTML]="RenderInlineEditableHtml(cell)"
                                               (focus)="OnTableCellFocus(seg, rIdx, cIdx, false)"
                                               (blur)="UpdateTableBodyCell(seg, rIdx, cIdx, $event)"
+                                              (contextmenu)="OnDocsTableCellContextMenu($event, seg, rIdx, cIdx, false)"
                                             ></td>
                                           }
                                         </tr>
@@ -1569,7 +1603,7 @@ interface DocsInlineToken {
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      @for (row of GetPaginatedBlockRows(seg.Descriptor, execResult.Rows); track $index) {
+                                      @for (row of GetPaginatedBlockRows(seg.Descriptor, execResult.Rows); track $index; let rIdx = $index) {
                                         <tr>
                                           @for (col of execResult.Columns; track col.Name) {
                                             <td>
@@ -1587,6 +1621,8 @@ interface DocsInlineToken {
                                                   [attr.data-testid]="
                                                     'record-link-' + seg.Descriptor.BlockID + '-' + col.Name
                                                   "
+                                                  [attr.data-record-col]="col.Name"
+                                                  [attr.data-record-row-idx]="rIdx"
                                                   (click)="OnBlockRecordCellClick(seg.Descriptor, col, row, $event)"
                                                 >
                                                   <i
@@ -1669,7 +1705,12 @@ interface DocsInlineToken {
                       <!-- Pending Suggestion Cards attached to this Segment (Word / Google-Docs Granular Redline) -->
                       @for (sug of GetSuggestionsForBlock(seg.SegmentID); track sug.SuggestionID) {
                         @if (GetSuggestionWordDiff(sug); as wordDiff) {
-                          <div class="mj-docs-suggestion-card" [attr.data-testid]="'suggestion-card-' + sug.SuggestionID">
+                          <div
+                            class="mj-docs-suggestion-card"
+                            [attr.data-testid]="'suggestion-card-' + sug.SuggestionID"
+                            [attr.data-suggestion-id]="sug.SuggestionID"
+                            (contextmenu)="OnDocsSuggestionContextMenu($event, sug)"
+                          >
                             <div class="mj-docs-suggestion-card__header">
                               <span>
                                 <i class="fas fa-code-pull-request"></i>
@@ -2542,6 +2583,17 @@ interface DocsInlineToken {
           </div>
         </div>
       }
+
+      <mj-context-menu
+        [IsOpen]="ContextMenuOpen"
+        [AnchorX]="ContextMenuX"
+        [AnchorY]="ContextMenuY"
+        [Items]="ContextMenuItems"
+        [AriaLabel]="ContextMenuAriaLabel"
+        [RestoreFocusElement]="ContextMenuRestoreFocusEl"
+        (ItemSelected)="OnDocsContextMenuCommand($event)"
+        (Closed)="CloseDocsContextMenu()"
+      ></mj-context-menu>
     </div>
   `,
   styles: [
@@ -4763,6 +4815,19 @@ export class MarkdownArtifactViewerComponent
   private draftSegmentCounter = 0;
   private isApplyingBlockTransaction = false;
 
+  // Context Menu State
+  public ContextMenuOpen = false;
+  public ContextMenuX = 0;
+  public ContextMenuY = 0;
+  public ContextMenuItems: ContextMenuItem<DocsContextMenuCommand>[] = [];
+  public ContextMenuAriaLabel = 'Document context menu';
+  public ContextMenuRestoreFocusEl: HTMLElement | null = null;
+  private contextMenuSelectionSnapshot: DocsSelectionSnapshot | null = null;
+  private contextMenuSelectionText = '';
+  private readonly touchMenuMonitor = new TouchContextMenuMonitor({
+    OnLongPress: (trigger) => this.onTouchLongPressContextMenu(trigger),
+  });
+
   // Parsed state
   public DocumentSegments: DocumentRenderSegment[] = [];
   public OutlineItems: DocumentOutlineItem[] = [];
@@ -5088,6 +5153,7 @@ export class MarkdownArtifactViewerComponent
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    this.touchMenuMonitor.Destroy();
     this.stopMoreMenuDocumentListeners();
     this.destroyCollaborationSession();
   }
@@ -6501,7 +6567,11 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
-  public GetParsedTable(seg: DocumentRenderSegment): { Headers: string[]; Rows: string[][] } {
+  public GetParsedTable(seg: DocumentRenderSegment): {
+    Headers: string[];
+    Rows: string[][];
+    Alignments: DocsTableAlignment[];
+  } {
     const lines = seg.RawMarkdown
       .split('\n')
       .map((l) => l.trim())
@@ -6513,11 +6583,24 @@ export class MarkdownArtifactViewerComponent
         .map((c) => c.trim());
 
     const headers = lines.length > 0 ? parseCells(lines[0]) : ['Column 1', 'Column 2'];
+    const alignments: DocsTableAlignment[] = headers.map(() => 'none');
     const rows: string[][] = [];
     for (let i = 1; i < lines.length; i++) {
       const cells = parseCells(lines[i]);
-      // Skip GFM separator row (| --- | --- |)
-      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) {
+      // Parse & skip GFM separator row (| --- | :---: | ---: | :--- |)
+      if (cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c))) {
+        for (let cIdx = 0; cIdx < headers.length; cIdx++) {
+          const marker = cells[cIdx] ?? '';
+          if (marker.startsWith(':') && marker.endsWith(':')) {
+            alignments[cIdx] = 'center';
+          } else if (marker.startsWith(':')) {
+            alignments[cIdx] = 'left';
+          } else if (marker.endsWith(':')) {
+            alignments[cIdx] = 'right';
+          } else {
+            alignments[cIdx] = 'none';
+          }
+        }
         continue;
       }
       while (cells.length < headers.length) {
@@ -6525,12 +6608,36 @@ export class MarkdownArtifactViewerComponent
       }
       rows.push(cells.slice(0, headers.length));
     }
-    return { Headers: headers, Rows: rows };
+    return { Headers: headers, Rows: rows, Alignments: alignments };
   }
 
-  private serializeParsedTable(headers: string[], rows: string[][]): string {
+  public GetColumnTextAlign(
+    table: { Alignments: ReadonlyArray<DocsTableAlignment> },
+    colIndex: number,
+  ): string | null {
+    const align = table.Alignments[colIndex] ?? 'none';
+    return align === 'none' ? null : align;
+  }
+
+  private serializeParsedTable(
+    headers: string[],
+    rows: string[][],
+    alignments: ReadonlyArray<DocsTableAlignment> = [],
+  ): string {
     const headerLine = `| ${headers.join(' | ')} |`;
-    const sepLine = `| ${headers.map(() => '---').join(' | ')} |`;
+    const sepMarkers = headers.map((_, idx) => {
+      switch (alignments[idx] ?? 'none') {
+        case 'left':
+          return ':---';
+        case 'center':
+          return ':---:';
+        case 'right':
+          return '---:';
+        default:
+          return '---';
+      }
+    });
+    const sepLine = `| ${sepMarkers.join(' | ')} |`;
     const bodyLines = rows.map((r) => `| ${headers.map((_, idx) => r[idx] ?? '').join(' | ')} |`);
     return [headerLine, sepLine, ...bodyLines].join('\n');
   }
@@ -6548,7 +6655,7 @@ export class MarkdownArtifactViewerComponent
     parsed.Headers[colIndex] = nextVal;
     this.ApplyInPlaceSegmentChange(
       seg,
-      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
       `Updated table header column ${colIndex + 1}`,
     );
   }
@@ -6570,7 +6677,7 @@ export class MarkdownArtifactViewerComponent
     targetRow.splice(colIndex, 1, nextVal);
     this.ApplyInPlaceSegmentChange(
       seg,
-      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
       `Updated table cell (${rowIndex + 1}, ${colIndex + 1})`,
     );
   }
@@ -6580,7 +6687,7 @@ export class MarkdownArtifactViewerComponent
     parsed.Rows.push(parsed.Headers.map((_, idx) => `Value ${idx + 1}`));
     this.ApplyInPlaceSegmentChange(
       seg,
-      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
       'Added table row',
     );
   }
@@ -6589,14 +6696,164 @@ export class MarkdownArtifactViewerComponent
     const parsed = this.GetParsedTable(seg);
     const colNum = parsed.Headers.length + 1;
     parsed.Headers.push(`Column ${colNum}`);
+    parsed.Alignments.push('none');
     for (const row of parsed.Rows) {
       row.push('—');
     }
     this.ApplyInPlaceSegmentChange(
       seg,
-      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
       'Added table column',
     );
+  }
+
+  public InsertTableRowAt(
+    seg: DocumentRenderSegment,
+    rowIndex: number,
+    placement: 'above' | 'below',
+    isHeaderRow = false,
+  ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    const parsed = this.GetParsedTable(seg);
+    const emptyRow = parsed.Headers.map(() => '');
+    const insertIdx = isHeaderRow
+      ? 0
+      : placement === 'above'
+        ? Math.max(0, Math.min(parsed.Rows.length, rowIndex))
+        : Math.max(0, Math.min(parsed.Rows.length, rowIndex + 1));
+    parsed.Rows.splice(insertIdx, 0, emptyRow);
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
+      `Inserted table row ${placement}`,
+    );
+  }
+
+  public DeleteTableRowAt(seg: DocumentRenderSegment, rowIndex: number): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    const parsed = this.GetParsedTable(seg);
+    if (parsed.Rows.length <= 1 || rowIndex < 0 || rowIndex >= parsed.Rows.length) {
+      return;
+    }
+    parsed.Rows.splice(rowIndex, 1);
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
+      'Deleted table row',
+    );
+  }
+
+  public InsertTableColumnAt(
+    seg: DocumentRenderSegment,
+    colIndex: number,
+    placement: 'left' | 'right',
+  ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    const parsed = this.GetParsedTable(seg);
+    const insertIdx =
+      placement === 'left'
+        ? Math.max(0, Math.min(parsed.Headers.length, colIndex))
+        : Math.max(0, Math.min(parsed.Headers.length, colIndex + 1));
+    parsed.Headers.splice(insertIdx, 0, `Column ${parsed.Headers.length + 1}`);
+    parsed.Alignments.splice(insertIdx, 0, 'none');
+    for (const row of parsed.Rows) {
+      row.splice(insertIdx, 0, '');
+    }
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
+      `Inserted table column ${placement}`,
+    );
+  }
+
+  public DeleteTableColumnAt(seg: DocumentRenderSegment, colIndex: number): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    const parsed = this.GetParsedTable(seg);
+    if (parsed.Headers.length <= 1 || colIndex < 0 || colIndex >= parsed.Headers.length) {
+      return;
+    }
+    parsed.Headers.splice(colIndex, 1);
+    parsed.Alignments.splice(colIndex, 1);
+    for (const row of parsed.Rows) {
+      row.splice(colIndex, 1);
+    }
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
+      'Deleted table column',
+    );
+  }
+
+  public SetTableColumnAlignment(
+    seg: DocumentRenderSegment,
+    colIndex: number,
+    alignment: 'left' | 'center' | 'right',
+  ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    const parsed = this.GetParsedTable(seg);
+    if (colIndex < 0 || colIndex >= parsed.Headers.length) {
+      return;
+    }
+    parsed.Alignments[colIndex] = alignment;
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
+      `Aligned column ${colIndex + 1} ${alignment}`,
+    );
+  }
+
+  public SortTableByColumn(
+    seg: DocumentRenderSegment,
+    colIndex: number,
+    direction: 'asc' | 'desc',
+  ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    const parsed = this.GetParsedTable(seg);
+    if (colIndex < 0 || colIndex >= parsed.Headers.length || parsed.Rows.length <= 1) {
+      return;
+    }
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+    const factor = direction === 'asc' ? 1 : -1;
+    const sortedRows = [...parsed.Rows].sort((a, b) => {
+      const av = (a[colIndex] ?? '').trim();
+      const bv = (b[colIndex] ?? '').trim();
+      return collator.compare(av, bv) * factor;
+    });
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, sortedRows, parsed.Alignments),
+      `Sorted table by column ${colIndex + 1} (${direction})`,
+    );
+  }
+
+  public CopyTableAs(seg: DocumentRenderSegment, format: 'markdown' | 'csv' | 'tsv'): void {
+    if (format === 'markdown') {
+      this.writeClipboardText(seg.RawMarkdown, 'Copied table as Markdown.');
+      return;
+    }
+    const parsed = this.GetParsedTable(seg);
+    const allRows = [parsed.Headers, ...parsed.Rows];
+    if (format === 'csv') {
+      const csv = allRows.map((row) => row.map((cell) => this.escapeCsvCell(cell)).join(',')).join('\n');
+      this.writeClipboardText(csv, 'Copied table as CSV.');
+      return;
+    }
+    const tsv = allRows
+      .map((row) => row.map((cell) => cell.replace(/[\t\r\n]+/g, ' ')).join('\t'))
+      .join('\n');
+    this.writeClipboardText(tsv, 'Copied table as TSV.');
   }
 
   public GetParsedListItems(seg: DocumentRenderSegment): Array<{
@@ -8574,7 +8831,7 @@ export class MarkdownArtifactViewerComponent
       } else {
         parsed.Rows[rowIdx].splice(colIdx, 1, sanitizedCellText);
       }
-      const nextMd = this.serializeParsedTable(parsed.Headers, parsed.Rows);
+      const nextMd = this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments);
       const visStart = this.mapMarkdownOffsetToVisibleOffset(sanitizedCellText, wrapped.selectStart);
       const visEnd = this.mapMarkdownOffsetToVisibleOffset(sanitizedCellText, wrapped.selectEnd);
       this.commitFormattedSegmentMarkdown(seg, segIdx, nextMd, visStart, visEnd, coords);
@@ -12521,5 +12778,1152 @@ export class MarkdownArtifactViewerComponent
       this.notifyError(err instanceof Error ? err.message : 'Failed to save anchored comment.');
       return false;
     }
+  }
+
+  // =========================================================================
+  // Right-Click Context Menu (Zones 2a–2d)
+  // =========================================================================
+
+  public OnDocsSegmentContextMenu(event: MouseEvent, seg: DocumentRenderSegment): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    const targetEl = event.target instanceof Element ? event.target : null;
+    if (targetEl?.closest('select') !== null) {
+      return;
+    }
+    this.CaptureSelectionSnapshot();
+    event.preventDefault();
+    event.stopPropagation();
+
+    this.openSegmentContextMenuAt(event.clientX, event.clientY, targetEl, seg);
+  }
+
+  private openSegmentContextMenuAt(
+    anchorX: number,
+    anchorY: number,
+    targetEl: Element | null,
+    seg: DocumentRenderSegment,
+  ): void {
+    const activeEl =
+      targetEl instanceof HTMLElement
+        ? targetEl
+        : (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null);
+
+    if (seg.Kind === 'mj-block' && seg.Descriptor) {
+      if (seg.Descriptor.Kind === 'Artifact') {
+        const block = seg.Descriptor;
+        const newerVer = this.GetNewerEmbeddedArtifactVersion(block);
+        this.openDocsContextMenuForTarget(
+          anchorX,
+          anchorY,
+          seg,
+          {
+            Kind: 'embedded-artifact',
+            Segment: seg,
+            Block: block,
+            IsCollapsed: this.IsBlockCollapsed(block),
+            IsInlineEditing: this.IsInlineEditingBlock(block.BlockID),
+            CanInlineEdit: this.CanInlineEditEmbeddedArtifact(block),
+            IsFullScreen: this.ExpandedOleBlockID === block.BlockID,
+            NewerVersionNumber: newerVer?.VersionNumber ?? null,
+          },
+          'Embedded artifact actions',
+          activeEl,
+        );
+        return;
+      }
+
+      const block = seg.Descriptor;
+      const execResult = this.GetBlockExecutionResult(block);
+      const recordLinkEl = targetEl?.closest<HTMLElement>('[data-record-col]') ?? null;
+      let recordLinkContext: DocsLiveRecordLinkContext | undefined;
+      if (recordLinkEl) {
+        const colName = recordLinkEl.getAttribute('data-record-col') ?? '';
+        const rawRowIdx = recordLinkEl.getAttribute('data-record-row-idx');
+        const rowIdx = rawRowIdx ? Number.parseInt(rawRowIdx, 10) : -1;
+        const matchedCol = execResult.Columns.find((c) => c.Name === colName);
+        if (colName && rowIdx >= 0) {
+          recordLinkContext = {
+            ColumnName: colName,
+            TargetEntityName: matchedCol?.TargetEntityName || block.EntityName || 'Record',
+            RowIndex: rowIdx,
+          };
+        }
+      }
+      this.openDocsContextMenuForTarget(
+        anchorX,
+        anchorY,
+        seg,
+        {
+          Kind: 'live-block',
+          Segment: seg,
+          Block: block,
+          HasResultRows: execResult.Rows.length > 0,
+          IsCollapsed: this.IsBlockCollapsed(block),
+          RecordLinkContext: recordLinkContext,
+        },
+        'Live data block actions',
+        activeEl,
+      );
+      return;
+    }
+
+    if (!this.IsInteractiveCanvasMode) {
+      if (seg.BlockKind === 'table') {
+        const cellEl = targetEl?.closest<HTMLTableCellElement>('th, td') ?? null;
+        const parsed = this.GetParsedTable(seg);
+        let rowIndex = 0;
+        let colIndex = 0;
+        let isHeaderRow = true;
+        if (cellEl) {
+          colIndex = Math.max(
+            0,
+            Math.min(parsed.Headers.length - 1, cellEl.cellIndex >= 0 ? cellEl.cellIndex : 0),
+          );
+          isHeaderRow = cellEl.tagName === 'TH' || cellEl.closest('thead') !== null;
+          if (!isHeaderRow) {
+            const tr = cellEl.closest('tr');
+            const tbody = tr?.closest('tbody');
+            if (tr && tbody) {
+              const foundIdx = Array.from(tbody.querySelectorAll('tr')).indexOf(tr);
+              rowIndex = foundIdx >= 0 ? foundIdx : 0;
+            }
+          }
+        }
+        const cellText = isHeaderRow
+          ? (parsed.Headers[colIndex] ?? '')
+          : (parsed.Rows[rowIndex]?.[colIndex] ?? '');
+        this.openDocsContextMenuForTarget(
+          anchorX,
+          anchorY,
+          seg,
+          {
+            Kind: 'table',
+            Segment: seg,
+            RowIndex: rowIndex,
+            ColIndex: colIndex,
+            IsHeaderRow: isHeaderRow,
+            TableHeadersCount: parsed.Headers.length,
+            TableBodyRowCount: parsed.Rows.length,
+            ColumnAlignment: parsed.Alignments[colIndex] ?? 'none',
+            CellText: cellText,
+          },
+          'Table actions',
+          activeEl,
+        );
+        return;
+      }
+
+      const anchorEl = targetEl?.closest<HTMLAnchorElement>('a[href]') ?? null;
+      const rawHref = anchorEl?.getAttribute('href') ?? null;
+      const linkUrl = rawHref && rawHref !== 'javascript:void(0)' ? rawHref : null;
+      const imgEl = targetEl?.closest<HTMLImageElement>('img[src]') ?? null;
+      const imageUrl = imgEl?.getAttribute('src') ?? null;
+      const isInsidePre = targetEl?.closest('pre') !== null;
+      const isInsideTable = targetEl?.closest('table') !== null;
+
+      this.openDocsContextMenuForTarget(
+        anchorX,
+        anchorY,
+        seg,
+        {
+          Kind: 'preview-prose',
+          Segment: seg,
+          LinkUrl: linkUrl,
+          ImageUrl: imageUrl,
+          IsInsidePre: isInsidePre,
+          IsInsideTable: isInsideTable,
+        },
+        'Reader block actions',
+        activeEl,
+      );
+      return;
+    }
+
+    if (seg.BlockKind === 'table') {
+      const parsed = this.GetParsedTable(seg);
+      const colIndex = Math.max(
+        0,
+        Math.min(parsed.Headers.length - 1, this.lastFocusedTableCell?.colIndex ?? 0),
+      );
+      const isHeaderRow = this.lastFocusedTableCell?.isHeader ?? true;
+      const rowIndex = isHeaderRow
+        ? 0
+        : Math.max(0, Math.min(Math.max(0, parsed.Rows.length - 1), this.lastFocusedTableCell?.rowIndex ?? 0));
+      const cellText = isHeaderRow
+        ? (parsed.Headers[colIndex] ?? '')
+        : (parsed.Rows[rowIndex]?.[colIndex] ?? '');
+      this.openDocsContextMenuForTarget(
+        anchorX,
+        anchorY,
+        seg,
+        {
+          Kind: 'table',
+          Segment: seg,
+          RowIndex: rowIndex,
+          ColIndex: colIndex,
+          IsHeaderRow: isHeaderRow,
+          TableHeadersCount: parsed.Headers.length,
+          TableBodyRowCount: parsed.Rows.length,
+          ColumnAlignment: parsed.Alignments[colIndex] ?? 'none',
+          CellText: cellText,
+        },
+        'Table actions',
+        activeEl,
+      );
+      return;
+    }
+
+    const listItems = seg.BlockKind === 'list' ? this.GetParsedListItems(seg) : [];
+    const currentListKind: 'bullet' | 'ordered' | 'task' | undefined =
+      seg.BlockKind === 'list'
+        ? listItems.some((i) => i.IsTask)
+          ? 'task'
+          : listItems.some((i) => Boolean(i.OrderedPrefix))
+            ? 'ordered'
+            : 'bullet'
+        : undefined;
+    const currentCalloutType: DocsCalloutType | undefined =
+      seg.BlockKind === 'callout' ? this.GetParsedCallout(seg).CalloutType : undefined;
+    const hasCodeContent =
+      seg.BlockKind === 'code' ? this.GetParsedCodeBlock(seg).Code.trim().length > 0 : undefined;
+
+    this.openDocsContextMenuForTarget(
+      anchorX,
+      anchorY,
+      seg,
+      {
+        Kind: 'prose',
+        Segment: seg,
+        CurrentCalloutType: currentCalloutType,
+        CurrentListKind: currentListKind,
+        HasCodeContent: hasCodeContent,
+      },
+      'Block actions',
+      activeEl,
+    );
+  }
+
+  public OnDocsTableCellContextMenu(
+    event: MouseEvent,
+    seg: DocumentRenderSegment,
+    rowIndex: number,
+    colIndex: number,
+    isHeaderRow: boolean,
+  ): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    this.lastFocusedSegmentId = seg.SegmentID;
+    this.lastFocusedTableCell = { rowIndex, colIndex, isHeader: isHeaderRow };
+    this.CaptureSelectionSnapshot();
+    event.preventDefault();
+    event.stopPropagation();
+
+    const parsed = this.GetParsedTable(seg);
+    const cellText = isHeaderRow
+      ? (parsed.Headers[colIndex] ?? '')
+      : (parsed.Rows[rowIndex]?.[colIndex] ?? '');
+    const activeEl = event.target instanceof HTMLElement ? event.target : null;
+
+    this.openDocsContextMenuForTarget(
+      event.clientX,
+      event.clientY,
+      seg,
+      {
+        Kind: 'table',
+        Segment: seg,
+        RowIndex: rowIndex,
+        ColIndex: colIndex,
+        IsHeaderRow: isHeaderRow,
+        TableHeadersCount: parsed.Headers.length,
+        TableBodyRowCount: parsed.Rows.length,
+        ColumnAlignment: parsed.Alignments[colIndex] ?? 'none',
+        CellText: cellText,
+      },
+      'Table cell actions',
+      activeEl,
+    );
+  }
+
+  public OnDocsOutlineContextMenu(event: MouseEvent, item: DocumentOutlineItem): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+
+    const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === item.ID);
+    const targetSeg = segIdx >= 0 ? this.DocumentSegments[segIdx] : null;
+    const activeEl = event.target instanceof HTMLElement ? event.target : null;
+
+    this.openDocsContextMenuForTarget(
+      event.clientX,
+      event.clientY,
+      targetSeg,
+      {
+        Kind: 'outline-item',
+        OutlineItem: item,
+        TargetSegment: targetSeg,
+        TargetSegmentIndex: segIdx,
+      },
+      'Outline item actions',
+      activeEl,
+    );
+  }
+
+  public OnDocsSuggestionContextMenu(event: MouseEvent, sug: DocumentSuggestionItem): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+
+    const targetSeg = this.DocumentSegments.find((s) => s.SegmentID === sug.BlockID) ?? null;
+    const activeEl = event.target instanceof HTMLElement ? event.target : null;
+
+    this.openDocsContextMenuForTarget(
+      event.clientX,
+      event.clientY,
+      targetSeg,
+      {
+        Kind: 'suggestion-card',
+        Suggestion: sug,
+      },
+      'Suggestion actions',
+      activeEl,
+    );
+  }
+
+  public OnDocsWorkspaceKeydown(event: KeyboardEvent): void {
+    if (!IsKeyboardContextMenuShortcut(event) || IsNativeContextMenuTarget(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.CaptureSelectionSnapshot();
+
+    const activeEl =
+      typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : event.target instanceof HTMLElement
+          ? event.target
+          : null;
+
+    const anchorPoint = activeEl
+      ? ComputeElementContextMenuAnchor(activeEl)
+      : { X: 40, Y: 80 };
+
+    const sugEl = activeEl?.closest<HTMLElement>('[data-suggestion-id]') ?? null;
+    if (sugEl) {
+      const sugId = sugEl.getAttribute('data-suggestion-id');
+      const sug = this.Suggestions.find((s) => s.SuggestionID === sugId);
+      if (sug) {
+        this.openDocsContextMenuForTarget(
+          anchorPoint.X,
+          anchorPoint.Y,
+          this.DocumentSegments.find((s) => s.SegmentID === sug.BlockID) ?? null,
+          { Kind: 'suggestion-card', Suggestion: sug },
+          'Suggestion actions',
+          activeEl,
+        );
+        return;
+      }
+    }
+
+    const outlineEl = activeEl?.closest<HTMLElement>('[data-outline-id]') ?? null;
+    if (outlineEl) {
+      const outlineId = outlineEl.getAttribute('data-outline-id');
+      const outlineItem = this.OutlineItems.find((o) => o.ID === outlineId);
+      if (outlineItem) {
+        const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === outlineItem.ID);
+        const seg = segIdx >= 0 ? this.DocumentSegments[segIdx] : null;
+        this.openDocsContextMenuForTarget(
+          anchorPoint.X,
+          anchorPoint.Y,
+          seg,
+          {
+            Kind: 'outline-item',
+            OutlineItem: outlineItem,
+            TargetSegment: seg,
+            TargetSegmentIndex: segIdx,
+          },
+          'Outline item actions',
+          activeEl,
+        );
+        return;
+      }
+    }
+
+    const segEl = activeEl?.closest<HTMLElement>('[data-segment-id]') ?? null;
+    const segId =
+      segEl?.getAttribute('data-segment-id') ??
+      this.lastFocusedSegmentId ??
+      (this.SelectedAnchorKey !== 'doc-root' ? this.SelectedAnchorKey : null);
+    const seg =
+      (segId ? this.DocumentSegments.find((s) => s.SegmentID === segId) : undefined) ??
+      this.DocumentSegments[0];
+    if (!seg) {
+      return;
+    }
+
+    this.openSegmentContextMenuAt(anchorPoint.X, anchorPoint.Y, activeEl, seg);
+  }
+
+  public OnDocsPointerDown(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerDown(event);
+  }
+
+  public OnDocsPointerMove(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerMove(event);
+  }
+
+  public OnDocsPointerUp(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerUp(event);
+  }
+
+  public OnDocsPointerCancel(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerCancel(event);
+  }
+
+  public OnDocsClickCapture(event: Event): void {
+    if (this.touchMenuMonitor.ConsumeSuppressedClick()) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  private onTouchLongPressContextMenu(trigger: TouchContextMenuTrigger): void {
+    if (IsNativeContextMenuTarget(trigger.Target)) {
+      return;
+    }
+    const targetEl = trigger.Target instanceof Element ? trigger.Target : null;
+    const segEl = targetEl?.closest<HTMLElement>('[data-segment-id]') ?? null;
+    const segId = segEl?.getAttribute('data-segment-id');
+    const seg = segId ? this.DocumentSegments.find((s) => s.SegmentID === segId) : undefined;
+    if (!seg) {
+      return;
+    }
+    if (seg.Kind === 'mj-block' && seg.Descriptor?.Kind === 'Artifact' && this.IsInlineEditingBlock(seg.Descriptor.BlockID)) {
+      return;
+    }
+    this.CaptureSelectionSnapshot();
+    const listItems = seg.BlockKind === 'list' ? this.GetParsedListItems(seg) : [];
+    const currentListKind: 'bullet' | 'ordered' | 'task' | undefined =
+      seg.BlockKind === 'list'
+        ? listItems.some((i) => i.IsTask)
+          ? 'task'
+          : listItems.some((i) => Boolean(i.OrderedPrefix))
+            ? 'ordered'
+            : 'bullet'
+        : undefined;
+    this.openDocsContextMenuForTarget(
+      trigger.AnchorX,
+      trigger.AnchorY,
+      seg,
+      this.IsInteractiveCanvasMode
+        ? { Kind: 'prose', Segment: seg, CurrentListKind: currentListKind }
+        : { Kind: 'preview-prose', Segment: seg },
+      'Block actions',
+      targetEl instanceof HTMLElement ? targetEl : null,
+    );
+  }
+
+  private openDocsContextMenuForTarget(
+    anchorX: number,
+    anchorY: number,
+    seg: DocumentRenderSegment | null,
+    target: DocsContextTarget,
+    ariaLabel: string,
+    restoreFocusEl: HTMLElement | null,
+  ): void {
+    if (seg) {
+      this.SelectedAnchorKey = seg.SegmentID;
+      this.lastFocusedSegmentId = seg.SegmentID;
+    }
+
+    const selectedText = this.resolveContextMenuSelectedText(seg);
+    this.contextMenuSelectionText = selectedText;
+    this.contextMenuSelectionSnapshot = this.lastSelectionSnapshot ? { ...this.lastSelectionSnapshot } : null;
+
+    const segIndex = seg
+      ? this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID)
+      : -1;
+    const snapshot: DocsContextMenuSnapshot = {
+      ViewMode: this.ViewMode,
+      CanUserEdit: this.CanUserEdit,
+      CanUserShareArtifact: this.CanUserShareArtifact,
+      IsSimpleNoteMode: this.IsSimpleNoteMode,
+      IsAiAssistantEnabled: this.IsAiAssistantEnabled,
+      CommentsEnabled: true,
+      SegmentCount: this.DocumentSegments.length,
+      SegmentIndex: segIndex,
+      SegmentEditable: seg ? this.CanEditSegment(seg) : this.CanUserEdit,
+      IsSegmentLocked: seg ? this.IsSegmentLocked(seg) : false,
+      IsHeadingCollapsed: seg ? this.IsHeadingCollapsed(seg) : false,
+      SelectedText: selectedText,
+      Target: target,
+    };
+
+    this.ContextMenuItems = BuildDocsContextMenu(snapshot);
+    this.ContextMenuX = anchorX;
+    this.ContextMenuY = anchorY;
+    this.ContextMenuAriaLabel = ariaLabel;
+    this.ContextMenuRestoreFocusEl = restoreFocusEl;
+    this.ContextMenuOpen = this.ContextMenuItems.length > 0;
+    this.cdr.markForCheck();
+  }
+
+  private resolveContextMenuSelectedText(seg: DocumentRenderSegment | null): string {
+    if (typeof window !== 'undefined' && typeof window.getSelection === 'function') {
+      const selText = window.getSelection()?.toString() ?? '';
+      if (selText.length > 0) {
+        return selText;
+      }
+    }
+    if (
+      seg &&
+      this.lastSelectionSnapshot?.segmentId === seg.SegmentID &&
+      this.lastSelectionSnapshot.end > this.lastSelectionSnapshot.start
+    ) {
+      const el = this.findEditableElementForSegment(seg, {
+        listItemIndex: this.lastSelectionSnapshot.listItemIndex,
+        tableRowIndex: this.lastSelectionSnapshot.tableRowIndex,
+        tableColIndex: this.lastSelectionSnapshot.tableColIndex,
+        isTableHeader: this.lastSelectionSnapshot.isTableHeader,
+      });
+      const sourceText = el?.textContent ?? seg.RawMarkdown;
+      return sourceText.slice(this.lastSelectionSnapshot.start, this.lastSelectionSnapshot.end);
+    }
+    return '';
+  }
+
+  public CloseDocsContextMenu(): void {
+    if (!this.ContextMenuOpen) {
+      return;
+    }
+    this.ContextMenuOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  public OnDocsContextMenuCommand(cmd: DocsContextMenuCommand): void {
+    this.CloseDocsContextMenu();
+
+    switch (cmd.Type) {
+      case 'clipboard': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (!seg) return;
+        if (cmd.Action === 'cut') {
+          this.CutDocsSelectionOrBlock(seg);
+        } else if (cmd.Action === 'copy-rich') {
+          this.CopyDocsSelectionOrBlock(seg, 'rich');
+        } else if (cmd.Action === 'copy-markdown') {
+          this.CopyDocsSelectionOrBlock(seg, 'markdown');
+        } else if (cmd.Action === 'copy-code') {
+          this.CopyCodeBlockText(seg);
+        } else {
+          this.PasteIntoDocsSegment(seg);
+        }
+        return;
+      }
+      case 'format-text': {
+        this.SelectedAnchorKey = cmd.SegmentID;
+        this.lastFocusedSegmentId = cmd.SegmentID;
+        if (
+          this.contextMenuSelectionSnapshot?.segmentId === cmd.SegmentID &&
+          this.lastSelectionSnapshot?.segmentId !== cmd.SegmentID
+        ) {
+          this.lastSelectionSnapshot = { ...this.contextMenuSelectionSnapshot };
+        }
+        const pair = this.getFormatPrefixSuffix(cmd.Format);
+        this.InsertFormattingSnippet(pair.prefix, pair.suffix);
+        return;
+      }
+      case 'turn-into': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.ConvertSegmentBlockType(seg, cmd.Target);
+        }
+        return;
+      }
+      case 'callout-style': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.UpdateCalloutType(seg, cmd.CalloutType);
+        }
+        return;
+      }
+      case 'insert-block': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (!seg) return;
+        if (cmd.Placement === 'above') {
+          this.InsertParagraphAboveSegment(seg);
+        } else if (cmd.Placement === 'below') {
+          this.InsertParagraphBelowSegment(seg);
+        } else {
+          this.OpenSlashMenuForSegment(seg);
+        }
+        return;
+      }
+      case 'duplicate-block': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.DuplicateSegment(seg);
+        }
+        return;
+      }
+      case 'move-block': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.MoveSegment(seg, cmd.Direction);
+        }
+        return;
+      }
+      case 'delete-block': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.DeleteSegment(seg);
+        }
+        return;
+      }
+      case 'toggle-heading-collapse': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.ToggleHeadingCollapse(seg);
+        }
+        return;
+      }
+      case 'toggle-heading-lock': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.ToggleHeadingLock(seg);
+        }
+        return;
+      }
+      case 'add-comment': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.OpenAnchorCommentForSegment(seg, cmd.SelectedText ?? this.contextMenuSelectionText);
+        }
+        return;
+      }
+      case 'propose-suggestion': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.OpenSuggestionModalForSegment(seg);
+        }
+        return;
+      }
+      case 'ask-ai': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.OpenAskAiAssistant(seg);
+        }
+        return;
+      }
+      case 'table-insert-row': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.InsertTableRowAt(seg, cmd.RowIndex, cmd.Placement, cmd.IsHeaderRow);
+        }
+        return;
+      }
+      case 'table-delete-row': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.DeleteTableRowAt(seg, cmd.RowIndex);
+        }
+        return;
+      }
+      case 'table-insert-col': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.InsertTableColumnAt(seg, cmd.ColIndex, cmd.Placement);
+        }
+        return;
+      }
+      case 'table-delete-col': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.DeleteTableColumnAt(seg, cmd.ColIndex);
+        }
+        return;
+      }
+      case 'table-align-col': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.SetTableColumnAlignment(seg, cmd.ColIndex, cmd.Alignment);
+        }
+        return;
+      }
+      case 'table-sort-col': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.SortTableByColumn(seg, cmd.ColIndex, cmd.Direction);
+        }
+        return;
+      }
+      case 'table-copy-cell': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          const parsed = this.GetParsedTable(seg);
+          const cellText = cmd.IsHeaderRow
+            ? (parsed.Headers[cmd.ColIndex] ?? '')
+            : (parsed.Rows[cmd.RowIndex]?.[cmd.ColIndex] ?? '');
+          this.writeClipboardText(cellText, 'Copied cell text to clipboard.');
+        }
+        return;
+      }
+      case 'table-copy-as': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.CopyTableAs(seg, cmd.Format);
+        }
+        return;
+      }
+      case 'live-block-refresh': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          void this.RefreshLiveBlock(block);
+        }
+        return;
+      }
+      case 'live-block-configure': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.OpenConfigureBlockModal(block);
+        }
+        return;
+      }
+      case 'live-block-open-record': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          const execResult = this.GetBlockExecutionResult(block);
+          const rows = this.GetPaginatedBlockRows(block, execResult.Rows);
+          const col = execResult.Columns.find((c) => c.Name === cmd.ColumnName);
+          const row = rows[cmd.RowIndex];
+          if (col && row) {
+            this.OnBlockRecordCellClick(block, col, row);
+          }
+        }
+        return;
+      }
+      case 'live-block-toggle-freeze': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          if (cmd.Action === 'freeze') {
+            this.PromptFreezeBlock(block);
+          } else {
+            this.UnfreezeLiveBlock(block);
+          }
+        }
+        return;
+      }
+      case 'live-block-copy-csv': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.CopyLiveBlockResultAsCsv(block);
+        }
+        return;
+      }
+      case 'live-block-copy-json': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.CopyBlockDirectiveJson(block);
+        }
+        return;
+      }
+      case 'live-block-toggle-collapse': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.ToggleBlockCollapsed(block);
+        }
+        return;
+      }
+      case 'ole-toggle-inline-edit': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.ToggleInlineArtifactEdit(block);
+        }
+        return;
+      }
+      case 'ole-toggle-fullscreen': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.ToggleExpandOleBlock(block);
+        }
+        return;
+      }
+      case 'ole-open-source': {
+        this.OpenSourceArtifactRecord(cmd.ArtifactID);
+        return;
+      }
+      case 'ole-update-latest': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.UpdateEmbeddedArtifactToLatestVersion(block);
+        }
+        return;
+      }
+      case 'ole-toggle-pin': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.TogglePinArtifactVersion(block);
+        }
+        return;
+      }
+      case 'preview-copy-selection': {
+        this.writeClipboardText(cmd.SelectedText, 'Copied selection to clipboard.');
+        return;
+      }
+      case 'preview-copy-link': {
+        this.writeClipboardText(cmd.Url, 'Copied link URL to clipboard.');
+        return;
+      }
+      case 'preview-open-link': {
+        if (typeof window !== 'undefined' && typeof window.open === 'function') {
+          window.open(cmd.Url, '_blank', 'noopener,noreferrer');
+        }
+        return;
+      }
+      case 'preview-copy-image': {
+        this.writeClipboardText(cmd.Url, 'Copied image URL to clipboard.');
+        return;
+      }
+      case 'preview-copy-anchor': {
+        this.SelectedAnchorKey = cmd.AnchorKey;
+        this.writeClipboardText(`#${cmd.AnchorKey}`, 'Copied section reference to clipboard.');
+        return;
+      }
+      case 'preview-switch-to-write': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.OnPreviewBlockDoubleClick(seg);
+        }
+        return;
+      }
+      case 'suggestion-accept': {
+        const sug = this.Suggestions.find((s) => s.SuggestionID === cmd.SuggestionID);
+        if (sug) {
+          this.AcceptSuggestion(sug);
+        }
+        return;
+      }
+      case 'suggestion-reject': {
+        const sug = this.Suggestions.find((s) => s.SuggestionID === cmd.SuggestionID);
+        if (sug) {
+          this.RejectSuggestion(sug);
+        }
+        return;
+      }
+      case 'suggestion-jump': {
+        this.FocusSegmentByAnchorKey(cmd.AnchorKey);
+        return;
+      }
+      case 'suggestion-copy-proposed': {
+        const sug = this.Suggestions.find((s) => s.SuggestionID === cmd.SuggestionID);
+        if (sug) {
+          this.writeClipboardText(sug.ProposedMarkdown, 'Copied proposed Markdown to clipboard.');
+        }
+        return;
+      }
+      case 'outline-jump': {
+        const item = this.OutlineItems.find((o) => o.ID === cmd.ItemID);
+        if (item) {
+          this.SelectOutlineItem(item);
+          this.FocusSegmentByAnchorKey(item.ID);
+        }
+        return;
+      }
+    }
+  }
+
+  public InsertParagraphAboveSegment(seg: DocumentRenderSegment): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
+    const insertIdx = idx >= 0 ? idx : 0;
+    blocks.splice(insertIdx, 0, '');
+    this.applyBlockFlowTransaction(blocks, { segmentIndex: insertIdx, position: 'start' });
+  }
+
+  public DuplicateSegment(seg: DocumentRenderSegment): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    if (idx < 0) {
+      return;
+    }
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
+    const cloneMd = blocks[idx] ?? seg.RawMarkdown;
+    blocks.splice(idx + 1, 0, cloneMd);
+    this.applyBlockFlowTransaction(blocks, { segmentIndex: idx + 1, position: 'end' });
+  }
+
+  public ConvertSegmentBlockType(
+    seg: DocumentRenderSegment,
+    target:
+      | 'paragraph'
+      | 'heading-1'
+      | 'heading-2'
+      | 'heading-3'
+      | 'bullet-list'
+      | 'ordered-list'
+      | 'task-list'
+      | 'callout'
+      | 'code',
+  ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    if (segIdx < 0) {
+      return;
+    }
+
+    let plainText: string;
+    if (seg.BlockKind === 'heading') {
+      plainText = (seg.HeadingText ?? this.GetEditableHeadingText(seg)).trim();
+    } else if (seg.BlockKind === 'callout') {
+      plainText = this.GetParsedCallout(seg).BodyText.trim();
+    } else if (seg.BlockKind === 'list') {
+      plainText = this.GetParsedListItems(seg)
+        .map((i) => i.Text)
+        .join('\n')
+        .trim();
+    } else if (seg.BlockKind === 'code') {
+      plainText = this.GetParsedCodeBlock(seg).Code.trim();
+    } else {
+      plainText = seg.RawMarkdown.trim();
+    }
+
+    const lines = (plainText || 'Text').split('\n');
+    const singleLine = lines.join(' ').trim() || 'Heading';
+    let nextMd: string;
+    switch (target) {
+      case 'paragraph':
+        nextMd = plainText;
+        break;
+      case 'heading-1':
+        nextMd = `# ${singleLine}`;
+        break;
+      case 'heading-2':
+        nextMd = `## ${singleLine}`;
+        break;
+      case 'heading-3':
+        nextMd = `### ${singleLine}`;
+        break;
+      case 'bullet-list':
+        nextMd = lines.map((l) => `- ${l}`).join('\n');
+        break;
+      case 'ordered-list':
+        nextMd = lines.map((l, idx) => `${idx + 1}. ${l}`).join('\n');
+        break;
+      case 'task-list':
+        nextMd = lines.map((l) => `- [ ] ${l}`).join('\n');
+        break;
+      case 'callout':
+        nextMd = ['> [!NOTE]', ...lines.map((l) => `> ${l}`)].join('\n');
+        break;
+      case 'code':
+        nextMd = ['```typescript', plainText, '```'].join('\n');
+        break;
+    }
+
+    if (this.ViewMode === 'suggest') {
+      this.ApplyInPlaceSegmentChange(seg, nextMd, `Converted block to ${target}`);
+      return;
+    }
+    this.commitBlockTransform(seg, segIdx, nextMd, 'end');
+  }
+
+  public CopyDocsSelectionOrBlock(seg: DocumentRenderSegment, mode: 'rich' | 'markdown'): void {
+    const text =
+      mode === 'rich' && this.contextMenuSelectionText.trim().length > 0
+        ? this.contextMenuSelectionText
+        : seg.RawMarkdown;
+    this.writeClipboardText(
+      text,
+      mode === 'markdown' ? 'Copied block Markdown to clipboard.' : 'Copied to clipboard.',
+    );
+  }
+
+  public CutDocsSelectionOrBlock(seg: DocumentRenderSegment): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    const snap = this.contextMenuSelectionSnapshot;
+    const selectedText = this.contextMenuSelectionText;
+    if (
+      snap &&
+      snap.segmentId === seg.SegmentID &&
+      snap.end > snap.start &&
+      selectedText.length > 0
+    ) {
+      this.writeClipboardText(selectedText, 'Cut selection to clipboard.');
+      const idx = seg.RawMarkdown.indexOf(selectedText);
+      if (idx >= 0) {
+        const nextMd = seg.RawMarkdown.slice(0, idx) + seg.RawMarkdown.slice(idx + selectedText.length);
+        this.ApplyInPlaceSegmentChange(seg, nextMd.trim() || '', 'Cut selection');
+        return;
+      }
+    }
+
+    this.writeClipboardText(seg.RawMarkdown, 'Cut block to clipboard.');
+    if (this.DocumentSegments.length > 1) {
+      this.DeleteSegment(seg);
+    } else {
+      this.ApplyInPlaceSegmentChange(seg, '', 'Cut block');
+    }
+  }
+
+  public PasteIntoDocsSegment(seg: DocumentRenderSegment): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.clipboard ||
+      typeof navigator.clipboard.readText !== 'function'
+    ) {
+      this.StatusBannerMessage = 'Clipboard paste requires browser permission — press Cmd/Ctrl+V in the block.';
+      this.cdr.markForCheck();
+      return;
+    }
+    navigator.clipboard
+      .readText()
+      .then((clipText) => {
+        if (!clipText) {
+          return;
+        }
+        const snap = this.contextMenuSelectionSnapshot;
+        if (snap && snap.segmentId === seg.SegmentID && snap.end >= snap.start) {
+          const range = this.mapVisibleRangeToMarkdownRange(seg.RawMarkdown, snap.start, snap.end);
+          const nextMd =
+            seg.RawMarkdown.slice(0, range.start) + clipText + seg.RawMarkdown.slice(range.end);
+          this.ApplyInPlaceSegmentChange(seg, nextMd, 'Pasted clipboard text');
+        } else {
+          const sep = seg.RawMarkdown.trim().length > 0 ? ' ' : '';
+          this.ApplyInPlaceSegmentChange(seg, `${seg.RawMarkdown}${sep}${clipText}`, 'Pasted clipboard text');
+        }
+      })
+      .catch(() => {
+        this.StatusBannerMessage = 'Clipboard paste requires browser permission — press Cmd/Ctrl+V in the block.';
+        this.cdr.markForCheck();
+      });
+  }
+
+  public CopyCodeBlockText(seg: DocumentRenderSegment): void {
+    const parsed = this.GetParsedCodeBlock(seg);
+    this.writeClipboardText(parsed.Code, 'Copied code to clipboard.');
+  }
+
+  public CopyLiveBlockResultAsCsv(block: DocumentBlockSpec): void {
+    const execResult = this.GetBlockExecutionResult(block);
+    if (execResult.Columns.length === 0 || execResult.Rows.length === 0) {
+      return;
+    }
+    const header = execResult.Columns.map((c) => this.escapeCsvCell(c.DisplayName || c.Name)).join(',');
+    const body = execResult.Rows.map((row) =>
+      execResult.Columns.map((c) => this.escapeCsvCell(this.FormatCellValue(row[c.Name]))).join(','),
+    );
+    this.writeClipboardText([header, ...body].join('\n'), 'Copied live block result as CSV.');
+  }
+
+  public CopyBlockDirectiveJson(block: DocumentBlockSpec): void {
+    const directive = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(block);
+    this.writeClipboardText(directive, 'Copied :::mj-block directive to clipboard.');
+  }
+
+  public OpenSourceArtifactRecord(artifactId: string): void {
+    const trimmed = artifactId.trim();
+    if (!trimmed) {
+      return;
+    }
+    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: trimmed }]);
+    this.OpenEntityRecord.emit({ entityName: 'MJ: Artifacts', compositeKey });
+    this.StatusBannerMessage = 'Opening source artifact…';
+    this.cdr.markForCheck();
+  }
+
+  public CanInlineEditEmbeddedArtifact(block: DocumentBlockSpec): boolean {
+    return (
+      this.CanUserEdit &&
+      Boolean(block.ArtifactID?.trim()) &&
+      (block.EmbedMode ?? 'Inline') === 'Inline'
+    );
+  }
+
+  public FocusSegmentByAnchorKey(anchorKey: string): void {
+    const seg =
+      this.DocumentSegments.find((s) => s.SegmentID === anchorKey) ?? this.DocumentSegments[0];
+    if (!seg) {
+      return;
+    }
+    this.SelectedAnchorKey = seg.SegmentID;
+    this.lastFocusedSegmentId = seg.SegmentID;
+    if (typeof document !== 'undefined') {
+      const root = this.PrintableCanvas?.nativeElement ?? this.hostElement?.nativeElement ?? document;
+      const el = root.querySelector<HTMLElement>(`[data-segment-id="${seg.SegmentID}"]`);
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+    if (this.IsInteractiveCanvasMode) {
+      this.FocusEditableSegment(seg.SegmentID, 'start');
+    } else {
+      this.cdr.markForCheck();
+    }
+  }
+
+  private findSegmentById(segmentId: string): DocumentRenderSegment | undefined {
+    return this.DocumentSegments.find((s) => s.SegmentID === segmentId);
+  }
+
+  private findBlockDescriptorById(blockId: string): DocumentBlockSpec | undefined {
+    return this.DocumentSegments.find((s) => s.Descriptor?.BlockID === blockId)?.Descriptor;
+  }
+
+  private getFormatPrefixSuffix(
+    format: 'bold' | 'italic' | 'strikethrough' | 'inline-code' | 'link',
+  ): { prefix: string; suffix: string } {
+    switch (format) {
+      case 'bold':
+        return { prefix: '**', suffix: '**' };
+      case 'italic':
+        return { prefix: '*', suffix: '*' };
+      case 'strikethrough':
+        return { prefix: '~~', suffix: '~~' };
+      case 'inline-code':
+        return { prefix: '`', suffix: '`' };
+      case 'link':
+        return { prefix: '[', suffix: '](https://)' };
+    }
+  }
+
+  private escapeCsvCell(raw: string): string {
+    const text = raw ?? '';
+    if (/[",\r\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  }
+
+  private writeClipboardText(text: string, successMessage: string): void {
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      void navigator.clipboard.writeText(text).catch((err) => {
+        LogError(err);
+      });
+    }
+    this.StatusBannerMessage = successMessage;
+    this.cdr.markForCheck();
   }
 }

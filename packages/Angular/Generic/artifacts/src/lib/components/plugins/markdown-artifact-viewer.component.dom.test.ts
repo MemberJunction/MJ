@@ -6,6 +6,7 @@ import type { IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { UserInfoEngine, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MarkdownArtifactViewerComponent } from './markdown-artifact-viewer.component';
+import { MjContextMenuComponent } from '../context-menu/mj-context-menu.component';
 import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
 import { ArtifactAgentRegionIndicatorComponent } from '../presence/artifact-agent-region-indicator.component';
 import { DocumentCollaborationService } from '../../services/document-collaboration.service';
@@ -307,7 +308,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
         ArtifactAgentPresenceBarComponent,
         ArtifactAgentRegionIndicatorComponent,
       ],
-      declarations: [MarkdownArtifactViewerComponent],
+      declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
       providers: [DocumentCollaborationService, DocumentImportExportService],
       inputs: {
         Provider: mock,
@@ -998,5 +999,266 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       VersionID: null,
     });
     expect(errMsg).toContain('not a valid artifact UUID');
+  });
+
+  it('wraps selected prose text in Bold via right-click context menu and closes the menu', async () => {
+    const f = await renderDocsViewer('# Title\n\nInitial narrative paragraph.');
+    const comp = f.componentInstance;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const paraSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.RawMarkdown.includes('Initial narrative'));
+    expect(paraSeg).toBeTruthy();
+    const segId = paraSeg!.SegmentID;
+
+    comp.CaptureSelectionSnapshot({
+      segmentId: segId,
+      start: 8,
+      end: 17,
+    });
+
+    const paraEl = f.nativeElement.querySelector(
+      `[data-testid="editable-paragraph-${segId}"]`,
+    ) as HTMLElement | null;
+    expect(paraEl).toBeTruthy();
+
+    const ctxEvent = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 140,
+      clientY: 220,
+    });
+    paraEl!.dispatchEvent(ctxEvent);
+    f.detectChanges();
+
+    expect(ctxEvent.defaultPrevented).toBe(true);
+    expect(f.nativeElement.querySelector('[data-testid="mj-context-menu-root"]')).toBeTruthy();
+
+    const formatSubmenuBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-format-text"]',
+    ) as HTMLButtonElement | null;
+    expect(formatSubmenuBtn).toBeTruthy();
+    formatSubmenuBtn!.click();
+    f.detectChanges();
+
+    const boldBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-format-bold"]',
+    ) as HTMLButtonElement | null;
+    expect(boldBtn).toBeTruthy();
+    boldBtn!.click();
+    f.detectChanges();
+
+    expect(comp.MarkdownContent).toContain('Initial **narrative** paragraph.');
+    expect(f.nativeElement.querySelector('[data-testid="mj-context-menu-root"]')).toBeNull();
+  });
+
+  it('executes table context menu actions: insert row below, align center, delete row, and copy as CSV', async () => {
+    const writeTextMock = vi.fn(async (_text: string) => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: writeTextMock,
+        readText: vi.fn(async () => ''),
+      },
+      configurable: true,
+    });
+
+    const f = await renderDocsViewer('# Metrics\n\n| Metric | Value |\n| --- | --- |\n| ARR | 100 |\n| NRR | 120 |');
+    const comp = f.componentInstance;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const tableSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.RawMarkdown.includes('| Metric |'));
+    expect(tableSeg).toBeTruthy();
+    const segId = tableSeg!.SegmentID;
+
+    // 1. Insert Row Below on row 0, col 1
+    const cell01 = f.nativeElement.querySelector(
+      `[data-testid="table-cell-${segId}-0-1"]`,
+    ) as HTMLElement | null;
+    expect(cell01).toBeTruthy();
+    cell01!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+    f.detectChanges();
+
+    const insertBelowBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-insert-row-below"]',
+    ) as HTMLButtonElement | null;
+    expect(insertBelowBtn).toBeTruthy();
+    insertBelowBtn!.click();
+    f.detectChanges();
+
+    const updatedAfterInsert = comp.DocumentSegments.find((s) => s.SegmentID === segId)!;
+    expect(comp.GetParsedTable(updatedAfterInsert).Rows.length).toBe(3);
+
+    // 2. Align Column Center (:---:)
+    const cellAfterInsert = f.nativeElement.querySelector(
+      `[data-testid="table-cell-${segId}-0-1"]`,
+    ) as HTMLElement | null;
+    cellAfterInsert!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+    f.detectChanges();
+
+    const alignMenuBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-align-col"]',
+    ) as HTMLButtonElement | null;
+    expect(alignMenuBtn).toBeTruthy();
+    alignMenuBtn!.click();
+    f.detectChanges();
+
+    const alignCenterBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-align-center"]',
+    ) as HTMLButtonElement | null;
+    expect(alignCenterBtn).toBeTruthy();
+    alignCenterBtn!.click();
+    f.detectChanges();
+
+    expect(comp.MarkdownContent).toContain(':---:');
+    const alignedCell = f.nativeElement.querySelector(
+      `[data-testid="table-cell-${segId}-0-1"]`,
+    ) as HTMLElement | null;
+    expect(alignedCell?.style.textAlign).toBe('center');
+
+    // 3. Delete inserted row (row 1)
+    const insertedRowCell = f.nativeElement.querySelector(
+      `[data-testid="table-cell-${segId}-1-1"]`,
+    ) as HTMLElement | null;
+    expect(insertedRowCell).toBeTruthy();
+    insertedRowCell!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 160 }));
+    f.detectChanges();
+
+    const deleteRowBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-delete-row"]',
+    ) as HTMLButtonElement | null;
+    expect(deleteRowBtn).toBeTruthy();
+    deleteRowBtn!.click();
+    f.detectChanges();
+
+    const updatedAfterDelete = comp.DocumentSegments.find((s) => s.SegmentID === segId)!;
+    expect(comp.GetParsedTable(updatedAfterDelete).Rows.length).toBe(2);
+
+    // 4. Copy Table As CSV
+    const cellForCsv = f.nativeElement.querySelector(
+      `[data-testid="table-cell-${segId}-0-0"]`,
+    ) as HTMLElement | null;
+    cellForCsv!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+    f.detectChanges();
+
+    const copyAsBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-copy-as"]',
+    ) as HTMLButtonElement | null;
+    expect(copyAsBtn).toBeTruthy();
+    copyAsBtn!.click();
+    f.detectChanges();
+
+    const copyCsvBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-copy-csv"]',
+    ) as HTMLButtonElement | null;
+    expect(copyCsvBtn).toBeTruthy();
+    copyCsvBtn!.click();
+    f.detectChanges();
+
+    expect(writeTextMock).toHaveBeenCalledTimes(1);
+    const copiedCsv = writeTextMock.mock.calls[0]?.[0] ?? '';
+    expect(copiedCsv).toContain('Metric,Value');
+    expect(copiedCsv).toContain('ARR,100');
+    expect(copiedCsv).toContain('NRR,120');
+  });
+
+  it('bypasses custom context menu on Shift+Right-Click so native browser menu is preserved', async () => {
+    const f = await renderDocsViewer('# Title\n\nShift right click paragraph.');
+    const comp = f.componentInstance;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const paraSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.RawMarkdown.includes('Shift right click'));
+    expect(paraSeg).toBeTruthy();
+    const paraEl = f.nativeElement.querySelector(
+      `[data-testid="editable-paragraph-${paraSeg!.SegmentID}"]`,
+    ) as HTMLElement | null;
+    expect(paraEl).toBeTruthy();
+
+    const shiftCtx = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      shiftKey: true,
+      clientX: 100,
+      clientY: 100,
+    });
+    paraEl!.dispatchEvent(shiftCtx);
+    f.detectChanges();
+
+    expect(shiftCtx.defaultPrevented).toBe(false);
+    expect(f.nativeElement.querySelector('[data-testid="mj-context-menu-root"]')).toBeNull();
+  });
+
+  it('respects defaultPrevented from an embedded OLE whiteboard plugin without opening the Docs context menu', async () => {
+    const wbArtifactId = '22222222-2222-4222-8222-222222222222';
+    const docWithUuidWb = [
+      '# Architecture Doc',
+      '',
+      ':::mj-block',
+      '{',
+      '  "BlockID": "blk-wb-bypass",',
+      '  "Kind": "Artifact",',
+      '  "Mode": "Live",',
+      '  "Title": "System Diagram",',
+      `  "ArtifactID": "${wbArtifactId}",`,
+      '  "ArtifactType": "Whiteboard",',
+      '  "EmbedMode": "Inline"',
+      '}',
+      ':::',
+    ].join('\n');
+
+    const mock = createDocsMockProvider();
+    const baseRunView = mock.provider.RunView.bind(mock.provider);
+    vi.spyOn(mock.provider, 'RunView').mockImplementation(async (params, contextUser) => {
+      if (params.EntityName === 'MJ: Artifact Versions' && params.ExtraFilter?.includes(wbArtifactId)) {
+        return {
+          Success: true,
+          Results: [
+            {
+              ID: '33333333-3333-4333-8333-333333333333',
+              ArtifactID: wbArtifactId,
+              VersionNumber: 1,
+              Name: 'System Diagram',
+              Content: '{"version":1,"activePageId":"page-1","pages":[{"id":"page-1","name":"Page 1","items":[]}]}',
+            },
+          ],
+          TotalRowCount: 1,
+        };
+      }
+      return baseRunView(params, contextUser);
+    });
+
+    const f = await renderDocsViewer(docWithUuidWb, false, mock.provider);
+    const comp = f.componentInstance;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const wbSeg = comp.DocumentSegments.find((s) => s.SegmentID === 'blk-wb-bypass');
+    expect(wbSeg?.Descriptor).toBeTruthy();
+    comp.ToggleInlineArtifactEdit(wbSeg!.Descriptor!);
+    await f.whenStable();
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+
+    const oleChild = f.nativeElement.querySelector(
+      '[data-testid="ole-artifact-block-blk-wb-bypass"] .stub-ole-plugin',
+    ) as HTMLElement | null;
+    expect(oleChild).toBeTruthy();
+
+    oleChild!.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+    });
+
+    const childEvent = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 200,
+      clientY: 200,
+    });
+    oleChild!.dispatchEvent(childEvent);
+    f.detectChanges();
+
+    expect(childEvent.defaultPrevented).toBe(true);
+    expect(f.nativeElement.querySelector('[data-testid="mj-context-menu-root"]')).toBeNull();
   });
 });
