@@ -12,6 +12,8 @@ export { GetDimensionsAction } from './verbs/get-dimensions.action';
 export { GetGLEntriesAction } from './verbs/get-gl-entries.action';
 export { GetCustomersAction } from './verbs/get-customers.action';
 export { GetSalesInvoicesAction } from './verbs/get-sales-invoices.action';
+export { GetBudgetAction } from './verbs/get-budget.action';
+export { GetVendorBillsAction } from './verbs/get-vendor-bills.action';
 
 export * from './providers/quickbooks/quickbooks-base.action';
 
