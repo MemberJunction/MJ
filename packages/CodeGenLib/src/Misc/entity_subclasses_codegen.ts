@@ -245,6 +245,8 @@ export class EntitySubClassGeneratorBase {
       const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
       const schemasDir = path.join(directory, 'entities');
       MakeDir(schemasDir);
+      const standaloneSchemasDir = path.join(directory, 'schemas');
+      MakeDir(standaloneSchemasDir);
 
       const toEmit = SchemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
         fs.existsSync(path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`)),
@@ -258,9 +260,14 @@ export class EntitySubClassGeneratorBase {
       const assembleStarted = Date.now();
       await MapLimit(toEmit, concurrency, async (schemaName) => {
         const schemaEntities = grouped.get(schemaName) ?? [];
-        const content = await this.AssembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false);
-        const filePath = path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`);
+        const sanitizedSchemaName = SanitizeSchemaFileName(schemaName);
+        const content = await this.AssembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false, sanitizedSchemaName);
+        const filePath = path.join(schemasDir, `${sanitizedSchemaName}.ts`);
         this.emitFile(filePath, content, emit.writeIfChanged);
+
+        const schemaContent = this.AssembleSchemaFile(schemaEntities);
+        const schemaFilePath = path.join(standaloneSchemasDir, `${sanitizedSchemaName}.ts`);
+        this.emitFile(schemaFilePath, schemaContent, emit.writeIfChanged);
       });
       EmitStats.AddAssembleMs(Date.now() - assembleStarted);
 
@@ -269,6 +276,7 @@ export class EntitySubClassGeneratorBase {
       if (pruned.length > 0) {
         logStatus(`   Removed ${pruned.length} orphaned entity schema file(s): ${pruned.join(', ')}`);
       }
+      PruneOrphanedSchemaFiles(standaloneSchemasDir, schemas);
 
       const barrel = BuildSchemaBarrel(
         schemas,
@@ -280,6 +288,12 @@ export class EntitySubClassGeneratorBase {
 `,
       );
       this.emitFile(path.join(directory, 'entity_subclasses.ts'), barrel, emit.writeIfChanged);
+
+      const schemaBarrelPath = path.join(directory, 'schemas.ts');
+      if (schemas.length > 0 || fs.existsSync(schemaBarrelPath)) {
+        const schemaBarrel = BuildSchemaBarrel(schemas, 'schemas', '');
+        this.emitFile(schemaBarrelPath, schemaBarrel, emit.writeIfChanged);
+      }
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -316,8 +330,8 @@ export class EntitySubClassGeneratorBase {
     entities: EntityInfo[],
     skipDBUpdate: boolean,
     includeLoadModule: boolean,
+    splitSchemaFileName?: string,
   ): Promise<string> {
-    const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
     let sContent = '';
     for (const e of entities) {
       sContent += await this.GenerateEntitySubClass(pool, e, false, skipDBUpdate);
@@ -343,6 +357,21 @@ export class EntitySubClassGeneratorBase {
     const peerImportStatements = EntitySubClassGeneratorBase.FormatPeerImportStatements(peerImports).join('');
     const subclassImports = `${baseClassImports}${peerImportStatements}`;
     const usesUUIDsEqual = EntitySubClassGeneratorBase.CallsUUIDsEqual(sContent);
+
+    if (splitSchemaFileName) {
+      // Split-schema emit puts Zod schemas and `*EntityType` aliases in `../schemas/<schema>.js`
+      // so entity subclass files don't pull `zod` into downstream module graphs unnecessarily.
+      const header = this.GenerateEntitySubClassFileHeader(includeLoadModule, usesUUIDsEqual, false).trimEnd();
+      const entityTypeNames = entitiesWithPK.map((e) => `${e.ClassName}EntityType`);
+      const typeImport =
+        entityTypeNames.length > 0
+          ? `\nimport type {\n  ${entityTypeNames.join(',\n  ')}\n} from '../schemas/${splitSchemaFileName}.js';`
+          : '';
+      const extraImports = subclassImports ? `\n${subclassImports.trimEnd()}` : '';
+      return `${header}\nexport * from '../schemas/${splitSchemaFileName}.js';${typeImport}${extraImports}${sContent}`;
+    }
+
+    const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
     return `${this.GenerateEntitySubClassFileHeader(includeLoadModule, usesUUIDsEqual)} \n ${subclassImports}${zodContent} \n ${sContent}`;
   }
 
@@ -352,8 +381,19 @@ export class EntitySubClassGeneratorBase {
     entities: EntityInfo[],
     skipDBUpdate: boolean,
     includeLoadModule: boolean,
+    splitSchemaFileName?: string,
   ): Promise<string> {
-    return this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, includeLoadModule);
+    return this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, includeLoadModule, splitSchemaFileName);
+  }
+
+  /**
+   * Builds the standalone Zod schema file content for an entity list (e.g. for a database schema).
+   * Contains only `import { z } from "zod";` and the Zod schema definitions and entity types,
+   * without BaseEntity or class registrations.
+   */
+  public AssembleSchemaFile(entities: EntityInfo[]): string {
+    const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
+    return `import { z } from "zod";\n\n${zodContent}`;
   }
 
   /** Delegates so both generators share one set of defaults; override to change them. */
@@ -369,8 +409,13 @@ export class EntitySubClassGeneratorBase {
   /**
    * @param includeLoadModule - Emit the `loadModule` no-op export.
    * @param usesUUIDsEqual - Import `UUIDsEqual` as well; set when a generated validator in the file calls it.
+   * @param includeZodImport - Import `z` from `zod` (omitted when schemas are emitted to a separate file).
    */
-  public GenerateEntitySubClassFileHeader(includeLoadModule: boolean = true, usesUUIDsEqual: boolean = false): string {
+  public GenerateEntitySubClassFileHeader(
+    includeLoadModule: boolean = true,
+    usesUUIDsEqual: boolean = false,
+    includeZodImport: boolean = true,
+  ): string {
     const loadModule = includeLoadModule
       ? `
 export const loadModule = () => {
@@ -378,16 +423,19 @@ export const loadModule = () => {
 }
 `
       : '';
+    const zodImport = includeZodImport ? '\nimport { z } from "zod";' : '';
+    const trailing = includeZodImport ? `\n${loadModule}\n    ` : loadModule ? `\n${loadModule}` : '';
     return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
-import { RegisterClass${usesUUIDsEqual ? `, ${UUIDS_EQUAL_FUNCTION_NAME}` : ''} } from "@memberjunction/global";
-import { z } from "zod";
-${loadModule}
-    `;
+import { RegisterClass${usesUUIDsEqual ? `, ${UUIDS_EQUAL_FUNCTION_NAME}` : ''} } from "@memberjunction/global";${zodImport}${trailing}`;
   }
 
   /** @deprecated Use {@link GenerateEntitySubClassFileHeader}. */
-  public generateEntitySubClassFileHeader(includeLoadModule: boolean = true, usesUUIDsEqual: boolean = false): string {
-    return this.GenerateEntitySubClassFileHeader(includeLoadModule, usesUUIDsEqual);
+  public generateEntitySubClassFileHeader(
+    includeLoadModule: boolean = true,
+    usesUUIDsEqual: boolean = false,
+    includeZodImport: boolean = true,
+  ): string {
+    return this.GenerateEntitySubClassFileHeader(includeLoadModule, usesUUIDsEqual, includeZodImport);
   }
 
   /**
