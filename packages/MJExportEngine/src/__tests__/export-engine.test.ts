@@ -43,6 +43,14 @@ describe('ExportEngine', () => {
             expect(exporter).toBeInstanceOf(ExcelExporter);
         });
 
+        it('should not statically re-export ExcelExporter from the package entry point', async () => {
+            const entryExports = await import('../index');
+            expect('ExcelExporter' in entryExports).toBe(false);
+            expect('CSVExporter' in entryExports).toBe(true);
+            expect('JSONExporter' in entryExports).toBe(true);
+            expect('ExportEngine' in entryExports).toBe(true);
+        });
+
         it('should throw for unsupported format', () => {
             expect(() => {
                 ExportEngine.createExporter('pdf' as Parameters<typeof ExportEngine.createExporter>[0]);

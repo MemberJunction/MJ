@@ -1,13 +1,16 @@
 import {
   Component,
+  ElementRef,
   Input,
   OnInit,
   OnChanges,
   OnDestroy,
+  Renderer2,
   SimpleChanges,
   ChangeDetectorRef,
   HostListener,
   Type,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
@@ -21,13 +24,16 @@ import {
   MJConversationEntity,
   MJConversationDetailEntity,
   ArtifactMetadataEngine,
+  BuildArtifactVersionConfigurationWithPreview,
   UserInfoEngine,
   DocumentLiveBlockEngine,
   ArtifactPermissionEngine,
   FilterReadableAnchoredConversations,
   SlideDeckEngine,
+  SpreadsheetEngine,
   SLIDE_LAYOUT_CATALOG,
   SLIDE_DECK_THEME_PRESETS,
+  type WorksheetSpec,
   type SlideDeckSpec,
   type SlideSpec,
   type SlideRegionSpec,
@@ -40,6 +46,7 @@ import {
   type DocumentBlockExecutionResult,
 } from '@memberjunction/core-entities';
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { SlidesVersionDiffComponent } from '../version-diff/slides-version-diff.component';
 import {
   DocumentCollaborationService,
@@ -90,6 +97,44 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
  * - OpenXML `.pptx` export (freezing live blocks per `Accept #2` and emitting editable `<p:sp>` text runs
  *   and `<a:tbl>` tables per `Accept #5`) and 16:9 `.pdf` export (`§ 5.3`).
  */
+export const SLIDES_TOOLBAR_PINS_SETTING_KEY = 'MJ.Slides.Toolbar.PinnedActions';
+
+export type SlidesToolbarItemKey =
+  | 'present'
+  | 'presenter'
+  | 'source-mode'
+  | 'diff-mode'
+  | 'add-slide'
+  | 'duplicate-slide'
+  | 'delete-slide'
+  | 'theme'
+  | 'md-to-deck'
+  | 'export-pptx'
+  | 'export-pdf';
+
+export const DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS: readonly SlidesToolbarItemKey[] = [
+  'present',
+  'add-slide',
+  'duplicate-slide',
+  'delete-slide',
+  'theme',
+  'export-pptx',
+];
+
+export interface ResolvedSlidesToolbarItem {
+  Key: SlidesToolbarItemKey;
+  Label: string;
+  ShortLabel?: string;
+  Description: string;
+  Icon: string;
+  Category: 'Slide Actions' | 'Design & AI' | 'View & Export';
+  Placement: 'left' | 'right';
+  TestId: string;
+  Active: boolean;
+  Disabled?: boolean;
+  Visible: boolean;
+}
+
 @Component({
   selector: 'mj-slide-deck-artifact-viewer',
   standalone: false,
@@ -124,75 +169,87 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
             >
               <i class="fa-solid fa-pen-ruler"></i> Edit
             </button>
-            <button
-              type="button"
-              class="mj-slides-mode-pill"
-              [class.active]="WorkspaceMode === 'present'"
-              (click)="EnterPresentationMode('present')"
-              data-testid="slides-mode-present"
-            >
-              <i class="fa-solid fa-play"></i> Present
-            </button>
-            <button
-              type="button"
-              class="mj-slides-mode-pill"
-              [class.active]="WorkspaceMode === 'presenter'"
-              (click)="EnterPresentationMode('presenter')"
-              data-testid="slides-mode-presenter"
-            >
-              <i class="fa-solid fa-chalkboard-user"></i> Presenter View
-            </button>
-            <button
-              type="button"
-              class="mj-slides-mode-pill"
-              [class.active]="WorkspaceMode === 'source'"
-              (click)="SetWorkspaceMode('source')"
-              data-testid="slides-mode-source"
-            >
-              <i class="fa-solid fa-code"></i> Source
-            </button>
-            <button
-              type="button"
-              class="mj-slides-mode-pill"
-              [class.active]="WorkspaceMode === 'diff'"
-              (click)="SetWorkspaceMode('diff')"
-              data-testid="slides-mode-diff"
-            >
-              <i class="fa-solid fa-code-compare"></i> Diff
-            </button>
           </div>
+
+          @if (
+            (WorkspaceMode === 'present' && !IsToolbarItemShownOnBar('present')) ||
+            (WorkspaceMode === 'presenter' && !IsToolbarItemShownOnBar('presenter')) ||
+            (WorkspaceMode === 'source' && !IsToolbarItemShownOnBar('source-mode')) ||
+            (WorkspaceMode === 'diff' && !IsToolbarItemShownOnBar('diff-mode'))
+          ) {
+            <button
+              type="button"
+              class="mj-slides-active-mode-chip"
+              title="Click to return to Edit mode"
+              data-testid="slides-active-mode-chip"
+              (click)="SetWorkspaceMode('edit')"
+            >
+              <i
+                class="fa-solid"
+                [class.fa-play]="WorkspaceMode === 'present'"
+                [class.fa-chalkboard-user]="WorkspaceMode === 'presenter'"
+                [class.fa-code]="WorkspaceMode === 'source'"
+                [class.fa-code-compare]="WorkspaceMode === 'diff'"
+              ></i>
+              <span>{{
+                WorkspaceMode === 'present'
+                  ? 'Present'
+                  : WorkspaceMode === 'presenter'
+                    ? 'Presenter'
+                    : WorkspaceMode === 'source'
+                      ? 'Source'
+                      : 'Diff'
+              }}</span>
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          }
+
+          @if (IsEditable) {
+            <div class="mj-slides-undo-group" role="group" aria-label="Undo and Redo">
+              <button
+                type="button"
+                class="mj-slides-tool-btn mj-slides-tool-btn--icon"
+                [disabled]="!CanUndo"
+                (click)="UndoDeck()"
+                title="Undo (Cmd/Ctrl+Z)"
+                data-testid="slides-undo-btn"
+              >
+                <i class="fa-solid fa-rotate-left"></i>
+              </button>
+              <button
+                type="button"
+                class="mj-slides-tool-btn mj-slides-tool-btn--icon"
+                [disabled]="!CanRedo"
+                (click)="RedoDeck()"
+                title="Redo (Cmd/Ctrl+Shift+Z)"
+                data-testid="slides-redo-btn"
+              >
+                <i class="fa-solid fa-rotate-right"></i>
+              </button>
+            </div>
+          }
         </div>
 
-        <!-- Authoring Controls (visible in Edit Mode when editable) -->
+        <!-- Pinned Authoring Controls (UserInfoEngine-persisted) -->
         @if (WorkspaceMode === 'edit' && IsEditable) {
-          <div class="mj-slides-toolbar-group">
-            <button
-              type="button"
-              class="mj-slides-tool-btn primary"
-              (click)="OnAddSlide()"
-              data-testid="add-slide-btn"
-            >
-              <i class="fa-solid fa-plus"></i> Add Slide
-            </button>
-            <button
-              type="button"
-              class="mj-slides-tool-btn"
-              (click)="OnDuplicateActiveSlide()"
-              title="Duplicate Current Slide"
-              data-testid="duplicate-slide-btn"
-            >
-              <i class="fa-solid fa-copy"></i>
-            </button>
-            <button
-              type="button"
-              class="mj-slides-tool-btn"
-              [disabled]="Deck.Slides.length <= 1"
-              (click)="OnDeleteActiveSlide()"
-              title="Delete Current Slide"
-              data-testid="delete-slide-btn"
-            >
-              <i class="fa-solid fa-trash-can"></i>
-            </button>
+          <div class="mj-slides-toolbar-group" data-testid="slides-pinned-left-group">
+            @for (item of PinnedLeftToolbarItems; track item.Key) {
+              <button
+                type="button"
+                class="mj-slides-tool-btn"
+                [class.primary]="item.Key === 'add-slide'"
+                [class.active]="item.Active"
+                [disabled]="item.Disabled"
+                (click)="ExecuteToolbarItem(item, false)"
+                [title]="item.Description"
+                [attr.data-testid]="item.TestId"
+              >
+                <i class="fa-solid" [ngClass]="item.Icon"></i>
+                @if (item.ShortLabel) {
+                  <span>{{ item.ShortLabel }}</span>
+                }
+              </button>
+            }
 
             <label class="mj-slides-inline-select-label">
               <span>Layout:</span>
@@ -207,27 +264,6 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                 }
               </select>
             </label>
-
-            <button
-              type="button"
-              class="mj-slides-tool-btn"
-              [class.active]="RightDrawerTab === 'theme'"
-              (click)="ToggleRightDrawer('theme')"
-              data-testid="toggle-theme-drawer-btn"
-            >
-              <i class="fa-solid fa-palette"></i>
-              <span>Theme ({{ Deck.Theme.Name }})</span>
-            </button>
-
-            <button
-              type="button"
-              class="mj-slides-tool-btn"
-              (click)="ShowMarkdownToDeckModal = true"
-              title="Convert a Markdown Document into Slides (§ 5.2)"
-              data-testid="open-markdown-to-deck-btn"
-            >
-              <i class="fa-solid fa-wand-magic-sparkles"></i> Doc → Slides
-            </button>
           </div>
         }
 
@@ -264,25 +300,22 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
             }
           </div>
 
-          <button
-            type="button"
-            class="mj-slides-tool-btn"
-            (click)="OnExportPptx()"
-            title="Export PowerPoint (.pptx) with Live Data Snapshots"
-            data-testid="export-pptx-btn"
-          >
-            <i class="fa-solid fa-file-powerpoint"></i> .pptx
-          </button>
-
-          <button
-            type="button"
-            class="mj-slides-tool-btn"
-            (click)="OnExportPdf()"
-            title="Export 16:9 Printable PDF (.pdf)"
-            data-testid="export-pdf-btn"
-          >
-            <i class="fa-solid fa-file-pdf"></i> .pdf
-          </button>
+          @for (item of PinnedRightToolbarItems; track item.Key) {
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              [class.active]="item.Active"
+              [disabled]="item.Disabled"
+              (click)="ExecuteToolbarItem(item, false)"
+              [title]="item.Description"
+              [attr.data-testid]="item.TestId"
+            >
+              <i class="fa-solid" [ngClass]="item.Icon"></i>
+              @if (item.ShortLabel) {
+                <span>{{ item.ShortLabel }}</span>
+              }
+            </button>
+          }
 
           @if (IsEditable) {
             <button
@@ -308,6 +341,80 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
             <i class="fa-regular fa-comments"></i>
             <span>Comments ({{ OpenThreadCount }})</span>
           </button>
+
+          <div class="mj-slides-more-anchor" #moreToolsAnchor>
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              [class.active]="ShowMoreToolsMenu"
+              aria-haspopup="menu"
+              [attr.aria-expanded]="ShowMoreToolsMenu"
+              title="Tools & View — pin favorite actions to your toolbar"
+              data-testid="slides-more-tools-btn"
+              (click)="ToggleMoreToolsMenu()"
+            >
+              <i class="fa-solid fa-ellipsis"></i>
+            </button>
+
+            @if (ShowMoreToolsMenu) {
+              <div class="mj-slides-more-menu" role="menu" data-testid="slides-more-tools-menu">
+                <div class="mj-slides-more-menu-header">
+                  <div>
+                    <span class="mj-slides-more-menu-title">Tools &amp; View</span>
+                    <span class="mj-slides-more-menu-hint">
+                      Pin up to {{ MaxPinnedToolbarActions }} actions ({{ PinnedToolbarActions.length }}/{{ MaxPinnedToolbarActions }})
+                    </span>
+                  </div>
+                  @if (HasCustomToolbarPreferences) {
+                    <button
+                      type="button"
+                      class="mj-slides-more-reset-btn"
+                      data-testid="slides-reset-toolbar-btn"
+                      (click)="ResetToolbarPreferences()"
+                    >
+                      Reset
+                    </button>
+                  }
+                </div>
+
+                @for (section of OverflowToolbarSections; track section.Category) {
+                  <div class="mj-slides-more-section">
+                    <div class="mj-slides-more-section-label">{{ section.Category }}</div>
+                    @for (item of section.Items; track item.Key) {
+                      <div class="mj-slides-more-row">
+                        <button
+                          type="button"
+                          class="mj-slides-more-action"
+                          [class.active]="item.Active"
+                          [disabled]="item.Disabled"
+                          role="menuitem"
+                          [attr.data-testid]="'slides-overflow-' + item.Key"
+                          (click)="ExecuteToolbarItem(item, true)"
+                        >
+                          <i class="fa-solid" [ngClass]="item.Icon"></i>
+                          <div class="mj-slides-more-action-text">
+                            <span class="mj-slides-more-action-label">{{ item.Label }}</span>
+                            <span class="mj-slides-more-action-desc">{{ item.Description }}</span>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          class="mj-slides-pin-btn"
+                          [class.pinned]="IsToolbarItemPinned(item.Key)"
+                          [disabled]="!IsToolbarItemPinned(item.Key) && PinnedToolbarActions.length >= MaxPinnedToolbarActions"
+                          [title]="IsToolbarItemPinned(item.Key) ? 'Unpin from toolbar' : 'Pin to toolbar'"
+                          [attr.data-testid]="'slides-pin-btn-' + item.Key"
+                          (click)="TogglePinToolbarAction(item.Key, $event)"
+                        >
+                          <i class="fa-solid fa-thumbtack"></i>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
         </div>
       </div>
 
@@ -428,6 +535,14 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                 <div
                   class="mj-slides-thumbnail-card"
                   [class.active]="slide.SlideID === ActiveSlide.SlideID"
+                  [class.dragging]="DraggingSlideID === slide.SlideID"
+                  [class.drag-over]="DragOverSlideID === slide.SlideID"
+                  [attr.draggable]="IsEditable"
+                  (dragstart)="OnSlideDragStart(slide.SlideID, $event)"
+                  (dragover)="OnSlideDragOver(slide.SlideID, $event)"
+                  (dragleave)="OnSlideDragLeave(slide.SlideID)"
+                  (drop)="OnSlideDrop(slide.SlideID, $event)"
+                  (dragend)="OnSlideDragEnd()"
                   (click)="SelectSlide(slide.SlideID)"
                   [attr.data-testid]="'filmstrip-slide-' + slide.SlideID"
                 >
@@ -640,6 +755,16 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                               <button
                                 type="button"
                                 class="mj-slides-mini-btn"
+                                (click)="OpenSheetEmbedModal(region)"
+                                title="Embed Live Chart or Range from MJ Spreadsheet"
+                                [attr.data-testid]="'region-insert-sheet-embed-' + region.RegionID"
+                              >
+                                <i class="fa-solid fa-chart-column"></i> + Sheet Chart/Range
+                              </button>
+
+                              <button
+                                type="button"
+                                class="mj-slides-mini-btn"
                                 (click)="OpenCommentForSlideRegion(DisplayedSlide.SlideID, region.RegionID, region.Label)"
                                 title="Comment on this slide section"
                                 [attr.data-testid]="'region-comment-btn-' + region.RegionID"
@@ -678,6 +803,18 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
 
                                 @if (WorkspaceMode === 'edit' && !IsInlineOleArtifactBlock(block)) {
                                   <div class="mj-slide-live-block-controls">
+                                    @if (GetNewerSourceWorkbookVersion(block); as newerWbVer) {
+                                      <button
+                                        type="button"
+                                        class="mj-slides-mini-btn primary"
+                                        title="Update pinned snapshot to latest workbook version"
+                                        [attr.data-testid]="'slides-update-from-source-workbook-btn-' + region.RegionID"
+                                        (click)="UpdateRegionBlockToLatestWorkbookVersion(region, block)"
+                                      >
+                                        <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                                        Update from Source Workbook (v{{ GetEmbeddedVersionNumber(block) }} → v{{ newerWbVer.VersionNumber }})
+                                      </button>
+                                    }
                                     <button
                                       type="button"
                                       class="mj-slides-mini-btn"
@@ -1181,6 +1318,139 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
           </div>
         </div>
       }
+
+      <!-- P1.2 Guided Cross-Artifact Sheet Chart / Range Picker Modal -->
+      @if (ShowSheetEmbedModal) {
+        <div class="mj-slides-modal-backdrop" data-testid="slides-sheet-embed-modal">
+          <div class="mj-slides-modal-card wide">
+            <h3><i class="fa-solid fa-chart-column"></i> Embed Spreadsheet Chart or Range</h3>
+            <p>Pick a Spreadsheet workbook, choose a Chart or Cell Range, and optionally pin to its current version.</p>
+
+            <div class="mj-slides-field-stack">
+              <label class="mj-slides-inline-select-label">
+                <span>Step 1 · Spreadsheet Workbook</span>
+                <select
+                  class="mj-slides-select"
+                  [(ngModel)]="SheetEmbedArtifactID"
+                  (ngModelChange)="OnSheetEmbedArtifactSelected($event)"
+                  data-testid="slides-sheet-embed-artifact-select"
+                >
+                  @for (wb of AvailableSpreadsheetArtifacts; track wb.ID) {
+                    <option [value]="wb.ID">{{ wb.Name }}</option>
+                  }
+                </select>
+              </label>
+
+              <div class="mj-slides-mode-pills" role="radiogroup" aria-label="Sheet Embed Type">
+                <button
+                  type="button"
+                  class="mj-slides-mode-pill"
+                  [class.active]="SheetEmbedMode === 'chart'"
+                  data-testid="slides-sheet-embed-mode-chart"
+                  (click)="SheetEmbedMode = 'chart'"
+                >
+                  <i class="fa-solid fa-chart-column"></i> Chart
+                </button>
+                <button
+                  type="button"
+                  class="mj-slides-mode-pill"
+                  [class.active]="SheetEmbedMode === 'range'"
+                  data-testid="slides-sheet-embed-mode-range"
+                  (click)="SheetEmbedMode = 'range'"
+                >
+                  <i class="fa-solid fa-table-cells"></i> Cell Range
+                </button>
+              </div>
+
+              @if (SheetEmbedWorkbookSheets.length > 0) {
+                <label class="mj-slides-inline-select-label">
+                  <span>Worksheet</span>
+                  <select
+                    class="mj-slides-select"
+                    [(ngModel)]="SheetEmbedWorksheetName"
+                    (ngModelChange)="OnSheetEmbedWorksheetChanged($event)"
+                    data-testid="slides-sheet-embed-worksheet-select"
+                  >
+                    @for (ws of SheetEmbedWorkbookSheets; track ws.SheetID) {
+                      <option [value]="ws.SheetID">{{ ws.Name }}</option>
+                    }
+                  </select>
+                </label>
+              }
+
+              @if (SheetEmbedMode === 'chart') {
+                <label class="mj-slides-inline-select-label">
+                  <span>Chart</span>
+                  @if (SheetEmbedWorksheetCharts.length > 0) {
+                    <select
+                      class="mj-slides-select"
+                      [(ngModel)]="SheetEmbedChartID"
+                      data-testid="slides-sheet-embed-chart-select"
+                    >
+                      @for (ch of SheetEmbedWorksheetCharts; track ch.ChartID) {
+                        <option [value]="ch.ChartID">{{ ch.Title || ch.ChartID }} ({{ ch.ChartType }})</option>
+                      }
+                    </select>
+                  } @else {
+                    <input
+                      type="text"
+                      class="mj-slides-input"
+                      [(ngModel)]="SheetEmbedChartID"
+                      placeholder="Chart ID (e.g., chart-1)"
+                      data-testid="slides-sheet-embed-chart-input"
+                    />
+                  }
+                </label>
+              } @else {
+                <label class="mj-slides-inline-select-label">
+                  <span>Cell Range</span>
+                  <input
+                    type="text"
+                    class="mj-slides-input"
+                    [(ngModel)]="SheetEmbedRange"
+                    placeholder="A1:D8"
+                    data-testid="slides-sheet-embed-range-input"
+                  />
+                </label>
+              }
+
+              <label class="mj-slides-checkbox-label">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="SheetEmbedPinVersion"
+                  data-testid="slides-sheet-embed-pin-checkbox"
+                />
+                <span>
+                  Pin to current version
+                  @if (SheetEmbedLatestVersionNumber > 0) {
+                    (v{{ SheetEmbedLatestVersionNumber }})
+                  }
+                  instead of tracking latest
+                </span>
+              </label>
+            </div>
+
+            <div class="mj-slides-modal-actions">
+              <button
+                type="button"
+                class="mj-slides-tool-btn"
+                (click)="ShowSheetEmbedModal = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="mj-slides-tool-btn primary"
+                [disabled]="!SheetEmbedArtifactID"
+                (click)="ConfirmSheetEmbedModal()"
+                data-testid="slides-sheet-embed-confirm-btn"
+              >
+                Embed in Slide
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [
@@ -1221,6 +1491,176 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
         align-items: center;
         flex-wrap: wrap;
         gap: 8px;
+      }
+
+      .mj-slides-undo-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-subtle);
+        border-radius: 6px;
+      }
+
+      .mj-slides-tool-btn--icon {
+        padding: 4px 8px;
+      }
+
+      .mj-slides-active-mode-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 9px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--mj-brand-primary);
+        background: var(--mj-brand-primary-subtle);
+        border: 1px solid var(--mj-brand-primary);
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      .mj-slides-more-anchor {
+        position: relative;
+        display: inline-flex;
+      }
+
+      .mj-slides-more-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 40;
+        width: 310px;
+        max-height: 440px;
+        overflow-y: auto;
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 10px;
+        box-shadow: var(--mj-shadow-lg);
+        padding: 8px;
+      }
+
+      .mj-slides-more-menu-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 6px 8px;
+        border-bottom: 1px solid var(--mj-border-subtle);
+        margin-bottom: 6px;
+      }
+
+      .mj-slides-more-menu-title {
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--mj-text-primary);
+      }
+
+      .mj-slides-more-menu-hint {
+        display: block;
+        font-size: 11px;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-slides-more-reset-btn {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--mj-brand-primary);
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 3px 6px;
+        border-radius: 4px;
+      }
+
+      .mj-slides-more-reset-btn:hover {
+        background: var(--mj-brand-primary-subtle);
+      }
+
+      .mj-slides-more-section {
+        margin-bottom: 8px;
+      }
+
+      .mj-slides-more-section-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--mj-text-muted);
+        padding: 4px 6px;
+      }
+
+      .mj-slides-more-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .mj-slides-more-action {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-align: left;
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 8px;
+        color: var(--mj-text-primary);
+        cursor: pointer;
+      }
+
+      .mj-slides-more-action:hover:not(:disabled),
+      .mj-slides-more-action.active {
+        background: var(--mj-bg-surface-hover);
+      }
+
+      .mj-slides-more-action:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .mj-slides-more-action-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .mj-slides-more-action-label {
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .mj-slides-more-action-desc {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .mj-slides-pin-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 5px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--mj-text-muted);
+        cursor: pointer;
+      }
+
+      .mj-slides-pin-btn.pinned {
+        color: var(--mj-brand-primary);
+        background: var(--mj-brand-primary-subtle);
+      }
+
+      .mj-slides-pin-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
       }
       .mj-slides-mode-pills {
         display: inline-flex;
@@ -1418,6 +1858,13 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
       .mj-slides-thumbnail-card.active {
         border-color: var(--mj-brand-primary);
         box-shadow: var(--mj-shadow-sm);
+      }
+      .mj-slides-thumbnail-card.dragging {
+        opacity: 0.45;
+      }
+      .mj-slides-thumbnail-card.drag-over {
+        border-color: var(--mj-brand-primary);
+        box-shadow: 0 -3px 0 0 var(--mj-brand-primary);
       }
       .mj-slides-thumbnail-top {
         display: flex;
@@ -2031,9 +2478,20 @@ export class SlideDeckArtifactViewerComponent
   @Input() public CollaborationWsUrl: string | null = null;
 
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly renderer = inject(Renderer2, { optional: true });
   private readonly collabService = inject(DocumentCollaborationService);
   private readonly exportService = inject(SlideDeckExportService);
   private readonly notificationService = inject(MJNotificationService, { optional: true });
+
+  @ViewChild('moreToolsAnchor') private moreToolsAnchorRef?: ElementRef<HTMLElement>;
+
+  public readonly MaxPinnedToolbarActions = 6;
+  public ShowMoreToolsMenu = false;
+  public DraggingSlideID: string | null = null;
+  public DragOverSlideID: string | null = null;
+  private _localToolbarPins: SlidesToolbarItemKey[] | null = null;
+  private _serverToolbarPinsRaw: string | null = null;
+  private _unlistenMoreMenuDocs: Array<() => void> = [];
 
   public readonly LayoutCatalog: ReadonlyArray<SlideLayoutMetadata> = SLIDE_LAYOUT_CATALOG;
   public readonly ThemePresets: ReadonlyArray<SlideDeckThemeSpec> = SLIDE_DECK_THEME_PRESETS;
@@ -2092,7 +2550,21 @@ export class SlideDeckArtifactViewerComponent
   // Live MJ Block & Inline OLE Whiteboard State
   private readonly blockResultsByBlockId = new Map<string, DocumentBlockExecutionResult>();
   private readonly embeddedArtifactVersions = new Map<string, MJArtifactVersionEntity>();
+  private readonly latestWorkbookVersions = new Map<string, MJArtifactVersionEntity>();
   private readonly inFlightEmbeddedVersionKeys = new Set<string>();
+
+  public ShowSheetEmbedModal = false;
+  private targetSheetEmbedRegionID: string | null = null;
+  public AvailableSpreadsheetArtifacts: Array<{ ID: string; Name: string }> = [];
+  public SheetEmbedArtifactID = '';
+  public SheetEmbedMode: 'chart' | 'range' = 'chart';
+  public SheetEmbedWorksheetName = '';
+  public SheetEmbedChartID = '';
+  public SheetEmbedRange = 'A1:D8';
+  public SheetEmbedPinVersion = false;
+  public SheetEmbedWorkbookSheets: WorksheetSpec[] = [];
+  public SheetEmbedLatestVersionID = '';
+  public SheetEmbedLatestVersionNumber = 0;
   private readonly failedEmbeddedVersionMessages = new Map<string, string>();
   private readonly oleEditingRegionIds = new Set<string>();
   public PendingFreezeBlock: DocumentBlockSpec | null = null;
@@ -2309,23 +2781,74 @@ export class SlideDeckArtifactViewerComponent
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    this.stopMoreMenuDocumentListeners();
     this.destroyCollaborationSession();
+  }
+
+  public get CanUndo(): boolean {
+    return this.IsEditable && Boolean(this.session?.CanUndo);
+  }
+
+  public get CanRedo(): boolean {
+    return this.IsEditable && Boolean(this.session?.CanRedo);
+  }
+
+  public UndoDeck(): void {
+    if (!this.CanUndo || !this.session) {
+      return;
+    }
+    if (this.session.Undo()) {
+      this.cdr.markForCheck();
+    }
+  }
+
+  public RedoDeck(): void {
+    if (!this.CanRedo || !this.session) {
+      return;
+    }
+    if (this.session.Redo()) {
+      this.cdr.markForCheck();
+    }
   }
 
   @HostListener('document:keydown', ['$event'])
   public OnGlobalKeyDown(event: KeyboardEvent): void {
-    if (this.WorkspaceMode !== 'present' && this.WorkspaceMode !== 'presenter') {
+    if (this.WorkspaceMode === 'present' || this.WorkspaceMode === 'presenter') {
+      if (event.key === 'ArrowRight' || event.key === 'PageDown') {
+        event.preventDefault();
+        this.NextSlide();
+      } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+        event.preventDefault();
+        this.PrevSlide();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        this.ExitPresentationMode();
+      }
       return;
     }
-    if (event.key === 'ArrowRight' || event.key === 'PageDown') {
-      event.preventDefault();
-      this.NextSlide();
-    } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
-      event.preventDefault();
-      this.PrevSlide();
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      this.ExitPresentationMode();
+
+    if (!this.IsEditable) {
+      return;
+    }
+    const isMod = event.metaKey || event.ctrlKey;
+    if (!isMod || event.altKey) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      return;
+    }
+    const key = event.key.toLowerCase();
+    if (key === 'z' && !event.shiftKey) {
+      if (this.CanUndo) {
+        event.preventDefault();
+        this.UndoDeck();
+      }
+    } else if ((key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey && event.ctrlKey)) {
+      if (this.CanRedo) {
+        event.preventDefault();
+        this.RedoDeck();
+      }
     }
   }
 
@@ -2508,6 +3031,393 @@ export class SlideDeckArtifactViewerComponent
     );
     this.syncRawDeckJson();
     this.cdr.markForCheck();
+  }
+
+  public OnSlideDragStart(slideId: string, event: DragEvent): void {
+    if (!this.IsEditable) {
+      event.preventDefault();
+      return;
+    }
+    this.DraggingSlideID = slideId;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', slideId);
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OnSlideDragOver(targetSlideId: string, event: DragEvent): void {
+    if (!this.IsEditable || !this.DraggingSlideID || this.DraggingSlideID === targetSlideId) {
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+    if (this.DragOverSlideID !== targetSlideId) {
+      this.DragOverSlideID = targetSlideId;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public OnSlideDragLeave(targetSlideId: string): void {
+    if (this.DragOverSlideID === targetSlideId) {
+      this.DragOverSlideID = null;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public OnSlideDrop(targetSlideId: string, event: DragEvent): void {
+    event.preventDefault();
+    const draggedId = this.DraggingSlideID || event.dataTransfer?.getData('text/plain') || null;
+    this.DraggingSlideID = null;
+    this.DragOverSlideID = null;
+    if (!this.IsEditable || !draggedId || draggedId === targetSlideId) {
+      this.cdr.markForCheck();
+      return;
+    }
+    const slides = [...this.Deck.Slides];
+    const fromIdx = slides.findIndex((s) => s.SlideID === draggedId);
+    const toIdx = slides.findIndex((s) => s.SlideID === targetSlideId);
+    if (fromIdx < 0 || toIdx < 0) {
+      this.cdr.markForCheck();
+      return;
+    }
+    const [moved] = slides.splice(fromIdx, 1);
+    slides.splice(toIdx, 0, moved);
+    this.Deck = { ...this.Deck, Slides: slides };
+    this.session?.ReorderSlidesInDeck(
+      this.Deck.Slides.map((s) => s.SlideID),
+      this.Deck,
+    );
+    this.syncRawDeckJson();
+    this.cdr.markForCheck();
+  }
+
+  public OnSlideDragEnd(): void {
+    this.DraggingSlideID = null;
+    this.DragOverSlideID = null;
+    this.cdr.markForCheck();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Progressive Disclosure Toolbar (UserInfoEngine-persisted)
+  // ---------------------------------------------------------------------------
+
+  public get PinnedToolbarActions(): SlidesToolbarItemKey[] {
+    if (this._localToolbarPins !== null) {
+      return [...this._localToolbarPins];
+    }
+    const engine = UserInfoEngine.Instance;
+    const raw = engine?.GetSetting(SLIDES_TOOLBAR_PINS_SETTING_KEY) ?? null;
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          const valid = parsed.filter((k): k is SlidesToolbarItemKey => typeof k === 'string');
+          return valid.slice(0, this.MaxPinnedToolbarActions);
+        }
+      } catch {
+        // Fallback to defaults
+      }
+    }
+    return [...DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS];
+  }
+
+  private savePinnedToolbarActions(pins: SlidesToolbarItemKey[]): void {
+    const trimmed = pins.slice(0, this.MaxPinnedToolbarActions);
+    this._localToolbarPins = [...trimmed];
+    const json = JSON.stringify(trimmed);
+    const engine = UserInfoEngine.Instance;
+    this._serverToolbarPinsRaw = engine?.GetSetting(SLIDES_TOOLBAR_PINS_SETTING_KEY) ?? null;
+    engine?.SetSettingDebounced(SLIDES_TOOLBAR_PINS_SETTING_KEY, json);
+  }
+
+  public get HasCustomToolbarPreferences(): boolean {
+    const pins = this.PinnedToolbarActions;
+    return (
+      pins.length !== DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS.length ||
+      DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS.some((key, idx) => pins[idx] !== key)
+    );
+  }
+
+  public IsToolbarItemPinned(key: SlidesToolbarItemKey): boolean {
+    return this.PinnedToolbarActions.includes(key);
+  }
+
+  public IsToolbarItemShownOnBar(key: SlidesToolbarItemKey): boolean {
+    return this.IsToolbarItemPinned(key);
+  }
+
+  public TogglePinToolbarAction(key: SlidesToolbarItemKey, event?: MouseEvent): void {
+    event?.stopPropagation();
+    const current = this.PinnedToolbarActions;
+    const idx = current.indexOf(key);
+    if (idx >= 0) {
+      current.splice(idx, 1);
+    } else if (current.length < this.MaxPinnedToolbarActions) {
+      current.push(key);
+    }
+    this.savePinnedToolbarActions(current);
+    this.cdr.markForCheck();
+  }
+
+  public ResetToolbarPreferences(): void {
+    this.savePinnedToolbarActions([...DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS]);
+    this.cdr.markForCheck();
+  }
+
+  public get AllToolbarItems(): ResolvedSlidesToolbarItem[] {
+    const canSlideEdit = this.WorkspaceMode === 'edit' && this.IsEditable;
+    return [
+      {
+        Key: 'add-slide',
+        Label: 'Add Slide',
+        ShortLabel: 'Add Slide',
+        Description: 'Insert a new slide after the active slide',
+        Icon: 'fa-plus',
+        Category: 'Slide Actions',
+        Placement: 'left',
+        TestId: 'add-slide-btn',
+        Active: false,
+        Visible: canSlideEdit,
+      },
+      {
+        Key: 'duplicate-slide',
+        Label: 'Duplicate Slide',
+        Description: 'Duplicate Current Slide',
+        Icon: 'fa-copy',
+        Category: 'Slide Actions',
+        Placement: 'left',
+        TestId: 'duplicate-slide-btn',
+        Active: false,
+        Visible: canSlideEdit,
+      },
+      {
+        Key: 'delete-slide',
+        Label: 'Delete Slide',
+        Description: 'Delete Current Slide',
+        Icon: 'fa-trash-can',
+        Category: 'Slide Actions',
+        Placement: 'left',
+        TestId: 'delete-slide-btn',
+        Active: false,
+        Disabled: this.Deck.Slides.length <= 1,
+        Visible: canSlideEdit,
+      },
+      {
+        Key: 'theme',
+        Label: `Theme (${this.Deck.Theme.Name})`,
+        ShortLabel: `Theme (${this.Deck.Theme.Name})`,
+        Description: 'Customize deck theme and brand colors',
+        Icon: 'fa-palette',
+        Category: 'Design & AI',
+        Placement: 'left',
+        TestId: 'toggle-theme-drawer-btn',
+        Active: this.RightDrawerTab === 'theme',
+        Visible: canSlideEdit,
+      },
+      {
+        Key: 'md-to-deck',
+        Label: 'Doc → Slides',
+        ShortLabel: 'Doc → Slides',
+        Description: 'Convert a Markdown Document into Slides',
+        Icon: 'fa-wand-magic-sparkles',
+        Category: 'Design & AI',
+        Placement: 'left',
+        TestId: 'open-markdown-to-deck-btn',
+        Active: false,
+        Visible: canSlideEdit,
+      },
+      {
+        Key: 'present',
+        Label: 'Present',
+        ShortLabel: 'Present',
+        Description: 'Full-screen Presentation Mode with frozen live blocks',
+        Icon: 'fa-play',
+        Category: 'View & Export',
+        Placement: 'right',
+        TestId: 'slides-mode-present',
+        Active: this.WorkspaceMode === 'present',
+        Visible: true,
+      },
+      {
+        Key: 'presenter',
+        Label: 'Presenter View',
+        ShortLabel: 'Presenter',
+        Description: 'Speaker notes, next-slide preview, and elapsed timer',
+        Icon: 'fa-chalkboard-user',
+        Category: 'View & Export',
+        Placement: 'right',
+        TestId: 'slides-mode-presenter',
+        Active: this.WorkspaceMode === 'presenter',
+        Visible: true,
+      },
+      {
+        Key: 'source-mode',
+        Label: 'Source JSON',
+        ShortLabel: 'Source',
+        Description: 'Inspect and edit raw SlideDeck JSON',
+        Icon: 'fa-code',
+        Category: 'View & Export',
+        Placement: 'right',
+        TestId: 'slides-mode-source',
+        Active: this.WorkspaceMode === 'source',
+        Visible: true,
+      },
+      {
+        Key: 'diff-mode',
+        Label: 'Version Diff',
+        ShortLabel: 'Diff',
+        Description: 'Compare deck versions',
+        Icon: 'fa-code-compare',
+        Category: 'View & Export',
+        Placement: 'right',
+        TestId: 'slides-mode-diff',
+        Active: this.WorkspaceMode === 'diff',
+        Visible: true,
+      },
+      {
+        Key: 'export-pptx',
+        Label: 'Export .pptx',
+        ShortLabel: '.pptx',
+        Description: 'Export PowerPoint (.pptx) with Live Data Snapshots',
+        Icon: 'fa-file-powerpoint',
+        Category: 'View & Export',
+        Placement: 'right',
+        TestId: 'export-pptx-btn',
+        Active: false,
+        Visible: true,
+      },
+      {
+        Key: 'export-pdf',
+        Label: 'Export .pdf',
+        ShortLabel: '.pdf',
+        Description: 'Export 16:9 Printable PDF (.pdf)',
+        Icon: 'fa-file-pdf',
+        Category: 'View & Export',
+        Placement: 'right',
+        TestId: 'export-pdf-btn',
+        Active: false,
+        Visible: true,
+      },
+    ];
+  }
+
+  public get PinnedLeftToolbarItems(): ResolvedSlidesToolbarItem[] {
+    const pins = this.PinnedToolbarActions;
+    const byKey = new Map(this.AllToolbarItems.map((item) => [item.Key, item]));
+    return pins
+      .map((k) => byKey.get(k))
+      .filter((item): item is ResolvedSlidesToolbarItem => Boolean(item && item.Visible && item.Placement === 'left'));
+  }
+
+  public get PinnedRightToolbarItems(): ResolvedSlidesToolbarItem[] {
+    const pins = this.PinnedToolbarActions;
+    const byKey = new Map(this.AllToolbarItems.map((item) => [item.Key, item]));
+    return pins
+      .map((k) => byKey.get(k))
+      .filter((item): item is ResolvedSlidesToolbarItem => Boolean(item && item.Visible && item.Placement === 'right'));
+  }
+
+  public get OverflowToolbarSections(): Array<{
+    Category: ResolvedSlidesToolbarItem['Category'];
+    Items: ResolvedSlidesToolbarItem[];
+  }> {
+    const categories: Array<ResolvedSlidesToolbarItem['Category']> = [
+      'Slide Actions',
+      'Design & AI',
+      'View & Export',
+    ];
+    const items = this.AllToolbarItems.filter((item) => item.Visible);
+    return categories
+      .map((Category) => ({ Category, Items: items.filter((i) => i.Category === Category) }))
+      .filter((s) => s.Items.length > 0);
+  }
+
+  public ExecuteToolbarItem(item: ResolvedSlidesToolbarItem, closeMenu: boolean): void {
+    if (closeMenu) {
+      this.CloseMoreToolsMenu();
+    }
+    switch (item.Key) {
+      case 'add-slide':
+        this.OnAddSlide();
+        break;
+      case 'duplicate-slide':
+        this.OnDuplicateActiveSlide();
+        break;
+      case 'delete-slide':
+        this.OnDeleteActiveSlide();
+        break;
+      case 'theme':
+        this.ToggleRightDrawer('theme');
+        break;
+      case 'md-to-deck':
+        this.ShowMarkdownToDeckModal = true;
+        this.cdr.markForCheck();
+        break;
+      case 'present':
+        this.EnterPresentationMode('present');
+        break;
+      case 'presenter':
+        this.EnterPresentationMode('presenter');
+        break;
+      case 'source-mode':
+        this.SetWorkspaceMode(this.WorkspaceMode === 'source' ? 'edit' : 'source');
+        break;
+      case 'diff-mode':
+        this.SetWorkspaceMode(this.WorkspaceMode === 'diff' ? 'edit' : 'diff');
+        break;
+      case 'export-pptx':
+        this.OnExportPptx();
+        break;
+      case 'export-pdf':
+        this.OnExportPdf();
+        break;
+    }
+  }
+
+  public ToggleMoreToolsMenu(): void {
+    this.ShowMoreToolsMenu = !this.ShowMoreToolsMenu;
+    if (this.ShowMoreToolsMenu) {
+      this.startMoreMenuDocumentListeners();
+    } else {
+      this.stopMoreMenuDocumentListeners();
+    }
+    this.cdr.markForCheck();
+  }
+
+  public CloseMoreToolsMenu(): void {
+    if (!this.ShowMoreToolsMenu) return;
+    this.ShowMoreToolsMenu = false;
+    this.stopMoreMenuDocumentListeners();
+    this.cdr.detectChanges();
+  }
+
+  private startMoreMenuDocumentListeners(): void {
+    this.stopMoreMenuDocumentListeners();
+    if (typeof document === 'undefined' || !this.renderer) return;
+    const unlistenClick = this.renderer.listen('document', 'click', (evt: MouseEvent) => {
+      const target = evt.target as Node | null;
+      const anchor = this.moreToolsAnchorRef?.nativeElement;
+      if (anchor && target && anchor.contains(target)) {
+        return;
+      }
+      this.CloseMoreToolsMenu();
+    });
+    const unlistenKey = this.renderer.listen('document', 'keydown', (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') {
+        this.CloseMoreToolsMenu();
+      }
+    });
+    this._unlistenMoreMenuDocs.push(unlistenClick, unlistenKey);
+  }
+
+  private stopMoreMenuDocumentListeners(): void {
+    for (const unlisten of this._unlistenMoreMenuDocs) {
+      unlisten();
+    }
+    this._unlistenMoreMenuDocs = [];
   }
 
   public OnChangeActiveSlideLayout(newLayout: SlideLayoutKind): void {
@@ -2770,6 +3680,205 @@ export class SlideDeckArtifactViewerComponent
     return null;
   }
 
+  public get SheetEmbedWorksheetCharts(): Array<{ ChartID: string; Title?: string; ChartType: string }> {
+    const ws =
+      this.SheetEmbedWorkbookSheets.find(
+        (s) => s.SheetID === this.SheetEmbedWorksheetName || s.Name === this.SheetEmbedWorksheetName,
+      ) ?? this.SheetEmbedWorkbookSheets[0];
+    return (ws?.Charts ?? []).map((c) => ({
+      ChartID: c.ChartID,
+      Title: c.Title,
+      ChartType: c.ChartType,
+    }));
+  }
+
+  public async OpenSheetEmbedModal(region: SlideRegionSpec): Promise<void> {
+    if (!this.IsEditable) return;
+    this.targetSheetEmbedRegionID = region.RegionID;
+    this.ShowSheetEmbedModal = true;
+    this.SheetEmbedMode = 'chart';
+    this.SheetEmbedWorksheetName = '';
+    this.SheetEmbedChartID = '';
+    this.SheetEmbedRange = 'A1:D8';
+    this.SheetEmbedPinVersion = false;
+    this.SheetEmbedWorkbookSheets = [];
+    this.SheetEmbedLatestVersionID = '';
+    this.SheetEmbedLatestVersionNumber = 0;
+
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (provider && user) {
+      try {
+        const rv = RunView.FromMetadataProvider(provider);
+        const res = await rv.RunView<{ ID: string; Name: string; Type: string }>(
+          {
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: `Type LIKE '%Spreadsheet%'`,
+            OrderBy: '__mj_UpdatedAt DESC',
+            Fields: ['ID', 'Name', 'Type'],
+            MaxRows: 30,
+            ResultType: 'simple',
+          },
+          user,
+        );
+        if (res.Success && res.Results) {
+          this.AvailableSpreadsheetArtifacts = res.Results.map((r) => ({ ID: r.ID, Name: r.Name }));
+          if (this.AvailableSpreadsheetArtifacts.length > 0 && !this.SheetEmbedArtifactID) {
+            this.SheetEmbedArtifactID = this.AvailableSpreadsheetArtifacts[0].ID;
+            await this.OnSheetEmbedArtifactSelected(this.SheetEmbedArtifactID);
+          }
+        }
+      } catch (err) {
+        LogError(err);
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  public async OnSheetEmbedArtifactSelected(artifactId: string): Promise<void> {
+    this.SheetEmbedArtifactID = artifactId;
+    this.SheetEmbedWorkbookSheets = [];
+    this.SheetEmbedWorksheetName = '';
+    this.SheetEmbedChartID = '';
+    this.SheetEmbedLatestVersionID = '';
+    this.SheetEmbedLatestVersionNumber = 0;
+
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!provider || !user || !artifactId) {
+      this.cdr.markForCheck();
+      return;
+    }
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const res = await rv.RunView<MJArtifactVersionEntity>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+          OrderBy: 'VersionNumber DESC',
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        },
+        user,
+      );
+      const latest = res.Success ? res.Results?.[0] : undefined;
+      if (latest) {
+        this.SheetEmbedLatestVersionID = latest.ID;
+        this.SheetEmbedLatestVersionNumber = latest.VersionNumber ?? 1;
+        const wb = SpreadsheetEngine.Instance.ParseWorkbook(latest.Content || '{}');
+        this.SheetEmbedWorkbookSheets = wb.Worksheets ?? [];
+        if (this.SheetEmbedWorkbookSheets.length > 0) {
+          this.SheetEmbedWorksheetName = this.SheetEmbedWorkbookSheets[0].SheetID;
+          if (this.SheetEmbedWorksheetCharts.length > 0) {
+            this.SheetEmbedChartID = this.SheetEmbedWorksheetCharts[0].ChartID;
+          }
+        }
+      }
+    } catch (err) {
+      LogError(err);
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OnSheetEmbedWorksheetChanged(sheetName: string): void {
+    this.SheetEmbedWorksheetName = sheetName;
+    if (this.SheetEmbedMode === 'chart' && this.SheetEmbedWorksheetCharts.length > 0) {
+      this.SheetEmbedChartID = this.SheetEmbedWorksheetCharts[0].ChartID;
+    }
+    this.cdr.markForCheck();
+  }
+
+  public ConfirmSheetEmbedModal(): void {
+    if (!this.IsEditable || !this.targetSheetEmbedRegionID || !this.SheetEmbedArtifactID) {
+      return;
+    }
+    const region = this.ActiveSlide.Regions.find((r) => r.RegionID === this.targetSheetEmbedRegionID);
+    if (!region) {
+      this.ShowSheetEmbedModal = false;
+      return;
+    }
+    const blockId = `sheet-block-${Date.now().toString(36)}`;
+    const selectedArt = this.AvailableSpreadsheetArtifacts.find((a) => UUIDsEqual(a.ID, this.SheetEmbedArtifactID));
+    const blockSpec: DocumentBlockSpec = {
+      BlockID: blockId,
+      Kind: 'Artifact',
+      Title:
+        this.SheetEmbedMode === 'chart'
+          ? `${selectedArt?.Name || 'Spreadsheet'} — Chart`
+          : `${selectedArt?.Name || 'Spreadsheet'} (${this.SheetEmbedRange})`,
+      Mode: 'Live',
+      ArtifactID: this.SheetEmbedArtifactID,
+      ArtifactType: 'Spreadsheet',
+      SheetID: this.SheetEmbedWorksheetName || undefined,
+      SheetChartID: this.SheetEmbedMode === 'chart' ? this.SheetEmbedChartID || undefined : undefined,
+      SheetRange: this.SheetEmbedMode === 'range' ? this.SheetEmbedRange || undefined : undefined,
+      VersionID: this.SheetEmbedPinVersion && this.SheetEmbedLatestVersionID ? this.SheetEmbedLatestVersionID : undefined,
+    };
+
+    const { Deck: updatedDeck, UpdatedRegion } = SlideDeckEngine.Instance.UpsertSlideRegion(
+      this.Deck,
+      this.ActiveSlide.SlideID,
+      { RegionID: region.RegionID, Kind: 'mj-block', BlockSpec: blockSpec },
+    );
+    const updatedSlide = updatedDeck.Slides.find((s) => s.SlideID === this.ActiveSlide.SlideID);
+    if (UpdatedRegion && updatedSlide) {
+      this.Deck = updatedDeck;
+      this.session?.UpdateSlideInDeck(updatedSlide, this.Deck);
+      this.syncRawDeckJson();
+      void this.ExecuteSlideRegionBlock(UpdatedRegion, blockSpec);
+    }
+    this.ShowSheetEmbedModal = false;
+    this.targetSheetEmbedRegionID = null;
+    this.cdr.markForCheck();
+  }
+
+  public GetEmbeddedVersionNumber(block: DocumentBlockSpec): number {
+    const artifactId = block.ArtifactID?.trim();
+    if (!artifactId) return 1;
+    const key = this.getEmbeddedVersionCacheKey(artifactId, block.VersionID);
+    return this.embeddedArtifactVersions.get(key)?.VersionNumber ?? 1;
+  }
+
+  public GetNewerSourceWorkbookVersion(block: DocumentBlockSpec): MJArtifactVersionEntity | null {
+    if (block.Kind !== 'Artifact' || !block.ArtifactID || !block.VersionID) {
+      return null;
+    }
+    const artifactId = block.ArtifactID.trim();
+    const latest = this.latestWorkbookVersions.get(artifactId);
+    if (!latest || UUIDsEqual(latest.ID, block.VersionID)) {
+      return null;
+    }
+    const currentNum = this.GetEmbeddedVersionNumber(block);
+    if ((latest.VersionNumber ?? 0) <= currentNum) {
+      return null;
+    }
+    return latest;
+  }
+
+  public UpdateRegionBlockToLatestWorkbookVersion(region: SlideRegionSpec, block: DocumentBlockSpec): void {
+    if (!this.IsEditable) return;
+    const newer = this.GetNewerSourceWorkbookVersion(block);
+    if (!newer) return;
+    const nextBlock: DocumentBlockSpec = {
+      ...block,
+      VersionID: newer.ID,
+    };
+    const { Deck: updatedDeck, UpdatedRegion } = SlideDeckEngine.Instance.UpsertSlideRegion(
+      this.Deck,
+      this.ActiveSlide.SlideID,
+      { RegionID: region.RegionID, Kind: 'mj-block', BlockSpec: nextBlock },
+    );
+    const updatedSlide = updatedDeck.Slides.find((s) => s.SlideID === this.ActiveSlide.SlideID);
+    if (UpdatedRegion && updatedSlide) {
+      this.Deck = updatedDeck;
+      this.session?.UpdateSlideInDeck(updatedSlide, this.Deck);
+      this.syncRawDeckJson();
+      void this.ExecuteSlideRegionBlock(UpdatedRegion, nextBlock);
+      this.StatusBannerMessage = `Updated ${block.Title || 'embedded workbook'} to v${newer.VersionNumber}.`;
+    }
+    this.cdr.markForCheck();
+  }
+
   private async loadEmbeddedArtifactVersion(artifactId: string, versionId?: string | null): Promise<void> {
     const key = this.getEmbeddedVersionCacheKey(artifactId, versionId);
     if (this.inFlightEmbeddedVersionKeys.has(key)) {
@@ -2805,6 +3914,22 @@ export class SlideDeckArtifactViewerComponent
         this.embeddedArtifactVersions.set(key, entity);
         if (!versionId && entity.ID) {
           this.embeddedArtifactVersions.set(this.getEmbeddedVersionCacheKey(artifactId, entity.ID), entity);
+          this.latestWorkbookVersions.set(artifactId, entity);
+        } else if (versionId && !this.latestWorkbookVersions.has(artifactId)) {
+          const latestRes = await rv.RunView<MJArtifactVersionEntity>(
+            {
+              EntityName: 'MJ: Artifact Versions',
+              ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+              OrderBy: 'VersionNumber DESC',
+              MaxRows: 1,
+              ResultType: 'entity_object',
+            },
+            user,
+          );
+          const latestEntity = latestRes.Success ? latestRes.Results?.[0] : undefined;
+          if (latestEntity) {
+            this.latestWorkbookVersions.set(artifactId, latestEntity);
+          }
         }
         this.failedEmbeddedVersionMessages.delete(key);
       } else {
@@ -3194,13 +4319,27 @@ export class SlideDeckArtifactViewerComponent
     );
   }
 
+  protected override resolveCaptureRootElement(): HTMLElement | null {
+    const el = this.captureHostElementRef?.nativeElement;
+    if (!el) return null;
+    return (
+      el.querySelector<HTMLElement>('.mj-slide-canvas-stage') ??
+      el.querySelector<HTMLElement>('.mj-slides-center-stage') ??
+      el
+    );
+  }
+
   public async OnSaveVersionCheckpoint(): Promise<void> {
     if (!this.IsEditable || !this.HasUnsavedChanges) {
       return;
     }
-    const sentOverWs = this.session?.RequestSaveVersion() ?? false;
+    const { Policy, CapturedThumbnailDataUrl } = await CaptureThumbnailForDriverIfAllowed(
+      'SlideDeckArtifactViewerPlugin',
+      this.resolveCaptureRootElement(),
+    );
+    const sentOverWs = this.session?.RequestSaveVersion(CapturedThumbnailDataUrl) ?? false;
     if (!sentOverWs) {
-      await this.saveArtifactVersionViaProvider();
+      await this.saveArtifactVersionViaProvider(CapturedThumbnailDataUrl, Policy);
     }
   }
 
@@ -3524,9 +4663,13 @@ export class SlideDeckArtifactViewerComponent
         }
       }),
       this.session.VersionSaved$.subscribe(({ versionNumber }) => {
+        const isNewSavedVersion = versionNumber > this.LastSavedVersionNumber;
         this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
         this.LastSavedVersionNumber = versionNumber;
         this.CurrentVersionNumber = versionNumber;
+        if (isNewSavedVersion) {
+          this.ContentCommitted.emit(SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck));
+        }
         this.cdr.markForCheck();
       }),
     );
@@ -3537,6 +4680,16 @@ export class SlideDeckArtifactViewerComponent
           return;
         }
         this.handleCollaborationMergeConflict(conflictEvt);
+      }),
+      this.session.CanUndo$.subscribe(() => {
+        if (!this.isComponentDestroyed) {
+          this.cdr.markForCheck();
+        }
+      }),
+      this.session.CanRedo$.subscribe(() => {
+        if (!this.isComponentDestroyed) {
+          this.cdr.markForCheck();
+        }
       }),
     );
 
@@ -4043,6 +5196,15 @@ export class SlideDeckArtifactViewerComponent
       ver.VersionNumber = 1;
       ver.Name = artifact.Name;
       ver.Content = emptyWhiteboardJson;
+      const wbConfig = BuildArtifactVersionConfigurationWithPreview(
+        null,
+        emptyWhiteboardJson,
+        null,
+        artifact.Name,
+      );
+      if (wbConfig) {
+        ver.Configuration = wbConfig;
+      }
 
       const verSaved = await ver.Save();
       if (!verSaved || !ver.ID) {
@@ -4061,7 +5223,10 @@ export class SlideDeckArtifactViewerComponent
     }
   }
 
-  private async saveArtifactVersionViaProvider(): Promise<void> {
+  private async saveArtifactVersionViaProvider(
+    capturedThumbnailDataUrl?: string | null,
+    policy?: import('@memberjunction/core-entities').ArtifactTypeThumbnailPolicy,
+  ): Promise<void> {
     const serializedContent = SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck);
     const artifactId = this.artifactVersion?.ArtifactID;
     if (!artifactId) {
@@ -4085,6 +5250,7 @@ export class SlideDeckArtifactViewerComponent
       serializedContent,
       true,
       provider,
+      capturedThumbnailDataUrl,
     );
     if (serverCommit.HandledByServer) {
       if (!serverCommit.Success) {
@@ -4127,6 +5293,19 @@ export class SlideDeckArtifactViewerComponent
       ver.VersionNumber = nextVerNum;
       ver.Name = this.Deck.Title || this.artifactVersion?.Name || 'Presentation';
       ver.Content = serializedContent;
+      const deckConfig = BuildArtifactVersionConfigurationWithPreview(
+        this.artifactVersion?.Configuration,
+        serializedContent,
+        'SlideDeckArtifactViewerPlugin',
+        ver.Name,
+        {
+          Policy: policy,
+          CapturedThumbnailDataUrl: capturedThumbnailDataUrl,
+        },
+      );
+      if (deckConfig) {
+        ver.Configuration = deckConfig;
+      }
       const saved = await ver.Save();
       if (!saved) {
         const msg = ver.LatestResult?.Message || 'Failed to save presentation version.';

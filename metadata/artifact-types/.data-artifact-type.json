@@ -8,14 +8,20 @@
       "DriverClass": "DataArtifactViewerPlugin",
       "ExtractRules": "@file:extract-rules/data-artifact.json",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-table"
+      "Icon": "fa-solid fa-table",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "66E3DA50-3C6B-4B0B-BAD0-8A9CB9A4B1FA"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:18:43.129Z",
-      "checksum": "73457615f6cea4ce4e87ed37b3e8660d0d17d534d2f5b51ece0f9790c5a9f0e4"
+      "lastModified": "2026-11-13T23:26:26.332Z",
+      "checksum": "e0438d5a603e71d09e2288fa26d45d113db31d59df33606caecb87fcd94dbc14"
     }
   }
 ]

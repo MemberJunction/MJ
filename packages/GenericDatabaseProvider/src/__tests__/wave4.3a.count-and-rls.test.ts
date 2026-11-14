@@ -154,13 +154,22 @@ describe('Wave 4.3a Base-Table COUNT(*) Rewrite', () => {
         expect(countSQL).toBe('SELECT COUNT(*) AS "TotalRowCount" FROM "dbo"."vwWidgets"');
     });
 
-    it('CanCountFromBaseTable returns false when filter contains subquery or join keywords', () => {
+    it('CanCountFromBaseTable unlocks safe RLS/filter subqueries and PG AT TIME ZONE while rejecting outer joins or BaseView/virtual references', () => {
         const info = makeTestEntityInfo();
-        expect(provider.CanCountFromBaseTable(info, 'ID IN (SELECT ID FROM OtherTable)')).toBe(false);
-        expect(provider.CanCountFromBaseTable(info, 'EXISTS (SELECT 1 FROM OtherTable WHERE OtherTable.ID = Widget.ID)')).toBe(false);
-        expect(provider.CanCountFromBaseTable(info, 'Status = (SELECT TOP 1 Name FROM Statuses)')).toBe(false);
+        expect(provider.CanCountFromBaseTable(info, 'ID IN (SELECT ID FROM OtherTable)')).toBe(true);
+        expect(provider.CanCountFromBaseTable(info, 'EXISTS (SELECT 1 FROM OtherTable WHERE OtherTable.ID = Widget.ID)')).toBe(true);
+        expect(provider.CanCountFromBaseTable(info, 'Status = (SELECT TOP 1 Name FROM Statuses)')).toBe(true);
+        expect(provider.CanCountFromBaseTable(info, "CreatedAt >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '7 days'")).toBe(true);
         const countSQL = provider.BuildTotalRowCountSQL(info, true, 100, undefined, undefined, 'ID IN (SELECT ID FROM OtherTable)');
-        expect(countSQL).toBe('SELECT COUNT(*) AS "TotalRowCount" FROM "dbo"."vwWidgets"');
+        expect(countSQL).toBe('SELECT COUNT(*) AS "TotalRowCount" FROM "dbo"."Widget"');
+
+        // Subquery referencing BaseView or unqualified virtual field falls back to BaseView
+        expect(provider.CanCountFromBaseTable(info, 'EXISTS (SELECT 1 FROM OtherTable WHERE OtherTable.ID = vwWidgets.ID)')).toBe(false);
+        expect(provider.CanCountFromBaseTable(info, 'EXISTS (SELECT 1 FROM OtherTable WHERE OtherTable.Name = Company)')).toBe(false);
+        // Outer JOIN / UNION / bare SELECT still rejected
+        expect(provider.CanCountFromBaseTable(info, '1=1 JOIN OtherTable ON 1=1')).toBe(false);
+        expect(provider.CanCountFromBaseTable(info, '1=1 UNION SELECT 1')).toBe(false);
+        expect(provider.CanCountFromBaseTable(info, 'vwWidgets.ID = 1')).toBe(false);
     });
 
     it('CanCountFromBaseTable returns false when BaseViewGenerated is false (custom view)', () => {
