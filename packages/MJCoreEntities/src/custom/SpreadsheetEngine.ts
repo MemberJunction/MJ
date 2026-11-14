@@ -8009,7 +8009,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     s = s.slice(2).trim();
                 }
                 const withoutCommas = s.replace(/,/g, '');
-                if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(withoutCommas)) {
+                if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(withoutCommas)) {
                     let parsed = Number(withoutCommas);
                     if (isNegative) parsed = -parsed;
                     if (isPercent) parsed = parsed / 100;
@@ -13368,7 +13368,7 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
 
         // Numeric literal (including leading dot .5 and scientific notation 1e-11, 1.5E+3)
         if ((ch >= '0' && ch <= '9') || (ch === '.' && i + 1 < len && expr[i + 1] >= '0' && expr[i + 1] <= '9')) {
-            const numMatch = /^(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/.exec(expr.slice(i));
+            const numMatch = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(expr.slice(i));
             if (numMatch) {
                 tokens.push({ type: 'Number', value: Number(numMatch[0]) });
                 i += numMatch[0].length;
