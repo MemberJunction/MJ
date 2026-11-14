@@ -35,6 +35,8 @@ export interface ArtifactToolExecutionContext {
     agentRunId?: string;
     /** Display name of the agent invoking the tool. */
     agentName?: string;
+    /** Resolves a session-scoped alpha short-ID (e.g. `"D"`) or UUID string to its real `MJ: Artifacts` UUID. */
+    resolveArtifactId?: (idOrAlpha: string) => string | undefined;
 }
 
 export interface ArtifactToolDefinition {
@@ -146,4 +148,49 @@ export abstract class BaseArtifactToolLibrary {
             },
         };
     }
+}
+
+const EMBEDDED_ARTIFACT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EMBEDDED_ARTIFACT_ALPHA_SHORT_ID_RE = /^(?:artifact\s+)?[A-Za-z]{1,2}$/i;
+
+export type ResolveEmbeddedArtifactResult =
+    | { ok: true; artifactId: string; errorMessage?: never }
+    | { ok: false; artifactId?: never; errorMessage: string };
+
+/**
+ * Resolves a session-scoped alpha short-ID (e.g. `"D"`) or full UUID provided to an
+ * embed tool into a canonical `MJ: Artifacts` UUID, rejecting unresolvable short IDs
+ * before they can be persisted into artifact content.
+ */
+export function ResolveEmbeddedArtifactId(
+    rawId: string,
+    context?: ArtifactToolExecutionContext
+): ResolveEmbeddedArtifactResult {
+    const trimmed = (rawId ?? '').trim();
+    if (!trimmed) {
+        return { ok: false, errorMessage: 'artifactId must be a non-empty string.' };
+    }
+
+    if (context?.resolveArtifactId) {
+        const resolved = context.resolveArtifactId(trimmed);
+        if (resolved && EMBEDDED_ARTIFACT_UUID_RE.test(resolved.trim())) {
+            return { ok: true, artifactId: resolved.trim() };
+        }
+        if (EMBEDDED_ARTIFACT_UUID_RE.test(trimmed)) {
+            return { ok: true, artifactId: trimmed };
+        }
+        return {
+            ok: false,
+            errorMessage: `Unable to resolve artifactId '${trimmed}' to a valid MJ: Artifacts UUID. Pass a full artifact UUID or a valid short ID from the current session.`,
+        };
+    }
+
+    if (EMBEDDED_ARTIFACT_ALPHA_SHORT_ID_RE.test(trimmed)) {
+        return {
+            ok: false,
+            errorMessage: `Short artifactId '${trimmed}' could not be resolved to an MJ: Artifacts UUID without an active artifact session.`,
+        };
+    }
+
+    return { ok: true, artifactId: trimmed };
 }

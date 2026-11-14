@@ -3,7 +3,8 @@ import {
     ArtifactToolDefinition,
     ArtifactToolExecutionContext,
     ArtifactToolResult,
-    BaseArtifactToolLibrary
+    BaseArtifactToolLibrary,
+    ResolveEmbeddedArtifactId
 } from '@memberjunction/ai-core-plus';
 import {
     CompileSafeUserRegex,
@@ -342,11 +343,40 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                         },
                         sourceRange: {
                             type: 'string',
-                            description: 'A1 source range on the worksheet (e.g. "A1:C6").'
+                            description: 'A1 source range on the worksheet, or comma-separated non-contiguous ranges (e.g. "A1:C6" or "A1:A6,D1:D6").'
                         },
                         positionCell: {
                             type: 'string',
                             description: 'Anchor cell for the chart card (default "E2").'
+                        },
+                        placement: {
+                            type: 'string',
+                            enum: ['dock', 'sheet'],
+                            description: 'Where to render the chart: "dock" in bottom strip (default) or "sheet" floating over grid cells.'
+                        },
+                        widthPx: { type: 'number', description: 'Optional chart width in pixels.' },
+                        heightPx: { type: 'number', description: 'Optional chart height in pixels.' },
+                        showLegend: { type: 'boolean', description: 'Whether to display the legend (defaults to true).' },
+                        hasHeaderRow: {
+                            description: 'Header handling: "auto" (default), true, or false.'
+                        },
+                        seriesOrientation: {
+                            type: 'string',
+                            enum: ['columns', 'rows'],
+                            description: 'Whether series come from "columns" (default) or "rows".'
+                        },
+                        categoryColumnIndex: {
+                            type: 'number',
+                            description: 'Zero-based column (or row) index within sourceRange for category labels.'
+                        },
+                        includedSeriesIndices: {
+                            type: 'array',
+                            items: { type: 'number' },
+                            description: 'Zero-based series indices within sourceRange to include.'
+                        },
+                        showDataLabels: {
+                            type: 'boolean',
+                            description: 'Whether to show numeric value labels on plotted chart elements.'
                         },
                         expectedRevisionHash: { type: 'string', description: 'Optional concurrency revision hash.' }
                     },
@@ -363,7 +393,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                         sheet: { type: 'string', description: 'Target worksheet SheetID or Name.' },
                         embedId: { type: 'string', description: 'Optional stable EmbedID.' },
                         title: { type: 'string', description: 'Display title.' },
-                        artifactId: { type: 'string', description: 'Target MJ: Artifacts UUID.' },
+                        artifactId: {
+                            type: 'string',
+                            description: 'Target MJ: Artifacts UUID (or session short-ID like "B", "D", which is resolved automatically).'
+                        },
                         artifactTypeName: {
                             type: 'string',
                             description: 'Artifact type name (e.g. "Whiteboard").'
@@ -539,7 +572,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             case 'upsert_chart':
                 return this.handleUpsertChart(workbook, input);
             case 'embed_artifact':
-                return this.handleEmbedArtifact(workbook, input);
+                return this.handleEmbedArtifact(workbook, input, context);
             case 'sort_and_filter':
                 return this.handleSortAndFilter(workbook, input);
             default:
@@ -1259,25 +1292,54 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             typeof input.chartId === 'string' && input.chartId.trim()
                 ? input.chartId.trim()
                 : `chart-${sheet.Charts.length + 1}`;
-        const chartTypeRaw = typeof input.chartType === 'string' ? input.chartType.toLowerCase() : 'bar';
+        const existingIdx = sheet.Charts.findIndex((c) => c.ChartID === chartId);
+        const existing = existingIdx >= 0 ? sheet.Charts[existingIdx] : undefined;
+
+        const chartTypeRaw = typeof input.chartType === 'string' ? input.chartType.toLowerCase() : existing?.ChartType ?? 'bar';
         const chartType: SpreadsheetChartType =
             chartTypeRaw === 'line' || chartTypeRaw === 'pie' || chartTypeRaw === 'area'
                 ? chartTypeRaw
                 : 'bar';
 
+        const placement: 'dock' | 'sheet' | undefined =
+            input.placement === 'sheet' || input.placement === 'dock' ? input.placement : existing?.Placement;
+        const hasHeaderRow: boolean | 'auto' | undefined =
+            input.hasHeaderRow === true || input.hasHeaderRow === false || input.hasHeaderRow === 'auto'
+                ? input.hasHeaderRow
+                : existing?.HasHeaderRow;
+        const seriesOrientation: 'columns' | 'rows' | undefined =
+            input.seriesOrientation === 'rows' || input.seriesOrientation === 'columns'
+                ? input.seriesOrientation
+                : existing?.SeriesOrientation;
+        const categoryColumnIndex =
+            typeof input.categoryColumnIndex === 'number' && Number.isInteger(input.categoryColumnIndex) && input.categoryColumnIndex >= 0
+                ? input.categoryColumnIndex
+                : existing?.CategoryColumnIndex;
+        const includedSeriesIndices = Array.isArray(input.includedSeriesIndices)
+            ? input.includedSeriesIndices.filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0)
+            : existing?.IncludedSeriesIndices;
+
         const chartSpec: SpreadsheetChartSpec = {
+            ...(existing ?? {}),
             ChartID: chartId,
-            Title: typeof input.title === 'string' ? input.title : `Chart (${sourceRange})`,
+            Title: typeof input.title === 'string' ? input.title : existing?.Title ?? `Chart (${sourceRange})`,
             ChartType: chartType,
             SheetID: sheet.SheetID,
             SourceRange: sourceRange,
-            PositionCell: typeof input.positionCell === 'string' ? input.positionCell : 'E2',
-            ShowLegend: true
+            PositionCell: typeof input.positionCell === 'string' ? input.positionCell : existing?.PositionCell ?? 'E2',
+            Placement: placement,
+            WidthPx: typeof input.widthPx === 'number' && Number.isFinite(input.widthPx) ? Math.round(input.widthPx) : existing?.WidthPx,
+            HeightPx: typeof input.heightPx === 'number' && Number.isFinite(input.heightPx) ? Math.round(input.heightPx) : existing?.HeightPx,
+            ShowLegend: typeof input.showLegend === 'boolean' ? input.showLegend : existing?.ShowLegend ?? true,
+            HasHeaderRow: hasHeaderRow,
+            SeriesOrientation: seriesOrientation,
+            CategoryColumnIndex: categoryColumnIndex,
+            IncludedSeriesIndices: includedSeriesIndices,
+            ShowDataLabels: typeof input.showDataLabels === 'boolean' ? input.showDataLabels : existing?.ShowDataLabels
         };
 
-        const idx = sheet.Charts.findIndex((c) => c.ChartID === chartId);
-        if (idx >= 0) {
-            sheet.Charts[idx] = chartSpec;
+        if (existingIdx >= 0) {
+            sheet.Charts[existingIdx] = chartSpec;
         } else {
             sheet.Charts.push(chartSpec);
         }
@@ -1297,16 +1359,22 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
 
     private handleEmbedArtifact(
         workbook: WorkbookSpec,
-        input: Record<string, unknown>
+        input: Record<string, unknown>,
+        context?: ArtifactToolExecutionContext
     ): ArtifactToolResult {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
         }
-        const artifactId = typeof input.artifactId === 'string' ? input.artifactId.trim() : '';
-        if (!artifactId) {
+        const rawArtifactId = typeof input.artifactId === 'string' ? input.artifactId.trim() : '';
+        if (!rawArtifactId) {
             return this.errorResult('Parameter "artifactId" is required.');
         }
+        const resolved = ResolveEmbeddedArtifactId(rawArtifactId, context);
+        if (!resolved.ok) {
+            return this.errorResult(resolved.errorMessage);
+        }
+        const artifactId = resolved.artifactId;
         const embedId =
             typeof input.embedId === 'string' && input.embedId.trim()
                 ? input.embedId.trim()

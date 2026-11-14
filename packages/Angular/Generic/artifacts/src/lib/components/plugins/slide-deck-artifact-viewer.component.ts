@@ -14,7 +14,7 @@ import {
   inject,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { LogError, RunView, UserInfo, type DataSnapshot, type IMetadataProvider } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateJsonSnapshot } from '../../snapshot-helpers';
@@ -4016,6 +4016,15 @@ export class SlideDeckArtifactViewerComponent
   private async loadEmbeddedArtifactVersion(artifactId: string, versionId?: string | null): Promise<void> {
     const key = this.getEmbeddedVersionCacheKey(artifactId, versionId);
     if (this.inFlightEmbeddedVersionKeys.has(key)) {
+      return;
+    }
+
+    if (!IsValidUUID(artifactId) || (versionId && !IsValidUUID(versionId))) {
+      this.failedEmbeddedVersionMessages.set(
+        key,
+        `Embedded artifact reference "${artifactId}" is not a valid artifact UUID.`,
+      );
+      this.cdr.markForCheck();
       return;
     }
 

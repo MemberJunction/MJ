@@ -825,6 +825,10 @@ Any currently open artifacts are listed in **Available Artifacts** below. Create
 Each call specifies an artifact ID (A, B, C, etc., or `'*'` for workspace tools), a tool name, and input parameters.
 Multiple calls can be batched in one response. When emitting a payload update, use `artifactDirective` (`behavior: "create-new"` for a brand-new artifact/topic, or `behavior: "version-source"` with `targetArtifactId` set to the artifact's alpha ID or `artifactId` UUID when refining an existing artifact).
 
+**Critical constraints:**
+- **NEVER** put artifact or workspace tool names (`create_artifact`, `open_artifact`, `get_blocks`, `insert_block_after`, `replace_block`, etc.) in `nextStep.actions` — they are NOT Action entities. Always call them via `artifactToolCalls`.
+- **Do NOT** emit `open:resource` `actionableCommands` for conversation artifacts you created or updated via artifact tools — inline artifact cards are attached automatically and auto-open in the side viewer.
+
 **How results reach you:** the result of each tool call is delivered as a regular
 conversation message on your next turn (header `Artifact tool result:` /
 `Artifact tool results (...)`), not via this system prompt. Recent tool results

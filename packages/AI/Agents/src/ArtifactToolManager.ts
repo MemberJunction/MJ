@@ -969,6 +969,7 @@ export class ArtifactToolManager {
         artifactId: targetEntry.artifactId,
         agentRunId: activeRunIdForCall,
         agentName: activeAgentNameForCall,
+        resolveArtifactId: (idOrAlpha: string) => this.ResolveArtifactUuid(idOrAlpha),
       };
       let result: ArtifactToolResult;
       try {

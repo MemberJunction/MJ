@@ -4,6 +4,7 @@ import {
     BaseArtifactToolLibrary,
     ArtifactToolDefinition,
     ArtifactToolResult,
+    ResolveEmbeddedArtifactId,
     type ArtifactToolExecutionContext
 } from '@memberjunction/ai-core-plus';
 import {
@@ -331,7 +332,10 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                     type: 'object',
                     properties: {
                         blockId: { type: 'string', description: 'Optional unique block ID.' },
-                        artifactId: { type: 'string', description: 'Target MJ: Artifacts ID to embed.' },
+                        artifactId: {
+                            type: 'string',
+                            description: 'Target MJ: Artifacts UUID (or session short-ID like "B", "D", which is automatically resolved to its UUID).'
+                        },
                         artifactType: {
                             type: 'string',
                             description: 'Artifact type name (e.g., "Whiteboard", "Presentation", "Excel Spreadsheet").'
@@ -425,9 +429,9 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             case 'get_lines':
                 return this.handleGetLines(contentStr, input);
             case 'insert_block_after':
-                return this.handleInsertBlockAfter(contentStr, input);
+                return this.handleInsertBlockAfter(contentStr, input, context);
             case 'replace_block':
-                return this.handleReplaceBlock(contentStr, input);
+                return this.handleReplaceBlock(contentStr, input, context);
             case 'delete_block':
                 return this.handleDeleteBlock(contentStr, input);
             case 'upsert_table':
@@ -435,7 +439,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             case 'insert_live_block':
                 return this.handleInsertLiveBlock(contentStr, input, context);
             case 'embed_artifact_block':
-                return this.handleEmbedArtifactBlock(contentStr, input);
+                return this.handleEmbedArtifactBlock(contentStr, input, context);
             case 'propose_suggestion':
                 return this.handleProposeSuggestion(contentStr, input);
             default:
@@ -954,16 +958,54 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             .join('\n\n');
     }
 
-    private handleInsertBlockAfter(content: string, input: Record<string, unknown>): ArtifactToolResult {
+    private normalizeArtifactBlocksInMarkdown(
+        markdown: string,
+        context?: ArtifactToolExecutionContext
+    ): { ok: true; markdown: string; errorMessage?: never } | { ok: false; markdown?: never; errorMessage: string } {
+        const parsedSegs = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(markdown);
+        let updated = markdown;
+        for (const seg of parsedSegs) {
+            if (seg.Type !== 'mj-block' || !seg.BlockSpec || seg.BlockSpec.Kind !== 'Artifact') {
+                continue;
+            }
+            const rawArtifactId = String(seg.BlockSpec.ArtifactID ?? '').trim();
+            if (!rawArtifactId) {
+                return { ok: false, errorMessage: 'Embedded Artifact block requires a valid ArtifactID.' };
+            }
+            const resolved = ResolveEmbeddedArtifactId(rawArtifactId, context);
+            if (!resolved.ok) {
+                return { ok: false, errorMessage: resolved.errorMessage };
+            }
+            if (resolved.artifactId !== seg.BlockSpec.ArtifactID) {
+                const normalizedDirective = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective({
+                    ...seg.BlockSpec,
+                    ArtifactID: resolved.artifactId
+                });
+                updated = updated.replace(seg.RawText, normalizedDirective);
+            }
+        }
+        return { ok: true, markdown: updated };
+    }
+
+    private handleInsertBlockAfter(
+        content: string,
+        input: Record<string, unknown>,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
         const conflict = this.checkRevision(content, input.expectedRevisionHash);
         if (conflict) {
             return { success: false, data: null, errorMessage: conflict };
         }
 
-        const newMarkdown = String(input.markdown ?? '').trim();
-        if (!newMarkdown) {
+        const rawNewMarkdown = String(input.markdown ?? '').trim();
+        if (!rawNewMarkdown) {
             return { success: false, data: null, errorMessage: 'insert_block_after requires non-empty markdown.' };
         }
+        const normalized = this.normalizeArtifactBlocksInMarkdown(rawNewMarkdown, context);
+        if (!normalized.ok) {
+            return { success: false, data: null, errorMessage: normalized.errorMessage };
+        }
+        const newMarkdown = normalized.markdown;
 
         const blocks = this.ParseLogicalBlocks(content);
         const existingIds = new Set(blocks.map((b) => b.blockId));
@@ -1032,17 +1074,26 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleReplaceBlock(content: string, input: Record<string, unknown>): ArtifactToolResult {
+    private handleReplaceBlock(
+        content: string,
+        input: Record<string, unknown>,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
         const conflict = this.checkRevision(content, input.expectedRevisionHash);
         if (conflict) {
             return { success: false, data: null, errorMessage: conflict };
         }
 
         const blockId = String(input.blockId ?? '').trim();
-        const rawReplacement = String(input.markdown ?? '').trim();
+        const rawInputMarkdown = String(input.markdown ?? '').trim();
         if (!blockId) {
             return { success: false, data: null, errorMessage: 'replace_block requires blockId.' };
         }
+        const normalized = this.normalizeArtifactBlocksInMarkdown(rawInputMarkdown, context);
+        if (!normalized.ok) {
+            return { success: false, data: null, errorMessage: normalized.errorMessage };
+        }
+        const rawReplacement = normalized.markdown;
 
         const blocks = this.ParseLogicalBlocks(content);
         const idx = blocks.findIndex((b) => b.blockId === blockId);
@@ -1217,11 +1268,20 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
     }
 
-    private handleEmbedArtifactBlock(content: string, input: Record<string, unknown>): ArtifactToolResult {
-        const artifactId = String(input.artifactId ?? '').trim();
-        if (!artifactId) {
+    private handleEmbedArtifactBlock(
+        content: string,
+        input: Record<string, unknown>,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
+        const rawArtifactId = String(input.artifactId ?? '').trim();
+        if (!rawArtifactId) {
             return { success: false, data: null, errorMessage: 'embed_artifact_block requires artifactId.' };
         }
+        const resolved = ResolveEmbeddedArtifactId(rawArtifactId, context);
+        if (!resolved.ok) {
+            return { success: false, data: null, errorMessage: resolved.errorMessage };
+        }
+        const artifactId = resolved.artifactId;
         const blockId =
             typeof input.blockId === 'string' && input.blockId.trim()
                 ? input.blockId.trim()
@@ -1240,11 +1300,15 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         };
 
         const directive = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(spec);
-        return this.handleInsertBlockAfter(content, {
-            afterBlockId: input.afterBlockId,
-            markdown: directive,
-            expectedRevisionHash: input.expectedRevisionHash
-        });
+        return this.handleInsertBlockAfter(
+            content,
+            {
+                afterBlockId: input.afterBlockId,
+                markdown: directive,
+                expectedRevisionHash: input.expectedRevisionHash
+            },
+            context
+        );
     }
 
     private handleProposeSuggestion(content: string, input: Record<string, unknown>): ArtifactToolResult {

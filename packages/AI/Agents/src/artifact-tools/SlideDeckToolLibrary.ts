@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import {
+    BaseArtifactToolLibrary,
+    ArtifactToolDefinition,
+    ArtifactToolResult,
+    ResolveEmbeddedArtifactId,
+    type ArtifactToolExecutionContext
+} from '@memberjunction/ai-core-plus';
 import {
     ArtifactEmbedMode,
     DocumentBlockKind,
@@ -261,7 +267,8 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
     protected override async invokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
-        artifactContent: string | Buffer
+        artifactContent: string | Buffer,
+        context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
         const contentStr = typeof artifactContent === 'string' ? artifactContent : artifactContent.toString('utf-8');
 
@@ -281,7 +288,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 return this.handleReorderSlides(contentStr, input);
             case 'upsert_slide_element':
             case 'update_slide_region':
-                return this.handleUpsertSlideElement(contentStr, input);
+                return this.handleUpsertSlideElement(contentStr, input, context);
             case 'delete_slide_element':
                 return this.handleDeleteSlideElement(contentStr, input);
             case 'update_speaker_notes':
@@ -524,7 +531,11 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleUpsertSlideElement(contentStr: string, input: Record<string, unknown>): ArtifactToolResult {
+    private handleUpsertSlideElement(
+        contentStr: string,
+        input: Record<string, unknown>,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
         const slideId = typeof input.slideId === 'string' ? input.slideId.trim() : '';
         const regionId = typeof input.regionId === 'string' ? input.regionId.trim() : '';
         if (!slideId || !regionId) {
@@ -542,12 +553,21 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
 
         if (input.mjBlock && typeof input.mjBlock === 'object') {
             const rawBlock = input.mjBlock as Record<string, unknown>;
+            const blockKind = (typeof rawBlock.Kind === 'string' ? rawBlock.Kind : 'EntityView') as DocumentBlockKind;
+            let resolvedArtifactId = typeof rawBlock.ArtifactID === 'string' ? rawBlock.ArtifactID : undefined;
+            if (blockKind === 'Artifact' || resolvedArtifactId) {
+                const resolved = ResolveEmbeddedArtifactId(resolvedArtifactId ?? '', context);
+                if (!resolved.ok) {
+                    return { success: false, data: null, errorMessage: resolved.errorMessage };
+                }
+                resolvedArtifactId = resolved.artifactId;
+            }
             blockSpec = {
                 BlockID:
                     typeof rawBlock.BlockID === 'string'
                         ? rawBlock.BlockID
                         : `slide-blk-${slideId}-${regionId}`,
-                Kind: (typeof rawBlock.Kind === 'string' ? rawBlock.Kind : 'EntityView') as DocumentBlockKind,
+                Kind: blockKind,
                 Mode: (typeof rawBlock.Mode === 'string' ? rawBlock.Mode : 'Live') as DocumentBlockMode,
                 Title: typeof rawBlock.Title === 'string' ? rawBlock.Title : undefined,
                 EntityName: typeof rawBlock.EntityName === 'string' ? rawBlock.EntityName : undefined,
@@ -556,7 +576,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 ExtraFilter: typeof rawBlock.ExtraFilter === 'string' ? rawBlock.ExtraFilter : undefined,
                 QueryID: typeof rawBlock.QueryID === 'string' ? rawBlock.QueryID : undefined,
                 QueryName: typeof rawBlock.QueryName === 'string' ? rawBlock.QueryName : undefined,
-                ArtifactID: typeof rawBlock.ArtifactID === 'string' ? rawBlock.ArtifactID : undefined,
+                ArtifactID: resolvedArtifactId,
                 ArtifactType: typeof rawBlock.ArtifactType === 'string' ? rawBlock.ArtifactType : undefined,
                 EmbedMode: (typeof rawBlock.EmbedMode === 'string' ? rawBlock.EmbedMode : 'Inline') as ArtifactEmbedMode
             };

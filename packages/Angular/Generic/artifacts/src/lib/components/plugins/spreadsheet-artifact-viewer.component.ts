@@ -16,7 +16,7 @@ import {
   inject,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, RunView, UserInfo, type DataSnapshot, type IMetadataProvider } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateJsonSnapshot } from '../../snapshot-helpers';
@@ -625,6 +625,7 @@ export interface ResolvedSheetsToolbarItem {
               (copy)="OnGridCopy($event)"
               (paste)="OnGridPaste($event)"
             >
+              <div class="mj-sheets-grid-canvas" data-testid="sheets-grid-canvas">
               <table
                 class="mj-sheets-grid-table"
                 role="grid"
@@ -823,15 +824,55 @@ export interface ResolvedSheetsToolbarItem {
                   }
                 </tbody>
               </table>
+
+              <!-- Floating In-Sheet Range Charts (Placement === 'sheet') -->
+              @for (chart of FloatingCharts; track chart.ChartID) {
+                <div
+                  class="mj-sheets-floating-chart mj-sheets-object-card mj-sheets-chart-card"
+                  [style.left.px]="GetFloatingChartLeftPx(chart)"
+                  [style.top.px]="GetFloatingChartTopPx(chart)"
+                  [style.width.px]="chart.WidthPx ?? 400"
+                  [style.min-height.px]="chart.HeightPx ?? 240"
+                  [attr.data-testid]="'sheet-floating-chart-' + chart.ChartID"
+                  [attr.data-chart-id]="chart.ChartID"
+                  (mousedown)="$event.stopPropagation()"
+                  (dblclick)="OpenChartEditorModal(chart, $event)"
+                >
+                  <ng-container
+                    [ngTemplateOutlet]="chartCardTpl"
+                    [ngTemplateOutletContext]="{ chart: chart, floating: true }"
+                  ></ng-container>
+                  @if (CanEdit) {
+                    <span
+                      class="mj-sheets-chart-resize-handle"
+                      title="Drag to resize chart"
+                      [attr.data-testid]="'sheet-chart-resize-' + chart.ChartID"
+                      (mousedown)="StartChartResize(chart, $event)"
+                    ></span>
+                  }
+                </div>
+              }
+              </div>
             </div>
 
-            <!-- Bound Live Tables, Range Charts & Inline OLE Whiteboards Strip -->
-            @if (
-              (ActiveSheet.LiveTables && ActiveSheet.LiveTables.length > 0) ||
-              (ActiveSheet.Charts && ActiveSheet.Charts.length > 0) ||
-              (ActiveSheet.EmbeddedArtifacts && ActiveSheet.EmbeddedArtifacts.length > 0)
-            ) {
-              <div class="mj-sheets-objects-strip" data-testid="sheets-objects-strip">
+            <!-- Resizable Dock Splitter + Bound Live Tables, Range Charts & Inline OLE Whiteboards Strip -->
+            @if (HasDockedObjects) {
+              <div
+                class="mj-sheets-objects-splitter"
+                data-testid="sheets-objects-splitter"
+                role="separator"
+                aria-orientation="horizontal"
+                title="Drag to resize bottom pane · Double-click to reset height"
+                (mousedown)="StartObjectsPaneResize($event)"
+                (dblclick)="ResetObjectsPaneHeight()"
+              >
+                <span class="mj-sheets-objects-splitter-pill"></span>
+              </div>
+              <div
+                class="mj-sheets-objects-strip"
+                data-testid="sheets-objects-strip"
+                [style.height.px]="ResolvedObjectsPaneHeightPx"
+              >
                 <!-- Bound Live Tables -->
                 @if (ActiveSheet.LiveTables && ActiveSheet.LiveTables.length > 0) {
                   <div class="mj-sheets-objects-section" data-testid="sheets-live-tables-section">
@@ -963,281 +1004,25 @@ export interface ResolvedSheetsToolbarItem {
                   </div>
                 }
 
-                <!-- Range Charts (§ 6.3, Accept #5) -->
-                @if (ActiveSheet.Charts && ActiveSheet.Charts.length > 0) {
+                <!-- Docked Range Charts (§ 6.3, Accept #5) -->
+                @if (DockedCharts.length > 0) {
                   <div class="mj-sheets-objects-section" data-testid="sheets-charts-section">
                     <div class="mj-sheets-section-header">
                       <i class="fa-solid fa-chart-column"></i>
-                      <span>Live Range Charts ({{ ActiveSheet.Charts.length }})</span>
+                      <span>Live Range Charts ({{ DockedCharts.length }})</span>
                     </div>
                     <div class="mj-sheets-cards-row">
-                      @for (chart of ActiveSheet.Charts; track chart.ChartID) {
-                        @let dataset = GetChartDataset(chart);
+                      @for (chart of DockedCharts; track chart.ChartID) {
                         <div
                           class="mj-sheets-object-card mj-sheets-chart-card"
+                          [style.flex-basis.px]="chart.WidthPx ?? null"
                           [attr.data-testid]="'sheet-chart-card-' + chart.ChartID"
+                          (dblclick)="OpenChartEditorModal(chart, $event)"
                         >
-                          <div class="mj-sheets-card-top">
-                            <div>
-                              <strong class="mj-sheets-card-title">{{ chart.Title }}</strong>
-                              <span class="mj-sheets-card-meta">
-                                Range: <code>{{ chart.SourceRange }}</code> · {{ chart.ChartType | uppercase }}
-                              </span>
-                            </div>
-                            <div class="mj-sheets-action-btns">
-                              <select
-                                class="mj-sheets-mini-select"
-                                [ngModel]="chart.ChartType"
-                                (ngModelChange)="OnChartTypeChanged(chart, $event)"
-                                [disabled]="!CanEdit"
-                                [attr.data-testid]="'sheet-chart-type-' + chart.ChartID"
-                              >
-                                <option value="bar">Bar</option>
-                                <option value="line">Line</option>
-                                <option value="area">Area</option>
-                                <option value="pie">Pie</option>
-                              </select>
-                              <button
-                                type="button"
-                                class="mj-sheets-mini-btn"
-                                (click)="CopySlideBlockDescriptorForChart(chart)"
-                                title="Copy Live Artifact Block JSON for MJ Slides / MJ Docs"
-                                [attr.data-testid]="'sheet-chart-copy-block-' + chart.ChartID"
-                              >
-                                <i class="fa-solid fa-share-from-square"></i> Embed in Slide/Doc
-                              </button>
-                              @if (CanEdit) {
-                                <button
-                                  type="button"
-                                  class="mj-sheets-mini-btn"
-                                  (click)="RemoveRangeChart(chart)"
-                                  title="Remove chart"
-                                  [attr.data-testid]="'sheet-chart-remove-' + chart.ChartID"
-                                >
-                                  <i class="fa-solid fa-xmark"></i>
-                                </button>
-                              }
-                            </div>
-                          </div>
-
-                          @if (dataset && dataset.Categories.length > 0 && dataset.Series.length > 0) {
-                            @if (dataset.Series.length > 1 && chart.ChartType !== 'pie') {
-                              <div class="mj-sheets-chart-series-bar">
-                                @for (s of dataset.Series; track s.Name; let sIdx = $index) {
-                                  <button
-                                    type="button"
-                                    class="mj-sheets-series-pill"
-                                    [class.active]="IsChartSeriesSelected(chart, dataset, sIdx)"
-                                    (click)="SetChartSeriesSelection(chart.ChartID, sIdx)"
-                                  >
-                                    <span
-                                      class="mj-sheets-series-dot"
-                                      [style.background]="GetChartSeriesColor(sIdx)"
-                                    ></span>
-                                    <span>{{ s.Name }}</span>
-                                  </button>
-                                }
-                                <button
-                                  type="button"
-                                  class="mj-sheets-series-pill"
-                                  [class.active]="IsAllChartSeriesSelected(chart, dataset)"
-                                  (click)="SetChartSeriesSelection(chart.ChartID, 'all')"
-                                >
-                                  <span>All</span>
-                                </button>
-                              </div>
-                            } @else if (dataset.Series.length > 1 && chart.ChartType === 'pie') {
-                              <div class="mj-sheets-chart-series-bar">
-                                @for (s of dataset.Series; track s.Name; let sIdx = $index) {
-                                  <button
-                                    type="button"
-                                    class="mj-sheets-series-pill"
-                                    [class.active]="IsChartSeriesSelected(chart, dataset, sIdx)"
-                                    (click)="SetChartSeriesSelection(chart.ChartID, sIdx)"
-                                  >
-                                    <span
-                                      class="mj-sheets-series-dot"
-                                      [style.background]="GetChartSeriesColor(sIdx)"
-                                    ></span>
-                                    <span>{{ s.Name }}</span>
-                                  </button>
-                                }
-                              </div>
-                            }
-
-                            <div
-                              class="mj-sheets-chart-Stage"
-                              [attr.data-testid]="'sheet-chart-svg-' + chart.ChartID"
-                            >
-                              @let activeSeries = GetActiveChartSeries(chart, dataset);
-                              @let maxVal = GetChartMaxValueForSeries(activeSeries);
-                              <svg viewBox="0 0 380 180" class="mj-sheets-chart-svg">
-                                @if (chart.ChartType === 'pie') {
-                                  @let pieSlices = GetChartPieSlices(chart, dataset, activeSeries);
-                                  @if (pieSlices.length === 0) {
-                                    <text x="190" y="92" text-anchor="middle" font-size="11" fill="var(--mj-text-secondary)">
-                                      All values are 0 in this series.
-                                    </text>
-                                  } @else {
-                                    @for (slice of pieSlices; track slice.Index) {
-                                      <g>
-                                        @if (slice.IsFullCircle) {
-                                          <circle cx="96" cy="90" r="62" [attr.fill]="slice.Color">
-                                            <title>{{ slice.Category }}: {{ slice.RawValue }} ({{ slice.PercentLabel }})</title>
-                                          </circle>
-                                        } @else {
-                                          <path [attr.d]="slice.Path" [attr.fill]="slice.Color" stroke="var(--mj-bg-surface)" stroke-width="1.5">
-                                            <title>{{ slice.Category }}: {{ slice.RawValue }} ({{ slice.PercentLabel }})</title>
-                                          </path>
-                                        }
-                                        @if (slice.Index < 7) {
-                                          <rect
-                                            x="174"
-                                            [attr.y]="22 + slice.Index * 21"
-                                            width="9"
-                                            height="9"
-                                            rx="2"
-                                            [attr.fill]="slice.Color"
-                                          />
-                                          <text
-                                            x="188"
-                                            [attr.y]="30 + slice.Index * 21"
-                                            font-size="9.5"
-                                            fill="var(--mj-text-primary)"
-                                          >
-                                            {{ slice.ShortCategory }} · {{ slice.PercentLabel }} ({{ slice.FormattedValue }})
-                                          </text>
-                                        }
-                                      </g>
-                                    }
-                                  }
-                                } @else {
-                                  <!-- Cartesian gridlines and Y-axis ticks -->
-                                  <line x1="44" y1="18" x2="366" y2="18" stroke="var(--mj-border-subtle)" stroke-dasharray="2,2" />
-                                  <line x1="44" y1="79" x2="366" y2="79" stroke="var(--mj-border-subtle)" stroke-dasharray="2,2" />
-                                  <line x1="44" y1="140" x2="366" y2="140" stroke="var(--mj-border-default)" />
-                                  <text x="40" y="21" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
-                                    {{ FormatChartValue(maxVal) }}
-                                  </text>
-                                  <text x="40" y="82" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
-                                    {{ FormatChartValue(maxVal / 2) }}
-                                  </text>
-                                  <text x="40" y="143" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
-                                    0
-                                  </text>
-
-                                  @if (chart.ChartType === 'line' || chart.ChartType === 'area') {
-                                    @let lineSeries = GetChartLineSeries(dataset, activeSeries, maxVal);
-                                    @for (ls of lineSeries; track ls.SeriesIndex) {
-                                      <g>
-                                        @if (chart.ChartType === 'area' && ls.AreaPath) {
-                                          <path [attr.d]="ls.AreaPath" [attr.fill]="ls.Color" fill-opacity="0.2" />
-                                        }
-                                        @if (ls.PolylinePoints) {
-                                          <polyline
-                                            fill="none"
-                                            [attr.stroke]="ls.Color"
-                                            stroke-width="2.2"
-                                            stroke-linejoin="round"
-                                            stroke-linecap="round"
-                                            [attr.points]="ls.PolylinePoints"
-                                          />
-                                        }
-                                        @for (pt of ls.Points; track pt.Index) {
-                                          <g>
-                                            <circle
-                                              [attr.cx]="pt.X"
-                                              [attr.cy]="pt.Y"
-                                              r="3.8"
-                                              [attr.fill]="ls.Color"
-                                              stroke="var(--mj-bg-surface)"
-                                              stroke-width="1.4"
-                                            >
-                                              <title>{{ pt.Category }} · {{ ls.Name }}: {{ pt.Value }}</title>
-                                            </circle>
-                                            @if (ls.ShowPointLabels) {
-                                              <text
-                                                [attr.x]="pt.X"
-                                                [attr.y]="pt.LabelY"
-                                                text-anchor="middle"
-                                                font-size="8.5"
-                                                fill="var(--mj-text-primary)"
-                                                [attr.data-testid]="ls.SeriesIndex === 0 ? 'sheet-chart-val-' + chart.ChartID + '-' + pt.Index : null"
-                                              >
-                                                {{ pt.FormattedValue }}
-                                              </text>
-                                            }
-                                          </g>
-                                        }
-                                      </g>
-                                    }
-                                    @for (xt of GetChartCategoryTicks(dataset.Categories); track xt.Index) {
-                                      <text
-                                        [attr.x]="xt.X"
-                                        y="153"
-                                        [attr.text-anchor]="xt.Rotated ? 'end' : 'middle'"
-                                        [attr.transform]="xt.Rotated ? 'rotate(-20 ' + xt.X + ' 153)' : null"
-                                        font-size="8.5"
-                                        fill="var(--mj-text-secondary)"
-                                      >
-                                        <title>{{ xt.FullLabel }}</title>
-                                        {{ xt.ShortLabel }}
-                                      </text>
-                                    }
-                                  } @else {
-                                    <!-- Bar Chart -->
-                                    @let bars = GetChartBarRects(chart, dataset, activeSeries, maxVal);
-                                    @for (bar of bars; track bar.Key) {
-                                      <g>
-                                        <rect
-                                          [attr.x]="bar.X"
-                                          [attr.y]="bar.Y"
-                                          [attr.width]="bar.Width"
-                                          [attr.height]="bar.Height"
-                                          rx="2.5"
-                                          [attr.fill]="bar.Color"
-                                        >
-                                          <title>{{ bar.Category }} · {{ bar.SeriesName }}: {{ bar.Value }}</title>
-                                        </rect>
-                                        @if (bars.length <= 12) {
-                                          <text
-                                            [attr.x]="bar.X + bar.Width / 2"
-                                            [attr.y]="bar.Y > 14 ? bar.Y - 3 : 12"
-                                            text-anchor="middle"
-                                            font-size="8.5"
-                                            fill="var(--mj-text-primary)"
-                                            [attr.data-testid]="bar.SeriesIndex === 0 ? 'sheet-chart-val-' + chart.ChartID + '-' + bar.CategoryIndex : null"
-                                          >
-                                            {{ bar.FormattedValue }}
-                                          </text>
-                                        }
-                                      </g>
-                                    }
-                                    @for (xt of GetChartCategoryTicks(dataset.Categories); track xt.Index) {
-                                      <text
-                                        [attr.x]="xt.X"
-                                        y="153"
-                                        [attr.text-anchor]="xt.Rotated ? 'end' : 'middle'"
-                                        [attr.transform]="xt.Rotated ? 'rotate(-20 ' + xt.X + ' 153)' : null"
-                                        font-size="8.5"
-                                        fill="var(--mj-text-secondary)"
-                                      >
-                                        <title>{{ xt.FullLabel }}</title>
-                                        {{ xt.ShortLabel }}
-                                      </text>
-                                    }
-                                  }
-                                }
-                              </svg>
-                            </div>
-                          } @else {
-                            <div class="mj-sheets-chart-empty" data-testid="sheet-chart-empty-hint">
-                              <i class="fa-solid fa-circle-info"></i>
-                              <span>
-                                No numeric values found in <code>{{ chart.SourceRange }}</code>. Select a range containing at least one numeric column (e.g., Revenue or Units).
-                              </span>
-                            </div>
-                          }
+                          <ng-container
+                            [ngTemplateOutlet]="chartCardTpl"
+                            [ngTemplateOutletContext]="{ chart: chart, floating: false }"
+                          ></ng-container>
                         </div>
                       }
                     </div>
@@ -1626,6 +1411,591 @@ export interface ResolvedSheetsToolbarItem {
                 data-testid="sheet-confirm-add-table-btn"
               >
                 <i class="fa-solid fa-plus"></i> Bind & Refresh Table
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Reusable Chart Card & SVG Templates (shared by Docked Strip, Floating Sheet Overlay, and Properties Preview) -->
+      <ng-template #chartCardTpl let-chart="chart" let-floating="floating">
+        @let dataset = GetChartDataset(chart);
+        <div
+          class="mj-sheets-card-top"
+          [class.mj-sheets-chart-card-draggable]="floating && CanEdit"
+          (mousedown)="floating ? StartChartDrag(chart, $event) : null"
+        >
+          <div class="mj-sheets-chart-title-wrap">
+            @if (floating && CanEdit) {
+              <span class="mj-sheets-chart-drag-grip" title="Drag chart to reposition on sheet">
+                <i class="fa-solid fa-grip-vertical"></i>
+              </span>
+            }
+            <div>
+              <strong class="mj-sheets-card-title">{{ chart.Title }}</strong>
+              <span class="mj-sheets-card-meta">
+                Range: <code>{{ chart.SourceRange }}</code> · {{ chart.ChartType | uppercase }}@if (floating && chart.PositionCell) { · &#64; {{ chart.PositionCell }}}
+              </span>
+            </div>
+          </div>
+          <div class="mj-sheets-action-btns" (mousedown)="$event.stopPropagation()">
+            <select
+              class="mj-sheets-mini-select"
+              [ngModel]="chart.ChartType"
+              (ngModelChange)="OnChartTypeChanged(chart, $event)"
+              [disabled]="!CanEdit"
+              [attr.data-testid]="'sheet-chart-type-' + chart.ChartID"
+            >
+              <option value="bar">Bar</option>
+              <option value="line">Line</option>
+              <option value="area">Area</option>
+              <option value="pie">Pie</option>
+            </select>
+            @if (CanEdit) {
+              <button
+                type="button"
+                class="mj-sheets-mini-btn"
+                (click)="OpenChartEditorModal(chart, $event)"
+                title="Edit chart range, series, layout & appearance"
+                [attr.data-testid]="'sheet-chart-edit-' + chart.ChartID"
+              >
+                <i class="fa-solid fa-sliders"></i>
+              </button>
+              <button
+                type="button"
+                class="mj-sheets-mini-btn"
+                (click)="ToggleChartPlacement(chart)"
+                [title]="floating ? 'Dock chart below sheet' : 'Move chart onto sheet canvas'"
+                [attr.data-testid]="'sheet-chart-placement-' + chart.ChartID"
+              >
+                <i class="fa-solid" [class.fa-down-left-and-up-right-to-center]="floating" [class.fa-up-right-from-square]="!floating"></i>
+                <span>{{ floating ? 'Dock' : 'On Sheet' }}</span>
+              </button>
+            }
+            <button
+              type="button"
+              class="mj-sheets-mini-btn"
+              (click)="CopySlideBlockDescriptorForChart(chart)"
+              title="Copy Live Artifact Block JSON for MJ Slides / MJ Docs"
+              [attr.data-testid]="'sheet-chart-copy-block-' + chart.ChartID"
+            >
+              <i class="fa-solid fa-share-from-square"></i>
+            </button>
+            @if (CanEdit) {
+              <button
+                type="button"
+                class="mj-sheets-mini-btn"
+                (click)="RemoveRangeChart(chart)"
+                title="Remove chart"
+                [attr.data-testid]="'sheet-chart-remove-' + chart.ChartID"
+              >
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (dataset && dataset.Categories.length > 0 && dataset.Series.length > 0) {
+          @if (chart.ShowLegend !== false && dataset.Series.length > 1 && chart.ChartType !== 'pie') {
+            <div class="mj-sheets-chart-series-bar">
+              @for (s of dataset.Series; track s.Name; let sIdx = $index) {
+                <button
+                  type="button"
+                  class="mj-sheets-series-pill"
+                  [class.active]="IsChartSeriesSelected(chart, dataset, sIdx)"
+                  (click)="SetChartSeriesSelection(chart.ChartID, sIdx)"
+                >
+                  <span
+                    class="mj-sheets-series-dot"
+                    [style.background]="GetChartSeriesColor(sIdx)"
+                  ></span>
+                  <span>{{ s.Name }}</span>
+                </button>
+              }
+              <button
+                type="button"
+                class="mj-sheets-series-pill"
+                [class.active]="IsAllChartSeriesSelected(chart, dataset)"
+                (click)="SetChartSeriesSelection(chart.ChartID, 'all')"
+              >
+                <span>All</span>
+              </button>
+            </div>
+          } @else if (chart.ShowLegend !== false && dataset.Series.length > 1 && chart.ChartType === 'pie') {
+            <div class="mj-sheets-chart-series-bar">
+              @for (s of dataset.Series; track s.Name; let sIdx = $index) {
+                <button
+                  type="button"
+                  class="mj-sheets-series-pill"
+                  [class.active]="IsChartSeriesSelected(chart, dataset, sIdx)"
+                  (click)="SetChartSeriesSelection(chart.ChartID, sIdx)"
+                >
+                  <span
+                    class="mj-sheets-series-dot"
+                    [style.background]="GetChartSeriesColor(sIdx)"
+                  ></span>
+                  <span>{{ s.Name }}</span>
+                </button>
+              }
+            </div>
+          }
+
+          <div
+            class="mj-sheets-chart-Stage"
+            [attr.data-testid]="'sheet-chart-svg-' + chart.ChartID"
+          >
+            <ng-container
+              [ngTemplateOutlet]="chartSvgTpl"
+              [ngTemplateOutletContext]="{ chart: chart, dataset: dataset }"
+            ></ng-container>
+          </div>
+        } @else {
+          <div class="mj-sheets-chart-empty" data-testid="sheet-chart-empty-hint">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>
+              No numeric values found in <code>{{ chart.SourceRange }}</code>. Use the
+              <i class="fa-solid fa-sliders"></i> editor to adjust range, headers, or orientation.
+            </span>
+          </div>
+        }
+      </ng-template>
+
+      <ng-template #chartSvgTpl let-chart="chart" let-dataset="dataset">
+        @let activeSeries = GetActiveChartSeries(chart, dataset);
+        @let maxVal = GetChartMaxValueForSeries(activeSeries);
+        <svg viewBox="0 0 380 180" class="mj-sheets-chart-svg">
+          @if (chart.ChartType === 'pie') {
+            @let pieSlices = GetChartPieSlices(chart, dataset, activeSeries);
+            @if (pieSlices.length === 0) {
+              <text x="190" y="92" text-anchor="middle" font-size="11" fill="var(--mj-text-secondary)">
+                All values are 0 in this series.
+              </text>
+            } @else {
+              @for (slice of pieSlices; track slice.Index) {
+                <g>
+                  @if (slice.IsFullCircle) {
+                    <circle cx="96" cy="90" r="62" [attr.fill]="slice.Color">
+                      <title>{{ slice.Category }}: {{ slice.RawValue }} ({{ slice.PercentLabel }})</title>
+                    </circle>
+                  } @else {
+                    <path [attr.d]="slice.Path" [attr.fill]="slice.Color" stroke="var(--mj-bg-surface)" stroke-width="1.5">
+                      <title>{{ slice.Category }}: {{ slice.RawValue }} ({{ slice.PercentLabel }})</title>
+                    </path>
+                  }
+                  @if (slice.Index < 7) {
+                    <rect
+                      x="174"
+                      [attr.y]="22 + slice.Index * 21"
+                      width="9"
+                      height="9"
+                      rx="2"
+                      [attr.fill]="slice.Color"
+                    />
+                    <text
+                      x="188"
+                      [attr.y]="30 + slice.Index * 21"
+                      font-size="9.5"
+                      fill="var(--mj-text-primary)"
+                    >
+                      {{ slice.ShortCategory }} · {{ slice.PercentLabel }} ({{ slice.FormattedValue }})
+                    </text>
+                  }
+                </g>
+              }
+            }
+          } @else {
+            <!-- Cartesian gridlines and Y-axis ticks -->
+            <line x1="44" y1="18" x2="366" y2="18" stroke="var(--mj-border-subtle)" stroke-dasharray="2,2" />
+            <line x1="44" y1="79" x2="366" y2="79" stroke="var(--mj-border-subtle)" stroke-dasharray="2,2" />
+            <line x1="44" y1="140" x2="366" y2="140" stroke="var(--mj-border-default)" />
+            <text x="40" y="21" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
+              {{ FormatChartValue(maxVal) }}
+            </text>
+            <text x="40" y="82" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
+              {{ FormatChartValue(maxVal / 2) }}
+            </text>
+            <text x="40" y="143" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
+              0
+            </text>
+
+            @if (chart.ChartType === 'line' || chart.ChartType === 'area') {
+              @let lineSeries = GetChartLineSeries(dataset, activeSeries, maxVal, chart);
+              @for (ls of lineSeries; track ls.SeriesIndex) {
+                <g>
+                  @if (chart.ChartType === 'area' && ls.AreaPath) {
+                    <path [attr.d]="ls.AreaPath" [attr.fill]="ls.Color" fill-opacity="0.2" />
+                  }
+                  @if (ls.PolylinePoints) {
+                    <polyline
+                      fill="none"
+                      [attr.stroke]="ls.Color"
+                      stroke-width="2.2"
+                      stroke-linejoin="round"
+                      stroke-linecap="round"
+                      [attr.points]="ls.PolylinePoints"
+                    />
+                  }
+                  @for (pt of ls.Points; track pt.Index) {
+                    <g>
+                      <circle
+                        [attr.cx]="pt.X"
+                        [attr.cy]="pt.Y"
+                        r="3.8"
+                        [attr.fill]="ls.Color"
+                        stroke="var(--mj-bg-surface)"
+                        stroke-width="1.4"
+                      >
+                        <title>{{ pt.Category }} · {{ ls.Name }}: {{ pt.Value }}</title>
+                      </circle>
+                      @if (ls.ShowPointLabels) {
+                        <text
+                          [attr.x]="pt.X"
+                          [attr.y]="pt.LabelY"
+                          text-anchor="middle"
+                          font-size="8.5"
+                          fill="var(--mj-text-primary)"
+                          [attr.data-testid]="ls.SeriesIndex === 0 ? 'sheet-chart-val-' + chart.ChartID + '-' + pt.Index : null"
+                        >
+                          {{ pt.FormattedValue }}
+                        </text>
+                      }
+                    </g>
+                  }
+                </g>
+              }
+              @for (xt of GetChartCategoryTicks(dataset.Categories); track xt.Index) {
+                <text
+                  [attr.x]="xt.X"
+                  y="153"
+                  [attr.text-anchor]="xt.Rotated ? 'end' : 'middle'"
+                  [attr.transform]="xt.Rotated ? 'rotate(-20 ' + xt.X + ' 153)' : null"
+                  font-size="8.5"
+                  fill="var(--mj-text-secondary)"
+                >
+                  <title>{{ xt.FullLabel }}</title>
+                  {{ xt.ShortLabel }}
+                </text>
+              }
+            } @else {
+              <!-- Bar Chart -->
+              @let bars = GetChartBarRects(chart, dataset, activeSeries, maxVal);
+              @for (bar of bars; track bar.Key) {
+                <g>
+                  <rect
+                    [attr.x]="bar.X"
+                    [attr.y]="bar.Y"
+                    [attr.width]="bar.Width"
+                    [attr.height]="bar.Height"
+                    rx="2.5"
+                    [attr.fill]="bar.Color"
+                  >
+                    <title>{{ bar.Category }} · {{ bar.SeriesName }}: {{ bar.Value }}</title>
+                  </rect>
+                  @if (chart.ShowDataLabels === true || (chart.ShowDataLabels !== false && bars.length <= 12)) {
+                    <text
+                      [attr.x]="bar.X + bar.Width / 2"
+                      [attr.y]="bar.Y > 14 ? bar.Y - 3 : 12"
+                      text-anchor="middle"
+                      font-size="8.5"
+                      fill="var(--mj-text-primary)"
+                      [attr.data-testid]="bar.SeriesIndex === 0 ? 'sheet-chart-val-' + chart.ChartID + '-' + bar.CategoryIndex : null"
+                    >
+                      {{ bar.FormattedValue }}
+                    </text>
+                  }
+                </g>
+              }
+              @for (xt of GetChartCategoryTicks(dataset.Categories); track xt.Index) {
+                <text
+                  [attr.x]="xt.X"
+                  y="153"
+                  [attr.text-anchor]="xt.Rotated ? 'end' : 'middle'"
+                  [attr.transform]="xt.Rotated ? 'rotate(-20 ' + xt.X + ' 153)' : null"
+                  font-size="8.5"
+                  fill="var(--mj-text-secondary)"
+                >
+                  <title>{{ xt.FullLabel }}</title>
+                  {{ xt.ShortLabel }}
+                </text>
+              }
+            }
+          }
+        </svg>
+      </ng-template>
+
+      <!-- World-Class Chart & Range Properties Editor Modal -->
+      @if (EditingChartDraft) {
+        @let previewDataset = GetChartEditorPreviewDataset();
+        <div
+          class="mj-sheets-modal-backdrop"
+          data-testid="sheets-chart-editor-modal"
+          (click)="CloseChartEditorModal()"
+        >
+          <div
+            class="mj-sheets-modal-dialog mj-sheets-chart-editor-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Chart and range properties editor"
+            (click)="$event.stopPropagation()"
+          >
+            <div class="mj-sheets-modal-header">
+              <i class="fa-solid fa-sliders"></i>
+              <h3>Edit Chart &amp; Data Range</h3>
+            </div>
+            <div class="mj-sheets-chart-editor-grid">
+              <div class="mj-sheets-modal-body mj-sheets-chart-editor-controls">
+                <div class="mj-sheets-form-row">
+                  <label>Chart Title</label>
+                  <input
+                    type="text"
+                    class="mj-sheets-modal-input"
+                    [(ngModel)]="EditingChartDraft.Title"
+                    placeholder="Chart title"
+                    data-testid="chart-editor-title"
+                  />
+                </div>
+
+                <div class="mj-sheets-form-row">
+                  <label>Chart Type</label>
+                  <div class="mj-sheets-segmented-group">
+                    @for (t of ['bar', 'line', 'area', 'pie']; track t) {
+                      <button
+                        type="button"
+                        class="mj-sheets-seg-btn"
+                        [class.active]="EditingChartDraft.ChartType === t"
+                        (click)="SetChartEditorType(t)"
+                        [attr.data-testid]="'chart-editor-type-' + t"
+                      >
+                        {{ t | titlecase }}
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                <div class="mj-sheets-form-row">
+                  <label>Data Range (supports contiguous <code>A1:C6</code> or unions <code>A1:A6,D1:D6</code>)</label>
+                  <div class="mj-sheets-range-input-row">
+                    <input
+                      type="text"
+                      class="mj-sheets-modal-input mj-sheets-range-field"
+                      [(ngModel)]="EditingChartDraft.SourceRange"
+                      (ngModelChange)="OnChartEditorRangeInputChanged()"
+                      placeholder="e.g. A1:D8 or A1:A8,C1:D8"
+                      data-testid="chart-editor-range"
+                    />
+                    <button
+                      type="button"
+                      class="mj-sheets-mini-btn"
+                      (click)="ApplyCurrentSelectionToChartEditor()"
+                      title="Use current worksheet selection"
+                      data-testid="chart-editor-use-selection"
+                    >
+                      <i class="fa-solid fa-vector-square"></i> Selection ({{ SelectedRange }})
+                    </button>
+                  </div>
+                  @if (previewDataset && previewDataset.Categories.length > 0 && previewDataset.Series.length > 0) {
+                    <span class="mj-sheets-range-status valid" data-testid="chart-editor-range-status">
+                      <i class="fa-solid fa-circle-check"></i>
+                      {{ previewDataset.Categories.length }} categories · {{ previewDataset.Series.length }} active series
+                    </span>
+                  } @else {
+                    <span class="mj-sheets-range-status invalid" data-testid="chart-editor-range-status">
+                      <i class="fa-solid fa-triangle-exclamation"></i>
+                      Enter a valid range containing categories and numeric values.
+                    </span>
+                  }
+                </div>
+
+                <div class="mj-sheets-two-col-row">
+                  <div class="mj-sheets-form-row">
+                    <label>Headers</label>
+                    <select
+                      class="mj-sheets-modal-input"
+                      [ngModel]="GetChartEditorHeaderModeValue()"
+                      (ngModelChange)="SetChartEditorHeaderMode($event)"
+                      data-testid="chart-editor-header-mode"
+                    >
+                      <option value="auto">Auto-detect</option>
+                      <option value="true">First row/col is header</option>
+                      <option value="false">No header row</option>
+                    </select>
+                  </div>
+                  <div class="mj-sheets-form-row">
+                    <label>Series Orientation</label>
+                    <select
+                      class="mj-sheets-modal-input"
+                      [ngModel]="EditingChartDraft.SeriesOrientation ?? 'columns'"
+                      (ngModelChange)="OnChartEditorOrientationChanged($event)"
+                      data-testid="chart-editor-orientation"
+                    >
+                      <option value="columns">Columns as series</option>
+                      <option value="rows">Rows as series</option>
+                    </select>
+                  </div>
+                </div>
+
+                @if (previewDataset?.DetectedColumns && previewDataset!.DetectedColumns!.length > 0) {
+                  <div class="mj-sheets-form-row">
+                    <label>Category / X-Axis {{ EditingChartDraft.SeriesOrientation === 'rows' ? 'Row' : 'Column' }}</label>
+                    <select
+                      class="mj-sheets-modal-input"
+                      [ngModel]="GetChartEditorCategoryIndexValue(previewDataset!)"
+                      (ngModelChange)="OnChartEditorCategoryChanged($event)"
+                      data-testid="chart-editor-category-col"
+                    >
+                      @for (dc of previewDataset!.DetectedColumns!; track dc.Index) {
+                        <option [ngValue]="dc.Index">
+                          {{ dc.Name }} ({{ EditingChartDraft.SeriesOrientation === 'rows' ? 'Row' : 'Col' }} {{ dc.Index + 1 }}{{ dc.IsNumeric ? ' · numeric' : '' }})
+                        </option>
+                      }
+                    </select>
+                  </div>
+
+                  @let candidateSeries = GetChartEditorSeriesCandidates(previewDataset!);
+                  @if (candidateSeries.length > 0) {
+                    <div class="mj-sheets-form-row">
+                      <label>Plotted Series</label>
+                      <div class="mj-sheets-series-check-list">
+                        @for (sc of candidateSeries; track sc.Index; let cIdx = $index) {
+                          <label class="mj-sheets-series-check-item">
+                            <input
+                              type="checkbox"
+                              [checked]="IsChartEditorSeriesIncluded(sc.Index)"
+                              (change)="ToggleChartEditorSeries(sc.Index, candidateSeries)"
+                              [attr.data-testid]="'chart-editor-series-' + sc.Index"
+                            />
+                            <span
+                              class="mj-sheets-series-dot"
+                              [style.background]="GetChartSeriesColor(cIdx)"
+                            ></span>
+                            <span>{{ sc.Name }}</span>
+                          </label>
+                        }
+                      </div>
+                    </div>
+                  }
+                }
+
+                <div class="mj-sheets-two-col-row">
+                  <div class="mj-sheets-form-row">
+                    <label>Placement</label>
+                    <div class="mj-sheets-segmented-group">
+                      <button
+                        type="button"
+                        class="mj-sheets-seg-btn"
+                        [class.active]="EditingChartDraft.Placement === 'sheet'"
+                        (click)="EditingChartDraft.Placement = 'sheet'"
+                        data-testid="chart-editor-placement-sheet"
+                      >
+                        On Sheet
+                      </button>
+                      <button
+                        type="button"
+                        class="mj-sheets-seg-btn"
+                        [class.active]="EditingChartDraft.Placement !== 'sheet'"
+                        (click)="EditingChartDraft.Placement = 'dock'"
+                        data-testid="chart-editor-placement-dock"
+                      >
+                        Docked Below
+                      </button>
+                    </div>
+                  </div>
+                  <div class="mj-sheets-form-row">
+                    <label>Anchor Cell</label>
+                    <input
+                      type="text"
+                      class="mj-sheets-modal-input"
+                      [(ngModel)]="EditingChartDraft.PositionCell"
+                      placeholder="E2"
+                      data-testid="chart-editor-position-cell"
+                    />
+                  </div>
+                </div>
+
+                <div class="mj-sheets-two-col-row">
+                  <div class="mj-sheets-form-row">
+                    <label>Width (px)</label>
+                    <input
+                      type="number"
+                      min="240"
+                      max="960"
+                      class="mj-sheets-modal-input"
+                      [(ngModel)]="EditingChartDraft.WidthPx"
+                      placeholder="400"
+                      data-testid="chart-editor-width"
+                    />
+                  </div>
+                  <div class="mj-sheets-form-row">
+                    <label>Height (px)</label>
+                    <input
+                      type="number"
+                      min="180"
+                      max="680"
+                      class="mj-sheets-modal-input"
+                      [(ngModel)]="EditingChartDraft.HeightPx"
+                      placeholder="240"
+                      data-testid="chart-editor-height"
+                    />
+                  </div>
+                </div>
+
+                <div class="mj-sheets-chart-editor-toggles">
+                  <label class="mj-sheets-confirm-checkbox">
+                    <input
+                      type="checkbox"
+                      [ngModel]="EditingChartDraft.ShowLegend !== false"
+                      (ngModelChange)="EditingChartDraft.ShowLegend = $event"
+                      data-testid="chart-editor-show-legend"
+                    />
+                    <span>Show series legend</span>
+                  </label>
+                  <label class="mj-sheets-confirm-checkbox">
+                    <input
+                      type="checkbox"
+                      [ngModel]="EditingChartDraft.ShowDataLabels === true"
+                      (ngModelChange)="EditingChartDraft.ShowDataLabels = $event"
+                      data-testid="chart-editor-show-labels"
+                    />
+                    <span>Always show value labels</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="mj-sheets-chart-editor-preview">
+                <div class="mj-sheets-chart-editor-preview-header">
+                  <strong>{{ EditingChartDraft.Title || 'Chart Preview' }}</strong>
+                  <span>{{ EditingChartDraft.SourceRange }} · {{ EditingChartDraft.ChartType | uppercase }}</span>
+                </div>
+                @if (previewDataset && previewDataset.Categories.length > 0 && previewDataset.Series.length > 0) {
+                  <div class="mj-sheets-chart-Stage" data-testid="chart-editor-preview-svg">
+                    <ng-container
+                      [ngTemplateOutlet]="chartSvgTpl"
+                      [ngTemplateOutletContext]="{ chart: EditingChartDraft, dataset: previewDataset }"
+                    ></ng-container>
+                  </div>
+                } @else {
+                  <div class="mj-sheets-chart-empty">
+                    <i class="fa-solid fa-chart-simple"></i>
+                    <span>Adjust source range or orientation to preview chart.</span>
+                  </div>
+                }
+              </div>
+            </div>
+            <div class="mj-sheets-modal-footer">
+              <button
+                type="button"
+                class="mj-sheets-tool-btn"
+                (click)="CloseChartEditorModal()"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="mj-sheets-tool-btn mj-sheets-save-btn"
+                (click)="ConfirmSaveChartEditor()"
+                data-testid="chart-editor-save"
+              >
+                <i class="fa-solid fa-check"></i> Apply Changes
               </button>
             </div>
           </div>
@@ -2129,6 +2499,67 @@ export interface ResolvedSheetsToolbarItem {
         flex: 1;
         overflow: auto;
         background: var(--mj-bg-surface);
+        min-height: 120px;
+      }
+
+      .mj-sheets-grid-canvas {
+        position: relative;
+        display: inline-block;
+        min-width: 100%;
+        min-height: 100%;
+      }
+
+      .mj-sheets-floating-chart {
+        position: absolute;
+        z-index: 4;
+        box-shadow: 0 8px 24px color-mix(in srgb, var(--mj-text-primary) 16%, transparent);
+        border-color: var(--mj-border-strong);
+        min-width: 260px;
+        max-width: none;
+      }
+
+      .mj-sheets-floating-chart:hover {
+        border-color: var(--mj-brand-primary);
+      }
+
+      .mj-sheets-chart-title-wrap {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .mj-sheets-chart-card-draggable {
+        cursor: grab;
+        user-select: none;
+      }
+
+      .mj-sheets-chart-card-draggable:active {
+        cursor: grabbing;
+      }
+
+      .mj-sheets-chart-drag-grip {
+        color: var(--mj-text-muted);
+        padding-top: 2px;
+        font-size: 12px;
+      }
+
+      .mj-sheets-chart-resize-handle {
+        position: absolute;
+        right: 3px;
+        bottom: 3px;
+        width: 12px;
+        height: 12px;
+        cursor: nwse-resize;
+        border-right: 2px solid var(--mj-text-muted);
+        border-bottom: 2px solid var(--mj-text-muted);
+        border-bottom-right-radius: 3px;
+        opacity: 0.7;
+      }
+
+      .mj-sheets-chart-resize-handle:hover {
+        opacity: 1;
+        border-color: var(--mj-brand-primary);
       }
 
       .mj-sheets-grid-table {
@@ -2468,12 +2899,36 @@ export interface ResolvedSheetsToolbarItem {
         color: var(--mj-text-primary);
       }
 
+      .mj-sheets-objects-splitter {
+        height: 9px;
+        flex-shrink: 0;
+        background: var(--mj-bg-surface-sunken);
+        border-top: 1px solid var(--mj-border-default);
+        border-bottom: 1px solid var(--mj-border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: row-resize;
+        user-select: none;
+      }
+
+      .mj-sheets-objects-splitter:hover {
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface-sunken));
+      }
+
+      .mj-sheets-objects-splitter-pill {
+        width: 44px;
+        height: 3px;
+        border-radius: 999px;
+        background: var(--mj-border-strong);
+      }
+
       .mj-sheets-objects-strip {
-        max-height: 270px;
+        flex-shrink: 0;
+        min-height: 120px;
         overflow-y: auto;
         padding: 10px 14px;
         background: var(--mj-bg-surface-sunken);
-        border-top: 1px solid var(--mj-border-default);
         display: flex;
         flex-direction: column;
         gap: 12px;
@@ -3017,6 +3472,133 @@ export interface ResolvedSheetsToolbarItem {
         display: flex;
         justify-content: flex-end;
         gap: 8px;
+      }
+
+      .mj-sheets-chart-editor-dialog {
+        width: 820px;
+        max-width: 95vw;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      .mj-sheets-chart-editor-grid {
+        display: grid;
+        grid-template-columns: minmax(280px, 1.1fr) minmax(280px, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+
+      .mj-sheets-chart-editor-controls {
+        max-height: 62vh;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+
+      .mj-sheets-chart-editor-preview {
+        background: var(--mj-bg-surface-sunken);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .mj-sheets-chart-editor-preview-header {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 12px;
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-sheets-chart-editor-preview-header strong {
+        color: var(--mj-text-primary);
+        font-size: 13px;
+      }
+
+      .mj-sheets-segmented-group {
+        display: flex;
+        gap: 4px;
+      }
+
+      .mj-sheets-seg-btn {
+        flex: 1;
+        padding: 5px 8px;
+        font-size: 12px;
+        font-weight: 500;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
+        cursor: pointer;
+      }
+
+      .mj-sheets-seg-btn.active {
+        border-color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+        font-weight: 600;
+      }
+
+      .mj-sheets-range-input-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .mj-sheets-range-field {
+        flex: 1;
+        font-family: var(--mj-font-family-mono, monospace);
+      }
+
+      .mj-sheets-range-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+      }
+
+      .mj-sheets-range-status.valid {
+        color: var(--mj-status-success);
+      }
+
+      .mj-sheets-range-status.invalid {
+        color: var(--mj-status-warning);
+      }
+
+      .mj-sheets-two-col-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .mj-sheets-series-check-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        max-height: 110px;
+        overflow-y: auto;
+      }
+
+      .mj-sheets-series-check-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--mj-text-primary);
+        cursor: pointer;
+      }
+
+      .mj-sheets-chart-editor-toggles {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        padding-top: 4px;
       }
     `,
   ],
@@ -4297,22 +4879,18 @@ export class SpreadsheetArtifactViewerComponent
     if (!col) return;
     const startX = event.clientX;
     const initialWidthPx = (col.Width ?? 14) * 8;
-    this.stopResizeDocumentListeners();
-
-    if (this.renderer) {
-      const unlistenMove = this.renderer.listen('document', 'mousemove', (moveEvt: MouseEvent) => {
+    this.bindDocumentDragListeners(
+      (moveEvt: MouseEvent) => {
         const nextPx = Math.max(48, Math.min(480, initialWidthPx + (moveEvt.clientX - startX)));
         col.Width = Math.round((nextPx / 8) * 10) / 10;
         this.cdr.markForCheck();
-      });
-      const unlistenUp = this.renderer.listen('document', 'mouseup', () => {
-        this.stopResizeDocumentListeners();
+      },
+      () => {
         this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
         this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
         this.cdr.markForCheck();
-      });
-      this._unlistenResizeDocs.push(unlistenMove, unlistenUp);
-    }
+      },
+    );
   }
 
   public StartRowResize(rowId: string, event: MouseEvent): void {
@@ -4323,20 +4901,43 @@ export class SpreadsheetArtifactViewerComponent
     if (!row) return;
     const startY = event.clientY;
     const initialHeight = row.Height ?? 28;
-    this.stopResizeDocumentListeners();
-
-    if (this.renderer) {
-      const unlistenMove = this.renderer.listen('document', 'mousemove', (moveEvt: MouseEvent) => {
+    this.bindDocumentDragListeners(
+      (moveEvt: MouseEvent) => {
         row.Height = Math.max(22, Math.min(240, Math.round(initialHeight + (moveEvt.clientY - startY))));
         this.cdr.markForCheck();
-      });
-      const unlistenUp = this.renderer.listen('document', 'mouseup', () => {
-        this.stopResizeDocumentListeners();
+      },
+      () => {
         this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
         this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
         this.cdr.markForCheck();
+      },
+    );
+  }
+
+  private bindDocumentDragListeners(
+    onMove: (evt: MouseEvent) => void,
+    onEnd: (evt: MouseEvent) => void,
+  ): void {
+    this.stopResizeDocumentListeners();
+    if (this.renderer) {
+      const unlistenMove = this.renderer.listen('document', 'mousemove', onMove);
+      const unlistenUp = this.renderer.listen('document', 'mouseup', (evt: MouseEvent) => {
+        this.stopResizeDocumentListeners();
+        onEnd(evt);
       });
       this._unlistenResizeDocs.push(unlistenMove, unlistenUp);
+    } else if (typeof document !== 'undefined') {
+      const moveHandler = (evt: MouseEvent): void => onMove(evt);
+      const upHandler = (evt: MouseEvent): void => {
+        this.stopResizeDocumentListeners();
+        onEnd(evt);
+      };
+      document.addEventListener('mousemove', moveHandler);
+      document.addEventListener('mouseup', upHandler);
+      this._unlistenResizeDocs.push(
+        () => document.removeEventListener('mousemove', moveHandler),
+        () => document.removeEventListener('mouseup', upHandler),
+      );
     }
   }
 
@@ -5605,6 +6206,397 @@ export class SpreadsheetArtifactViewerComponent
   // ---------------------------------------------------------------------------
 
   public SelectedChartSeriesByChartID: Record<string, number | 'all'> = {};
+  public EditingChartDraft: SpreadsheetChartSpec | null = null;
+  private editingChartTargetId: string | null = null;
+
+  public get DockedCharts(): SpreadsheetChartSpec[] {
+    return (this.ActiveSheet?.Charts ?? []).filter((c) => c.Placement !== 'sheet');
+  }
+
+  public get FloatingCharts(): SpreadsheetChartSpec[] {
+    return (this.ActiveSheet?.Charts ?? []).filter((c) => c.Placement === 'sheet');
+  }
+
+  public get HasDockedObjects(): boolean {
+    return (
+      (this.ActiveSheet?.LiveTables?.length ?? 0) > 0 ||
+      this.DockedCharts.length > 0 ||
+      (this.ActiveSheet?.EmbeddedArtifacts?.length ?? 0) > 0
+    );
+  }
+
+  public get ResolvedObjectsPaneHeightPx(): number {
+    const raw = this.Workbook?.PreferredObjectsPaneHeightPx;
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+      return Math.max(140, Math.min(640, Math.round(raw)));
+    }
+    return 270;
+  }
+
+  public StartObjectsPaneResize(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const startY = event.clientY;
+    const startHeight = this.ResolvedObjectsPaneHeightPx;
+    this.bindDocumentDragListeners(
+      (moveEvt: MouseEvent) => {
+        const deltaUp = startY - moveEvt.clientY;
+        const nextHeight = Math.max(140, Math.min(640, Math.round(startHeight + deltaUp)));
+        this.Workbook.PreferredObjectsPaneHeightPx = nextHeight;
+        this.cdr.markForCheck();
+      },
+      () => {
+        this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+        this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+        this.cdr.markForCheck();
+      },
+    );
+  }
+
+  public ResetObjectsPaneHeight(): void {
+    delete this.Workbook.PreferredObjectsPaneHeightPx;
+    this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  private computeCellPixelOffset(cellAddress: string): { left: number; top: number } {
+    const parsed = ParseCellAddress(cellAddress || 'E2') ?? { row: 2, col: 5 };
+    const cols = this.ActiveSheet?.Columns ?? [];
+    const rows = this.ActiveSheet?.Rows ?? [];
+    let left = 42;
+    for (let c = 1; c < parsed.col; c++) {
+      const colSpec = cols.find((item) => item.Index === c);
+      left += (colSpec?.Width ?? 14) * 8;
+    }
+    let top = 28;
+    for (let r = 1; r < parsed.row; r++) {
+      const rowSpec = rows.find((item) => item.Index === r);
+      top += rowSpec?.Height ?? 28;
+    }
+    return { left: Math.round(left), top: Math.round(top) };
+  }
+
+  private resolveNearestCellFromOffset(offsetX: number, offsetY: number): string {
+    const cols = this.ActiveSheet?.Columns ?? [];
+    const rows = this.ActiveSheet?.Rows ?? [];
+    let col = 1;
+    let x = 42;
+    const maxCols = Math.max(26, cols.length);
+    for (let c = 1; c <= maxCols; c++) {
+      const w = (cols.find((item) => item.Index === c)?.Width ?? 14) * 8;
+      if (offsetX < x + w * 0.5) {
+        col = c;
+        break;
+      }
+      x += w;
+      col = c;
+    }
+
+    let row = 1;
+    let y = 28;
+    const maxRows = Math.max(50, rows.length);
+    for (let r = 1; r <= maxRows; r++) {
+      const h = rows.find((item) => item.Index === r)?.Height ?? 28;
+      if (offsetY < y + h * 0.5) {
+        row = r;
+        break;
+      }
+      y += h;
+      row = r;
+    }
+    return FormatCellAddress(row, col);
+  }
+
+  public GetFloatingChartLeftPx(chart: SpreadsheetChartSpec): number {
+    if (typeof chart.OffsetX === 'number' && Number.isFinite(chart.OffsetX)) {
+      return Math.max(44, Math.round(chart.OffsetX));
+    }
+    return this.computeCellPixelOffset(chart.PositionCell).left;
+  }
+
+  public GetFloatingChartTopPx(chart: SpreadsheetChartSpec): number {
+    if (typeof chart.OffsetY === 'number' && Number.isFinite(chart.OffsetY)) {
+      return Math.max(30, Math.round(chart.OffsetY));
+    }
+    return this.computeCellPixelOffset(chart.PositionCell).top;
+  }
+
+  public ToggleChartPlacement(chart: SpreadsheetChartSpec): void {
+    if (!this.CanEdit) return;
+    if (chart.Placement === 'sheet') {
+      chart.Placement = 'dock';
+    } else {
+      chart.Placement = 'sheet';
+      if (typeof chart.OffsetX !== 'number' || typeof chart.OffsetY !== 'number') {
+        const pos = this.computeCellPixelOffset(chart.PositionCell || 'E2');
+        chart.OffsetX = pos.left;
+        chart.OffsetY = pos.top;
+      }
+      chart.WidthPx = chart.WidthPx ?? 400;
+      chart.HeightPx = chart.HeightPx ?? 240;
+    }
+    this.commitChartStructureChange();
+  }
+
+  public StartChartDrag(chart: SpreadsheetChartSpec, event: MouseEvent): void {
+    if (!this.CanEdit || chart.Placement !== 'sheet') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originLeft = this.GetFloatingChartLeftPx(chart);
+    const originTop = this.GetFloatingChartTopPx(chart);
+
+    this.bindDocumentDragListeners(
+      (moveEvt: MouseEvent) => {
+        chart.OffsetX = Math.max(44, Math.round(originLeft + (moveEvt.clientX - startX)));
+        chart.OffsetY = Math.max(30, Math.round(originTop + (moveEvt.clientY - startY)));
+        chart.PositionCell = this.resolveNearestCellFromOffset(chart.OffsetX, chart.OffsetY);
+        this.cdr.markForCheck();
+      },
+      () => {
+        this.commitChartStructureChange();
+      },
+    );
+  }
+
+  public StartChartResize(chart: SpreadsheetChartSpec, event: MouseEvent): void {
+    if (!this.CanEdit || chart.Placement !== 'sheet') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originWidth = chart.WidthPx ?? 400;
+    const originHeight = chart.HeightPx ?? 240;
+
+    this.bindDocumentDragListeners(
+      (moveEvt: MouseEvent) => {
+        chart.WidthPx = Math.max(260, Math.min(920, Math.round(originWidth + (moveEvt.clientX - startX))));
+        chart.HeightPx = Math.max(190, Math.min(640, Math.round(originHeight + (moveEvt.clientY - startY))));
+        this.cdr.markForCheck();
+      },
+      () => {
+        this.commitChartStructureChange();
+      },
+    );
+  }
+
+  private commitChartStructureChange(): void {
+    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public OpenChartEditorModal(chart: SpreadsheetChartSpec, event?: Event): void {
+    event?.stopPropagation();
+    if (!this.CanEdit) return;
+    this.editingChartTargetId = chart.ChartID;
+    this.EditingChartDraft = {
+      ...chart,
+      Placement: chart.Placement ?? 'dock',
+      HasHeaderRow: chart.HasHeaderRow ?? 'auto',
+      SeriesOrientation: chart.SeriesOrientation ?? 'columns',
+      ShowLegend: chart.ShowLegend ?? true,
+      IncludedSeriesIndices: chart.IncludedSeriesIndices ? [...chart.IncludedSeriesIndices] : undefined,
+    };
+    this.cdr.markForCheck();
+  }
+
+  public CloseChartEditorModal(): void {
+    this.EditingChartDraft = null;
+    this.editingChartTargetId = null;
+    this.cdr.markForCheck();
+  }
+
+  public SetChartEditorType(nextType: string): void {
+    if (!this.EditingChartDraft) return;
+    if (nextType === 'bar' || nextType === 'line' || nextType === 'area' || nextType === 'pie') {
+      this.EditingChartDraft.ChartType = nextType;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public ApplyCurrentSelectionToChartEditor(): void {
+    if (!this.EditingChartDraft) return;
+    const range = this.SelectedRange.includes(':')
+      ? this.SelectedRange
+      : this.detectContiguousRangeForChart(this.ActiveCellAddress || 'A1');
+    this.EditingChartDraft.SourceRange = range;
+    this.EditingChartDraft.IncludedSeriesIndices = undefined;
+    this.EditingChartDraft.CategoryColumnIndex = undefined;
+    this.cdr.markForCheck();
+  }
+
+  public OnChartEditorRangeInputChanged(): void {
+    if (!this.EditingChartDraft) return;
+    this.EditingChartDraft.IncludedSeriesIndices = undefined;
+    this.EditingChartDraft.CategoryColumnIndex = undefined;
+    this.cdr.markForCheck();
+  }
+
+  public GetChartEditorHeaderModeValue(): string {
+    const val = this.EditingChartDraft?.HasHeaderRow;
+    if (val === true) return 'true';
+    if (val === false) return 'false';
+    return 'auto';
+  }
+
+  public SetChartEditorHeaderMode(mode: string): void {
+    if (!this.EditingChartDraft) return;
+    this.EditingChartDraft.HasHeaderRow = mode === 'true' ? true : mode === 'false' ? false : 'auto';
+    this.cdr.markForCheck();
+  }
+
+  public OnChartEditorOrientationChanged(orientation: string): void {
+    if (!this.EditingChartDraft) return;
+    this.EditingChartDraft.SeriesOrientation = orientation === 'rows' ? 'rows' : 'columns';
+    this.EditingChartDraft.CategoryColumnIndex = undefined;
+    this.EditingChartDraft.IncludedSeriesIndices = undefined;
+    this.cdr.markForCheck();
+  }
+
+  public GetChartEditorCategoryIndexValue(dataset: SpreadsheetChartDataset): number {
+    if (typeof this.EditingChartDraft?.CategoryColumnIndex === 'number') {
+      return this.EditingChartDraft.CategoryColumnIndex;
+    }
+    const firstNonNumeric = dataset.DetectedColumns?.find((c) => !c.IsNumeric);
+    return firstNonNumeric?.Index ?? dataset.DetectedColumns?.[0]?.Index ?? 0;
+  }
+
+  public OnChartEditorCategoryChanged(colIndex: number): void {
+    if (!this.EditingChartDraft) return;
+    const parsed = Number(colIndex);
+    this.EditingChartDraft.CategoryColumnIndex = Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+    if (this.EditingChartDraft.IncludedSeriesIndices) {
+      this.EditingChartDraft.IncludedSeriesIndices = this.EditingChartDraft.IncludedSeriesIndices.filter(
+        (i) => i !== parsed,
+      );
+      if (this.EditingChartDraft.IncludedSeriesIndices.length === 0) {
+        this.EditingChartDraft.IncludedSeriesIndices = undefined;
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  public GetChartEditorSeriesCandidates(
+    dataset: SpreadsheetChartDataset,
+  ): Array<{ Index: number; Name: string; IsNumeric: boolean }> {
+    const catIdx = this.GetChartEditorCategoryIndexValue(dataset);
+    const detected = dataset.DetectedColumns ?? [];
+    const numericOthers = detected.filter((c) => c.Index !== catIdx && c.IsNumeric);
+    if (numericOthers.length > 0) {
+      return numericOthers;
+    }
+    return detected.filter((c) => c.Index !== catIdx);
+  }
+
+  public IsChartEditorSeriesIncluded(colIndex: number): boolean {
+    const included = this.EditingChartDraft?.IncludedSeriesIndices;
+    if (!included || included.length === 0) {
+      return true;
+    }
+    return included.includes(colIndex);
+  }
+
+  public ToggleChartEditorSeries(
+    colIndex: number,
+    candidates: Array<{ Index: number; Name: string; IsNumeric: boolean }>,
+  ): void {
+    if (!this.EditingChartDraft) return;
+    const allIndices = candidates.map((c) => c.Index);
+    const current =
+      this.EditingChartDraft.IncludedSeriesIndices && this.EditingChartDraft.IncludedSeriesIndices.length > 0
+        ? [...this.EditingChartDraft.IncludedSeriesIndices]
+        : [...allIndices];
+    const next = current.includes(colIndex)
+      ? current.filter((i) => i !== colIndex)
+      : [...current, colIndex].sort((a, b) => a - b);
+    if (next.length === 0) {
+      return;
+    }
+    this.EditingChartDraft.IncludedSeriesIndices = next.length === allIndices.length ? undefined : next;
+    this.cdr.markForCheck();
+  }
+
+  public GetChartEditorPreviewDataset(): SpreadsheetChartDataset | null {
+    const draft = this.EditingChartDraft;
+    if (!draft || !draft.SourceRange?.trim()) {
+      return null;
+    }
+    return SpreadsheetEngine.Instance.ExtractChartDataset(
+      this.Workbook,
+      draft.SheetID || this.ActiveSheet.SheetID,
+      draft.ChartID || draft.SourceRange,
+      draft,
+    );
+  }
+
+  public ConfirmSaveChartEditor(): void {
+    const draft = this.EditingChartDraft;
+    if (!this.CanEdit || !draft) return;
+    const trimmedRange = (draft.SourceRange ?? '').trim();
+    if (!trimmedRange) {
+      this.notifyError('Chart source range cannot be empty.');
+      return;
+    }
+
+    const charts = this.ActiveSheet.Charts ?? [];
+    const targetIdx = charts.findIndex((c) => c.ChartID === this.editingChartTargetId);
+    if (targetIdx < 0) {
+      this.CloseChartEditorModal();
+      return;
+    }
+    const prev = charts[targetIdx];
+    const nextCell = (draft.PositionCell || prev.PositionCell || 'E2').trim().toUpperCase();
+    const cellMoved = nextCell !== (prev.PositionCell || 'E2').trim().toUpperCase();
+
+    let nextOffsetX = draft.OffsetX;
+    let nextOffsetY = draft.OffsetY;
+    if (draft.Placement === 'sheet' && (cellMoved || typeof nextOffsetX !== 'number' || typeof nextOffsetY !== 'number')) {
+      const pos = this.computeCellPixelOffset(nextCell);
+      nextOffsetX = pos.left;
+      nextOffsetY = pos.top;
+    }
+
+    const updatedChart: SpreadsheetChartSpec = {
+      ...prev,
+      Title: (draft.Title || '').trim() || `Chart (${trimmedRange})`,
+      ChartType: draft.ChartType,
+      SourceRange: trimmedRange,
+      PositionCell: nextCell,
+      Placement: draft.Placement === 'sheet' ? 'sheet' : 'dock',
+      OffsetX: nextOffsetX,
+      OffsetY: nextOffsetY,
+      WidthPx:
+        typeof draft.WidthPx === 'number' && Number.isFinite(draft.WidthPx) && draft.WidthPx >= 240
+          ? Math.round(draft.WidthPx)
+          : draft.Placement === 'sheet'
+            ? prev.WidthPx ?? 400
+            : undefined,
+      HeightPx:
+        typeof draft.HeightPx === 'number' && Number.isFinite(draft.HeightPx) && draft.HeightPx >= 180
+          ? Math.round(draft.HeightPx)
+          : draft.Placement === 'sheet'
+            ? prev.HeightPx ?? 240
+            : undefined,
+      ShowLegend: draft.ShowLegend !== false,
+      HasHeaderRow: draft.HasHeaderRow ?? 'auto',
+      SeriesOrientation: draft.SeriesOrientation ?? 'columns',
+      CategoryColumnIndex: draft.CategoryColumnIndex,
+      IncludedSeriesIndices:
+        draft.IncludedSeriesIndices && draft.IncludedSeriesIndices.length > 0
+          ? [...draft.IncludedSeriesIndices]
+          : undefined,
+      ShowDataLabels: draft.ShowDataLabels,
+    };
+
+    charts[targetIdx] = updatedChart;
+    delete this.SelectedChartSeriesByChartID[updatedChart.ChartID];
+    this.EditingChartDraft = null;
+    this.editingChartTargetId = null;
+    this.commitChartStructureChange();
+  }
 
   private hasCellDisplayValue(cellAddr: string): boolean {
     const cell = this.ActiveSheet?.Cells?.[cellAddr];
@@ -5938,6 +6930,7 @@ export class SpreadsheetArtifactViewerComponent
     dataset: SpreadsheetChartDataset,
     activeSeries: ActiveChartSeriesItem[],
     maxVal: number,
+    chart?: SpreadsheetChartSpec,
   ): ChartLineSeriesItem[] {
     const categories = dataset.Categories;
     const catCount = categories.length;
@@ -5989,7 +6982,12 @@ export class SpreadsheetArtifactViewerComponent
         Color: s.Color,
         PolylinePoints: polylinePoints,
         AreaPath: areaPath,
-        ShowPointLabels: activeSeries.length === 1 && catCount <= 10,
+        ShowPointLabels:
+          chart?.ShowDataLabels === true
+            ? true
+            : chart?.ShowDataLabels === false
+              ? false
+              : activeSeries.length === 1 && catCount <= 10,
         Points: points,
       };
     });
@@ -6054,8 +7052,7 @@ export class SpreadsheetArtifactViewerComponent
   public OnChartTypeChanged(chart: SpreadsheetChartSpec, nextType: SpreadsheetChartType): void {
     if (!this.CanEdit) return;
     chart.ChartType = nextType;
-    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
-    this.cdr.markForCheck();
+    this.commitChartStructureChange();
   }
 
   public CopySlideBlockDescriptorForChart(chart: SpreadsheetChartSpec): void {
@@ -6246,6 +7243,9 @@ export class SpreadsheetArtifactViewerComponent
     try {
       const rv = RunView.FromMetadataProvider(provider);
       for (const emb of embeds) {
+        if (!IsValidUUID(emb.ArtifactID) || (emb.ArtifactVersionID && !IsValidUUID(emb.ArtifactVersionID))) {
+          continue;
+        }
         const filter = emb.ArtifactVersionID
           ? `ID = '${EscapeSQLString(emb.ArtifactVersionID)}' AND ArtifactID = '${EscapeSQLString(emb.ArtifactID)}'`
           : `ArtifactID = '${EscapeSQLString(emb.ArtifactID)}'`;

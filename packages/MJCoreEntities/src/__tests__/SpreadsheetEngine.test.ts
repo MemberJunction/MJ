@@ -3419,4 +3419,125 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(expValXml).toContain('<f>B1+1</f>');
         expect(expValXml).not.toContain('t="array"');
     });
+
+    it('extracts charts from comma-separated non-contiguous ranges, row orientation, and custom category/series filters', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('NonContiguousCharts', ['Trade'], 10, 6);
+        const ws = wb.Worksheets[0];
+        const rows: Array<[string, string, number, number]> = [
+            ['Era', 'Notes', 100, 500],
+            ['Han', 'Early', 120, 420],
+            ['Tang', 'Peak', 350, 980],
+            ['Song', 'Maritime', 280, 760],
+        ];
+        engine.SetCell(wb, ws.SheetID, 'A1', { Value: 'Era' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B1', { Value: 'Notes' }, false);
+        engine.SetCell(wb, ws.SheetID, 'C1', { Value: 'Caravans' }, false);
+        engine.SetCell(wb, ws.SheetID, 'D1', { Value: 'Volume' }, false);
+        for (let i = 1; i < rows.length; i++) {
+            const [era, note, caravans, volume] = rows[i];
+            const r = i + 1;
+            engine.SetCell(wb, ws.SheetID, `A${r}`, { Value: era }, false);
+            engine.SetCell(wb, ws.SheetID, `B${r}`, { Value: note }, false);
+            engine.SetCell(wb, ws.SheetID, `C${r}`, { Value: caravans }, false);
+            engine.SetCell(wb, ws.SheetID, `D${r}`, { Value: volume }, false);
+        }
+
+        // 1) Non-contiguous column union A1:A4,D1:D4
+        const unionDs = engine.ExtractChartDataset(wb, ws.SheetID, 'A1:A4,D1:D4');
+        expect(unionDs).not.toBeNull();
+        expect(unionDs!.Categories).toEqual(['Han', 'Tang', 'Song']);
+        expect(unionDs!.Series).toHaveLength(1);
+        expect(unionDs!.Series[0].Name).toBe('Volume');
+        expect(unionDs!.Series[0].Values).toEqual([420, 980, 760]);
+
+        // 2) Non-contiguous stacked row union A1:D2,A4:D4
+        const stackedDs = engine.ExtractChartDataset(wb, ws.SheetID, 'A1:D2,A4:D4');
+        expect(stackedDs).not.toBeNull();
+        expect(stackedDs!.Categories).toEqual(['Han · Early', 'Song · Maritime']);
+        expect(stackedDs!.Series.map((s) => s.Name)).toEqual(['Caravans', 'Volume']);
+        expect(stackedDs!.Series[1].Values).toEqual([420, 760]);
+
+        // 3) Override spec: explicit CategoryColumnIndex & IncludedSeriesIndices
+        const filteredDs = engine.ExtractChartDataset(wb, ws.SheetID, 'A1:D4', {
+            CategoryColumnIndex: 1,
+            IncludedSeriesIndices: [2],
+            HasHeaderRow: true,
+        });
+        expect(filteredDs).not.toBeNull();
+        expect(filteredDs!.Categories).toEqual(['Early', 'Peak', 'Maritime']);
+        expect(filteredDs!.Series).toHaveLength(1);
+        expect(filteredDs!.Series[0].Name).toBe('Caravans');
+        expect(filteredDs!.Series[0].Values).toEqual([120, 350, 280]);
+
+        // 4) Row-oriented series (transposed layout)
+        const wbRows = engine.CreateEmptyWorkbook('RowOriented', ['Summary'], 6, 6);
+        const wsRows = wbRows.Worksheets[0];
+        engine.SetCell(wbRows, wsRows.SheetID, 'A1', { Value: 'Region' }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'B1', { Value: 'Q1' }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'C1', { Value: 'Q2' }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'A2', { Value: 'North' }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'B2', { Value: 10 }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'C2', { Value: 25 }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'A3', { Value: 'South' }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'B3', { Value: 15 }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'C3', { Value: 30 }, false);
+
+        const rowDs = engine.ExtractChartDataset(wbRows, wsRows.SheetID, 'A1:C3', {
+            SeriesOrientation: 'rows',
+        });
+        expect(rowDs).not.toBeNull();
+        expect(rowDs!.Categories).toEqual(['Q1', 'Q2']);
+        expect(rowDs!.Series.map((s) => s.Name)).toEqual(['North', 'South']);
+        expect(rowDs!.Series[0].Values).toEqual([10, 25]);
+        expect(rowDs!.Series[1].Values).toEqual([15, 30]);
+    });
+
+    it('preserves PreferredObjectsPaneHeightPx and sheet chart placement metadata across JSON and XLSX round-trips', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('ChartMetaPersist', ['Overview'], 12, 8);
+        const ws = wb.Worksheets[0];
+        engine.SetCell(wb, ws.SheetID, 'A1', { Value: 'Item' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B1', { Value: 'Amount' }, false);
+        engine.SetCell(wb, ws.SheetID, 'A2', { Value: 'Alpha' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B2', { Value: 42 }, false);
+
+        wb.PreferredObjectsPaneHeightPx = 384;
+        ws.Charts.push({
+            ChartID: 'chart-sheet-1',
+            Title: 'Floating Sheet Chart',
+            ChartType: 'area',
+            SheetID: ws.SheetID,
+            SourceRange: 'A1:B2',
+            PositionCell: 'D3',
+            Placement: 'sheet',
+            OffsetX: 390,
+            OffsetY: 96,
+            WidthPx: 440,
+            HeightPx: 260,
+            ShowLegend: false,
+            ShowDataLabels: true,
+            HasHeaderRow: true,
+            SeriesOrientation: 'columns',
+            CategoryColumnIndex: 0,
+            IncludedSeriesIndices: [1],
+        });
+
+        const parsedJson = engine.ParseWorkbook(engine.SerializeWorkbook(wb));
+        expect(parsedJson.PreferredObjectsPaneHeightPx).toBe(384);
+        const jsonChart = parsedJson.Worksheets[0].Charts[0];
+        expect(jsonChart.Placement).toBe('sheet');
+        expect(jsonChart.OffsetX).toBe(390);
+        expect(jsonChart.OffsetY).toBe(96);
+        expect(jsonChart.WidthPx).toBe(440);
+        expect(jsonChart.HeightPx).toBe(260);
+        expect(jsonChart.ShowDataLabels).toBe(true);
+        expect(jsonChart.IncludedSeriesIndices).toEqual([1]);
+
+        const xlsxBytes = engine.ExportToXlsxBytes(parsedJson);
+        const reimported = engine.ImportFromXlsxBytes(xlsxBytes);
+        expect(reimported.PreferredObjectsPaneHeightPx).toBe(384);
+        expect(reimported.Worksheets[0].Charts[0].Placement).toBe('sheet');
+        expect(reimported.Worksheets[0].Charts[0].OffsetX).toBe(390);
+    });
 });

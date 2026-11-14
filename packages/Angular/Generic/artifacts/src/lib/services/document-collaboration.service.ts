@@ -2199,6 +2199,15 @@ export class DocumentCollaborationSession {
     workbookMeta.set('Title', parsed.Title || 'Workbook');
     workbookMeta.set('ActiveSheetID', parsed.ActiveSheetID || parsed.Worksheets[0].SheetID);
     workbookMeta.set('NamedRanges', JSON.stringify(parsed.NamedRanges ?? []));
+    if (
+      typeof parsed.PreferredObjectsPaneHeightPx === 'number' &&
+      Number.isFinite(parsed.PreferredObjectsPaneHeightPx) &&
+      parsed.PreferredObjectsPaneHeightPx > 0
+    ) {
+      workbookMeta.set('PreferredObjectsPaneHeightPx', String(Math.round(parsed.PreferredObjectsPaneHeightPx)));
+    } else {
+      workbookMeta.delete('PreferredObjectsPaneHeightPx');
+    }
 
     const nextSheetIds: string[] = [];
     const activeCellKeys = new Set<string>();
@@ -2330,6 +2339,9 @@ export class DocumentCollaborationSession {
       namedRanges = SafeJSONParse<SpreadsheetNamedRangeSpec[]>(rawNamedRanges) ?? [];
     }
 
+    const rawPrefPaneHeight = workbookMeta.get('PreferredObjectsPaneHeightPx');
+    const parsedPrefPaneHeight = rawPrefPaneHeight ? Number(rawPrefPaneHeight) : NaN;
+
     const nowIso = new Date().toISOString();
     const wb: WorkbookSpec = {
       WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
@@ -2337,6 +2349,9 @@ export class DocumentCollaborationSession {
       ActiveSheetID: workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID,
       Worksheets: worksheets,
       NamedRanges: namedRanges,
+      ...(Number.isFinite(parsedPrefPaneHeight) && parsedPrefPaneHeight > 0
+        ? { PreferredObjectsPaneHeightPx: Math.round(parsedPrefPaneHeight) }
+        : {}),
       CreatedAt: nowIso,
       UpdatedAt: nowIso,
     };

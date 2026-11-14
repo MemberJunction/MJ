@@ -1,6 +1,6 @@
 import { Component, ChangeDetectionStrategy, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Renderer2, Type, inject } from '@angular/core';
 import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo } from '@memberjunction/core';
-import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
   ArtifactMetadataEngine,
   BuildArtifactVersionConfigurationWithPreview,
@@ -10636,6 +10636,15 @@ export class MarkdownArtifactViewerComponent
   private async loadEmbeddedArtifactVersion(artifactId: string, versionId?: string | null): Promise<void> {
     const key = this.getEmbeddedVersionCacheKey(artifactId, versionId);
     if (this.inFlightEmbeddedVersionKeys.has(key)) {
+      return;
+    }
+
+    if (!IsValidUUID(artifactId) || (versionId && !IsValidUUID(versionId))) {
+      this.failedEmbeddedVersionMessages.set(
+        key,
+        `Embedded artifact reference "${artifactId}" is not a valid artifact UUID.`,
+      );
+      this.cdr.markForCheck();
       return;
     }
 

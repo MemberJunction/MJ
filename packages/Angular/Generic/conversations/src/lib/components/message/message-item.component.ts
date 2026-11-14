@@ -18,7 +18,7 @@ import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJA
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, OpenResourceCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { FormatAgentFailureForDisplay } from '../../utils/agent-failure-display';
@@ -33,7 +33,7 @@ import {
   AfterResponseFormSubmittedEventArgs,
   BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
-import { ExcludeByUUIDs, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { ExcludeByUUIDs, IsValidUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
@@ -126,6 +126,70 @@ export interface MessagePendingArtifactRef {
   artifactId: string;
   artifactName: string;
   visibility: string;
+}
+
+const ARTIFACT_RESOURCE_TYPES = new Set(['artifact', 'file']);
+const FALLBACK_ARTIFACT_RESOURCE_TYPES = new Set(['report', 'dashboard']);
+
+function matchesAttachedArtifactTarget(
+  rawResourceId: string | undefined,
+  artifacts: readonly MessageArtifactRef[],
+  pendingArtifacts: readonly MessagePendingArtifactRef[]
+): boolean {
+  const trimmed = rawResourceId?.trim();
+  if (!trimmed || !IsValidUUID(trimmed)) {
+    return true;
+  }
+  const normalizedName = trimmed.toLowerCase();
+  for (const ref of artifacts) {
+    if (
+      UUIDsEqual(ref.artifact.ID, trimmed) ||
+      UUIDsEqual(ref.version.ID, trimmed) ||
+      ref.artifact.Name?.trim().toLowerCase() === normalizedName ||
+      ref.version.Name?.trim().toLowerCase() === normalizedName
+    ) {
+      return true;
+    }
+  }
+  for (const pending of pendingArtifacts) {
+    if (
+      UUIDsEqual(pending.artifactId, trimmed) ||
+      pending.artifactName?.trim().toLowerCase() === normalizedName
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Filters out redundant `open:resource` actionable commands when the message already displays
+ * inline artifact card(s), preventing duplicate "Open Document" buttons underneath artifact cards
+ * while keeping valid navigation links to real dashboards, queries, views, records, and external URLs.
+ */
+export function FilterRedundantArtifactCommands(
+  commands: readonly ActionableCommand[],
+  artifacts: readonly MessageArtifactRef[],
+  pendingArtifacts: readonly MessagePendingArtifactRef[] = []
+): ActionableCommand[] {
+  if (commands.length === 0) {
+    return [];
+  }
+  const hasAttachedArtifacts = artifacts.length > 0 || pendingArtifacts.length > 0;
+  if (!hasAttachedArtifacts) {
+    return commands.slice();
+  }
+  return commands.filter((cmd) => {
+    if (cmd.type !== 'open:resource') {
+      return true;
+    }
+    const resourceCmd = cmd as OpenResourceCommand;
+    const rt = (resourceCmd.resourceType ?? '').trim().toLowerCase();
+    if (ARTIFACT_RESOURCE_TYPES.has(rt) || FALLBACK_ARTIFACT_RESOURCE_TYPES.has(rt)) {
+      return !matchesAttachedArtifactTarget(resourceCmd.resourceId, artifacts, pendingArtifacts);
+    }
+    return true;
+  });
 }
 
 /** Shared empty result so the placeholder getter allocates nothing once loading has finished. */
@@ -3676,18 +3740,30 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Cached against the raw JSON string (see {@link responseForm} for rationale).
    */
   private _actionableCommandsRaw: string | null | undefined = undefined;
+  private _actionableCommandsArtifactSig: string = '';
   private _actionableCommandsCache: ActionableCommand[] = [];
   public get ActionableCommands(): ActionableCommand[] {
-    const rawData = this.message.ActionableCommands ?? null;
-    if (rawData === this._actionableCommandsRaw) return this._actionableCommandsCache;
+    const rawData = this.message?.ActionableCommands ?? null;
+    const artifacts = this.DisplayArtifacts ?? [];
+    const pending = this.PendingArtifacts ?? NO_PENDING_ARTIFACTS;
+    const artifactSig =
+      artifacts.map((a) => `${a.artifact?.ID ?? ''}:${a.version?.ID ?? ''}`).join('|') +
+      '#' +
+      pending.map((p) => p.artifactId).join('|');
+    if (rawData === this._actionableCommandsRaw && artifactSig === this._actionableCommandsArtifactSig) {
+      return this._actionableCommandsCache;
+    }
     this._actionableCommandsRaw = rawData;
+    this._actionableCommandsArtifactSig = artifactSig;
     if (!rawData) {
       this._actionableCommandsCache = [];
       return this._actionableCommandsCache;
     }
     try {
       const commands = JSON.parse(rawData);
-      this._actionableCommandsCache = Array.isArray(commands) ? commands : [];
+      this._actionableCommandsCache = Array.isArray(commands)
+        ? FilterRedundantArtifactCommands(commands as ActionableCommand[], artifacts, pending)
+        : [];
     } catch (error) {
       console.error('Failed to parse actionable commands:', error);
       this._actionableCommandsCache = [];

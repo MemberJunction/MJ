@@ -256,6 +256,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Trigger change handler after initialization is complete
       // Only skip during Angular's initial binding before ngOnInit completes
       if (this.isInitialized) {
+        this.prepareStandbyRemoteBrowser(value);
         this.onConversationChanged(value);
       }
     }
@@ -439,6 +440,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.standbyPreparedConversationId = null;
       this.CloseRemoteBrowserPanel();
       void this.remoteBrowser?.Close();
+    } else if (this.isInitialized) {
+      this.prepareStandbyRemoteBrowser(this.ConversationId);
     }
   }
   get AllowRemoteBrowser(): boolean {
@@ -1699,11 +1702,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() pendingMessageRequested = this.PendingMessageRequested;
 
   private scrollContainer?: ElementRef<HTMLElement>;
+  private messageScrollRootEl: HTMLElement | null = null;
 
   /** The transcript scroller; watched so the scroll-to-bottom arrow follows content that grows or shrinks without a scroll. */
   @ViewChild('scrollContainer') private set scrollContainerRef(ref: ElementRef<HTMLElement> | undefined) {
     this.scrollContainer = ref;
-    this.watchScrollContent(ref?.nativeElement ?? null);
+    const nextEl = ref?.nativeElement ?? null;
+    if (nextEl !== this.messageScrollRootEl) {
+      // Defer updating the template-bound [ScrollRoot] reference past ViewChild resolution so
+      // Angular does not observe null -> HTMLDivElement within the same change-detection pass (NG0100).
+      Promise.resolve().then(() => {
+        if ((this.scrollContainer?.nativeElement ?? null) === nextEl && this.messageScrollRootEl !== nextEl) {
+          this.messageScrollRootEl = nextEl;
+          this.cdr?.markForCheck?.();
+        }
+      });
+    }
+    this.watchScrollContent(nextEl);
   }
 
   /** Re-checks the scroll state when the transcript or its content changes size; null when nothing is watched. */
@@ -2859,7 +2874,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * discover it, which depends on layout having settled.
    */
   public get MessageScrollRoot(): HTMLElement | null {
-    return this.scrollContainer?.nativeElement ?? null;
+    return this.messageScrollRootEl;
   }
 
   /** @deprecated Use {@link MessageScrollRoot}. */
@@ -3849,6 +3864,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.standbyPreparedConversationId = null;
       void this.remoteBrowser?.Close();
     }
+    this.prepareStandbyRemoteBrowser(this._conversationId);
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
     this.hostInterceptedArtifactId = null;
@@ -7097,7 +7113,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
         this.SelectedArtifactId = action.artifactId;
         this.SelectedVersionNumber = action.versionNumber;
+        this.SelectedTaskGraphPanel = null;
+        this.ShowRemoteBrowserPanel = false;
         this.ShowArtifactPanel = true;
+        this.cdr?.markForCheck?.();
         this.AfterArtifactPanelOpen?.emit(
           new AfterArtifactPanelOpenEventArgs(action.artifactId, action.versionNumber)
         );
@@ -7107,6 +7126,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, action.artifactId)) {
           return;
         }
+        this.cdr?.detectChanges?.();
         LogStatusEx({
           message: `🎨 Opening artifact ${action.artifactId} v${action.versionNumber} after agent run (decided from the conversation-wide version diff, so no single detail id applies)`,
           verboseOnly: true
@@ -8196,19 +8216,27 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Prepares the standby remote browser controller for a conversation outside of template checking
+   * so `OnStateChange` (`cdr.detectChanges()`) never fires during change detection.
+   */
+  private prepareStandbyRemoteBrowser(conversationId: string | null): void {
+    if (
+      !this.AllowRemoteBrowser ||
+      !conversationId ||
+      !this.agentClientService ||
+      UUIDsEqual(this.standbyPreparedConversationId, conversationId)
+    ) {
+      return;
+    }
+    this.standbyPreparedConversationId = conversationId;
+    this.ensureRemoteBrowser().SetConversation(conversationId);
+  }
+
+  /**
    * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
-   * chat area owns them). Cached: it is bound to an input, so a fresh object per check would re-fire it.
+   * chat area owns them). Pure & cached: it is bound to an input, so it never mutates state or fires CD.
    */
   public get EffectiveAppContext(): Record<string, unknown> | null {
-    if (
-      this.AllowRemoteBrowser &&
-      this.ConversationId &&
-      this.agentClientService &&
-      !UUIDsEqual(this.standbyPreparedConversationId, this.ConversationId)
-    ) {
-      this.standbyPreparedConversationId = this.ConversationId;
-      this.ensureRemoteBrowser().SetConversation(this.ConversationId);
-    }
     const controller = this.remoteBrowser;
     if (!controller) {
       return this.AppContext;

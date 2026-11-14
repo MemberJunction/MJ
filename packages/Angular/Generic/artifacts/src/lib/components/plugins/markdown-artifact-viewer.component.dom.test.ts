@@ -951,4 +951,52 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       vi.restoreAllMocks();
     }
   });
+
+  it('rejects non-UUID embedded artifact short-IDs (e.g. "D") before executing SQL RunView and displays a clean error message', async () => {
+    const runViewSpy = vi.fn(async () => ({ Success: true, Results: [], TotalRowCount: 0 }));
+    const mockProvider = {
+      Entities: [],
+      CurrentUser: { ID: '11111111-1111-4111-8111-111111111111', Name: 'Test', Email: 't@example.com' },
+      RunView: runViewSpy,
+    } as Partial<IMetadataProvider> as IMetadataProvider;
+
+    const brokenDoc = [
+      '# Silk Road History',
+      '',
+      ':::mj-block',
+      JSON.stringify(
+        {
+          BlockID: 'mj-artifact-bad-id',
+          Kind: 'Artifact',
+          Mode: 'Live',
+          Title: 'Silk Road Trade Analysis',
+          ArtifactID: 'D',
+          ArtifactType: 'Excel Spreadsheet',
+          EmbedMode: 'Inline',
+          VersionID: null,
+        },
+        null,
+        2,
+      ),
+      ':::',
+    ].join('\n');
+
+    const f = await renderDocsViewer(brokenDoc, true, mockProvider);
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+
+    const embeddedVersionCalls = runViewSpy.mock.calls.filter(
+      (call) => (call[0] as { EntityName?: string })?.EntityName === 'MJ: Artifact Versions' &&
+        String((call[0] as { ExtraFilter?: string })?.ExtraFilter ?? '').includes("'D'"),
+    );
+    expect(embeddedVersionCalls).toHaveLength(0);
+    const errMsg = f.componentInstance.GetEmbeddedArtifactError({
+      BlockID: 'mj-artifact-bad-id',
+      Kind: 'Artifact',
+      Mode: 'Live',
+      ArtifactID: 'D',
+      VersionID: null,
+    });
+    expect(errMsg).toContain('not a valid artifact UUID');
+  });
 });

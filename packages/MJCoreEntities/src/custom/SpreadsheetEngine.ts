@@ -1641,16 +1641,32 @@ export interface SpreadsheetChartSpec {
     ChartType: SpreadsheetChartType;
     /** Worksheet ID owning the source range. */
     SheetID: string;
-    /** A1 range feeding the chart (e.g. `'A1:C6'`). First column provides category labels; subsequent numeric columns become series. */
+    /** A1 range or comma-separated range union feeding the chart (e.g. `'A1:C6'` or `'A1:A6,D1:D6'`). */
     SourceRange: string;
     /** Anchor cell where the floating chart card sits on the worksheet (e.g. `'E2'`). */
     PositionCell: string;
+    /** Where the chart renders: `'dock'` in the bottom strip (default) or `'sheet'` floating over the grid. */
+    Placement?: 'dock' | 'sheet';
+    /** Optional horizontal pixel offset within the grid canvas when `Placement === 'sheet'`. */
+    OffsetX?: number;
+    /** Optional vertical pixel offset within the grid canvas when `Placement === 'sheet'`. */
+    OffsetY?: number;
     /** Optional width in pixels. */
     WidthPx?: number;
     /** Optional height in pixels. */
     HeightPx?: number;
     /** Whether to display the series legend (default `true`). */
     ShowLegend?: boolean;
+    /** Header row handling (`'auto'` detects automatically, `true` uses first row/col as labels, `false` treats all as data). */
+    HasHeaderRow?: boolean | 'auto';
+    /** Series orientation (`'columns'` = each column is a series, `'rows'` = each row is a series). Default `'columns'`. */
+    SeriesOrientation?: 'columns' | 'rows';
+    /** Zero-based index within the extracted grid for the category/X-axis column (or row when `SeriesOrientation === 'rows'`). */
+    CategoryColumnIndex?: number;
+    /** Zero-based grid column (or transposed row) indices to include as plotted numeric series. Omit or empty for all numeric series. */
+    IncludedSeriesIndices?: number[];
+    /** Whether to render value data labels directly on chart bars/points/slices. */
+    ShowDataLabels?: boolean;
 }
 
 /**
@@ -1663,10 +1679,14 @@ export interface SpreadsheetChartDataset {
     SheetID: string;
     SourceRange: string;
     Categories: string[];
-    Series: Array<{ Name: string; Values: number[] }>;
+    Series: Array<{ Name: string; Values: number[]; ColumnIndex?: number }>;
     Columns: DocumentBlockColumn[];
     Rows: Array<Record<string, unknown>>;
     RevisionHash: string;
+    /** Detected columns (or transposed rows when `SeriesOrientation === 'rows'`) available in the source range. */
+    DetectedColumns?: Array<{ Index: number; Name: string; IsNumeric: boolean }>;
+    /** Effective header detection result after applying `HasHeaderRow`. */
+    EffectiveHasHeaderRow?: boolean;
 }
 
 /**
@@ -1763,6 +1783,8 @@ export interface WorkbookSpec {
     Worksheets: WorksheetSpec[];
     /** Workbook-level named ranges. */
     NamedRanges: SpreadsheetNamedRangeSpec[];
+    /** Persisted preferred height (px) of the docked bottom strip containing charts, live tables, and embedded canvases. */
+    PreferredObjectsPaneHeightPx?: number;
     /** ISO creation timestamp. */
     CreatedAt: string;
     /** ISO last-modified timestamp. */
@@ -2800,6 +2822,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ActiveSheetID: activeId,
             Worksheets: worksheets,
             NamedRanges: Array.isArray(raw.NamedRanges) ? raw.NamedRanges : [],
+            ...(typeof raw.PreferredObjectsPaneHeightPx === 'number' &&
+            Number.isFinite(raw.PreferredObjectsPaneHeightPx) &&
+            raw.PreferredObjectsPaneHeightPx > 0
+                ? { PreferredObjectsPaneHeightPx: Math.round(raw.PreferredObjectsPaneHeightPx) }
+                : {}),
             CreatedAt: raw.CreatedAt || now,
             UpdatedAt: raw.UpdatedAt || now
         };
@@ -10349,31 +10376,138 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * Extracts a live {@link SpreadsheetChartDataset} from a chart spec (or ad-hoc range) on `workbook`.
      * Always evaluates the workbook first so formula cells in the chart range reflect latest values (`Accept #5`).
      */
+    /**
+     * Reads one or more comma-separated A1 ranges (supporting optional `'SheetName'!` prefixes)
+     * into a single aligned 2D cell grid for chart dataset extraction.
+     */
+    private readChartSourceGrid(
+        workbook: WorkbookSpec,
+        defaultSheet: WorksheetSpec,
+        sourceRange: string
+    ): Array<Array<SpreadsheetCellSpec | null>> | null {
+        const parts = sourceRange
+            .split(',')
+            .map((p) => p.trim())
+            .filter((p) => p.length > 0);
+        if (parts.length === 0) return null;
+
+        const segmentGrids: Array<{
+            bounds: { startRow: number; endRow: number; startCol: number; endCol: number };
+            grid: Array<Array<SpreadsheetCellSpec | null>>;
+        }> = [];
+
+        for (const part of parts) {
+            let segSheet = defaultSheet;
+            let addrPart = part;
+            const bangIdx = part.lastIndexOf('!');
+            if (bangIdx > 0) {
+                const rawSheetToken = part.slice(0, bangIdx).trim().replace(/^'+|'+$/g, '').replace(/''/g, "'");
+                const matched = this.GetWorksheet(workbook, rawSheetToken);
+                if (!matched) {
+                    return null;
+                }
+                segSheet = matched;
+                addrPart = part.slice(bangIdx + 1).trim();
+            }
+            const bounds = ParseRangeAddress(addrPart);
+            if (!bounds) {
+                return null;
+            }
+            const grid = this.ReadRange(workbook, segSheet.SheetID, addrPart);
+            if (grid.length > 0 && grid[0].length > 0) {
+                segmentGrids.push({ bounds, grid });
+            }
+        }
+
+        if (segmentGrids.length === 0) return null;
+        if (segmentGrids.length === 1) {
+            return segmentGrids[0].grid;
+        }
+
+        const firstBounds = segmentGrids[0].bounds;
+        const allSameColumns = segmentGrids.every(
+            (s) => s.bounds.startCol === firstBounds.startCol && s.bounds.endCol === firstBounds.endCol
+        );
+        if (allSameColumns) {
+            const stacked: Array<Array<SpreadsheetCellSpec | null>> = [];
+            for (const seg of segmentGrids) {
+                for (const row of seg.grid) {
+                    stacked.push(row);
+                }
+            }
+            return stacked;
+        }
+
+        const maxRows = Math.max(...segmentGrids.map((s) => s.grid.length));
+        const combined: Array<Array<SpreadsheetCellSpec | null>> = [];
+        for (let r = 0; r < maxRows; r++) {
+            const rowCells: Array<SpreadsheetCellSpec | null> = [];
+            for (const seg of segmentGrids) {
+                const segWidth = seg.grid[0]?.length ?? 0;
+                const segRow = seg.grid[r];
+                if (segRow) {
+                    rowCells.push(...segRow);
+                } else {
+                    for (let c = 0; c < segWidth; c++) {
+                        rowCells.push(null);
+                    }
+                }
+            }
+            combined.push(rowCells);
+        }
+        return combined;
+    }
+
+    /**
+     * Transposes a 2D cell grid for row-oriented chart extraction (`SeriesOrientation === 'rows'`).
+     */
+    private transposeChartGrid(
+        grid: Array<Array<SpreadsheetCellSpec | null>>
+    ): Array<Array<SpreadsheetCellSpec | null>> {
+        const rowCount = grid.length;
+        const colCount = Math.max(0, ...grid.map((r) => r.length));
+        const transposed: Array<Array<SpreadsheetCellSpec | null>> = [];
+        for (let c = 0; c < colCount; c++) {
+            const outRow: Array<SpreadsheetCellSpec | null> = [];
+            for (let r = 0; r < rowCount; r++) {
+                outRow.push(grid[r]?.[c] ?? null);
+            }
+            transposed.push(outRow);
+        }
+        return transposed;
+    }
+
     public ExtractChartDataset(
         workbook: WorkbookSpec,
         sheetIdOrName: string,
-        chartIdOrRange: string
+        chartIdOrRange: string,
+        overrideSpec?: Partial<SpreadsheetChartSpec>
     ): SpreadsheetChartDataset | null {
         this.EvaluateWorkbook(workbook);
         const sheet = this.GetWorksheet(workbook, sheetIdOrName) ?? workbook.Worksheets[0];
         if (!sheet) return null;
 
         const existingChart = sheet.Charts.find((c) => c.ChartID === chartIdOrRange);
-        const sourceRange = existingChart ? existingChart.SourceRange : chartIdOrRange;
-        const bounds = ParseRangeAddress(sourceRange);
-        if (!bounds) return null;
+        const effectiveChart: Partial<SpreadsheetChartSpec> | undefined =
+            existingChart || overrideSpec ? { ...existingChart, ...overrideSpec } : undefined;
+        const sourceRange = effectiveChart?.SourceRange ?? chartIdOrRange;
+        const rawGrid = this.readChartSourceGrid(workbook, sheet, sourceRange);
+        if (!rawGrid || rawGrid.length === 0 || rawGrid[0].length === 0) return null;
 
-        const grid = this.ReadRange(workbook, sheet.SheetID, sourceRange);
+        const orientation = effectiveChart?.SeriesOrientation === 'rows' ? 'rows' : 'columns';
+        const grid = orientation === 'rows' ? this.transposeChartGrid(rawGrid) : rawGrid;
         if (grid.length === 0 || grid[0].length === 0) return null;
 
-        // Determine if row 0 is headers (has string text that isn't purely a formatted number)
         const firstRow = grid[0];
-        const hasHeaderRow =
+        const autoHasHeader =
             grid.length > 1 &&
             firstRow.some((cell) => {
                 const raw = cell?.ComputedValue ?? cell?.RawValue;
                 return typeof raw === 'string' && raw.trim() !== '' && parseChartNumericValue(raw) === null;
             });
+        const hasHeaderPref = effectiveChart?.HasHeaderRow ?? 'auto';
+        const hasHeaderRow =
+            hasHeaderPref === true ? grid.length > 1 : hasHeaderPref === false ? false : autoHasHeader;
 
         const dataRows = hasHeaderRow ? grid.slice(1) : grid;
         const colCount = firstRow.length;
@@ -10396,34 +10530,71 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             columnNonEmptyCounts.push(nonEmptyCount);
         }
 
-        // Identify numeric value columns vs non-numeric category/dimension columns.
-        // Column 0 defaults to category whenever > 1 columns exist unless all columns are purely numeric.
+        const explicitCatIdx =
+            typeof effectiveChart?.CategoryColumnIndex === 'number' &&
+            Number.isInteger(effectiveChart.CategoryColumnIndex) &&
+            effectiveChart.CategoryColumnIndex >= 0 &&
+            effectiveChart.CategoryColumnIndex < colCount
+                ? effectiveChart.CategoryColumnIndex
+                : undefined;
+
+        const detectedColumns: Array<{ Index: number; Name: string; IsNumeric: boolean }> = [];
         const numericColIndices: number[] = [];
         const textColIndices: number[] = [];
         for (let c = 0; c < colCount; c++) {
             const nonEmpty = columnNonEmptyCounts[c];
-            const isNumericCol = nonEmpty > 0 && columnNumericCounts[c] >= Math.ceil(nonEmpty * 0.5);
-            if (isNumericCol && (colCount === 1 || c > 0)) {
+            const isNumericDataCol = nonEmpty > 0 && columnNumericCounts[c] >= Math.ceil(nonEmpty * 0.5);
+            const rawHeader = firstRow[c]?.ComputedValue ?? firstRow[c]?.RawValue;
+            const colLabel =
+                hasHeaderRow && rawHeader !== null && rawHeader !== undefined && String(rawHeader).trim() !== ''
+                    ? String(rawHeader).trim()
+                    : colCount === 1
+                      ? 'Value'
+                      : orientation === 'rows'
+                        ? `Row ${c + 1}`
+                        : `Series ${c}`;
+            detectedColumns.push({ Index: c, Name: colLabel, IsNumeric: isNumericDataCol });
+
+            if (explicitCatIdx !== undefined) {
+                if (c === explicitCatIdx) {
+                    textColIndices.push(c);
+                } else if (isNumericDataCol) {
+                    numericColIndices.push(c);
+                }
+            } else if (isNumericDataCol && (colCount === 1 || c > 0)) {
                 numericColIndices.push(c);
             } else {
                 textColIndices.push(c);
             }
         }
 
-        // If every column in range is numeric and colCount > 1 (e.g., B2:C5), treat all after col 0 as series,
-        // unless col 0 itself looks like an integer series with no non-numeric label columns; keep existing col-0 category contract.
-        const activeSeriesIndices =
+        let activeSeriesIndices =
             numericColIndices.length > 0
                 ? numericColIndices
                 : colCount === 1
                   ? [0]
                   : [];
+
+        if (Array.isArray(effectiveChart?.IncludedSeriesIndices) && effectiveChart.IncludedSeriesIndices.length > 0) {
+            const wanted = new Set(effectiveChart.IncludedSeriesIndices);
+            const filtered = activeSeriesIndices.filter((c) => wanted.has(c));
+            if (filtered.length > 0) {
+                activeSeriesIndices = filtered;
+            }
+        }
+
         const categoryColIndices =
-            textColIndices.length > 0 ? textColIndices : colCount > 1 ? [0] : [];
+            explicitCatIdx !== undefined
+                ? [explicitCatIdx]
+                : textColIndices.length > 0
+                  ? textColIndices
+                  : colCount > 1
+                    ? [0]
+                    : [];
 
         const categories: string[] = dataRows.map((r, idx) => {
             if (categoryColIndices.length === 0) {
-                return `Row ${idx + 1}`;
+                return orientation === 'rows' ? `Column ${idx + 1}` : `Row ${idx + 1}`;
             }
             const parts = categoryColIndices
                 .map((cIdx) => {
@@ -10431,23 +10602,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     return v !== null && v !== undefined ? String(v).trim() : '';
                 })
                 .filter((s) => s.length > 0);
-            return parts.length > 0 ? parts.join(' · ') : `Row ${idx + 1}`;
+            return parts.length > 0 ? parts.join(' · ') : orientation === 'rows' ? `Column ${idx + 1}` : `Row ${idx + 1}`;
         });
 
-        const series: Array<{ Name: string; Values: number[] }> = activeSeriesIndices.map((c) => {
-            const headerCell = firstRow[c];
-            const rawHeader = headerCell?.ComputedValue ?? headerCell?.RawValue;
-            const sName =
-                hasHeaderRow && rawHeader !== null && rawHeader !== undefined && String(rawHeader).trim() !== ''
-                    ? String(rawHeader)
-                    : colCount === 1
-                      ? 'Value'
-                      : `Series ${c}`;
+        const series: Array<{ Name: string; Values: number[]; ColumnIndex?: number }> = activeSeriesIndices.map((c) => {
+            const colMeta = detectedColumns[c];
+            const sName = colMeta ? colMeta.Name : `Series ${c}`;
             const vals = dataRows.map((r) => {
                 const raw = r[c]?.ComputedValue ?? r[c]?.RawValue;
                 return parseChartNumericValue(raw) ?? 0;
             });
-            return { Name: sName, Values: vals };
+            return { Name: sName, Values: vals, ColumnIndex: c };
         });
 
         const categoryColName =
@@ -10470,16 +10635,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         });
 
         return {
-            ChartID: existingChart?.ChartID ?? `range-${sourceRange}`,
-            Title: existingChart?.Title ?? `${sheet.Name} (${sourceRange})`,
-            ChartType: existingChart?.ChartType ?? 'bar',
+            ChartID: effectiveChart?.ChartID ?? `range-${sourceRange}`,
+            Title: effectiveChart?.Title ?? `${sheet.Name} (${sourceRange})`,
+            ChartType: effectiveChart?.ChartType ?? 'bar',
             SheetID: sheet.SheetID,
             SourceRange: sourceRange,
             Categories: categories,
             Series: series,
             Columns: columns,
             Rows: rows,
-            RevisionHash: this.ComputeRevisionHash(workbook)
+            RevisionHash: this.ComputeRevisionHash(workbook),
+            DetectedColumns: detectedColumns,
+            EffectiveHasHeaderRow: hasHeaderRow
         };
     }
 
@@ -11787,6 +11954,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ActiveSheetID: finalWorksheets[0].SheetID,
             Worksheets: finalWorksheets,
             NamedRanges: Array.isArray(metaWorkbook?.NamedRanges) ? metaWorkbook!.NamedRanges! : [],
+            ...(typeof metaWorkbook?.PreferredObjectsPaneHeightPx === 'number' &&
+            Number.isFinite(metaWorkbook.PreferredObjectsPaneHeightPx) &&
+            metaWorkbook.PreferredObjectsPaneHeightPx > 0
+                ? { PreferredObjectsPaneHeightPx: Math.round(metaWorkbook.PreferredObjectsPaneHeightPx) }
+                : {}),
             CreatedAt: metaWorkbook?.CreatedAt || now,
             UpdatedAt: now
         };
@@ -11942,6 +12114,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             Title: sanitized.Title,
             ActiveSheetID: sanitized.ActiveSheetID,
             NamedRanges: sanitized.NamedRanges,
+            ...(typeof sanitized.PreferredObjectsPaneHeightPx === 'number' &&
+            Number.isFinite(sanitized.PreferredObjectsPaneHeightPx) &&
+            sanitized.PreferredObjectsPaneHeightPx > 0
+                ? { PreferredObjectsPaneHeightPx: Math.round(sanitized.PreferredObjectsPaneHeightPx) }
+                : {}),
             CreatedAt: sanitized.CreatedAt,
             UpdatedAt: sanitized.UpdatedAt,
             Worksheets: sanitized.Worksheets.map((ws) => {

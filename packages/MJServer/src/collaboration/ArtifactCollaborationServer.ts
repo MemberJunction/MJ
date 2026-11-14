@@ -8119,6 +8119,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             setWorkbookMeta('Title', wb.Title);
             setWorkbookMeta('ActiveSheetID', wb.ActiveSheetID);
             setWorkbookMeta('NamedRanges', JSON.stringify(wb.NamedRanges ?? []));
+            if (typeof wb.PreferredObjectsPaneHeightPx === 'number' && Number.isFinite(wb.PreferredObjectsPaneHeightPx)) {
+                setWorkbookMeta('PreferredObjectsPaneHeightPx', String(Math.round(wb.PreferredObjectsPaneHeightPx)));
+            }
 
             const validSheetIds = new Set<string>();
             const validCellCoordKeys = new Set<string>();
@@ -8465,6 +8468,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 ['ActiveSheetID', wb.ActiveSheetID],
                 ['NamedRanges', JSON.stringify(wb.NamedRanges ?? [])]
             ]);
+            if (typeof wb.PreferredObjectsPaneHeightPx === 'number' && Number.isFinite(wb.PreferredObjectsPaneHeightPx)) {
+                meta.set('PreferredObjectsPaneHeightPx', String(Math.round(wb.PreferredObjectsPaneHeightPx)));
+            }
             const items = new Map<string, string>();
             const cells = new Map<string, string>();
             for (const ws of wb.Worksheets) {
@@ -8538,12 +8544,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     }
                     const now = new Date().toISOString();
                     const activeId = workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID;
+                    const prefPaneRaw = workbookMeta.get('PreferredObjectsPaneHeightPx');
+                    const prefPaneHeight = prefPaneRaw ? Number(prefPaneRaw) : NaN;
                     const wb: WorkbookSpec = SpreadsheetEngine.Instance.NormalizeWorkbook({
                         WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
                         Title: workbookMeta.get('Title') || 'Workbook',
                         ActiveSheetID: activeId,
                         Worksheets: worksheets,
                         NamedRanges: namedRanges,
+                        ...(Number.isFinite(prefPaneHeight) && prefPaneHeight > 0
+                            ? { PreferredObjectsPaneHeightPx: Math.round(prefPaneHeight) }
+                            : {}),
                         CreatedAt: now,
                         UpdatedAt: now
                     });

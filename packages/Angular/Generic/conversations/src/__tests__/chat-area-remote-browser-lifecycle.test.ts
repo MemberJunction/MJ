@@ -117,6 +117,7 @@ describe('chat area: conversation browser lifecycle', () => {
 
     // 1. Standby (drawer closed, ShowRemoteBrowserPanel === false): CloseRemoteBrowserPanel() is a no-op,
     //    so void this.remoteBrowser?.Close() in the setter is what unregisters the 13 standby tools.
+    (component as unknown as { prepareStandbyRemoteBrowser(id: string | null): void }).prepareStandbyRemoteBrowser(component.ConversationId);
     expect(component.EffectiveAppContext).toBeTruthy();
     expect(tools.size).toBe(13);
     component.AllowRemoteBrowser = false;
@@ -151,6 +152,7 @@ describe('chat area: conversation browser lifecycle', () => {
     };
 
     // Initial standby on A: 13 tools registered and advertised.
+    (component as unknown as { prepareStandbyRemoteBrowser(id: string | null): void }).prepareStandbyRemoteBrowser(component.ConversationId);
     expect(readToolCount()).toBe(13);
     expect(tools.size).toBe(13);
 

@@ -839,4 +839,93 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
     expect(cellsDraft.success).toBe(true);
     expect((cellsDraft.data as { matches: Array<{ cell: string }> }).matches.map((m) => m.cell)).toEqual(['B2']);
   });
+
+  it('resolves session alpha short-IDs (e.g. "D") to real UUIDs across DocumentToolLibrary and SlideDeckToolLibrary, and rejects unresolved short-IDs', async () => {
+    const docLib = new DocumentToolLibrary();
+    const slideLib = new SlideDeckToolLibrary();
+    const targetUuid = '5B83B8FC-0C19-4584-BC21-B7DFCDC518DD';
+    const ctx = {
+      resolveArtifactId: (id: string) => (id.trim().toUpperCase() === 'D' ? targetUuid : undefined),
+    };
+
+    // 1. DocumentToolLibrary.embed_artifact_block resolves "D" -> UUID
+    const embedRes = await docLib.InvokeTool(
+      'embed_artifact_block',
+      { artifactId: 'D', title: 'Silk Road Trade Analysis', artifactType: 'Excel Spreadsheet' },
+      '# Silk Road\n\nIntro paragraph.',
+      ctx,
+    );
+    expect(embedRes.success).toBe(true);
+    const updatedDoc = (embedRes.data as { updatedContent: string }).updatedContent;
+    expect(updatedDoc).toContain(`"ArtifactID": "${targetUuid}"`);
+    expect(updatedDoc).not.toContain('"ArtifactID": "D"');
+
+    // 2. DocumentToolLibrary rejects unresolved short-ID "D" without resolver context
+    const unlinkedEmbed = await docLib.InvokeTool(
+      'embed_artifact_block',
+      { artifactId: 'D', title: 'Should Fail' },
+      '# Silk Road',
+    );
+    expect(unlinkedEmbed.success).toBe(false);
+    expect(unlinkedEmbed.errorMessage).toContain('could not be resolved');
+
+    // 3. DocumentToolLibrary.insert_block_after & replace_block normalize hand-crafted :::mj-block JSON with "ArtifactID": "D"
+    const rawDirective = [
+      ':::mj-block',
+      JSON.stringify(
+        {
+          BlockID: 'blk-handcrafted',
+          Kind: 'Artifact',
+          Mode: 'Live',
+          Title: 'Embedded Sheet',
+          ArtifactID: 'D',
+          ArtifactType: 'Excel Spreadsheet',
+          EmbedMode: 'Inline',
+        },
+        null,
+        2,
+      ),
+      ':::',
+    ].join('\n');
+    const insertRawRes = await docLib.InvokeTool(
+      'insert_block_after',
+      { markdown: rawDirective },
+      '# Doc',
+      ctx,
+    );
+    expect(insertRawRes.success).toBe(true);
+    expect((insertRawRes.data as { updatedContent: string }).updatedContent).toContain(`"ArtifactID": "${targetUuid}"`);
+
+    // 4. SlideDeckToolLibrary.upsert_slide_element resolves mjBlock.ArtifactID "D" -> UUID
+    const deckRes = await slideLib.InvokeTool(
+      'add_slide',
+      { title: 'Trade Sheet Slide', layout: 'title-body' },
+      '',
+      ctx,
+    );
+    expect(deckRes.success).toBe(true);
+    const deckJson = (deckRes.data as { updatedContent: string }).updatedContent;
+    const outline = JSON.parse(deckJson) as { Slides: Array<{ SlideID: string }> };
+    const slideId = outline.Slides[outline.Slides.length - 1].SlideID;
+
+    const slideUpsert = await slideLib.InvokeTool(
+      'upsert_slide_element',
+      {
+        slideId,
+        regionId: 'body',
+        mjBlock: {
+          Kind: 'Artifact',
+          Mode: 'Live',
+          Title: 'Embedded Workbook',
+          ArtifactID: 'D',
+          ArtifactType: 'Excel Spreadsheet',
+          EmbedMode: 'Inline',
+        },
+      },
+      deckJson,
+      ctx,
+    );
+    expect(slideUpsert.success).toBe(true);
+    expect((slideUpsert.data as { updatedContent: string }).updatedContent).toContain(targetUuid);
+  });
 });
