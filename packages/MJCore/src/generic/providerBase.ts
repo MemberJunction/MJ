@@ -8389,14 +8389,51 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const itemsKey = this.LocalStoragePrefix + ProviderBase.localStorageDatasetItemsKey;
 
             const readStart = Date.now();
-            const all = await ls.GetItems<string>([tsKey, fmtKey, dataKey, membershipKey, itemsKey]);
-            const readMs = Date.now() - readStart;
+            let raw: unknown = null;
+            let tsRaw: string | null = null;
+            let format: string | null = null;
+            let membershipRaw: string | null = null;
+            let itemsRaw: string | null = null;
 
-            const tsRaw = all.get(tsKey) ?? null;
-            const format = all.get(fmtKey) ?? null;
-            const raw = all.get(dataKey) ?? null;
-            const membershipRaw = all.get(membershipKey) ?? null;
-            const itemsRaw = all.get(itemsKey) ?? null;
+            if (typeof ls.GetObject === 'function') {
+                const otherKeys = [tsKey, fmtKey, membershipKey, itemsKey];
+                const [metadataObj, otherItems] = await Promise.all([
+                    ls.GetObject(dataKey),
+                    typeof ls.GetItems === 'function' ? ls.GetItems<string>(otherKeys) : null
+                ]);
+                raw = metadataObj !== null && metadataObj !== undefined
+                    ? metadataObj
+                    : await ls.GetItem<string>(dataKey);
+                if (otherItems) {
+                    tsRaw = otherItems.get(tsKey) ?? null;
+                    format = otherItems.get(fmtKey) ?? null;
+                    membershipRaw = otherItems.get(membershipKey) ?? null;
+                    itemsRaw = otherItems.get(itemsKey) ?? null;
+                } else {
+                    tsRaw = await ls.GetItem<string>(tsKey);
+                    format = await ls.GetItem<string>(fmtKey);
+                    membershipRaw = await ls.GetItem<string>(membershipKey);
+                    itemsRaw = await ls.GetItem<string>(itemsKey);
+                }
+            } else {
+                const all = typeof ls.GetItems === 'function'
+                    ? await ls.GetItems<string>([tsKey, fmtKey, dataKey, membershipKey, itemsKey])
+                    : null;
+                if (all) {
+                    tsRaw = all.get(tsKey) ?? null;
+                    format = all.get(fmtKey) ?? null;
+                    raw = all.get(dataKey) ?? null;
+                    membershipRaw = all.get(membershipKey) ?? null;
+                    itemsRaw = all.get(itemsKey) ?? null;
+                } else {
+                    tsRaw = await ls.GetItem<string>(tsKey);
+                    format = await ls.GetItem<string>(fmtKey);
+                    raw = await ls.GetItem<string>(dataKey);
+                    membershipRaw = await ls.GetItem<string>(membershipKey);
+                    itemsRaw = await ls.GetItem<string>(itemsKey);
+                }
+            }
+            const readMs = Date.now() - readStart;
 
             // The timestamps are a freshness claim FOR THE PAYLOAD, so they are only adopted when the
             // payload is there to adopt with them. Timestamps without a payload happen whenever the
@@ -8444,7 +8481,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             if (!raw) return;
 
-            // Decompress if stored in compressed format, otherwise parse directly
+            // Decompress if stored in compressed format, otherwise parse directly or adopt object directly
             const parseStart = Date.now();
             let temp: any;
             if (format === 'gzip' && typeof raw === 'string') {
@@ -8455,9 +8492,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const decompressedStream = blob.stream().pipeThrough(ds);
                 const jsonString = await new Response(decompressedStream).text();
                 temp = JSON.parse(jsonString);
-            } else {
-                // Legacy uncompressed path
-                temp = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } else if (typeof raw === 'string') {
+                // Legacy uncompressed string path
+                temp = JSON.parse(raw);
+            } else if (typeof raw === 'object' && raw !== null) {
+                // Structured clone object path: directly adopt the cloned object
+                temp = raw;
             }
             const parseMs = Date.now() - parseStart;
 
@@ -8734,15 +8774,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             const start = Date.now();
+            const dataKey = this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey;
+            const formatKey = this.LocalStoragePrefix + ProviderBase.localStorageFormatKey;
 
-            // Serialize the AllMetadata object FIRST. If this throws (or the payload write below
-            // fails), nothing else has been written yet, so the previously stored timestamps still
-            // describe the previously stored payload and LocalMetadataObsolete() will report
-            // obsolete on the next boot — which is what makes the save retry. Writing timestamps
-            // before the payload left the cache claiming freshness with no payload behind it, and
-            // that state was never retried.
-            const jsonString = JSON.stringify(this._localMetadata);
-            const snapshot = await this.writeMetadataSnapshot(ls, jsonString);
+            let snapshot: { compressed: boolean; storedLength: number };
+            if (typeof ls.SetObject === 'function') {
+                // Structured-clone path: store AllMetadata directly into storage without JSON.stringify or gzip compression
+                await ls.SetObject<AllMetadata>(dataKey, this._localMetadata);
+                await ls.SetItem<string>(formatKey, 'structured-clone');
+                snapshot = { compressed: false, storedLength: 0 };
+            } else {
+                // Serialized string path (JSON.stringify + gzip/base64 when CompressionStream is available)
+                const jsonString = JSON.stringify(this._localMetadata);
+                snapshot = await this.writeMetadataSnapshot(ls, jsonString);
+            }
 
             // Persist the metadata-member entity set beside the snapshot it belongs to, so the
             // event-driven refresh survives a warm boot (see LoadLocalMetadataFromStorage).
@@ -8760,7 +8805,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, timestampsRaw);
             this._storedTimestampsRaw = timestampsRaw;
 
-            this.logMetadataSaveComplete(Date.now() - start, jsonString.length, snapshot);
+            this.logMetadataSaveComplete(Date.now() - start, snapshot.storedLength, snapshot);
         }
         catch (e) {
             LogError(`[Metadata Cache] SaveLocalMetadataToStorage failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -8809,6 +8854,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const ratio = rawLength > 0 ? (snapshot.storedLength / rawLength * 100).toFixed(1) : '?';
             LogStatusEx({
                 message: `[Metadata Cache] Save complete: ${elapsedMs}ms, raw=${mb(rawLength)}MB, compressed=${mb(snapshot.storedLength)}MB (${ratio}%)`,
+                verboseOnly: true
+            });
+        }
+        else if (snapshot.storedLength === 0) {
+            LogStatusEx({
+                message: `[Metadata Cache] Save complete (structured-clone): ${elapsedMs}ms`,
                 verboseOnly: true
             });
         }

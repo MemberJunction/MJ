@@ -151,6 +151,11 @@ export interface PrimitiveBenchmarkMetrics {
     CanCountSubqueryFiltersPassed?: number;
     RecordChangesExistsCountTargetsBaseTable?: boolean;
     RecordChangesExistsCountMs?: number;
+    // Wave 5.4 (PB20) metrics:
+    LazyEntityInfoConstructAllMs?: number;
+    LazyEntityInfo5FieldsAccessMs?: number;
+    MetadataStorageRoundTripMs?: number;
+    MetadataStorageStructuredCloneUsed?: boolean;
 }
 
 export interface BaselineComparisonRow {
@@ -2855,6 +2860,157 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             );
         },
     },
+    {
+        Id: `${BUNDLE}.PB20`,
+        Name: 'PB20: Wave 5.4 — Lazy EntityInfo.Fields metadata construction & IndexedDB structured-clone boot hydration benchmark',
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const fx = requireFixture();
+            const allEntities = ctx.Provider.Entities;
+            Assert(allEntities.length > 0, 'PB20: expected loaded entities in ctx.Provider.Entities');
+
+            // ── Part A: Lazy EntityInfo.Fields construction vs 5-entity access ─
+            const tConstruct0 = performance.now();
+            const lazyEntities: EntityInfo[] = [];
+            for (let i = 0; i < allEntities.length; i++) {
+                const newEnt = new EntityInfo(allEntities[i], ctx.Provider);
+                lazyEntities.push(newEnt);
+            }
+            const constructAllMs = Number((performance.now() - tConstruct0).toFixed(2));
+
+            let unhydratedCount = 0;
+            for (const ent of lazyEntities) {
+                if (!ent.IsFieldsLoaded) {
+                    unhydratedCount++;
+                }
+            }
+            AssertEqual(
+                unhydratedCount,
+                lazyEntities.length,
+                `PB20: expected all ${lazyEntities.length} constructed EntityInfo instances to have lazy fields unhydrated, but ${lazyEntities.length - unhydratedCount} were eagerly loaded`
+            );
+
+            const sampleCount = Math.min(5, lazyEntities.length);
+            const tFields0 = performance.now();
+            let totalSampleFields = 0;
+            for (let i = 0; i < sampleCount; i++) {
+                const fields = lazyEntities[i].Fields;
+                totalSampleFields += fields.length;
+            }
+            const fields5AccessMs = Number((performance.now() - tFields0).toFixed(2));
+
+            for (let i = 0; i < sampleCount; i++) {
+                Assert(lazyEntities[i].IsFieldsLoaded, `PB20: entity ${lazyEntities[i].Name} expected IsFieldsLoaded === true after accessing .Fields`);
+            }
+            if (lazyEntities.length > sampleCount) {
+                Assert(!lazyEntities[sampleCount].IsFieldsLoaded, `PB20: entity ${lazyEntities[sampleCount].Name} expected IsFieldsLoaded === false (not accessed)`);
+            }
+            Assert(totalSampleFields > 0, `PB20: expected > 0 total fields across ${sampleCount} sample entities, got ${totalSampleFields}`);
+
+            fx.Primitives.LazyEntityInfoConstructAllMs = constructAllMs;
+            fx.Primitives.LazyEntityInfo5FieldsAccessMs = fields5AccessMs;
+
+            // ── Part B: SaveLocalMetadataToStorage / LoadLocalMetadataFromStorage round-trip ─
+            interface ProviderStorageHarness {
+                LocalStorageProvider: ILocalStorageProvider | null;
+                SetLocalStorageProvider?(provider: ILocalStorageProvider): void;
+                _localStorageProvider?: ILocalStorageProvider;
+                SaveLocalMetadataToStorage(): Promise<void>;
+                LoadLocalMetadataFromStorage(): Promise<void>;
+            }
+
+            class BenchStructuredCloneStorageProvider implements ILocalStorageProvider {
+                public readonly SharesReferences = false;
+                public readonly SupportsCrossProcessPersistence = true;
+                public readonly SharedAcrossProcesses = true;
+                private _items = new Map<string, unknown>();
+
+                public async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
+                    const fullKey = `${category ?? 'default'}:${key}`;
+                    const val = this._items.get(fullKey);
+                    return val !== undefined ? (val as T) : null;
+                }
+                public async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
+                    const fullKey = `${category ?? 'default'}:${key}`;
+                    this._items.set(fullKey, value);
+                }
+                public async Remove(key: string, category?: string): Promise<void> {
+                    const fullKey = `${category ?? 'default'}:${key}`;
+                    this._items.delete(fullKey);
+                }
+                public async ClearCategory(category: string): Promise<void> {
+                    const prefix = `${category}:`;
+                    for (const k of this._items.keys()) {
+                        if (k.startsWith(prefix)) this._items.delete(k);
+                    }
+                }
+                public async SetObject<T>(key: string, value: T, category?: string): Promise<void> {
+                    const fullKey = `${category ?? 'default'}:${key}`;
+                    this._items.set(fullKey, structuredClone(value));
+                }
+                public async GetObject<T>(key: string, category?: string): Promise<T | null> {
+                    const fullKey = `${category ?? 'default'}:${key}`;
+                    const val = this._items.get(fullKey);
+                    return val !== undefined ? (structuredClone(val) as T) : null;
+                }
+                public async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
+                    const result = new Map<string, T | null>();
+                    for (const key of keys) {
+                        result.set(key, await this.GetItem<T>(key, category));
+                    }
+                    return result;
+                }
+            }
+
+            const harness = ctx.Provider as unknown as ProviderStorageHarness;
+            const originalStorage = harness.LocalStorageProvider;
+            const useExistingStructuredClone =
+                !!originalStorage &&
+                typeof originalStorage.SetObject === 'function' &&
+                originalStorage.SupportsCrossProcessPersistence !== false;
+
+            const benchStore = useExistingStructuredClone ? originalStorage : new BenchStructuredCloneStorageProvider();
+            if (!useExistingStructuredClone) {
+                if (typeof harness.SetLocalStorageProvider === 'function') {
+                    harness.SetLocalStorageProvider(benchStore);
+                } else {
+                    harness._localStorageProvider = benchStore;
+                }
+            }
+
+            let roundTripMs = 0;
+            try {
+                const tRoundTrip0 = performance.now();
+                await harness.SaveLocalMetadataToStorage();
+                await harness.LoadLocalMetadataFromStorage();
+                roundTripMs = Number((performance.now() - tRoundTrip0).toFixed(2));
+            } finally {
+                if (!useExistingStructuredClone && originalStorage) {
+                    if (typeof harness.SetLocalStorageProvider === 'function') {
+                        harness.SetLocalStorageProvider(originalStorage);
+                    } else {
+                        harness._localStorageProvider = originalStorage;
+                    }
+                }
+            }
+
+            fx.Primitives.MetadataStorageRoundTripMs = roundTripMs;
+            fx.Primitives.MetadataStorageStructuredCloneUsed = true;
+
+            Assert(ctx.Provider.Entities.length > 0, 'PB20: expected entities populated after storage round-trip');
+            const reloadedSample = ctx.Provider.Entities.slice(0, 5);
+            for (const ent of reloadedSample) {
+                AssertEqual(ent.IsFieldsLoaded, false, `PB20: expected reloaded entity ${ent.Name} to have lazy fields unhydrated`);
+            }
+            const reloadedFields = reloadedSample[0].Fields;
+            Assert(reloadedFields.length > 0, `PB20: expected entity ${reloadedSample[0].Name} to hydrate fields`);
+            AssertEqual(reloadedSample[0].IsFieldsLoaded, true, 'PB20: expected IsFieldsLoaded === true after accessing .Fields on reloaded entity');
+
+            console.log(
+                `      → PB20 Wave 5.4 Hydration KPIs: lazyEntityInfoConstructAll=${constructAllMs}ms (${lazyEntities.length} entities), ` +
+                    `5FieldsAccess=${fields5AccessMs}ms | storageRoundTrip=${roundTripMs}ms (structuredClone=true, reloadedEntities=${ctx.Provider.Entities.length})`
+            );
+        },
+    },
 ];
 
 for (const check of PerformanceBenchmarkChecks) {
@@ -2915,6 +3071,7 @@ function formatBenchmarkMarkdown(report: PerformanceBenchmarkReport): string {
         `| **PB17** | \`FrozenRowSerializationCache\` \`WeakMap\` wire serialize (5,000 rows x 20 responses) | ${report.Primitives.FrozenRowWireSerialize5000x20Ms ?? 'n/a'} ms (${report.Primitives.FrozenRowWireSpeedupRatio ?? 'n/a'}x vs \`JSON.stringify\`) |`,
         `| **PB19** | \`BuildRecordChangePayload\` \`skipFullRecordJSON\` (500 x 32 KB rows) | ${report.Primitives.RecordChangePayloadSkip500x32KBMs ?? 'n/a'} ms (vs ${report.Primitives.RecordChangePayloadFull500x32KBMs ?? 'n/a'} ms unskipped, ${report.Primitives.RecordChangePayloadSkipSpeedupRatio ?? 'n/a'}x faster) |`,
         `| **PB19** | \`CanCountFromBaseTable\` subqueries & PG temporal + \`EXISTS\` \`count_only\` | ${report.Primitives.CanCountSubqueryFiltersPassed ?? 'n/a'}/3 filters, ${report.Primitives.RecordChangesExistsCountMs ?? 'n/a'} ms (\`baseTable=${report.Primitives.RecordChangesExistsCountTargetsBaseTable ?? false}\`) |`,
+        `| **PB20** | \`EntityInfo\` lazy \`Fields\` construction (all ${report.Primitives.LazyEntityInfoConstructAllMs ?? 'n/a'} ms) & 5-entity access | ${report.Primitives.LazyEntityInfo5FieldsAccessMs ?? 'n/a'} ms (storage roundtrip: ${report.Primitives.MetadataStorageRoundTripMs ?? 'n/a'} ms, structuredClone=${report.Primitives.MetadataStorageStructuredCloneUsed ?? false}) |`,
         ``,
         `## 2. Multi-Turn Agent Loop & SQL Server Footprint Benchmarks (PB7–PB12)`,
         ``,
@@ -3000,6 +3157,7 @@ function printBenchmarkSummary(report: PerformanceBenchmarkReport): void {
     console.log(`    - PB17 FrozenRow WeakMap Wire (5,000 x 20):           ${report.Primitives.FrozenRowWireSerialize5000x20Ms ?? 'n/a'} ms (${report.Primitives.FrozenRowWireSpeedupRatio ?? 'n/a'}x vs JSON.stringify)`);
     console.log(`    - PB19 RecordChangePayload skipFullRecordJSON (500x): ${report.Primitives.RecordChangePayloadSkip500x32KBMs ?? 'n/a'} ms (vs ${report.Primitives.RecordChangePayloadFull500x32KBMs ?? 'n/a'} ms, ${report.Primitives.RecordChangePayloadSkipSpeedupRatio ?? 'n/a'}x faster)`);
     console.log(`    - PB19 CanCountFromBaseTable subqueries & EXISTS:     ${report.Primitives.CanCountSubqueryFiltersPassed ?? 'n/a'}/3 filters, ${report.Primitives.RecordChangesExistsCountMs ?? 'n/a'} ms (baseTable=${report.Primitives.RecordChangesExistsCountTargetsBaseTable ?? false})`);
+    console.log(`    - PB20 Lazy EntityInfo (all ${report.Primitives.LazyEntityInfoConstructAllMs ?? 'n/a'} ms) & 5 Fields: ${report.Primitives.LazyEntityInfo5FieldsAccessMs ?? 'n/a'} ms | Storage roundtrip: ${report.Primitives.MetadataStorageRoundTripMs ?? 'n/a'} ms (structuredClone=${report.Primitives.MetadataStorageStructuredCloneUsed ?? false})`);
 
     const allRuns = [...report.DeterministicAgentRuns, ...report.LiveAgentRuns];
     if (allRuns.length > 0) {
