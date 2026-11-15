@@ -52,7 +52,8 @@
     "packages/eSignature/*",
     "packages/eSignature/Providers/*",
     "packages/WorkQueue/*",
-    "packages/Diagnostics/*"
+    "packages/Diagnostics/*",
+    "packages/BrowserExtension/*"
   ],
   "scripts": {
     "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n\u274c Dependencies not installed. Run: pnpm install\\n'); process.exit(1); }\"",

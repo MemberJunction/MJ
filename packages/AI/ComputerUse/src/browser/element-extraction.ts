@@ -10,33 +10,34 @@
  * so both `PlaywrightBrowserAdapter` and `SharedContextBrowserAdapter` share ONE
  * implementation (mirroring `page-perception.ts`).
  *
- * App-agnostic: the probe keys off standard interactive tags + ARIA roles +
- * click affordances only — no app-specific selectors or markers. Widget-toolkit
- * quirks (virtualized grids) are handled generically or via AppProfile hints,
- * never by naming a specific app here.
+ * The pure in-page probe (`INTERACTIVITYPROBE`) and raw-to-entity mapper
+ * (`MapRawToInteractiveElement`) live in `../browser-probe/index.js` so the
+ * MemberJunction Browser Extension (`ContentScriptBrowserAdapter`) shares the
+ * exact same DOM grounding logic without importing Playwright.
  */
 
 import type { Locator, Page } from 'playwright';
-import { InteractiveElement, BoundingBox } from '../types/browser.js';
+import { InteractiveElement } from '../types/browser.js';
 import { TraceTarget } from '../types/trace.js';
 import { ReresolveTarget, ShouldAcceptHeal } from '../engine/replay.js';
 import { IsBlockedByDismissableOverlay, DismissOverlay } from './overlay-dismiss.js';
+import {
+    INTERACTIVITYPROBE,
+    INTERACTIVITY_PROBE,
+    MapRawToInteractiveElement,
+    ProbeDomInteractiveElements,
+    ResolveDomSelector,
+    type RawInteractiveElement,
+} from '../browser-probe/index.js';
 
-/** Raw per-element record the in-page probe returns (plain JSON, browser context). */
-interface RawInteractiveElement {
-    role: string;
-    name: string;
-    xpath: string;
-    /** Nearest labeled ancestor region as `role:name`; '' when there is none. */
-    scope: string;
-    value: string | null;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    scrollable: boolean;
-    disabled: boolean;
-}
+export {
+    INTERACTIVITYPROBE,
+    INTERACTIVITY_PROBE,
+    MapRawToInteractiveElement,
+    ProbeDomInteractiveElements,
+    ResolveDomSelector,
+    type RawInteractiveElement,
+};
 
 /**
  * Fallback bound for the in-page probe when a caller does not supply one.
@@ -78,7 +79,7 @@ export async function ExtractInteractiveElements(
         if (raws === null) {
             return [];
         }
-        return raws.map((r, i) => toInteractiveElement(r, i));
+        return raws.map((r, i) => MapRawToInteractiveElement(r, i));
     } catch {
         return [];
     } finally {
@@ -94,28 +95,6 @@ export async function extractInteractiveElements(
     timeoutMs: number = DEFAULT_PROBE_TIMEOUT_MS
 ): Promise<InteractiveElement[]> {
     return ExtractInteractiveElements(page, timeoutMs);
-}
-
-/** Map one raw probe record + its assigned index to the typed element. */
-function toInteractiveElement(r: RawInteractiveElement, index: number): InteractiveElement {
-    const el = new InteractiveElement();
-    el.Index = index;
-    el.Role = r.role;
-    el.Name = r.name;
-    el.Selector = `xpath=${r.xpath}`;
-    el.Scope = r.scope || undefined;
-    el.Value = r.value ?? undefined;
-    el.Scrollable = r.scrollable;
-    el.Disabled = r.disabled;
-    if (r.width > 0 && r.height > 0) {
-        const box = new BoundingBox();
-        box.XMin = Math.round(r.x);
-        box.YMin = Math.round(r.y);
-        box.XMax = Math.round(r.x + r.width);
-        box.YMax = Math.round(r.y + r.height);
-        el.BoundingBox = box;
-    }
-    return el;
 }
 
 /** Resolve an element's locator (its stored `xpath=` selector). */
@@ -176,12 +155,6 @@ async function actOnElement(
         await act(locatorFor(page, element), preciseMs);
         return;
     } catch (error) {
-        // An open popover's backdrop deadlocks the click: Playwright keeps retrying
-        // until the target becomes hit-testable, but the thing covering it only goes
-        // away if something dismisses it — so the action can never succeed and burns
-        // its whole budget. A person just presses Escape and clicks again; do that.
-        // (Seen on T124: an open Filters popover blocked every attempt to clear the
-        // search box, and the run died on loop detection with budget to spare.)
         if (IsBlockedByDismissableOverlay(error)) {
             try {
                 await DismissOverlay(page);
@@ -250,211 +223,3 @@ export async function typeIntoInteractiveElement(
 ): Promise<void> {
     return TypeIntoInteractiveElement(page, element, text, pressEnter, actionTimeoutMs);
 }
-
-/**
- * The in-page interactivity probe (serialized into the browser via
- * `page.evaluate`). Returns interactive elements with role/name/xpath/bbox +
- * scrollable/disabled/value flags. Kept as a single self-contained function so
- * it captures no Node closure state.
- */
-export const INTERACTIVITYPROBE = (): RawInteractiveElement[] => {
-    const INTERACTIVE_SELECTOR = [
-        'a[href]', 'button', 'input', 'select', 'textarea', 'summary',
-        '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="radio"]',
-        '[role="tab"]', '[role="menuitem"]', '[role="switch"]', '[role="combobox"]',
-        '[role="option"]', '[role="textbox"]', '[contenteditable=""]', '[contenteditable="true"]',
-        // Splitters/resize handles. Draggable but not clickable, so they carry no
-        // role="button" and no tabindex — without this they were invisible to
-        // grounding, and a goal like "drag the handle to resize the panel" left the
-        // agent estimating coordinates against a ~6px target it could not see.
-        '[role="separator"]',
-        '[onclick]', '[tabindex]',
-    ].join(',');
-
-    // The same list minus the two catch-alls, so the probe can ask "did this match
-    // because it IS interactive, or only because it carries a tabindex?".
-    const INTERACTIVE_WITHOUT_TABINDEX = INTERACTIVE_SELECTOR
-        .split(',')
-        .filter(sel => sel !== '[tabindex]' && sel !== '[onclick]')
-        .join(',');
-
-    const xpathOf = (node: Element): string => {
-        const segments: string[] = [];
-        let el: Element | null = node;
-        while (el && el.nodeType === 1 && el !== document.documentElement) {
-            let index = 1;
-            let sib = el.previousElementSibling;
-            while (sib) {
-                if (sib.tagName === el.tagName) index++;
-                sib = sib.previousElementSibling;
-            }
-            segments.unshift(`${el.tagName.toLowerCase()}[${index}]`);
-            el = el.parentElement;
-        }
-        return `/html/${segments.join('/')}`;
-    };
-
-    const roleOf = (el: Element): string => {
-        const explicit = el.getAttribute('role');
-        if (explicit) return explicit;
-        const tag = el.tagName.toLowerCase();
-        if (tag === 'a') return 'link';
-        if (tag === 'button' || tag === 'summary') return 'button';
-        if (tag === 'select') return 'combobox';
-        if (tag === 'textarea') return 'textbox';
-        if (tag === 'input') {
-            const t = (el.getAttribute('type') || 'text').toLowerCase();
-            if (t === 'checkbox') return 'checkbox';
-            if (t === 'radio') return 'radio';
-            if (t === 'button' || t === 'submit' || t === 'reset') return 'button';
-            return 'textbox';
-        }
-        return el.getAttribute('role') || tag;
-    };
-
-    const nameOf = (el: Element): string => {
-        const aria = el.getAttribute('aria-label');
-        if (aria) return aria.trim();
-        const labelledby = el.getAttribute('aria-labelledby');
-        if (labelledby) {
-            const ref = document.getElementById(labelledby);
-            if (ref?.textContent) return ref.textContent.trim();
-        }
-        if (el.id) {
-            const label = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-            if (label?.textContent) return label.textContent.trim();
-        }
-        const placeholder = el.getAttribute('placeholder');
-        if (placeholder) return placeholder.trim();
-        const title = el.getAttribute('title');
-        if (title) return title.trim();
-        const text = (el as HTMLElement).innerText || el.textContent || '';
-        return text.trim().slice(0, 120);
-    };
-
-    /**
-     * Landmark roles that bound a meaningful region of the page. An element's
-     * nearest NAMED such ancestor is the semantic answer to "where does this
-     * live" — stable across the reordering and relayout that break a positional
-     * path, and the only thing that separates same-named twins in different
-     * parts of one screen.
-     */
-    const SCOPE_ROLES = new Set([
-        'group', 'region', 'dialog', 'alertdialog', 'navigation', 'main', 'form',
-        'table', 'grid', 'list', 'listbox', 'tabpanel', 'menu', 'toolbar',
-        'banner', 'complementary', 'contentinfo', 'search', 'article',
-    ]);
-    const IMPLICIT_SCOPE_ROLE: Record<string, string> = {
-        NAV: 'navigation', MAIN: 'main', FORM: 'form', DIALOG: 'dialog',
-        TABLE: 'table', SECTION: 'region', ASIDE: 'complementary',
-        HEADER: 'banner', FOOTER: 'contentinfo', UL: 'list', OL: 'list',
-        ARTICLE: 'article', SEARCH: 'search',
-    };
-
-    /** A region's accessible name — aria-label, else aria-labelledby's text. */
-    const regionName = (node: Element): string => {
-        const label = node.getAttribute('aria-label');
-        if (label && label.trim()) {
-            return label.trim();
-        }
-        const labelledBy = node.getAttribute('aria-labelledby');
-        if (!labelledBy) {
-            return '';
-        }
-        return labelledBy
-            .split(/\s+/)
-            .map(id => document.getElementById(id))
-            .map(n => (n?.textContent ?? '').trim())
-            .filter(Boolean)
-            .join(' ')
-            .trim();
-    };
-
-    /** `role:name` of the nearest NAMED landmark ancestor, or '' when there is none. */
-    const scopeOf = (el: Element): string => {
-        let node: Element | null = el.parentElement;
-        while (node && node !== document.body) {
-            const role = (node.getAttribute('role') || IMPLICIT_SCOPE_ROLE[node.tagName] || '').trim().toLowerCase();
-            if (role && SCOPE_ROLES.has(role)) {
-                const name = regionName(node);
-                // An unnamed landmark cannot be told apart from its siblings, so
-                // it is no better a discriminator than the path already is — keep
-                // climbing for one that carries a name.
-                if (name) {
-                    return `${role}:${name}`;
-                }
-            }
-            node = node.parentElement;
-        }
-        return '';
-    };
-
-    const results: RawInteractiveElement[] = [];
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const seen = new Set<Element>();
-
-    document.querySelectorAll(INTERACTIVE_SELECTOR).forEach(node => {
-        const el = node as HTMLElement;
-        if (seen.has(el)) return;
-        seen.add(el);
-
-        // tabindex="-1" is programmatic-focus-only — but ONLY when that is the sole
-        // reason the element matched. A roving-tabindex composite (Kendo/Material
-        // tabs, toolbars, listboxes, menus) puts -1 on every inactive item, so
-        // dropping them removed every unselected tab and option from the list and
-        // the model fell back to coordinates — which isRecordableRun then refuses,
-        // making the whole test unrecordable.
-        if (el.getAttribute('tabindex') === '-1'
-            && !el.hasAttribute('onclick')
-            && !el.matches(INTERACTIVE_WITHOUT_TABINDEX)) return;
-
-        const style = window.getComputedStyle(el);
-
-        // Visibility must account for ANCESTOR-driven invisibility. getComputedStyle
-        // does not inherit opacity, so a descendant of an `opacity: 0` overlay reports
-        // its own opacity as 1 — which let every closed-but-mounted popover in the app
-        // leak into the list as a phantom target at real on-screen coordinates.
-        // checkVisibility() resolves the whole ancestor chain; the own-style test is
-        // kept only as a fallback for engines that lack it.
-        if (typeof el.checkVisibility === 'function') {
-            if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })) return;
-        } else if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) === 0) {
-            return;
-        }
-
-        // An element that cannot receive a pointer event is not interactive, however it
-        // looks. Checked per-element, so a `pointer-events: none` wrapper is dropped
-        // while a child that re-enables `auto` is still offered.
-        if (style.pointerEvents === 'none') return;
-
-        const rect = el.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return;
-        // Viewport + near-viewport (one screen of slack each way) so off-screen bloat is filtered.
-        if (rect.bottom < -vh || rect.top > vh * 2 || rect.right < -vw || rect.left > vw * 2) return;
-
-        const disabled = (el as HTMLInputElement).disabled === true || el.getAttribute('aria-disabled') === 'true';
-        const isFormValue = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
-        const scrollable = (el.scrollHeight > el.clientHeight + 4) &&
-            (style.overflowY === 'auto' || style.overflowY === 'scroll');
-
-        results.push({
-            role: roleOf(el),
-            name: nameOf(el),
-            xpath: xpathOf(el),
-            scope: scopeOf(el),
-            value: isFormValue ? String((el as HTMLInputElement).value ?? '') : null,
-            x: rect.left,
-            y: rect.top,
-            width: rect.width,
-            height: rect.height,
-            scrollable,
-            disabled,
-        });
-    });
-
-    return results;
-};
-
-/** @deprecated Use {@link INTERACTIVITYPROBE}. */
-export const INTERACTIVITY_PROBE = INTERACTIVITYPROBE;

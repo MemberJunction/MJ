@@ -1,0 +1,16 @@
+{
+  "extends": "../../../tsconfig.server.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/__tests__/**", "sidepanel-app/**"]
+}

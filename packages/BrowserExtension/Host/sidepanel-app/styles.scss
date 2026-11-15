@@ -1,0 +1,61 @@
+/**
+ * MemberJunction Browser Extension Side Panel Global Stylesheet
+ *
+ * Imports MJ design tokens (`--mj-*`) and `@memberjunction/ng-ui-components` themes
+ * so `<mj-conversation-chat-area>` and `@memberjunction/ng-browser-extension` render
+ * with identical typography, bubbles, composer, voice controls, and buttons as MJ Explorer
+ * without bundling MJExplorer (`<mj-shell>`, Golden Layout, or dashboards).
+ */
+
+@import '@memberjunction/ng-shared-generic/dist/lib/tokens';
+
+[hidden]:not([hidden='until-found']) {
+  display: none !important;
+}
+
+@import '@memberjunction/ng-ui-components/dist/lib/button/button';
+@import '@memberjunction/ng-ui-components/dist/lib/dialog/dialog';
+@import '@memberjunction/ng-ui-components/dist/lib/dropdown/dropdown';
+@import '@memberjunction/ng-ui-components/dist/lib/combobox/combobox';
+@import '@memberjunction/ng-ui-components/dist/lib/input/input';
+@import '@memberjunction/ng-ui-components/dist/lib/input/input-switch-progress';
+@import '@memberjunction/ng-ui-components/dist/lib/datepicker/datepicker';
+@import '@memberjunction/ng-ui-components/dist/lib/splitter/splitter';
+@import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
+@import '@memberjunction/ng-ui-components/dist/lib/window/window';
+@import '@memberjunction/ng-ui-components/dist/lib/input/chip';
+@import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';
+
+:root {
+  --mj-ext-sans-stack: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  --mj-font-family: var(--mj-ext-sans-stack);
+  --mj-font-family-base: var(--mj-ext-sans-stack);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--mj-bg-surface, #ffffff);
+  color: var(--mj-text-primary, #0f172a);
+  font-family: var(--mj-font-family, var(--mj-ext-sans-stack));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
+}

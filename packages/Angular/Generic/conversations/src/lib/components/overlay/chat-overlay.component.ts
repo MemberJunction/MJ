@@ -40,6 +40,7 @@ import {
 } from '@memberjunction/core-entities';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
+import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { ConversationBridgeService, ConversationSwitchEvent } from '../../services/conversation-bridge.service';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { PendingAttachment } from '@memberjunction/ng-composer';
@@ -133,8 +134,16 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     /** Environment ID, passed through to conversation-chat-area. Auto-resolved from default if not provided. */
     @Input() EnvironmentId!: string;
 
+    private _appContext: Record<string, unknown> | null = null;
+
     /** Application context snapshot for AI agent awareness. Updated by the host app on navigation transitions. */
-    @Input() AppContext: Record<string, unknown> | null = null;
+    @Input()
+    set AppContext(value: AppContextSnapshot | Record<string, unknown> | null) {
+        this._appContext = value as Record<string, unknown> | null;
+    }
+    get AppContext(): Record<string, unknown> | null {
+        return this._appContext;
+    }
 
     /** Greeting message shown in the empty state when no conversation is active */
     @Input() EmptyStateGreeting: string = 'How can I help you?';

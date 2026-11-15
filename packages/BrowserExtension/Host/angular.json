@@ -1,0 +1,70 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "cli": {
+    "analytics": false
+  },
+  "projects": {
+    "mj-extension-sidepanel": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "sidepanel-app",
+      "prefix": "mj",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:application",
+          "options": {
+            "outputPath": "dist/sidepanel-app",
+            "index": "sidepanel-app/index.html",
+            "browser": "sidepanel-app/main.ts",
+            "polyfills": ["@angular/localize/init", "zone.js"],
+            "tsConfig": "tsconfig.sidepanel.json",
+            "assets": [],
+            "styles": [
+              "node_modules/@fortawesome/fontawesome-free/css/all.min.css",
+              "sidepanel-app/styles.scss"
+            ],
+            "stylePreprocessorOptions": {
+              "includePaths": ["../../../node_modules", "node_modules"]
+            },
+            "scripts": [],
+            "outputHashing": "none"
+          },
+          "configurations": {
+            "production": {
+              "optimization": {
+                "scripts": false,
+                "styles": true,
+                "fonts": false
+              },
+              "extractLicenses": false,
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "40mb",
+                  "maximumError": "60mb"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "24kb",
+                  "maximumError": "64kb"
+                }
+              ],
+              "outputHashing": "none"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": false,
+              "outputHashing": "none"
+            }
+          },
+          "defaultConfiguration": "production"
+        }
+      }
+    }
+  },
+  "cli": {
+    "analytics": false
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "name": "@memberjunction/browser-extension-core",
+  "type": "module",
+  "version": "6.2.0",
+  "description": "MemberJunction: Framework-agnostic Browser Extension Core — Dual-Mode LocalBrowserChannel (ContentScript + DebuggerCDP + Auto), Multi-App Context Braiding Engine, SensitivePageGuard, Session Handoff Coordinator, and Guided Playbooks.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/ai": "6.2.0",
+    "@memberjunction/ai-core-plus": "6.2.0",
+    "@memberjunction/ai-realtime-client": "6.2.0",
+    "@memberjunction/computer-use": "6.2.0",
+    "@memberjunction/core": "6.2.0",
+    "@memberjunction/core-entities": "6.2.0",
+    "@memberjunction/global": "6.2.0",
+    "@memberjunction/realtime-runtime": "6.2.0",
+    "@memberjunction/theme-engine": "6.2.0",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
