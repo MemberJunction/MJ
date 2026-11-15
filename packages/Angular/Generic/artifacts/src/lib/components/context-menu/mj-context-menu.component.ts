@@ -10,6 +10,7 @@ import {
   Output,
   inject,
 } from '@angular/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
   ComputeRootMenuPlacement,
   ComputeSubmenuPlacement,
@@ -89,6 +90,12 @@ export class MjContextMenuComponent<
   private typeaheadBuffer = '';
   private lastPointerPos: ContextMenuPoint | null = null;
   private prevPointerPos: ContextMenuPoint | null = null;
+  private pendingInitialFocus = false;
+  private pendingHoverSwitch: {
+    LevelIndex: number;
+    ItemIndex: number;
+    Item: ContextMenuItem<TCommand>;
+  } | null = null;
 
   public MenuLevels: MenuLevelState<TCommand>[] = [];
 
@@ -221,7 +228,7 @@ export class MjContextMenuComponent<
 
   public IsSubmenuOpenAtLevel(levelIndex: number, submenuID: string): boolean {
     const child = this.MenuLevels[levelIndex + 1];
-    return child !== undefined && child.ParentSubmenuID === submenuID;
+    return child !== undefined && UUIDsEqual(child.ParentSubmenuID, submenuID);
   }
 
   public IsItemFocused(levelIndex: number, itemIndex: number): boolean {
@@ -283,15 +290,23 @@ export class MjContextMenuComponent<
   }
 
   public OnPanelMouseMove(event: MouseEvent): void {
-    this.prevPointerPos = this.lastPointerPos;
-    this.lastPointerPos = { X: event.clientX, Y: event.clientY };
+    this.recordPointerPos(event);
+    if (
+      this.hoverSwitchTimer !== null &&
+      this.pendingHoverSwitch !== null &&
+      this.isCursorInsideSafeTriangle(this.pendingHoverSwitch.LevelIndex + 1)
+    ) {
+      this.scheduleDeferredHoverSwitch(this.pendingHoverSwitch);
+    }
   }
 
   public OnItemMouseEnter(
     levelIndex: number,
     itemIndex: number,
     item: ContextMenuItem<TCommand>,
+    event?: MouseEvent,
   ): void {
+    this.recordPointerPos(event);
     this.clearHoverTimers();
     const level = this.MenuLevels[levelIndex];
     if (!level) {
@@ -301,13 +316,15 @@ export class MjContextMenuComponent<
     const childLevel = this.MenuLevels[levelIndex + 1];
     const isMovingWithinSafeCorridor =
       childLevel !== undefined &&
-      (item.Kind !== 'submenu' || childLevel.ParentSubmenuID !== item.ID) &&
+      (item.Kind !== 'submenu' || !UUIDsEqual(childLevel.ParentSubmenuID, item.ID)) &&
       this.isCursorInsideSafeTriangle(levelIndex + 1);
 
     if (isMovingWithinSafeCorridor) {
-      this.hoverSwitchTimer = setTimeout(() => {
-        this.applyHoveredItem(levelIndex, itemIndex, item);
-      }, SAFE_TRIANGLE_DEFER_MS);
+      this.scheduleDeferredHoverSwitch({
+        LevelIndex: levelIndex,
+        ItemIndex: itemIndex,
+        Item: item,
+      });
       return;
     }
 
@@ -363,7 +380,7 @@ export class MjContextMenuComponent<
 
     if (item.Kind === 'submenu' && !item.Disabled) {
       const existingChild = this.MenuLevels[levelIndex + 1];
-      if (existingChild && existingChild.ParentSubmenuID === item.ID) {
+      if (existingChild && UUIDsEqual(existingChild.ParentSubmenuID, item.ID)) {
         this.cdr.markForCheck();
         return;
       }
@@ -406,6 +423,7 @@ export class MjContextMenuComponent<
       },
     ];
 
+    this.pendingInitialFocus = true;
     this.attachGlobalListeners();
     this.schedulePositionLevel(0, true);
   }
@@ -421,7 +439,7 @@ export class MjContextMenuComponent<
     root.Top = this.anchorY;
     root.IsPositioned = false;
     this.MenuLevels = [root];
-    this.schedulePositionLevel(0, false);
+    this.schedulePositionLevel(0, this.pendingInitialFocus);
   }
 
   private openSubmenu(
@@ -435,6 +453,9 @@ export class MjContextMenuComponent<
       return;
     }
     const normalizedChildren = NormalizeContextMenuItems(submenuItem.Children);
+    if (normalizedChildren.length === 0) {
+      return;
+    }
     const viewport = this.getViewportSize();
     const maxHeight = Math.max(160, viewport.Height - 16);
     const nextLevelIndex = parentLevelIndex + 1;
@@ -516,8 +537,11 @@ export class MjContextMenuComponent<
 
       if (focusFirstChildOnOpen && level.FocusedIndex >= 0) {
         this.focusDomElement(levelIndex, level.FocusedIndex, level.FocusedSwatchIndex);
-      } else if (focusRootPanelOnOpen && level.FocusedIndex === -1 && panelEl) {
-        panelEl.focus({ preventScroll: true });
+      } else if (levelIndex === 0 && (focusRootPanelOnOpen || this.pendingInitialFocus)) {
+        this.pendingInitialFocus = false;
+        if (level.FocusedIndex === -1 && panelEl) {
+          panelEl.focus({ preventScroll: true });
+        }
       }
     };
 
@@ -859,11 +883,17 @@ export class MjContextMenuComponent<
       const swatchEl = this.hostElement.nativeElement.querySelector<HTMLElement>(
         `[data-menu-level="${levelIndex}"][data-item-index="${itemIndex}"][data-swatch-index="${swatchIndex}"]`,
       );
+      if (typeof swatchEl?.scrollIntoView === 'function') {
+        swatchEl.scrollIntoView({ block: 'nearest' });
+      }
       swatchEl?.focus({ preventScroll: true });
       return;
     }
 
     const itemEl = this.queryItemElement(levelIndex, itemIndex);
+    if (typeof itemEl?.scrollIntoView === 'function') {
+      itemEl.scrollIntoView({ block: 'nearest' });
+    }
     itemEl?.focus({ preventScroll: true });
   }
 
@@ -934,12 +964,14 @@ export class MjContextMenuComponent<
   }
 
   private activateCommand(command: TCommand): void {
+    const restoreEl = this.restoreFocusElement;
     this.isOpen = false;
     this.teardown();
     this.MenuLevels = [];
     if (!this.destroyed) {
       this.cdr.detectChanges();
     }
+    restoreEl?.focus({ preventScroll: true });
     this.ItemSelected.emit(command);
     this.Closed.emit();
   }
@@ -1070,6 +1102,42 @@ export class MjContextMenuComponent<
     win?.removeEventListener('blur', this.boundWindowDismiss);
   }
 
+  private recordPointerPos(event?: MouseEvent): void {
+    if (!event || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) {
+      return;
+    }
+    if (event.clientX === 0 && event.clientY === 0 && this.lastPointerPos !== null) {
+      return;
+    }
+    if (
+      this.lastPointerPos &&
+      this.lastPointerPos.X === event.clientX &&
+      this.lastPointerPos.Y === event.clientY
+    ) {
+      return;
+    }
+    this.prevPointerPos = this.lastPointerPos;
+    this.lastPointerPos = { X: event.clientX, Y: event.clientY };
+  }
+
+  private scheduleDeferredHoverSwitch(target: {
+    LevelIndex: number;
+    ItemIndex: number;
+    Item: ContextMenuItem<TCommand>;
+  }): void {
+    if (this.hoverSwitchTimer !== null) {
+      clearTimeout(this.hoverSwitchTimer);
+    }
+    this.pendingHoverSwitch = target;
+    this.hoverSwitchTimer = setTimeout(() => {
+      this.hoverSwitchTimer = null;
+      this.pendingHoverSwitch = null;
+      if (!this.destroyed && this.isOpen) {
+        this.applyHoveredItem(target.LevelIndex, target.ItemIndex, target.Item);
+      }
+    }, SAFE_TRIANGLE_DEFER_MS);
+  }
+
   private clearHoverTimers(): void {
     if (this.hoverOpenTimer !== null) {
       clearTimeout(this.hoverOpenTimer);
@@ -1079,6 +1147,7 @@ export class MjContextMenuComponent<
       clearTimeout(this.hoverSwitchTimer);
       this.hoverSwitchTimer = null;
     }
+    this.pendingHoverSwitch = null;
   }
 
   private clearPositionRafs(): void {
@@ -1105,5 +1174,6 @@ export class MjContextMenuComponent<
     this.typeaheadBuffer = '';
     this.lastPointerPos = null;
     this.prevPointerPos = null;
+    this.pendingInitialFocus = false;
   }
 }

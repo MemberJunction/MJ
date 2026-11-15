@@ -15,7 +15,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ArtifactID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "UUID of the MJ: Artifacts record to refresh and snapshot",
@@ -93,6 +93,34 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000007"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousVersionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the previous artifact version before refresh",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "19136719-6D85-4372-9DB4-421B298A0367"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousVersionNumber",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version number before refresh",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FA7F3B42-A61D-4EC0-9AFA-0504F62894F1"
           }
         },
         {
@@ -184,6 +212,72 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000012"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONTEXT_USER",
+            "Description": "ContextUser is required to refresh an artifact",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "2BAD400E-5EB3-4515-A164-9130BF95E6D5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ARTIFACT_ID",
+            "Description": "ArtifactID parameter is required",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "CED00463-C096-4EBF-AF61-FA81148AD481"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ARTIFACT_NOT_FOUND",
+            "Description": "Target artifact record was not found",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "55176662-7241-4EEB-9505-E8812C47C932"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VERSION_NOT_FOUND",
+            "Description": "No artifact versions exist for the target artifact",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "422D0C07-8FBE-49FC-91B5-BE53D5DB980D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SAVE_VERSION_FAILED",
+            "Description": "Failed to save the refreshed artifact version record",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "0512A291-B1EF-4F62-A7F9-B32E24AE9757"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "Description": "Unexpected error while refreshing and snapshotting the artifact",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "89A36105-E241-4239-8C0B-A647FB38464E"
           }
         }
       ]

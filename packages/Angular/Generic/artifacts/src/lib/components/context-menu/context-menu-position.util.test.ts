@@ -260,6 +260,39 @@ describe('context-menu-position.util', () => {
         expect(origSub.Children).toHaveLength(6);
       }
     });
+
+    it('strips empty submenus and headers whose only child is an empty submenu', () => {
+      const items: ContextMenuItem<TestCmd>[] = [
+        { Kind: 'header', ID: 'hdr-empty-sub', Label: 'Empty Section' },
+        {
+          Kind: 'submenu',
+          ID: 'empty-direct',
+          Label: 'Empty Direct',
+          Children: [],
+        },
+        {
+          Kind: 'submenu',
+          ID: 'empty-nested',
+          Label: 'Empty Nested',
+          Children: [
+            { Kind: 'separator', ID: 'only-sep' },
+            { Kind: 'header', ID: 'only-hdr', Label: 'Nothing Inside' },
+          ],
+        },
+        { Kind: 'separator', ID: 'sep-after-empty' },
+        { Kind: 'header', ID: 'hdr-actions', Label: 'Actions' },
+        { Kind: 'action', ID: 'copy', Label: 'Copy', Command: { Type: 'copy' } },
+        {
+          Kind: 'submenu',
+          ID: 'empty-trailing',
+          Label: 'Empty Trailing',
+          Children: [],
+        },
+      ];
+
+      const normalized = NormalizeContextMenuItems(items);
+      expect(normalized.map((i) => i.ID)).toEqual(['hdr-actions', 'copy']);
+    });
   });
 
   describe('FormatMenuShortcut', () => {
@@ -358,6 +391,32 @@ describe('context-menu-position.util', () => {
       vi.advanceTimersByTime(600);
       expect(triggered).toHaveLength(0);
       monitor.Destroy();
+    });
+
+    it('auto-expires suppressNextClick after 800ms when no trailing click arrives', () => {
+      const triggered: TouchContextMenuTrigger[] = [];
+      const monitor = new TouchContextMenuMonitor({
+        OnLongPress: (t) => triggered.push(t),
+      });
+
+      monitor.OnPointerDown(makePointerEvent('pointerdown', 'touch', 140, 220));
+      vi.advanceTimersByTime(500);
+      expect(triggered).toHaveLength(1);
+
+      vi.advanceTimersByTime(799);
+      expect(monitor.ConsumeSuppressedClick()).toBe(true);
+
+      // Without consuming, 800ms timeout clears suppressNextClick automatically
+      const monitor2 = new TouchContextMenuMonitor({
+        OnLongPress: (t) => triggered.push(t),
+      });
+      monitor2.OnPointerDown(makePointerEvent('pointerdown', 'touch', 140, 220));
+      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(800);
+      expect(monitor2.ConsumeSuppressedClick()).toBe(false);
+
+      monitor.Destroy();
+      monitor2.Destroy();
     });
   });
 });

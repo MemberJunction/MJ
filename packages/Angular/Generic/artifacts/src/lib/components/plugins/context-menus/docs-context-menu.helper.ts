@@ -307,6 +307,7 @@ export interface DocsContextMenuSnapshot {
   ViewMode: DocsViewModeSnapshot;
   CanUserEdit: boolean;
   CanUserShareArtifact: boolean;
+  IsArtifactOwner?: boolean;
   IsSimpleNoteMode: boolean;
   IsAiAssistantEnabled: boolean;
   CommentsEnabled: boolean;
@@ -573,6 +574,8 @@ function buildProseMenu(
         ID: 'insert-block-above',
         Label: 'Insert Block Above',
         Icon: 'fa-solid fa-arrow-up',
+        Disabled: segLocked,
+        DisabledReason: lockReason,
         Command: { Type: 'insert-block', Placement: 'above', SegmentID: seg.SegmentID },
       },
       {
@@ -580,6 +583,8 @@ function buildProseMenu(
         ID: 'insert-block-below',
         Label: 'Insert Block Below',
         Icon: 'fa-solid fa-arrow-down',
+        Disabled: segLocked,
+        DisabledReason: lockReason,
         Command: { Type: 'insert-block', Placement: 'below', SegmentID: seg.SegmentID },
       },
       {
@@ -588,6 +593,8 @@ function buildProseMenu(
         Label: 'Insert via / Menu…',
         Icon: 'fa-solid fa-plus',
         Shortcut: '/',
+        Disabled: segLocked,
+        DisabledReason: lockReason,
         Command: { Type: 'insert-block', Placement: 'slash', SegmentID: seg.SegmentID },
       },
       {
@@ -596,6 +603,8 @@ function buildProseMenu(
         Label: 'Duplicate Block',
         Icon: 'fa-regular fa-clone',
         Shortcut: FormatMenuShortcut('⌘D', 'Ctrl+D', ctx.IsMac),
+        Disabled: segLocked,
+        DisabledReason: lockReason,
         Command: { Type: 'duplicate-block', SegmentID: seg.SegmentID },
       },
       {
@@ -604,8 +613,8 @@ function buildProseMenu(
         Label: 'Move Block Up',
         Icon: 'fa-solid fa-chevron-up',
         Shortcut: FormatMenuShortcut('⌥↑', 'Alt+↑', ctx.IsMac),
-        Disabled: ctx.SegmentIndex <= 0,
-        DisabledReason: ctx.SegmentIndex <= 0 ? 'Already at the top of the document' : undefined,
+        Disabled: segLocked || ctx.SegmentIndex <= 0,
+        DisabledReason: lockReason ?? (ctx.SegmentIndex <= 0 ? 'Already at the top of the document' : undefined),
         Command: { Type: 'move-block', Direction: -1, SegmentID: seg.SegmentID },
       },
       {
@@ -614,9 +623,9 @@ function buildProseMenu(
         Label: 'Move Block Down',
         Icon: 'fa-solid fa-chevron-down',
         Shortcut: FormatMenuShortcut('⌥↓', 'Alt+↓', ctx.IsMac),
-        Disabled: ctx.SegmentIndex >= ctx.SegmentCount - 1,
+        Disabled: segLocked || ctx.SegmentIndex >= ctx.SegmentCount - 1,
         DisabledReason:
-          ctx.SegmentIndex >= ctx.SegmentCount - 1 ? 'Already at the bottom of the document' : undefined,
+          lockReason ?? (ctx.SegmentIndex >= ctx.SegmentCount - 1 ? 'Already at the bottom of the document' : undefined),
         Command: { Type: 'move-block', Direction: 1, SegmentID: seg.SegmentID },
       },
     );
@@ -624,6 +633,7 @@ function buildProseMenu(
 
   // Heading Collapse & Owner-Only Lock
   if (seg.BlockKind === 'heading') {
+    const canManageLock = ctx.IsArtifactOwner ?? ctx.CanUserShareArtifact;
     items.push(
       { Kind: 'separator', ID: 'sep-heading' },
       {
@@ -638,8 +648,8 @@ function buildProseMenu(
         ID: 'toggle-heading-lock',
         Label: ctx.IsSegmentLocked ? 'Unlock Section' : 'Lock Section (Owner Only)',
         Icon: ctx.IsSegmentLocked ? 'fa-solid fa-lock-open' : 'fa-solid fa-lock',
-        Disabled: !ctx.CanUserShareArtifact,
-        DisabledReason: !ctx.CanUserShareArtifact ? OWNER_ONLY_LOCK_REASON : undefined,
+        Disabled: !canManageLock,
+        DisabledReason: !canManageLock ? OWNER_ONLY_LOCK_REASON : undefined,
         Command: { Type: 'toggle-heading-lock', SegmentID: seg.SegmentID },
       },
     );
@@ -1489,6 +1499,9 @@ function buildOutlineItemMenu(
   });
 
   if (isInteractive && seg) {
+    const segLocked = !ctx.SegmentEditable;
+    const lockReason = getEditLockReason(ctx);
+    const canManageLock = ctx.IsArtifactOwner ?? ctx.CanUserShareArtifact;
     items.push({ Kind: 'separator', ID: 'sep-outline-edit' });
     if (item.Kind === 'heading') {
       items.push({
@@ -1496,8 +1509,8 @@ function buildOutlineItemMenu(
         ID: 'toggle-heading-lock',
         Label: ctx.IsSegmentLocked ? 'Unlock Section' : 'Lock Section (Owner Only)',
         Icon: ctx.IsSegmentLocked ? 'fa-solid fa-lock-open' : 'fa-solid fa-lock',
-        Disabled: !ctx.CanUserShareArtifact,
-        DisabledReason: !ctx.CanUserShareArtifact ? OWNER_ONLY_LOCK_REASON : undefined,
+        Disabled: !canManageLock,
+        DisabledReason: !canManageLock ? OWNER_ONLY_LOCK_REASON : undefined,
         Command: { Type: 'toggle-heading-lock', SegmentID: seg.SegmentID },
       });
     }
@@ -1508,8 +1521,8 @@ function buildOutlineItemMenu(
           ID: 'move-block-up',
           Label: 'Move Section Block Up',
           Icon: 'fa-solid fa-chevron-up',
-          Disabled: segIdx <= 0,
-          DisabledReason: segIdx <= 0 ? 'Already at the top of the document' : undefined,
+          Disabled: segLocked || segIdx <= 0,
+          DisabledReason: lockReason ?? (segIdx <= 0 ? 'Already at the top of the document' : undefined),
           Command: { Type: 'move-block', Direction: -1, SegmentID: seg.SegmentID },
         },
         {
@@ -1517,8 +1530,9 @@ function buildOutlineItemMenu(
           ID: 'move-block-down',
           Label: 'Move Section Block Down',
           Icon: 'fa-solid fa-chevron-down',
-          Disabled: segIdx >= ctx.SegmentCount - 1,
-          DisabledReason: segIdx >= ctx.SegmentCount - 1 ? 'Already at the bottom of the document' : undefined,
+          Disabled: segLocked || segIdx >= ctx.SegmentCount - 1,
+          DisabledReason:
+            lockReason ?? (segIdx >= ctx.SegmentCount - 1 ? 'Already at the bottom of the document' : undefined),
           Command: { Type: 'move-block', Direction: 1, SegmentID: seg.SegmentID },
         },
       );

@@ -53,9 +53,11 @@ describe('DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)', () => {
         'upsert_table',
         'insert_live_block',
         'embed_artifact_block',
-        'propose_suggestion',
+        'move_block',
+        'duplicate_block',
       ]),
     );
+    expect(toolNames).not.toContain('propose_suggestion');
   });
 
   it('get_outline returns hierarchical headings with line numbers and word counts', async () => {
@@ -150,7 +152,7 @@ describe('DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)', () => {
     expect(afterDelete).not.toContain('# Updated Q4 Executive Report');
   });
 
-  it('upsert_table, insert_live_block, embed_artifact_block, and propose_suggestion work end-to-end', async () => {
+  it('upsert_table, insert_live_block, and embed_artifact_block work end-to-end', async () => {
     const tableRes = await lib.InvokeTool(
       'upsert_table',
       {
@@ -183,7 +185,7 @@ describe('DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)', () => {
     const oleRes = await lib.InvokeTool(
       'embed_artifact_block',
       {
-        artifactId: 'wb-12345',
+        artifactId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
         artifactType: 'Whiteboard',
         title: 'Architecture Diagram',
         embedMode: 'Inline',
@@ -192,26 +194,8 @@ describe('DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)', () => {
     );
     expect(oleRes.success).toBe(true);
     const docWithOle = (oleRes.data as { updatedContent: string }).updatedContent;
-    expect(docWithOle).toContain('"ArtifactID": "wb-12345"');
+    expect(docWithOle).toContain('"ArtifactID": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"');
     expect(docWithOle).toContain('"ArtifactType": "Whiteboard"');
-
-    const blocksRes = await lib.InvokeTool('get_blocks', {}, docWithOle);
-    const firstBlock = (blocksRes.data as { blocks: Array<{ blockId: string }> }).blocks[0];
-    const suggestRes = await lib.InvokeTool(
-      'propose_suggestion',
-      {
-        targetBlockId: firstBlock.blockId,
-        proposedText: '# Executive Summary (Final)',
-        rationale: 'Tighter title for board deck',
-        authorName: '@DocsAgent',
-      },
-      docWithOle,
-    );
-    expect(suggestRes.success).toBe(true);
-    const proposal = (suggestRes.data as { suggestion: { status: string; authorName: string; proposedText: string } }).suggestion;
-    expect(proposal.status).toBe('pending');
-    expect(proposal.authorName).toBe('@DocsAgent');
-    expect(proposal.proposedText).toBe('# Executive Summary (Final)');
   });
 
   it('D6 & CodeQL: preserves <!-- mj-block-id: ... --> comments across edits, mints stable IDs on inserted blocks, and escapes backslashes before pipes in upsert_table', async () => {

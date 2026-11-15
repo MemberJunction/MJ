@@ -28,17 +28,17 @@ describe('ConversationChatAreaComponent — NG0100 template safety', () => {
   function setupTestBed() {
     vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined as never);
     vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockReturnValue(undefined as never);
-    vi.spyOn(ConversationEngine.Instance, 'GetConversation').mockReturnValue(null);
+    vi.spyOn(ConversationEngine.Instance, 'GetConversation').mockReturnValue(undefined);
     vi.spyOn(ConversationsRuntime, 'Instance', 'get').mockReturnValue({
       Bridge: {
         Attach: vi.fn(),
         Detach: vi.fn(),
         SetConversation: vi.fn(),
         OpenArtifact$: new Subject(),
-      },
+      } as Partial<ConversationsRuntime['Bridge']> as ConversationsRuntime['Bridge'],
       Liveness: {
         ReconciliationRequired$: new Subject(),
-      },
+      } as Partial<ConversationsRuntime['Liveness']> as ConversationsRuntime['Liveness'],
       Sessions: {
         SessionLifecycle$: new Subject(),
         SessionStarted$: new Subject(),
@@ -51,8 +51,8 @@ describe('ConversationChatAreaComponent — NG0100 template safety', () => {
         ToolEvent$: new Subject(),
         CallEnded$: new Subject(),
         Active$: new BehaviorSubject(false),
-      },
-    } as unknown as ConversationsRuntime);
+      } as Partial<ConversationsRuntime['Sessions']> as ConversationsRuntime['Sessions'],
+    } as Partial<ConversationsRuntime> as ConversationsRuntime);
 
     TestBed.configureTestingModule({
       declarations: [ConversationChatAreaComponent],
@@ -143,23 +143,15 @@ describe('ConversationChatAreaComponent — NG0100 template safety', () => {
     expect(component.EffectiveAppContext).toBe(firstCtx);
 
     // Opening the artifact panel between ticks (including via applyArtifactPanelAction) must not throw NG0100.
-    const open = component as unknown as {
-      Messages: MJConversationDetailEntity[];
-      IsLoadingConversation: boolean;
-      applyArtifactPanelAction: (
-        action: { kind: 'open'; artifactId: string; versionNumber?: number },
-        conversationId: string
-      ) => Promise<void>;
-    };
-    open.IsLoadingConversation = false;
-    open.Messages = [
+    component.IsLoadingConversation = false;
+    component.messages = [
       {
         ID: 'msg-1',
         ConversationID: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
         Role: 'AI',
         Message: 'Created doc',
         __mj_CreatedAt: new Date(),
-      } as unknown as MJConversationDetailEntity,
+      } as Partial<MJConversationDetailEntity> as MJConversationDetailEntity,
     ];
     fixture.changeDetectorRef.markForCheck();
     fixture.detectChanges();
@@ -169,7 +161,12 @@ describe('ConversationChatAreaComponent — NG0100 template safety', () => {
     // ScrollContainer ViewChild resolves cleanly without NG0100 on MessageScrollRoot
     expect(component.MessageScrollRoot).toBeInstanceOf(HTMLElement);
 
-    await open.applyArtifactPanelAction(
+    const applyArtifactPanelAction = Reflect.get(component, 'applyArtifactPanelAction') as (
+      action: { kind: 'open'; artifactId: string; versionNumber?: number },
+      conversationId: string
+    ) => Promise<void>;
+    await applyArtifactPanelAction.call(
+      component,
       { kind: 'open', artifactId: '11111111-1111-4111-8111-111111111111', versionNumber: 1 },
       'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
     );

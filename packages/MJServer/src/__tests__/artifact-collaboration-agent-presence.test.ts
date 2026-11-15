@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createServer, type Server as HttpServer, type IncomingMessage } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,7 +14,7 @@ import {
     GetArtifactLiveContentReaderHook,
     GovernedArtifactService,
 } from '@memberjunction/ai-agents';
-import { ArtifactPermissionEngine, DocumentLiveBlockEngine } from '@memberjunction/core-entities';
+import { ArtifactPermissionEngine, DocumentLiveBlockEngine, SpreadsheetEngine } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import '../agentSessions/index.js';
@@ -75,6 +76,32 @@ import {
 } from '../collaboration/ArtifactCollaborationServer.js';
 import { InMemoryYjsRelayBus, InMemoryYjsRoomRelay, type YjsRelayMessage } from '../collaboration/YjsRoomRelay.js';
 
+interface TestAwarenessLocation {
+    Domain?: string;
+    SheetName?: string;
+    Range?: string;
+    RangeRef?: string;
+}
+
+interface TestAwarenessUser {
+    userId?: string;
+    userName?: string;
+    name?: string;
+    color?: string;
+    isAgent?: boolean;
+    agentName?: string;
+    actingForUserName?: string;
+    actingForUserId?: string;
+    agentPhase?: string;
+    actionSummary?: string;
+    agentLocation?: TestAwarenessLocation;
+}
+
+interface TestAwarenessState {
+    isAgent?: boolean;
+    user?: TestAwarenessUser;
+}
+
 function makeUser(id: string, name: string, email: string): UserInfo {
     const u = new UserInfo();
     u.ID = id;
@@ -91,10 +118,19 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
     let httpServer: HttpServer;
     let wsPort: number;
     let versions: Array<{ ID: string; ArtifactID: string; VersionNumber: number; Content: string }>;
+    let workingStates: Array<{ ID: string; ArtifactID: string; YjsState: Uint8Array; __mj_UpdatedAt?: Date }>;
     let resolvePermissionsSpy: ReturnType<typeof vi.spyOn>;
 
     function createMockProvider(): IMetadataProvider & IRunViewProvider {
         const runViewFn = async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: Artifact Working States') {
+                const matching = workingStates.filter((w) => UUIDsEqual(w.ArtifactID, artifactId));
+                return {
+                    Success: true,
+                    Results: matching,
+                    TotalRowCount: matching.length,
+                };
+            }
             if (params.EntityName === 'MJ: Artifact Versions') {
                 return {
                     Success: true,
@@ -111,6 +147,7 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
     }
 
     beforeEach(async () => {
+        workingStates = [];
         versions = [
             {
                 ID: 'ver-1',
@@ -136,7 +173,7 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
 
         const server = ArtifactCollaborationServer.Instance;
         await server.Shutdown();
-        (server as unknown as { _shuttingDown: boolean })._shuttingDown = false;
+        Reflect.set(server, '_shuttingDown', false);
         server.SetTicketHmacSecret('test-collab-ticket-hmac-secret-at-least-32-bytes!!');
         server.SetTicketReplayStore(null);
         DocumentLiveBlockEngine.Instance.SetSigningSecret('test-frozen-block-hmac-secret-at-least-32-bytes!!');
@@ -295,24 +332,24 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
 
             const states = Array.from(awareness.getStates().entries());
             const agentEntry = states.find(([cid, st]) => {
-                const userObj = (st as { user?: Record<string, unknown> }).user;
-                return cid >= AGENT_AWARENESS_CLIENT_ID_BASE && cid <= AGENT_AWARENESS_CLIENT_ID_MAX && userObj?.['isAgent'] === true;
+                const userObj = (st as TestAwarenessState).user;
+                return cid >= AGENT_AWARENESS_CLIENT_ID_BASE && cid <= AGENT_AWARENESS_CLIENT_ID_MAX && userObj?.isAgent === true;
             });
             expect(agentEntry).toBeDefined();
-            const agentUser = (agentEntry![1] as { user: Record<string, unknown> }).user;
-            expect(agentUser['agentName']).toBe('Sage');
-            expect(agentUser['actingForUserName']).toBe('Alice Editor');
-            expect(agentUser['actingForUserId']).toBe(editorUser.ID);
-            expect(agentUser['actionSummary']).toBe('Refreshing live query table (Pipeline!A1:E20)');
-            expect((agentUser['agentLocation'] as { Range?: string })?.Range).toBe('A1:E20');
+            const agentUser = (agentEntry![1] as TestAwarenessState).user!;
+            expect(agentUser.agentName).toBe('Sage');
+            expect(agentUser.actingForUserName).toBe('Alice Editor');
+            expect(agentUser.actingForUserId).toBe(editorUser.ID);
+            expect(agentUser.actionSummary).toBe('Refreshing live query table (Pipeline!A1:E20)');
+            expect(agentUser.agentLocation?.Range).toBe('A1:E20');
 
             // Cross-instance relay also received the awareness frame
             expect(relayedMessages.some((m) => m.MessageType === 'awareness')).toBe(true);
 
             // Wait for 80ms decay to 'settled'
             await new Promise((r) => setTimeout(r, 95));
-            const settledState = awareness.getStates().get(agentEntry![0]) as { user?: Record<string, unknown> } | undefined;
-            expect(settledState?.user?.['agentPhase']).toBe('settled');
+            const settledState = awareness.getStates().get(agentEntry![0]) as TestAwarenessState | undefined;
+            expect(settledState?.user?.agentPhase).toBe('settled');
 
             // Emit 'exit' -> remains settled for 40ms grace, then removed cleanly
             await GovernedArtifactService.Instance.EmitAgentPresence({
@@ -330,16 +367,40 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
         }
     });
 
-    it('C3 security: strips client-supplied isAgent/actingFor* spoofing fields and rejects writes targeting reserved agent clientIDs', async () => {
+    it('C3 security: strips client-supplied isAgent/actingFor* spoofing, sanitizes user.color, and rejects writes targeting active ProtectedAgentClientIDs', async () => {
         const { ws, doc, awareness } = await connectClient();
         try {
-            // 1. Browser tries to spoof isAgent/actingForUserName under its own clientID
+            // Emit real agent presence so an active ProtectedAgentClientID exists on this room
+            await GovernedArtifactService.Instance.EmitAgentPresence({
+                artifactId,
+                phase: 'working',
+                contextUser: editorUser,
+                agentRunId: 'run-protected-agent-1',
+                agentName: 'LegitAgent',
+            });
+            const agentDeadline = Date.now() + 1500;
+            let activeAgentClientId: number | undefined;
+            while (Date.now() < agentDeadline) {
+                for (const [cid, st] of awareness.getStates().entries()) {
+                    const userObj = (st as TestAwarenessState).user;
+                    if (userObj?.isAgent === true && userObj.agentName === 'LegitAgent') {
+                        activeAgentClientId = cid;
+                        break;
+                    }
+                }
+                if (activeAgentClientId !== undefined) break;
+                await new Promise((r) => setTimeout(r, 15));
+            }
+            expect(activeAgentClientId).toBeDefined();
+
+            // 1. Browser tries to spoof isAgent/actingForUserName and inject CSS into user.color
             const spoofAwareness = new awarenessProtocol.Awareness(new Y.Doc());
             spoofAwareness.setLocalState({
                 isAgent: true,
                 agentName: 'SpoofBot',
                 user: {
                     name: 'Spoofed Name',
+                    color: 'red; background-image: url(https://evil.test/x)',
                     isAgent: true,
                     agentName: 'SpoofBot',
                     actingForUserName: 'Super Admin',
@@ -354,19 +415,18 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
             );
             ws.send(encoding.toUint8Array(frame));
 
-            // 2. Browser also tries to overwrite a reserved server-owned agent clientID directly
-            const spoofAgentClientId = AGENT_AWARENESS_CLIENT_ID_BASE + 12345;
-            const spoofEnc = encoding.createEncoder();
-            encoding.writeVarUint(spoofEnc, 1);
-            encoding.writeVarUint(spoofEnc, spoofAgentClientId);
-            encoding.writeVarUint(spoofEnc, 1);
+            // 2. Browser also tries to overwrite the active ProtectedAgentClientIDs entry directly
+            const hijackEnc = encoding.createEncoder();
+            encoding.writeVarUint(hijackEnc, 1);
+            encoding.writeVarUint(hijackEnc, activeAgentClientId!);
+            encoding.writeVarUint(hijackEnc, 999);
             encoding.writeVarString(
-                spoofEnc,
+                hijackEnc,
                 JSON.stringify({ user: { isAgent: true, agentName: 'HijackedAgent' } }),
             );
             const hijackFrame = encoding.createEncoder();
             encoding.writeVarUint(hijackFrame, YJS_MESSAGE_AWARENESS);
-            encoding.writeVarUint8Array(hijackFrame, encoding.toUint8Array(spoofEnc));
+            encoding.writeVarUint8Array(hijackFrame, encoding.toUint8Array(hijackEnc));
             ws.send(encoding.toUint8Array(hijackFrame));
 
             const deadline = Date.now() + 1500;
@@ -375,21 +435,218 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
             }
             await new Promise((r) => setTimeout(r, 30));
 
-            const clientEntry = awareness.getStates().get(spoofAwareness.clientID) as
-                | { isAgent?: unknown; user?: Record<string, unknown> }
-                | undefined;
+            const clientEntry = awareness.getStates().get(spoofAwareness.clientID) as TestAwarenessState | undefined;
             expect(clientEntry).toBeDefined();
             expect(clientEntry?.isAgent).toBeUndefined();
-            expect(clientEntry?.user?.['isAgent']).toBe(false);
-            expect(clientEntry?.user?.['actingForUserName']).toBeUndefined();
-            expect(clientEntry?.user?.['userName']).toBe('Alice Editor');
+            expect(clientEntry?.user?.isAgent).toBe(false);
+            expect(clientEntry?.user?.actingForUserName).toBeUndefined();
+            expect(clientEntry?.user?.userName).toBe('Alice Editor');
+            expect(clientEntry?.user?.color).toBe('var(--mj-brand-primary)');
 
-            // Reserved agent clientID was completely rejected
-            expect(awareness.getStates().has(spoofAgentClientId)).toBe(false);
+            // Active protected agent clientID was NOT overwritten
+            const protectedEntry = awareness.getStates().get(activeAgentClientId!) as TestAwarenessState | undefined;
+            expect(protectedEntry?.user?.agentName).toBe('LegitAgent');
             void doc;
             void RedisLocalStorageProvider;
         } finally {
             ws.close();
         }
+    });
+
+    it('[C-P0-3] allows human Yjs clientIDs in [0x70000000, 0x7fffffff] and avoids clientID collisions for server agents', async () => {
+        const viewer = await connectClient();
+        const highIdClient = await connectClient();
+        try {
+            const presenceKey = `agent:${editorUser.ID}:run-collision-test`;
+            const digest = createHash('sha256').update(presenceKey, 'utf8').digest();
+            const derivedCollidingId = AGENT_AWARENESS_CLIENT_ID_BASE + (digest.readUInt32BE(0) & 0x0fffffff);
+
+            // Connect a human client using a Y.Doc whose clientID is both inside [0x70000000, 0x7fffffff]
+            // and equal to the derived agent ID.
+            const humanDoc = new Y.Doc();
+            humanDoc.clientID = derivedCollidingId;
+            const humanAwareness = new awarenessProtocol.Awareness(humanDoc);
+            humanAwareness.setLocalState({
+                user: {
+                    name: 'Human High ID',
+                    color: '#2563eb',
+                },
+            });
+            const humanFrame = encoding.createEncoder();
+            encoding.writeVarUint(humanFrame, YJS_MESSAGE_AWARENESS);
+            encoding.writeVarUint8Array(
+                humanFrame,
+                awarenessProtocol.encodeAwarenessUpdate(humanAwareness, [humanDoc.clientID]),
+            );
+            highIdClient.ws.send(encoding.toUint8Array(humanFrame));
+
+            const humanDeadline = Date.now() + 1500;
+            while (!viewer.awareness.getStates().has(derivedCollidingId) && Date.now() < humanDeadline) {
+                await new Promise((r) => setTimeout(r, 15));
+            }
+            const humanState = viewer.awareness.getStates().get(derivedCollidingId) as TestAwarenessState | undefined;
+            expect(humanState?.user?.isAgent).toBe(false);
+            expect(humanState?.user?.color).toBe('#2563eb');
+
+            // Now emit agent presence sharing that exact presenceKey; server must pick an unused clientID
+            await GovernedArtifactService.Instance.EmitAgentPresence({
+                artifactId,
+                phase: 'working',
+                contextUser: editorUser,
+                agentRunId: 'run-collision-test',
+                agentName: 'CollisionSafeAgent',
+                actionSummary: 'Turn on collision-free ID',
+            });
+
+            const agentDeadline = Date.now() + 1500;
+            let agentClientId: number | undefined;
+            while (Date.now() < agentDeadline) {
+                for (const [cid, st] of viewer.awareness.getStates().entries()) {
+                    const userObj = (st as TestAwarenessState).user;
+                    if (userObj?.isAgent === true && userObj.agentName === 'CollisionSafeAgent') {
+                        agentClientId = cid;
+                        break;
+                    }
+                }
+                if (agentClientId !== undefined) break;
+                await new Promise((r) => setTimeout(r, 15));
+            }
+            expect(agentClientId).toBeDefined();
+            expect(agentClientId).not.toBe(derivedCollidingId);
+            expect(viewer.awareness.getStates().has(derivedCollidingId)).toBe(true);
+        } finally {
+            viewer.ws.close();
+            highIdClient.ws.close();
+        }
+    });
+
+    it('[C-P0-3] maintains monotonic awareness clock across TTL expiry and exit-grace expiry on the same presenceKey', async () => {
+        const { ws, awareness } = await connectClient();
+        try {
+            // Turn 1
+            await GovernedArtifactService.Instance.EmitAgentPresence({
+                artifactId,
+                phase: 'working',
+                contextUser: editorUser,
+                agentRunId: 'run-multi-turn-1',
+                agentName: 'Sage',
+                actionSummary: 'Turn 1 work',
+            });
+            const waitForAgent = async (summary: string): Promise<number> => {
+                const deadline = Date.now() + 1500;
+                while (Date.now() < deadline) {
+                    for (const [cid, st] of awareness.getStates().entries()) {
+                        const userObj = (st as TestAwarenessState).user;
+                        if (userObj?.isAgent === true && userObj.actionSummary === summary) {
+                            return cid;
+                        }
+                    }
+                    await new Promise((r) => setTimeout(r, 15));
+                }
+                throw new Error(`Timed out waiting for agent awareness '${summary}'`);
+            };
+
+            const turn1Cid = await waitForAgent('Turn 1 work');
+            // Wait past 300ms TTL so server removes entry
+            const ttlDeadline = Date.now() + 1500;
+            while (awareness.getStates().has(turn1Cid) && Date.now() < ttlDeadline) {
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(awareness.getStates().has(turn1Cid)).toBe(false);
+
+            // Turn 2 on the same agentRunId/presenceKey after TTL removal
+            await GovernedArtifactService.Instance.EmitAgentPresence({
+                artifactId,
+                phase: 'working',
+                contextUser: editorUser,
+                agentRunId: 'run-multi-turn-1',
+                agentName: 'Sage',
+                actionSummary: 'Turn 2 after TTL',
+            });
+            const turn2Cid = await waitForAgent('Turn 2 after TTL');
+            expect(turn2Cid).toBe(turn1Cid);
+
+            // Explicit exit + wait past 40ms exitGraceMs
+            await GovernedArtifactService.Instance.EmitAgentPresence({
+                artifactId,
+                phase: 'exit',
+                contextUser: editorUser,
+                agentRunId: 'run-multi-turn-1',
+                agentName: 'Sage',
+            });
+            const exitDeadline = Date.now() + 1500;
+            while (awareness.getStates().has(turn2Cid) && Date.now() < exitDeadline) {
+                await new Promise((r) => setTimeout(r, 15));
+            }
+            expect(awareness.getStates().has(turn2Cid)).toBe(false);
+
+            // Turn 3 after exit-grace removal
+            await GovernedArtifactService.Instance.EmitAgentPresence({
+                artifactId,
+                phase: 'working',
+                contextUser: editorUser,
+                agentRunId: 'run-multi-turn-1',
+                agentName: 'Sage',
+                actionSummary: 'Turn 3 after exit',
+            });
+            const turn3Cid = await waitForAgent('Turn 3 after exit');
+            expect(turn3Cid).toBe(turn1Cid);
+        } finally {
+            ws.close();
+        }
+    });
+
+    it('[C-P1-1] GetArtifactLiveContentReaderHook hydrates cold MJ: Artifact Working States when no in-memory room exists', async () => {
+        const seedDoc = new Y.Doc();
+        seedDoc.getText('content').insert(0, '# Cold Persisted Working State');
+        seedDoc.getMap('meta').set('baseVersionId', 'ver-1');
+        seedDoc.getMap('meta').set('baseVersionNumber', 1);
+        workingStates.push({
+            ID: 'ws-cold-1',
+            ArtifactID: artifactId,
+            YjsState: Y.encodeStateAsUpdate(seedDoc),
+            __mj_UpdatedAt: new Date(),
+        });
+
+        expect(ArtifactCollaborationServer.Instance.ActiveRoomCount).toBe(0);
+        const liveReader = GetArtifactLiveContentReaderHook();
+        expect(liveReader).not.toBeNull();
+        const snap = await liveReader!(artifactId, editorUser);
+        expect(snap).not.toBeNull();
+        expect(snap?.Content).toBe('# Cold Persisted Working State');
+        expect(snap?.VersionNumber).toBe(1);
+    });
+
+    it('[C-P0-3] deletes PreferredObjectsPaneHeightPx from Y.Map workbookMeta when cleared to undefined', async () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb1 = engine.CreateEmptyWorkbook('PaneHeightBook', ['Sheet1'], 4, 3);
+        wb1.PreferredObjectsPaneHeightPx = 320;
+        const v1Json = engine.SerializeWorkbook(wb1);
+        versions = [
+            {
+                ID: 'ver-1',
+                ArtifactID: artifactId,
+                VersionNumber: 1,
+                Content: v1Json,
+            },
+        ];
+
+        const room = await ArtifactCollaborationServer.Instance.GetOrCreateRoom(artifactId, editorUser);
+        expect(room).not.toBeNull();
+        expect(room!.Doc.getMap<string>('workbookMeta').get('PreferredObjectsPaneHeightPx')).toBe('320');
+
+        const wb2 = engine.ParseWorkbook(v1Json);
+        delete wb2.PreferredObjectsPaneHeightPx;
+        const v2Json = engine.SerializeWorkbook(wb2);
+
+        const mutationRes = await ArtifactCollaborationServer.Instance.ApplyServerContentMutation(
+            artifactId,
+            v2Json,
+            editorUser,
+            false,
+            v1Json,
+        );
+        expect(mutationRes.Success).toBe(true);
+        expect(room!.Doc.getMap<string>('workbookMeta').has('PreferredObjectsPaneHeightPx')).toBe(false);
     });
 });

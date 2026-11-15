@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
+import type { ArtifactToolArgs } from '@memberjunction/ai-core-plus';
 import { GovernedArtifactService } from '@memberjunction/ai-agents';
 import { BaseGovernedArtifactAction } from './base-governed-artifact.action';
 
@@ -10,6 +11,8 @@ import { BaseGovernedArtifactAction } from './base-governed-artifact.action';
  */
 @RegisterClass(BaseAction, '__CreateGovernedArtifact')
 export class CreateGovernedArtifactAction extends BaseGovernedArtifactAction {
+    public static readonly AuthorizesCaller = true;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         if (!params.ContextUser) {
             return {
@@ -29,7 +32,20 @@ export class CreateGovernedArtifactAction extends BaseGovernedArtifactAction {
         const collectionId = this.getStringParam(params, 'CollectionID');
         const environmentId = this.getStringParam(params, 'EnvironmentID');
         const sheetNames = this.getStringArrayParam(params, 'SheetNames');
-        const rawContent = this.getObjectParam(params, 'Content') ?? this.getStringParam(params, 'Content');
+        const normalizedType = GovernedArtifactService.Instance.NormalizeArtifactTypeName(artifactType);
+        const rawContentValue = this.getParamValue(params, 'Content');
+        let rawContent: string | ArtifactToolArgs | undefined;
+        if (normalizedType === 'Markdown Document') {
+            if (typeof rawContentValue === 'string') {
+                rawContent = rawContentValue.trim().length > 0 ? rawContentValue : undefined;
+            } else if (rawContentValue && typeof rawContentValue === 'object' && !Array.isArray(rawContentValue)) {
+                rawContent = rawContentValue as ArtifactToolArgs;
+            } else {
+                rawContent = this.getStringParam(params, 'Content');
+            }
+        } else {
+            rawContent = this.getObjectParam(params, 'Content') ?? this.getStringParam(params, 'Content');
+        }
         const attribution = this.extractAgentAttribution(params);
 
         const outcome = await GovernedArtifactService.Instance.CreateGovernedArtifact({

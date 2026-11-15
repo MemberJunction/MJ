@@ -5,7 +5,10 @@ import type {
   SpreadsheetChartType,
   SpreadsheetLiveTableSpec,
 } from '@memberjunction/core-entities';
-import { FormatMenuShortcut } from '../../context-menu/context-menu-position.util';
+import {
+  FormatMenuShortcut,
+  NormalizeContextMenuItems,
+} from '../../context-menu/context-menu-position.util';
 import type {
   ContextMenuCommandBase,
   ContextMenuItem,
@@ -66,13 +69,23 @@ export type SheetsContextMenuCommand =
   | (ContextMenuCommandBase & { readonly Type: 'refresh-mj-formula'; readonly AddressA1: string })
   | (ContextMenuCommandBase & { readonly Type: 'inspect-mj-formula'; readonly AddressA1: string })
   | (ContextMenuCommandBase & { readonly Type: 'select-spill-range'; readonly RangeA1: string })
-  | (ContextMenuCommandBase & { readonly Type: 'select-row'; readonly RowIndex: number })
+  | (ContextMenuCommandBase & {
+      readonly Type: 'select-row';
+      readonly RowIndex: number;
+      readonly StartRow: number;
+      readonly EndRow: number;
+    })
   | (ContextMenuCommandBase & { readonly Type: 'set-row-height'; readonly StartRowIndex: number; readonly EndRowIndex: number })
   | (ContextMenuCommandBase & { readonly Type: 'auto-fit-row-height'; readonly StartRowIndex: number; readonly EndRowIndex: number })
   | (ContextMenuCommandBase & { readonly Type: 'freeze-up-to-row'; readonly RowIndex: number })
   | (ContextMenuCommandBase & { readonly Type: 'hide-rows'; readonly StartRowIndex: number; readonly EndRowIndex: number })
   | (ContextMenuCommandBase & { readonly Type: 'unhide-adjacent-rows'; readonly StartRowIndex: number; readonly EndRowIndex: number })
-  | (ContextMenuCommandBase & { readonly Type: 'select-col'; readonly ColIndex: number })
+  | (ContextMenuCommandBase & {
+      readonly Type: 'select-col';
+      readonly ColIndex: number;
+      readonly StartCol: number;
+      readonly EndCol: number;
+    })
   | (ContextMenuCommandBase & { readonly Type: 'sort-col'; readonly ColumnLetter: string; readonly Direction: 'asc' | 'desc' })
   | (ContextMenuCommandBase & { readonly Type: 'set-col-width'; readonly StartColIndex: number; readonly EndColIndex: number })
   | (ContextMenuCommandBase & { readonly Type: 'auto-fit-col-width'; readonly StartColIndex: number; readonly EndColIndex: number })
@@ -139,6 +152,8 @@ export interface SheetsRowHeaderContextTarget {
   readonly StartRow: number;
   readonly EndRow: number;
   readonly TotalRows: number;
+  readonly VisibleRows?: number;
+  readonly VisibleRowsInRange?: number;
   readonly TotalCols: number;
   readonly CurrentFrozenRows: number;
   readonly HasAdjacentHiddenRows: boolean;
@@ -155,6 +170,8 @@ export interface SheetsColumnHeaderContextTarget {
   readonly EndColLetter: string;
   readonly TotalRows: number;
   readonly TotalCols: number;
+  readonly VisibleCols?: number;
+  readonly VisibleColsInRange?: number;
   readonly CurrentFrozenColumns: number;
   readonly CurrentFormat: SpreadsheetCellFormatType;
   readonly HasAdjacentHiddenCols: boolean;
@@ -172,6 +189,7 @@ export interface SheetsWorksheetTabContextTarget {
   readonly ColCount: number;
   readonly HiddenRowCount: number;
   readonly HiddenColCount: number;
+  readonly ProtectedReason?: string | null;
 }
 
 export interface SheetsChartContextTarget {
@@ -781,7 +799,7 @@ function buildRowHeaderMenu(
       ID: 'sheets-select-row',
       Label: rowCount === 1 ? `Select Row ${target.StartRow}` : `Select Rows ${target.StartRow}–${target.EndRow}`,
       Icon: 'fa-solid fa-arrow-pointer',
-      Command: { Type: 'select-row', RowIndex: target.StartRow },
+      Command: { Type: 'select-row', RowIndex: target.StartRow, StartRow: target.StartRow, EndRow: target.EndRow },
     },
     {
       Kind: 'action',
@@ -888,8 +906,11 @@ function buildRowHeaderMenu(
         ID: 'sheets-row-hide',
         Label: `Hide ${rowPlural}`,
         Icon: 'fa-regular fa-eye-slash',
-        Disabled: target.TotalRows <= rowCount,
-        DisabledReason: target.TotalRows <= rowCount ? 'Cannot hide every row in the sheet' : undefined,
+        Disabled: (target.VisibleRows ?? target.TotalRows) <= (target.VisibleRowsInRange ?? rowCount),
+        DisabledReason:
+          (target.VisibleRows ?? target.TotalRows) <= (target.VisibleRowsInRange ?? rowCount)
+            ? 'Cannot hide every row in the sheet'
+            : undefined,
         Command: { Type: 'hide-rows', StartRowIndex: target.StartRow, EndRowIndex: target.EndRow },
       }
     );
@@ -941,7 +962,7 @@ function buildColumnHeaderMenu(
         ? `Select Column ${target.StartColLetter}`
         : `Select Columns ${target.StartColLetter}–${target.EndColLetter}`,
       Icon: 'fa-solid fa-arrow-pointer',
-      Command: { Type: 'select-col', ColIndex: target.StartCol },
+      Command: { Type: 'select-col', ColIndex: target.StartCol, StartCol: target.StartCol, EndCol: target.EndCol },
     },
     {
       Kind: 'action',
@@ -1076,8 +1097,11 @@ function buildColumnHeaderMenu(
         ID: 'sheets-col-hide',
         Label: `Hide ${colPlural}`,
         Icon: 'fa-regular fa-eye-slash',
-        Disabled: target.TotalCols <= colCount,
-        DisabledReason: target.TotalCols <= colCount ? 'Cannot hide every column in the sheet' : undefined,
+        Disabled: (target.VisibleCols ?? target.TotalCols) <= (target.VisibleColsInRange ?? colCount),
+        DisabledReason:
+          (target.VisibleCols ?? target.TotalCols) <= (target.VisibleColsInRange ?? colCount)
+            ? 'Cannot hide every column in the sheet'
+            : undefined,
         Command: { Type: 'hide-cols', StartColIndex: target.StartCol, EndColIndex: target.EndCol },
       }
     );
@@ -1191,6 +1215,8 @@ function buildWorksheetTabMenu(
   );
 
   if (ctx.CanEdit) {
+    const isProtected = Boolean(target.ProtectedReason);
+    const protectedReason = target.ProtectedReason ?? undefined;
     items.push(
       { Kind: 'separator', ID: 'sheets-tab-sep-delete' },
       {
@@ -1199,8 +1225,12 @@ function buildWorksheetTabMenu(
         Label: 'Delete Sheet',
         Icon: 'fa-regular fa-trash-can',
         Destructive: true,
-        Disabled: target.TotalSheets <= 1,
-        DisabledReason: target.TotalSheets <= 1 ? 'Workbook must contain at least one worksheet' : undefined,
+        Disabled: isProtected || target.TotalSheets <= 1,
+        DisabledReason: isProtected
+          ? protectedReason
+          : target.TotalSheets <= 1
+            ? 'Workbook must contain at least one worksheet'
+            : undefined,
         Command: { Type: 'delete-sheet', SheetID: target.SheetID },
       }
     );
@@ -1331,13 +1361,19 @@ function buildLiveTableMenu(
       Label: `${target.Title || 'Live Table'} (${target.Mode})`,
       Icon: 'fa-solid fa-database',
     },
-    {
+  ];
+
+  if (ctx.CanEdit && target.Mode !== 'Frozen') {
+    items.push({
       Kind: 'action',
       ID: 'sheets-live-table-refresh',
       Label: 'Refresh Live Data',
       Icon: 'fa-solid fa-arrows-rotate',
       Command: { Type: 'refresh-live-table', TableID: target.TableID },
-    },
+    });
+  }
+
+  items.push(
     {
       Kind: 'action',
       ID: 'sheets-live-table-select-range',
@@ -1352,7 +1388,7 @@ function buildLiveTableMenu(
       Icon: 'fa-solid fa-code',
       Command: { Type: 'copy-live-table-block', TableID: target.TableID },
     },
-  ];
+  );
 
   if (ctx.CanEdit) {
     items.push(
@@ -1457,18 +1493,18 @@ export function BuildSheetsContextMenu(
 ): ContextMenuItem<SheetsContextMenuCommand>[] {
   switch (ctx.Target.Kind) {
     case 'cell':
-      return buildCellOrRangeMenu(ctx.Target, ctx);
+      return NormalizeContextMenuItems(buildCellOrRangeMenu(ctx.Target, ctx));
     case 'row-header':
-      return buildRowHeaderMenu(ctx.Target, ctx);
+      return NormalizeContextMenuItems(buildRowHeaderMenu(ctx.Target, ctx));
     case 'col-header':
-      return buildColumnHeaderMenu(ctx.Target, ctx);
+      return NormalizeContextMenuItems(buildColumnHeaderMenu(ctx.Target, ctx));
     case 'worksheet-tab':
-      return buildWorksheetTabMenu(ctx.Target, ctx);
+      return NormalizeContextMenuItems(buildWorksheetTabMenu(ctx.Target, ctx));
     case 'chart':
-      return buildChartMenu(ctx.Target, ctx);
+      return NormalizeContextMenuItems(buildChartMenu(ctx.Target, ctx));
     case 'live-table':
-      return buildLiveTableMenu(ctx.Target, ctx);
+      return NormalizeContextMenuItems(buildLiveTableMenu(ctx.Target, ctx));
     case 'embedded-artifact':
-      return buildEmbeddedArtifactMenu(ctx.Target, ctx);
+      return NormalizeContextMenuItems(buildEmbeddedArtifactMenu(ctx.Target, ctx));
   }
 }

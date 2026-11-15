@@ -44,6 +44,20 @@ export interface VerifiedArtifactPermissions extends ResolvedArtifactPermissions
 }
 
 const ANCHORED_COMMENT_MENTION_SOURCE = '(?:^|[\\s([{"\'])@([A-Za-z][A-Za-z0-9_-]*)';
+const SAFE_AWARENESS_COLOR_RE =
+  /^(#[0-9a-fA-F]{3,8}|var\(--mj-[a-zA-Z0-9-]+\)|(rgb|hsl)a?\([0-9.,\s%/]+\))$/;
+
+/**
+ * Validates a CSS color or `--mj-*` design token from untrusted Yjs awareness state,
+ * rejecting arbitrary CSS payloads such as `url(...)` exfiltration beacons.
+ */
+export function SanitizeAwarenessColor(rawColor: string | null | undefined): string {
+  if (typeof rawColor !== 'string') {
+    return 'var(--mj-brand-primary)';
+  }
+  const trimmed = rawColor.trim();
+  return SAFE_AWARENESS_COLOR_RE.test(trimmed) ? trimmed : 'var(--mj-brand-primary)';
+}
 
 /**
  * Extracts unique `@handle` mentions from comment text while strictly ignoring email addresses
@@ -920,7 +934,7 @@ export class DocumentCollaborationSession {
       userId: user.id,
       name: user.name,
       email: user.email,
-      color: user.color ?? 'var(--mj-brand-primary)',
+      color: SanitizeAwarenessColor(user.color),
       canEdit,
       isAgent: user.isAgent,
       role: user.role,
@@ -1781,7 +1795,7 @@ export class DocumentCollaborationSession {
             UserID: String(u.userId ?? clientId),
             Name: u.name,
             Email: typeof u.email === 'string' ? u.email : undefined,
-            Color: typeof u.color === 'string' ? u.color : 'var(--mj-brand-primary)',
+            Color: SanitizeAwarenessColor(typeof u.color === 'string' ? u.color : undefined),
             ActiveBlockID: activeBlockId,
             CanEdit: u.canEdit !== false,
             IsAgent: isAgent,
@@ -2356,6 +2370,9 @@ export class DocumentCollaborationSession {
       UpdatedAt: nowIso,
     };
 
+    // Bind `wb` in SpreadsheetEngine before per-sheet reindex so cross-sheet
+    // `FormulaStable` references (@SHEET_CELL, @SHEET_RANGE, etc.) resolve instead of #REF!
+    SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
     for (const ws of wb.Worksheets) {
       SpreadsheetEngine.Instance.ReindexWorksheetAndResolveFormulas(ws);
     }

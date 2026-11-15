@@ -1,8 +1,24 @@
-import { ActionParam, RunActionParams } from '@memberjunction/actions-base';
+import { RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { IMetadataProvider, Metadata } from '@memberjunction/core';
-import { CleanAndParseJSON } from '@memberjunction/global';
+import type { ArtifactJsonValue, ArtifactToolArgs } from '@memberjunction/ai-core-plus';
 import type { ArtifactMutationOperation } from '@memberjunction/ai-agents';
+
+export type GovernedActionParamValue = ArtifactJsonValue | object | undefined;
+
+interface ActionContextWithAttribution {
+    AgentRunID?: string;
+    AgentName?: string;
+}
+
+interface ParamsWithProvider {
+    Provider?: IMetadataProvider;
+}
+
+interface RawOperationItem {
+    tool?: ArtifactJsonValue;
+    input?: ArtifactJsonValue;
+}
 
 /**
  * Shared parameter-extraction and attribution helpers for the 4 Governed Artifact CoreActions.
@@ -11,14 +27,18 @@ import type { ArtifactMutationOperation } from '@memberjunction/ai-agents';
  */
 export abstract class BaseGovernedArtifactAction extends BaseAction {
     protected resolveProvider(params: RunActionParams): IMetadataProvider {
-        const provider = (params as { Provider?: IMetadataProvider }).Provider;
+        const provider = (params as ParamsWithProvider).Provider;
         return provider ?? Metadata.Provider;
     }
 
     protected extractAgentAttribution(params: RunActionParams): { agentRunId?: string; agentName?: string } {
         // Attribution must come exclusively from trusted server-stamped params.Context
         // (never from user/LLM-supplied Action Params, which could spoof agent presence or cross-run tracking).
-        const ctx = (params.Context ?? undefined) as Record<string, unknown> | undefined;
+        const rawContext: GovernedActionParamValue = params.Context;
+        const ctx =
+            rawContext && typeof rawContext === 'object' && !Array.isArray(rawContext)
+                ? (rawContext as ActionContextWithAttribution)
+                : undefined;
         const rawRunId = ctx && typeof ctx.AgentRunID === 'string' && ctx.AgentRunID.trim()
             ? ctx.AgentRunID.trim()
             : undefined;
@@ -31,9 +51,9 @@ export abstract class BaseGovernedArtifactAction extends BaseAction {
         };
     }
 
-    protected getParamValue(params: RunActionParams, name: string): unknown {
+    protected getParamValue(params: RunActionParams, name: string): GovernedActionParamValue {
         const param = params.Params?.find((p) => p.Name?.trim().toLowerCase() === name.toLowerCase());
-        return param?.Value;
+        return param?.Value as GovernedActionParamValue;
     }
 
     protected getStringParam(params: RunActionParams, name: string): string | undefined {
@@ -50,16 +70,23 @@ export abstract class BaseGovernedArtifactAction extends BaseAction {
         return Number.isFinite(num) ? num : undefined;
     }
 
-    protected getObjectParam(params: RunActionParams, name: string): Record<string, unknown> | undefined {
+    protected getObjectParam(params: RunActionParams, name: string): ArtifactToolArgs | undefined {
         const value = this.getParamValue(params, name);
         if (value === undefined || value === null) return undefined;
         if (typeof value === 'object' && !Array.isArray(value)) {
-            return value as Record<string, unknown>;
+            return value as ArtifactToolArgs;
         }
-        if (typeof value === 'string' && value.trim()) {
-            const parsed = CleanAndParseJSON<unknown>(value);
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                return parsed as Record<string, unknown>;
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed) as ArtifactJsonValue;
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        return parsed as ArtifactToolArgs;
+                    }
+                } catch {
+                    return undefined;
+                }
             }
         }
         return undefined;
@@ -68,16 +95,27 @@ export abstract class BaseGovernedArtifactAction extends BaseAction {
     protected getStringArrayParam(params: RunActionParams, name: string): string[] | undefined {
         const value = this.getParamValue(params, name);
         if (Array.isArray(value)) {
-            const items = value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map(v => v.trim());
+            const items = value
+                .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+                .map((v) => v.trim());
             return items.length > 0 ? items : undefined;
         }
         if (typeof value === 'string' && value.trim()) {
-            const parsed = CleanAndParseJSON<unknown>(value);
-            if (Array.isArray(parsed)) {
-                const items = parsed.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map(v => v.trim());
-                return items.length > 0 ? items : undefined;
+            const trimmed = value.trim();
+            if (trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed) as ArtifactJsonValue;
+                    if (Array.isArray(parsed)) {
+                        const items = parsed
+                            .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+                            .map((v) => v.trim());
+                        return items.length > 0 ? items : undefined;
+                    }
+                } catch {
+                    // Fall through to comma-separated parsing
+                }
             }
-            const split = value.split(',').map(v => v.trim()).filter(Boolean);
+            const split = value.split(',').map((v) => v.trim()).filter(Boolean);
             return split.length > 0 ? split : undefined;
         }
         return undefined;
@@ -85,40 +123,51 @@ export abstract class BaseGovernedArtifactAction extends BaseAction {
 
     protected getOperationsParam(params: RunActionParams, name: string): ArtifactMutationOperation[] | undefined {
         let value = this.getParamValue(params, name);
-        if (typeof value === 'string' && value.trim()) {
-            value = CleanAndParseJSON<unknown>(value);
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+                try {
+                    value = JSON.parse(trimmed) as ArtifactJsonValue;
+                } catch {
+                    return undefined;
+                }
+            }
         }
         if (!Array.isArray(value)) return undefined;
         const ops: ArtifactMutationOperation[] = [];
         for (const item of value) {
-            if (!item || typeof item !== 'object') continue;
-            const rec = item as Record<string, unknown>;
+            if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+            const rec = item as RawOperationItem;
             if (typeof rec.tool === 'string' && rec.tool.trim()) {
                 ops.push({
                     tool: rec.tool.trim(),
-                    input: rec.input && typeof rec.input === 'object' && !Array.isArray(rec.input)
-                        ? (rec.input as Record<string, unknown>)
-                        : undefined,
+                    input:
+                        rec.input && typeof rec.input === 'object' && !Array.isArray(rec.input)
+                            ? (rec.input as ArtifactToolArgs)
+                            : undefined,
                 });
             }
         }
         return ops.length > 0 ? ops : undefined;
     }
 
-    protected setOutputParam(params: RunActionParams, name: string, value: unknown): void {
+    protected setOutputParam(params: RunActionParams, name: string, value: GovernedActionParamValue): void {
         const existing = params.Params?.find((p) => p.Name?.trim().toLowerCase() === name.toLowerCase());
         if (existing) {
             existing.Value = value;
-            existing.Type = existing.Type === 'Input' ? 'Both' : existing.Type || 'Output';
+            const existingType = existing.Type?.trim().toLowerCase();
+            existing.Type = existingType === 'input' || existingType === 'both' ? 'Both' : 'Output';
         } else {
             if (!params.Params) {
                 params.Params = [];
             }
-            const output = new ActionParam();
-            output.Name = name;
-            output.Value = value;
-            output.Type = 'Output';
-            params.Params.push(output);
+            // Plain object literal is required so GraphQL ActionResolver -> CopyScalarsAndArrays
+            // (which skips class instances with constructor !== Object) serializes output params.
+            params.Params.push({
+                Name: name,
+                Value: value,
+                Type: 'Output',
+            });
         }
     }
 }

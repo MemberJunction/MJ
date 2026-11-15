@@ -46,4 +46,23 @@ describe('ParseDelegationResultJson ArtifactTypeName & DriverClass', () => {
             },
         ]);
     });
+
+    it('falls back safely on non-JSON strings, explicit failures, and empty artifacts', () => {
+        expect(ParseDelegationResultJson('plain spoken summary')).toEqual({
+            Success: true,
+            Output: 'plain spoken summary',
+        });
+
+        const failed = ParseDelegationResultJson(JSON.stringify({
+            success: false,
+            error: 'Permission denied',
+            artifacts: 'not-an-array',
+        }));
+        expect(failed).toEqual({
+            Success: false,
+            Output: 'Permission denied',
+            RunID: undefined,
+            Artifacts: undefined,
+        });
+    });
 });

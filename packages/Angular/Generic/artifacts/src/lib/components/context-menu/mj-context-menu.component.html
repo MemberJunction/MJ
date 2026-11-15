@@ -42,7 +42,7 @@
               [attr.title]="item.Disabled && item.DisabledReason ? item.DisabledReason : null"
               [tabIndex]="GetItemTabIndex(level, idx)"
               (mousedown)="OnItemMouseDown($event)"
-              (mouseenter)="OnItemMouseEnter(level.Level, idx, item)"
+              (mouseenter)="OnItemMouseEnter(level.Level, idx, item, $event)"
               (click)="OnActionClick(item, $event)">
               @if (HasCheckOrRadioColumn(level)) {
                 <span class="mj-context-menu-check-slot" aria-hidden="true">
@@ -82,7 +82,7 @@
               [attr.title]="item.Disabled && item.DisabledReason ? item.DisabledReason : null"
               [tabIndex]="GetItemTabIndex(level, idx)"
               (mousedown)="OnItemMouseDown($event)"
-              (mouseenter)="OnItemMouseEnter(level.Level, idx, item)"
+              (mouseenter)="OnItemMouseEnter(level.Level, idx, item, $event)"
               (click)="OnSubmenuClick(level.Level, idx, item, $event)">
               @if (HasCheckOrRadioColumn(level)) {
                 <span class="mj-context-menu-check-slot" aria-hidden="true"></span>
@@ -104,9 +104,9 @@
               [attr.data-item-index]="idx"
               [attr.aria-label]="item.Label"
               [attr.title]="item.Disabled && item.DisabledReason ? item.DisabledReason : null"
-              (mouseenter)="OnItemMouseEnter(level.Level, idx, item)">
+              (mouseenter)="OnItemMouseEnter(level.Level, idx, item, $event)">
               <span class="mj-context-menu-swatch-label">{{ item.Label }}</span>
-              <div class="mj-context-menu-swatch-list" role="radiogroup" [attr.aria-label]="item.Label">
+              <div class="mj-context-menu-swatch-list" role="none">
                 @for (swatch of item.Swatches; track $index; let sIdx = $index) {
                   <button
                     type="button"

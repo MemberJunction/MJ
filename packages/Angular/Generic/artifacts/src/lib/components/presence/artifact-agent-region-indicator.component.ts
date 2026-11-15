@@ -1,5 +1,8 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-import type { CollaboratorPresence } from '../../services/document-collaboration.service';
+import {
+  SanitizeAwarenessColor,
+  type CollaboratorPresence,
+} from '../../services/document-collaboration.service';
 import { FormatAgentBaseName, FormatAgentCoordinateLabel } from './artifact-agent-presence-bar.component';
 
 /**
@@ -14,14 +17,15 @@ import { FormatAgentBaseName, FormatAgentCoordinateLabel } from './artifact-agen
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (Agent && Agent.AgentPhase !== 'exit') {
-      <div
+      <button
+        type="button"
         class="mj-agent-region-badge"
         [class.compact]="Compact"
         [class.is-working]="IsWorking"
         [class.is-settled]="Agent.AgentPhase === 'settled'"
-        [style.--mj-agent-accent]="Agent.Color || 'var(--mj-brand-primary)'"
+        [style.--mj-agent-accent]="SanitizeColor(Agent.Color)"
         data-testid="artifact-agent-region-indicator"
-        role="status"
+        [attr.aria-label]="AccessibleLabel"
         (click)="JumpToAgent.emit(Agent)"
       >
         <span class="mj-agent-region-badge__icon" aria-hidden="true">
@@ -37,7 +41,7 @@ import { FormatAgentBaseName, FormatAgentCoordinateLabel } from './artifact-agen
         @if (CoordinateLabel) {
           <span class="mj-agent-region-badge__coord">{{ CoordinateLabel }}</span>
         }
-      </div>
+      </button>
     }
   `,
   styles: [
@@ -51,13 +55,19 @@ import { FormatAgentBaseName, FormatAgentCoordinateLabel } from './artifact-agen
         border: 1px solid color-mix(in srgb, var(--mj-agent-accent, var(--mj-brand-primary)) 55%, var(--mj-border-default));
         border-left-width: 3px;
         border-left-color: var(--mj-agent-accent, var(--mj-brand-primary));
-        background: color-mix(in srgb, var(--mj-agent-accent, var(--mj-brand-primary)) 12%, var(--mj-bg-surface));
+        background-color: color-mix(in srgb, var(--mj-agent-accent, var(--mj-brand-primary)) 12%, var(--mj-bg-surface));
         color: var(--mj-text-primary);
+        font-family: inherit;
         font-size: 12px;
         line-height: 1.25;
+        text-align: left;
         cursor: pointer;
         box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
         transition: opacity 0.2s ease, transform 0.15s ease;
+      }
+      .mj-agent-region-badge:focus-visible {
+        outline: none;
+        box-shadow: var(--mj-focus-ring);
       }
       .mj-agent-region-badge.compact {
         padding: 2px 8px;
@@ -73,7 +83,7 @@ import { FormatAgentBaseName, FormatAgentCoordinateLabel } from './artifact-agen
         width: 18px;
         height: 18px;
         border-radius: 50%;
-        background: var(--mj-agent-accent, var(--mj-brand-primary));
+        background-color: var(--mj-agent-accent, var(--mj-brand-primary));
         color: var(--mj-text-inverse);
         font-size: 10px;
         flex-shrink: 0;
@@ -108,7 +118,7 @@ import { FormatAgentBaseName, FormatAgentCoordinateLabel } from './artifact-agen
         padding: 1px 5px;
         border-radius: 4px;
         background: var(--mj-bg-surface-sunken);
-        font-family: monospace;
+        font-family: var(--mj-font-family-mono);
         font-size: 11px;
       }
     `,
@@ -133,5 +143,23 @@ export class ArtifactAgentRegionIndicatorComponent {
 
   public get CoordinateLabel(): string {
     return this.Agent ? FormatAgentCoordinateLabel(this.Agent) : '';
+  }
+
+  public get AccessibleLabel(): string {
+    if (!this.Agent) {
+      return '';
+    }
+    const parts = [this.AgentDisplayName];
+    if (this.Agent.ActingForUserName) {
+      parts.push(`for ${this.Agent.ActingForUserName}`);
+    }
+    if (this.CoordinateLabel) {
+      parts.push(this.CoordinateLabel);
+    }
+    return parts.join(' · ');
+  }
+
+  public SanitizeColor(rawColor: string | null | undefined): string {
+    return SanitizeAwarenessColor(rawColor);
   }
 }

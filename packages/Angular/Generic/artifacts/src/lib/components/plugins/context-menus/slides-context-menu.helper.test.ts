@@ -382,6 +382,47 @@ describe('slides-context-menu.helper', () => {
       expect(findAction(rightItems, 'swap-region-later')?.Disabled).toBe(true);
     });
 
+    it('disables swap-region actions when target or neighbor region is locked', () => {
+      const twoCol = makeTwoColumnSlide();
+      const lockedTargetItems = BuildSlidesContextMenu(
+        makeSnapshot({
+          Zone: 'slide-region',
+          Slide: twoCol,
+          TargetRegion: twoCol.Regions[0],
+          RegionIndex: 0,
+          TotalRegions: 2,
+          CanEditSlide: true,
+          CanEditRegion: false,
+          RegionLockedReason: 'Region locked by owner',
+        }),
+      );
+      expect(findAction(lockedTargetItems, 'swap-region-later')?.Disabled).toBe(true);
+      expect(findAction(lockedTargetItems, 'swap-region-later')?.DisabledReason).toBe(
+        'Region locked by owner',
+      );
+
+      const lockedNeighborItems = BuildSlidesContextMenu(
+        makeSnapshot({
+          Zone: 'slide-region',
+          Slide: twoCol,
+          TargetRegion: twoCol.Regions[1],
+          RegionIndex: 1,
+          TotalRegions: 2,
+          CanEditSlide: true,
+          CanEditRegion: true,
+          CanSwapEarlier: false,
+          SwapEarlierDisabledReason: 'Target region is locked',
+          CanSwapLater: false,
+          SwapLaterDisabledReason: 'Already last region',
+        }),
+      );
+      expect(findAction(lockedNeighborItems, 'swap-region-earlier')?.Disabled).toBe(true);
+      expect(findAction(lockedNeighborItems, 'swap-region-earlier')?.DisabledReason).toBe(
+        'Target region is locked',
+      );
+      expect(findAction(lockedNeighborItems, 'swap-region-later')?.Disabled).toBe(true);
+    });
+
     it('includes Sheet Chart, Workbook Update, Freeze/Unfreeze, Source Artifact, and Copy Block JSON for blocks', () => {
       const twoCol = makeTwoColumnSlide();
       const liveItems = BuildSlidesContextMenu(

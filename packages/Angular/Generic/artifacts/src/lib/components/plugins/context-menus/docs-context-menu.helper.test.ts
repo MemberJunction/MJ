@@ -485,4 +485,98 @@ describe('BuildDocsContextMenu', () => {
     expect(findAction(outlineItems, 'move-block-up')?.Disabled).toBe(true);
     expect(findAction(outlineItems, 'move-block-down')?.Disabled).toBe(false);
   });
+
+  it('disables all 6 prose structure items and outline moves when SegmentEditable is false, and gates toggle-heading-lock on IsArtifactOwner', () => {
+    const lockedSeg = makeSegment({ SegmentID: 'seg-locked', BlockKind: 'paragraph', RawMarkdown: 'Locked body' });
+    const headingSeg = makeSegment({
+      SegmentID: 'h-locked',
+      BlockKind: 'heading',
+      HeadingLevel: 2,
+      HeadingText: 'Protected Section',
+      RawMarkdown: '## Protected Section <!-- mj-lock:owner-1 -->',
+    });
+
+    const lockedProseItems = BuildDocsContextMenu(
+      makeSnapshot({
+        ViewMode: 'edit',
+        CanUserEdit: true,
+        CanUserShareArtifact: true,
+        IsArtifactOwner: false,
+        SegmentCount: 3,
+        SegmentIndex: 1,
+        SegmentEditable: false,
+        IsSegmentLocked: true,
+        Target: { Kind: 'prose', Segment: lockedSeg },
+      }),
+    );
+    for (const id of [
+      'insert-block-above',
+      'insert-block-below',
+      'insert-slash-menu',
+      'duplicate-block',
+      'move-block-up',
+      'move-block-down',
+    ]) {
+      expect(findAction(lockedProseItems, id)?.Disabled).toBe(true);
+    }
+
+    const nonOwnerHeadingItems = BuildDocsContextMenu(
+      makeSnapshot({
+        ViewMode: 'edit',
+        CanUserEdit: true,
+        CanUserShareArtifact: true,
+        IsArtifactOwner: false,
+        SegmentCount: 3,
+        SegmentIndex: 1,
+        SegmentEditable: false,
+        IsSegmentLocked: true,
+        Target: { Kind: 'prose', Segment: headingSeg },
+      }),
+    );
+    expect(findAction(nonOwnerHeadingItems, 'toggle-heading-lock')?.Disabled).toBe(true);
+
+    const outlineItem: DocumentOutlineItem = {
+      ID: 'h-locked',
+      Kind: 'heading',
+      Level: 2,
+      Title: 'Protected Section',
+      StartLine: 1,
+    };
+    const lockedOutlineItems = BuildDocsContextMenu(
+      makeSnapshot({
+        ViewMode: 'edit',
+        CanUserEdit: true,
+        CanUserShareArtifact: true,
+        IsArtifactOwner: false,
+        SegmentCount: 3,
+        SegmentIndex: 1,
+        SegmentEditable: false,
+        IsSegmentLocked: true,
+        Target: {
+          Kind: 'outline-item',
+          OutlineItem: outlineItem,
+          TargetSegment: headingSeg,
+          TargetSegmentIndex: 1,
+        },
+      }),
+    );
+    expect(findAction(lockedOutlineItems, 'move-block-up')?.Disabled).toBe(true);
+    expect(findAction(lockedOutlineItems, 'move-block-down')?.Disabled).toBe(true);
+    expect(findAction(lockedOutlineItems, 'toggle-heading-lock')?.Disabled).toBe(true);
+
+    const ownerHeadingItems = BuildDocsContextMenu(
+      makeSnapshot({
+        ViewMode: 'edit',
+        CanUserEdit: true,
+        CanUserShareArtifact: true,
+        IsArtifactOwner: true,
+        SegmentCount: 3,
+        SegmentIndex: 1,
+        SegmentEditable: true,
+        IsSegmentLocked: true,
+        Target: { Kind: 'prose', Segment: headingSeg },
+      }),
+    );
+    expect(findAction(ownerHeadingItems, 'toggle-heading-lock')?.Disabled).toBe(false);
+  });
 });

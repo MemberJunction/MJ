@@ -144,4 +144,31 @@ describe('artifact-presence-locator', () => {
             'Linking live MJ block ("Regional Revenue")',
         );
     });
+
+    it('includes clear_range and Slice B parity tools in MUTATING_ARTIFACT_TOOL_NAMES and omits phantom/deferred tools', () => {
+        const expectedMutating = [
+            'clear_range',
+            'move_block',
+            'duplicate_block',
+            'duplicate_slide',
+            'update_deck_metadata',
+            'format_range',
+            'delete_rows',
+            'delete_columns',
+            'delete_chart',
+            'delete_live_table',
+            'delete_embedded_artifact',
+            'set_sheet_layout',
+            'duplicate_sheet',
+            'reorder_sheets',
+        ];
+        for (const name of expectedMutating) {
+            expect(MUTATING_ARTIFACT_TOOL_NAMES.has(name), `expected ${name} to be mutating`).toBe(true);
+        }
+
+        const phantomTools = ['replace_section', 'insert_section', 'delete_section', 'set_cells', 'propose_suggestion'];
+        for (const name of phantomTools) {
+            expect(MUTATING_ARTIFACT_TOOL_NAMES.has(name), `expected ${name} to be absent`).toBe(false);
+        }
+    });
 });

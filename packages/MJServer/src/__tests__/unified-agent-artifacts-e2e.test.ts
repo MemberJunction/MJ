@@ -80,6 +80,47 @@ class TestDetachedRelayCollabNode extends ArtifactCollaborationServer {
     }
 }
 
+interface E2EAwarenessLocation {
+    Domain?: string;
+    SheetName?: string;
+    RangeRef?: string;
+    Summary?: string;
+}
+
+interface E2EAwarenessUser {
+    isAgent?: boolean;
+    agentName?: string;
+    actingForUserName?: string;
+    actingForUserId?: string;
+    agentPhase?: string;
+    agentLocation?: E2EAwarenessLocation;
+}
+
+interface E2EAwarenessState {
+    user?: E2EAwarenessUser;
+}
+
+interface E2ELiveTableStepResult {
+    tool: string;
+    data: {
+        materialized?: boolean;
+        headers?: string[];
+        rowCount?: number;
+        boundingRange?: string;
+    };
+}
+
+interface MockArtifactVersionEntityRecord {
+    ID: string;
+    ArtifactID: string;
+    VersionNumber: number;
+    Content: string;
+    ContentMode: string;
+    MimeType: string;
+    NewRecord: () => boolean;
+    Save: () => Promise<boolean>;
+}
+
 function makeUser(id: string, name: string, email: string): UserInfo {
     const u = new UserInfo();
     u.ID = id;
@@ -154,11 +195,7 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
 
         const getEntityObjectFn = async (entityName: string) => {
             if (entityName === 'MJ: Artifact Versions') {
-                const record: Record<string, unknown> & {
-                    ID: string;
-                    NewRecord: () => boolean;
-                    Save: () => Promise<boolean>;
-                } = {
+                const record: MockArtifactVersionEntityRecord = {
                     ID: `ver-e2e-${versions.length + 1}`,
                     ArtifactID: artifactId,
                     VersionNumber: versions.length + 1,
@@ -339,30 +376,30 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
         const { ws, doc, awareness } = await connectYjsBrowserClient();
         const observedAgentStates: Array<{
             clientId: number;
-            agentName: unknown;
-            actingForUserName: unknown;
-            actingForUserId: unknown;
-            agentPhase: unknown;
-            domain: unknown;
-            sheetName: unknown;
+            agentName?: string;
+            actingForUserName?: string;
+            actingForUserId?: string;
+            agentPhase?: string;
+            domain?: string;
+            sheetName?: string;
         }> = [];
         awareness.on('update', () => {
             for (const [cid, st] of awareness.getStates().entries()) {
-                const userObj = (st as { user?: Record<string, unknown> })?.user;
+                const userObj = (st as E2EAwarenessState)?.user;
                 if (
                     cid >= AGENT_AWARENESS_CLIENT_ID_BASE &&
                     cid <= AGENT_AWARENESS_CLIENT_ID_MAX &&
-                    userObj?.['isAgent'] === true
+                    userObj?.isAgent === true
                 ) {
-                    const loc = userObj['agentLocation'] as Record<string, unknown> | undefined;
+                    const loc = userObj.agentLocation;
                     observedAgentStates.push({
                         clientId: cid,
-                        agentName: userObj['agentName'],
-                        actingForUserName: userObj['actingForUserName'],
-                        actingForUserId: userObj['actingForUserId'],
-                        agentPhase: userObj['agentPhase'],
-                        domain: loc?.['Domain'],
-                        sheetName: loc?.['SheetName'],
+                        agentName: userObj.agentName,
+                        actingForUserName: userObj.actingForUserName,
+                        actingForUserId: userObj.actingForUserId,
+                        agentPhase: userObj.agentPhase,
+                        domain: loc?.Domain,
+                        sheetName: loc?.SheetName,
                     });
                 }
             }
@@ -413,13 +450,13 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
             expect(runParams.Params.find((p) => p.Name === 'VersionNumber')?.Value).toBe(2);
 
             const resultsParam = runParams.Params.find((p) => p.Name === 'Results')?.Value as
-                | Array<{ tool: string; data: Record<string, unknown> }>
+                | E2ELiveTableStepResult[]
                 | undefined;
             const liveTableStep = resultsParam?.find((r) => r.tool === 'upsert_live_table')?.data;
-            expect(liveTableStep?.['materialized']).toBe(true);
-            expect(liveTableStep?.['headers']).toEqual(['Month', 'Revenue']);
-            expect(liveTableStep?.['rowCount']).toBe(2);
-            expect(liveTableStep?.['boundingRange']).toBe('A1:B3');
+            expect(liveTableStep?.materialized).toBe(true);
+            expect(liveTableStep?.headers).toEqual(['Month', 'Revenue']);
+            expect(liveTableStep?.rowCount).toBe(2);
+            expect(liveTableStep?.boundingRange).toBe('A1:B3');
 
             // Wait briefly for server Yjs room commit & exit grace period
             await new Promise((r) => setTimeout(r, 120));
@@ -491,7 +528,7 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
 
         const { ws, awareness } = await connectYjsBrowserClient();
         try {
-            const observed: Array<Record<string, unknown>> = [];
+            const observed: E2EAwarenessUser[] = [];
             awareness.on('change', () => {
                 for (const [clientId, state] of awareness.getStates().entries()) {
                     if (
@@ -500,7 +537,7 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
                         state &&
                         typeof state === 'object'
                     ) {
-                        const userObj = (state as { user?: Record<string, unknown> }).user;
+                        const userObj = (state as E2EAwarenessState).user;
                         if (userObj) {
                             observed.push(userObj);
                         }
@@ -533,12 +570,12 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
             });
 
             const enterDeadline = Date.now() + 5000;
-            while (!observed.some((s) => s['agentName'] === 'Query Builder') && Date.now() < enterDeadline) {
+            while (!observed.some((s) => s.agentName === 'Query Builder') && Date.now() < enterDeadline) {
                 await new Promise((r) => setTimeout(r, 15));
             }
-            expect(observed.some((s) => s['agentName'] === 'Query Builder')).toBe(true);
-            expect(observed.some((s) => s['actingForUserName'] === 'Alice Editor')).toBe(true);
-            expect(observed.some((s) => s['agentPhase'] === 'working')).toBe(true);
+            expect(observed.some((s) => s.agentName === 'Query Builder')).toBe(true);
+            expect(observed.some((s) => s.actingForUserName === 'Alice Editor')).toBe(true);
+            expect(observed.some((s) => s.agentPhase === 'working')).toBe(true);
 
             // Exit on detached Node A must relay removal ('null') so viewer on Node B clears the indicator
             serverA.DispatchAgentPresence({
@@ -566,6 +603,70 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
                     (cid) => cid >= AGENT_AWARENESS_CLIENT_ID_BASE && cid <= AGENT_AWARENESS_CLIENT_ID_MAX,
                 ),
             ).toBe(false);
+        } finally {
+            await serverA.Shutdown();
+            ws.close();
+        }
+    });
+
+    it('[C-P0-3] relay ghost presence TTL cleanup: clears relayed agent awareness when peer node crashes without sending exit', async () => {
+        const bus = new InMemoryYjsRelayBus();
+        const serverB = ArtifactCollaborationServer.Instance;
+        serverB.SetRoomRelay(new InMemoryYjsRoomRelay(bus));
+        serverB.SetAgentPresenceTimings({
+            throttleMs: 0,
+            decayMs: 60,
+            ttlMs: 120,
+            exitGraceMs: 0,
+        });
+
+        const serverA = new TestDetachedRelayCollabNode();
+        serverA.SetRoomRelay(new InMemoryYjsRoomRelay(bus));
+        serverA.SetAgentPresenceTimings({
+            throttleMs: 0,
+            decayMs: 5_000,
+            ttlMs: 60_000, // Longer than serverB so we test serverB's own relay ghost TTL
+            exitGraceMs: 0,
+        });
+
+        const { ws, awareness } = await connectYjsBrowserClient();
+        try {
+            const presenceKey = `ghost-relay-agent:${alice.ID}`;
+            serverA.DispatchAgentPresence({
+                ArtifactID: artifactId,
+                AgentPresenceKey: presenceKey,
+                AgentRunID: 'run-ghost-crash',
+                AgentName: 'GhostNodeAgent',
+                ActingForUserID: alice.ID,
+                ActingForUserName: 'Alice Editor',
+                Phase: 'working',
+                TimestampMs: Date.now(),
+            });
+
+            const appearDeadline = Date.now() + 2000;
+            let relayedAgentCid: number | undefined;
+            while (Date.now() < appearDeadline) {
+                for (const [cid, st] of awareness.getStates().entries()) {
+                    const userObj = (st as E2EAwarenessState)?.user;
+                    if (userObj?.isAgent === true && userObj.agentName === 'GhostNodeAgent') {
+                        relayedAgentCid = cid;
+                        break;
+                    }
+                }
+                if (relayedAgentCid !== undefined) break;
+                await new Promise((r) => setTimeout(r, 15));
+            }
+            expect(relayedAgentCid).toBeDefined();
+
+            // Simulate Node A crashing abruptly (Shutdown clears its timers without broadcasting exit)
+            await serverA.Shutdown();
+
+            // Node B's relay ghost TTL (ttlMs + grace = 120ms + 25ms = 145ms) must remove the ghost presence
+            const cleanupDeadline = Date.now() + 2000;
+            while (awareness.getStates().has(relayedAgentCid!) && Date.now() < cleanupDeadline) {
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(awareness.getStates().has(relayedAgentCid!)).toBe(false);
         } finally {
             await serverA.Shutdown();
             ws.close();

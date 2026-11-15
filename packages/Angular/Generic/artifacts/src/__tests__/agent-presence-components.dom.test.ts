@@ -121,16 +121,27 @@ describe('Cross-Device Agent Presence Components & Awareness Mapping', () => {
     component.Agent = slideAgent;
     fixture.detectChanges();
 
-    const badge = fixture.nativeElement.querySelector('[data-testid="artifact-agent-region-indicator"]');
+    const badge = fixture.nativeElement.querySelector('[data-testid="artifact-agent-region-indicator"]') as HTMLElement;
     expect(badge).not.toBeNull();
+    expect(badge.tagName).toBe('BUTTON');
+    expect(badge.getAttribute('type')).toBe('button');
     expect(badge.textContent).toContain('Slide Builder');
     expect(badge.textContent).toContain('for Amith');
     expect(badge.textContent).toContain('Slide 2 · reg-kpi');
     expect(badge.classList.contains('is-settled')).toBe(true);
 
+    // Unsafe CSS url(...) injection in Agent.Color must fall back to var(--mj-brand-primary)
+    component.Agent = { ...slideAgent, Color: 'url(https://evil.example/leak.png)' };
+    fixture.detectChanges();
+    const sanitizedBadge = fixture.nativeElement.querySelector('[data-testid="artifact-agent-region-indicator"]') as HTMLElement;
+    expect(sanitizedBadge.style.getPropertyValue('--mj-agent-accent')).toBe('var(--mj-brand-primary)');
+
+    component.Agent = slideAgent;
+    fixture.detectChanges();
+
     const jumpSpy = vi.fn();
     component.JumpToAgent.subscribe(jumpSpy);
-    badge.click();
+    (fixture.nativeElement.querySelector('[data-testid="artifact-agent-region-indicator"]') as HTMLElement).click();
     expect(jumpSpy).toHaveBeenCalledWith(slideAgent);
 
     // Exit phase hides the region indicator
@@ -141,17 +152,21 @@ describe('Cross-Device Agent Presence Components & Awareness Mapping', () => {
     ).toBeNull();
   });
 
-  it('DocumentCollaborationSession.GetCollaborators strictly requires u.isAgent === true and maps structured AgentLocation', () => {
+  it('DocumentCollaborationSession.GetCollaborators strictly requires u.isAgent === true, sanitizes user.color, and maps structured AgentLocation', () => {
     const svc = new DocumentCollaborationService();
-    const session = svc.CreateSession('art-presence-1', 'Excel Spreadsheet', '{}', {
-      userId: 'human-local',
-      name: 'Local User',
-      canEdit: true,
-    });
+    const session = svc.CreateSession(
+      'art-presence-1',
+      '{}',
+      {
+        id: 'human-local',
+        name: 'Local User',
+      },
+      true,
+    );
 
     // Apply a remote server-style Yjs awareness update with both a human named "Agent Smith"
     // and a genuine server agent awareness entry
-    const remoteDoc = new Y.Doc({ clientID: 0x70000010 });
+    const remoteDoc = new Y.Doc();
     const remoteAwareness = new Awareness(remoteDoc);
     remoteAwareness.setLocalState({
       isAgent: true,
@@ -182,14 +197,14 @@ describe('Cross-Device Agent Presence Components & Awareness Mapping', () => {
       },
     });
 
-    const fakeHumanDoc = new Y.Doc({ clientID: 555 });
+    const fakeHumanDoc = new Y.Doc();
     const fakeHumanAwareness = new Awareness(fakeHumanDoc);
     fakeHumanAwareness.setLocalState({
       user: {
         userId: 'human-smith',
         name: 'Agent Smith',
         role: 'agent',
-        color: 'var(--mj-status-success)',
+        color: 'url(https://attacker.example/beacon)',
         canEdit: true,
       },
     });
@@ -200,8 +215,8 @@ describe('Cross-Device Agent Presence Components & Awareness Mapping', () => {
     expect(yUpdate).toBe(true);
 
     const collaborators = session.GetCollaborators();
-    const realAgent = collaborators.find((c) => c.ClientID === 0x70000010);
-    const humanNamedAgent = collaborators.find((c) => c.ClientID === 555);
+    const realAgent = collaborators.find((c) => c.ClientID === remoteDoc.clientID);
+    const humanNamedAgent = collaborators.find((c) => c.ClientID === fakeHumanDoc.clientID);
 
     expect(realAgent).toBeDefined();
     expect(realAgent?.IsAgent).toBe(true);
@@ -209,13 +224,16 @@ describe('Cross-Device Agent Presence Components & Awareness Mapping', () => {
     expect(realAgent?.AgentName).toBe('Query Analyst');
     expect(realAgent?.AgentPhase).toBe('working');
     expect(realAgent?.ActiveBlockID).toBe('sheet-rev:B2:D15');
+    expect(realAgent?.Color).toBe('var(--mj-brand-primary)');
     expect(FormatAgentBaseName(realAgent!)).toBe('Query Analyst');
     expect(FormatAgentCoordinateLabel(realAgent!)).toBe('Revenue!B2:D15');
 
-    // Strict check: name regex / role hint must NOT elevate a human client to an agent
+    // Strict check: name regex / role hint must NOT elevate a human client to an agent,
+    // and untrusted url(...) color must be sanitized to var(--mj-brand-primary)
     expect(humanNamedAgent).toBeDefined();
     expect(humanNamedAgent?.IsAgent).toBe(false);
     expect(humanNamedAgent?.ActingForUserName).toBeUndefined();
+    expect(humanNamedAgent?.Color).toBe('var(--mj-brand-primary)');
 
     remoteAwareness.destroy();
     remoteDoc.destroy();

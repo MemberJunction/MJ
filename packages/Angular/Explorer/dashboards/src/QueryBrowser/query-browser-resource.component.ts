@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrateg
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
 import { GroupByUUID, IndexByUUID, RegisterClass , UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey, RunQuery, RunQueryResult } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
@@ -18,6 +18,8 @@ import { ValidateStringParam, BoundNameList } from '../shared/agent-tool-validat
 import {
     CreateLiveSheetHelperForProvider,
     LiveSheetClientToolHelper,
+    type LiveSheetJsonObject,
+    type LiveSheetJsonValue,
     type LiveSheetToolResult,
 } from '../shared/live-sheet-client-tool.helper';
 import {
@@ -500,7 +502,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                     },
                     required: ['query'],
                 },
-                Handler: async (params: Record<string, unknown>) => this.handleCreateLiveSheetFromQueryTool(params),
+                Handler: async (params) => this.handleCreateLiveSheetFromQueryTool(params),
             },
             {
                 Name: 'AppendQueryToLiveSheet',
@@ -518,7 +520,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                     },
                     required: ['artifactId', 'query'],
                 },
-                Handler: async (params: Record<string, unknown>) => this.handleAppendQueryToLiveSheetTool(params),
+                Handler: async (params) => this.handleAppendQueryToLiveSheetTool(params),
             },
         ]);
     }
@@ -756,7 +758,47 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         return { ...exec, PageNumber: pageNumber, PageSize: pageSize };
     }
 
-    private prepareApprovedQuerySheetContext(params: Record<string, unknown>):
+    private toLiveSheetJsonValue(
+        value: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0][string],
+    ): LiveSheetJsonValue {
+        if (
+            value === null ||
+            value === undefined ||
+            typeof value === 'string' ||
+            typeof value === 'number' ||
+            typeof value === 'boolean'
+        ) {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            return value.map((item) => this.toLiveSheetJsonValue(item));
+        }
+        if (typeof value === 'object') {
+            const out: LiveSheetJsonObject = {};
+            for (const [k, v] of Object.entries(value)) {
+                out[k] = this.toLiveSheetJsonValue(v);
+            }
+            return out;
+        }
+        return String(value);
+    }
+
+    private toLiveSheetParameters(
+        raw: ReturnType<typeof NormalizeQueryParameters>,
+    ): LiveSheetJsonObject | undefined {
+        if (!raw) {
+            return undefined;
+        }
+        const out: LiveSheetJsonObject = {};
+        for (const [k, v] of Object.entries(raw)) {
+            out[k] = this.toLiveSheetJsonValue(v);
+        }
+        return out;
+    }
+
+    private prepareApprovedQuerySheetContext(
+        params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+    ):
         | {
             ok: true;
             query: MJQueryEntityExtended;
@@ -765,8 +807,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             sheetName?: string;
             tableTitle?: string;
             anchorCell?: string;
+            existingArtifactId?: string;
             maxRows?: number;
-            parameters?: Record<string, unknown>;
+            parameters?: LiveSheetJsonObject;
           }
         | { ok: false; result: LiveSheetToolResult } {
         const raw = String(params?.['query'] ?? params?.['queryId'] ?? params?.['QueryId'] ?? '');
@@ -802,14 +845,17 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             sheetName: opt('sheetName'),
             tableTitle: opt('tableTitle'),
             anchorCell: opt('anchorCell'),
+            existingArtifactId: opt('existingArtifactId'),
             maxRows: typeof params?.['MaxRows'] === 'number'
                 ? NormalizeMaxRows(params['MaxRows'], DEFAULT_QUERY_MAX_ROWS)
                 : undefined,
-            parameters: NormalizeQueryParameters(params?.['Parameters']),
+            parameters: this.toLiveSheetParameters(NormalizeQueryParameters(params?.['Parameters'])),
         };
     }
 
-    private async handleCreateLiveSheetFromQueryTool(params: Record<string, unknown>): Promise<LiveSheetToolResult> {
+    private async handleCreateLiveSheetFromQueryTool(
+        params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+    ): Promise<LiveSheetToolResult> {
         const ctx = this.prepareApprovedQuerySheetContext(params);
         if (!ctx.ok) return ctx.result;
 
@@ -822,6 +868,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             Parameters: ctx.parameters,
             MaxRows: ctx.maxRows,
             AnchorCell: ctx.anchorCell,
+            ExistingArtifactID: ctx.existingArtifactId,
         });
         if (res.Success) {
             this.lastExecutedQueryId = ctx.query.ID;
@@ -831,7 +878,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         return res;
     }
 
-    private async handleAppendQueryToLiveSheetTool(params: Record<string, unknown>): Promise<LiveSheetToolResult> {
+    private async handleAppendQueryToLiveSheetTool(
+        params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+    ): Promise<LiveSheetToolResult> {
         const artifactVal = ValidateStringParam(params?.['artifactId'], 'artifactId');
         if (!artifactVal.ok) {
             return { Success: false, ErrorMessage: artifactVal.result.ErrorMessage };

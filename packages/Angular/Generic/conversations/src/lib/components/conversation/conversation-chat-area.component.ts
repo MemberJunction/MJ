@@ -1712,7 +1712,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Defer updating the template-bound [ScrollRoot] reference past ViewChild resolution so
       // Angular does not observe null -> HTMLDivElement within the same change-detection pass (NG0100).
       Promise.resolve().then(() => {
-        if ((this.scrollContainer?.nativeElement ?? null) === nextEl && this.messageScrollRootEl !== nextEl) {
+        if (!this.destroy$?.closed && (this.scrollContainer?.nativeElement ?? null) === nextEl && this.messageScrollRootEl !== nextEl) {
           this.messageScrollRootEl = nextEl;
           this.cdr?.markForCheck?.();
         }
@@ -3839,7 +3839,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
-    return UUIDsEqual(conversationId, this.ConversationId);
+    return !this.destroy$?.closed && UUIDsEqual(conversationId, this.ConversationId);
   }
 
   private isActiveConversationLoad(conversationId: string | null | undefined, loadToken: number): boolean {
@@ -8236,7 +8236,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
    * chat area owns them). Pure & cached: it is bound to an input, so it never mutates state or fires CD.
    */
-  public get EffectiveAppContext(): Record<string, unknown> | null {
+  public get EffectiveAppContext(): ConversationChatAreaComponent['AppContext'] {
     const controller = this.remoteBrowser;
     if (!controller) {
       return this.AppContext;
@@ -8250,7 +8250,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return memo.Value;
   }
   private standbyPreparedConversationId: string | null = null;
-  private effectiveAppContextMemo: { Base: Record<string, unknown> | null; Version: number; Owns: boolean; Value: Record<string, unknown> | null } | null = null;
+  private effectiveAppContextMemo: { Base: ConversationChatAreaComponent['AppContext']; Version: number; Owns: boolean; Value: ConversationChatAreaComponent['AppContext'] } | null = null;
 
   /**
    * Persists the currently displayed Task Graph in the chat side-panel as a reusable

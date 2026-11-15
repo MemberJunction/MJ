@@ -36,7 +36,7 @@
         "realtime": {
           "directActions": {
             "enabled": true,
-            "timeoutMs": 5000,
+            "timeoutMs": 30000,
             "actionNames": [
               "Search Query Catalog",
               "Create Governed Artifact",

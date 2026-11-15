@@ -12,7 +12,7 @@ import {
   MJArtifactEntity,
   MJArtifactVersionEntity,
 } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { ChannelFrameCapture } from '@memberjunction/ng-realtime-channels';
 import {
   BaseRealtimeChannelClient,
@@ -135,6 +135,7 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
         ParametersSchema: {
           type: 'object',
           properties: {
+            artifactId: { type: 'string', description: 'Optional artifact ID; defaults to the active workspace tab.' },
             versionId: { type: 'string', description: 'Artifact version ID to display.' },
             versionNumber: { type: 'number', description: 'Optional version number.' },
           },
@@ -161,7 +162,9 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
         Description: 'Closes an open workspace artifact tab.',
         ParametersSchema: {
           type: 'object',
-          properties: {},
+          properties: {
+            artifactId: { type: 'string', description: 'Optional artifact ID to close; defaults to the active tab.' },
+          },
           additionalProperties: false,
         },
         InvokableBy: 'agent',
@@ -201,6 +204,10 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
         { Name: 'opened', Description: 'A workspace artifact tab was opened.' },
         { Name: 'focused', Description: 'A workspace artifact tab gained focus.' },
         { Name: 'version_changed', Description: 'A workspace tab switched to a different version.' },
+        {
+          Name: 'newer_version_available',
+          Description: 'A newer version of an open workspace artifact is available while SwapToNewerVersions is disabled.',
+        },
         { Name: 'refreshed', Description: 'A workspace tab refreshed its rendered artifact.' },
         { Name: 'closed', Description: 'A workspace artifact tab was closed.' },
       ],
@@ -252,6 +259,7 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
     this.surface = instance;
     instance.Engine = this.Engine;
     instance.AgentName = this.Context?.AgentName ?? 'The agent';
+    instance.Provider = this.Context?.Provider ?? null;
     instance.CurrentUser = this.Context?.Provider?.CurrentUser ?? null;
     const configuredEnvId = this.Context?.ChannelConfig?.['environmentId'];
     instance.EnvironmentID = typeof configuredEnvId === 'string' ? configuredEnvId : '';
@@ -296,28 +304,75 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
   }
 
   public override RestoreState(stateJson: string): boolean {
-    try {
-      const parsed = JSON.parse(stateJson) as {
-        activeArtifactId?: string | null;
-        instances?: ArtifactWorkspaceOpenPayload[];
-      };
-      if (!Array.isArray(parsed.instances) || parsed.instances.length === 0) {
-        return false;
-      }
-      for (const item of parsed.instances) {
-        if (item.ArtifactID && !IsComponentArtifactDescriptor(item.ArtifactTypeName, item.DriverClass)) {
-          this.Engine.AddOrFocus(item);
-        }
-      }
-      if (parsed.activeArtifactId) {
-        const active = this.Engine.FindByArtifact(parsed.activeArtifactId);
-        if (active) {
-          this.Engine.SetActive(active.InstanceID);
-        }
-      }
-      return this.Engine.Instances.length > 0;
-    } catch {
+    const parsed = SafeJSONParse<{
+      activeArtifactId?: string | null;
+      instances?: ArtifactWorkspaceOpenPayload[];
+    }>(stateJson);
+    if (!parsed || !Array.isArray(parsed.instances) || parsed.instances.length === 0) {
       return false;
+    }
+    const validItems = parsed.instances.filter(
+      (item) =>
+        item != null &&
+        typeof item === 'object' &&
+        Boolean(item.ArtifactID) &&
+        !IsComponentArtifactDescriptor(item.ArtifactTypeName, item.DriverClass),
+    );
+    if (validItems.length === 0) {
+      return false;
+    }
+    for (const existing of [...this.Engine.Instances]) {
+      this.Engine.Remove(existing.InstanceID);
+    }
+    for (const item of validItems) {
+      // Force CanEdit: false until async rehydration verifies permissions against the backend
+      this.Engine.AddOrFocus({ ...item, CanEdit: false });
+    }
+    if (parsed.activeArtifactId) {
+      const active = this.Engine.FindByArtifact(parsed.activeArtifactId);
+      if (active) {
+        this.Engine.SetActive(active.InstanceID);
+      }
+    }
+    void this.rehydrateRestoredInstances();
+    return true;
+  }
+
+  private async rehydrateRestoredInstances(): Promise<void> {
+    const provider = this.Context?.Provider;
+    const user = provider?.CurrentUser;
+    if (!provider || !user) {
+      return;
+    }
+    const snapshot = [...this.Engine.Instances];
+    for (const record of snapshot) {
+      if (this.disposed) {
+        return;
+      }
+      const resolved = await this.resolveArtifactMetadata({
+        artifactId: record.ArtifactID,
+        artifactVersionId: record.ArtifactVersionID,
+        versionNumber: record.VersionNumber,
+        name: undefined,
+        fallbackName: record.Name,
+        artifactTypeName: record.ArtifactTypeName,
+        driverClass: record.DriverClass,
+      });
+      if (this.disposed) {
+        return;
+      }
+      if ('Success' in resolved) {
+        this.Engine.Remove(record.InstanceID);
+        continue;
+      }
+      this.Engine.UpdateRecordMetadata(record.InstanceID, {
+        ArtifactVersionID: resolved.ArtifactVersionID,
+        VersionNumber: resolved.VersionNumber,
+        Name: resolved.Name,
+        ArtifactTypeName: resolved.ArtifactTypeName,
+        DriverClass: resolved.DriverClass,
+        CanEdit: resolved.CanEdit,
+      });
     }
   }
 
@@ -452,7 +507,7 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
   ): Promise<void> {
     const sameVersion =
       Boolean(existing.ArtifactVersionID) &&
-      existing.ArtifactVersionID!.trim().toLowerCase() === artifact.ArtifactVersionID.trim().toLowerCase();
+      UUIDsEqual(existing.ArtifactVersionID, artifact.ArtifactVersionID);
     if (sameVersion) {
       this.Engine.SetActive(existing.InstanceID);
       return;
@@ -527,7 +582,36 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       if (!versionId) {
         return failure('invalid_params', 'show_version requires versionId.');
       }
-      const versionNumber = readNumber(args, 'versionNumber');
+      let versionNumber = readNumber(args, 'versionNumber');
+      const provider = this.Context?.Provider;
+      const user = provider?.CurrentUser;
+      if (provider && user) {
+        const cleanVersionId = versionId.replace(/[{}]/g, '');
+        if (!UUID_PATTERN.test(cleanVersionId)) {
+          return failure('invalid_params', 'show_version requires a valid UUID versionId.');
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+        const verRes = await rv.RunView<MJArtifactVersionEntity>(
+          {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID='${EscapeSQLString(cleanVersionId)}'`,
+            MaxRows: 1,
+            ResultType: 'entity_object',
+          },
+          user,
+        );
+        const ver = verRes.Success ? verRes.Results[0] : undefined;
+        if (!ver) {
+          return failure('not_found', `Artifact version ${cleanVersionId} was not found.`);
+        }
+        if (!UUIDsEqual(ver.ArtifactID, record.ArtifactID)) {
+          return failure(
+            'invalid_params',
+            `Artifact version ${cleanVersionId} does not belong to artifact ${record.ArtifactID}.`,
+          );
+        }
+        versionNumber = versionNumber ?? ver.VersionNumber;
+      }
       this.Engine.SwapVersion(record.InstanceID, versionId, versionNumber);
       this.EmitChannelEvent(
         'version_changed',
@@ -593,6 +677,7 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
     artifactVersionId?: string;
     versionNumber?: number;
     name?: string;
+    fallbackName?: string;
     artifactTypeName?: string;
     driverClass?: string;
   }): Promise<ArtifactWorkspaceOpenPayload | RealtimeChannelVerbResult> {
@@ -618,7 +703,7 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
           ArtifactID: params.artifactId,
           ArtifactVersionID: params.artifactVersionId,
           VersionNumber: params.versionNumber,
-          Name: params.name ?? 'Artifact',
+          Name: params.name ?? params.fallbackName ?? 'Artifact',
           ArtifactTypeName: params.artifactTypeName,
           DriverClass: params.driverClass,
           CanEdit: false,
@@ -637,7 +722,7 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       const verRes = await rv.RunView<MJArtifactVersionEntity>(
         {
           EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ID='${resolvedVersionId}'`,
+          ExtraFilter: `ID='${EscapeSQLString(resolvedVersionId)}'`,
           MaxRows: 1,
           ResultType: 'entity_object',
         },
@@ -645,9 +730,17 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       );
       const ver = verRes.Success ? verRes.Results[0] : undefined;
       if (ver) {
+        if (resolvedArtifactId && !UUIDsEqual(ver.ArtifactID, resolvedArtifactId)) {
+          return failure(
+            'invalid_params',
+            `Artifact version ${resolvedVersionId} does not belong to artifact ${resolvedArtifactId}.`,
+          );
+        }
         resolvedArtifactId = resolvedArtifactId || ver.ArtifactID;
         resolvedVersionNumber = resolvedVersionNumber ?? ver.VersionNumber;
         resolvedName = resolvedName || ver.Name || undefined;
+      } else if (!resolvedArtifactId) {
+        return failure('not_found', `Artifact version ${resolvedVersionId} was not found.`);
       }
     }
 
@@ -655,18 +748,10 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       return failure('invalid_params', 'A valid artifactId (or artifactVersionId) is required.');
     }
 
-    let canEdit = false;
-    try {
-      const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, resolvedArtifactId, user);
-      canEdit = perms.CanEdit;
-    } catch {
-      canEdit = false;
-    }
-
     const artRes = await rv.RunView<MJArtifactEntity>(
       {
         EntityName: 'MJ: Artifacts',
-        ExtraFilter: `ID='${resolvedArtifactId}'`,
+        ExtraFilter: `ID='${EscapeSQLString(resolvedArtifactId)}'`,
         MaxRows: 1,
         ResultType: 'entity_object',
       },
@@ -674,25 +759,25 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
     );
     const artifactEntity = artRes.Success ? artRes.Results[0] : undefined;
     if (!artifactEntity) {
-      if (params.name) {
-        return {
-          ArtifactID: resolvedArtifactId,
-          ArtifactVersionID: resolvedVersionId,
-          VersionNumber: resolvedVersionNumber,
-          Name: params.name,
-          ArtifactTypeName: params.artifactTypeName,
-          DriverClass: params.driverClass,
-          CanEdit: canEdit,
-        };
+      return failure('not_found', `Artifact ${resolvedArtifactId} was not found or is inaccessible.`);
+    }
+
+    let canEdit = false;
+    try {
+      const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, resolvedArtifactId, user);
+      if (!perms.CanRead) {
+        return failure('access_denied', `Access denied for artifact ${resolvedArtifactId}.`);
       }
-      return failure('open_failed', `Artifact ${resolvedArtifactId} was not found or is inaccessible.`);
+      canEdit = perms.CanEdit;
+    } catch {
+      return failure('access_denied', `Unable to verify read permissions for artifact ${resolvedArtifactId}.`);
     }
 
     return {
       ArtifactID: artifactEntity.ID,
       ArtifactVersionID: resolvedVersionId,
       VersionNumber: resolvedVersionNumber,
-      Name: resolvedName || artifactEntity.Name || 'Artifact',
+      Name: resolvedName || artifactEntity.Name || params.fallbackName || 'Artifact',
       ArtifactTypeName: params.artifactTypeName || artifactEntity.Type || undefined,
       DriverClass: params.driverClass,
       CanEdit: canEdit,

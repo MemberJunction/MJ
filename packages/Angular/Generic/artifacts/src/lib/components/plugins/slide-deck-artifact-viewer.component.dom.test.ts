@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
-import type { IMetadataProvider } from '@memberjunction/core';
+import { type IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
   MJArtifactVersionEntity,
   SlideDeckEngine,
+  type DocumentBlockSpec,
   type SlideDeckSpec,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -293,11 +294,12 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
     f.detectChanges();
     queryMenuItem('copy-region')!.click();
     f.detectChanges();
-    expect(f.componentInstance.copiedSlideRegionSpec?.MarkdownContent).toBe('Right narrative block');
+    expect(f.componentInstance.StatusBannerMessage).toContain('Copied region');
 
     const destCard = query(f, `[data-testid="slide-region-${firstRegionId}"]`);
     dispatchContextMenu(destCard!);
     f.detectChanges();
+    expect(queryMenuItem('paste-region')?.getAttribute('aria-disabled')).toBeNull();
     queryMenuItem('paste-region')!.click();
     f.detectChanges();
     expect(f.componentInstance.ActiveSlide.Regions[1].MarkdownContent).toBe('Right narrative block');
@@ -401,5 +403,310 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
     expect(f.componentInstance.ContextMenuOpen).toBe(true);
     expect(queryMenuItem('copy-speaker-notes')).not.toBeNull();
     expect(queryMenuItem('reset-presenter-timer')).not.toBeNull();
+  });
+
+  it('prevents non-owner CanShare collaborators from unlocking or mutating owner-locked slides and regions', () => {
+    const ownerUserId = '11111111-1111-4111-8111-111111111111';
+    const collaboratorUserId = '22222222-2222-4222-8222-222222222222';
+    const baseDeck = SlideDeckEngine.Instance.CreateDefaultDeck('Lock Regression', 'deck-lock-reg');
+    const twoCol = SlideDeckEngine.Instance.AddSlide(baseDeck, {
+      Layout: 'TwoColumn',
+      Title: 'Mixed Locks',
+    });
+    const slide1 = twoCol.Deck.Slides[0];
+    const slide2 = twoCol.Deck.Slides[1];
+
+    // Lock slide 1 (slide-level owner lock) and lock region 1 of slide 2 (region-level owner lock)
+    const ownerLockedDeck = SlideDeckEngine.Instance.SetSlideLock(
+      twoCol.Deck,
+      slide1.SlideID,
+      true,
+      ownerUserId,
+      false,
+      ownerUserId,
+    ).Deck;
+    const lockedRegDeck = SlideDeckEngine.Instance.SetRegionLock(
+      ownerLockedDeck,
+      slide2.SlideID,
+      slide2.Regions[1].RegionID,
+      true,
+      ownerUserId,
+      false,
+      ownerUserId,
+    ).Deck;
+
+    const collaboratorUser: UserInfo = Object.create(UserInfo.prototype);
+    Object.defineProperties(collaboratorUser, {
+      ID: { value: collaboratorUserId, enumerable: true },
+      Name: { value: 'Share Collaborator', enumerable: true },
+      Email: { value: 'collab@example.com', enumerable: true },
+    });
+    const provider: IMetadataProvider = Object.create(Object.prototype);
+    Object.defineProperties(provider, {
+      CurrentUser: { value: collaboratorUser, enumerable: true },
+      Entities: { value: [], enumerable: true },
+    });
+
+    const f = makeDeckFixture({ customDeck: lockedRegDeck, readonly: false });
+    f.componentInstance.Provider = provider;
+    f.componentInstance.ResolvedPermissions = {
+      ArtifactID: 'art-slide-dom-1',
+      CanRead: true,
+      CanEdit: true,
+      CanDelete: false,
+      CanShare: true,
+      Source: 'ArtifactPermission',
+      Reason: 'Collaborator with edit + share only (not owner)',
+    };
+    f.detectChanges();
+
+    // Slide 1 is owner-locked: CanShare collaborator must NOT be able to unlock, edit, or delete it
+    f.componentInstance.SelectSlide(slide1.SlideID);
+    expect(f.componentInstance.CanEditSlideElements).toBe(false);
+    expect(f.componentInstance.CanEditRegion(f.componentInstance.ActiveSlide.Regions[0])).toBe(false);
+
+    f.componentInstance.ToggleCurrentSlideLock();
+    expect(f.componentInstance.Deck.Slides[0].Locked).toBe(true);
+    expect(f.componentInstance.StatusBannerMessage).toContain('locked');
+
+    f.componentInstance.DeleteSlideById(slide1.SlideID);
+    expect(f.componentInstance.Deck.Slides.length).toBe(lockedRegDeck.Slides.length);
+
+    // Slide 2 is unlocked, but Region 1 is owner-locked
+    f.componentInstance.SelectSlide(slide2.SlideID);
+    f.detectChanges();
+    const unlockedReg = f.componentInstance.ActiveSlide.Regions[0];
+    const ownerLockedReg = f.componentInstance.ActiveSlide.Regions[1];
+    expect(f.componentInstance.CanEditRegion(unlockedReg)).toBe(true);
+    expect(f.componentInstance.CanEditRegion(ownerLockedReg)).toBe(false);
+
+    f.componentInstance.ToggleRegionLock(ownerLockedReg);
+    expect(f.componentInstance.ActiveSlide.Regions[1].Locked).toBe(true);
+
+    const originalLockedMarkdown = ownerLockedReg.MarkdownContent;
+    f.componentInstance.CutSlideRegion(slide2.SlideID, ownerLockedReg.RegionID);
+    expect(f.componentInstance.ActiveSlide.Regions[1].MarkdownContent).toBe(originalLockedMarkdown);
+
+    // Swapping an unlocked region with a locked neighbor (or vice versa) must be rejected
+    f.componentInstance.SwapSlideRegion(slide2.SlideID, unlockedReg.RegionID, 1);
+    expect(f.componentInstance.ActiveSlide.Regions[0].RegionID).toBe(unlockedReg.RegionID);
+    expect(f.componentInstance.ActiveSlide.Regions[1].RegionID).toBe(ownerLockedReg.RegionID);
+
+    // Context menu on unlocked region disables swap-region-later because neighbor is owner-locked
+    const unlockedCard = query(f, `[data-testid="slide-region-${unlockedReg.RegionID}"]`);
+    dispatchContextMenu(unlockedCard!);
+    f.detectChanges();
+    expect(queryMenuItem('swap-region-later')?.getAttribute('aria-disabled')).toBe('true');
+
+    // Context menu on locked region disables cut & swap
+    const lockedCard = query(f, `[data-testid="slide-region-${ownerLockedReg.RegionID}"]`);
+    dispatchContextMenu(lockedCard!);
+    f.detectChanges();
+    expect(queryMenuItem('cut-region')?.getAttribute('aria-disabled')).toBe('true');
+    expect(queryMenuItem('swap-region-earlier')?.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('routes OnSlideDrop through SlideDeckEngine.ReorderSlides and keeps active selection on moved slide', () => {
+    const f = makeDeckFixture({ customDeck: makeThreeSlideDeck(), readonly: false });
+    const s0 = f.componentInstance.Deck.Slides[0].SlideID;
+    const s2 = f.componentInstance.Deck.Slides[2].SlideID;
+    const reorderSpy = vi.spyOn(SlideDeckEngine.Instance, 'ReorderSlides');
+
+    f.componentInstance.SelectSlide(s0);
+    expect(f.componentInstance.ActiveSlideIndex).toBe(0);
+
+    const dragData = new Map<string, string>();
+    const dragTransfer = {
+      effectAllowed: 'move',
+      dropEffect: 'move',
+      setData: (format: string, value: string) => {
+        dragData.set(format, value);
+      },
+      getData: (format: string) => dragData.get(format) ?? '',
+    };
+    const dragStartEvent: DragEvent = Object.create(Event.prototype);
+    Object.defineProperties(dragStartEvent, {
+      dataTransfer: { value: dragTransfer, enumerable: true },
+    });
+    const dropEvent: DragEvent = Object.create(Event.prototype);
+    Object.defineProperties(dropEvent, {
+      preventDefault: { value: vi.fn(), enumerable: true },
+      dataTransfer: { value: dragTransfer, enumerable: true },
+    });
+
+    f.componentInstance.OnSlideDragStart(s0, dragStartEvent);
+    f.componentInstance.OnSlideDrop(s2, dropEvent);
+
+    const slideCount = f.componentInstance.Deck.Slides.length;
+    expect(reorderSpy).toHaveBeenCalledTimes(1);
+    expect(f.componentInstance.Deck.Slides.map((s) => s.SlideNumber)).toEqual(
+      Array.from({ length: slideCount }, (_, idx) => idx + 1),
+    );
+    expect(f.componentInstance.Deck.Slides[2].SlideID).toBe(s0);
+    expect(f.componentInstance.ActiveSlideID).toBe(s0);
+    expect(f.componentInstance.ActiveSlideIndex).toBe(2);
+
+    f.componentInstance.MoveSlideToEdge(s0, 'start');
+    expect(f.componentInstance.Deck.Slides[0].SlideID).toBe(s0);
+    expect(f.componentInstance.Deck.Slides[0].SlideNumber).toBe(1);
+    expect(f.componentInstance.ActiveSlideID).toBe(s0);
+    expect(f.componentInstance.ActiveSlideIndex).toBe(0);
+  });
+
+  it('deep-clones BlockSpec with a fresh UUID BlockID on Copy/Paste and Duplicate', () => {
+    const base = SlideDeckEngine.Instance.CreateDefaultDeck('Block Clone', 'deck-block-clone');
+    const twoCol = SlideDeckEngine.Instance.AddSlide(base, {
+      Layout: 'TwoColumn',
+      Title: 'Live KPIs',
+    });
+    const sourceBlockId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const sourceBlock: DocumentBlockSpec = {
+      BlockID: sourceBlockId,
+      Title: 'ARR Metric',
+      Kind: 'SavedQuery',
+      Mode: 'Live',
+      QueryID: 'qry-arr-1',
+      Parameters: { fiscalYear: 2026 },
+    };
+    const slide = twoCol.Deck.Slides[1];
+    slide.Regions[0] = {
+      ...slide.Regions[0],
+      Kind: 'mj-block',
+      BlockSpec: sourceBlock,
+      MarkdownContent: `:::mj-block\n${JSON.stringify(sourceBlock)}\n:::`,
+    };
+
+    const f = makeDeckFixture({ customDeck: twoCol.Deck, readonly: false });
+    f.componentInstance.SelectSlide(slide.SlideID);
+    f.detectChanges();
+
+    const srcId = slide.Regions[0].RegionID;
+    const dstId = slide.Regions[1].RegionID;
+
+    f.componentInstance.CopySlideRegion(slide.SlideID, srcId);
+    f.componentInstance.PasteIntoSlideRegion(slide.SlideID, dstId);
+
+    const pastedBlock = f.componentInstance.ActiveSlide.Regions[1].BlockSpec;
+    expect(pastedBlock).toBeDefined();
+    expect(pastedBlock?.BlockID).toBeTruthy();
+    expect(pastedBlock?.BlockID).not.toBe(sourceBlockId);
+    expect(f.componentInstance.ActiveSlide.Regions[1].MarkdownContent).toContain(pastedBlock!.BlockID);
+    expect(f.componentInstance.ActiveSlide.Regions[1].MarkdownContent).not.toContain(sourceBlockId);
+
+    // Mutating pasted BlockSpec.Parameters must not affect the source region's BlockSpec
+    if (pastedBlock?.Parameters) {
+      pastedBlock.Parameters['fiscalYear'] = 2030;
+    }
+    expect(f.componentInstance.ActiveSlide.Regions[0].BlockSpec?.Parameters?.['fiscalYear']).toBe(2026);
+
+    f.componentInstance.DuplicateSlideRegion(slide.SlideID, srcId);
+    // DuplicateSlideRegion splices the clone at idx + 1 (index 1), shifting pasted dstId to index 2
+    const duplicatedBlock = f.componentInstance.ActiveSlide.Regions[1]?.BlockSpec;
+    expect(duplicatedBlock).toBeDefined();
+    expect(duplicatedBlock?.BlockID).not.toBe(sourceBlockId);
+    expect(duplicatedBlock?.BlockID).not.toBe(pastedBlock?.BlockID);
+    expect(f.componentInstance.ActiveSlide.Regions[2]?.BlockSpec?.BlockID).toBe(pastedBlock?.BlockID);
+  });
+
+  it('preserves headings, strong, em, code, and list items in OnInlineRegionContentBlur', () => {
+    const f = makeDeckFixture({ readonly: false });
+    const slide = f.componentInstance.ActiveSlide;
+    const region = slide.Regions[0];
+
+    const editorEl = document.createElement('div');
+    editorEl.innerHTML =
+      '<h1>Title</h1><h2>Section</h2><h3>Detail</h3>' +
+      '<p>Has <strong>bold</strong>, <em>italic</em>, and <code>code()</code>.</p>' +
+      '<ul><li>Alpha</li><li>Beta</li></ul>';
+    const blurEvent = new FocusEvent('blur');
+    Object.defineProperty(blurEvent, 'target', { value: editorEl, enumerable: true });
+
+    f.componentInstance.OnInlineRegionContentBlur(region, blurEvent);
+
+    const saved = f.componentInstance.ActiveSlide.Regions[0].MarkdownContent;
+    expect(saved).toContain('# Title');
+    expect(saved).toContain('## Section');
+    expect(saved).toContain('### Detail');
+    expect(saved).toContain('**bold**');
+    expect(saved).toContain('*italic*');
+    expect(saved).toContain('`code()`');
+    expect(saved).toContain('- Alpha');
+    expect(saved).toContain('- Beta');
+  });
+
+  it('calls cdr.detectChanges in FocusRegionInlineEditor, suppresses post-long-press clicks via click.capture, and orders modal Primary left / Cancel right', () => {
+    const f = makeDeckFixture({ readonly: false });
+    const targetSlide = f.componentInstance.Deck.Slides[1];
+    const targetRegion = targetSlide.Regions[0];
+
+    const componentCdr = f.debugElement.injector.get(ChangeDetectorRef);
+    const cdrProto = Object.getPrototypeOf(componentCdr);
+    const detectSpy = vi.spyOn(cdrProto, 'detectChanges');
+    f.componentInstance.FocusRegionInlineEditor(targetSlide.SlideID, targetRegion.RegionID);
+    expect(detectSpy).toHaveBeenCalled();
+    expect(query(f, `[data-testid="slide-region-${targetRegion.RegionID}"]`)).not.toBeNull();
+    const region = targetRegion;
+
+    // Suppress click after touch long-press via (click.capture) on .mj-slides-shell
+    const shell = query(f, '.mj-slides-shell') as HTMLElement;
+    const childBtn = document.createElement('button');
+    const childClickSpy = vi.fn();
+    childBtn.addEventListener('click', childClickSpy);
+    shell.appendChild(childBtn);
+
+    try {
+      vi.useFakeTimers();
+      const pointerDown = new Event('pointerdown', { bubbles: true });
+      Object.defineProperties(pointerDown, {
+        pointerType: { value: 'touch' },
+        clientX: { value: 48 },
+        clientY: { value: 48 },
+      });
+      shell.dispatchEvent(pointerDown);
+      vi.advanceTimersByTime(550);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(f.componentInstance.ContextMenuOpen).toBe(true);
+    childBtn.click();
+    expect(childClickSpy).not.toHaveBeenCalled();
+
+    // Verify all 3 confirmation modals render Primary LEFT, Cancel RIGHT
+    f.componentInstance.PendingFreezeBlock = {
+      BlockID: 'blk-freeze-1',
+      Title: 'Pipeline',
+      Kind: 'SavedQuery',
+      Mode: 'Live',
+      QueryID: 'q-1',
+    };
+    f.componentInstance.PendingFreezeRegion = region;
+    componentCdr.markForCheck();
+    f.detectChanges();
+    const freezeActions = query(f, '[data-testid="slides-freeze-warning-modal"] .mj-slides-modal-actions');
+    const freezeBtns = freezeActions?.querySelectorAll('button') ?? [];
+    expect(freezeBtns.length).toBe(2);
+    expect(freezeBtns[0].classList.contains('primary')).toBe(true);
+    expect(freezeBtns[1].textContent?.trim()).toBe('Cancel');
+    f.componentInstance.CancelFreezeSlideBlock();
+
+    f.componentInstance.ShowMarkdownToDeckModal = true;
+    componentCdr.markForCheck();
+    f.detectChanges();
+    const mdActions = query(f, '[data-testid="markdown-to-deck-modal"] .mj-slides-modal-actions');
+    const mdBtns = mdActions?.querySelectorAll('button') ?? [];
+    expect(mdBtns.length).toBe(2);
+    expect(mdBtns[0].classList.contains('primary')).toBe(true);
+    expect(mdBtns[1].textContent?.trim()).toBe('Cancel');
+    f.componentInstance.ShowMarkdownToDeckModal = false;
+
+    f.componentInstance.ShowSheetEmbedModal = true;
+    componentCdr.markForCheck();
+    f.detectChanges();
+    const sheetActions = query(f, '[data-testid="slides-sheet-embed-modal"] .mj-slides-modal-actions');
+    const sheetBtns = sheetActions?.querySelectorAll('button') ?? [];
+    expect(sheetBtns.length).toBe(2);
+    expect(sheetBtns[0].classList.contains('primary')).toBe(true);
+    expect(sheetBtns[1].textContent?.trim()).toBe('Cancel');
   });
 });

@@ -43,7 +43,7 @@
           },
           "directActions": {
             "enabled": true,
-            "timeoutMs": 8000,
+            "timeoutMs": 30000,
             "actionNames": [
               "Get Record",
               "Scoped Search",

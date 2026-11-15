@@ -517,14 +517,14 @@ Configuration (`channels.config.InteractiveComponent`): `autoOpenDelegatedCompon
 
 ## 7b. The Artifact Workspace channel (`ArtifactWorkspace`)
 
-Collaborative Docs (`Markdown Document`), Slides (`Presentation`), and Sheets (`Excel Spreadsheet`) have their own dedicated channel — **`ArtifactWorkspace`** (`RealtimeArtifactWorkspaceChannel` in `@memberjunction/ng-conversations`, paired with `ArtifactWorkspaceChannelServer` in `@memberjunction/ai-agents`):
+Collaborative Docs (`Markdown Document`), Slides (`Presentation`), and Sheets (`Excel Spreadsheet`) have their own dedicated channel — **`ArtifactWorkspace`** (`ArtifactWorkspaceChannel`, registered as `'RealtimeArtifactWorkspaceChannel'` in `@memberjunction/ng-conversations`, paired with `ArtifactWorkspaceChannelServer` in `@memberjunction/ai-agents`):
 
 | Capability | Behavior |
 |---|---|
-| **Multi-instance tabs** | Hosts concurrent open Docs, Slides, and Sheets inside `<mj-artifact-viewer-panel>` tabs (`a1`, `a2`, …) beside the realtime call. |
+| **Multi-instance tabs** | Hosts concurrent open Docs, Slides, and Sheets inside `<mj-artifact-viewer-panel>` tabs (`w1`, `w2`, …) beside the realtime call. |
 | **Delegation partitioning** | `AcceptsDelegationArtifacts` inspects each `ParsedDelegationArtifact`'s `ArtifactTypeName` and `DriverClass`: collaborative Docs/Slides/Sheets route exclusively to `ArtifactWorkspace`, while React component specs continue routing exclusively to `InteractiveComponent`. |
-| **Verbs (`ContextTool`)** | `open` (mounts `{ artifactId, artifactVersionId?, versionNumber?, name?, artifactTypeName?, driverClass? }` or focuses an existing tab), `focus`, `show_version` (`versionId`, optional `versionNumber`), `refresh`, and `close`. |
-| **Live collaboration & presence** | Viewer tabs connect through `@memberjunction/ng-artifacts`' `/collaboration/yjs` Yjs session and render spoof-proof live agent presence (`<AgentName> · for <ActingForUserName>`) while `RealtimeArtifactWorkspaceSurfaceComponent` emits coalesced, payload-free `RecordChange` structural summaries (`kind`, `versionNumber`, active `sheetName`/`slideNumber`). |
+| **Verbs (`ContextTool`)** | `open` (mounts `{ artifactId, artifactVersionId?, versionNumber?, name?, artifactTypeName?, driverClass? }` or focuses an existing tab), `focus`, `show_version` (`artifactId?`, `versionId`, optional `versionNumber`), `refresh`, and `close`. |
+| **Live collaboration & presence** | Viewer tabs connect through `@memberjunction/ng-artifacts`' `/collaboration/yjs` Yjs session and render spoof-proof live agent presence (`<AgentName> · for <ActingForUserName>`) while `ArtifactWorkspaceChannel` emits coalesced `RecordChange` deltas over `GetState()` (`activeInstanceId` and per-instance `{ artifactId, artifactVersionId, versionNumber, name, artifactTypeName, driverClass, active }`). |
 
 ---
 

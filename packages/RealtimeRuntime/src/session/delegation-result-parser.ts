@@ -43,13 +43,22 @@ export interface ParsedDelegationResult {
   Artifacts?: ParsedDelegationArtifact[];
 }
 
+/** JSON-compatible recursive value type for parsed broker payloads. */
+type DelegationJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | DelegationJsonValue[]
+  | { [key: string]: DelegationJsonValue | undefined };
+
 /** The raw camelCase artifact entry shape the broker serializes. */
 interface RawDelegationArtifact {
-  artifactId?: unknown;
-  artifactVersionId?: unknown;
-  name?: unknown;
-  artifactTypeName?: unknown;
-  driverClass?: unknown;
+  artifactId?: DelegationJsonValue;
+  artifactVersionId?: DelegationJsonValue;
+  name?: DelegationJsonValue;
+  artifactTypeName?: DelegationJsonValue;
+  driverClass?: DelegationJsonValue;
 }
 
 /**
@@ -64,7 +73,7 @@ export function ParseDelegationResultJson(resultJson: string): ParsedDelegationR
       output?: string;
       error?: string;
       runId?: string;
-      artifacts?: unknown;
+      artifacts?: DelegationJsonValue;
     };
     return {
       Success: parsed.success !== false,
@@ -82,7 +91,7 @@ export function ParseDelegationResultJson(resultJson: string): ParsedDelegationR
  * `artifactVersionId` strings (malformed entries are dropped); a missing/blank `name`
  * falls back to `"Artifact"`. Returns `undefined` when nothing valid remains.
  */
-function parseArtifacts(raw: unknown): ParsedDelegationArtifact[] | undefined {
+function parseArtifacts(raw: DelegationJsonValue | undefined): ParsedDelegationArtifact[] | undefined {
   if (!Array.isArray(raw)) {
     return undefined;
   }

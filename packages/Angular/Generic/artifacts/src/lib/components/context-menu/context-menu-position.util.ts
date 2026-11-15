@@ -193,22 +193,29 @@ function isContentItem<TPayload>(item: ContextMenuItem<TPayload>): boolean {
 
 /**
  * Strips leading separators, trailing separators, consecutive duplicate separators,
- * and section headers whose section contains no actionable/content items.
+ * empty submenus (whose normalized children are empty), and section headers whose
+ * section contains no actionable/content items.
  * Recursively normalizes submenu children without mutating the input array.
  */
 export function NormalizeContextMenuItems<TPayload = ContextMenuCommandBase>(
   items: ReadonlyArray<ContextMenuItem<TPayload>>,
 ): ContextMenuItem<TPayload>[] {
-  // Pass 1: Recursively normalize submenu children
-  const withNormalizedChildren: ContextMenuItem<TPayload>[] = items.map((item) => {
+  // Pass 1: Recursively normalize submenu children and strip empty submenus
+  const withNormalizedChildren: ContextMenuItem<TPayload>[] = [];
+  for (const item of items) {
     if (item.Kind === 'submenu') {
-      return {
+      const normalizedChildren = NormalizeContextMenuItems(item.Children);
+      if (normalizedChildren.length === 0) {
+        continue;
+      }
+      withNormalizedChildren.push({
         ...item,
-        Children: NormalizeContextMenuItems(item.Children),
-      };
+        Children: normalizedChildren,
+      });
+    } else {
+      withNormalizedChildren.push(item);
     }
-    return item;
-  });
+  }
 
   // Pass 2: Drop headers that have no non-header/non-separator items in their section
   const withoutEmptyHeaders: ContextMenuItem<TPayload>[] = [];
@@ -300,6 +307,8 @@ export function ShouldBypassCustomContextMenu(event: MouseEvent): boolean {
   return event.defaultPrevented || event.shiftKey || IsNativeContextMenuTarget(event.target);
 }
 
+const SUPPRESS_CLICK_EXPIRY_MS = 800;
+
 /**
  * Lightweight touch long-press monitor for iOS/Android touchscreens where
  * `pointerdown` has `pointerType === 'touch'`. Cancels on drift > 10px,
@@ -320,6 +329,7 @@ export class TouchContextMenuMonitor {
   } | null = null;
 
   private suppressNextClick = false;
+  private suppressClickTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: TouchContextMenuMonitorOptions) {
     this.delayMs = options.DelayMs ?? 500;
@@ -386,6 +396,7 @@ export class TouchContextMenuMonitor {
     if (!this.suppressNextClick) {
       return false;
     }
+    this.clearSuppressClickTimer();
     this.suppressNextClick = false;
     return true;
   }
@@ -399,7 +410,15 @@ export class TouchContextMenuMonitor {
 
   public Destroy(): void {
     this.Cancel();
+    this.clearSuppressClickTimer();
     this.suppressNextClick = false;
+  }
+
+  private clearSuppressClickTimer(): void {
+    if (this.suppressClickTimer !== null) {
+      clearTimeout(this.suppressClickTimer);
+      this.suppressClickTimer = null;
+    }
   }
 
   private completeLongPress(): void {
@@ -408,7 +427,12 @@ export class TouchContextMenuMonitor {
       return;
     }
     this.activePress = null;
+    this.clearSuppressClickTimer();
     this.suppressNextClick = true;
+    this.suppressClickTimer = setTimeout(() => {
+      this.suppressClickTimer = null;
+      this.suppressNextClick = false;
+    }, SUPPRESS_CLICK_EXPIRY_MS);
     this.onLongPress({
       AnchorX: press.StartX,
       AnchorY: press.StartY,

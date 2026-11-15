@@ -595,8 +595,8 @@ Unlike binary document export actions (`__CreateDocument` -> `MJ: Files` `.pdf`/
 | Action Name | `DriverClass` | Purpose |
 |---|---|---|
 | **Create Governed Artifact** | `__CreateGovernedArtifact` | Create a permission-checked Doc, Presentation, or Spreadsheet (optional initial `Content` / `SheetNames` / `CollectionID`) and persist Version 1. |
-| **Inspect Governed Artifact** | `__InspectGovernedArtifact` | Inspect summary or execute read-only library tools (`get_sheets`, `get_outline`, `read_range`, `search_cells`), hydrating uncompacted edits from active Yjs rooms. |
-| **Mutate Governed Artifact** | `__MutateGovernedArtifact` | Execute single (`Tool` + `Input`) or batched (`Operations`) mutations (`upsert_live_table`, `write_cells`, `add_sheet`, `upsert_chart`, `insert_section`, `upsert_slide`) through live Yjs sync + agent presence events. |
+| **Inspect Governed Artifact** | `__InspectGovernedArtifact` | Inspect summary or execute read-only library tools (`get_outline`, `get_workbook_outline`, `read_deck`, `get_sheets`, `read_range`, `search_cells`), hydrating uncompacted edits from active Yjs rooms. |
+| **Mutate Governed Artifact** | `__MutateGovernedArtifact` | Execute single (`Tool` + `Input`) or batched (`Operations`) mutations (`upsert_live_table`, `write_cells`, `format_range`, `add_sheet`, `upsert_chart`, `insert_block_after`, `replace_block`, `add_slide`, `upsert_slide_element`) through live Yjs sync + agent presence events. |
 | **List Workspace Artifacts** | `__ListWorkspaceArtifacts` | List collaborative artifacts readable by `ContextUser` filtered by `CollectionID`, `TypeFilter`, or `Search`. |
 
 ## Action Execution Flow

@@ -3,10 +3,14 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
 import type { IMetadataProvider } from '@memberjunction/core';
-import { MJArtifactVersionEntity, SpreadsheetEngine } from '@memberjunction/core-entities';
+import { MJArtifactVersionEntity, SpreadsheetEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
-import { SpreadsheetArtifactViewerComponent } from './spreadsheet-artifact-viewer.component';
+import {
+  SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY,
+  SpreadsheetArtifactViewerComponent,
+} from './spreadsheet-artifact-viewer.component';
+import { DocumentCollaborationSession } from '../../services/document-collaboration.service';
 import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
 import { MjContextMenuComponent } from '../context-menu/mj-context-menu.component';
 
@@ -17,7 +21,7 @@ import { MjContextMenuComponent } from '../context-menu/mj-context-menu.componen
 })
 class SheetPluginViewerStubComponent {
   @Input() Provider: IMetadataProvider | null = null;
-  @Input() artifactVersion: unknown;
+  @Input() artifactVersion: MJArtifactVersionEntity | null = null;
   @Input() artifactTypeName = '';
   @Input() ArtifactTypeName = '';
   @Input() readonly = true;
@@ -34,9 +38,21 @@ class XlsxPreviewStubComponent {
 }
 
 afterEach(() => {
-  vi.restoreAllMocks();
   TestBed.resetTestingModule();
+  vi.restoreAllMocks();
 });
+
+function makeMockCollaborationSession(): DocumentCollaborationSession {
+  const session = Object.create(DocumentCollaborationSession.prototype) as DocumentCollaborationSession;
+  vi.spyOn(session, 'Destroy').mockImplementation(() => undefined);
+  vi.spyOn(session, 'SetActiveBlock').mockImplementation(() => undefined);
+  vi.spyOn(session, 'BatchUpdateSpreadsheetCells').mockImplementation(() => undefined);
+  vi.spyOn(session, 'UpdateWorkbookMetadata').mockImplementation(() => undefined);
+  vi.spyOn(session, 'UpdateWorksheetStructure').mockImplementation(() => undefined);
+  vi.spyOn(session, 'CanUndo', 'get').mockReturnValue(false);
+  vi.spyOn(session, 'CanRedo', 'get').mockReturnValue(false);
+  return session;
+}
 
 function makeSheetVersion(): MJArtifactVersionEntity {
   const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Revenue Forecast');
@@ -173,16 +189,18 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
     const splitter = query(f, '[data-testid="sheets-objects-splitter"]') as HTMLElement | null;
     expect(splitter).not.toBeNull();
 
-    // 2. Drag splitter upward by 90px -> persists PreferredObjectsPaneHeightPx = 360 in workbook & SourceJsonText
+    // 2. Drag splitter upward by 90px -> persists per-user via UserInfoEngine without mutating shared WorkbookSpec
+    const setSettingSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
     splitter!.dispatchEvent(new MouseEvent('mousedown', { clientY: 500, bubbles: true }));
     document.dispatchEvent(new MouseEvent('mousemove', { clientY: 410 }));
     document.dispatchEvent(new MouseEvent('mouseup', { clientY: 410 }));
     f.detectChanges();
-    expect(f.componentInstance.Workbook.PreferredObjectsPaneHeightPx).toBe(360);
+    expect(setSettingSpy).toHaveBeenCalledWith(SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY, '360');
+    expect(f.componentInstance.Workbook.PreferredObjectsPaneHeightPx).toBeUndefined();
     expect(f.componentInstance.ResolvedObjectsPaneHeightPx).toBe(360);
     const stripEl = query(f, '[data-testid="sheets-objects-strip"]') as HTMLElement | null;
     expect(stripEl?.style.height).toBe('360px');
-    expect(SpreadsheetEngine.Instance.ParseWorkbook(f.componentInstance.SourceJsonText).PreferredObjectsPaneHeightPx).toBe(360);
+    expect(SpreadsheetEngine.Instance.ParseWorkbook(f.componentInstance.SourceJsonText).PreferredObjectsPaneHeightPx).toBeUndefined();
 
     // 3. Toggle chart onto sheet canvas -> floating chart appears inside grid canvas, bottom strip hides (no other docked objects)
     const moveBtn = query(f, '[data-testid="sheet-chart-placement-chart-1"]') as HTMLButtonElement | null;
@@ -536,5 +554,241 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
     oleCard.dispatchEvent(preHandledEvt);
     f.detectChanges();
     expect(f.componentInstance.ContextMenuOpen).toBe(false);
+  });
+
+  it('sends Yjs cell deletes to BatchUpdateSpreadsheetCells on clearRangeByKind(all) and applyClipboardPaste(cut)', async () => {
+    const f = createEditableWorkbookFixture('Yjs Delete Sync', (wb) => {
+      const sheet1 = wb.Worksheets[0];
+      SpreadsheetEngine.Instance.SetCell(wb, sheet1.SheetID, 'A1', { Value: 100 });
+      SpreadsheetEngine.Instance.SetCell(wb, sheet1.SheetID, 'B1', { Formula: '=A1*2' });
+      const sheet2 = SpreadsheetEngine.Instance.AddWorksheet(wb, 'Sheet2', 10, 5);
+      SpreadsheetEngine.Instance.SetCell(wb, sheet2.SheetID, 'A1', { Value: 999 });
+    });
+
+    const session = makeMockCollaborationSession();
+    const batchSpy = vi.spyOn(session, 'BatchUpdateSpreadsheetCells');
+    f.componentInstance.CollaborationSession = session;
+
+    const sheet1 = f.componentInstance.Workbook.Worksheets[0];
+    const sheet2 = f.componentInstance.Workbook.Worksheets[1];
+    const cellA1RowId = sheet1.Cells['A1'].RowID;
+    const cellA1ColId = sheet1.Cells['A1'].ColumnID;
+    const cellB1RowId = sheet1.Cells['B1'].RowID;
+    const cellB1ColId = sheet1.Cells['B1'].ColumnID;
+
+    // 1. Clear A1 ('all') emits explicit { rowId, colId } deletes to BatchUpdateSpreadsheetCells
+    f.componentInstance.OnContextMenuCommand({ Type: 'clear-range', Kind: 'all', RangeA1: 'A1' });
+    expect(sheet1.Cells['A1']).toBeUndefined();
+    expect(batchSpy).toHaveBeenCalledWith(
+      sheet1.SheetID,
+      [],
+      [{ rowId: cellA1RowId, colId: cellA1ColId }],
+      f.componentInstance.Workbook,
+    );
+
+    batchSpy.mockClear();
+
+    // 2. Cut B1 (=A1*2) on Sheet1 and paste to C3 on Sheet2 -> syncs deletes on Sheet1 and shifted updates on Sheet2
+    f.componentInstance.SelectCell(1, 2);
+    f.componentInstance.OnContextMenuCommand({ Type: 'cut' });
+    f.componentInstance.SelectWorksheet(sheet2.SheetID);
+    f.componentInstance.SelectCell(3, 3);
+    f.componentInstance.OnContextMenuCommand({ Type: 'paste', Kind: 'all' });
+    await Promise.resolve();
+
+    expect(sheet1.Cells['B1']).toBeUndefined();
+    expect(sheet2.Cells['C3']?.Formula).toBe('=B3*2');
+    expect(batchSpy).toHaveBeenCalledWith(
+      sheet1.SheetID,
+      [],
+      [{ rowId: cellB1RowId, colId: cellB1ColId }],
+      f.componentInstance.Workbook,
+    );
+    expect(batchSpy).toHaveBeenCalledWith(
+      sheet2.SheetID,
+      [expect.objectContaining({ Formula: '=B3*2' })],
+      [],
+      f.componentInstance.Workbook,
+    );
+  });
+
+  it('remaps copied cell RowID/ColumnID and deep-clones objects with fresh IDs on duplicateWorksheetTab', () => {
+    const f = createEditableWorkbookFixture('Duplicate Tab', (wb) => {
+      const sheet = wb.Worksheets[0];
+      sheet.Rows[0].Height = 44;
+      sheet.Columns[0].Width = 24;
+      sheet.Columns[0].Header = 'Revenue';
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'A1', { Value: 42 });
+      sheet.Charts.push({
+        ChartID: 'chart-orig',
+        Title: 'Sales',
+        ChartType: 'bar',
+        SheetID: sheet.SheetID,
+        SourceRange: 'A1:A1',
+      });
+      sheet.LiveTables.push({
+        TableID: 'tbl-orig',
+        Title: 'Agents',
+        SourceType: 'EntityView',
+        EntityName: 'AI Agents',
+        AnchorCell: 'A2',
+        IncludeHeaders: true,
+        Mode: 'Live',
+      });
+      sheet.EmbeddedArtifacts.push({
+        EmbedID: 'emb-orig',
+        Title: 'Board',
+        ArtifactID: '11111111-1111-4111-8111-111111111111',
+        ArtifactTypeName: 'Whiteboard',
+      });
+      sheet.ProtectedRanges = [
+        {
+          RangeID: 'prot-orig',
+          Range: 'A1:A1',
+          LockedByUserID: 'user-owner',
+          AllowEditors: false,
+        },
+      ];
+    });
+
+    const session = makeMockCollaborationSession();
+    const metaSpy = vi.spyOn(session, 'UpdateWorkbookMetadata');
+    f.componentInstance.CollaborationSession = session;
+
+    const source = f.componentInstance.Workbook.Worksheets[0];
+    f.componentInstance.OnContextMenuCommand({ Type: 'duplicate-sheet', SheetID: source.SheetID });
+
+    expect(f.componentInstance.Workbook.Worksheets.length).toBe(2);
+    const copy = f.componentInstance.Workbook.Worksheets[1];
+    expect(copy.Rows[0].Height).toBe(44);
+    expect(copy.Columns[0].Width).toBe(24);
+    expect(copy.Columns[0].Header).toBe('Revenue');
+    expect(copy.Cells['A1']?.RawValue).toBe(42);
+    // Copied cell RowID/ColumnID must match the duplicated worksheet's own Rows/Columns, never the source tab's IDs
+    expect(copy.Cells['A1']?.RowID).toBe(copy.Rows[0].RowID);
+    expect(copy.Cells['A1']?.ColumnID).toBe(copy.Columns[0].ColumnID);
+    expect(copy.Cells['A1']?.RowID).not.toBe(source.Rows[0].RowID);
+    expect(copy.Cells['A1']?.ColumnID).not.toBe(source.Columns[0].ColumnID);
+    // Charts / LiveTables / EmbeddedArtifacts / ProtectedRanges must be deep-cloned with fresh IDs
+    expect(copy.Charts[0].ChartID).not.toBe('chart-orig');
+    expect(copy.Charts[0].SheetID).toBe(copy.SheetID);
+    expect(copy.LiveTables[0].TableID).not.toBe('tbl-orig');
+    expect(copy.EmbeddedArtifacts[0].EmbedID).not.toBe('emb-orig');
+    expect(copy.ProtectedRanges?.[0].RangeID).not.toBe('prot-orig');
+    expect(metaSpy).toHaveBeenCalledWith(f.componentInstance.Workbook);
+  });
+
+  it('blocks non-owner with CanShare=true from bypassing protected ranges while allowing the owner', () => {
+    const f = createEditableWorkbookFixture('Protected Lock', (wb) => {
+      const sheet = wb.Worksheets[0];
+      SpreadsheetEngine.Instance.SetCell(wb, sheet.SheetID, 'A1', { Value: 500 });
+      sheet.ProtectedRanges = [
+        {
+          RangeID: 'prot-1',
+          Range: 'A1:B2',
+          LockedByUserID: 'user-real-owner',
+          AllowEditors: false,
+        },
+      ];
+    });
+
+    const nonOwnerProvider: Partial<IMetadataProvider> = {
+      Entities: [],
+      CurrentUser: { ID: 'user-shared-editor', Name: 'Shared User', Email: 'share@example.com' } as IMetadataProvider['CurrentUser'],
+    };
+    f.componentInstance.Provider = nonOwnerProvider as IMetadataProvider;
+    f.componentInstance.Permissions = {
+      CanRead: true,
+      CanEdit: true,
+      CanShare: true,
+      Source: 'Share',
+    };
+
+    // Non-owner even with CanShare=true MUST be blocked from clearing protected cell A1
+    f.componentInstance.OnContextMenuCommand({ Type: 'clear-range', Kind: 'all', RangeA1: 'A1' });
+    expect(f.componentInstance.Workbook.Worksheets[0].Cells['A1']?.RawValue).toBe(500);
+    expect(f.componentInstance.StatusBannerMessage).toContain('protected');
+
+    // Actual artifact owner CAN edit/clear the protected range
+    const ownerProvider: Partial<IMetadataProvider> = {
+      Entities: [],
+      CurrentUser: { ID: 'user-real-owner', Name: 'Owner User', Email: 'owner@example.com' } as IMetadataProvider['CurrentUser'],
+    };
+    f.componentInstance.Provider = ownerProvider as IMetadataProvider;
+    f.componentInstance.Permissions = {
+      CanRead: true,
+      CanEdit: true,
+      CanShare: true,
+      Source: 'Owner',
+    };
+    f.componentInstance.OnContextMenuCommand({ Type: 'clear-range', Kind: 'all', RangeA1: 'A1' });
+    expect(f.componentInstance.Workbook.Worksheets[0].Cells['A1']).toBeUndefined();
+  });
+
+  it('edits an existing LiveTable in place via EditingLiveTableID instead of pushing a duplicate', async () => {
+    const f = createEditableWorkbookFixture('Live Table Edit', (wb) => {
+      wb.Worksheets[0].LiveTables.push({
+        TableID: 'tbl-edit-1',
+        Title: 'Original Agents',
+        SourceType: 'EntityView',
+        EntityName: 'AI Agents',
+        AnchorCell: 'A1',
+        IncludeHeaders: true,
+        Mode: 'Live',
+      });
+    });
+
+    f.componentInstance.OnContextMenuCommand({ Type: 'open-live-table-editor', TableID: 'tbl-edit-1' });
+    f.detectChanges();
+
+    expect(f.componentInstance.ShowAddLiveTableModal).toBe(true);
+    expect(f.componentInstance.EditingLiveTableID).toBe('tbl-edit-1');
+    expect(f.componentInstance.NewLiveTableTitle).toBe('Original Agents');
+
+    f.componentInstance.NewLiveTableTitle = 'Updated Agents';
+    await f.componentInstance.ConfirmAddLiveTable();
+    f.detectChanges();
+
+    expect(f.componentInstance.ActiveSheet.LiveTables.length).toBe(1);
+    expect(f.componentInstance.ActiveSheet.LiveTables[0].TableID).toBe('tbl-edit-1');
+    expect(f.componentInstance.ActiveSheet.LiveTables[0].Title).toBe('Updated Agents');
+  });
+
+  it('surfaces inline error card for invalid-UUID embedded artifact and opens inline dimension dialog instead of window.prompt', async () => {
+    const promptSpy = vi.spyOn(window, 'prompt').mockImplementation(() => '99');
+    const f = createEditableWorkbookFixture('Embed Error & Dimension Modal', (wb) => {
+      wb.Worksheets[0].EmbeddedArtifacts.push({
+        EmbedID: 'emb-bad-uuid',
+        Title: 'Broken Embed',
+        ArtifactID: 'not-a-valid-uuid',
+        ArtifactTypeName: 'Whiteboard',
+      });
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    f.detectChanges();
+
+    const errCard = query(f, '[data-testid="sheet-ole-error-emb-bad-uuid"]');
+    expect(errCard).not.toBeNull();
+    expect(f.componentInstance.EmbeddedArtifactErrors['emb-bad-uuid']).toContain('is not a valid artifact UUID');
+
+    // Context menu Set Row Height opens inline modal without calling window.prompt
+    f.componentInstance.OnContextMenuCommand({ Type: 'set-row-height', StartRowIndex: 1, EndRowIndex: 1 });
+    f.detectChanges();
+    expect(promptSpy).not.toHaveBeenCalled();
+    expect(query(f, '[data-testid="sheets-dimension-modal"]')).not.toBeNull();
+
+    f.componentInstance.PendingDimensionPrompt!.Value = 64;
+    f.componentInstance.ConfirmDimensionPrompt();
+    f.detectChanges();
+    expect(f.componentInstance.ActiveSheet.Rows[0].Height).toBe(64);
+    expect(query(f, '[data-testid="sheets-dimension-modal"]')).toBeNull();
+
+    // Native capture-phase click suppression works after long-press
+    const shell = query(f, '.mj-sheets-shell') as HTMLElement;
+    expect(shell).not.toBeNull();
+    f.componentInstance.ConnectionStatus = 'connected';
+    f.componentInstance.Collaborators = [];
+    expect(f.componentInstance.Collaborators.some((c) => c.IsAgent === true)).toBe(false);
   });
 });

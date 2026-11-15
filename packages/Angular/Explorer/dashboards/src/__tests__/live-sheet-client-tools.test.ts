@@ -2,15 +2,25 @@
  * Unit tests for LiveSheetClientToolHelper and ExtractActionOutputParams
  * (`shared/live-sheet-client-tool.helper.ts`).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { ActionEngineBase, ActionParam, RunActionParams, type MJActionEntityExtended } from '@memberjunction/actions-base';
+import { type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
+  CreateGraphQLGovernedActionExecutor,
+  CreateLiveSheetHelperForProvider,
   ExtractActionOutputParams,
   LiveSheetClientToolHelper,
   type GovernedActionExecutionRequest,
   type GovernedActionExecutionResult,
+  type GovernedArtifactRollback,
 } from '../shared/live-sheet-client-tool.helper';
 
 describe('live-sheet-client-tool.helper', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe('ExtractActionOutputParams', () => {
     it('extracts Name -> Value pairs from ActionParam arrays', () => {
       const result = ExtractActionOutputParams([
@@ -18,6 +28,20 @@ describe('live-sheet-client-tool.helper', () => {
         { Name: 'VersionNumber', Value: 2, Type: 'Output' },
       ]);
       expect(result).toEqual({ ArtifactID: 'art-1', VersionNumber: 2 });
+    });
+
+    it('unwraps CopyScalarsAndArrays index-keyed object maps of ActionParam entries', () => {
+      const copyScalarsOutput = {
+        '0': { Name: 'ArtifactID', Value: 'art-copy-1', Type: 'Output' },
+        '1': { Name: 'VersionID', Value: 'ver-copy-1', Type: 'Output' },
+        '2': { Name: 'VersionNumber', Value: 1, Type: 'Output' },
+      };
+
+      expect(ExtractActionOutputParams(copyScalarsOutput)).toEqual({
+        ArtifactID: 'art-copy-1',
+        VersionID: 'ver-copy-1',
+        VersionNumber: 1,
+      });
     });
 
     it('copies keys from plain object payloads and handles empty inputs', () => {
@@ -296,6 +320,113 @@ describe('live-sheet-client-tool.helper', () => {
       const res = await helper.CreateLiveSheetFromView({ EntityName: '' });
       expect(res.Success).toBe(false);
       expect(executor).not.toHaveBeenCalled();
+    });
+
+    it('rolls back step-1 artifact when step-2 fails, and skips __CreateGovernedArtifact when ExistingArtifactID is provided', async () => {
+      const rollbackArtifact = vi.fn<GovernedArtifactRollback>(async () => true);
+      const executor = vi.fn(async (req: GovernedActionExecutionRequest): Promise<GovernedActionExecutionResult> => {
+        if (req.ActionName === '__CreateGovernedArtifact') {
+          return {
+            Success: true,
+            OutputParams: { ArtifactID: 'art-orphan', VersionID: 'ver-orphan', VersionNumber: 1 },
+          };
+        }
+        return {
+          Success: false,
+          Message: 'Entity view permission denied',
+          OutputParams: {},
+        };
+      });
+
+      const helper = new LiveSheetClientToolHelper(executor, rollbackArtifact);
+      const failedRes = await helper.CreateLiveSheetFromView({ EntityName: 'MJ: Users' });
+      expect(failedRes.Success).toBe(false);
+      expect(failedRes.ArtifactID).toBeUndefined();
+      expect(rollbackArtifact).toHaveBeenCalledWith('art-orphan', 'ver-orphan');
+
+      // ExistingArtifactID path skips __CreateGovernedArtifact and mutates directly
+      const reuseCalls: string[] = [];
+      const reuseExecutor = vi.fn(async (req: GovernedActionExecutionRequest): Promise<GovernedActionExecutionResult> => {
+        reuseCalls.push(req.ActionName);
+        return {
+          Success: true,
+          OutputParams: {
+            ArtifactID: 'art-v1',
+            VersionID: 'ver-v2',
+            VersionNumber: 2,
+            Results: [{ ok: true, data: { boundingRange: 'A1:B5', rowCount: 4 } }],
+          },
+        };
+      });
+
+      const reuseHelper = new LiveSheetClientToolHelper(reuseExecutor);
+      const reused = await reuseHelper.CreateLiveSheetFromQuery({
+        QueryID: 'q-1',
+        QueryName: 'Sales',
+        ExistingArtifactID: 'art-v1',
+      });
+      expect(reused.Success).toBe(true);
+      expect(reuseCalls).toEqual(['__MutateGovernedArtifact']);
+      expect(reused.ArtifactID).toBe('art-v1');
+      expect(reused.VersionNumber).toBe(2);
+    });
+  });
+
+  describe('CreateGraphQLGovernedActionExecutor & CreateLiveSheetHelperForProvider', () => {
+    it('falls back to res.Message JSON when Result is empty and resolves actions via ActionEngineBase.GetProviderInstance', async () => {
+      const fakeUser = { ID: 'user-1', Name: 'Tester' } as UserInfo;
+      const fakeProvider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+
+      const getProviderSpy = vi.spyOn(ActionEngineBase, 'GetProviderInstance').mockReturnValue({
+        Actions: [
+          {
+            ID: 'act-create-1',
+            Name: 'Create Governed Artifact',
+            DriverClass: '__CreateGovernedArtifact',
+          } as Partial<MJActionEntityExtended> as MJActionEntityExtended,
+        ],
+        Config: vi.fn(async () => undefined),
+      } as Partial<ActionEngineBase> as ActionEngineBase);
+
+      const runActionSpy = vi.spyOn(GraphQLActionClient.prototype, 'RunAction').mockResolvedValue({
+        RunParams: new RunActionParams(),
+        Success: true,
+        Message: JSON.stringify({
+          artifactId: 'art-from-msg',
+          versionId: 'ver-from-msg',
+          versionNumber: 1,
+          name: 'From Message',
+        }),
+        Result: undefined as never,
+      });
+
+      const executor = CreateGraphQLGovernedActionExecutor(fakeProvider, fakeUser);
+      const res = await executor({
+        ActionName: '__CreateGovernedArtifact',
+        Params: [{ Name: 'Name', Value: 'From Message', Type: 'Input' }],
+      });
+
+      expect(getProviderSpy).toHaveBeenCalledWith(fakeProvider, ActionEngineBase);
+      expect(runActionSpy).toHaveBeenCalledWith('act-create-1', expect.arrayContaining([expect.any(ActionParam)]));
+      expect(res.Success).toBe(true);
+      expect(res.OutputParams['ArtifactID']).toBe('art-from-msg');
+      expect(res.OutputParams['VersionID']).toBe('ver-from-msg');
+      expect(res.OutputParams['VersionNumber']).toBe(1);
+    });
+
+    it('CreateLiveSheetHelperForProvider returns null without GraphQLDataProvider and builds helper with one', () => {
+      const fakeUser = { ID: 'user-1' } as UserInfo;
+      const nonGraphQLProvider = {} as IMetadataProvider;
+      const fakeGraphQLProvider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+      Object.defineProperty(fakeGraphQLProvider, 'CurrentUser', {
+        value: fakeUser,
+        configurable: true,
+      });
+
+      expect(CreateLiveSheetHelperForProvider(null)).toBeNull();
+      expect(CreateLiveSheetHelperForProvider(undefined)).toBeNull();
+      expect(CreateLiveSheetHelperForProvider(nonGraphQLProvider, fakeUser)).toBeNull();
+      expect(CreateLiveSheetHelperForProvider(fakeGraphQLProvider)).toBeInstanceOf(LiveSheetClientToolHelper);
     });
   });
 });

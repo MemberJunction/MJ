@@ -134,10 +134,11 @@ const FALLBACK_ARTIFACT_RESOURCE_TYPES = new Set(['report', 'dashboard']);
 function matchesAttachedArtifactTarget(
   rawResourceId: string | undefined,
   artifacts: readonly MessageArtifactRef[],
-  pendingArtifacts: readonly MessagePendingArtifactRef[]
+  pendingArtifacts: readonly MessagePendingArtifactRef[],
+  suppressNonUuidPlaceholder: boolean
 ): boolean {
   const trimmed = rawResourceId?.trim();
-  if (!trimmed || !IsValidUUID(trimmed)) {
+  if (!trimmed) {
     return true;
   }
   const normalizedName = trimmed.toLowerCase();
@@ -159,7 +160,7 @@ function matchesAttachedArtifactTarget(
       return true;
     }
   }
-  return false;
+  return suppressNonUuidPlaceholder && !IsValidUUID(trimmed);
 }
 
 /**
@@ -185,8 +186,11 @@ export function FilterRedundantArtifactCommands(
     }
     const resourceCmd = cmd as OpenResourceCommand;
     const rt = (resourceCmd.resourceType ?? '').trim().toLowerCase();
-    if (ARTIFACT_RESOURCE_TYPES.has(rt) || FALLBACK_ARTIFACT_RESOURCE_TYPES.has(rt)) {
-      return !matchesAttachedArtifactTarget(resourceCmd.resourceId, artifacts, pendingArtifacts);
+    if (ARTIFACT_RESOURCE_TYPES.has(rt)) {
+      return !matchesAttachedArtifactTarget(resourceCmd.resourceId, artifacts, pendingArtifacts, true);
+    }
+    if (FALLBACK_ARTIFACT_RESOURCE_TYPES.has(rt)) {
+      return !matchesAttachedArtifactTarget(resourceCmd.resourceId, artifacts, pendingArtifacts, false);
     }
     return true;
   });

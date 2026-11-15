@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-import type {
-  CollaboratorAgentLocation,
-  CollaboratorPresence,
+import {
+  SanitizeAwarenessColor,
+  type CollaboratorAgentLocation,
+  type CollaboratorPresence,
 } from '../../services/document-collaboration.service';
 
 /**
@@ -90,7 +91,7 @@ export function FormatAgentBaseName(agent: CollaboratorPresence): string {
             class="mj-agent-pill"
             [class.is-working]="IsAgentWorking(agent)"
             [class.is-settled]="agent.AgentPhase === 'settled'"
-            [style.--mj-agent-accent]="agent.Color || 'var(--mj-brand-primary)'"
+            [style.--mj-agent-accent]="SanitizeColor(agent.Color)"
             [title]="BuildTooltip(agent)"
             [attr.data-testid]="'agent-presence-pill-' + agent.ClientID"
             (click)="OnSelectAgent(agent)"
@@ -131,7 +132,7 @@ export function FormatAgentBaseName(agent: CollaboratorPresence): string {
         padding: 4px 10px 4px 7px;
         border-radius: 999px;
         border: 1px solid color-mix(in srgb, var(--mj-agent-accent, var(--mj-brand-primary)) 45%, var(--mj-border-default));
-        background: color-mix(in srgb, var(--mj-agent-accent, var(--mj-brand-primary)) 10%, var(--mj-bg-surface));
+        background-color: color-mix(in srgb, var(--mj-agent-accent, var(--mj-brand-primary)) 10%, var(--mj-bg-surface));
         color: var(--mj-text-primary);
         font-size: 12px;
         line-height: 1.2;
@@ -140,7 +141,7 @@ export function FormatAgentBaseName(agent: CollaboratorPresence): string {
         max-width: 100%;
       }
       .mj-agent-pill:hover {
-        background: color-mix(in srgb, var(--mj-agent-accent, var(--mj-brand-primary)) 18%, var(--mj-bg-surface-hover));
+        background-color: color-mix(in srgb, var(--mj-agent-accent, var(--mj-brand-primary)) 18%, var(--mj-bg-surface-hover));
         border-color: var(--mj-agent-accent, var(--mj-brand-primary));
       }
       .mj-agent-pill.is-settled {
@@ -154,7 +155,7 @@ export function FormatAgentBaseName(agent: CollaboratorPresence): string {
         width: 20px;
         height: 20px;
         border-radius: 50%;
-        background: var(--mj-agent-accent, var(--mj-brand-primary));
+        background-color: var(--mj-agent-accent, var(--mj-brand-primary));
         color: var(--mj-text-inverse);
         font-size: 10px;
         flex-shrink: 0;
@@ -213,7 +214,7 @@ export function FormatAgentBaseName(agent: CollaboratorPresence): string {
         background: var(--mj-bg-surface-sunken);
         border: 1px solid var(--mj-border-subtle);
         color: var(--mj-text-primary);
-        font-family: monospace;
+        font-family: var(--mj-font-family-mono);
         font-size: 11px;
         white-space: nowrap;
       }
@@ -256,6 +257,10 @@ export class ArtifactAgentPresenceBarComponent {
       parts.push(`Location: ${coord}`);
     }
     return parts.join(' · ');
+  }
+
+  public SanitizeColor(rawColor: string | null | undefined): string {
+    return SanitizeAwarenessColor(rawColor);
   }
 
   public OnSelectAgent(agent: CollaboratorPresence): void {

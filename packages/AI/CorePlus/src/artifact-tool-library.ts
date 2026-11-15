@@ -19,6 +19,22 @@
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 /**
+ * JSON-compatible recursive value type for artifact tool inputs, schemas, and payloads.
+ */
+export type ArtifactJsonValue =
+    | string
+    | number
+    | boolean
+    | null
+    | ArtifactJsonValue[]
+    | { [key: string]: ArtifactJsonValue | undefined };
+
+/**
+ * Strongly typed dictionary of JSON-compatible arguments or schema fields for artifact tools.
+ */
+export type ArtifactToolArgs = Record<string, ArtifactJsonValue | undefined>;
+
+/**
  * Optional execution context supplied by host callers (e.g. `ArtifactToolManager` or
  * `GovernedArtifactService`) when invoking an artifact tool library on the server.
  * Enables live data materialization (`RefreshLiveTables`, `EvaluateMjCustomFunctions`,
@@ -27,6 +43,12 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 export interface ArtifactToolExecutionContext {
     /** Authenticated human user on whose behalf the tool is executing (enforces RLS/FLS/Query perms). */
     contextUser?: UserInfo;
+    /** Trusted ID of the acting user populated by host callers (never supplied by untrusted tool input). */
+    actorUserId?: string;
+    /** Trusted ID of the artifact's owner populated by host callers for owner-only lock operations. */
+    ownerUserId?: string;
+    /** Trusted edit-permission flag populated by host callers indicating whether the actor may mutate this artifact. */
+    isEditor?: boolean;
     /** Request-scoped metadata provider (preferred over falling back to global `Metadata.Provider`). */
     provider?: IMetadataProvider;
     /** Underlying `MJ: Artifacts` UUID (used for `=MJ.IMPORTRANGE` resolution and audit). */
@@ -42,12 +64,12 @@ export interface ArtifactToolExecutionContext {
 export interface ArtifactToolDefinition {
     name: string;
     description: string;
-    inputSchema: Record<string, unknown>;
+    inputSchema: ArtifactToolArgs;
 }
 
 export interface ArtifactToolResult {
     success: boolean;
-    data: unknown;
+    data: ArtifactJsonValue | object | undefined;
     errorMessage?: string;
 }
 
@@ -68,7 +90,7 @@ export abstract class BaseArtifactToolLibrary {
      */
     public async InvokeTool(
         toolName: string,
-        input: Record<string, unknown>,
+        input: ArtifactToolArgs,
         artifactContent: string | Buffer,
         context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
@@ -100,7 +122,7 @@ export abstract class BaseArtifactToolLibrary {
      */
     protected async invokeSubclassTool(
         toolName: string,
-        _input: Record<string, unknown>,
+        _input: ArtifactToolArgs,
         _artifactContent: string | Buffer,
         _context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
@@ -192,5 +214,12 @@ export function ResolveEmbeddedArtifactId(
         };
     }
 
-    return { ok: true, artifactId: trimmed };
+    if (EMBEDDED_ARTIFACT_UUID_RE.test(trimmed)) {
+        return { ok: true, artifactId: trimmed };
+    }
+
+    return {
+        ok: false,
+        errorMessage: `Invalid artifactId '${trimmed}': expected a valid MJ: Artifacts UUID.`,
+    };
 }

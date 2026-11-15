@@ -12,6 +12,7 @@ export const COLLABORATIVE_ARTIFACT_TYPES: ReadonlySet<string> = new Set([
   'excel spreadsheet',
   'presentation',
   'whiteboard diagram',
+  'whiteboard',
 ]);
 
 export const COLLABORATIVE_ARTIFACT_DRIVERS: ReadonlySet<string> = new Set([

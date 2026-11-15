@@ -136,6 +136,10 @@ export interface SlidesContextMenuSnapshot {
   readonly RegionLockedReason?: string;
   readonly CanToggleRegionLock?: boolean;
   readonly RegionLockToggleDisabledReason?: string;
+  readonly CanSwapEarlier?: boolean;
+  readonly SwapEarlierDisabledReason?: string;
+  readonly CanSwapLater?: boolean;
+  readonly SwapLaterDisabledReason?: string;
   readonly IsOleBlock?: boolean;
   readonly IsOleEditing?: boolean;
   readonly IsSheetBackedBlock?: boolean;
@@ -792,7 +796,6 @@ function buildSlideRegionMenu(
   const regionId = region.RegionID;
   const canEditRegion = ctx.IsEditable && Boolean(ctx.CanEditRegion ?? ctx.CanEditSlide);
   const regionLockReason = ctx.RegionLockedReason || ctx.SlideLockedReason || DEFAULT_LOCKED_REGION_REASON;
-  const slideLockReason = ctx.SlideLockedReason || DEFAULT_LOCKED_SLIDE_REASON;
   const hasBlock = region.Kind === 'mj-block' || Boolean(region.BlockSpec);
 
   if (ctx.IsEditable) {
@@ -895,15 +898,27 @@ function buildSlideRegionMenu(
     if (totalRegions > 1) {
       const atFirst = regionIdx <= 0;
       const atLast = regionIdx >= totalRegions - 1;
+      const canSwapEarlier = canEditRegion && (ctx.CanSwapEarlier ?? true);
+      const swapEarlierReason = !canEditRegion
+        ? regionLockReason
+        : ctx.CanSwapEarlier === false
+          ? (ctx.SwapEarlierDisabledReason || DEFAULT_LOCKED_REGION_REASON)
+          : undefined;
+      const canSwapLater = canEditRegion && (ctx.CanSwapLater ?? true);
+      const swapLaterReason = !canEditRegion
+        ? regionLockReason
+        : ctx.CanSwapLater === false
+          ? (ctx.SwapLaterDisabledReason || DEFAULT_LOCKED_REGION_REASON)
+          : undefined;
       items.push(
         {
           Kind: 'action',
           ID: 'swap-region-earlier',
           Label: 'Move Region Earlier (Swap Left)',
           Icon: 'fa-solid fa-arrow-left-long',
-          Disabled: !ctx.CanEditSlide || atFirst,
-          DisabledReason: !ctx.CanEditSlide
-            ? slideLockReason
+          Disabled: !canSwapEarlier || atFirst,
+          DisabledReason: !canSwapEarlier
+            ? swapEarlierReason
             : atFirst
               ? 'Region is already first on this slide'
               : undefined,
@@ -914,9 +929,9 @@ function buildSlideRegionMenu(
           ID: 'swap-region-later',
           Label: 'Move Region Later (Swap Right)',
           Icon: 'fa-solid fa-arrow-right-long',
-          Disabled: !ctx.CanEditSlide || atLast,
-          DisabledReason: !ctx.CanEditSlide
-            ? slideLockReason
+          Disabled: !canSwapLater || atLast,
+          DisabledReason: !canSwapLater
+            ? swapLaterReason
             : atLast
               ? 'Region is already last on this slide'
               : undefined,

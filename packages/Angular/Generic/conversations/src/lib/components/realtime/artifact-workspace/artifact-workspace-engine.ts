@@ -1,4 +1,5 @@
 import { Observable, Subject } from 'rxjs';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
   DEFAULT_ARTIFACT_WORKSPACE_CONFIG,
   type ArtifactWorkspaceOpenPayload,
@@ -48,9 +49,8 @@ export class ArtifactWorkspaceEngine {
   }
 
   public FindByArtifact(artifactId: string): ArtifactWorkspaceRecord | undefined {
-    const target = artifactId.trim().toLowerCase();
     for (const record of this.records.values()) {
-      if (record.ArtifactID.trim().toLowerCase() === target) {
+      if (UUIDsEqual(record.ArtifactID, artifactId)) {
         return record;
       }
     }
@@ -139,6 +139,54 @@ export class ArtifactWorkspaceEngine {
     record.LastUpdatedAt = Date.now();
     this.changedSubject.next({ Kind: 'updated', InstanceID: instanceId });
     this.TriggerRefresh(record.ArtifactID, record.VersionNumber ?? 1);
+    return record;
+  }
+
+  /**
+   * Updates metadata/permissions on an already-open tab (e.g. after session state re-hydration)
+   * without triggering a full version reload unless version fields changed.
+   */
+  public UpdateRecordMetadata(
+    instanceId: string,
+    patch: Partial<
+      Pick<
+        ArtifactWorkspaceRecord,
+        'ArtifactVersionID' | 'VersionNumber' | 'Name' | 'ArtifactTypeName' | 'DriverClass' | 'CanEdit'
+      >
+    >,
+  ): ArtifactWorkspaceRecord | undefined {
+    const record = this.records.get(instanceId);
+    if (!record) {
+      return undefined;
+    }
+    let changed = false;
+    if (patch.ArtifactVersionID !== undefined && patch.ArtifactVersionID !== record.ArtifactVersionID) {
+      record.ArtifactVersionID = patch.ArtifactVersionID;
+      changed = true;
+    }
+    if (typeof patch.VersionNumber === 'number' && patch.VersionNumber > 0 && patch.VersionNumber !== record.VersionNumber) {
+      record.VersionNumber = patch.VersionNumber;
+      changed = true;
+    }
+    if (patch.Name && patch.Name !== record.Name) {
+      record.Name = patch.Name;
+      changed = true;
+    }
+    if (patch.ArtifactTypeName && patch.ArtifactTypeName !== record.ArtifactTypeName) {
+      record.ArtifactTypeName = patch.ArtifactTypeName;
+      changed = true;
+    }
+    if (patch.DriverClass && patch.DriverClass !== record.DriverClass) {
+      record.DriverClass = patch.DriverClass;
+      changed = true;
+    }
+    if (typeof patch.CanEdit === 'boolean' && patch.CanEdit !== record.CanEdit) {
+      record.CanEdit = patch.CanEdit;
+      changed = true;
+    }
+    if (changed) {
+      this.changedSubject.next({ Kind: 'updated', InstanceID: instanceId });
+    }
     return record;
   }
 

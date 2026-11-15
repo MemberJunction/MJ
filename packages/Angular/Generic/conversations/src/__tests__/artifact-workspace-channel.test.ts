@@ -1,7 +1,7 @@
 import '@angular/compiler';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
-import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
+import { ArtifactPermissionEngine, type ResolvedArtifactPermissions } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import {
@@ -217,22 +217,19 @@ describe('ArtifactWorkspaceChannel & Partitioning with InteractiveComponentChann
       const v2Id = 'cccccccc-2222-4222-8222-222222222222';
       let canEditResponse = false;
 
-      vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(async () => ({
-        ArtifactID: artId,
-        UserID: 'u-1',
-        IsOwner: canEditResponse,
-        CanRead: true,
-        CanEdit: canEditResponse,
-        CanDelete: false,
-        CanShare: false,
-        HasDirectPermissions: true,
-        GrantedBy: 'owner',
-      }));
+      vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(
+        async (): Promise<ResolvedArtifactPermissions> => ({
+          ArtifactID: artId,
+          CanRead: true,
+          CanEdit: canEditResponse,
+          CanDelete: false,
+          CanShare: false,
+          Source: canEditResponse ? 'Owner' : 'ArtifactPermission',
+          Reason: 'test fixture',
+        }),
+      );
 
       const fakeUser = { ID: 'u-1', Name: 'Reader User' } as UserInfo;
-      const fakeProvider: Partial<IMetadataProvider> = {
-        CurrentUser: fakeUser,
-      };
       const runViewMock = vi.fn(async (params: RunViewParams) => {
         if (params.EntityName === 'MJ: Artifact Versions') {
           const isV2 = String(params.ExtraFilter ?? '').includes(v2Id);
@@ -258,7 +255,10 @@ describe('ArtifactWorkspaceChannel & Partitioning with InteractiveComponentChann
         }
         return { Success: true, Results: [], TotalRowCount: 0 };
       });
-      (fakeProvider as { RunView?: unknown }).RunView = runViewMock;
+      const fakeProvider: Partial<IMetadataProvider> & { RunView: typeof runViewMock } = {
+        CurrentUser: fakeUser,
+        RunView: runViewMock,
+      };
 
       // 1. SwapToNewerVersions = false preserves v1 & read-only CanEdit=false
       const readOnlyChannel = new ArtifactWorkspaceChannel();
@@ -311,6 +311,342 @@ describe('ArtifactWorkspaceChannel & Partitioning with InteractiveComponentChann
       expect(rwChannel.Engine.Instances[0]?.ArtifactVersionID).toBe(v2Id);
       expect(refreshedEvents).toContainEqual({ artifactId: artId, versionNumber: 2 });
       rwChannel.Dispose();
+    });
+
+    it('rejects missing or unreadable artifacts in Open and OnDelegationArtifacts even when params.name is provided (G-P0-1)', async () => {
+      const missingArtId = 'aaaaaaaa-1111-4111-8111-111111111111';
+      const missingVerId = 'bbbbbbbb-1111-4111-8111-111111111111';
+      const deniedArtId = 'aaaaaaaa-2222-4222-8222-222222222222';
+      const deniedVerId = 'bbbbbbbb-2222-4222-8222-222222222222';
+
+      const permSpy = vi
+        .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
+        .mockImplementation(
+          async (_provider, artifactId): Promise<ResolvedArtifactPermissions> => ({
+            ArtifactID: artifactId ?? '',
+            CanRead: false,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Denied',
+            Reason: 'denied',
+          }),
+        );
+
+      const fakeUser = { ID: 'u-1', Name: 'Restricted User' } as UserInfo;
+      const runViewMock = vi.fn(async (params: RunViewParams) => {
+        const filter = String(params.ExtraFilter ?? '');
+        if (params.EntityName === 'MJ: Artifact Versions') {
+          if (filter.includes(deniedVerId) || filter.includes(deniedArtId)) {
+            return {
+              Success: true,
+              Results: [{ ID: deniedVerId, ArtifactID: deniedArtId, VersionNumber: 1, Name: 'Confidential v1' }],
+              TotalRowCount: 1,
+            };
+          }
+          return { Success: true, Results: [], TotalRowCount: 0 };
+        }
+        if (params.EntityName === 'MJ: Artifacts') {
+          if (filter.includes(deniedArtId)) {
+            return {
+              Success: true,
+              Results: [{ ID: deniedArtId, Name: 'Confidential Deck', Type: 'Presentation' }],
+              TotalRowCount: 1,
+            };
+          }
+          return { Success: true, Results: [], TotalRowCount: 0 };
+        }
+        return { Success: true, Results: [], TotalRowCount: 0 };
+      });
+      const fakeProvider: Partial<IMetadataProvider> & { RunView: typeof runViewMock } = {
+        CurrentUser: fakeUser,
+        RunView: runViewMock,
+      };
+
+      const channel = new ArtifactWorkspaceChannel();
+      const log: ChannelLog = { Notes: [] };
+      await channel.Initialize({
+        ...MakeContext(log),
+        Provider: fakeProvider as IMetadataProvider,
+      });
+
+      try {
+        const missingRes = await channel.Open({
+          artifactId: missingArtId,
+          artifactVersionId: missingVerId,
+          name: 'Spoofed Client Name',
+        });
+        expect(missingRes.Success).toBe(false);
+        expect(missingRes.ErrorCode).toBe('not_found');
+        expect(channel.Engine.Instances).toHaveLength(0);
+        expect(permSpy).not.toHaveBeenCalledWith(expect.anything(), missingArtId, expect.anything());
+
+        const deniedRes = await channel.Open({
+          artifactId: deniedArtId,
+          artifactVersionId: deniedVerId,
+          name: 'Spoofed Client Name',
+        });
+        expect(deniedRes.Success).toBe(false);
+        expect(deniedRes.ErrorCode).toBe('access_denied');
+        expect(channel.Engine.Instances).toHaveLength(0);
+
+        await channel.OnDelegationArtifacts([
+          {
+            ArtifactID: missingArtId,
+            ArtifactVersionID: missingVerId,
+            Name: 'Spoofed Missing Deck',
+            ArtifactTypeName: 'Presentation',
+          },
+          {
+            ArtifactID: deniedArtId,
+            ArtifactVersionID: deniedVerId,
+            Name: 'Spoofed Confidential Deck',
+            ArtifactTypeName: 'Presentation',
+          },
+        ]);
+        expect(channel.Engine.Instances).toHaveLength(0);
+      } finally {
+        channel.Dispose();
+        permSpy.mockRestore();
+      }
+    });
+
+    it('routes Whiteboard to ArtifactWorkspace and blocks non-component typed artifacts from InteractiveComponent (G-P1-1)', async () => {
+      expect(IsCollaborativeArtifactDescriptor('Whiteboard')).toBe(true);
+
+      const workspace = new ArtifactWorkspaceChannel();
+      const interactive = new InteractiveComponentChannel();
+      const wsLog: ChannelLog = { Notes: [] };
+      const icLog: ChannelLog = { Notes: [] };
+      await workspace.Initialize(MakeContext(wsLog));
+      await interactive.Initialize(MakeContext(icLog));
+
+      try {
+        const whiteboardArtifact = [
+          {
+            ArtifactID: '55555555-5555-4555-8555-555555555555',
+            ArtifactVersionID: '66666666-6666-4666-8666-666666666666',
+            Name: 'Architecture Whiteboard',
+            ArtifactTypeName: 'Whiteboard',
+          },
+        ];
+        expect(workspace.AcceptsDelegationArtifacts(whiteboardArtifact, {})).toBe(true);
+        expect(
+          interactive.AcceptsDelegationArtifacts(whiteboardArtifact, {
+            autoOpenDelegatedComponents: true,
+          }),
+        ).toBe(false);
+
+        for (const nonComponentType of ['Code', 'HTML', 'JSON', 'SVG', 'SQL']) {
+          const typedArtifact = [
+            {
+              ArtifactID: '77777777-7777-4777-8777-777777777777',
+              ArtifactVersionID: '88888888-8888-4888-8888-888888888888',
+              Name: `Sample ${nonComponentType}`,
+              ArtifactTypeName: nonComponentType,
+            },
+          ];
+          expect(
+            interactive.AcceptsDelegationArtifacts(typedArtifact, {
+              autoOpenDelegatedComponents: true,
+            }),
+          ).toBe(false);
+          await interactive.OnDelegationArtifacts(typedArtifact);
+          expect(interactive.GetState()).toEqual({ components: {} });
+        }
+
+        const legacyUntyped = [
+          {
+            ArtifactID: '99999999-9999-4999-8999-999999999999',
+            ArtifactVersionID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            Name: 'Legacy Widget',
+          },
+        ];
+        expect(
+          interactive.AcceptsDelegationArtifacts(legacyUntyped, {
+            autoOpenDelegatedComponents: true,
+          }),
+        ).toBe(true);
+      } finally {
+        workspace.Dispose();
+        interactive.Dispose();
+      }
+    });
+
+    it('resolves VersionNumber in show_version, rejects cross-artifact versionId, and re-hydrates RestoreState permissions (G-P1-2)', async () => {
+      const artA = '11111111-aaaa-4111-8111-111111111111';
+      const v1A = '22222222-aaaa-4222-8222-222222222222';
+      const v2A = '33333333-aaaa-4333-8333-333333333333';
+      const artB = '44444444-bbbb-4444-8444-444444444444';
+      const v1B = '55555555-bbbb-4555-8555-555555555555';
+      const artDenied = '66666666-cccc-4666-8666-666666666666';
+      const v1Denied = '77777777-cccc-4777-8777-777777777777';
+
+      const permSpy = vi
+        .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
+        .mockImplementation(
+          async (_provider, artifactId): Promise<ResolvedArtifactPermissions> => ({
+            ArtifactID: artifactId ?? '',
+            CanRead: artifactId !== artDenied,
+            CanEdit: artifactId === artA,
+            CanDelete: false,
+            CanShare: false,
+            Source: artifactId === artA ? 'Owner' : 'Denied',
+            Reason: 'test fixture',
+          }),
+        );
+
+      const fakeUser = { ID: 'u-1', Name: 'Author User' } as UserInfo;
+      const runViewMock = vi.fn(async (params: RunViewParams) => {
+        const filter = String(params.ExtraFilter ?? '');
+        if (params.EntityName === 'MJ: Artifact Versions') {
+          if (filter.includes(v2A)) {
+            return {
+              Success: true,
+              Results: [{ ID: v2A, ArtifactID: artA, VersionNumber: 2, Name: 'Spec v2' }],
+              TotalRowCount: 1,
+            };
+          }
+          if (filter.includes(v1B)) {
+            return {
+              Success: true,
+              Results: [{ ID: v1B, ArtifactID: artB, VersionNumber: 1, Name: 'Other v1' }],
+              TotalRowCount: 1,
+            };
+          }
+          if (filter.includes(v1A) || filter.includes(artA)) {
+            return {
+              Success: true,
+              Results: [{ ID: v1A, ArtifactID: artA, VersionNumber: 1, Name: 'Spec v1' }],
+              TotalRowCount: 1,
+            };
+          }
+          if (filter.includes(v1Denied) || filter.includes(artDenied)) {
+            return {
+              Success: true,
+              Results: [{ ID: v1Denied, ArtifactID: artDenied, VersionNumber: 1, Name: 'Denied v1' }],
+              TotalRowCount: 1,
+            };
+          }
+          return { Success: true, Results: [], TotalRowCount: 0 };
+        }
+        if (params.EntityName === 'MJ: Artifacts') {
+          if (filter.includes(artA)) {
+            return {
+              Success: true,
+              Results: [{ ID: artA, Name: 'Spec', Type: 'Markdown Document' }],
+              TotalRowCount: 1,
+            };
+          }
+          if (filter.includes(artB)) {
+            return {
+              Success: true,
+              Results: [{ ID: artB, Name: 'Other Doc', Type: 'Markdown Document' }],
+              TotalRowCount: 1,
+            };
+          }
+          if (filter.includes(artDenied)) {
+            return {
+              Success: true,
+              Results: [{ ID: artDenied, Name: 'Denied Doc', Type: 'Markdown Document' }],
+              TotalRowCount: 1,
+            };
+          }
+          return { Success: true, Results: [], TotalRowCount: 0 };
+        }
+        return { Success: true, Results: [], TotalRowCount: 0 };
+      });
+      const fakeProvider: Partial<IMetadataProvider> & { RunView: typeof runViewMock } = {
+        CurrentUser: fakeUser,
+        RunView: runViewMock,
+      };
+
+      const channel = new ArtifactWorkspaceChannel();
+      const descriptor = channel.GetDescriptor();
+      expect(descriptor.Events).toContainEqual(
+        expect.objectContaining({ Name: 'newer_version_available' }),
+      );
+      const closeVerb = descriptor.Verbs.find((v) => v.Name === 'close');
+      expect(closeVerb?.ParametersSchema?.properties).toHaveProperty('artifactId');
+
+      await channel.Initialize({
+        ...MakeContext({ Notes: [] }),
+        Provider: fakeProvider as IMetadataProvider,
+      });
+
+      const prior = new ArtifactWorkspaceChannel();
+      const noProviderChannel = new ArtifactWorkspaceChannel();
+      const freshChannel = new ArtifactWorkspaceChannel();
+      try {
+        await channel.Open({ artifactId: artA, artifactVersionId: v1A });
+        expect(channel.Engine.Instances[0]?.VersionNumber).toBe(1);
+
+        // Cross-artifact versionId must be rejected
+        const wrongArtifact = await channel.ApplyVerb('show_version', { versionId: v1B }, 'agent');
+        expect(wrongArtifact.Success).toBe(false);
+        expect(wrongArtifact.ErrorCode).toBe('invalid_params');
+
+        // Matching artifact versionId resolves VersionNumber from DB
+        const switched = await channel.ApplyVerb('show_version', { versionId: v2A }, 'agent');
+        expect(switched.Success).toBe(true);
+        expect(channel.Engine.Instances[0]?.ArtifactVersionID).toBe(v2A);
+        expect(channel.Engine.Instances[0]?.VersionNumber).toBe(2);
+
+        // Build real serialized state via SerializeState() with a stale Name and denied active tab
+        await prior.Initialize(MakeContext({ Notes: [] }));
+        await prior.Open({ artifactId: artA, artifactVersionId: v1A, versionNumber: 1, name: 'Stale Name' });
+        await prior.Open({ artifactId: artDenied, artifactVersionId: v1Denied, versionNumber: 1, name: 'Revoked Doc' });
+        const serializedState = prior.SerializeState();
+        expect(serializedState).not.toBeNull();
+
+        // Missing provider/user must stay CanEdit=false even if untrusted JSON attempts CanEdit: true
+        await noProviderChannel.Initialize(MakeContext({ Notes: [] }));
+        const untrustedJson = JSON.stringify({
+          activeArtifactId: artA,
+          instances: [
+            {
+              ArtifactID: artA,
+              ArtifactVersionID: v1A,
+              VersionNumber: 1,
+              Name: 'Stale Name',
+              CanEdit: true,
+            },
+          ],
+        });
+        expect(noProviderChannel.RestoreState(untrustedJson)).toBe(true);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        expect(noProviderChannel.Engine.Instances).toHaveLength(1);
+        expect(noProviderChannel.Engine.Instances[0]?.CanEdit).toBe(false);
+
+        // Pre-populate freshChannel with an unrelated tab to prove RestoreState clears stale tabs cleanly
+        await freshChannel.Initialize({
+          ...MakeContext({ Notes: [] }),
+          Provider: fakeProvider as IMetadataProvider,
+        });
+        await freshChannel.Open({ artifactId: artB, artifactVersionId: v1B, versionNumber: 1, name: 'Old Tab' });
+        expect(freshChannel.Engine.Instances).toHaveLength(1);
+
+        // RestoreState clears existing tabs, forces CanEdit=false synchronously, then rehydrates DB name + perms & evicts denied tabs
+        const restored = freshChannel.RestoreState(serializedState!);
+        expect(restored).toBe(true);
+        expect(freshChannel.Engine.Instances).toHaveLength(2);
+        expect(freshChannel.Engine.Instances.every((inst) => inst.CanEdit === false)).toBe(true);
+        expect(freshChannel.Engine.FindByArtifact(artB)).toBeUndefined();
+
+        await new Promise((resolve) => setTimeout(resolve, 25));
+
+        expect(freshChannel.Engine.Instances).toHaveLength(1);
+        expect(freshChannel.Engine.Instances[0]?.ArtifactID).toBe(artA);
+        expect(freshChannel.Engine.Instances[0]?.CanEdit).toBe(true);
+        expect(freshChannel.Engine.Instances[0]?.Name).toBe('Spec v1');
+        expect(freshChannel.Engine.ActiveID).toBe(freshChannel.Engine.Instances[0]?.InstanceID);
+      } finally {
+        prior.Dispose();
+        noProviderChannel.Dispose();
+        freshChannel.Dispose();
+        channel.Dispose();
+        permSpy.mockRestore();
+      }
     });
   });
 });

@@ -1,5 +1,6 @@
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import type { UserInfo } from '@memberjunction/core';
+import type { ArtifactToolArgs } from '@memberjunction/ai-core-plus';
 import {
     FormatCellAddress,
     ParseCellAddress,
@@ -21,16 +22,15 @@ export const MUTATING_ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set([
     'insert_block_after',
     'replace_block',
     'delete_block',
+    'move_block',
+    'duplicate_block',
     'upsert_table',
     'insert_live_block',
     'embed_artifact_block',
-    'propose_suggestion',
-    'replace_section',
-    'insert_section',
-    'delete_section',
     // SpreadsheetToolLibrary
     'write_cells',
-    'set_cells',
+    'clear_range',
+    'format_range',
     'insert_rows',
     'delete_rows',
     'insert_columns',
@@ -38,21 +38,29 @@ export const MUTATING_ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set([
     'add_sheet',
     'rename_sheet',
     'delete_sheet',
+    'duplicate_sheet',
+    'reorder_sheets',
+    'set_sheet_layout',
     'upsert_live_table',
     'refresh_live_tables',
+    'delete_live_table',
     'upsert_chart',
+    'delete_chart',
     'embed_artifact',
+    'delete_embedded_artifact',
     'sort_and_filter',
     // SlideDeckToolLibrary
     'add_slide',
     'update_slide',
     'delete_slide',
+    'duplicate_slide',
     'reorder_slides',
     'upsert_slide_element',
     'update_slide_region',
     'delete_slide_element',
     'update_speaker_notes',
     'apply_theme',
+    'update_deck_metadata',
     'generate_deck_from_markdown',
     // WhiteboardToolLibrary
     'upsert_nodes',
@@ -257,10 +265,10 @@ export function ResolvePresenceDomain(artifactTypeName: string | undefined): Art
  */
 export function ExtractAgentTargetLocation(
     toolName: string,
-    input: Record<string, unknown>,
+    input: ArtifactToolArgs,
     content: string | Buffer | undefined,
     artifactTypeName: string | undefined,
-    toolData?: Record<string, unknown> | null
+    toolData?: ArtifactToolArgs | null
 ): ArtifactAgentTargetLocation {
     const domain = ResolvePresenceDomain(artifactTypeName);
     const contentStr = Buffer.isBuffer(content) ? '' : (content ?? '');
@@ -282,7 +290,7 @@ export function ExtractAgentTargetLocation(
 /** Produces a concise human-readable action phrase for the collaboration header & region badge. */
 export function FormatAgentActionSummary(
     toolName: string,
-    input: Record<string, unknown>,
+    input: ArtifactToolArgs,
     location?: ArtifactAgentTargetLocation
 ): string {
     const tool = toolName.trim();
@@ -292,37 +300,46 @@ export function FormatAgentActionSummary(
         create_artifact: 'Created artifact',
         open_artifact: 'Inspecting artifact',
         write_cells: 'Writing cells',
-        set_cells: 'Writing cells',
         clear_range: 'Clearing range',
+        format_range: 'Formatting range',
         read_range: 'Reading range',
         insert_rows: 'Inserting rows',
+        delete_rows: 'Deleting rows',
         insert_columns: 'Inserting columns',
+        delete_columns: 'Deleting columns',
         add_sheet: 'Adding worksheet',
         rename_sheet: 'Renaming worksheet',
         delete_sheet: 'Removing worksheet',
+        duplicate_sheet: 'Duplicating worksheet',
+        reorder_sheets: 'Reordering worksheets',
+        set_sheet_layout: 'Updating worksheet layout',
         upsert_live_table: 'Refreshing live query table',
         refresh_live_tables: 'Refreshing live tables',
+        delete_live_table: 'Removing live table',
         upsert_chart: 'Building chart',
+        delete_chart: 'Removing chart',
         embed_artifact: 'Embedding artifact',
+        delete_embedded_artifact: 'Removing embedded artifact',
         sort_and_filter: 'Sorting & filtering',
         insert_block_after: 'Adding section content',
         replace_block: 'Updating block',
         delete_block: 'Removing block',
+        move_block: 'Moving block',
+        duplicate_block: 'Duplicating block',
         upsert_table: 'Updating table',
         insert_live_block: 'Linking live MJ block',
         embed_artifact_block: 'Embedding visual block',
-        propose_suggestion: 'Proposing edit suggestion',
-        replace_section: 'Updating section',
-        insert_section: 'Adding section',
-        delete_section: 'Removing section',
         add_slide: 'Adding slide',
         update_slide: 'Updating slide',
         delete_slide: 'Removing slide',
+        duplicate_slide: 'Duplicating slide',
         reorder_slides: 'Reordering slides',
         upsert_slide_element: 'Updating slide layout',
         update_slide_region: 'Updating slide region',
+        delete_slide_element: 'Removing slide element',
         update_speaker_notes: 'Updating speaker notes',
         apply_theme: 'Applying deck theme',
+        update_deck_metadata: 'Updating deck metadata',
         generate_deck_from_markdown: 'Building presentation',
     };
 
@@ -357,9 +374,9 @@ function formatLocationSuffix(loc?: ArtifactAgentTargetLocation): string {
 
 function extractSpreadsheetLocation(
     toolName: string,
-    input: Record<string, unknown>,
+    input: ArtifactToolArgs,
     contentStr: string,
-    toolData?: Record<string, unknown> | null
+    toolData?: ArtifactToolArgs | null
 ): ArtifactAgentTargetLocation {
     let workbook: WorkbookSpec | null = null;
     if (contentStr.trim().startsWith('{')) {
@@ -414,9 +431,9 @@ function extractSpreadsheetLocation(
         let maxRow = 0;
         let maxCol = 0;
         for (const item of input.cells) {
-            if (!item || typeof item !== 'object') continue;
-            const addr = typeof (item as Record<string, unknown>).address === 'string'
-                ? ((item as Record<string, unknown>).address as string).trim()
+            if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+            const addr = typeof item.address === 'string'
+                ? item.address.trim()
                 : '';
             const pos = addr ? ParseCellAddress(addr) : null;
             if (!pos) continue;
@@ -481,9 +498,9 @@ function extractSpreadsheetLocation(
 }
 
 function extractSlideDeckLocation(
-    input: Record<string, unknown>,
+    input: ArtifactToolArgs,
     contentStr: string,
-    toolData?: Record<string, unknown> | null
+    toolData?: ArtifactToolArgs | null
 ): ArtifactAgentTargetLocation {
     let deck: SlideDeckSpec | null = null;
     if (contentStr.trim().startsWith('{')) {
@@ -537,9 +554,9 @@ function extractSlideDeckLocation(
 
 function extractDocumentLocation(
     _toolName: string,
-    input: Record<string, unknown>,
+    input: ArtifactToolArgs,
     contentStr: string,
-    toolData?: Record<string, unknown> | null
+    toolData?: ArtifactToolArgs | null
 ): ArtifactAgentTargetLocation {
     const blockId =
         typeof toolData?.blockId === 'string'

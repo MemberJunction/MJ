@@ -35,6 +35,8 @@ interface RefreshDigestSummary {
  */
 @RegisterClass(BaseAction, '__RefreshAndSnapshotArtifact')
 export class RefreshAndSnapshotArtifactAction extends BaseAction {
+    public static readonly AuthorizesCaller = true;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         return this.ExecuteRefreshAction(params);
     }
@@ -454,12 +456,14 @@ export class RefreshAndSnapshotArtifactAction extends BaseAction {
     }
 
     private getStringParam(params: RunActionParams, name: string): string {
-        const match = params.Params.find((p) => p.Name.toLowerCase() === name.toLowerCase() && p.Type !== 'Output');
+        const paramsList = params.Params ?? [];
+        const match = paramsList.find((p) => p.Name.toLowerCase() === name.toLowerCase() && p.Type !== 'Output');
         return match?.Value != null ? String(match.Value).trim() : '';
     }
 
     private getBooleanParam(params: RunActionParams, name: string, defaultVal: boolean): boolean {
-        const match = params.Params.find((p) => p.Name.toLowerCase() === name.toLowerCase() && p.Type !== 'Output');
+        const paramsList = params.Params ?? [];
+        const match = paramsList.find((p) => p.Name.toLowerCase() === name.toLowerCase() && p.Type !== 'Output');
         if (match?.Value == null) return defaultVal;
         if (typeof match.Value === 'boolean') return match.Value;
         const normalized = String(match.Value).trim().toLowerCase();
@@ -468,12 +472,18 @@ export class RefreshAndSnapshotArtifactAction extends BaseAction {
         return defaultVal;
     }
 
-    private setOutputParam(params: RunActionParams, name: string, value: unknown): void {
-        const existing = params.Params.find((p) => p.Name.toLowerCase() === name.toLowerCase() && p.Type === 'Output');
+    private setOutputParam(params: RunActionParams, name: string, value: string | number | boolean | null): void {
+        if (!params.Params) {
+            params.Params = [];
+        }
+        const paramsList = params.Params;
+        const existing = paramsList.find((p) => p.Name.toLowerCase() === name.toLowerCase());
         if (existing) {
             existing.Value = value;
+            const existingType = existing.Type?.trim().toLowerCase();
+            existing.Type = existingType === 'input' || existingType === 'both' ? 'Both' : 'Output';
         } else {
-            params.Params.push({
+            paramsList.push({
                 Name: name,
                 Type: 'Output',
                 Value: value,

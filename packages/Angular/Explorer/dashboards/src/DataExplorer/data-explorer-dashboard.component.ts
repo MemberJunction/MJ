@@ -1726,7 +1726,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Create a live EntityView-backed collaborative spreadsheet artifact from the active
    * (or specified) entity/saved view so users and agents can explore live data together.
    */
-  private async toolCreateLiveSheetFromView(params: Record<string, unknown>): Promise<LiveSheetToolResult> {
+  private async toolCreateLiveSheetFromView(
+    params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+  ): Promise<LiveSheetToolResult> {
     const opt = (key: string): string | undefined => {
       const v = params[key];
       return typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
@@ -1760,7 +1762,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const requestedViewRaw = opt('view') ?? opt('viewId');
     if (requestedViewRaw) {
       const lowered = requestedViewRaw.toLowerCase();
-      const entityViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(entity.ID);
+      const userViewEngine = this.ProviderToUse
+        ? (UserViewEngine.GetProviderInstance(this.ProviderToUse, UserViewEngine) as UserViewEngine)
+        : UserViewEngine.Instance;
+      const entityViews = userViewEngine.GetAccessibleViewsForEntity(entity.ID);
       const match =
         entityViews.find((v) => UUIDsEqual(v.ID, requestedViewRaw)) ??
         entityViews.find((v) => v.Name.toLowerCase() === lowered);
@@ -1793,6 +1798,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       TableTitle: opt('tableTitle'),
       MaxRows: maxRows,
       AnchorCell: opt('anchorCell'),
+      ExistingArtifactID: opt('existingArtifactId'),
     });
   }
 

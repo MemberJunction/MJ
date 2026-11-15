@@ -23,8 +23,9 @@ import { AgentToolCircuitBreaker } from './native-tools/agent-tool-circuit-break
 import { BuildFrameworkTools, type FrameworkToolAvailability, type FrameworkToolHost } from './native-tools/framework-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactAnsweredToolCallArguments, CompactToolResultContent, CompactToolResultContentAsync, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
-import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd, GovernedRunArtifactSummary } from "@memberjunction/ai-core-plus";
-import { GovernedArtifactService } from './GovernedArtifactService';
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd, GovernedRunArtifactSummary, type ArtifactJsonValue, type ArtifactToolArgs } from "@memberjunction/ai-core-plus";
+import { GovernedArtifactService, MergeTouchedArtifactSummary } from './GovernedArtifactService';
+import { CollectDelegatedRunArtifactsSafely, ExtractDirectActionArtifacts } from './realtime/realtime-artifact-helpers';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON, ServerOperationScopeManager } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPrefixFingerprint } from '@memberjunction/ai-prompts';
@@ -4279,7 +4280,8 @@ export class BaseAgent {
 
         try {
             const requestText = this.parseDelegateRequestText(request.Arguments);
-            const runner = new AgentRunner(params.provider || this._activeProvider);
+            const effectiveProvider = params.provider || this._activeProvider;
+            const runner = new AgentRunner(effectiveProvider);
             const result = await runner.RunAgent({
                 agent: targetAgent,
                 conversationMessages: [{ role: 'user', content: requestText }],
@@ -4305,12 +4307,23 @@ export class BaseAgent {
                 onProgress: this.combineProgressCallbacks(request.OnProgress, params.onProgress)
             });
 
+            const artifacts = await CollectDelegatedRunArtifactsSafely({
+                Result: result,
+                ContextUser: params.contextUser,
+                Provider: effectiveProvider,
+                ProcessPayloadArtifacts: (r) =>
+                    runner.ProcessAgentArtifacts(r, undefined, undefined, params.contextUser, effectiveProvider),
+                logLabel: 'BaseAgent.delegateRealtimeToTarget',
+            });
+
             return {
                 CallID: request.CallID,
                 Success: result.success,
                 Output: result.success
                     ? (result.agentRun?.Message || 'The target agent completed the request.')
-                    : (result.agentRun?.ErrorMessage || 'The target agent failed to complete the request.')
+                    : (result.agentRun?.ErrorMessage || 'The target agent failed to complete the request.'),
+                ...(result.agentRun?.ID ? { RunID: result.agentRun.ID } : {}),
+                ...(artifacts ? { Artifacts: artifacts } : {}),
             };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -4370,8 +4383,8 @@ export class BaseAgent {
      */
     private parseDelegateRequestText(argumentsJson: string): string {
         try {
-            const parsed = JSON.parse(argumentsJson) as { request?: unknown };
-            if (typeof parsed.request === 'string') {
+            const parsed = JSON.parse(argumentsJson) as ArtifactToolArgs;
+            if (parsed && typeof parsed === 'object' && typeof parsed.request === 'string') {
                 return parsed.request;
             }
         } catch {
@@ -4405,10 +4418,12 @@ export class BaseAgent {
         try {
             const agentAction: AgentAction = { name: action.Name, params: this.parseRealtimeToolParams(call.Arguments) };
             const result = await this.ExecuteSingleAction(params, agentAction, action, params.contextUser);
+            const actionArtifacts = ExtractDirectActionArtifacts(action.Name, result.Success, result.Params);
             return {
                 CallID: call.CallID,
                 Success: result.Success,
-                Output: result.Message || (result.Success ? 'Tool completed.' : 'Tool failed.')
+                Output: result.Message || (result.Success ? 'Tool completed.' : 'Tool failed.'),
+                ...(actionArtifacts ? { Artifacts: actionArtifacts } : {}),
             };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -4422,11 +4437,11 @@ export class BaseAgent {
      * @param argumentsJson The raw arguments string.
      * @returns A record of parameter name → value (empty when not parseable).
      */
-    private parseRealtimeToolParams(argumentsJson: string): Record<string, unknown> {
+    private parseRealtimeToolParams(argumentsJson: string): ArtifactToolArgs {
         try {
-            const parsed = JSON.parse(argumentsJson);
-            if (parsed && typeof parsed === 'object') {
-                return parsed as Record<string, unknown>;
+            const parsed = JSON.parse(argumentsJson) as ArtifactJsonValue;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return parsed;
             }
         } catch {
             /* ignore — return empty params */
@@ -6329,7 +6344,7 @@ export class BaseAgent {
             : { Content: stored.result.errorMessage ?? `Artifact tool '${call.tool}' failed.`, IsError: true };
     }
 
-    private async runConversationToolFromTool(tool: string, input: Record<string, unknown>): Promise<AgentToolResult> {
+    private async runConversationToolFromTool(tool: string, input: ArtifactToolArgs): Promise<AgentToolResult> {
         const name = ConversationToolNames.find((n) => n === tool);
         if (!name) {
             return { Content: `'${tool}' is not a conversation tool. Use one of: ${ConversationToolNames.join(', ')}.`, IsError: true };
@@ -11893,7 +11908,7 @@ The context is now within limits. Please retry your request with the recovered c
                     const stored = await this._artifactToolManager.ExecuteSingleToolCall({
                         artifactId: String(p.artifactId ?? ''),
                         tool,
-                        input: p,
+                        input: p as ArtifactToolArgs,
                     });
                     return stored.result;
                 }),
@@ -22128,11 +22143,12 @@ The context is now within limits. Please retry your request with the recovered c
         // Sub-agents pass their mediaOutputs to parent for merging and placeholder resolution.
         const touchedMap = new Map<string, GovernedRunArtifactSummary>();
         for (const item of this._artifactToolManager.GetTouchedArtifacts()) {
-            touchedMap.set(item.ArtifactID.trim().toLowerCase(), item);
+            const key = item.ArtifactID.trim().toLowerCase();
+            touchedMap.set(key, MergeTouchedArtifactSummary(touchedMap.get(key), item));
         }
         for (const item of GovernedArtifactService.Instance.ConsumeTouchedArtifacts(this._agentRun?.ID)) {
             const key = item.ArtifactID.trim().toLowerCase();
-            touchedMap.set(key, { ...(touchedMap.get(key) ?? {}), ...item });
+            touchedMap.set(key, MergeTouchedArtifactSummary(touchedMap.get(key), item));
         }
         const touchedArtifacts = touchedMap.size > 0 ? Array.from(touchedMap.values()) : undefined;
 

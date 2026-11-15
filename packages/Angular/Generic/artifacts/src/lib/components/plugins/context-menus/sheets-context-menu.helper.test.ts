@@ -269,7 +269,12 @@ describe('BuildSheetsContextMenu', () => {
         Target: target,
       });
 
-      expect(findAction(items, 'sheets-select-row')?.Command).toEqual({ Type: 'select-row', RowIndex: 3 });
+      expect(findAction(items, 'sheets-select-row')?.Command).toEqual({
+        Type: 'select-row',
+        RowIndex: 3,
+        StartRow: 3,
+        EndRow: 3,
+      });
       const freeze = findAction(items, 'sheets-row-freeze');
       expect(freeze?.Checked).toBe(true);
       expect(freeze?.Label).toBe('Unfreeze Rows');
@@ -531,11 +536,85 @@ describe('BuildSheetsContextMenu', () => {
           RangeA1: 'A1:E10',
         },
       });
-      expect(findAction(liveItems, 'sheets-live-table-refresh')).toBeDefined();
+      expect(findAction(liveItems, 'sheets-live-table-refresh')).toBeUndefined();
       expect(findAction(liveItems, 'sheets-live-table-select-range')).toBeDefined();
       expect(findAction(liveItems, 'sheets-live-table-copy-block')).toBeDefined();
       expect(findAction(liveItems, 'sheets-live-table-toggle-mode')).toBeUndefined();
       expect(findAction(liveItems, 'sheets-live-table-delete')).toBeUndefined();
+    });
+
+    it('hides sheets-live-table-refresh on Frozen live tables even when CanEdit is true', () => {
+      const frozenItems = BuildSheetsContextMenu({
+        CanEdit: true,
+        CanComment: true,
+        HasClipboardData: false,
+        ClipboardSourceRangeA1: null,
+        Target: {
+          Kind: 'live-table',
+          SheetID: 's1',
+          TableID: 'lt-frozen',
+          Title: 'Snapshot Table',
+          Mode: 'Frozen',
+          RangeA1: 'A1:C5',
+        },
+      });
+      expect(findAction(frozenItems, 'sheets-live-table-refresh')).toBeUndefined();
+      expect(findAction(frozenItems, 'sheets-live-table-edit')).toBeDefined();
+      expect(findAction(frozenItems, 'sheets-live-table-toggle-mode')).toBeDefined();
+    });
+
+    it('carries StartCol/EndCol on select-col and disables hiding last remaining visible row/col', () => {
+      const colItems = BuildSheetsContextMenu({
+        CanEdit: true,
+        CanComment: true,
+        HasClipboardData: false,
+        ClipboardSourceRangeA1: null,
+        Target: {
+          Kind: 'col-header',
+          SheetID: 's1',
+          StartCol: 2,
+          EndCol: 4,
+          StartColLetter: 'B',
+          EndColLetter: 'D',
+          TotalRows: 10,
+          TotalCols: 6,
+          VisibleCols: 3,
+          VisibleColsInRange: 3,
+          CurrentFrozenColumns: 0,
+          HasAdjacentHiddenCols: false,
+          ProtectedReason: null,
+          RangeThreadCount: 0,
+        },
+      });
+      expect(findAction(colItems, 'sheets-select-col')?.Command).toEqual({
+        Type: 'select-col',
+        ColIndex: 2,
+        StartCol: 2,
+        EndCol: 4,
+      });
+      expect(findAction(colItems, 'sheets-col-hide')?.Disabled).toBe(true);
+
+      const rowItems = BuildSheetsContextMenu({
+        CanEdit: true,
+        CanComment: true,
+        HasClipboardData: false,
+        ClipboardSourceRangeA1: null,
+        Target: {
+          Kind: 'row-header',
+          SheetID: 's1',
+          StartRow: 1,
+          EndRow: 5,
+          TotalRows: 10,
+          TotalCols: 5,
+          VisibleRows: 5,
+          VisibleRowsInRange: 5,
+          CurrentFrozenRows: 0,
+          HasAdjacentHiddenRows: false,
+          ProtectedReason: null,
+          RangeThreadCount: 0,
+        },
+      });
+      expect(findAction(rowItems, 'sheets-row-hide')?.Disabled).toBe(true);
     });
   });
 });

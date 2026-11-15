@@ -8,6 +8,8 @@ import {
   MJEventType,
   MJGlobal,
   MJLruCache,
+  NormalizeUUID,
+  UUIDsEqual,
 } from '@memberjunction/global';
 import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
@@ -27,6 +29,8 @@ import {
 } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import {
+  ArtifactJsonValue,
+  ArtifactToolArgs,
   ArtifactToolDefinition,
   ArtifactToolExecutionContext,
   ArtifactToolResult,
@@ -59,6 +63,57 @@ const MARKDOWN_MIME_TYPE = 'text/markdown';
 const PRESENTATION_MIME_TYPE = 'application/vnd.mj.presentation+json';
 const SPREADSHEET_JSON_MIME_TYPE = 'application/vnd.mj.spreadsheet+json';
 
+/**
+ * Spreadsheet tools that alter workbook structure, sheet order, or sheet layout rather than
+ * cell values/formulas. Refused on `File`-mode `.xlsx` workbooks because `PatchXlsxBytes`
+ * preserves non-`<sheetData>` OpenXML parts in-place instead of regenerating `workbook.xml`
+ * or worksheet layout XML.
+ */
+export const STRUCTURAL_SPREADSHEET_TOOLS: ReadonlySet<string> = new Set([
+  'insert_rows',
+  'delete_rows',
+  'insert_columns',
+  'delete_columns',
+  'add_sheet',
+  'delete_sheet',
+  'rename_sheet',
+  'duplicate_sheet',
+  'reorder_sheets',
+  'set_sheet_layout',
+  'merge_cells',
+  'unmerge_cells',
+]);
+
+/** Formats the shared refusal message for structural spreadsheet tools on `File`-mode `.xlsx` workbooks. */
+export function FormatFileModeStructuralToolError(toolName: string): string {
+  return `Structural spreadsheet tool "${toolName}" is not supported on File-mode .xlsx workbooks to preserve OpenXML fidelity. Only cell value/formula updates (e.g. write_cells) are allowed on uploaded .xlsx files.`;
+}
+
+/**
+ * Merges two {@link GovernedRunArtifactSummary} records for the same artifact, keeping the
+ * higher `VersionNumber` snapshot while preserving `Operation: 'created'` if either entry
+ * created the artifact during the run.
+ */
+export function MergeTouchedArtifactSummary(
+  existing: GovernedRunArtifactSummary | undefined,
+  incoming: GovernedRunArtifactSummary,
+): GovernedRunArtifactSummary {
+  if (!existing) {
+    return { ...incoming };
+  }
+  const winner = incoming.VersionNumber >= existing.VersionNumber ? incoming : existing;
+  const other = winner === incoming ? existing : incoming;
+  return {
+    ...other,
+    ...winner,
+    DriverClass: winner.DriverClass ?? other.DriverClass,
+    Operation:
+      existing.Operation === 'created' || incoming.Operation === 'created'
+        ? 'created'
+        : winner.Operation,
+  };
+}
+
 export interface ArtifactToolLibraryWithRevisionHash extends BaseArtifactToolLibrary {
   ComputeRevisionHash?(content: string): string;
 }
@@ -86,7 +141,7 @@ export class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
 
   public override async InvokeTool(
     toolName: string,
-    input: Record<string, unknown>,
+    input: ArtifactToolArgs,
     artifactContent: string | Buffer,
     context?: ArtifactToolExecutionContext,
   ): Promise<ArtifactToolResult> {
@@ -123,6 +178,7 @@ export class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
 
 export interface LoadedGovernedArtifactState {
   artifactId: string;
+  ownerUserId?: string;
   name: string;
   description?: string;
   typeName: string;
@@ -132,6 +188,7 @@ export interface LoadedGovernedArtifactState {
   environmentId?: string | null;
   versionId?: string;
   versionNumber: number;
+  dbVersionNumber: number;
   contentMode: 'File' | 'Text';
   content: string | Buffer;
   configuration?: string;
@@ -147,7 +204,7 @@ export interface CreateGovernedArtifactParams {
   title: string;
   artifactType: string;
   description?: string;
-  content?: string | Record<string, unknown>;
+  content?: string | ArtifactToolArgs;
   sheetNames?: string[];
   collectionId?: string;
   environmentId?: string;
@@ -176,7 +233,7 @@ export interface InspectGovernedArtifactParams {
   contextUser: UserInfo;
   artifactId: string;
   tool?: string;
-  input?: Record<string, unknown>;
+  input?: ArtifactToolArgs;
   agentRunId?: string;
   agentName?: string;
 }
@@ -191,13 +248,13 @@ export interface InspectGovernedArtifactOutcome {
   driverClass?: string;
   canEdit?: boolean;
   liveRoomHydrated?: boolean;
-  data?: unknown;
+  data?: ArtifactToolResult['data'];
   errorMessage?: string;
 }
 
 export interface ArtifactMutationOperation {
   tool: string;
-  input?: Record<string, unknown>;
+  input?: ArtifactToolArgs;
 }
 
 export interface MutateGovernedArtifactParams {
@@ -205,7 +262,7 @@ export interface MutateGovernedArtifactParams {
   contextUser: UserInfo;
   artifactId: string;
   tool?: string;
-  input?: Record<string, unknown>;
+  input?: ArtifactToolArgs;
   operations?: ArtifactMutationOperation[];
   agentRunId?: string;
   agentName?: string;
@@ -219,7 +276,7 @@ export interface MutateGovernedArtifactOutcome {
   name?: string;
   typeName?: string;
   driverClass?: string;
-  results?: Array<{ tool: string; data: unknown }>;
+  results?: Array<{ tool: string; data: ArtifactToolResult['data'] }>;
   warnings?: string[];
   errorMessage?: string;
 }
@@ -269,8 +326,45 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     ttlMs: 2 * 60 * 60 * 1000,
   });
 
+  private readonly artifactLocks = new Map<string, Promise<void>>();
+
   protected constructor() {
     super();
+  }
+
+  private async withArtifactLock<T>(artifactId: string, fn: () => Promise<T>): Promise<T> {
+    const key = NormalizeUUID(artifactId) || (artifactId ?? '').trim().toLowerCase();
+    const prev = this.artifactLocks.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const chain = prev.then(() => current, () => current);
+    this.artifactLocks.set(key, chain);
+
+    try {
+      await prev;
+      return await fn();
+    } finally {
+      release();
+      if (this.artifactLocks.get(key) === chain) {
+        this.artifactLocks.delete(key);
+      }
+    }
+  }
+
+  private sanitizeToolInput(input?: ArtifactToolArgs): ArtifactToolArgs {
+    if (!input) return {};
+    const sanitized: ArtifactToolArgs = {};
+    for (const [k, v] of Object.entries(input)) {
+      if (k === '_actorUserId' || k === '_ownerUserId' || k === '_isEditor') continue;
+      sanitized[k] = v;
+    }
+    return sanitized;
+  }
+
+  private escapeSqlLike(term: string): string {
+    return term.replace(/[\[%_]/g, (ch) => `[${ch}]`);
   }
 
   public static get Instance(): GovernedArtifactService {
@@ -335,7 +429,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     const idx = existing.findIndex((item) => item.ArtifactID.trim().toLowerCase() === targetLower);
     const next = [...existing];
     if (idx >= 0) {
-      next[idx] = { ...next[idx], ...summary };
+      next[idx] = MergeTouchedArtifactSummary(next[idx], summary);
     } else {
       next.push({ ...summary });
     }
@@ -465,7 +559,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       return { allowed: false, reason: `Collection '${trimmedId}' was not found.` };
     }
     const collectionRow = colRes.Results[0];
-    if (collectionRow.OwnerID && collectionRow.OwnerID.toLowerCase() === contextUser.ID.toLowerCase()) {
+    if (UUIDsEqual(collectionRow.OwnerID, contextUser.ID)) {
       return { allowed: true, environmentId: collectionRow.EnvironmentID ?? null };
     }
 
@@ -553,6 +647,12 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     provider: IMetadataProvider,
     contextUser: UserInfo,
     artifactId: string,
+    options?: {
+      skipBinaryDownload?: boolean;
+      failOnMissingFileContent?: boolean;
+      fallbackTypeName?: string;
+      skipTypeEntityResolution?: boolean;
+    },
   ): Promise<{ state?: LoadedGovernedArtifactState; errorMessage?: string }> {
     const trimmedId = (artifactId ?? '').trim();
     if (!IsValidUUID(trimmedId)) {
@@ -567,6 +667,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     const rv = RunView.FromMetadataProvider(provider);
     const artRes = await rv.RunView<{
       ID: string;
+      UserID?: string | null;
       Name?: string | null;
       Description?: string | null;
       EnvironmentID?: string | null;
@@ -575,7 +676,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       {
         EntityName: 'MJ: Artifacts',
         ExtraFilter: `ID='${EscapeSQLString(trimmedId)}'`,
-        Fields: ['ID', 'Name', 'Description', 'EnvironmentID', 'Type'],
+        Fields: ['ID', 'UserID', 'Name', 'Description', 'EnvironmentID', 'Type'],
         MaxRows: 1,
         SkipTotalRowCount: true,
         ResultType: 'simple',
@@ -586,8 +687,10 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       return { errorMessage: `Artifact '${trimmedId}' was not found.` };
     }
     const artRow = artRes.Results[0];
-    const typeName = (artRow.Type ?? 'Markdown Document').trim();
-    const typeEntity = await this.ResolveArtifactType(provider, contextUser, typeName);
+    const typeName = (artRow.Type ?? options?.fallbackTypeName ?? 'Markdown Document').trim();
+    const typeEntity = options?.skipTypeEntityResolution
+      ? null
+      : await this.ResolveArtifactType(provider, contextUser, typeName);
 
     const verRes = await rv.RunView<{
       ID: string;
@@ -610,14 +713,20 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       },
       contextUser,
     );
+    if (options?.failOnMissingFileContent && (!verRes.Success || !verRes.Results?.length)) {
+      return {
+        errorMessage: verRes.ErrorMessage || `No persisted versions found for artifact '${trimmedId}'.`,
+      };
+    }
     const ver = verRes.Success && verRes.Results?.length ? verRes.Results[0] : undefined;
     const latestFileId = (ver?.FileID ?? '').trim();
 
-    let content: string | Buffer = ver?.Content ?? '';
+    let content: string | Buffer = ver?.Content ?? (ver?.Configuration ?? '');
     let contentMode: 'File' | 'Text' = ver?.ContentMode === 'File' || Boolean(latestFileId) ? 'File' : 'Text';
     let originalXlsxBytes: Uint8Array | undefined;
     let liveRoomHydrated = false;
-    let versionNumber = ver?.VersionNumber ?? 1;
+    const dbVersionNumber = ver?.VersionNumber ?? 1;
+    let versionNumber = dbVersionNumber;
     let versionId = ver?.ID;
 
     // 1. Prefer uncompacted live Yjs collaboration room snapshot if active
@@ -644,15 +753,24 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       }
     }
 
+    if (options?.failOnMissingFileContent && !latestFileId && ver?.ContentMode === 'File') {
+      return {
+        errorMessage: `Latest version v${versionNumber} of artifact '${trimmedId}' has ContentMode='File' without a FileID.`,
+      };
+    }
+
     // 2. If File-mode .xlsx is needed (or not hydrated from live room), download and hydrate binary bytes
-    if (latestFileId) {
+    if (latestFileId && !options?.skipBinaryDownload) {
       const downloaded = await this.DownloadArtifactFileContent(provider, contextUser, latestFileId);
       if (downloaded && downloaded.byteLength > 0) {
         const isZip = downloaded.length > 4 && downloaded[0] === 0x50 && downloaded[1] === 0x4b;
         const toolLib = (typeEntity?.ToolLibraryClass ?? '').trim();
+        const typeLower = typeName.toLowerCase();
         const isSpreadsheet =
           toolLib === 'SpreadsheetToolLibrary' ||
-          typeEntity?.DriverClass === 'SpreadsheetArtifactViewerPlugin';
+          typeEntity?.DriverClass === 'SpreadsheetArtifactViewerPlugin' ||
+          typeLower.includes('excel') ||
+          typeLower.includes('spreadsheet');
         if (isSpreadsheet && isZip) {
           originalXlsxBytes = new Uint8Array(downloaded);
           if (!liveRoomHydrated) {
@@ -666,14 +784,28 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         } else if (!liveRoomHydrated) {
           content = downloaded;
         }
+      } else if (options?.failOnMissingFileContent) {
+        return {
+          errorMessage: `Failed to download file content for FileID '${latestFileId}' while reloading artifact '${trimmedId}'.`,
+        };
       } else if (!liveRoomHydrated && !content) {
         contentMode = 'Text';
       }
+    } else if (
+      options?.failOnMissingFileContent &&
+      !liveRoomHydrated &&
+      typeof ver?.Content !== 'string' &&
+      typeof ver?.Configuration !== 'string'
+    ) {
+      return {
+        errorMessage: `Latest version v${versionNumber} of artifact '${trimmedId}' has no loadable content.`,
+      };
     }
 
     return {
       state: {
         artifactId: artRow.ID,
+        ownerUserId: artRow.UserID ?? undefined,
         name: (ver?.Name ?? artRow.Name ?? 'Untitled Artifact').trim(),
         description: artRow.Description ?? undefined,
         typeName,
@@ -683,6 +815,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         environmentId: artRow.EnvironmentID ?? null,
         versionId,
         versionNumber,
+        dbVersionNumber,
         contentMode,
         content,
         configuration: ver?.Configuration ?? undefined,
@@ -697,7 +830,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
   public BuildInitialContent(
     normalizedTypeName: string,
     title: string,
-    providedContent?: string | Record<string, unknown>,
+    providedContent?: string | ArtifactToolArgs,
     sheetNames?: string[],
   ): { content: string; mimeType: string } {
     if (normalizedTypeName === 'Excel Spreadsheet') {
@@ -864,31 +997,43 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       Operation: 'created',
     });
 
-    await this.EmitAgentPresence({
-      artifactId: artifactEntity.ID,
-      phase: 'enter',
-      contextUser: params.contextUser,
-      agentRunId: params.agentRunId,
-      agentName: params.agentName,
-      toolName: 'create_artifact',
-      actionSummary: `Created "${title}"`,
-      location: { Domain: ResolvePresenceDomain(artifactType.Name) },
-    });
+    try {
+      await this.EmitAgentPresence({
+        artifactId: artifactEntity.ID,
+        phase: 'enter',
+        contextUser: params.contextUser,
+        agentRunId: params.agentRunId,
+        agentName: params.agentName,
+        toolName: 'create_artifact',
+        actionSummary: `Created "${title}"`,
+        location: { Domain: ResolvePresenceDomain(artifactType.Name) },
+      });
 
-    return {
-      success: true,
-      artifactId: artifactEntity.ID,
-      versionId: versionEntity.ID,
-      versionNumber: 1,
-      name: title,
-      typeName: artifactType.Name,
-      driverClass,
-      toolLibraryClass: artifactType.ToolLibraryClass ?? undefined,
-      mimeType: built.mimeType,
-      contentMode: 'Text',
-      content: built.content,
-      configuration: versionEntity.Configuration ?? undefined,
-    };
+      return {
+        success: true,
+        artifactId: artifactEntity.ID,
+        versionId: versionEntity.ID,
+        versionNumber: 1,
+        name: title,
+        typeName: artifactType.Name,
+        driverClass,
+        toolLibraryClass: artifactType.ToolLibraryClass ?? undefined,
+        mimeType: built.mimeType,
+        contentMode: 'Text',
+        content: built.content,
+        configuration: versionEntity.Configuration ?? undefined,
+      };
+    } finally {
+      if (!params.agentRunId) {
+        await this.EmitAgentPresence({
+          artifactId: artifactEntity.ID,
+          phase: 'exit',
+          contextUser: params.contextUser,
+          agentRunId: params.agentRunId,
+          agentName: params.agentName,
+        });
+      }
+    }
   }
 
   /**
@@ -910,27 +1055,32 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       };
     }
 
-    const toolInput = params.input ?? {};
+    const toolInput = this.sanitizeToolInput(params.input);
     const domain = ResolvePresenceDomain(state.typeName);
     const location = ExtractAgentTargetLocation(requestedTool || 'inspect', toolInput, state.content, state.typeName);
-
-    await this.EmitAgentPresence({
-      artifactId: state.artifactId,
-      phase: 'working',
-      contextUser: params.contextUser,
-      agentRunId: params.agentRunId,
-      agentName: params.agentName,
-      toolName: requestedTool || 'inspect',
-      actionSummary: requestedTool ? FormatAgentActionSummary(requestedTool, toolInput, location) : `Inspecting "${state.name}"`,
-      location: location ?? { Domain: domain },
-    });
+    let workingEmitted = false;
 
     try {
-      let data: unknown;
+      await this.EmitAgentPresence({
+        artifactId: state.artifactId,
+        phase: 'working',
+        contextUser: params.contextUser,
+        agentRunId: params.agentRunId,
+        agentName: params.agentName,
+        toolName: requestedTool || 'inspect',
+        actionSummary: requestedTool ? FormatAgentActionSummary(requestedTool, toolInput, location) : `Inspecting "${state.name}"`,
+        location: location ?? { Domain: domain },
+      });
+      workingEmitted = true;
+
+      let data: ArtifactToolResult['data'];
       if (requestedTool) {
         const lib = this.ResolveLibrary(state.typeName, state.toolLibraryClass);
         const toolContext: ArtifactToolExecutionContext = {
           contextUser: params.contextUser,
+          actorUserId: params.contextUser.ID,
+          ownerUserId: state.ownerUserId,
+          isEditor: state.permissions.CanEdit,
           provider: params.provider,
           artifactId: state.artifactId,
           agentRunId: params.agentRunId,
@@ -943,6 +1093,16 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
             artifactId: state.artifactId,
             errorMessage: res.errorMessage || `Inspection tool '${requestedTool}' failed.`,
           };
+        }
+        if (res.data !== null && typeof res.data === 'object' && !Array.isArray(res.data)) {
+          const dataObj = res.data as ArtifactToolArgs;
+          if (dataObj.updatedContent !== undefined || dataObj.xlsxBase64 !== undefined) {
+            return {
+              success: false,
+              artifactId: state.artifactId,
+              errorMessage: `InspectGovernedArtifact blocked tool '${requestedTool}' because it attempted to return mutated artifact content.`,
+            };
+          }
         }
         data = res.data;
       } else {
@@ -979,15 +1139,6 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         actionSummary: `Inspected "${state.name}"`,
         location: location ?? { Domain: domain },
       });
-      if (!params.agentRunId) {
-        await this.EmitAgentPresence({
-          artifactId: state.artifactId,
-          phase: 'exit',
-          contextUser: params.contextUser,
-          agentRunId: params.agentRunId,
-          agentName: params.agentName,
-        });
-      }
 
       return {
         success: true,
@@ -1007,6 +1158,16 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         artifactId: state.artifactId,
         errorMessage: `InspectGovernedArtifact error: ${err instanceof Error ? err.message : String(err)}`,
       };
+    } finally {
+      if (workingEmitted && !params.agentRunId) {
+        await this.EmitAgentPresence({
+          artifactId: state.artifactId,
+          phase: 'exit',
+          contextUser: params.contextUser,
+          agentRunId: params.agentRunId,
+          agentName: params.agentName,
+        });
+      }
     }
   }
 
@@ -1015,11 +1176,151 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
    * live Yjs collaboration rooms, persisting a new version, and emitting real-time presence awareness.
    */
   public async MutateGovernedArtifact(params: MutateGovernedArtifactParams): Promise<MutateGovernedArtifactOutcome> {
+    return this.withArtifactLock(params.artifactId, () => this.mutateGovernedArtifactLocked(params));
+  }
+
+  private async safeRollbackHook(
+    rollbackFn: ArtifactLiveMutationHookResult['rollback'] | undefined,
+    versionId: string | undefined,
+  ): Promise<void> {
+    if (!rollbackFn) return;
+    try {
+      await rollbackFn(versionId);
+    } catch (err) {
+      LogError(
+        `GovernedArtifactService: live hook rollback failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  private async safeDeleteVersionEntity(versionEntity: MJArtifactVersionEntity): Promise<void> {
+    try {
+      await versionEntity.Delete();
+    } catch (err) {
+      LogError(
+        `GovernedArtifactService: failed to delete rolled-back version entity '${versionEntity.ID}': ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  private materializeXlsxForContent(
+    contentStr: string,
+    workingXlsxBytes: Uint8Array | undefined,
+  ): { xlsxBytes?: Uint8Array; xlsxBase64?: string } {
+    try {
+      const parsedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(contentStr);
+      const patched = workingXlsxBytes
+        ? XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(workingXlsxBytes, parsedWorkbook)
+        : SpreadsheetEngine.Instance.ExportToXlsxBytes(parsedWorkbook);
+      return {
+        xlsxBytes: patched,
+        xlsxBase64: Buffer.from(patched).toString('base64'),
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  private async uploadXlsxBuffer(
+    params: { provider: IMetadataProvider; contextUser: UserInfo },
+    artifactName: string,
+    xlsxBase64: string,
+  ): Promise<{ fileId: string | null; sizeBytes: number }> {
+    const xlsxBuf = Buffer.from(xlsxBase64, 'base64');
+    let uploadedFileId: string | null = null;
+    try {
+      await FileStorageEngine.Instance.Config(false, params.contextUser, params.provider);
+      if (FileStorageEngine.Instance.HasStorageAccounts) {
+        const safeFileName = artifactName.toLowerCase().endsWith('.xlsx')
+          ? artifactName
+          : `${artifactName || 'workbook'}.xlsx`;
+        const uploadRes = await FileStorageEngine.Instance.UploadFile({
+          content: xlsxBuf,
+          fileName: safeFileName,
+          mimeType: XLSX_MIME_TYPE,
+          contextUser: params.contextUser,
+          provider: params.provider,
+        });
+        uploadedFileId = uploadRes.FileID;
+      }
+    } catch {
+      uploadedFileId = null;
+    }
+    return { fileId: uploadedFileId, sizeBytes: xlsxBuf.byteLength };
+  }
+
+  private applyVersionPayload(
+    versionEntity: MJArtifactVersionEntity,
+    state: LoadedGovernedArtifactState,
+    finalContentStr: string,
+    lastToolName: string,
+    params: MutateGovernedArtifactParams,
+    uploadedFileId: string | null,
+    xlsxSizeBytes: number | null,
+  ): void {
+    versionEntity.ContentHash = createHash('sha256').update(finalContentStr, 'utf8').digest('hex');
+
+    if (uploadedFileId) {
+      const safeFileName = state.name.toLowerCase().endsWith('.xlsx')
+        ? state.name
+        : `${state.name || 'workbook'}.xlsx`;
+      versionEntity.ContentMode = 'File';
+      versionEntity.FileID = uploadedFileId;
+      versionEntity.MimeType = XLSX_MIME_TYPE;
+      versionEntity.FileName = safeFileName;
+      versionEntity.ContentSizeBytes = xlsxSizeBytes;
+      versionEntity.Content = null;
+      versionEntity.Configuration = finalContentStr;
+      return;
+    }
+
+    versionEntity.ContentMode = 'Text';
+    versionEntity.FileID = null;
+    versionEntity.MimeType = state.mimeType ?? null;
+    versionEntity.Content = finalContentStr;
+    versionEntity.ContentSizeBytes = Buffer.byteLength(finalContentStr, 'utf8');
+    let existingConfig: ArtifactToolArgs = {};
+    if (state.configuration) {
+      const parsedConfig = CleanAndParseJSON<ArtifactJsonValue>(state.configuration);
+      if (parsedConfig && typeof parsedConfig === 'object' && !Array.isArray(parsedConfig)) {
+        existingConfig = parsedConfig;
+      }
+    }
+    const mergedConfig = JSON.stringify({
+      ...existingConfig,
+      agentRunId: params.agentRunId ?? null,
+      agentName: params.agentName ?? null,
+      lastTool: lastToolName,
+    });
+    const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
+      mergedConfig,
+      finalContentStr,
+      state.driverClass ?? null,
+      state.name,
+      {
+        ArtifactType: state.typeEntity ?? undefined,
+        AllArtifactTypes: ArtifactMetadataEngine.Instance.ArtifactTypes ?? [],
+      },
+    );
+    versionEntity.Configuration = enrichedConfig ?? mergedConfig;
+  }
+
+  private async mutateGovernedArtifactLocked(params: MutateGovernedArtifactParams): Promise<MutateGovernedArtifactOutcome> {
     const loaded = await this.LoadReadableArtifactState(params.provider, params.contextUser, params.artifactId);
     if (!loaded.state) {
       return { success: false, errorMessage: loaded.errorMessage };
     }
     const state = loaded.state;
+
+    if (!state.permissions.CanEdit) {
+      return {
+        success: false,
+        artifactId: state.artifactId,
+        errorMessage: `Permission denied: user lacks Edit access to artifact '${state.artifactId}'.`,
+      };
+    }
 
     const ops: ArtifactMutationOperation[] =
       params.operations && params.operations.length > 0
@@ -1031,17 +1332,23 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       return { success: false, errorMessage: 'MutateGovernedArtifact requires either tool or operations.' };
     }
 
-    const requiresEdit = ops.some((o) => this.IsMutatingTool(o.tool));
-    if (requiresEdit && !state.permissions.CanEdit) {
-      return {
-        success: false,
-        errorMessage: `Permission denied: user lacks Edit access to artifact '${state.artifactId}'.`,
-      };
+    if (state.contentMode === 'File' || Boolean(state.originalXlsxBytes)) {
+      const refusedOp = ops.find((op) => STRUCTURAL_SPREADSHEET_TOOLS.has(op.tool));
+      if (refusedOp) {
+        return {
+          success: false,
+          artifactId: state.artifactId,
+          errorMessage: FormatFileModeStructuralToolError(refusedOp.tool),
+        };
+      }
     }
 
     const lib = this.ResolveLibrary(state.typeName, state.toolLibraryClass);
     const toolContext: ArtifactToolExecutionContext = {
       contextUser: params.contextUser,
+      actorUserId: params.contextUser.ID,
+      ownerUserId: state.ownerUserId,
+      isEditor: state.permissions.CanEdit,
       provider: params.provider,
       artifactId: state.artifactId,
       agentRunId: params.agentRunId,
@@ -1054,66 +1361,326 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     let latestXlsxBase64: string | undefined;
     let lastLocation: ArtifactAgentTargetLocation | undefined;
     let lastToolName = ops[0].tool;
+    let lastToolInput: ArtifactToolArgs = this.sanitizeToolInput(ops[ops.length - 1]?.input);
     const warnings: string[] = [];
-    const stepResults: Array<{ tool: string; data: unknown }> = [];
+    const stepResults: Array<{ tool: string; data: ArtifactToolResult['data'] }> = [];
+    let workingEmitted = false;
 
-    for (const op of ops) {
-      const toolInput = op.input ?? {};
-      lastToolName = op.tool;
-      lastLocation = ExtractAgentTargetLocation(op.tool, toolInput, workingContent, state.typeName);
-      await this.EmitAgentPresence({
-        artifactId: state.artifactId,
-        phase: 'working',
-        contextUser: params.contextUser,
-        agentRunId: params.agentRunId,
-        agentName: params.agentName,
-        toolName: op.tool,
-        actionSummary: FormatAgentActionSummary(op.tool, toolInput, lastLocation),
-        location: lastLocation,
-      });
-
-      const res = await lib.InvokeTool(op.tool, toolInput, workingContent, toolContext);
-      if (!res.success) {
-        if (!params.agentRunId) {
-          await this.EmitAgentPresence({
-            artifactId: state.artifactId,
-            phase: 'exit',
-            contextUser: params.contextUser,
-            agentRunId: params.agentRunId,
-            agentName: params.agentName,
-          });
-        }
-        return {
-          success: false,
+    try {
+      for (const op of ops) {
+        const toolInput = this.sanitizeToolInput(op.input);
+        lastToolName = op.tool;
+        lastToolInput = toolInput;
+        lastLocation = ExtractAgentTargetLocation(op.tool, toolInput, workingContent, state.typeName);
+        await this.EmitAgentPresence({
           artifactId: state.artifactId,
-          errorMessage: res.errorMessage || `Tool '${op.tool}' failed.`,
+          phase: 'working',
+          contextUser: params.contextUser,
+          agentRunId: params.agentRunId,
+          agentName: params.agentName,
+          toolName: op.tool,
+          actionSummary: FormatAgentActionSummary(op.tool, toolInput, lastLocation),
+          location: lastLocation,
+        });
+        workingEmitted = true;
+
+        const res = await lib.InvokeTool(op.tool, toolInput, workingContent, toolContext);
+        if (!res.success) {
+          return {
+            success: false,
+            artifactId: state.artifactId,
+            errorMessage: res.errorMessage || `Tool '${op.tool}' failed.`,
+          };
+        }
+
+        const rawData: ArtifactToolArgs =
+          res.data !== null && typeof res.data === 'object' && !Array.isArray(res.data)
+            ? (res.data as ArtifactToolArgs)
+            : {};
+        if (typeof rawData.updatedContent === 'string') {
+          workingContent = rawData.updatedContent;
+          if (typeof rawData.xlsxBase64 === 'string') {
+            latestXlsxBase64 = rawData.xlsxBase64;
+          }
+        }
+        lastLocation =
+          ExtractAgentTargetLocation(op.tool, toolInput, workingContent, state.typeName, rawData) ?? lastLocation;
+
+        const sanitized: ArtifactToolArgs = {};
+        for (const [k, v] of Object.entries(rawData)) {
+          if (k === 'updatedContent' || k === 'xlsxBase64') continue;
+          sanitized[k] = v;
+        }
+        stepResults.push({ tool: op.tool, data: sanitized });
+      }
+
+      let finalContentStr = Buffer.isBuffer(workingContent) ? '' : String(workingContent);
+      if (!finalContentStr || finalContentStr === previousContentStr) {
+        return {
+          success: true,
+          artifactId: state.artifactId,
+          versionId: state.versionId,
+          versionNumber: state.versionNumber,
+          name: state.name,
+          typeName: state.typeName,
+          driverClass: state.driverClass,
+          results: stepResults,
         };
       }
 
-      const rawData =
-        res.data !== null && typeof res.data === 'object' && !Array.isArray(res.data)
-          ? (res.data as Record<string, unknown>)
-          : {};
-      if (typeof rawData.updatedContent === 'string') {
-        workingContent = rawData.updatedContent;
-        if (typeof rawData.xlsxBase64 === 'string') {
-          latestXlsxBase64 = rawData.xlsxBase64;
+      if (workingXlsxBytes || state.contentMode === 'File') {
+        const materialized = this.materializeXlsxForContent(finalContentStr, workingXlsxBytes);
+        if (materialized.xlsxBytes) {
+          workingXlsxBytes = materialized.xlsxBytes;
+          latestXlsxBase64 = materialized.xlsxBase64;
+        } else {
+          latestXlsxBase64 = undefined;
         }
       }
-      lastLocation =
-        ExtractAgentTargetLocation(op.tool, toolInput, workingContent, state.typeName, rawData) ?? lastLocation;
 
-      const sanitized: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(rawData)) {
-        if (k === 'updatedContent' || k === 'xlsxBase64') continue;
-        sanitized[k] = v;
+      const liveHook = GetArtifactLiveMutationHook();
+      let hookOutcome: ArtifactLiveMutationHookResult | undefined = undefined;
+      if (liveHook) {
+        const hookResult = await liveHook({
+          artifactId: state.artifactId,
+          alphaId: 'A',
+          versionId: state.versionId,
+          versionNumber: state.versionNumber + 1,
+          previousContent: previousContentStr,
+          updatedContent: finalContentStr,
+          xlsxBase64: latestXlsxBase64,
+          tool: lastToolName,
+          contextUser: params.contextUser,
+          agentRunId: params.agentRunId,
+          agentName: params.agentName,
+          deferCommit: true,
+        });
+        if (hookResult && typeof hookResult === 'object') {
+          hookOutcome = hookResult;
+          if (typeof hookResult.mergedContent === 'string' && hookResult.mergedContent !== finalContentStr) {
+            finalContentStr = hookResult.mergedContent;
+            if (workingXlsxBytes || state.contentMode === 'File') {
+              const rematerialized = this.materializeXlsxForContent(finalContentStr, workingXlsxBytes);
+              if (rematerialized.xlsxBytes) {
+                workingXlsxBytes = rematerialized.xlsxBytes;
+                latestXlsxBase64 = rematerialized.xlsxBase64;
+              } else {
+                latestXlsxBase64 = undefined;
+              }
+            }
+          }
+        }
       }
-      stepResults.push({ tool: op.tool, data: sanitized });
-    }
 
-    let finalContentStr = Buffer.isBuffer(workingContent) ? '' : String(workingContent);
-    if (!finalContentStr || finalContentStr === previousContentStr) {
-      if (!params.agentRunId) {
+      // Re-check latest DB version number before persisting to catch out-of-band concurrent edits
+      const rv = RunView.FromMetadataProvider(params.provider);
+      const verCheck = await rv.RunView<{ ID: string; VersionNumber?: number | null }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(state.artifactId)}'`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'VersionNumber'],
+          MaxRows: 1,
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        },
+        params.contextUser,
+      );
+      if (verCheck.Success && verCheck.Results?.length) {
+        const currentDbVersion = verCheck.Results[0].VersionNumber ?? 1;
+        if (currentDbVersion > state.dbVersionNumber) {
+          return {
+            success: false,
+            artifactId: state.artifactId,
+            errorMessage: `Concurrent modification detected on artifact '${state.artifactId}': expected version ${state.dbVersionNumber}, found version ${currentDbVersion}. Please re-inspect and retry.`,
+          };
+        }
+      }
+
+      let uploadedFileId: string | null = null;
+      let xlsxSizeBytes: number | null = null;
+      if (state.contentMode === 'File') {
+        if (!latestXlsxBase64) {
+          return {
+            success: false,
+            artifactId: state.artifactId,
+            errorMessage: 'Failed to materialize updated .xlsx bytes for File-mode artifact.',
+          };
+        }
+        const upload = await this.uploadXlsxBuffer(params, state.name, latestXlsxBase64);
+        uploadedFileId = upload.fileId;
+        xlsxSizeBytes = upload.sizeBytes;
+        if (!uploadedFileId) {
+          return {
+            success: false,
+            artifactId: state.artifactId,
+            errorMessage: 'Failed to upload updated .xlsx binary to FileStorageEngine; refusing to downgrade File-mode artifact.',
+          };
+        }
+      }
+
+      const nextVersionNumber = Math.max(state.versionNumber, state.dbVersionNumber) + 1;
+      const versionEntity = await params.provider.GetEntityObject<MJArtifactVersionEntity>(
+        'MJ: Artifact Versions',
+        params.contextUser,
+      );
+      versionEntity.NewRecord();
+      versionEntity.ArtifactID = state.artifactId;
+      versionEntity.VersionNumber = nextVersionNumber;
+      versionEntity.Name = state.name;
+      versionEntity.UserID = params.contextUser.ID;
+      versionEntity.Comments = params.agentName
+        ? `Edited by ${params.agentName} via '${lastToolName}'`
+        : `Updated via '${lastToolName}'`;
+      this.applyVersionPayload(
+        versionEntity,
+        state,
+        finalContentStr,
+        lastToolName,
+        params,
+        uploadedFileId,
+        xlsxSizeBytes,
+      );
+
+      if (!(await versionEntity.Save())) {
+        return {
+          success: false,
+          artifactId: state.artifactId,
+          errorMessage: versionEntity.LatestResult?.CompleteMessage || 'Failed to save new MJ: Artifact Versions record.',
+        };
+      }
+
+      if (hookOutcome?.commit) {
+        let commitRes: Awaited<ReturnType<NonNullable<ArtifactLiveMutationHookResult['commit']>>>;
+        try {
+          commitRes = await hookOutcome.commit({
+            versionId: versionEntity.ID,
+            versionNumber: nextVersionNumber,
+          });
+        } catch (commitErr) {
+          const savedVersionId = versionEntity.ID;
+          await this.safeDeleteVersionEntity(versionEntity);
+          await this.safeRollbackHook(hookOutcome.rollback, savedVersionId);
+          return {
+            success: false,
+            artifactId: state.artifactId,
+            errorMessage: `Live room commit failed for artifact '${state.artifactId}': ${
+              commitErr instanceof Error ? commitErr.message : String(commitErr)
+            }`,
+          };
+        }
+
+        if (commitRes && typeof commitRes === 'object' && commitRes.applied === false) {
+          const savedVersionId = versionEntity.ID;
+          await this.safeDeleteVersionEntity(versionEntity);
+          await this.safeRollbackHook(commitRes.rollback ?? hookOutcome.rollback, savedVersionId);
+          return {
+            success: false,
+            artifactId: state.artifactId,
+            errorMessage: `Live room commit rejected mutation for artifact '${state.artifactId}' (applied=false).`,
+          };
+        }
+
+        if (
+          commitRes &&
+          typeof commitRes === 'object' &&
+          typeof commitRes.mergedContent === 'string' &&
+          commitRes.mergedContent !== finalContentStr
+        ) {
+          finalContentStr = commitRes.mergedContent;
+          let updatedFileId = uploadedFileId;
+          let updatedSizeBytes = xlsxSizeBytes;
+          if (state.contentMode === 'File') {
+            const rematerialized = this.materializeXlsxForContent(finalContentStr, workingXlsxBytes);
+            if (rematerialized.xlsxBase64) {
+              workingXlsxBytes = rematerialized.xlsxBytes;
+              latestXlsxBase64 = rematerialized.xlsxBase64;
+              const reupload = await this.uploadXlsxBuffer(params, state.name, rematerialized.xlsxBase64);
+              if (reupload.fileId) {
+                updatedFileId = reupload.fileId;
+                updatedSizeBytes = reupload.sizeBytes;
+              } else {
+                warnings.push('Live room merged content after save, but re-uploading merged .xlsx binary failed.');
+              }
+            }
+          }
+          this.applyVersionPayload(
+            versionEntity,
+            state,
+            finalContentStr,
+            lastToolName,
+            params,
+            updatedFileId,
+            updatedSizeBytes,
+          );
+          if (!(await versionEntity.Save())) {
+            warnings.push(
+              versionEntity.LatestResult?.CompleteMessage ||
+                'Failed to re-save version record with post-commit merged content.',
+            );
+          }
+        }
+      }
+
+      try {
+        MJGlobal.Instance.RaiseEvent({
+          component: this,
+          event: MJEventType.ComponentEvent,
+          eventCode: ARTIFACT_LIVE_MUTATION_EVENT_CODE,
+          args: {
+            ArtifactID: state.artifactId,
+            NewContent: finalContentStr,
+            PreviousContent: previousContentStr,
+            ToolName: lastToolName,
+            User: params.contextUser,
+            SaveVersion: false,
+            AlreadyAppliedToRoom: Boolean(liveHook),
+          },
+        });
+      } catch {
+        // Never fail mutation if UI subscriber throws
+      }
+
+      this.RecordTouchedArtifact(params.agentRunId, {
+        ArtifactID: state.artifactId,
+        ArtifactVersionID: versionEntity.ID,
+        VersionNumber: nextVersionNumber,
+        Name: state.name,
+        ArtifactTypeName: state.typeName,
+        DriverClass: state.driverClass,
+        Operation: 'mutated',
+      });
+
+      await this.EmitAgentPresence({
+        artifactId: state.artifactId,
+        phase: 'settled',
+        contextUser: params.contextUser,
+        agentRunId: params.agentRunId,
+        agentName: params.agentName,
+        toolName: lastToolName,
+        actionSummary: FormatAgentActionSummary(lastToolName, lastToolInput, lastLocation),
+        location: lastLocation,
+      });
+
+      return {
+        success: true,
+        artifactId: state.artifactId,
+        versionId: versionEntity.ID,
+        versionNumber: nextVersionNumber,
+        name: state.name,
+        typeName: state.typeName,
+        driverClass: state.driverClass,
+        results: stepResults,
+        ...(warnings.length > 0 ? { warnings } : {}),
+      };
+    } catch (err) {
+      return {
+        success: false,
+        artifactId: state.artifactId,
+        errorMessage: `MutateGovernedArtifact error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    } finally {
+      if (workingEmitted && !params.agentRunId) {
         await this.EmitAgentPresence({
           artifactId: state.artifactId,
           phase: 'exit',
@@ -1122,236 +1689,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
           agentName: params.agentName,
         });
       }
-      return {
-        success: true,
-        artifactId: state.artifactId,
-        versionId: state.versionId,
-        versionNumber: state.versionNumber,
-        name: state.name,
-        typeName: state.typeName,
-        driverClass: state.driverClass,
-        results: stepResults,
-      };
     }
-
-    if (workingXlsxBytes) {
-      const parsedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(finalContentStr);
-      workingXlsxBytes = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(workingXlsxBytes, parsedWorkbook);
-      latestXlsxBase64 = Buffer.from(workingXlsxBytes).toString('base64');
-    }
-
-    const liveHook = GetArtifactLiveMutationHook();
-    let hookOutcome: ArtifactLiveMutationHookResult | undefined = undefined;
-    if (liveHook && state.contentMode !== 'File') {
-      const hookResult = await liveHook({
-        artifactId: state.artifactId,
-        alphaId: 'A',
-        versionId: state.versionId,
-        versionNumber: state.versionNumber + 1,
-        previousContent: previousContentStr,
-        updatedContent: finalContentStr,
-        xlsxBase64: latestXlsxBase64,
-        tool: lastToolName,
-        contextUser: params.contextUser,
-        agentRunId: params.agentRunId,
-        agentName: params.agentName,
-        deferCommit: true,
-      });
-      if (hookResult && typeof hookResult === 'object') {
-        hookOutcome = hookResult;
-        if (typeof hookResult.mergedContent === 'string') {
-          finalContentStr = hookResult.mergedContent;
-        }
-      }
-    }
-
-    let uploadedFileId: string | null = null;
-    let xlsxSizeBytes: number | null = null;
-    if (state.contentMode === 'File') {
-      if (!latestXlsxBase64) {
-        return {
-          success: false,
-          artifactId: state.artifactId,
-          errorMessage: 'Failed to materialize updated .xlsx bytes for File-mode artifact.',
-        };
-      }
-      const xlsxBuf = Buffer.from(latestXlsxBase64, 'base64');
-      xlsxSizeBytes = xlsxBuf.byteLength;
-      try {
-        await FileStorageEngine.Instance.Config(false, params.contextUser, params.provider);
-        if (FileStorageEngine.Instance.HasStorageAccounts) {
-          const safeFileName = state.name.toLowerCase().endsWith('.xlsx') ? state.name : `${state.name || 'workbook'}.xlsx`;
-          const uploadRes = await FileStorageEngine.Instance.UploadFile({
-            content: xlsxBuf,
-            fileName: safeFileName,
-            mimeType: XLSX_MIME_TYPE,
-            contextUser: params.contextUser,
-            provider: params.provider,
-          });
-          uploadedFileId = uploadRes.FileID;
-        }
-      } catch {
-        uploadedFileId = null;
-      }
-      if (!uploadedFileId) {
-        await hookOutcome?.rollback?.(state.versionId);
-        return {
-          success: false,
-          artifactId: state.artifactId,
-          errorMessage: 'Failed to upload updated .xlsx binary to FileStorageEngine; refusing to downgrade File-mode artifact.',
-        };
-      }
-    }
-
-    const nextVersionNumber = state.versionNumber + 1;
-    const versionEntity = await params.provider.GetEntityObject<MJArtifactVersionEntity>(
-      'MJ: Artifact Versions',
-      params.contextUser,
-    );
-    versionEntity.NewRecord();
-    versionEntity.ArtifactID = state.artifactId;
-    versionEntity.VersionNumber = nextVersionNumber;
-    versionEntity.Name = state.name;
-    versionEntity.UserID = params.contextUser.ID;
-    versionEntity.Comments = params.agentName
-      ? `Edited by ${params.agentName} via '${lastToolName}'`
-      : `Updated via '${lastToolName}'`;
-    versionEntity.ContentHash = createHash('sha256').update(finalContentStr, 'utf8').digest('hex');
-
-    if (uploadedFileId) {
-      const safeFileName = state.name.toLowerCase().endsWith('.xlsx') ? state.name : `${state.name || 'workbook'}.xlsx`;
-      versionEntity.ContentMode = 'File';
-      versionEntity.FileID = uploadedFileId;
-      versionEntity.MimeType = XLSX_MIME_TYPE;
-      versionEntity.FileName = safeFileName;
-      versionEntity.ContentSizeBytes = xlsxSizeBytes;
-      versionEntity.Content = null;
-      versionEntity.Configuration = finalContentStr;
-    } else {
-      versionEntity.ContentMode = 'Text';
-      versionEntity.FileID = null;
-      versionEntity.MimeType = state.mimeType ?? null;
-      versionEntity.Content = finalContentStr;
-      versionEntity.ContentSizeBytes = Buffer.byteLength(finalContentStr, 'utf8');
-      let existingConfig: Record<string, unknown> = {};
-      if (state.configuration) {
-        const parsedConfig = CleanAndParseJSON<unknown>(state.configuration);
-        if (parsedConfig && typeof parsedConfig === 'object' && !Array.isArray(parsedConfig)) {
-          existingConfig = parsedConfig as Record<string, unknown>;
-        }
-      }
-      const mergedConfig = JSON.stringify({
-        ...existingConfig,
-        agentRunId: params.agentRunId ?? null,
-        agentName: params.agentName ?? null,
-        lastTool: lastToolName,
-      });
-      const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
-        mergedConfig,
-        finalContentStr,
-        state.driverClass ?? null,
-        state.name,
-        {
-          ArtifactType: state.typeEntity ?? undefined,
-          AllArtifactTypes: ArtifactMetadataEngine.Instance.ArtifactTypes ?? [],
-        },
-      );
-      versionEntity.Configuration = enrichedConfig ?? mergedConfig;
-    }
-
-    if (!(await versionEntity.Save())) {
-      await hookOutcome?.rollback?.(state.versionId);
-      return {
-        success: false,
-        artifactId: state.artifactId,
-        errorMessage: versionEntity.LatestResult?.CompleteMessage || 'Failed to save new MJ: Artifact Versions record.',
-      };
-    }
-
-    if (hookOutcome?.commit) {
-      const commitRes = await hookOutcome.commit({
-        versionId: versionEntity.ID,
-        versionNumber: nextVersionNumber,
-      });
-      if (commitRes && typeof commitRes === 'object' && commitRes.applied === false) {
-        warnings.push('Live room commit returned applied=false after version persistence.');
-      }
-    } else if (liveHook && state.contentMode === 'File') {
-      await liveHook({
-        artifactId: state.artifactId,
-        alphaId: 'A',
-        versionId: versionEntity.ID,
-        versionNumber: nextVersionNumber,
-        previousContent: previousContentStr,
-        updatedContent: finalContentStr,
-        xlsxBase64: latestXlsxBase64,
-        tool: lastToolName,
-        contextUser: params.contextUser,
-        agentRunId: params.agentRunId,
-        agentName: params.agentName,
-      });
-    }
-
-    try {
-      MJGlobal.Instance.RaiseEvent({
-        component: this,
-        event: MJEventType.ComponentEvent,
-        eventCode: ARTIFACT_LIVE_MUTATION_EVENT_CODE,
-        args: {
-          ArtifactID: state.artifactId,
-          NewContent: finalContentStr,
-          PreviousContent: previousContentStr,
-          ToolName: lastToolName,
-          User: params.contextUser,
-          SaveVersion: false,
-          AlreadyAppliedToRoom: Boolean(liveHook),
-        },
-      });
-    } catch {
-      // Never fail mutation if UI subscriber throws
-    }
-
-    this.RecordTouchedArtifact(params.agentRunId, {
-      ArtifactID: state.artifactId,
-      ArtifactVersionID: versionEntity.ID,
-      VersionNumber: nextVersionNumber,
-      Name: state.name,
-      ArtifactTypeName: state.typeName,
-      DriverClass: state.driverClass,
-      Operation: 'mutated',
-    });
-
-    await this.EmitAgentPresence({
-      artifactId: state.artifactId,
-      phase: 'settled',
-      contextUser: params.contextUser,
-      agentRunId: params.agentRunId,
-      agentName: params.agentName,
-      toolName: lastToolName,
-      actionSummary: FormatAgentActionSummary(lastToolName, ops[ops.length - 1]?.input ?? {}, lastLocation),
-      location: lastLocation,
-    });
-    if (!params.agentRunId) {
-      await this.EmitAgentPresence({
-        artifactId: state.artifactId,
-        phase: 'exit',
-        contextUser: params.contextUser,
-        agentRunId: params.agentRunId,
-        agentName: params.agentName,
-      });
-    }
-
-    return {
-      success: true,
-      artifactId: state.artifactId,
-      versionId: versionEntity.ID,
-      versionNumber: nextVersionNumber,
-      name: state.name,
-      typeName: state.typeName,
-      driverClass: state.driverClass,
-      results: stepResults,
-      ...(warnings.length > 0 ? { warnings } : {}),
-    };
   }
 
   /**
@@ -1362,6 +1700,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
   ): Promise<{ success: boolean; artifacts: WorkspaceArtifactListItem[]; errorMessage?: string }> {
     const collectionId = (params.collectionId ?? '').trim();
     const typeFilter = (params.typeFilter ?? '').trim().toLowerCase();
+    const normalizedTypeFilter = typeFilter ? this.NormalizeArtifactTypeName(params.typeFilter).toLowerCase() : '';
     const search = (params.search ?? '').trim().toLowerCase();
     const maxResults = Math.min(Math.max(params.maxResults ?? 25, 1), 100);
 
@@ -1407,17 +1746,77 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         );
         for (const row of verLookup.Success && verLookup.Results ? verLookup.Results : []) {
           const id = (row.ArtifactID ?? '').trim();
-          if (id && !seen.has(id.toLowerCase())) {
-            seen.add(id.toLowerCase());
+          const norm = NormalizeUUID(id);
+          if (id && !seen.has(norm)) {
+            seen.add(norm);
             candidateIds.push(id);
           }
         }
       }
     } else {
-      const filters = [`UserID='${EscapeSQLString(params.contextUser.ID)}'`];
-      if (search) {
-        filters.push(`Name LIKE '%${EscapeSQLString(search)}%'`);
+      const safeUserId = EscapeSQLString(params.contextUser.ID);
+      const sharedArtifactIds: string[] = [];
+      try {
+        const permRes = await rv.RunView<{ ArtifactID?: string | null }>(
+          {
+            EntityName: 'MJ: Artifact Permissions',
+            ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
+            Fields: ['ArtifactID'],
+            MaxRows: maxResults * 4,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+          },
+          params.contextUser,
+        );
+        if (permRes.Success && permRes.Results?.length) {
+          for (const row of permRes.Results) {
+            const aid = (row.ArtifactID ?? '').trim();
+            if (aid && IsValidUUID(aid)) {
+              sharedArtifactIds.push(aid);
+            }
+          }
+        }
+      } catch {
+        // Proceed with owned artifacts if permissions query fails
       }
+
+      const accessFilter =
+        sharedArtifactIds.length > 0
+          ? `(UserID='${safeUserId}' OR ID IN (${Array.from(new Set(sharedArtifactIds))
+              .map((id) => `'${EscapeSQLString(id)}'`)
+              .join(',')}))`
+          : `UserID='${safeUserId}'`;
+
+      const filters = [accessFilter];
+      if (search) {
+        filters.push(`Name LIKE '%${EscapeSQLString(this.escapeSqlLike(search))}%'`);
+      }
+      if (typeFilter) {
+        const canonicalName = this.NormalizeArtifactTypeName(params.typeFilter);
+        const types = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+        const matchedTypeNames = types
+          .filter(
+            (t) =>
+              t.Name.toLowerCase().includes(typeFilter) ||
+              t.Name.toLowerCase() === normalizedTypeFilter,
+          )
+          .map((t) => t.Name);
+        if (matchedTypeNames.length > 0) {
+          filters.push(
+            `Type IN (${Array.from(new Set(matchedTypeNames))
+              .map((n) => `'${EscapeSQLString(n)}'`)
+              .join(',')})`,
+          );
+        } else {
+          const escapedLike = EscapeSQLString(this.escapeSqlLike(typeFilter));
+          if (canonicalName.toLowerCase() !== typeFilter) {
+            filters.push(`(Type LIKE '%${escapedLike}%' OR Type='${EscapeSQLString(canonicalName)}')`);
+          } else {
+            filters.push(`Type LIKE '%${escapedLike}%'`);
+          }
+        }
+      }
+
       const artRes = await rv.RunView<{ ID: string }>(
         {
           EntityName: 'MJ: Artifacts',
@@ -1432,8 +1831,9 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       );
       for (const row of artRes.Success && artRes.Results ? artRes.Results : []) {
         const id = (row.ID ?? '').trim();
-        if (id && !seen.has(id.toLowerCase())) {
-          seen.add(id.toLowerCase());
+        const norm = NormalizeUUID(id);
+        if (id && !seen.has(norm)) {
+          seen.add(norm);
           candidateIds.push(id);
         }
       }
@@ -1442,10 +1842,13 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     const items: WorkspaceArtifactListItem[] = [];
     for (const artId of candidateIds) {
       if (items.length >= maxResults) break;
-      const loaded = await this.LoadReadableArtifactState(params.provider, params.contextUser, artId);
+      const loaded = await this.LoadReadableArtifactState(params.provider, params.contextUser, artId, {
+        skipBinaryDownload: true,
+      });
       if (!loaded.state) continue;
       const st = loaded.state;
-      if (typeFilter && !st.typeName.toLowerCase().includes(typeFilter)) continue;
+      const stTypeLower = st.typeName.toLowerCase();
+      if (typeFilter && !stTypeLower.includes(typeFilter) && stTypeLower !== normalizedTypeFilter) continue;
       if (search && !st.name.toLowerCase().includes(search)) continue;
 
       const digest = ArtifactSynthesisEngine.Instance.ExtractSourceDigest(

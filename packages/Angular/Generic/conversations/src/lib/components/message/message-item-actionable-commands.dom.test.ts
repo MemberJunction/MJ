@@ -10,8 +10,8 @@ import {
 
 function makeArtifactRef(artifactId: string, versionId: string, name: string): MessageArtifactRef {
   return {
-    artifact: { ID: artifactId, Name: name } as unknown as MJArtifactEntity,
-    version: { ID: versionId, ArtifactID: artifactId, Name: `${name} v1`, VersionNumber: 1 } as unknown as MJArtifactVersionEntity,
+    artifact: { ID: artifactId, Name: name } as Partial<MJArtifactEntity> as MJArtifactEntity,
+    version: { ID: versionId, ArtifactID: artifactId, Name: `${name} v1`, VersionNumber: 1 } as Partial<MJArtifactVersionEntity> as MJArtifactVersionEntity,
   };
 }
 
@@ -35,16 +35,21 @@ describe('FilterRedundantArtifactCommands & MessageItemComponent.ActionableComma
     ]);
   });
 
-  it('suppresses Report/Dashboard placeholder or matching artifact links while preserving real Dashboard UUID links', () => {
+  it('suppresses Report/Dashboard placeholder or matching artifact links while preserving real Dashboard UUID links and distinct names', () => {
     const commands: ActionableCommand[] = [
-      { type: 'open:resource', label: 'Open Report', resourceType: 'Report', resourceId: 'latest-doc' },
+      { type: 'open:resource', label: 'Open Placeholder', resourceType: 'Report', resourceId: '' },
+      { type: 'open:resource', label: 'Open Matching Name', resourceType: 'Report', resourceId: 'Architecture Doc' },
+      { type: 'open:resource', label: 'Open Q4 Report', resourceType: 'Report', resourceId: 'Q4 Financial Report' },
       { type: 'open:resource', label: 'Open Spec', resourceType: 'Dashboard', resourceId: ARTIFACT_ID },
       { type: 'open:resource', label: 'Open Revenue Dashboard', resourceType: 'Dashboard', resourceId: OTHER_DASHBOARD_ID },
+      { type: 'open:resource', label: 'Open Named Dashboard', resourceType: 'Dashboard', resourceId: 'Executive Sales Dashboard' },
       { type: 'open:url', label: 'Docs', url: 'https://example.com' },
     ];
     const result = FilterRedundantArtifactCommands(commands, [makeArtifactRef(ARTIFACT_ID, VERSION_ID, 'Architecture Doc')]);
     expect(result).toEqual([
+      { type: 'open:resource', label: 'Open Q4 Report', resourceType: 'Report', resourceId: 'Q4 Financial Report' },
       { type: 'open:resource', label: 'Open Revenue Dashboard', resourceType: 'Dashboard', resourceId: OTHER_DASHBOARD_ID },
+      { type: 'open:resource', label: 'Open Named Dashboard', resourceType: 'Dashboard', resourceId: 'Executive Sales Dashboard' },
       { type: 'open:url', label: 'Docs', url: 'https://example.com' },
     ]);
   });
@@ -78,7 +83,7 @@ describe('FilterRedundantArtifactCommands & MessageItemComponent.ActionableComma
         { type: 'open:resource', label: 'Open Document', resourceType: 'Artifact', resourceId: ARTIFACT_ID },
         { type: 'open:url', label: 'Reference', url: 'https://example.com' },
       ]),
-    } as unknown as MJConversationDetailEntity;
+    } as Partial<MJConversationDetailEntity> as MJConversationDetailEntity;
     item.artifacts = [];
     item.PendingArtifacts = [];
 

@@ -355,7 +355,7 @@ describe('Always-on ArtifactToolManager workspace, GovernedArtifactService & liv
                     return true;
                 },
             })),
-        } as unknown as IMetadataProvider;
+        } as object as IMetadataProvider;
 
         vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
             ArtifactID: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
@@ -380,7 +380,12 @@ describe('Always-on ArtifactToolManager workspace, GovernedArtifactService & liv
         });
         expect(outcome.success, outcome.errorMessage).toBe(true);
         expect(savedConfigs).toHaveLength(1);
-        const parsed = JSON.parse(savedConfigs[0]) as Record<string, unknown>;
+        const parsed = JSON.parse(savedConfigs[0]) as {
+            customSetting?: string;
+            agentRunId?: string;
+            lastTool?: string;
+            previewSnapshot?: { version?: number; title?: string };
+        };
         expect(parsed['customSetting']).toBe('preserve-me');
         expect(parsed['agentRunId']).toBe('run-config-check');
         expect(parsed['lastTool']).toBe('replace_block');

@@ -100,6 +100,10 @@ import { DelegationNarrator } from './realtime-delegation-narrator';
 import { FilterAllowedAgentsByCanRun } from './realtime-coagent-resolution';
 import { BridgeRealtimeUsageRecorder } from './bridge-realtime-usage-recorder';
 import {
+    CollectDelegatedRunArtifacts,
+    ExtractDirectActionArtifacts,
+} from './realtime-artifact-helpers';
+import {
     RealtimeToolBroker,
     RealtimeToolBrokerDeps,
     INVOKE_TARGET_AGENT_TOOL_NAME,
@@ -4310,8 +4314,8 @@ export class RealtimeClientSessionService {
         provider: IMetadataProvider
     ): Promise<DelegatedRunArtifact[] | undefined> {
         const paused = result.agentRun?.Status === 'AwaitingFeedback';
-        const payload = result.payload as Record<string, unknown> | null | undefined;
-        const hasPayload = payload != null && Object.keys(payload).length > 0;
+        const payload = result.payload;
+        const hasPayload = payload != null && typeof payload === 'object' && Object.keys(payload).length > 0;
         const hasTouched = (result.touchedArtifacts?.length ?? 0) > 0;
         if (!result.success || paused || (!hasPayload && !hasTouched)) {
             return undefined;
@@ -4335,50 +4339,14 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<DelegatedRunArtifact[] | undefined> {
-        const collected: DelegatedRunArtifact[] = [];
-        const seen = new Set<string>();
-
-        if (result.touchedArtifacts?.length) {
-            for (const touched of result.touchedArtifacts) {
-                const artId = (touched.ArtifactID ?? '').trim();
-                if (!artId || seen.has(artId.toLowerCase())) continue;
-                seen.add(artId.toLowerCase());
-                const typeEntity = touched.ArtifactTypeName
-                    ? ArtifactMetadataEngine.Instance.FindArtifactType(touched.ArtifactTypeName)
-                    : undefined;
-                collected.push({
-                    ArtifactID: artId,
-                    ArtifactVersionID: touched.ArtifactVersionID ?? '',
-                    Name: touched.Name || 'Untitled Artifact',
-                    ArtifactTypeName: touched.ArtifactTypeName,
-                    DriverClass: touched.DriverClass ?? typeEntity?.DriverClass ?? undefined,
-                });
-            }
-        }
-
-        const payload = result.payload as Record<string, unknown> | null | undefined;
-        const hasPayload = payload != null && Object.keys(payload).length > 0;
-        if (hasPayload) {
-            const runner = new AgentRunner(provider);
-            const info = await runner.ProcessAgentArtifacts(result, undefined, undefined, contextUser, provider);
-            if (info && !seen.has(info.artifactId.toLowerCase())) {
-                const artifact = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
-                if (await artifact.Load(info.artifactId) && artifact.Visibility !== 'System Only') {
-                    const typeName = artifact.Type ?? undefined;
-                    const typeEntity = typeName ? ArtifactMetadataEngine.Instance.FindArtifactType(typeName) : undefined;
-                    seen.add(info.artifactId.toLowerCase());
-                    collected.push({
-                        ArtifactID: info.artifactId,
-                        ArtifactVersionID: info.versionId,
-                        Name: artifact.Name,
-                        ArtifactTypeName: typeName,
-                        DriverClass: typeEntity?.DriverClass ?? undefined,
-                    });
-                }
-            }
-        }
-
-        return collected.length > 0 ? collected : undefined;
+        const runner = new AgentRunner(provider);
+        return CollectDelegatedRunArtifacts({
+            Result: result,
+            ContextUser: contextUser,
+            Provider: provider,
+            ProcessPayloadArtifacts: (r) =>
+                runner.ProcessAgentArtifacts(r, undefined, undefined, contextUser, provider),
+        });
     }
 
     /**
@@ -4805,7 +4773,7 @@ export class RealtimeClientSessionService {
             });
 
             const outputText = result.Message || (result.Success ? 'Action completed successfully.' : 'Action failed.');
-            const actionArtifacts = this.extractDirectActionArtifacts(result.Params);
+            const actionArtifacts = ExtractDirectActionArtifacts(action.Name, result.Success, result.Params);
 
             return {
                 CallID: call.CallID,
@@ -4821,27 +4789,6 @@ export class RealtimeClientSessionService {
                 Output: `Action '${action.Name}' failed: ${message}`
             };
         }
-    }
-
-    private extractDirectActionArtifacts(params?: ActionParam[]): DelegatedRunArtifact[] | undefined {
-        if (!params?.length) return undefined;
-        const readStr = (name: string): string | undefined => {
-            const match = params.find(p => p.Name.toLowerCase() === name.toLowerCase());
-            return typeof match?.Value === 'string' && match.Value.trim() ? match.Value.trim() : undefined;
-        };
-        const artifactId = readStr('ArtifactID');
-        if (!artifactId) return undefined;
-        const versionId = readStr('VersionID') ?? '';
-        const name = readStr('ArtifactName') ?? readStr('Title') ?? 'Untitled Artifact';
-        const typeName = readStr('ArtifactTypeName') ?? readStr('ArtifactType');
-        const driverClass = readStr('DriverClass');
-        return [{
-            ArtifactID: artifactId,
-            ArtifactVersionID: versionId,
-            Name: name,
-            ...(typeName ? { ArtifactTypeName: typeName } : {}),
-            ...(driverClass ? { DriverClass: driverClass } : {}),
-        }];
     }
 
     /**

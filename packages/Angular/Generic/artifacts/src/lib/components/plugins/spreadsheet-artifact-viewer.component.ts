@@ -18,7 +18,7 @@ import {
   inject,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { EscapeSQLString, IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, LogError, RunView, UserInfo, type DataSnapshot, type IMetadataProvider } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateJsonSnapshot } from '../../snapshot-helpers';
@@ -51,6 +51,11 @@ import {
   type SpreadsheetChartDataset,
   type SpreadsheetEmbeddedArtifactSpec,
   type SpreadsheetCellEditContext,
+  type SpreadsheetSortSpec,
+  type SpreadsheetFilterSpec,
+  type SpreadsheetValidationRuleSpec,
+  type SpreadsheetConditionalFormatRuleSpec,
+  type SpreadsheetProtectedRangeSpec,
   type DocumentBlockSpec,
   type DocumentBlockExecutionResult,
 } from '@memberjunction/core-entities';
@@ -93,6 +98,7 @@ import {
 export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
 
 export const SHEETS_TOOLBAR_PINS_SETTING_KEY = 'MJ.Sheets.Toolbar.PinnedActions';
+export const SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY = 'MJ.Sheets.ObjectsPaneHeightPx';
 
 export type SheetsToolbarItemKey =
   | 'bold'
@@ -241,10 +247,6 @@ export interface ResolvedSheetsToolbarItem {
     <div
       class="mj-sheets-shell"
       data-testid="mj-sheets-shell"
-      (pointerdown)="OnShellPointerDown($event)"
-      (pointermove)="OnShellPointerMove($event)"
-      (pointerup)="OnShellPointerUp($event)"
-      (pointercancel)="OnShellPointerCancel($event)"
     >
       <!-- Top Workbook Toolbar -->
       <div class="mj-sheets-toolbar" data-testid="sheets-toolbar">
@@ -711,6 +713,7 @@ export interface ResolvedSheetsToolbarItem {
                         class="mj-sheets-row-header"
                         [class.selected]="row.Index === ActiveRowIndex"
                         [class.in-range]="IsRowInSelectedRange(row.Index)"
+                        [style.top.px]="row.Index <= ActiveSheet.FrozenRows ? GetFrozenRowTopPx(row.Index) : null"
                         [attr.data-testid]="'sheet-row-header-' + row.Index"
                         (click)="SelectRowHeader(row.Index, $event)"
                         (contextmenu)="OnRowHeaderContextMenu($event, row.Index)"
@@ -739,6 +742,7 @@ export interface ResolvedSheetsToolbarItem {
                           [class.in-range]="IsAddressInSelectedRange(row.Index, col.Index)"
                           [class.mj-sheets-frozen-col]="col.Index <= ActiveSheet.FrozenColumns"
                           [style.left.px]="col.Index <= ActiveSheet.FrozenColumns ? GetFrozenColumnLeftPx(col.Index) : null"
+                          [style.top.px]="row.Index <= ActiveSheet.FrozenRows ? GetFrozenRowTopPx(row.Index) : null"
                           [class.mj-sheets-cell-cut-source]="IsCellInCutSource(row.Index, col.Index)"
                           [class.has-peer-selection]="!!peerColor"
                           [style.--mj-sheets-peer-color]="peerColor"
@@ -1004,14 +1008,16 @@ export interface ResolvedSheetsToolbarItem {
                               }
                             </span>
                             <div class="mj-sheets-action-btns">
-                              <button
-                                type="button"
-                                class="mj-sheets-mini-btn"
-                                (click)="RefreshSingleLiveTable(table)"
-                                [attr.data-testid]="'sheet-table-refresh-' + table.TableID"
-                              >
-                                <i class="fa-solid fa-rotate"></i> Refresh
-                              </button>
+                              @if (CanEdit && table.Mode !== 'Frozen') {
+                                <button
+                                  type="button"
+                                  class="mj-sheets-mini-btn"
+                                  (click)="RefreshSingleLiveTable(table)"
+                                  [attr.data-testid]="'sheet-table-refresh-' + table.TableID"
+                                >
+                                  <i class="fa-solid fa-rotate"></i> Refresh
+                                </button>
+                              }
                               @if (CanEdit) {
                                 @if (table.Mode === 'Live') {
                                   <button
@@ -1095,6 +1101,7 @@ export interface ResolvedSheetsToolbarItem {
                             </span>
                           </div>
                           <div class="mj-sheets-ole-host" [attr.data-testid]="'sheet-ole-host-' + emb.EmbedID">
+                            @let embError = EmbeddedArtifactErrors[emb.EmbedID];
                             @if (childVer) {
                               <mj-artifact-type-plugin-viewer
                                 [Provider]="Provider"
@@ -1103,6 +1110,14 @@ export interface ResolvedSheetsToolbarItem {
                                 [readonly]="!CanEdit"
                                 (ContentCommitted)="OnEmbeddedArtifactCommitted(emb, $event)"
                               ></mj-artifact-type-plugin-viewer>
+                            } @else if (embError) {
+                              <div
+                                class="mj-sheets-ole-fallback mj-sheets-ole-error"
+                                [attr.data-testid]="'sheet-ole-error-' + emb.EmbedID"
+                              >
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <span>{{ embError }}</span>
+                              </div>
                             } @else {
                               <div class="mj-sheets-ole-fallback">
                                 <i class="fa-solid fa-diagram-project"></i>
@@ -1151,7 +1166,8 @@ export interface ResolvedSheetsToolbarItem {
                         type="button"
                         class="mj-sheets-tab-close"
                         (click)="DeleteWorksheetTab(ws.SheetID, $event)"
-                        title="Delete Worksheet"
+                        [disabled]="!!GetWorksheetDeleteBlockedReason(ws)"
+                        [title]="GetWorksheetDeleteBlockedReason(ws) || 'Delete Worksheet'"
                         [attr.data-testid]="'sheet-delete-tab-' + ws.SheetID"
                       >
                         <i class="fa-solid fa-xmark"></i>
@@ -1338,14 +1354,6 @@ export interface ResolvedSheetsToolbarItem {
             <div class="mj-sheets-modal-footer">
               <button
                 type="button"
-                class="mj-sheets-tool-btn"
-                (click)="CancelFreezeLiveTable()"
-                data-testid="sheet-freeze-cancel-btn"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 class="mj-sheets-tool-btn mj-sheets-save-btn"
                 [disabled]="!FreezeConfirmedChecked"
                 (click)="ConfirmFreezeLiveTable()"
@@ -1353,18 +1361,26 @@ export interface ResolvedSheetsToolbarItem {
               >
                 <i class="fa-solid fa-snowflake"></i> Confirm Freeze Snapshot
               </button>
+              <button
+                type="button"
+                class="mj-sheets-tool-btn"
+                (click)="CancelFreezeLiveTable()"
+                data-testid="sheet-freeze-cancel-btn"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       }
 
-      <!-- Add Bound Live Table Modal -->
+      <!-- Add / Configure Bound Live Table Modal -->
       @if (ShowAddLiveTableModal) {
         <div class="mj-sheets-modal-backdrop" data-testid="sheets-live-table-modal">
           <div class="mj-sheets-modal-dialog" role="dialog" aria-modal="true">
             <div class="mj-sheets-modal-header">
               <i class="fa-solid fa-table-list"></i>
-              <h3>Bind Live MJ Entity View or Saved Query</h3>
+              <h3>{{ EditingLiveTableID ? 'Configure Live Table' : 'Bind Live MJ Entity View or Saved Query' }}</h3>
             </div>
             <div class="mj-sheets-modal-body">
               <div class="mj-sheets-form-row">
@@ -1454,18 +1470,20 @@ export interface ResolvedSheetsToolbarItem {
             <div class="mj-sheets-modal-footer">
               <button
                 type="button"
-                class="mj-sheets-tool-btn"
-                (click)="ShowAddLiveTableModal = false"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 class="mj-sheets-tool-btn mj-sheets-save-btn"
                 (click)="ConfirmAddLiveTable()"
                 data-testid="sheet-confirm-add-table-btn"
               >
-                <i class="fa-solid fa-plus"></i> Bind & Refresh Table
+                <i class="fa-solid" [class.fa-check]="EditingLiveTableID" [class.fa-plus]="!EditingLiveTableID"></i>
+                {{ EditingLiveTableID ? 'Save & Refresh Table' : 'Bind & Refresh Table' }}
+              </button>
+              <button
+                type="button"
+                class="mj-sheets-tool-btn"
+                (click)="CancelLiveTableModal()"
+                data-testid="sheet-cancel-add-table-btn"
+              >
+                Cancel
               </button>
             </div>
           </div>
@@ -2039,18 +2057,77 @@ export interface ResolvedSheetsToolbarItem {
             <div class="mj-sheets-modal-footer">
               <button
                 type="button"
-                class="mj-sheets-tool-btn"
-                (click)="CloseChartEditorModal()"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 class="mj-sheets-tool-btn mj-sheets-save-btn"
                 (click)="ConfirmSaveChartEditor()"
                 data-testid="chart-editor-save"
               >
                 <i class="fa-solid fa-check"></i> Apply Changes
+              </button>
+              <button
+                type="button"
+                class="mj-sheets-tool-btn"
+                (click)="CloseChartEditorModal()"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Inline Row Height / Column Width Dialog -->
+      @if (PendingDimensionPrompt) {
+        <div
+          class="mj-sheets-modal-backdrop"
+          data-testid="sheets-dimension-modal"
+          (click)="CancelDimensionPrompt()"
+        >
+          <div
+            class="mj-sheets-modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            [attr.aria-label]="PendingDimensionPrompt.Title"
+            (click)="$event.stopPropagation()"
+          >
+            <div class="mj-sheets-modal-header">
+              <i
+                class="fa-solid"
+                [class.fa-up-down]="PendingDimensionPrompt.Kind === 'row-height'"
+                [class.fa-left-right]="PendingDimensionPrompt.Kind === 'col-width'"
+              ></i>
+              <h3>{{ PendingDimensionPrompt.Title }}</h3>
+            </div>
+            <div class="mj-sheets-modal-body">
+              <div class="mj-sheets-form-row">
+                <label>{{ PendingDimensionPrompt.Label }}</label>
+                <input
+                  type="number"
+                  class="mj-sheets-modal-input"
+                  [min]="PendingDimensionPrompt.Min"
+                  [max]="PendingDimensionPrompt.Max"
+                  [(ngModel)]="PendingDimensionPrompt.Value"
+                  (keydown.enter)="ConfirmDimensionPrompt()"
+                  (keydown.escape)="CancelDimensionPrompt()"
+                  data-testid="sheet-dimension-input"
+                />
+              </div>
+            </div>
+            <div class="mj-sheets-modal-footer">
+              <button
+                type="button"
+                class="mj-sheets-tool-btn mj-sheets-save-btn"
+                (click)="ConfirmDimensionPrompt()"
+                data-testid="sheet-dimension-confirm-btn"
+              >
+                <i class="fa-solid fa-check"></i> Apply
+              </button>
+              <button
+                type="button"
+                class="mj-sheets-tool-btn"
+                (click)="CancelDimensionPrompt()"
+                data-testid="sheet-dimension-cancel-btn"
+              >
+                Cancel
               </button>
             </div>
           </div>
@@ -2735,16 +2812,6 @@ export interface ResolvedSheetsToolbarItem {
         user-select: none;
       }
 
-      .mj-sheets-frozen-row td {
-        border-bottom: 2px solid var(--mj-brand-primary);
-      }
-
-      .mj-sheets-frozen-col {
-        position: sticky;
-        z-index: 3;
-        border-right: 2px solid var(--mj-brand-primary);
-      }
-
       .mj-sheets-cell-cut-source {
         outline: 2px dashed var(--mj-brand-primary);
         outline-offset: -2px;
@@ -2759,6 +2826,27 @@ export interface ResolvedSheetsToolbarItem {
         color: var(--mj-text-primary);
         position: relative;
         cursor: cell;
+      }
+
+      .mj-sheets-frozen-row > td {
+        position: sticky;
+        z-index: 2;
+        border-bottom: 2px solid var(--mj-brand-primary);
+      }
+
+      .mj-sheets-frozen-row > td.mj-sheets-row-header {
+        z-index: 4;
+      }
+
+      .mj-sheets-col-header.mj-sheets-frozen-col,
+      .mj-sheets-cell.mj-sheets-frozen-col {
+        position: sticky;
+        z-index: 3;
+        border-right: 2px solid var(--mj-brand-primary);
+      }
+
+      .mj-sheets-frozen-row > td.mj-sheets-cell.mj-sheets-frozen-col {
+        z-index: 4;
       }
 
       .mj-sheets-cell.in-range {
@@ -3242,6 +3330,12 @@ export interface ResolvedSheetsToolbarItem {
         font-size: 12px;
       }
 
+      .mj-sheets-ole-error {
+        color: var(--mj-status-error);
+        padding: 0 12px;
+        text-align: center;
+      }
+
       .mj-sheets-tab-bar {
         display: flex;
         align-items: center;
@@ -3720,7 +3814,16 @@ export class SpreadsheetArtifactViewerComponent
   public RenameSheetDraftName = '';
 
   private readonly touchContextMenuMonitor = new TouchContextMenuMonitor({
-    OnLongPress: (trigger) => this.handleTouchContextMenuTrigger(trigger),
+    OnLongPress: (trigger) => {
+      if (this.ngZone) {
+        this.ngZone.run(() => {
+          this.handleTouchContextMenuTrigger(trigger);
+          this.cdr.detectChanges();
+        });
+      } else {
+        this.handleTouchContextMenuTrigger(trigger);
+      }
+    },
   });
 
   private readonly cdr = inject(ChangeDetectorRef);
@@ -3788,6 +3891,7 @@ export class SpreadsheetArtifactViewerComponent
   public FreezeConfirmedChecked = false;
 
   public ShowAddLiveTableModal = false;
+  public EditingLiveTableID: string | null = null;
   public NewLiveTableTitle = 'Active AI Agents';
   public NewLiveTableSourceType: 'EntityView' | 'SavedQuery' = 'EntityView';
   public NewLiveTableEntityName = 'AI Agents';
@@ -3796,6 +3900,16 @@ export class SpreadsheetArtifactViewerComponent
   public NewLiveTableAnchorCell = 'A1';
   public NewLiveTableCalcHeader = '';
   public NewLiveTableCalcFormula = '';
+  public PendingDimensionPrompt: {
+    Kind: 'row-height' | 'col-width';
+    StartIndex: number;
+    EndIndex: number;
+    Title: string;
+    Label: string;
+    Min: number;
+    Max: number;
+    Value: number;
+  } | null = null;
 
   public IsRefreshingData = false;
   public IsSavingVersion = false;
@@ -3805,8 +3919,12 @@ export class SpreadsheetArtifactViewerComponent
   private cachedUnsavedChanges: boolean | null = null;
   private unsavedCacheClearScheduled = false;
   private delegatedMouseOverCleanup: (() => void) | null = null;
+  private touchPointerCleanup: (() => void) | null = null;
+  private artifactOwnerUserId: string | null = null;
+  private localObjectsPaneHeightPx: number | null = null;
 
   public EmbeddedArtifactVersions: Record<string, MJArtifactVersionEntity> = {};
+  public EmbeddedArtifactErrors: Record<string, string> = {};
   private lastTableResults: Record<string, DocumentBlockExecutionResult> = {};
 
   private readonly subs: Subscription[] = [];
@@ -3983,9 +4101,20 @@ export class SpreadsheetArtifactViewerComponent
 
   private sessionInitGeneration = 0;
   private isComponentDestroyed = false;
+  private isSyncingLocalSessionUpdate = false;
+
+  private withLocalSessionSync(fn: () => void): void {
+    this.isSyncingLocalSessionUpdate = true;
+    try {
+      fn();
+    } finally {
+      this.isSyncingLocalSessionUpdate = false;
+    }
+  }
 
   public async ngOnInit(): Promise<void> {
     this.bindDelegatedCellMouseOver();
+    this.bindTouchPointerListenersOutsideZone();
     await this.initializeWorkbookSession();
   }
 
@@ -4076,6 +4205,7 @@ export class SpreadsheetArtifactViewerComponent
       this.delegatedMouseOverCleanup();
       this.delegatedMouseOverCleanup = null;
     }
+    this.unbindTouchPointerListeners();
     this.teardownSession();
   }
 
@@ -4126,11 +4256,16 @@ export class SpreadsheetArtifactViewerComponent
     this.teardownSession();
     this.FallbackXlsxBytes = null;
     this.Permissions = null;
+    this.artifactOwnerUserId = null;
+    this.localObjectsPaneHeightPx = null;
+    this.EditingLiveTableID = null;
+    this.PendingDimensionPrompt = null;
     this.AccessRevoked = false;
     this.PermissionVerifyError = false;
     this.ConnectionStatus = 'local';
     this.AnchoredThreads = [];
     this.EmbeddedArtifactVersions = {};
+    this.EmbeddedArtifactErrors = {};
 
     const rawContent = this.artifactVersion?.Content ?? '';
     const configJson = this.artifactVersion?.Configuration ?? null;
@@ -4196,6 +4331,21 @@ export class SpreadsheetArtifactViewerComponent
           );
           if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
             return;
+          }
+          if (this.Permissions?.Source === 'Owner') {
+            this.artifactOwnerUserId = currentUser.ID;
+          } else if (this.Permissions?.CanRead) {
+            await this.resolveArtifactOwnerFromProvider(
+              this.artifactVersion.ArtifactID,
+              currentUser,
+              provider,
+              gen,
+            );
+            if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+              return;
+            }
+          } else {
+            this.artifactOwnerUserId = null;
           }
           if (!this.Permissions) {
             this.AccessRevoked = false;
@@ -4295,7 +4445,13 @@ export class SpreadsheetArtifactViewerComponent
         }
       }),
       session.ContentChanged$.subscribe((nextContent: string) => {
-        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
+        if (
+          this.isComponentDestroyed ||
+          gen !== this.sessionInitGeneration ||
+          this.isSyncingLocalSessionUpdate
+        ) {
+          return;
+        }
         if (!nextContent || !nextContent.trim().startsWith('{')) return;
         const prevCells: Record<string, SpreadsheetCellSpec> = {
           ...(this.ActiveSheet?.Cells ?? {}),
@@ -4311,8 +4467,7 @@ export class SpreadsheetArtifactViewerComponent
         }
 
         // Compare changed cells on active sheet to surface synthetic agent selection only when real Yjs agent awareness is not present
-        const hasRealAgentAwareness =
-          this.ConnectionStatus === 'connected' || this.Collaborators.some((c) => c.IsAgent);
+        const hasRealAgentAwareness = this.Collaborators.some((c) => c.IsAgent === true);
         if (
           !hasRealAgentAwareness &&
           this.ActiveSheet &&
@@ -4448,6 +4603,21 @@ export class SpreadsheetArtifactViewerComponent
       );
       if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
         return;
+      }
+      if (this.Permissions?.Source === 'Owner') {
+        this.artifactOwnerUserId = user.ID;
+      } else if (this.Permissions?.CanRead) {
+        await this.resolveArtifactOwnerFromProvider(
+          this.artifactVersion.ArtifactID,
+          user,
+          provider,
+          gen,
+        );
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
+      } else {
+        this.artifactOwnerUserId = null;
       }
       if (!this.Permissions) {
         this.AccessRevoked = false;
@@ -5108,14 +5278,10 @@ export class SpreadsheetArtifactViewerComponent
     const engine = UserInfoEngine.Instance;
     const raw = engine?.GetSetting(SHEETS_TOOLBAR_PINS_SETTING_KEY) ?? null;
     if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) {
-          const valid = parsed.filter((k): k is SheetsToolbarItemKey => typeof k === 'string');
-          return valid.slice(0, this.MaxPinnedToolbarActions);
-        }
-      } catch {
-        // Fallback to defaults
+      const parsed = SafeJSONParse<string[]>(raw);
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((k): k is SheetsToolbarItemKey => typeof k === 'string');
+        return valid.slice(0, this.MaxPinnedToolbarActions);
       }
     }
     return [...DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS];
@@ -5708,9 +5874,12 @@ export class SpreadsheetArtifactViewerComponent
     if (typeof document !== 'undefined') {
       setTimeout(() => {
         if (this.InlineEditingAddress !== addr || this.isComponentDestroyed) return;
-        const inputEl = document.querySelector<HTMLInputElement>(
-          '[data-testid="sheet-inline-cell-input"]',
-        );
+        const hostEl =
+          this.hostElementRef?.nativeElement instanceof HTMLElement
+            ? this.hostElementRef.nativeElement
+            : null;
+        const inputEl =
+          hostEl?.querySelector<HTMLInputElement>('[data-testid="sheet-inline-cell-input"]') ?? null;
         if (inputEl) {
           inputEl.focus();
           const len = inputEl.value.length;
@@ -5864,31 +6033,11 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public InsertRowAtActive(): void {
-    if (!this.CanEdit) return;
-    SpreadsheetEngine.Instance.InsertRows(
-      this.Workbook,
-      this.ActiveSheet.SheetID,
-      this.ActiveRowIndex,
-      1,
-    );
-    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.syncFormulaBarFromActiveCell();
-    this.cdr.markForCheck();
+    this.insertRowsAt('above', 1, this.ActiveRowIndex);
   }
 
   public InsertColumnAtActive(): void {
-    if (!this.CanEdit) return;
-    SpreadsheetEngine.Instance.InsertColumns(
-      this.Workbook,
-      this.ActiveSheet.SheetID,
-      this.ActiveColumnIndex,
-      1,
-    );
-    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.syncFormulaBarFromActiveCell();
-    this.cdr.markForCheck();
+    this.insertColsAt('left', 1, this.ActiveColumnIndex);
   }
 
   public SortActiveColumn(direction: 'asc' | 'desc'): void {
@@ -5934,16 +6083,13 @@ export class SpreadsheetArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  public GetWorksheetDeleteBlockedReason(sheet: WorksheetSpec): string | null {
+    return this.findProtectedReasonForSheet(sheet);
+  }
+
   public DeleteWorksheetTab(sheetId: string, event: MouseEvent): void {
     event.stopPropagation();
-    if (!this.CanEdit || this.Workbook.Worksheets.length <= 1) return;
-    this.Workbook.Worksheets = this.Workbook.Worksheets.filter((w) => w.SheetID !== sheetId);
-    if (this.Workbook.ActiveSheetID === sheetId) {
-      this.Workbook.ActiveSheetID = this.Workbook.Worksheets[0].SheetID;
-    }
-    this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.cdr.markForCheck();
+    this.deleteWorksheetById(sheetId);
   }
 
   public OnWorkbookTitleChanged(nextTitle: string): void {
@@ -5957,8 +6103,15 @@ export class SpreadsheetArtifactViewerComponent
   // ---------------------------------------------------------------------------
 
   public OpenAddLiveTableModal(): void {
+    this.EditingLiveTableID = null;
     this.NewLiveTableAnchorCell = this.ActiveCellAddress;
     this.ShowAddLiveTableModal = true;
+    this.cdr.markForCheck();
+  }
+
+  public CancelLiveTableModal(): void {
+    this.ShowAddLiveTableModal = false;
+    this.EditingLiveTableID = null;
     this.cdr.markForCheck();
   }
 
@@ -5973,8 +6126,19 @@ export class SpreadsheetArtifactViewerComponent
       });
     }
 
+    if (!this.ActiveSheet.LiveTables) {
+      this.ActiveSheet.LiveTables = [];
+    }
+
+    const editingId = this.EditingLiveTableID;
+    const existingIdx = editingId
+      ? this.ActiveSheet.LiveTables.findIndex((t) => t.TableID === editingId)
+      : -1;
+    const existingTable = existingIdx >= 0 ? this.ActiveSheet.LiveTables[existingIdx] : undefined;
+
     const tableSpec: SpreadsheetLiveTableSpec = {
-      TableID: `tbl-${Date.now()}`,
+      ...(existingTable ?? {}),
+      TableID: existingTable?.TableID ?? `tbl-${Date.now()}`,
       Title: this.NewLiveTableTitle.trim() || 'MJ Live Table',
       SourceType: this.NewLiveTableSourceType,
       EntityName:
@@ -5990,15 +6154,17 @@ export class SpreadsheetArtifactViewerComponent
           ? this.NewLiveTableQueryName.trim()
           : undefined,
       AnchorCell: this.NewLiveTableAnchorCell.trim() || 'A1',
-      IncludeHeaders: true,
-      Mode: 'Live',
+      IncludeHeaders: existingTable?.IncludeHeaders ?? true,
+      Mode: existingTable?.Mode ?? 'Live',
       CalculatedColumns: calcCols,
     };
 
-    if (!this.ActiveSheet.LiveTables) {
-      this.ActiveSheet.LiveTables = [];
+    if (existingIdx >= 0) {
+      this.ActiveSheet.LiveTables[existingIdx] = tableSpec;
+    } else {
+      this.ActiveSheet.LiveTables.push(tableSpec);
     }
-    this.ActiveSheet.LiveTables.push(tableSpec);
+    this.EditingLiveTableID = null;
     this.ShowAddLiveTableModal = false;
 
     await this.RefreshAllLiveData(true);
@@ -6019,11 +6185,76 @@ export class SpreadsheetArtifactViewerComponent
     this.CommitFormulaBarInput();
   }
 
+  private snapshotWorkbookCells(): Map<string, Record<string, string>> {
+    const snapshots = new Map<string, Record<string, string>>();
+    for (const ws of this.Workbook.Worksheets ?? []) {
+      const sheetMap: Record<string, string> = {};
+      for (const [addr, cell] of Object.entries(ws.Cells ?? {})) {
+        sheetMap[addr] = JSON.stringify(cell);
+      }
+      snapshots.set(ws.SheetID, sheetMap);
+    }
+    return snapshots;
+  }
+
+  private syncWorkbookCellDiffsToSession(
+    beforeSnapshots: Map<string, Record<string, string>>,
+    syncStructure = false,
+  ): void {
+    if (!this.CanEdit || !this.CollaborationSession) {
+      return;
+    }
+    for (const ws of this.Workbook.Worksheets ?? []) {
+      const beforeMap = beforeSnapshots.get(ws.SheetID) ?? {};
+      const currCells = ws.Cells ?? {};
+      const updates: SpreadsheetCellSpec[] = [];
+      const deletes: Array<{ rowId: string; colId: string }> = [];
+      const activeCoordKeys = new Set<string>();
+
+      for (const [addr, cell] of Object.entries(currCells)) {
+        activeCoordKeys.add(`${cell.RowID}::${cell.ColumnID}`);
+        const serialized = JSON.stringify(cell);
+        if (beforeMap[addr] !== serialized) {
+          updates.push(cell);
+        }
+      }
+
+      const seenDeletes = new Set<string>();
+      for (const prevJson of Object.values(beforeMap)) {
+        const prevCell = SafeJSONParse<SpreadsheetCellSpec>(prevJson);
+        if (
+          prevCell?.RowID &&
+          prevCell?.ColumnID &&
+          !activeCoordKeys.has(`${prevCell.RowID}::${prevCell.ColumnID}`)
+        ) {
+          const coordKey = `${prevCell.RowID}::${prevCell.ColumnID}`;
+          if (!seenDeletes.has(coordKey)) {
+            seenDeletes.add(coordKey);
+            deletes.push({ rowId: prevCell.RowID, colId: prevCell.ColumnID });
+          }
+        }
+      }
+
+      if (updates.length > 0 || deletes.length > 0) {
+        this.CollaborationSession.BatchUpdateSpreadsheetCells(
+          ws.SheetID,
+          updates,
+          deletes,
+          this.Workbook,
+        );
+      }
+      if (syncStructure && (updates.length > 0 || deletes.length > 0)) {
+        this.CollaborationSession.UpdateWorksheetStructure(ws, this.Workbook);
+      }
+    }
+  }
+
   public async RefreshAllLiveData(bypassCache = false): Promise<void> {
     const user = this.resolveCurrentUser();
     if (!user) return;
     this.IsRefreshingData = true;
     this.cdr.markForCheck();
+    const beforeSnapshots = this.snapshotWorkbookCells();
     try {
       const tableResults = await SpreadsheetEngine.Instance.RefreshLiveTables(
         this.Workbook,
@@ -6039,6 +6270,7 @@ export class SpreadsheetArtifactViewerComponent
           BypassCache: bypassCache,
         },
       );
+      this.syncWorkbookCellDiffsToSession(beforeSnapshots, true);
       this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
       this.syncFormulaBarFromActiveCell();
     } finally {
@@ -6057,9 +6289,46 @@ export class SpreadsheetArtifactViewerComponent
     return Boolean(SpreadsheetEngine.Instance.GetProtectedRangeForCell(active, this.ActiveCellAddress));
   }
 
+  private async resolveArtifactOwnerFromProvider(
+    artifactId: string,
+    user: UserInfo,
+    provider: IMetadataProvider,
+    gen = this.sessionInitGeneration,
+  ): Promise<void> {
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const artRes = await rv.RunView<{ ID: string; UserID: string | null }>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
+          Fields: ['ID', 'UserID'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
+      this.artifactOwnerUserId = artRes.Success ? (artRes.Results?.[0]?.UserID ?? null) : null;
+    } catch {
+      // Leave null on query failure so non-owners never elevate to owner privileges
+    }
+  }
+
+  private resolveArtifactOwnerUserId(currentUserId: string | null): string | null {
+    if (this.artifactOwnerUserId) {
+      return this.artifactOwnerUserId;
+    }
+    if (this.Permissions?.Source === 'Owner' && currentUserId) {
+      return currentUserId;
+    }
+    return null;
+  }
+
   private buildCellEditContext(): SpreadsheetCellEditContext {
     const userId = this.resolveCurrentUser()?.ID ?? null;
-    const ownerId = this.Permissions?.CanShare ? userId : null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
     return {
       UserID: userId,
       OwnerUserID: ownerId,
@@ -6077,6 +6346,7 @@ export class SpreadsheetArtifactViewerComponent
     }
     this.IsEvaluatingAiFormulas = true;
     this.cdr.markForCheck();
+    const beforeSnapshots = this.snapshotWorkbookCells();
     try {
       const result = await SpreadsheetEngine.Instance.EvaluateAiFormulas(
         this.Workbook,
@@ -6086,6 +6356,7 @@ export class SpreadsheetArtifactViewerComponent
           ArtifactID: this.artifactVersion?.ArtifactID ?? null,
         },
       );
+      this.syncWorkbookCellDiffsToSession(beforeSnapshots);
       this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
       this.syncFormulaBarFromActiveCell();
       if (result.ErrorCount > 0) {
@@ -6127,6 +6398,7 @@ export class SpreadsheetArtifactViewerComponent
         this.cdr.markForCheck();
         return;
       }
+      this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
       this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
       this.StatusBannerMessage = `Removed protection on ${sheet.Name}!${existing.Range}.`;
       this.cdr.markForCheck();
@@ -6140,6 +6412,7 @@ export class SpreadsheetArtifactViewerComponent
       Description: `Protected by ${user.Name || user.Email || user.ID}`,
       AllowEditors: false,
     });
+    this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.StatusBannerMessage = `Protected ${sheet.Name}!${rangeTarget} (owner/locker only).`;
     this.cdr.markForCheck();
@@ -6194,8 +6467,10 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public async RefreshSingleLiveTable(table: SpreadsheetLiveTableSpec): Promise<void> {
+    if (!this.CanEdit || table.Mode === 'Frozen') return;
     const user = this.resolveCurrentUser();
     if (!user) return;
+    const beforeSnapshots = this.snapshotWorkbookCells();
     const results = await SpreadsheetEngine.Instance.RefreshLiveTables(
       this.Workbook,
       user,
@@ -6205,6 +6480,7 @@ export class SpreadsheetArtifactViewerComponent
       },
     );
     this.lastTableResults = { ...this.lastTableResults, ...results };
+    this.syncWorkbookCellDiffsToSession(beforeSnapshots, true);
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.cdr.markForCheck();
   }
@@ -6375,6 +6651,20 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public get ResolvedObjectsPaneHeightPx(): number {
+    if (
+      this.localObjectsPaneHeightPx !== null &&
+      Number.isFinite(this.localObjectsPaneHeightPx) &&
+      this.localObjectsPaneHeightPx > 0
+    ) {
+      return Math.max(140, Math.min(640, Math.round(this.localObjectsPaneHeightPx)));
+    }
+    const savedRaw = UserInfoEngine.Instance?.GetSetting(SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY) ?? null;
+    if (savedRaw) {
+      const savedNum = Number(savedRaw);
+      if (Number.isFinite(savedNum) && savedNum > 0) {
+        return Math.max(140, Math.min(640, Math.round(savedNum)));
+      }
+    }
     const raw = this.Workbook?.PreferredObjectsPaneHeightPx;
     if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
       return Math.max(140, Math.min(640, Math.round(raw)));
@@ -6391,21 +6681,24 @@ export class SpreadsheetArtifactViewerComponent
       (moveEvt: MouseEvent) => {
         const deltaUp = startY - moveEvt.clientY;
         const nextHeight = Math.max(140, Math.min(640, Math.round(startHeight + deltaUp)));
-        this.Workbook.PreferredObjectsPaneHeightPx = nextHeight;
+        this.localObjectsPaneHeightPx = nextHeight;
         this.cdr.markForCheck();
       },
       () => {
-        this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
-        this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+        if (this.localObjectsPaneHeightPx !== null) {
+          UserInfoEngine.Instance?.SetSettingDebounced(
+            SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY,
+            String(this.localObjectsPaneHeightPx),
+          );
+        }
         this.cdr.markForCheck();
       },
     );
   }
 
   public ResetObjectsPaneHeight(): void {
-    delete this.Workbook.PreferredObjectsPaneHeightPx;
-    this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.localObjectsPaneHeightPx = 270;
+    UserInfoEngine.Instance?.SetSettingDebounced(SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY, '');
     this.cdr.markForCheck();
   }
 
@@ -7375,6 +7668,7 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   private async hydrateEmbeddedArtifactVersions(): Promise<void> {
+    this.EmbeddedArtifactErrors = {};
     const embeds: SpreadsheetEmbeddedArtifactSpec[] = [];
     for (const ws of this.Workbook.Worksheets) {
       for (const emb of ws.EmbeddedArtifacts ?? []) {
@@ -7385,16 +7679,32 @@ export class SpreadsheetArtifactViewerComponent
     }
     if (embeds.length === 0) return;
 
+    const validEmbeds: SpreadsheetEmbeddedArtifactSpec[] = [];
+    for (const emb of embeds) {
+      if (!IsValidUUID(emb.ArtifactID)) {
+        this.EmbeddedArtifactErrors[emb.EmbedID] =
+          `Embedded artifact reference "${emb.ArtifactID}" is not a valid artifact UUID.`;
+        continue;
+      }
+      if (emb.ArtifactVersionID && !IsValidUUID(emb.ArtifactVersionID)) {
+        this.EmbeddedArtifactErrors[emb.EmbedID] =
+          `Embedded artifact version "${emb.ArtifactVersionID}" is not a valid UUID.`;
+        continue;
+      }
+      validEmbeds.push(emb);
+    }
+
+    if (Object.keys(this.EmbeddedArtifactErrors).length > 0) {
+      this.cdr.markForCheck();
+    }
+
     const provider = this.getSafeProvider();
     const user = this.resolveCurrentUser();
-    if (!provider || !user) return;
+    if (!provider || !user || validEmbeds.length === 0) return;
 
     try {
       const rv = RunView.FromMetadataProvider(provider);
-      for (const emb of embeds) {
-        if (!IsValidUUID(emb.ArtifactID) || (emb.ArtifactVersionID && !IsValidUUID(emb.ArtifactVersionID))) {
-          continue;
-        }
+      for (const emb of validEmbeds) {
         const filter = emb.ArtifactVersionID
           ? `ID = '${EscapeSQLString(emb.ArtifactVersionID)}' AND ArtifactID = '${EscapeSQLString(emb.ArtifactID)}'`
           : `ArtifactID = '${EscapeSQLString(emb.ArtifactID)}'`;
@@ -7410,6 +7720,9 @@ export class SpreadsheetArtifactViewerComponent
         );
         if (res.Success && res.Results && res.Results.length > 0) {
           this.EmbeddedArtifactVersions[emb.ArtifactID] = res.Results[0];
+        } else {
+          this.EmbeddedArtifactErrors[emb.EmbedID] =
+            res.ErrorMessage || `Unable to load embedded ${emb.ArtifactTypeName} "${emb.Title}".`;
         }
       }
       this.cdr.markForCheck();
@@ -8285,6 +8598,55 @@ export class SpreadsheetArtifactViewerComponent
     this.touchContextMenuMonitor.OnPointerCancel(event);
   }
 
+  public OnShellClick(event: MouseEvent): void {
+    if (this.touchContextMenuMonitor.ConsumeSuppressedClick()) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  private bindTouchPointerListenersOutsideZone(): void {
+    this.unbindTouchPointerListeners();
+    const hostEl = this.hostElementRef?.nativeElement;
+    if (!hostEl) return;
+    const attachListeners = (): void => {
+      const onPointerDown = (event: PointerEvent): void => this.OnShellPointerDown(event);
+      const onPointerMove = (event: PointerEvent): void => this.OnShellPointerMove(event);
+      const onPointerUp = (event: PointerEvent): void => this.OnShellPointerUp(event);
+      const onPointerCancel = (event: PointerEvent): void => this.OnShellPointerCancel(event);
+      const onClickCapture = (event: MouseEvent): void => this.OnShellClick(event);
+      hostEl.addEventListener('pointerdown', onPointerDown, { passive: true });
+      hostEl.addEventListener('pointermove', onPointerMove, { passive: true });
+      hostEl.addEventListener('pointerup', onPointerUp, { passive: true });
+      hostEl.addEventListener('pointercancel', onPointerCancel, { passive: true });
+      hostEl.addEventListener('click', onClickCapture, { capture: true });
+      this.touchPointerCleanup = () => {
+        hostEl.removeEventListener('pointerdown', onPointerDown);
+        hostEl.removeEventListener('pointermove', onPointerMove);
+        hostEl.removeEventListener('pointerup', onPointerUp);
+        hostEl.removeEventListener('pointercancel', onPointerCancel);
+        hostEl.removeEventListener('click', onClickCapture, { capture: true });
+      };
+    };
+    if (this.ngZone) {
+      this.ngZone.runOutsideAngular(attachListeners);
+    } else {
+      attachListeners();
+    }
+  }
+
+  private queryHostElement<T extends Element>(selector: string): T | null {
+    const hostEl = this.hostElementRef?.nativeElement;
+    return hostEl instanceof HTMLElement ? hostEl.querySelector<T>(selector) : null;
+  }
+
+  private unbindTouchPointerListeners(): void {
+    if (this.touchPointerCleanup) {
+      this.touchPointerCleanup();
+      this.touchPointerCleanup = null;
+    }
+  }
+
   private handleTouchContextMenuTrigger(trigger: TouchContextMenuTrigger): void {
     const el = trigger.Target instanceof HTMLElement ? trigger.Target : null;
     if (!el) return;
@@ -8421,6 +8783,10 @@ export class SpreadsheetArtifactViewerComponent
     const hasAdjacentHiddenRows = sheet.Rows.some(
       (r) => r.Hidden && r.Index >= Math.max(1, bounds.startRow - 1) && r.Index <= bounds.endRow + 1,
     );
+    const visibleRows = sheet.Rows.filter((r) => !r.Hidden).length;
+    const visibleRowsInRange = sheet.Rows.filter(
+      (r) => !r.Hidden && r.Index >= bounds.startRow && r.Index <= bounds.endRow,
+    ).length;
 
     const target: SheetsContextMenuTarget = {
       Kind: 'row-header',
@@ -8429,6 +8795,8 @@ export class SpreadsheetArtifactViewerComponent
       EndRow: bounds.endRow,
       TotalRows: Math.max(1, sheet.Rows.length),
       TotalCols: totalCols,
+      VisibleRows: visibleRows,
+      VisibleRowsInRange: visibleRowsInRange,
       CurrentFrozenRows: sheet.FrozenRows ?? 0,
       HasAdjacentHiddenRows: hasAdjacentHiddenRows,
       ProtectedReason: this.findProtectedReasonInRange(sheet, bounds.startRow, bounds.endRow, 1, totalCols),
@@ -8462,6 +8830,10 @@ export class SpreadsheetArtifactViewerComponent
     const hasAdjacentHiddenCols = sheet.Columns.some(
       (c) => c.Hidden && c.Index >= Math.max(1, bounds.startCol - 1) && c.Index <= bounds.endCol + 1,
     );
+    const visibleCols = sheet.Columns.filter((c) => !c.Hidden).length;
+    const visibleColsInRange = sheet.Columns.filter(
+      (c) => !c.Hidden && c.Index >= bounds.startCol && c.Index <= bounds.endCol,
+    ).length;
     const sampleCell = sheet.Cells[`${ColumnIndexToLetter(bounds.startCol)}2`] ?? sheet.Cells[`${ColumnIndexToLetter(bounds.startCol)}1`];
     const currentFormat =
       sampleCell?.Style?.FormatType ??
@@ -8476,6 +8848,8 @@ export class SpreadsheetArtifactViewerComponent
       EndColLetter: ColumnIndexToLetter(bounds.endCol),
       TotalRows: totalRows,
       TotalCols: Math.max(1, sheet.Columns.length),
+      VisibleCols: visibleCols,
+      VisibleColsInRange: visibleColsInRange,
       CurrentFrozenColumns: sheet.FrozenColumns ?? 0,
       CurrentFormat: currentFormat,
       HasAdjacentHiddenCols: hasAdjacentHiddenCols,
@@ -8505,6 +8879,7 @@ export class SpreadsheetArtifactViewerComponent
       ColCount: ws.Columns.length,
       HiddenRowCount: hiddenRowCount,
       HiddenColCount: hiddenColCount,
+      ProtectedReason: this.findProtectedReasonForSheet(ws),
     };
 
     const restoreEl = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
@@ -8704,7 +9079,7 @@ export class SpreadsheetArtifactViewerComponent
         this.selectRangeString(command.RangeA1);
         break;
       case 'select-row':
-        this.SelectRowHeader(command.RowIndex);
+        this.selectRowRange(command.StartRow ?? command.RowIndex, command.EndRow ?? command.RowIndex);
         break;
       case 'set-row-height':
         this.promptAndSetRowHeight(command.StartRowIndex, command.EndRowIndex);
@@ -8727,7 +9102,7 @@ export class SpreadsheetArtifactViewerComponent
         this.unhideAdjacentRows(command.StartRowIndex, command.EndRowIndex);
         break;
       case 'select-col':
-        this.SelectColumnHeader(ColumnIndexToLetter(command.ColIndex));
+        this.selectColumnRange(command.StartCol ?? command.ColIndex, command.EndCol ?? command.ColIndex);
         break;
       case 'sort-col':
         if (this.CanEdit) {
@@ -8865,6 +9240,51 @@ export class SpreadsheetArtifactViewerComponent
     return left;
   }
 
+  public GetFrozenRowTopPx(rowIndex: number): number {
+    let top = 28;
+    for (const row of this.VisibleRows) {
+      if (row.Index < rowIndex) {
+        top += row.Height ?? 28;
+      }
+    }
+    return top;
+  }
+
+  private selectRowRange(startRow: number, endRow: number): void {
+    const minRow = Math.max(1, Math.min(startRow, endRow));
+    const maxRow = Math.max(minRow, Math.max(startRow, endRow));
+    const lastColLetter =
+      this.VisibleColumns.length > 0
+        ? this.VisibleColumns[this.VisibleColumns.length - 1].Letter
+        : 'Z';
+    const rowRange = `A${minRow}:${lastColLetter}${maxRow}`;
+    this.ActiveRowIndex = minRow;
+    this.ActiveColumnIndex = 1;
+    this.DragAnchorAddress = `A${minRow}`;
+    this.syncFormulaBarFromActiveCell();
+    this.SelectedRanges = [rowRange];
+    this.SelectedRange = rowRange;
+    this.broadcastSelectionPresence();
+    this.cdr.markForCheck();
+  }
+
+  private selectColumnRange(startCol: number, endCol: number): void {
+    const minCol = Math.max(1, Math.min(startCol, endCol));
+    const maxCol = Math.max(minCol, Math.max(startCol, endCol));
+    const startLetter = ColumnIndexToLetter(minCol);
+    const endLetter = ColumnIndexToLetter(maxCol);
+    const rowCount = this.ActiveSheet?.Rows?.length ?? 100;
+    const colRange = `${startLetter}1:${endLetter}${rowCount}`;
+    this.ActiveRowIndex = 1;
+    this.ActiveColumnIndex = minCol;
+    this.DragAnchorAddress = `${startLetter}1`;
+    this.syncFormulaBarFromActiveCell();
+    this.SelectedRanges = [colRange];
+    this.SelectedRange = colRange;
+    this.broadcastSelectionPresence();
+    this.cdr.markForCheck();
+  }
+
   public IsCellInCutSource(rowIndex: number, colIndex: number): boolean {
     const buf = this.SheetsClipboardBuffer;
     if (!buf || buf.Mode !== 'cut' || buf.SourceSheetID !== this.ActiveSheet?.SheetID) {
@@ -8883,7 +9303,7 @@ export class SpreadsheetArtifactViewerComponent
     this.cdr.markForCheck();
     if (typeof document !== 'undefined') {
       setTimeout(() => {
-        const input = document.querySelector<HTMLInputElement>('[data-testid="sheet-tab-rename-input"]');
+        const input = this.queryHostElement<HTMLInputElement>('[data-testid="sheet-tab-rename-input"]');
         if (input) {
           input.focus();
           input.select();
@@ -9089,12 +9509,28 @@ export class SpreadsheetArtifactViewerComponent
     const rowDelta = srcBounds ? this.ActiveRowIndex - srcBounds.minR : 0;
     const colDelta = srcBounds ? this.ActiveColumnIndex - srcBounds.minC : 0;
     const updatedCells: SpreadsheetCellSpec[] = [];
+    const sameSheetDeletes: Array<{ rowId: string; colId: string }> = [];
+    const crossSheetDeletes: Array<{ rowId: string; colId: string }> = [];
+    const sourceSheetForCut =
+      buf.Mode === 'cut' && kind === 'all'
+        ? this.Workbook.Worksheets.find((w) => w.SheetID === buf.SourceSheetID)
+        : undefined;
+    const sourceCellsBeforeCut = new Map<string, { rowId: string; colId: string }>();
+    if (sourceSheetForCut) {
+      for (const [addr, cell] of Object.entries(sourceSheetForCut.Cells)) {
+        if (cell.RowID && cell.ColumnID) {
+          sourceCellsBeforeCut.set(addr, { rowId: cell.RowID, colId: cell.ColumnID });
+        }
+      }
+    }
+    const destAddrs = new Set<string>();
 
     try {
       for (const entry of buf.Cells) {
         const targetRow = this.ActiveRowIndex + entry.RowOffset;
         const targetCol = this.ActiveColumnIndex + entry.ColOffset;
         const addr = FormatCellAddress(targetRow, targetCol);
+        destAddrs.add(addr);
         const existing = sheet.Cells[addr];
 
         if (kind === 'values') {
@@ -9155,6 +9591,7 @@ export class SpreadsheetArtifactViewerComponent
                   BackgroundColor: entry.BackgroundColor,
                 }
               : undefined;
+          this.clearExistingStyleIfWritable(sheet, addr, editContext);
           const updated = SpreadsheetEngine.Instance.SetCell(
             this.Workbook,
             sheet.SheetID,
@@ -9174,13 +9611,70 @@ export class SpreadsheetArtifactViewerComponent
       if (buf.Mode === 'cut' && kind === 'all') {
         const destStart = FormatCellAddress(this.ActiveRowIndex, this.ActiveColumnIndex);
         if (buf.SourceSheetID !== sheet.SheetID || destStart !== buf.SourceRangeA1.split(':')[0]) {
-          SpreadsheetEngine.Instance.ClearRange(
-            this.Workbook,
-            buf.SourceSheetID,
-            buf.SourceRangeA1,
-            true,
-            editContext,
-          );
+          const destMinR = this.ActiveRowIndex;
+          const destMaxR = this.ActiveRowIndex + buf.RowCount - 1;
+          const destMinC = this.ActiveColumnIndex;
+          const destMaxC = this.ActiveColumnIndex + buf.ColCount - 1;
+          const sameSheetOverlap =
+            buf.SourceSheetID === sheet.SheetID &&
+            srcBounds != null &&
+            !(
+              srcBounds.maxR < destMinR ||
+              srcBounds.minR > destMaxR ||
+              srcBounds.maxC < destMinC ||
+              srcBounds.minC > destMaxC
+            );
+
+          let clearedSourceAddrs: string[] = [];
+          if (!sameSheetOverlap) {
+            clearedSourceAddrs = SpreadsheetEngine.Instance.ClearRange(
+              this.Workbook,
+              buf.SourceSheetID,
+              buf.SourceRangeA1,
+              true,
+              editContext,
+            );
+          } else if (srcBounds) {
+            for (const srcAddr of Array.from(sourceCellsBeforeCut.keys())) {
+              const pos = ParseCellAddress(srcAddr);
+              if (
+                pos &&
+                pos.row >= srcBounds.minR &&
+                pos.row <= srcBounds.maxR &&
+                pos.col >= srcBounds.minC &&
+                pos.col <= srcBounds.maxC &&
+                !destAddrs.has(srcAddr)
+              ) {
+                const cleared = SpreadsheetEngine.Instance.ClearRange(
+                  this.Workbook,
+                  buf.SourceSheetID,
+                  srcAddr,
+                  false,
+                  editContext,
+                );
+                clearedSourceAddrs.push(...cleared);
+              }
+            }
+            if (clearedSourceAddrs.length > 0) {
+              SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
+            }
+          }
+
+          const seenDeletes = new Set<string>();
+          const targetDeletes = buf.SourceSheetID === sheet.SheetID ? sameSheetDeletes : crossSheetDeletes;
+          for (const clearedAddr of clearedSourceAddrs) {
+            if (buf.SourceSheetID === sheet.SheetID && destAddrs.has(clearedAddr)) {
+              continue;
+            }
+            const ids = sourceCellsBeforeCut.get(clearedAddr);
+            if (ids) {
+              const key = `${ids.rowId}::${ids.colId}`;
+              if (!seenDeletes.has(key)) {
+                seenDeletes.add(key);
+                targetDeletes.push(ids);
+              }
+            }
+          }
         }
         this.SheetsClipboardBuffer = null;
       }
@@ -9191,11 +9685,20 @@ export class SpreadsheetArtifactViewerComponent
       return;
     }
 
-    if (updatedCells.length > 0) {
+    if (crossSheetDeletes.length > 0 && buf.SourceSheetID !== sheet.SheetID) {
+      this.CollaborationSession?.BatchUpdateSpreadsheetCells(
+        buf.SourceSheetID,
+        [],
+        crossSheetDeletes,
+        this.Workbook,
+      );
+    }
+
+    if (updatedCells.length > 0 || sameSheetDeletes.length > 0) {
       this.CollaborationSession?.BatchUpdateSpreadsheetCells(
         sheet.SheetID,
         updatedCells,
-        [],
+        sameSheetDeletes,
         this.Workbook,
       );
       const endAddr = FormatCellAddress(
@@ -9214,20 +9717,18 @@ export class SpreadsheetArtifactViewerComponent
 
   private shiftFormulaRelativeReferences(formula: string, rowDelta: number, colDelta: number): string {
     if (rowDelta === 0 && colDelta === 0) return formula;
-    return formula.replace(/(\$?)([A-Z]+)(\$?)([0-9]+)/g, (_full, absCol: string, colStr: string, absRow: string, rowStr: string) => {
-      const parsed = ParseCellAddress(`${colStr}${rowStr}`);
-      if (!parsed) return _full;
-      const nextCol = absCol ? parsed.col : Math.max(1, parsed.col + colDelta);
-      const nextRow = absRow ? parsed.row : Math.max(1, parsed.row + rowDelta);
-      return `${absCol}${ColumnIndexToLetter(nextCol)}${absRow}${nextRow}`;
-    });
+    return SpreadsheetEngine.Instance.ShiftFormulaReferences(formula, rowDelta, colDelta);
   }
 
   private insertRowsAt(position: 'above' | 'below', count: number, atRowIndex: number): void {
     if (!this.CanEdit) return;
     const insertAt = position === 'below' ? atRowIndex + 1 : atRowIndex;
+    const before = this.snapshotWorkbookCells();
     SpreadsheetEngine.Instance.InsertRows(this.Workbook, this.ActiveSheet.SheetID, insertAt, count);
-    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+      this.syncWorkbookCellDiffsToSession(before);
+    });
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.syncFormulaBarFromActiveCell();
     this.cdr.markForCheck();
@@ -9235,8 +9736,25 @@ export class SpreadsheetArtifactViewerComponent
 
   private deleteRowsAt(startRowIndex: number, count: number): void {
     if (!this.CanEdit) return;
+    const normalizedCount = Math.max(1, Math.floor(count));
+    const protectedReason = this.findProtectedReasonInRange(
+      this.ActiveSheet,
+      startRowIndex,
+      startRowIndex + normalizedCount - 1,
+      1,
+      16_384,
+    );
+    if (protectedReason) {
+      this.StatusBannerMessage = protectedReason;
+      this.cdr.markForCheck();
+      return;
+    }
+    const before = this.snapshotWorkbookCells();
     SpreadsheetEngine.Instance.DeleteRows(this.Workbook, this.ActiveSheet.SheetID, startRowIndex, count);
-    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+      this.syncWorkbookCellDiffsToSession(before);
+    });
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.syncFormulaBarFromActiveCell();
     this.cdr.markForCheck();
@@ -9245,8 +9763,12 @@ export class SpreadsheetArtifactViewerComponent
   private insertColsAt(position: 'left' | 'right', count: number, atColIndex: number): void {
     if (!this.CanEdit) return;
     const insertAt = position === 'right' ? atColIndex + 1 : atColIndex;
+    const before = this.snapshotWorkbookCells();
     SpreadsheetEngine.Instance.InsertColumns(this.Workbook, this.ActiveSheet.SheetID, insertAt, count);
-    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+      this.syncWorkbookCellDiffsToSession(before);
+    });
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.syncFormulaBarFromActiveCell();
     this.cdr.markForCheck();
@@ -9254,8 +9776,25 @@ export class SpreadsheetArtifactViewerComponent
 
   private deleteColsAt(startColIndex: number, count: number): void {
     if (!this.CanEdit) return;
+    const normalizedCount = Math.max(1, Math.floor(count));
+    const protectedReason = this.findProtectedReasonInRange(
+      this.ActiveSheet,
+      1,
+      1_048_576,
+      startColIndex,
+      startColIndex + normalizedCount - 1,
+    );
+    if (protectedReason) {
+      this.StatusBannerMessage = protectedReason;
+      this.cdr.markForCheck();
+      return;
+    }
+    const before = this.snapshotWorkbookCells();
     SpreadsheetEngine.Instance.DeleteColumns(this.Workbook, this.ActiveSheet.SheetID, startColIndex, count);
-    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+      this.syncWorkbookCellDiffsToSession(before);
+    });
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.syncFormulaBarFromActiveCell();
     this.cdr.markForCheck();
@@ -9267,11 +9806,37 @@ export class SpreadsheetArtifactViewerComponent
     const segments = rangeA1.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
     const editContext = this.buildCellEditContext();
     const updatedCells: SpreadsheetCellSpec[] = [];
+    const deletedCells: Array<{ rowId: string; colId: string }> = [];
+    const seenDeletes = new Set<string>();
+    const beforeCells = new Map<string, { rowId: string; colId: string }>();
+    if (kind === 'all') {
+      for (const [addr, cell] of Object.entries(sheet.Cells)) {
+        if (cell.RowID && cell.ColumnID) {
+          beforeCells.set(addr, { rowId: cell.RowID, colId: cell.ColumnID });
+        }
+      }
+    }
 
     try {
       for (const seg of segments) {
         if (kind === 'all') {
-          SpreadsheetEngine.Instance.ClearRange(this.Workbook, sheet.SheetID, seg, true, editContext);
+          const clearedAddrs = SpreadsheetEngine.Instance.ClearRange(
+            this.Workbook,
+            sheet.SheetID,
+            seg,
+            true,
+            editContext,
+          );
+          for (const clearedAddr of clearedAddrs) {
+            const ids = beforeCells.get(clearedAddr);
+            if (ids) {
+              const key = `${ids.rowId}::${ids.colId}`;
+              if (!seenDeletes.has(key)) {
+                seenDeletes.add(key);
+                deletedCells.push(ids);
+              }
+            }
+          }
         } else {
           const bounds = this.parseRangeBounds(seg);
           if (!bounds) continue;
@@ -9280,13 +9845,21 @@ export class SpreadsheetArtifactViewerComponent
               const addr = FormatCellAddress(r, c);
               const existing = sheet.Cells[addr];
               if (!existing) continue;
+              const preservedStyle = kind === 'contents' ? existing.Style : undefined;
+              const rawValue = existing.RawValue ?? null;
+              const formula = existing.Formula ?? null;
+              if (kind === 'formatting') {
+                this.clearExistingStyleIfWritable(sheet, addr, editContext);
+              }
               const updated = SpreadsheetEngine.Instance.SetCell(
                 this.Workbook,
                 sheet.SheetID,
                 addr,
-                kind === 'contents'
-                  ? { Value: null, Formula: null, Style: existing.Style }
-                  : { Value: existing.RawValue, Formula: existing.Formula ?? null, Style: undefined },
+                {
+                  Value: kind === 'contents' ? null : rawValue,
+                  Formula: kind === 'contents' ? null : formula,
+                  Style: preservedStyle,
+                },
                 true,
                 editContext,
               );
@@ -9302,8 +9875,13 @@ export class SpreadsheetArtifactViewerComponent
       return;
     }
 
-    if (updatedCells.length > 0) {
-      this.CollaborationSession?.BatchUpdateSpreadsheetCells(sheet.SheetID, updatedCells, [], this.Workbook);
+    if (updatedCells.length > 0 || deletedCells.length > 0) {
+      this.CollaborationSession?.BatchUpdateSpreadsheetCells(
+        sheet.SheetID,
+        updatedCells,
+        deletedCells,
+        this.Workbook,
+      );
     } else {
       this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
     }
@@ -9351,6 +9929,9 @@ export class SpreadsheetArtifactViewerComponent
             if ('BackgroundColor' in stylePatch && stylePatch.BackgroundColor === undefined) {
               delete nextStyle.BackgroundColor;
             }
+            const styleToApply: SpreadsheetCellStyleSpec | undefined =
+              Object.keys(nextStyle).length > 0 ? nextStyle : undefined;
+            this.clearExistingStyleIfWritable(sheet, addr, editContext);
             const updated = SpreadsheetEngine.Instance.SetCell(
               this.Workbook,
               sheet.SheetID,
@@ -9358,7 +9939,7 @@ export class SpreadsheetArtifactViewerComponent
               {
                 Value: existing?.RawValue ?? null,
                 Formula: existing?.Formula ?? null,
-                Style: nextStyle,
+                Style: styleToApply,
               },
               false,
               editContext,
@@ -9385,21 +9966,23 @@ export class SpreadsheetArtifactViewerComponent
   private promptAndSetRowHeight(startRow: number, endRow: number): void {
     if (!this.CanEdit) return;
     const current = this.ActiveSheet.Rows.find((r) => r.Index === startRow)?.Height ?? 28;
-    const input = typeof window !== 'undefined' && typeof window.prompt === 'function'
-      ? window.prompt(`Row height in pixels (16–240):`, String(current))
-      : null;
-    if (!input) return;
-    const parsed = Number(input.trim());
-    if (!Number.isFinite(parsed)) return;
-    const clamped = Math.max(16, Math.min(240, Math.round(parsed)));
-    for (const row of this.ActiveSheet.Rows) {
-      if (row.Index >= startRow && row.Index <= endRow) {
-        row.Height = clamped;
-      }
-    }
-    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    const labelSuffix = startRow === endRow ? `Row ${startRow}` : `Rows ${startRow}–${endRow}`;
+    this.PendingDimensionPrompt = {
+      Kind: 'row-height',
+      StartIndex: startRow,
+      EndIndex: endRow,
+      Title: `Set Row Height (${labelSuffix})`,
+      Label: 'Row height in pixels (16–240)',
+      Min: 16,
+      Max: 240,
+      Value: current,
+    };
     this.cdr.markForCheck();
+    setTimeout(() => {
+      const input = this.queryHostElement<HTMLInputElement>('[data-testid="sheet-dimension-input"]');
+      input?.focus();
+      input?.select();
+    }, 0);
   }
 
   private autoFitRowHeights(startRow: number, endRow: number): void {
@@ -9423,6 +10006,13 @@ export class SpreadsheetArtifactViewerComponent
 
   private hideRowsRange(startRow: number, endRow: number): void {
     if (!this.CanEdit) return;
+    const visibleRows = this.ActiveSheet.Rows.filter((r) => !r.Hidden);
+    const hidingCount = visibleRows.filter((r) => r.Index >= startRow && r.Index <= endRow).length;
+    if (visibleRows.length - hidingCount < 1) {
+      this.StatusBannerMessage = 'At least one row must remain visible.';
+      this.cdr.markForCheck();
+      return;
+    }
     for (const row of this.ActiveSheet.Rows) {
       if (row.Index >= startRow && row.Index <= endRow) {
         row.Hidden = true;
@@ -9448,20 +10038,62 @@ export class SpreadsheetArtifactViewerComponent
   private promptAndSetColWidth(startCol: number, endCol: number): void {
     if (!this.CanEdit) return;
     const current = this.ActiveSheet.Columns.find((c) => c.Index === startCol)?.Width ?? 14;
-    const input = typeof window !== 'undefined' && typeof window.prompt === 'function'
-      ? window.prompt(`Column width in characters (5–60):`, String(current))
-      : null;
-    if (!input) return;
-    const parsed = Number(input.trim());
-    if (!Number.isFinite(parsed)) return;
-    const clamped = Math.max(5, Math.min(60, Math.round(parsed)));
-    for (const col of this.ActiveSheet.Columns) {
-      if (col.Index >= startCol && col.Index <= endCol) {
-        col.Width = clamped;
+    const startLetter = ColumnIndexToLetter(startCol);
+    const endLetter = ColumnIndexToLetter(endCol);
+    const labelSuffix = startCol === endCol ? `Column ${startLetter}` : `Columns ${startLetter}–${endLetter}`;
+    this.PendingDimensionPrompt = {
+      Kind: 'col-width',
+      StartIndex: startCol,
+      EndIndex: endCol,
+      Title: `Set Column Width (${labelSuffix})`,
+      Label: 'Column width in characters (5–60)',
+      Min: 5,
+      Max: 60,
+      Value: current,
+    };
+    this.cdr.markForCheck();
+    setTimeout(() => {
+      const input = this.queryHostElement<HTMLInputElement>('[data-testid="sheet-dimension-input"]');
+      input?.focus();
+      input?.select();
+    }, 0);
+  }
+
+  public ConfirmDimensionPrompt(): void {
+    const prompt = this.PendingDimensionPrompt;
+    if (!prompt || !this.CanEdit) {
+      this.PendingDimensionPrompt = null;
+      this.cdr.markForCheck();
+      return;
+    }
+    const parsed = Number(prompt.Value);
+    if (!Number.isFinite(parsed)) {
+      this.PendingDimensionPrompt = null;
+      this.cdr.markForCheck();
+      return;
+    }
+    const clamped = Math.max(prompt.Min, Math.min(prompt.Max, Math.round(parsed)));
+    if (prompt.Kind === 'row-height') {
+      for (const row of this.ActiveSheet.Rows) {
+        if (row.Index >= prompt.StartIndex && row.Index <= prompt.EndIndex) {
+          row.Height = clamped;
+        }
+      }
+    } else {
+      for (const col of this.ActiveSheet.Columns) {
+        if (col.Index >= prompt.StartIndex && col.Index <= prompt.EndIndex) {
+          col.Width = clamped;
+        }
       }
     }
+    this.PendingDimensionPrompt = null;
     this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public CancelDimensionPrompt(): void {
+    this.PendingDimensionPrompt = null;
     this.cdr.markForCheck();
   }
 
@@ -9487,6 +10119,13 @@ export class SpreadsheetArtifactViewerComponent
 
   private hideColsRange(startCol: number, endCol: number): void {
     if (!this.CanEdit) return;
+    const visibleCols = this.ActiveSheet.Columns.filter((c) => !c.Hidden);
+    const hidingCount = visibleCols.filter((c) => c.Index >= startCol && c.Index <= endCol).length;
+    if (visibleCols.length - hidingCount < 1) {
+      this.StatusBannerMessage = 'At least one column must remain visible.';
+      this.cdr.markForCheck();
+      return;
+    }
     for (const col of this.ActiveSheet.Columns) {
       if (col.Index >= startCol && col.Index <= endCol) {
         col.Hidden = true;
@@ -9526,7 +10165,79 @@ export class SpreadsheetArtifactViewerComponent
     );
     created.FrozenRows = source.FrozenRows;
     created.FrozenColumns = source.FrozenColumns;
-    created.Cells = JSON.parse(JSON.stringify(source.Cells)) as Record<string, SpreadsheetCellSpec>;
+
+    const rowIdMap = new Map<string, string>();
+    for (let i = 0; i < source.Rows.length; i++) {
+      const srcRow = source.Rows[i];
+      const dstRow = created.Rows[i];
+      if (dstRow) {
+        rowIdMap.set(srcRow.RowID, dstRow.RowID);
+        dstRow.Height = srcRow.Height;
+        dstRow.Hidden = srcRow.Hidden;
+      }
+    }
+    const colIdMap = new Map<string, string>();
+    for (let i = 0; i < source.Columns.length; i++) {
+      const srcCol = source.Columns[i];
+      const dstCol = created.Columns[i];
+      if (dstCol) {
+        colIdMap.set(srcCol.ColumnID, dstCol.ColumnID);
+        dstCol.Width = srcCol.Width;
+        dstCol.Hidden = srcCol.Hidden;
+        dstCol.Header = srcCol.Header;
+      }
+    }
+
+    const clonedCells: Record<string, SpreadsheetCellSpec> = {};
+    for (const [addr, cell] of Object.entries(source.Cells)) {
+      const cloned = JSON.parse(JSON.stringify(cell)) as SpreadsheetCellSpec;
+      const pos = ParseCellAddress(addr);
+      const mappedRowId =
+        (cell.RowID ? rowIdMap.get(cell.RowID) : undefined) ??
+        (pos && created.Rows[pos.row - 1] ? created.Rows[pos.row - 1].RowID : cloned.RowID);
+      const mappedColId =
+        (cell.ColumnID ? colIdMap.get(cell.ColumnID) : undefined) ??
+        (pos && created.Columns[pos.col - 1] ? created.Columns[pos.col - 1].ColumnID : cloned.ColumnID);
+      cloned.RowID = mappedRowId;
+      cloned.ColumnID = mappedColId;
+      clonedCells[addr] = cloned;
+    }
+    created.Cells = clonedCells;
+
+    const cloneIdPrefix = `${created.SheetID}-${Date.now().toString(36)}`;
+    created.Charts = (source.Charts ?? []).map((chart, idx) => ({
+      ...(JSON.parse(JSON.stringify(chart)) as SpreadsheetChartSpec),
+      ChartID: `chart-${cloneIdPrefix}-${idx + 1}`,
+      SheetID: created.SheetID,
+    }));
+    created.LiveTables = (source.LiveTables ?? []).map((table, idx) => ({
+      ...(JSON.parse(JSON.stringify(table)) as SpreadsheetLiveTableSpec),
+      TableID: `tbl-${cloneIdPrefix}-${idx + 1}`,
+    }));
+    created.EmbeddedArtifacts = (source.EmbeddedArtifacts ?? []).map((emb, idx) => ({
+      ...(JSON.parse(JSON.stringify(emb)) as SpreadsheetEmbeddedArtifactSpec),
+      EmbedID: `emb-${cloneIdPrefix}-${idx + 1}`,
+    }));
+    created.ProtectedRanges = source.ProtectedRanges
+      ? source.ProtectedRanges.map((rule, idx) => ({
+          ...(JSON.parse(JSON.stringify(rule)) as SpreadsheetProtectedRangeSpec),
+          RangeID: `prot-${cloneIdPrefix}-${idx + 1}`,
+        }))
+      : undefined;
+    created.SortSpec = source.SortSpec
+      ? (JSON.parse(JSON.stringify(source.SortSpec)) as SpreadsheetSortSpec)
+      : source.SortSpec;
+    created.FilterSpecs = JSON.parse(JSON.stringify(source.FilterSpecs ?? [])) as SpreadsheetFilterSpec[];
+    created.ValidationRules = (source.ValidationRules ?? []).map((rule, idx) => ({
+      ...(JSON.parse(JSON.stringify(rule)) as SpreadsheetValidationRuleSpec),
+      RuleID: `val-${cloneIdPrefix}-${idx + 1}`,
+    }));
+    created.ConditionalFormats = (source.ConditionalFormats ?? []).map((rule, idx) => ({
+      ...(JSON.parse(JSON.stringify(rule)) as SpreadsheetConditionalFormatRuleSpec),
+      RuleID: `cf-${cloneIdPrefix}-${idx + 1}`,
+    }));
+    created.ClearedSpillChildren = source.ClearedSpillChildren ? [...source.ClearedSpillChildren] : undefined;
+
     this.Workbook.ActiveSheetID = created.SheetID;
     SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
     this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
@@ -9583,6 +10294,14 @@ export class SpreadsheetArtifactViewerComponent
 
   private deleteWorksheetById(sheetId: string): void {
     if (!this.CanEdit || this.Workbook.Worksheets.length <= 1) return;
+    const targetSheet = this.Workbook.Worksheets.find((w) => w.SheetID === sheetId);
+    if (!targetSheet) return;
+    const protectedReason = this.findProtectedReasonForSheet(targetSheet);
+    if (protectedReason) {
+      this.StatusBannerMessage = protectedReason;
+      this.cdr.markForCheck();
+      return;
+    }
     this.Workbook.Worksheets = this.Workbook.Worksheets.filter((w) => w.SheetID !== sheetId);
     if (this.Workbook.ActiveSheetID === sheetId) {
       this.Workbook.ActiveSheetID = this.Workbook.Worksheets[0].SheetID;
@@ -9662,12 +10381,16 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.CanEdit) return;
     const table = this.ActiveSheet.LiveTables?.find((t) => t.TableID === tableId);
     if (!table) return;
+    this.EditingLiveTableID = table.TableID;
     this.NewLiveTableTitle = table.Title;
     this.NewLiveTableSourceType = table.SourceType;
     this.NewLiveTableEntityName = table.EntityName ?? 'AI Agents';
     this.NewLiveTableExtraFilter = table.ExtraFilter ?? '';
     this.NewLiveTableQueryName = table.QueryName ?? 'Renewals by Month';
     this.NewLiveTableAnchorCell = table.AnchorCell || 'A1';
+    const firstCalc = table.CalculatedColumns?.[0];
+    this.NewLiveTableCalcHeader = firstCalc?.Header ?? '';
+    this.NewLiveTableCalcFormula = firstCalc?.FormulaTemplate ?? '';
     this.ShowAddLiveTableModal = true;
     this.cdr.markForCheck();
   }
@@ -9693,9 +10416,11 @@ export class SpreadsheetArtifactViewerComponent
 
   private openEmbeddedArtifact(embedId: string): void {
     const emb = this.ActiveSheet.EmbeddedArtifacts?.find((e) => e.EmbedID === embedId);
-    if (!emb?.ArtifactID) return;
-    const key = new CompositeKey([{ FieldName: 'ID', Value: emb.ArtifactID }]);
-    this.OpenEntityRecord.emit({ entityName: 'MJ: Artifacts', compositeKey: key });
+    if (!emb?.ArtifactID || !IsValidUUID(emb.ArtifactID)) return;
+    this.OpenEntityRecord.emit({
+      entityName: 'MJ: Artifacts',
+      compositeKey: CompositeKey.FromID(emb.ArtifactID),
+    });
   }
 
   private selectEmbeddedAnchor(embedId: string): void {
@@ -9720,7 +10445,7 @@ export class SpreadsheetArtifactViewerComponent
     this.cdr.markForCheck();
     if (focusComposer && typeof document !== 'undefined') {
       setTimeout(() => {
-        const input = document.querySelector<HTMLTextAreaElement>('[data-testid="sheet-comment-input"]');
+        const input = this.queryHostElement<HTMLTextAreaElement>('[data-testid="sheet-comment-input"]');
         input?.focus();
       }, 0);
     }
@@ -9756,6 +10481,65 @@ export class SpreadsheetArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  /**
+   * Verifies write permission before stripping `existing.Style`, preventing partial mutation on protected cells
+   * and ensuring `SpreadsheetEngine.SetCell` does not shallow-merge stale style properties back in.
+   */
+  private clearExistingStyleIfWritable(
+    sheet: WorksheetSpec,
+    addr: string,
+    editContext: SpreadsheetCellEditContext,
+  ): void {
+    const perm = SpreadsheetEngine.Instance.CheckCellWritePermission(sheet, addr, editContext);
+    if (!perm.Allowed) {
+      throw new Error(perm.Reason || `Cell '${addr}' is protected.`);
+    }
+    const existing = sheet.Cells[addr];
+    if (existing) {
+      delete existing.Style;
+    }
+  }
+
+  private isActorAllowedForProtectedRule(
+    rule: SpreadsheetProtectedRangeSpec,
+    editContext: SpreadsheetCellEditContext,
+  ): boolean {
+    if (editContext.BypassProtection) {
+      return true;
+    }
+    const actor = (editContext.UserID ?? '').trim();
+    if (actor && editContext.OwnerUserID && UUIDsEqual(actor, editContext.OwnerUserID)) {
+      return true;
+    }
+    if (actor && rule.LockedByUserID && UUIDsEqual(actor, rule.LockedByUserID)) {
+      return true;
+    }
+    if (rule.AllowEditors && editContext.IsEditor) {
+      return true;
+    }
+    return false;
+  }
+
+  private findProtectedReasonForSheet(sheet: WorksheetSpec): string | null {
+    const rules = sheet.ProtectedRanges;
+    if (!Array.isArray(rules) || rules.length === 0) {
+      return null;
+    }
+    const editContext = this.buildCellEditContext();
+    if (editContext.BypassProtection) {
+      return null;
+    }
+    for (const rule of rules) {
+      if (!this.isActorAllowedForProtectedRule(rule, editContext)) {
+        return (
+          rule.Description ||
+          `Worksheet '${sheet.Name}' contains protected range '${rule.Range}' (locked by ${rule.LockedByUserID}).`
+        );
+      }
+    }
+    return null;
+  }
+
   private findProtectedReasonInRange(
     sheet: WorksheetSpec,
     minR: number,
@@ -9763,16 +10547,27 @@ export class SpreadsheetArtifactViewerComponent
     minC: number,
     maxC: number,
   ): string | null {
+    const rules = sheet.ProtectedRanges;
+    if (!Array.isArray(rules) || rules.length === 0) {
+      return null;
+    }
     const editContext = this.buildCellEditContext();
-    const rowEnd = Math.min(maxR, minR + 50);
-    const colEnd = Math.min(maxC, minC + 26);
-    for (let r = minR; r <= rowEnd; r++) {
-      for (let c = minC; c <= colEnd; c++) {
-        const addr = FormatCellAddress(r, c);
-        const perm = SpreadsheetEngine.Instance.CheckCellWritePermission(sheet, addr, editContext);
-        if (!perm.Allowed) {
-          return perm.Reason || perm.ProtectedRange?.Description || `Range ${addr} is protected`;
-        }
+    if (editContext.BypassProtection) {
+      return null;
+    }
+    for (const rule of rules) {
+      const bounds = ParseRangeAddress(rule.Range, 1_048_576, 16_384);
+      if (!bounds) continue;
+      const overlaps =
+        bounds.startRow <= maxR &&
+        bounds.endRow >= minR &&
+        bounds.startCol <= maxC &&
+        bounds.endCol >= minC;
+      if (overlaps && !this.isActorAllowedForProtectedRule(rule, editContext)) {
+        return (
+          rule.Description ||
+          `Range '${rule.Range}' is protected (locked by ${rule.LockedByUserID}).`
+        );
       }
     }
     return null;

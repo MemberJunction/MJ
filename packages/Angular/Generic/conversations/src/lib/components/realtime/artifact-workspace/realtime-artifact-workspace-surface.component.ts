@@ -36,15 +36,18 @@ import type { ArtifactWorkspaceRecord } from './artifact-workspace-types';
           </p>
         </div>
       } @else {
-        <div class="aw-tabbar" role="tablist" aria-label="Open workspace artifacts">
-          <div class="aw-tabs">
+        <div class="aw-tabbar">
+          <div class="aw-tabs" role="tablist" aria-label="Open workspace artifacts">
             @for (record of Instances; track record.InstanceID) {
               <button
                 type="button"
                 class="aw-tab"
                 role="tab"
+                [id]="'aw-tab-' + record.InstanceID"
                 [class.aw-tab--active]="record.InstanceID === ActiveID"
                 [attr.aria-selected]="record.InstanceID === ActiveID"
+                [attr.aria-controls]="'aw-panel-' + record.InstanceID"
+                [attr.tabindex]="record.InstanceID === ActiveID ? 0 : -1"
                 [attr.data-instance]="record.InstanceID"
                 [title]="record.Name"
                 (click)="SelectTab(record.InstanceID)"
@@ -71,20 +74,29 @@ import type { ArtifactWorkspaceRecord } from './artifact-workspace-types';
         </div>
         <div class="aw-panes">
           @if (ActiveRecord; as active) {
-            <div class="aw-pane" [attr.data-instance]="active.InstanceID">
-              <mj-artifact-viewer-panel
-                [artifactId]="active.ArtifactID"
-                [versionNumber]="active.VersionNumber"
-                [currentUser]="CurrentUser!"
-                [environmentId]="EnvironmentID"
-                [refreshTrigger]="RefreshTrigger$"
-                [canEdit]="active.CanEdit ?? false"
-                [showHeader]="false"
-                [showTabs]="false"
-                [showSaveToCollection]="false"
-                [showCloseButton]="false"
-                [showMaximizeButton]="false"
-              ></mj-artifact-viewer-panel>
+            <div
+              class="aw-pane"
+              role="tabpanel"
+              [id]="'aw-panel-' + active.InstanceID"
+              [attr.aria-labelledby]="'aw-tab-' + active.InstanceID"
+              [attr.data-instance]="active.InstanceID"
+            >
+              @if (CurrentUser; as user) {
+                <mj-artifact-viewer-panel
+                  [artifactId]="active.ArtifactID"
+                  [versionNumber]="active.VersionNumber"
+                  [currentUser]="user"
+                  [Provider]="Provider"
+                  [environmentId]="EnvironmentID"
+                  [refreshTrigger]="RefreshTrigger$"
+                  [canEdit]="active.CanEdit ?? false"
+                  [showHeader]="false"
+                  [showTabs]="false"
+                  [showSaveToCollection]="false"
+                  [showCloseButton]="false"
+                  [showMaximizeButton]="false"
+                ></mj-artifact-viewer-panel>
+              }
             </div>
           }
         </div>

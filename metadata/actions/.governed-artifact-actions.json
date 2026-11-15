@@ -73,7 +73,7 @@
             "ActionID": "@parent:ID",
             "Name": "Content",
             "Type": "Input",
-            "ValueType": "Simple Object",
+            "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Optional initial artifact payload (markdown string, slide deck spec JSON, or workbook spec JSON).",
             "IsRequired": false
@@ -221,6 +221,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required parameter (such as Title) is missing."
+          },
+          "primaryKey": {
+            "ID": "BD21E81A-95A7-4B7E-A705-26963061C288"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "ResultCode": "CREATE_FAILED",
             "IsSuccess": false,
             "Description": "Artifact creation failed validation, permission, or persistence checks."
@@ -238,7 +249,7 @@
   {
     "fields": {
       "Name": "Inspect Governed Artifact",
-      "Description": "Inspect a permission-checked collaborative Markdown Document, Presentation, or Excel Spreadsheet artifact (summary or read-only tool such as get_sheets, get_outline, read_range, search_cells), hydrating uncompacted edits from any active live Yjs collaboration room.",
+      "Description": "Inspect a permission-checked collaborative Markdown Document, Presentation, or Excel Spreadsheet artifact (summary or read-only tool such as get_outline, get_workbook_outline, read_deck, get_sheets, read_range, search_cells), hydrating uncompacted edits from any active live Yjs collaboration room.",
       "DriverClass": "__InspectGovernedArtifact",
       "Type": "Custom",
       "Status": "Active",
@@ -251,7 +262,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ArtifactID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Artifact ID (UUID) to inspect.",
@@ -268,7 +279,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional read-only tool name from the artifact type's tool library (e.g., get_summary, get_outline, get_sheets, read_range, search_cells).",
+            "Description": "Optional read-only tool name from the artifact type's tool library (e.g., get_outline, get_workbook_outline, read_deck, get_deck_outline, get_sheets, read_range, search_cells).",
             "IsRequired": false
           },
           "primaryKey": {
@@ -287,20 +298,6 @@
           },
           "primaryKey": {
             "ID": "770C0FB4-7A8F-4F39-BB29-CBBB7FF55525"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ArtifactID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Inspected Artifact ID.",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "55242D82-930F-4302-9A14-31EFDC482A9E"
           }
         },
         {
@@ -470,7 +467,7 @@
   {
     "fields": {
       "Name": "Mutate Governed Artifact",
-      "Description": "Apply one or more typed tool mutations to an existing collaborative Markdown Document, Presentation, or Excel Spreadsheet artifact (e.g., upsert_live_table, write_cells, upsert_chart, add_sheet, insert_section, upsert_slide), synchronizing through any live Yjs collaboration room and broadcasting spoof-proof agent presence.",
+      "Description": "Apply one or more typed tool mutations to an existing collaborative Markdown Document, Presentation, or Excel Spreadsheet artifact (e.g., upsert_live_table, write_cells, format_range, upsert_chart, add_sheet, insert_block_after, replace_block, add_slide, upsert_slide_element), synchronizing through any live Yjs collaboration room and broadcasting spoof-proof agent presence.",
       "DriverClass": "__MutateGovernedArtifact",
       "Type": "Custom",
       "Status": "Active",
@@ -483,7 +480,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ArtifactID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Target Artifact ID (UUID) to mutate.",
@@ -500,7 +497,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Single tool name to execute (e.g., upsert_live_table, write_cells, add_sheet, upsert_chart, insert_section, upsert_slide).",
+            "Description": "Single tool name to execute (e.g., upsert_live_table, write_cells, format_range, add_sheet, upsert_chart, insert_block_after, replace_block, add_slide, upsert_slide_element).",
             "IsRequired": false
           },
           "primaryKey": {
@@ -533,20 +530,6 @@
           },
           "primaryKey": {
             "ID": "AAD2EE0E-021B-4849-8E1F-01236606EFFE"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ArtifactID",
-            "Type": "Both",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Mutated Artifact ID.",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "B5D201E9-5C72-4B7C-B778-04A280DB7CD4"
           }
         },
         {

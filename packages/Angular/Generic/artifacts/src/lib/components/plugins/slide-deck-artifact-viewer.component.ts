@@ -1,8 +1,10 @@
 import {
+  ChangeDetectionStrategy,
   Component,
   ElementRef,
   EventEmitter,
   Input,
+  NgZone,
   Output,
   OnInit,
   OnChanges,
@@ -160,15 +162,11 @@ export interface ResolvedSlidesToolbarItem {
 @Component({
   selector: 'mj-slide-deck-artifact-viewer',
   standalone: false,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
       class="mj-slides-shell"
       [class.mj-slides-fullscreen]="WorkspaceMode === 'present' || WorkspaceMode === 'presenter'"
-      (pointerdown)="OnTouchPointerDown($event)"
-      (pointermove)="OnTouchPointerMove($event)"
-      (pointerup)="OnTouchPointerUp($event)"
-      (pointercancel)="OnTouchPointerCancel($event)"
-      (click)="OnShellClick($event)"
       data-testid="mj-slides-shell"
     >
       <!-- Top Presentation Toolbar -->
@@ -1365,19 +1363,19 @@ export interface ResolvedSlidesToolbarItem {
             <div class="mj-slides-modal-actions">
               <button
                 type="button"
-                class="mj-slides-tool-btn"
-                (click)="CancelFreezeSlideBlock()"
-                data-testid="cancel-slide-freeze-btn"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 class="mj-slides-tool-btn primary"
                 (click)="ConfirmFreezeSlideBlock()"
                 data-testid="confirm-slide-freeze-btn"
               >
                 Acknowledge &amp; Freeze Snapshot
+              </button>
+              <button
+                type="button"
+                class="mj-slides-tool-btn"
+                (click)="CancelFreezeSlideBlock()"
+                data-testid="cancel-slide-freeze-btn"
+              >
+                Cancel
               </button>
             </div>
           </div>
@@ -1403,18 +1401,18 @@ export interface ResolvedSlidesToolbarItem {
             <div class="mj-slides-modal-actions">
               <button
                 type="button"
-                class="mj-slides-tool-btn"
-                (click)="ShowMarkdownToDeckModal = false"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 class="mj-slides-tool-btn primary"
                 (click)="ConvertDraftMarkdownToDeck()"
                 data-testid="confirm-markdown-to-deck-btn"
               >
                 Convert Document to Slides
+              </button>
+              <button
+                type="button"
+                class="mj-slides-tool-btn"
+                (click)="ShowMarkdownToDeckModal = false"
+              >
+                Cancel
               </button>
             </div>
           </div>
@@ -1535,19 +1533,19 @@ export interface ResolvedSlidesToolbarItem {
             <div class="mj-slides-modal-actions">
               <button
                 type="button"
-                class="mj-slides-tool-btn"
-                (click)="ShowSheetEmbedModal = false"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 class="mj-slides-tool-btn primary"
                 [disabled]="!SheetEmbedArtifactID"
                 (click)="ConfirmSheetEmbedModal()"
                 data-testid="slides-sheet-embed-confirm-btn"
               >
                 Embed in Slide
+              </button>
+              <button
+                type="button"
+                class="mj-slides-tool-btn"
+                (click)="ShowSheetEmbedModal = false"
+              >
+                Cancel
               </button>
             </div>
           </div>
@@ -2613,9 +2611,11 @@ export class SlideDeckArtifactViewerComponent
     entityName: string;
     compositeKey: CompositeKey;
   }>();
+  /** @deprecated Use {@link OpenEntityRecord}. */
   @Output() public openEntityRecord = this.OpenEntityRecord;
 
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly ngZone = inject(NgZone, { optional: true });
   private readonly hostElRef = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
   private readonly renderer = inject(Renderer2, { optional: true });
   private readonly collabService = inject(DocumentCollaborationService);
@@ -2631,6 +2631,8 @@ export class SlideDeckArtifactViewerComponent
   private _localToolbarPins: SlidesToolbarItemKey[] | null = null;
   private _serverToolbarPinsRaw: string | null = null;
   private _unlistenMoreMenuDocs: Array<() => void> = [];
+  private touchPointerCleanup: (() => void) | null = null;
+  private artifactOwnerUserId: string | null = null;
 
   // Context Menu & Clipboard State
   public ContextMenuOpen = false;
@@ -2639,11 +2641,18 @@ export class SlideDeckArtifactViewerComponent
   public ContextMenuItems: ContextMenuItem<SlidesContextMenuCommand>[] = [];
   public ContextMenuAriaLabel = 'Slide actions';
   public ContextMenuRestoreFocusEl: HTMLElement | null = null;
-  public copiedSlideRegionSpec: SlideRegionSpec | null = null;
+  private copiedSlideRegionSpec: SlideRegionSpec | null = null;
   public LastClipboardText = '';
   private readonly touchMenuMonitor = new TouchContextMenuMonitor({
     OnLongPress: (trigger) => {
-      this.openContextMenuForTargetElement(trigger.Target, trigger.AnchorX, trigger.AnchorY);
+      if (this.ngZone) {
+        this.ngZone.run(() => {
+          this.openContextMenuForTargetElement(trigger.Target, trigger.AnchorX, trigger.AnchorY);
+          this.cdr.detectChanges();
+        });
+      } else {
+        this.openContextMenuForTargetElement(trigger.Target, trigger.AnchorX, trigger.AnchorY);
+      }
     },
   });
 
@@ -2951,6 +2960,7 @@ export class SlideDeckArtifactViewerComponent
 
   public ngOnInit(): void {
     this.initializePresentationFromArtifactVersion();
+    this.bindTouchPointerListenersOutsideZone();
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
@@ -2994,6 +3004,7 @@ export class SlideDeckArtifactViewerComponent
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    this.unbindTouchPointerListeners();
     this.touchMenuMonitor.Destroy();
     this.stopMoreMenuDocumentListeners();
     this.destroyCollaborationSession();
@@ -3258,16 +3269,7 @@ export class SlideDeckArtifactViewerComponent
     if (!this.IsEditable || this.Deck.Slides.length <= 1) {
       return;
     }
-    const targetId = this.ActiveSlide.SlideID;
-    const { Deck: updatedDeck, Deleted } = SlideDeckEngine.Instance.DeleteSlide(this.Deck, targetId);
-    if (!Deleted) {
-      return;
-    }
-    this.Deck = updatedDeck;
-    this.ActiveSlideID = this.Deck.Slides[0].SlideID;
-    this.session?.DeleteSlideFromDeck(targetId, this.Deck);
-    this.syncRawDeckJson();
-    this.cdr.markForCheck();
+    this.DeleteSlideById(this.ActiveSlide.SlideID);
   }
 
   /**
@@ -3290,6 +3292,48 @@ export class SlideDeckArtifactViewerComponent
   // =========================================================================
   // Touch Long-Press & Right-Click Context Menu Support
   // =========================================================================
+
+  private bindTouchPointerListenersOutsideZone(): void {
+    this.unbindTouchPointerListeners();
+    const hostEl = this.hostElRef?.nativeElement ?? null;
+    if (!hostEl || typeof hostEl.addEventListener !== 'function') {
+      return;
+    }
+    const onDown = (event: PointerEvent): void => this.OnTouchPointerDown(event);
+    const onMove = (event: PointerEvent): void => this.OnTouchPointerMove(event);
+    const onUp = (event: PointerEvent): void => this.OnTouchPointerUp(event);
+    const onCancel = (event: PointerEvent): void => this.OnTouchPointerCancel(event);
+    const onClickCapture = (event: MouseEvent): void => this.OnShellClick(event);
+
+    const attach = (): void => {
+      hostEl.addEventListener('pointerdown', onDown, { passive: true });
+      hostEl.addEventListener('pointermove', onMove, { passive: true });
+      hostEl.addEventListener('pointerup', onUp, { passive: true });
+      hostEl.addEventListener('pointercancel', onCancel, { passive: true });
+      // Register click suppression in true DOM capture phase (Angular templates bind '(click.capture)' as a literal event name)
+      hostEl.addEventListener('click', onClickCapture, { capture: true });
+    };
+    if (this.ngZone) {
+      this.ngZone.runOutsideAngular(attach);
+    } else {
+      attach();
+    }
+
+    this.touchPointerCleanup = () => {
+      hostEl.removeEventListener('pointerdown', onDown);
+      hostEl.removeEventListener('pointermove', onMove);
+      hostEl.removeEventListener('pointerup', onUp);
+      hostEl.removeEventListener('pointercancel', onCancel);
+      hostEl.removeEventListener('click', onClickCapture, { capture: true });
+    };
+  }
+
+  private unbindTouchPointerListeners(): void {
+    if (this.touchPointerCleanup) {
+      this.touchPointerCleanup();
+      this.touchPointerCleanup = null;
+    }
+  }
 
   public OnTouchPointerDown(event: PointerEvent): void {
     this.touchMenuMonitor.OnPointerDown(event);
@@ -3671,7 +3715,7 @@ export class SlideDeckArtifactViewerComponent
     }
     const targetSlide = this.Deck.Slides.find((s) => s.SlideID === slideId);
     const userId = this.getSafeCurrentUser()?.ID ?? null;
-    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
     if (targetSlide) {
       const check = SlideDeckEngine.Instance.CanActorEditSlide(
         targetSlide,
@@ -3724,6 +3768,7 @@ export class SlideDeckArtifactViewerComponent
     const remainingIds = slides.filter((s) => s.SlideID !== slideId).map((s) => s.SlideID);
     const orderedSlideIds = edge === 'start' ? [slideId, ...remainingIds] : [...remainingIds, slideId];
     this.Deck = SlideDeckEngine.Instance.ReorderSlides(this.Deck, orderedSlideIds);
+    this.SelectSlide(slideId);
     this.session?.ReorderSlidesInDeck(orderedSlideIds, this.Deck);
     this.syncRawDeckJson();
     this.cdr.markForCheck();
@@ -3878,6 +3923,7 @@ export class SlideDeckArtifactViewerComponent
   public FocusRegionInlineEditor(slideId: string, regionId: string): void {
     this.SelectSlide(slideId);
     this.FocusedRegionID = regionId;
+    this.cdr.detectChanges();
     const hostEl = this.hostElRef?.nativeElement ?? this.captureHostElementRef?.nativeElement ?? null;
     const regionCard = hostEl?.querySelector<HTMLElement>(`[data-testid="slide-region-${regionId}"]`);
     const editableEl = regionCard?.querySelector<HTMLElement>('[contenteditable="true"]') ?? regionCard;
@@ -3906,6 +3952,25 @@ export class SlideDeckArtifactViewerComponent
     if (!this.IsEditable) {
       return;
     }
+    const slide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const region = slide?.Regions.find((r) => r.RegionID === regionId);
+    if (!slide || !region) {
+      return;
+    }
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    const check = SlideDeckEngine.Instance.CanActorEditRegion(
+      slide,
+      region,
+      userId,
+      ownerId,
+      this.IsEditable,
+    );
+    if (!check.Allowed) {
+      this.StatusBannerMessage = check.Reason || 'This slide region is locked.';
+      this.cdr.markForCheck();
+      return;
+    }
     this.CopySlideRegion(slideId, regionId);
     this.ClearSlideRegion(slideId, regionId);
   }
@@ -3923,7 +3988,7 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
     const userId = this.getSafeCurrentUser()?.ID ?? null;
-    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
     const slideCheck = SlideDeckEngine.Instance.CanActorEditSlide(slide, userId, ownerId, this.IsEditable);
     if (!slideCheck.Allowed) {
       this.StatusBannerMessage = slideCheck.Reason || 'This slide is locked.';
@@ -3961,7 +4026,7 @@ export class SlideDeckArtifactViewerComponent
       RegionID: regionId,
       Kind: copied.Kind,
       MarkdownContent: copied.MarkdownContent,
-      BlockSpec: copied.BlockSpec ? { ...copied.BlockSpec } : undefined,
+      BlockSpec: copied.BlockSpec,
       BigNumberValue: copied.BigNumberValue,
       BigNumberLabel: copied.BigNumberLabel,
       BigNumberDelta: copied.BigNumberDelta,
@@ -3990,10 +4055,28 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
     const userId = this.getSafeCurrentUser()?.ID ?? null;
-    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
-    const slideCheck = SlideDeckEngine.Instance.CanActorEditSlide(slide, userId, ownerId, this.IsEditable);
-    if (!slideCheck.Allowed) {
-      this.StatusBannerMessage = slideCheck.Reason || 'This slide is locked.';
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    const sourceCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+      slide,
+      slide.Regions[idx],
+      userId,
+      ownerId,
+      this.IsEditable,
+    );
+    if (!sourceCheck.Allowed) {
+      this.StatusBannerMessage = sourceCheck.Reason || 'This slide region is locked.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const targetCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+      slide,
+      slide.Regions[targetIdx],
+      userId,
+      ownerId,
+      this.IsEditable,
+    );
+    if (!targetCheck.Allowed) {
+      this.StatusBannerMessage = targetCheck.Reason || 'The target slide region is locked.';
       this.cdr.markForCheck();
       return;
     }
@@ -4046,10 +4129,9 @@ export class SlideDeckArtifactViewerComponent
     if (!artifactId) {
       return;
     }
-    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: artifactId }]);
     this.OpenEntityRecord.emit({
       entityName: 'MJ: Artifacts',
-      compositeKey,
+      compositeKey: CompositeKey.FromID(artifactId),
     });
   }
 
@@ -4103,9 +4185,23 @@ export class SlideDeckArtifactViewerComponent
   }
 
   private cloneRegionSpec(region: SlideRegionSpec): SlideRegionSpec {
+    let clonedBlock: DocumentBlockSpec | undefined;
+    if (region.BlockSpec) {
+      const parsed = SafeJSONParse<DocumentBlockSpec>(JSON.stringify(region.BlockSpec));
+      const baseBlock: DocumentBlockSpec = parsed ?? { ...region.BlockSpec };
+      clonedBlock = {
+        ...baseBlock,
+        BlockID: generateSlideBlockUuid(),
+      };
+    }
+    const nextMarkdown =
+      clonedBlock && (region.Kind === 'mj-block' || (region.MarkdownContent ?? '').includes(':::mj-block'))
+        ? DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(clonedBlock)
+        : region.MarkdownContent;
     return {
       ...region,
-      BlockSpec: region.BlockSpec ? { ...region.BlockSpec } : undefined,
+      MarkdownContent: nextMarkdown,
+      BlockSpec: clonedBlock,
     };
   }
 
@@ -4215,7 +4311,7 @@ export class SlideDeckArtifactViewerComponent
       slides.findIndex((s) => s.SlideID === slide.SlideID),
     );
     const userId = this.getSafeCurrentUser()?.ID ?? null;
-    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
     const slideEditCheck = SlideDeckEngine.Instance.CanActorEditSlide(
       slide,
       userId,
@@ -4233,6 +4329,10 @@ export class SlideDeckArtifactViewerComponent
     let regionLockedReason: string | undefined;
     let regionLockToggleAllowed: boolean | undefined;
     let regionLockToggleDisabledReason: string | undefined;
+    let canSwapEarlier: boolean | undefined;
+    let swapEarlierDisabledReason: string | undefined;
+    let canSwapLater: boolean | undefined;
+    let swapLaterDisabledReason: string | undefined;
     let isOleBlock = false;
     let isOleEditing = false;
     let isSheetBacked = false;
@@ -4259,6 +4359,29 @@ export class SlideDeckArtifactViewerComponent
           : { Allowed: this.IsEditable, Reason: undefined };
       regionLockToggleAllowed = regionLockCheck.Allowed;
       regionLockToggleDisabledReason = regionLockCheck.Reason;
+
+      if (regionIdx > 0) {
+        const prevCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+          slide,
+          slide.Regions[regionIdx - 1],
+          userId,
+          ownerId,
+          this.IsEditable,
+        );
+        canSwapEarlier = regionCheck.Allowed && prevCheck.Allowed;
+        swapEarlierDisabledReason = !regionCheck.Allowed ? regionCheck.Reason : prevCheck.Reason;
+      }
+      if (regionIdx >= 0 && regionIdx < slide.Regions.length - 1) {
+        const nextCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+          slide,
+          slide.Regions[regionIdx + 1],
+          userId,
+          ownerId,
+          this.IsEditable,
+        );
+        canSwapLater = regionCheck.Allowed && nextCheck.Allowed;
+        swapLaterDisabledReason = !regionCheck.Allowed ? regionCheck.Reason : nextCheck.Reason;
+      }
 
       const block = this.GetRegionBlockSpec(region);
       if (block) {
@@ -4306,6 +4429,10 @@ export class SlideDeckArtifactViewerComponent
       RegionLockedReason: regionLockedReason,
       CanToggleRegionLock: regionLockToggleAllowed,
       RegionLockToggleDisabledReason: regionLockToggleDisabledReason,
+      CanSwapEarlier: canSwapEarlier,
+      SwapEarlierDisabledReason: swapEarlierDisabledReason,
+      CanSwapLater: canSwapLater,
+      SwapLaterDisabledReason: swapLaterDisabledReason,
       IsOleBlock: isOleBlock,
       IsOleEditing: isOleEditing,
       IsSheetBackedBlock: isSheetBacked,
@@ -4374,11 +4501,10 @@ export class SlideDeckArtifactViewerComponent
     }
     const [moved] = slides.splice(fromIdx, 1);
     slides.splice(toIdx, 0, moved);
-    this.Deck = { ...this.Deck, Slides: slides };
-    this.session?.ReorderSlidesInDeck(
-      this.Deck.Slides.map((s) => s.SlideID),
-      this.Deck,
-    );
+    const orderedSlideIds = slides.map((s) => s.SlideID);
+    this.Deck = SlideDeckEngine.Instance.ReorderSlides(this.Deck, orderedSlideIds);
+    this.SelectSlide(draggedId);
+    this.session?.ReorderSlidesInDeck(orderedSlideIds, this.Deck);
     this.syncRawDeckJson();
     this.cdr.markForCheck();
   }
@@ -4400,14 +4526,10 @@ export class SlideDeckArtifactViewerComponent
     const engine = UserInfoEngine.Instance;
     const raw = engine?.GetSetting(SLIDES_TOOLBAR_PINS_SETTING_KEY) ?? null;
     if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) {
-          const valid = parsed.filter((k): k is SlidesToolbarItemKey => typeof k === 'string');
-          return valid.slice(0, this.MaxPinnedToolbarActions);
-        }
-      } catch {
-        // Fallback to defaults
+      const parsed = SafeJSONParse<string[]>(raw);
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((k): k is SlidesToolbarItemKey => typeof k === 'string');
+        return valid.slice(0, this.MaxPinnedToolbarActions);
       }
     }
     return [...DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS];
@@ -5444,7 +5566,7 @@ export class SlideDeckArtifactViewerComponent
 
   public GetDisplayRowsForBlock(block: DocumentBlockSpec): {
     Columns: DocumentBlockColumn[];
-    Rows: Array<Record<string, unknown>>;
+    Rows: DocumentBlockExecutionResult['Rows'];
   } {
     if (block.Mode === 'Frozen' && block.FrozenSnapshot) {
       return {
@@ -5462,7 +5584,7 @@ export class SlideDeckArtifactViewerComponent
     return { Columns: [], Rows: [] };
   }
 
-  public FormatCellValue(value: unknown): string {
+  public FormatCellValue(value: DocumentBlockExecutionResult['Rows'][number][string]): string {
     if (value === null || value === undefined) {
       return '';
     }
@@ -5822,11 +5944,137 @@ export class SlideDeckArtifactViewerComponent
   }
 
   private convertEditableRegionDomToMarkdown(el: HTMLElement): string {
-    const rawText = (el.innerText ?? '').replace(/\r\n/g, '\n').trim();
-    return rawText
-      .split('\n')
+    if (!el.childNodes || el.childNodes.length === 0) {
+      const rawText = (el.innerText ?? el.textContent ?? '').replace(/\r\n/g, '\n').trim();
+      return rawText
+        .split('\n')
+        .map((line) => line.replace(/^•\s+/, '- ').trimEnd())
+        .join('\n');
+    }
+    const lines: string[] = [];
+    this.collectEditableBlockLines(el, lines);
+    return lines
       .map((line) => line.replace(/^•\s+/, '- ').trimEnd())
-      .join('\n');
+      .filter((line, idx, arr) => line.length > 0 || (idx > 0 && idx < arr.length - 1))
+      .join('\n')
+      .trim();
+  }
+
+  private collectEditableBlockLines(container: Node, outLines: string[]): void {
+    const blockTags = new Set(['H1', 'H2', 'H3', 'P', 'DIV', 'BLOCKQUOTE', 'UL', 'OL', 'LI']);
+    let inlineBuf = '';
+    const flushInline = (): void => {
+      const normalized = inlineBuf.replace(/\r\n/g, '\n');
+      if (normalized.trim().length > 0) {
+        for (const l of normalized.split('\n')) {
+          if (l.trim().length > 0) {
+            outLines.push(l.trimEnd());
+          }
+        }
+      }
+      inlineBuf = '';
+    };
+
+    for (const child of Array.from(container.childNodes)) {
+      if (child.nodeType === 3) {
+        inlineBuf += child.textContent ?? '';
+        continue;
+      }
+      if (child.nodeType !== 1) {
+        continue;
+      }
+      const el = child as HTMLElement;
+      const tag = el.tagName.toUpperCase();
+      if (!blockTags.has(tag)) {
+        inlineBuf += this.serializeEditableInlineNode(el);
+        continue;
+      }
+      flushInline();
+
+      if (tag === 'H1') {
+        const text = this.serializeEditableInlineChildren(el).trim();
+        if (text) outLines.push(`# ${text}`);
+      } else if (tag === 'H2') {
+        const text = this.serializeEditableInlineChildren(el).trim();
+        if (text) outLines.push(`## ${text}`);
+      } else if (tag === 'H3') {
+        const text = this.serializeEditableInlineChildren(el).trim();
+        if (text) outLines.push(`### ${text}`);
+      } else if (tag === 'UL' || tag === 'OL') {
+        const listItems = Array.from(el.childNodes).filter(
+          (n) => n.nodeType === 1 && (n as HTMLElement).tagName.toUpperCase() === 'LI',
+        );
+        listItems.forEach((li, index) => {
+          const prefix = tag === 'OL' ? `${index + 1}. ` : '- ';
+          const text = this.serializeEditableInlineChildren(li).trim();
+          if (text) outLines.push(`${prefix}${text}`);
+        });
+      } else if (tag === 'LI') {
+        const text = this.serializeEditableInlineChildren(el).trim();
+        if (text) outLines.push(`- ${text}`);
+      } else {
+        const hasNestedBlock = Array.from(el.childNodes).some(
+          (n) => n.nodeType === 1 && blockTags.has((n as HTMLElement).tagName.toUpperCase()),
+        );
+        if (hasNestedBlock) {
+          this.collectEditableBlockLines(el, outLines);
+        } else {
+          const text = this.serializeEditableInlineChildren(el).replace(/\r\n/g, '\n');
+          for (const l of text.split('\n')) {
+            const trimmed = l.trimEnd();
+            if (trimmed.trim().length > 0) {
+              outLines.push(trimmed);
+            }
+          }
+        }
+      }
+    }
+    flushInline();
+  }
+
+  private serializeEditableInlineChildren(parent: Node): string {
+    let out = '';
+    for (const child of Array.from(parent.childNodes)) {
+      out += this.serializeEditableInlineNode(child);
+    }
+    return out;
+  }
+
+  private serializeEditableInlineNode(node: Node): string {
+    if (node.nodeType === 3) {
+      return node.textContent ?? '';
+    }
+    if (node.nodeType !== 1) {
+      return '';
+    }
+    const el = node as HTMLElement;
+    const tag = el.tagName.toUpperCase();
+    if (tag === 'BR') {
+      return '\n';
+    }
+    if (tag === 'STRONG' || tag === 'B') {
+      const inner = this.serializeEditableInlineChildren(el);
+      return inner ? `**${inner}**` : '';
+    }
+    if (tag === 'EM' || tag === 'I') {
+      const inner = this.serializeEditableInlineChildren(el);
+      return inner ? `*${inner}*` : '';
+    }
+    if (tag === 'CODE') {
+      const inner = el.textContent ?? '';
+      return inner ? `\`${inner}\`` : '';
+    }
+    return this.serializeEditableInlineChildren(el);
+  }
+
+  private resolveArtifactOwnerUserId(currentUserId: string | null): string | null {
+    if (this.artifactOwnerUserId) {
+      return this.artifactOwnerUserId;
+    }
+    if (this.ResolvedPermissions?.Source === 'Owner' && currentUserId) {
+      return currentUserId;
+    }
+    return null;
   }
 
   /**
@@ -5838,7 +6086,7 @@ export class SlideDeckArtifactViewerComponent
       return false;
     }
     const userId = this.getSafeCurrentUser()?.ID ?? null;
-    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
     return SlideDeckEngine.Instance.CanActorEditSlide(
       this.ActiveSlide,
       userId,
@@ -5852,7 +6100,7 @@ export class SlideDeckArtifactViewerComponent
       return false;
     }
     const userId = this.getSafeCurrentUser()?.ID ?? null;
-    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
     return SlideDeckEngine.Instance.CanActorEditRegion(
       this.ActiveSlide,
       region,
@@ -5868,7 +6116,20 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
     const nextLocked = !this.ActiveSlide.Locked;
-    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    if (!nextLocked) {
+      const canUnlock = SlideDeckEngine.Instance.CanActorEditSlide(
+        this.ActiveSlide,
+        userId,
+        ownerId,
+        false,
+      );
+      if (!canUnlock.Allowed) {
+        this.StatusBannerMessage = canUnlock.Reason || 'Only the locker or owner can unlock this slide.';
+        this.cdr.markForCheck();
+        return;
+      }
+    }
     const res = SlideDeckEngine.Instance.SetSlideLock(
       this.Deck,
       this.ActiveSlide.SlideID,
@@ -5897,7 +6158,21 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
     const nextLocked = !region.Locked;
-    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    if (region.Locked || this.ActiveSlide.Locked) {
+      const canUnlock = SlideDeckEngine.Instance.CanActorEditRegion(
+        this.ActiveSlide,
+        region,
+        userId,
+        ownerId,
+        false,
+      );
+      if (!canUnlock.Allowed) {
+        this.StatusBannerMessage = canUnlock.Reason || 'Only the locker or owner can unlock this region.';
+        this.cdr.markForCheck();
+        return;
+      }
+    }
     const res = SlideDeckEngine.Instance.SetRegionLock(
       this.Deck,
       this.ActiveSlide.SlideID,
@@ -5965,7 +6240,7 @@ export class SlideDeckArtifactViewerComponent
   ): void {
     const targetSlide = this.Deck.Slides.find((s) => s.SlideID === slideId);
     const userId = this.getSafeCurrentUser()?.ID ?? null;
-    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
     if (targetSlide) {
       const check = SlideDeckEngine.Instance.CanActorEditSlide(
         targetSlide,
@@ -6009,7 +6284,7 @@ export class SlideDeckArtifactViewerComponent
     const targetSlide = this.Deck.Slides.find((s) => s.SlideID === slideId);
     const targetRegion = targetSlide?.Regions.find((r) => r.RegionID === regionPatch.RegionID);
     const userId = this.getSafeCurrentUser()?.ID ?? null;
-    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
     if (targetSlide && targetRegion) {
       const check = SlideDeckEngine.Instance.CanActorEditRegion(
         targetSlide,
@@ -6065,6 +6340,7 @@ export class SlideDeckArtifactViewerComponent
     this.failedEmbeddedVersionMessages.clear();
     this.AnchoredThreads = [];
     this.ResolvedPermissions = null;
+    this.artifactOwnerUserId = null;
     this.ConnectionStatus = 'local';
 
     const rawContent = this.extractArtifactVersionContent();
@@ -6357,6 +6633,16 @@ export class SlideDeckArtifactViewerComponent
         return;
       }
       this.ResolvedPermissions = perms;
+      if (perms?.Source === 'Owner') {
+        this.artifactOwnerUserId = currentUser.ID;
+      } else if (perms?.CanRead) {
+        await this.resolveArtifactOwnerFromProvider(persistedArtifactId, currentUser, provider, gen);
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
+      } else {
+        this.artifactOwnerUserId = null;
+      }
       if (!perms) {
         this.AccessRevoked = false;
         this.PermissionVerifyError = false;
@@ -6482,6 +6768,33 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
     this.cdr.markForCheck();
+  }
+
+  private async resolveArtifactOwnerFromProvider(
+    artifactId: string,
+    user: UserInfo,
+    provider: IMetadataProvider,
+    gen: number,
+  ): Promise<void> {
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const artRes = await rv.RunView<{ ID: string; UserID?: string }>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
+          Fields: ['ID', 'UserID'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
+      this.artifactOwnerUserId = artRes.Success ? (artRes.Results?.[0]?.UserID ?? null) : null;
+    } catch {
+      // Leave null on query failure so non-owners never elevate to owner privileges
+    }
   }
 
   private async hydrateAnchoredSlideThreadsFromServer(
@@ -6965,4 +7278,22 @@ export class SlideDeckArtifactViewerComponent
       }),
     );
   }
+}
+
+function generateSlideBlockUuid(): string {
+  if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.getRandomValues === 'function') {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }

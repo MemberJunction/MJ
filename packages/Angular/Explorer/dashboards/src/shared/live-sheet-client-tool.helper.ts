@@ -1,7 +1,15 @@
-import { ActionEngineBase, ActionParam } from '@memberjunction/actions-base';
-import { RunView, type UserInfo } from '@memberjunction/core';
-import type { MJActionEntity } from '@memberjunction/core-entities';
+import { ActionEngineBase, ActionParam, type ActionResult } from '@memberjunction/actions-base';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import type { MJActionEntity, MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, SafeJSONParse } from '@memberjunction/global';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+
+export type LiveSheetJsonPrimitive = string | number | boolean | null | undefined;
+export type LiveSheetJsonValue =
+  | LiveSheetJsonPrimitive
+  | LiveSheetJsonValue[]
+  | { [key: string]: LiveSheetJsonValue };
+export type LiveSheetJsonObject = { [key: string]: LiveSheetJsonValue };
 
 export type GovernedArtifactActionName =
   | '__CreateGovernedArtifact'
@@ -10,7 +18,7 @@ export type GovernedArtifactActionName =
 
 export interface GovernedActionParamInput {
   Name: string;
-  Value: unknown;
+  Value: LiveSheetJsonValue;
   Type: 'Input' | 'Output' | 'Both';
 }
 
@@ -22,12 +30,17 @@ export interface GovernedActionExecutionRequest {
 export interface GovernedActionExecutionResult {
   Success: boolean;
   Message?: string;
-  OutputParams: Record<string, unknown>;
+  OutputParams: LiveSheetJsonObject;
 }
 
 export type GovernedActionExecutor = (
   request: GovernedActionExecutionRequest,
 ) => Promise<GovernedActionExecutionResult>;
+
+export type GovernedArtifactRollback = (
+  artifactId: string,
+  versionId?: string,
+) => Promise<boolean>;
 
 export interface CreateLiveSheetFromQueryInput {
   QueryID: string;
@@ -35,11 +48,12 @@ export interface CreateLiveSheetFromQueryInput {
   Title?: string;
   SheetName?: string;
   TableTitle?: string;
-  Parameters?: Record<string, unknown>;
+  Parameters?: LiveSheetJsonObject;
   MaxRows?: number;
   AnchorCell?: string;
   Description?: string;
   CollectionID?: string;
+  ExistingArtifactID?: string;
 }
 
 export interface AppendQueryToLiveSheetInput {
@@ -48,7 +62,7 @@ export interface AppendQueryToLiveSheetInput {
   QueryName: string;
   SheetName?: string;
   TableTitle?: string;
-  Parameters?: Record<string, unknown>;
+  Parameters?: LiveSheetJsonObject;
   MaxRows?: number;
   AnchorCell?: string;
 }
@@ -66,6 +80,7 @@ export interface CreateLiveSheetFromViewInput {
   AnchorCell?: string;
   Description?: string;
   CollectionID?: string;
+  ExistingArtifactID?: string;
 }
 
 export interface LiveSheetToolResult {
@@ -82,16 +97,19 @@ export interface LiveSheetToolResult {
   ErrorMessage?: string;
 }
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
+function isPlainRecord(value: LiveSheetJsonValue | ActionResult['Result']): value is LiveSheetJsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
- * Normalizes `GraphQLActionClient.RunAction`'s `Result` payload (`ActionParam[]` JSON or object)
- * into a flat `Name -> Value` lookup map.
+ * Normalizes `GraphQLActionClient.RunAction`'s `Result` payload (`ActionParam[]` JSON,
+ * `CopyScalarsAndArrays(ActionParam[])` index-keyed object `{"0": {"Name": ..., "Value": ...}}`,
+ * or flat object) into a `Name -> Value` lookup map.
  */
-export function ExtractActionOutputParams(resultPayload: unknown): Record<string, unknown> {
-  const outputs: Record<string, unknown> = {};
+export function ExtractActionOutputParams(
+  resultPayload: LiveSheetJsonValue | ActionResult['Result'],
+): LiveSheetJsonObject {
+  const outputs: LiveSheetJsonObject = {};
   if (Array.isArray(resultPayload)) {
     for (const item of resultPayload) {
       if (isPlainRecord(item) && typeof item['Name'] === 'string') {
@@ -101,11 +119,62 @@ export function ExtractActionOutputParams(resultPayload: unknown): Record<string
     return outputs;
   }
   if (isPlainRecord(resultPayload)) {
-    for (const [k, v] of Object.entries(resultPayload)) {
+    const entries = Object.entries(resultPayload);
+    const values = Object.values(resultPayload);
+    const keysAreNumericIndices = entries.length > 0 && entries.every(([k]) => /^\d+$/.test(k));
+    const hasNamedParamEntry = values.some(
+      (entry) => isPlainRecord(entry) && typeof entry['Name'] === 'string',
+    );
+    const allEntriesAreNamedParams =
+      values.length > 0 &&
+      values.every((entry) => isPlainRecord(entry) && typeof entry['Name'] === 'string');
+
+    if ((keysAreNumericIndices && hasNamedParamEntry) || allEntriesAreNamedParams) {
+      for (const entry of values) {
+        if (isPlainRecord(entry) && typeof entry['Name'] === 'string') {
+          outputs[entry['Name']] = entry['Value'];
+        }
+      }
+      return outputs;
+    }
+
+    for (const [k, v] of entries) {
       outputs[k] = v;
     }
   }
   return outputs;
+}
+
+const MESSAGE_JSON_KEY_ALIASES: ReadonlyArray<readonly [string, string]> = [
+  ['artifactId', 'ArtifactID'],
+  ['versionId', 'VersionID'],
+  ['versionNumber', 'VersionNumber'],
+  ['name', 'ArtifactName'],
+  ['typeName', 'ArtifactTypeName'],
+  ['driverClass', 'DriverClass'],
+  ['results', 'Results'],
+  ['data', 'InspectionResult'],
+];
+
+function extractOutputParamsFromMessage(message: string | undefined): LiveSheetJsonObject {
+  if (!message) {
+    return {};
+  }
+  const trimmed = message.trim();
+  if (!trimmed.startsWith('{')) {
+    return {};
+  }
+  const parsed = SafeJSONParse<LiveSheetJsonObject>(trimmed, false);
+  if (!parsed || !isPlainRecord(parsed)) {
+    return {};
+  }
+  const normalized: LiveSheetJsonObject = { ...parsed };
+  for (const [camelKey, pascalKey] of MESSAGE_JSON_KEY_ALIASES) {
+    if (normalized[pascalKey] === undefined && parsed[camelKey] !== undefined) {
+      normalized[pascalKey] = parsed[camelKey];
+    }
+  }
+  return normalized;
 }
 
 const ACTION_DISPLAY_NAME_MAP: Record<GovernedArtifactActionName, string> = {
@@ -123,10 +192,11 @@ async function resolveActionIdByName(
   const displayName = ACTION_DISPLAY_NAME_MAP[actionName];
   const loweredName = displayName.toLowerCase();
 
-  if (ActionEngineBase.Instance.Actions.length === 0) {
-    await ActionEngineBase.Instance.Config(false, contextUser, provider);
+  const actionEngine = ActionEngineBase.GetProviderInstance(provider, ActionEngineBase) as ActionEngineBase;
+  if (actionEngine.Actions.length === 0) {
+    await actionEngine.Config(false, contextUser, provider);
   }
-  const cached = ActionEngineBase.Instance.Actions.find(
+  const cached = actionEngine.Actions.find(
     (a) =>
       a.DriverClass?.trim().toLowerCase() === loweredDriver ||
       a.Name.trim().toLowerCase() === loweredName ||
@@ -137,8 +207,8 @@ async function resolveActionIdByName(
   }
 
   const rv = RunView.FromMetadataProvider(provider);
-  const safeDriver = actionName.replace(/'/g, "''");
-  const safeDisplay = displayName.replace(/'/g, "''");
+  const safeDriver = EscapeSQLString(actionName);
+  const safeDisplay = EscapeSQLString(displayName);
   const res = await rv.RunView<MJActionEntity>(
     {
       EntityName: 'MJ: Actions',
@@ -179,12 +249,45 @@ export function CreateGraphQLGovernedActionExecutor(
     );
 
     const res = await client.RunAction(actionId, actionParams);
+    const outputParams = ExtractActionOutputParams(res.Result);
+    const fromMessage = extractOutputParamsFromMessage(res.Message);
+    for (const [key, val] of Object.entries(fromMessage)) {
+      if (outputParams[key] === undefined) {
+        outputParams[key] = val;
+      }
+    }
     return {
       Success: res.Success,
       Message: res.Message,
-      OutputParams: ExtractActionOutputParams(res.Result),
+      OutputParams: outputParams,
     };
   };
+}
+
+async function rollbackCreatedArtifact(
+  provider: GraphQLDataProvider,
+  contextUser: UserInfo,
+  artifactId: string,
+  versionId?: string,
+): Promise<boolean> {
+  try {
+    if (versionId) {
+      const versionEntity = await provider.GetEntityObject<MJArtifactVersionEntity>(
+        'MJ: Artifact Versions',
+        contextUser,
+      );
+      if (await versionEntity.Load(versionId)) {
+        await versionEntity.Delete();
+      }
+    }
+    const artifactEntity = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+    if (await artifactEntity.Load(artifactId)) {
+      return await artifactEntity.Delete();
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -192,7 +295,7 @@ export function CreateGraphQLGovernedActionExecutor(
  * shared across dashboard client-tool handlers (`QueryBrowser`, `DataExplorer`).
  */
 export function CreateLiveSheetHelperForProvider(
-  providerToUse: unknown,
+  providerToUse: IMetadataProvider | null | undefined,
   currentUser?: UserInfo | null,
 ): LiveSheetClientToolHelper | null {
   const provider =
@@ -205,20 +308,21 @@ export function CreateLiveSheetHelperForProvider(
   }
   return new LiveSheetClientToolHelper(
     CreateGraphQLGovernedActionExecutor(provider, user),
+    (artifactId, versionId) => rollbackCreatedArtifact(provider, user, artifactId, versionId),
   );
 }
 
-function readStringOut(outputs: Record<string, unknown>, key: string): string | undefined {
+function readStringOut(outputs: LiveSheetJsonObject, key: string): string | undefined {
   const val = outputs[key];
   return typeof val === 'string' && val.trim().length > 0 ? val.trim() : undefined;
 }
 
-function readNumberOut(outputs: Record<string, unknown>, key: string): number | undefined {
+function readNumberOut(outputs: LiveSheetJsonObject, key: string): number | undefined {
   const val = outputs[key];
   return typeof val === 'number' && Number.isFinite(val) ? val : undefined;
 }
 
-function extractMutationMetrics(outputs: Record<string, unknown>): {
+function extractMutationMetrics(outputs: LiveSheetJsonObject): {
   BoundingRange?: string;
   RowCount?: number;
 } {
@@ -243,7 +347,10 @@ function extractMutationMetrics(outputs: Record<string, unknown>): {
  * that the realtime `ArtifactWorkspace` channel can open immediately.
  */
 export class LiveSheetClientToolHelper {
-  public constructor(private readonly executor: GovernedActionExecutor) {}
+  public constructor(
+    private readonly executor: GovernedActionExecutor,
+    private readonly rollbackArtifact?: GovernedArtifactRollback,
+  ) {}
 
   public async CreateLiveSheetFromQuery(
     input: CreateLiveSheetFromQueryInput,
@@ -252,80 +359,24 @@ export class LiveSheetClientToolHelper {
     const title = input.Title?.trim() || `${input.QueryName} — Live Sheet`;
     const tableTitle = input.TableTitle?.trim() || input.QueryName;
 
-    const created = await this.executor({
-      ActionName: '__CreateGovernedArtifact',
-      Params: [
-        { Name: 'Title', Value: title, Type: 'Input' },
-        { Name: 'ArtifactType', Value: 'Excel Spreadsheet', Type: 'Input' },
-        { Name: 'SheetNames', Value: [sheetName], Type: 'Input' },
-        ...(input.Description
-          ? [{ Name: 'Description', Value: input.Description, Type: 'Input' as const }]
-          : []),
-        ...(input.CollectionID
-          ? [{ Name: 'CollectionID', Value: input.CollectionID, Type: 'Input' as const }]
-          : []),
-      ],
+    return this.createAndPopulateLiveSheet({
+      title,
+      sheetName,
+      description: input.Description,
+      collectionId: input.CollectionID,
+      existingArtifactId: input.ExistingArtifactID,
+      defaultMutationFailureMessage: 'Created sheet but failed to populate live query table.',
+      tableInput: {
+        sheet: sheetName,
+        title: tableTitle,
+        sourceType: 'SavedQuery',
+        queryId: input.QueryID,
+        queryName: input.QueryName,
+        ...(input.Parameters ? { parameters: input.Parameters } : {}),
+        ...(typeof input.MaxRows === 'number' ? { maxRows: input.MaxRows } : {}),
+        anchorCell: input.AnchorCell?.trim() || 'A1',
+      },
     });
-
-    const artifactId = readStringOut(created.OutputParams, 'ArtifactID');
-    if (!created.Success || !artifactId) {
-      return {
-        Success: false,
-        ErrorMessage: created.Message || 'Failed to create governed spreadsheet artifact.',
-      };
-    }
-
-    const mutated = await this.executor({
-      ActionName: '__MutateGovernedArtifact',
-      Params: [
-        { Name: 'ArtifactID', Value: artifactId, Type: 'Input' },
-        { Name: 'Tool', Value: 'upsert_live_table', Type: 'Input' },
-        {
-          Name: 'Input',
-          Value: {
-            sheet: sheetName,
-            title: tableTitle,
-            sourceType: 'SavedQuery',
-            queryId: input.QueryID,
-            queryName: input.QueryName,
-            ...(input.Parameters ? { parameters: input.Parameters } : {}),
-            ...(typeof input.MaxRows === 'number' ? { maxRows: input.MaxRows } : {}),
-            anchorCell: input.AnchorCell?.trim() || 'A1',
-          },
-          Type: 'Input',
-        },
-      ],
-    });
-
-    if (!mutated.Success) {
-      return {
-        Success: false,
-        ArtifactID: artifactId,
-        ErrorMessage: mutated.Message || 'Created sheet but failed to populate live query table.',
-      };
-    }
-
-    const metrics = extractMutationMetrics(mutated.OutputParams);
-    return {
-      Success: true,
-      ArtifactID: readStringOut(mutated.OutputParams, 'ArtifactID') ?? artifactId,
-      VersionID:
-        readStringOut(mutated.OutputParams, 'VersionID') ??
-        readStringOut(created.OutputParams, 'VersionID'),
-      VersionNumber:
-        readNumberOut(mutated.OutputParams, 'VersionNumber') ??
-        readNumberOut(created.OutputParams, 'VersionNumber') ??
-        1,
-      ArtifactName:
-        readStringOut(mutated.OutputParams, 'ArtifactName') ??
-        readStringOut(created.OutputParams, 'ArtifactName') ??
-        title,
-      ArtifactTypeName: 'Excel Spreadsheet',
-      DriverClass: 'SpreadsheetArtifactViewerPlugin',
-      SheetName: sheetName,
-      BoundingRange: metrics.BoundingRange,
-      RowCount: metrics.RowCount,
-    };
   }
 
   public async AppendQueryToLiveSheet(
@@ -336,7 +387,7 @@ export class LiveSheetClientToolHelper {
     }
 
     const targetSheet = input.SheetName?.trim();
-    const operations: Array<{ tool: string; input: Record<string, unknown> }> = [];
+    const operations: Array<{ tool: string; input: LiveSheetJsonObject }> = [];
 
     if (targetSheet) {
       const inspected = await this.executor({
@@ -412,27 +463,69 @@ export class LiveSheetClientToolHelper {
       (input.ViewName ? `${input.EntityName} — ${input.ViewName}` : `${input.EntityName} — Live Sheet`);
     const tableTitle = input.TableTitle?.trim() || input.ViewName || input.EntityName;
 
-    const created = await this.executor({
-      ActionName: '__CreateGovernedArtifact',
-      Params: [
-        { Name: 'Title', Value: title, Type: 'Input' },
-        { Name: 'ArtifactType', Value: 'Excel Spreadsheet', Type: 'Input' },
-        { Name: 'SheetNames', Value: [sheetName], Type: 'Input' },
-        ...(input.Description
-          ? [{ Name: 'Description', Value: input.Description, Type: 'Input' as const }]
-          : []),
-        ...(input.CollectionID
-          ? [{ Name: 'CollectionID', Value: input.CollectionID, Type: 'Input' as const }]
-          : []),
-      ],
+    return this.createAndPopulateLiveSheet({
+      title,
+      sheetName,
+      description: input.Description,
+      collectionId: input.CollectionID,
+      existingArtifactId: input.ExistingArtifactID,
+      defaultMutationFailureMessage: 'Created sheet but failed to populate live view table.',
+      tableInput: {
+        sheet: sheetName,
+        title: tableTitle,
+        sourceType: 'EntityView',
+        entityName: input.EntityName,
+        ...(input.ViewID ? { viewId: input.ViewID } : {}),
+        ...(input.ViewName ? { viewName: input.ViewName } : {}),
+        ...(input.ExtraFilter ? { extraFilter: input.ExtraFilter } : {}),
+        ...(input.Fields && input.Fields.length > 0 ? { fields: input.Fields } : {}),
+        ...(typeof input.MaxRows === 'number' ? { maxRows: input.MaxRows } : {}),
+        anchorCell: input.AnchorCell?.trim() || 'A1',
+      },
     });
+  }
 
-    const artifactId = readStringOut(created.OutputParams, 'ArtifactID');
-    if (!created.Success || !artifactId) {
-      return {
-        Success: false,
-        ErrorMessage: created.Message || 'Failed to create governed spreadsheet artifact.',
-      };
+  private async createAndPopulateLiveSheet(opts: {
+    title: string;
+    sheetName: string;
+    description?: string;
+    collectionId?: string;
+    existingArtifactId?: string;
+    defaultMutationFailureMessage: string;
+    tableInput: LiveSheetJsonObject;
+  }): Promise<LiveSheetToolResult> {
+    const existingId = opts.existingArtifactId?.trim();
+    let artifactId = existingId;
+    let createdVersionId: string | undefined;
+    let createdVersionNumber: number | undefined;
+    let createdArtifactName: string | undefined;
+
+    if (!artifactId) {
+      const created = await this.executor({
+        ActionName: '__CreateGovernedArtifact',
+        Params: [
+          { Name: 'Title', Value: opts.title, Type: 'Input' },
+          { Name: 'ArtifactType', Value: 'Excel Spreadsheet', Type: 'Input' },
+          { Name: 'SheetNames', Value: [opts.sheetName], Type: 'Input' },
+          ...(opts.description
+            ? [{ Name: 'Description', Value: opts.description, Type: 'Input' as const }]
+            : []),
+          ...(opts.collectionId
+            ? [{ Name: 'CollectionID', Value: opts.collectionId, Type: 'Input' as const }]
+            : []),
+        ],
+      });
+
+      artifactId = readStringOut(created.OutputParams, 'ArtifactID');
+      if (!created.Success || !artifactId) {
+        return {
+          Success: false,
+          ErrorMessage: created.Message || 'Failed to create governed spreadsheet artifact.',
+        };
+      }
+      createdVersionId = readStringOut(created.OutputParams, 'VersionID');
+      createdVersionNumber = readNumberOut(created.OutputParams, 'VersionNumber');
+      createdArtifactName = readStringOut(created.OutputParams, 'ArtifactName');
     }
 
     const mutated = await this.executor({
@@ -440,30 +533,19 @@ export class LiveSheetClientToolHelper {
       Params: [
         { Name: 'ArtifactID', Value: artifactId, Type: 'Input' },
         { Name: 'Tool', Value: 'upsert_live_table', Type: 'Input' },
-        {
-          Name: 'Input',
-          Value: {
-            sheet: sheetName,
-            title: tableTitle,
-            sourceType: 'EntityView',
-            entityName: input.EntityName,
-            ...(input.ViewID ? { viewId: input.ViewID } : {}),
-            ...(input.ViewName ? { viewName: input.ViewName } : {}),
-            ...(input.ExtraFilter ? { extraFilter: input.ExtraFilter } : {}),
-            ...(input.Fields && input.Fields.length > 0 ? { fields: input.Fields } : {}),
-            ...(typeof input.MaxRows === 'number' ? { maxRows: input.MaxRows } : {}),
-            anchorCell: input.AnchorCell?.trim() || 'A1',
-          },
-          Type: 'Input',
-        },
+        { Name: 'Input', Value: opts.tableInput, Type: 'Input' },
       ],
     });
 
     if (!mutated.Success) {
+      const rolledBack =
+        !existingId && this.rollbackArtifact
+          ? await this.rollbackArtifact(artifactId, createdVersionId)
+          : false;
       return {
         Success: false,
-        ArtifactID: artifactId,
-        ErrorMessage: mutated.Message || 'Created sheet but failed to populate live view table.',
+        ...(rolledBack ? {} : { ArtifactID: artifactId }),
+        ErrorMessage: mutated.Message || opts.defaultMutationFailureMessage,
       };
     }
 
@@ -471,26 +553,18 @@ export class LiveSheetClientToolHelper {
     return {
       Success: true,
       ArtifactID: readStringOut(mutated.OutputParams, 'ArtifactID') ?? artifactId,
-      VersionID:
-        readStringOut(mutated.OutputParams, 'VersionID') ??
-        readStringOut(created.OutputParams, 'VersionID'),
-      VersionNumber:
-        readNumberOut(mutated.OutputParams, 'VersionNumber') ??
-        readNumberOut(created.OutputParams, 'VersionNumber') ??
-        1,
-      ArtifactName:
-        readStringOut(mutated.OutputParams, 'ArtifactName') ??
-        readStringOut(created.OutputParams, 'ArtifactName') ??
-        title,
+      VersionID: readStringOut(mutated.OutputParams, 'VersionID') ?? createdVersionId,
+      VersionNumber: readNumberOut(mutated.OutputParams, 'VersionNumber') ?? createdVersionNumber ?? 1,
+      ArtifactName: readStringOut(mutated.OutputParams, 'ArtifactName') ?? createdArtifactName ?? opts.title,
       ArtifactTypeName: 'Excel Spreadsheet',
       DriverClass: 'SpreadsheetArtifactViewerPlugin',
-      SheetName: sheetName,
+      SheetName: opts.sheetName,
       BoundingRange: metrics.BoundingRange,
       RowCount: metrics.RowCount,
     };
   }
 
-  private hasExistingWorksheet(inspectionResult: unknown, sheetName: string): boolean {
+  private hasExistingWorksheet(inspectionResult: LiveSheetJsonValue, sheetName: string): boolean {
     if (!isPlainRecord(inspectionResult)) {
       return false;
     }

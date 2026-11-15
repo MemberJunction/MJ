@@ -2,7 +2,14 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IMetadataProvider } from '@memberjunction/core';
+import {
+  EntityInfo,
+  type IMetadataProvider,
+  type IRunViewProvider,
+  type RunViewParams,
+  type RunViewResult,
+  type UserInfo,
+} from '@memberjunction/core';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { UserInfoEngine, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MarkdownArtifactViewerComponent } from './markdown-artifact-viewer.component';
@@ -85,13 +92,33 @@ interface MockDocsProviderOptions {
   failSaves?: boolean;
 }
 
+interface MockDocsEntityRecord {
+  ID: string;
+  LatestResult: { Message: string };
+  NewRecord: () => void;
+  Load: (id: string) => Promise<boolean>;
+  Delete: () => Promise<boolean>;
+  Save: () => Promise<boolean>;
+  ArtifactID?: string;
+  VersionNumber?: number;
+  Name?: string;
+  Content?: string;
+  UserID?: string;
+  Role?: string;
+  CanRead?: boolean;
+  CanEdit?: boolean;
+  CanShare?: boolean;
+}
+
+type MockDocsMetadataAndRunViewProvider = IMetadataProvider & IRunViewProvider;
+
 function createDocsMockProvider(opts: MockDocsProviderOptions = {}) {
   const currentUserId = opts.currentUserId ?? '11111111-1111-4111-8111-111111111111';
   const artifactOwnerId = opts.artifactOwnerId ?? currentUserId;
   const permissionGrants = [...(opts.permissionGrants ?? [])];
   let seq = 0;
 
-  const savedEntities: Array<{ entityName: string; record: Record<string, unknown> }> = [];
+  const savedEntities: Array<{ entityName: string; record: MockDocsEntityRecord }> = [];
   const deletedPermissionIds: string[] = [];
   const childVersionsByArtifact = new Map<string, Array<{ ID: string; ArtifactID: string; VersionNumber: number; Name: string; Content: string }>>([
     [
@@ -113,145 +140,133 @@ function createDocsMockProvider(opts: MockDocsProviderOptions = {}) {
     Name: 'Alex Author',
     Email: 'alex@memberjunction.org',
     IsActive: true,
-  };
+  } as Partial<UserInfo> as UserInfo;
 
-  const entities = [
-    {
+  const entities: EntityInfo[] = [
+    new EntityInfo({
       ID: 'ent-artifacts',
       Name: 'MJ: Artifacts',
-      DisplayNameOrName: 'Artifacts',
+      DisplayName: 'Artifacts',
       SchemaName: '__mj',
       BaseTable: 'Artifact',
       Icon: 'fa-solid fa-cube',
       FieldLevelSecurityApplies: false,
-      GetUserPermisions: () => ({ CanRead: true }),
       Fields: [
-        { Name: 'ID', DisplayNameOrName: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' },
-        { Name: 'Name', DisplayNameOrName: 'Name', IsNameField: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' },
+        { Name: 'ID', DisplayName: 'ID', IsPrimaryKey: true, DefaultInView: true, Type: 'uniqueidentifier' },
+        { Name: 'Name', DisplayName: 'Name', IsNameField: true, DefaultInView: true, Type: 'nvarchar' },
       ],
-    },
-    {
+    }),
+    new EntityInfo({
       ID: 'ent-projects',
       Name: 'MJ: Projects',
-      DisplayNameOrName: 'Projects',
+      DisplayName: 'Projects',
       SchemaName: '__mj',
       BaseTable: 'Project',
       Icon: 'fa-solid fa-diagram-project',
       FieldLevelSecurityApplies: false,
-      GetUserPermisions: () => ({ CanRead: true }),
       Fields: [
-        { Name: 'ID', DisplayNameOrName: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' },
-        { Name: 'Name', DisplayNameOrName: 'Name', IsNameField: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' },
+        { Name: 'ID', DisplayName: 'ID', IsPrimaryKey: true, DefaultInView: true, Type: 'uniqueidentifier' },
+        { Name: 'Name', DisplayName: 'Name', IsNameField: true, DefaultInView: true, Type: 'nvarchar' },
       ],
-    },
-    {
+    }),
+    new EntityInfo({
       ID: 'ent-conversations',
       Name: 'MJ: Conversations',
-      DisplayNameOrName: 'Conversations',
+      DisplayName: 'Conversations',
       SchemaName: '__mj',
       BaseTable: 'Conversation',
       Icon: 'fa-solid fa-comments',
       FieldLevelSecurityApplies: false,
-      GetUserPermisions: () => ({ CanRead: true }),
       Fields: [
-        { Name: 'ID', DisplayNameOrName: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' },
-        { Name: 'Name', DisplayNameOrName: 'Name', IsNameField: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' },
+        { Name: 'ID', DisplayName: 'ID', IsPrimaryKey: true, DefaultInView: true, Type: 'uniqueidentifier' },
+        { Name: 'Name', DisplayName: 'Name', IsNameField: true, DefaultInView: true, Type: 'nvarchar' },
         {
           Name: 'Type',
-          DisplayNameOrName: 'Type',
+          DisplayName: 'Type',
           DefaultInView: true,
-          IsBinaryFieldType: false,
-          TSType: 'string',
+          Type: 'uniqueidentifier',
           RelatedEntity: 'MJ: Artifact Types',
           RelatedEntityFieldName: 'ID',
         },
       ],
-    },
-    {
+    }),
+    new EntityInfo({
       ID: 'ent-ai-models',
       Name: 'MJ: AI Models',
-      DisplayNameOrName: 'AI Models',
+      DisplayName: 'AI Models',
       SchemaName: '__mj',
       BaseTable: 'AIModel',
       Icon: 'fa-solid fa-microchip',
       FieldLevelSecurityApplies: false,
-      GetUserPermisions: () => ({ CanRead: true }),
       Fields: [
-        { Name: 'ID', DisplayNameOrName: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' },
+        { Name: 'ID', DisplayName: 'ID', IsPrimaryKey: true, DefaultInView: true, Type: 'uniqueidentifier' },
       ],
-    },
+    }),
   ];
+  for (const entity of entities) {
+    entity.GetUserPermisions = () => ({
+      ID: `perm-${entity.ID}`,
+      Entity: entity,
+      User: user,
+      CanRead: true,
+      CanCreate: false,
+      CanUpdate: false,
+      CanDelete: false,
+    });
+  }
+
+  const okResult = <T>(results: T[], totalRowCount = results.length): RunViewResult<T> => ({
+    Success: true,
+    Results: results,
+    RowCount: results.length,
+    TotalRowCount: totalRowCount,
+    ExecutionTime: 0,
+    ErrorMessage: '',
+  });
 
   const provider = {
     CurrentUser: user,
     Entities: entities,
     EntityByName: (name: string) => entities.find((e) => e.Name === name),
-    RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
+    RunView: async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
+      const extraFilter = String(params.ExtraFilter ?? '');
       if (params.EntityName === 'MJ: Artifacts') {
-        return {
-          Success: true,
-          Results: [{ ID: 'art-doc-1', UserID: artifactOwnerId, EnvironmentID: 'env-doc-1' }],
-          TotalRowCount: 1,
-        };
+        return okResult([{ ID: 'art-doc-1', UserID: artifactOwnerId, EnvironmentID: 'env-doc-1' }]) as RunViewResult<T>;
       }
       if (params.EntityName === 'MJ: Artifact Permissions') {
-        return {
-          Success: true,
-          Results: permissionGrants,
-          TotalRowCount: permissionGrants.length,
-        };
+        return okResult(permissionGrants) as RunViewResult<T>;
       }
       if (params.EntityName === 'MJ: Artifact Types') {
-        return {
-          Success: true,
-          Results: [{ ID: 'type-wb-1', Name: 'Whiteboard' }],
-          TotalRowCount: 1,
-        };
+        return okResult([{ ID: 'type-wb-1', Name: 'Whiteboard' }]) as RunViewResult<T>;
       }
       if (params.EntityName === 'MJ: Artifact Versions') {
-        if (params.ExtraFilter?.includes('wb-inline-1')) {
+        if (extraFilter.includes('wb-inline-1')) {
           const list = childVersionsByArtifact.get('wb-inline-1') ?? [];
           const sorted = [...list].sort((a, b) => b.VersionNumber - a.VersionNumber);
-          return {
-            Success: true,
-            Results: sorted.slice(0, 1),
-            TotalRowCount: sorted.length,
-          };
+          return okResult(sorted.slice(0, 1), sorted.length) as RunViewResult<T>;
         }
-        return {
-          Success: true,
-          Results: [{ ID: 'ver-doc-1', VersionNumber: 1 }],
-          TotalRowCount: 1,
-        };
+        return okResult([{ ID: 'ver-doc-1', VersionNumber: 1 }]) as RunViewResult<T>;
       }
       if (
         params.EntityName === 'MJ: Projects' ||
-        (params.EntityName === 'MJ: Conversations' && !params.ExtraFilter?.includes('LinkedRecordID'))
+        (params.EntityName === 'MJ: Conversations' && !extraFilter.includes('LinkedRecordID'))
       ) {
-        return {
-          Success: true,
-          Results: [
-            { ID: 'rec-1', Name: 'Project Alpha', Type: 'rec-type-1' },
-            { ID: 'rec-2', Name: 'Project Beta', Type: 'rec-type-2' },
-          ],
-          TotalRowCount: 2,
-        };
+        return okResult([
+          { ID: 'rec-1', Name: 'Project Alpha', Type: 'rec-type-1' },
+          { ID: 'rec-2', Name: 'Project Beta', Type: 'rec-type-2' },
+        ]) as RunViewResult<T>;
       }
       if (params.EntityName === 'MJ: Users') {
-        return {
-          Success: true,
-          Results: [
-            user,
-            { ID: 'user-colleague-1', Name: 'Jane Reviewer', Email: 'jane@example.com' },
-          ],
-          TotalRowCount: 2,
-        };
+        return okResult([
+          user,
+          { ID: 'user-colleague-1', Name: 'Jane Reviewer', Email: 'jane@example.com' },
+        ]) as RunViewResult<T>;
       }
-      return { Success: true, Results: [], TotalRowCount: 0 };
+      return okResult([]) as RunViewResult<T>;
     },
     GetEntityObject: async (entityName: string) => {
       const generatedId = `66666666-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
-      const rec: Record<string, unknown> = {
+      const rec: MockDocsEntityRecord = {
         ID: generatedId,
         LatestResult: { Message: 'Mock persistence failure' },
         NewRecord: () => undefined,
@@ -283,7 +298,7 @@ function createDocsMockProvider(opts: MockDocsProviderOptions = {}) {
       };
       return rec;
     },
-  } as unknown as IMetadataProvider;
+  } as Partial<MockDocsMetadataAndRunViewProvider> as MockDocsMetadataAndRunViewProvider;
 
   return { provider, savedEntities, deletedPermissionIds };
 }
@@ -318,7 +333,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
           VersionNumber: 1,
           Name: 'Q4 Strategy Document',
           Content: content,
-        } as unknown as MJArtifactVersionEntity,
+        } as Partial<MJArtifactVersionEntity> as MJArtifactVersionEntity,
         readonly,
       },
     });
@@ -511,7 +526,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(firstCheckbox.checked).toBe(false);
 
     firstCheckbox.checked = true;
-    f.componentInstance.ToggleTaskListItem(listSeg, 0, { target: firstCheckbox } as unknown as Event);
+    firstCheckbox.dispatchEvent(new Event('change'));
     f.detectChanges();
     expect(f.componentInstance.MarkdownContent).toContain('- [x] First task item');
 
@@ -954,12 +969,16 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
   });
 
   it('rejects non-UUID embedded artifact short-IDs (e.g. "D") before executing SQL RunView and displays a clean error message', async () => {
-    const runViewSpy = vi.fn(async () => ({ Success: true, Results: [], TotalRowCount: 0 }));
-    const mockProvider = {
-      Entities: [],
-      CurrentUser: { ID: '11111111-1111-4111-8111-111111111111', Name: 'Test', Email: 't@example.com' },
-      RunView: runViewSpy,
-    } as Partial<IMetadataProvider> as IMetadataProvider;
+    const mock = createDocsMockProvider();
+    mock.provider.Entities.length = 0;
+    const runViewSpy = vi.spyOn(mock.provider, 'RunView').mockImplementation(async () => ({
+      Success: true,
+      Results: [],
+      RowCount: 0,
+      TotalRowCount: 0,
+      ExecutionTime: 0,
+      ErrorMessage: '',
+    }));
 
     const brokenDoc = [
       '# Silk Road History',
@@ -982,13 +1001,14 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       ':::',
     ].join('\n');
 
-    const f = await renderDocsViewer(brokenDoc, true, mockProvider);
+    const f = await renderDocsViewer(brokenDoc, true, mock.provider);
     await new Promise((r) => setTimeout(r, 20));
     f.detectChanges();
 
     const embeddedVersionCalls = runViewSpy.mock.calls.filter(
-      (call) => (call[0] as { EntityName?: string })?.EntityName === 'MJ: Artifact Versions' &&
-        String((call[0] as { ExtraFilter?: string })?.ExtraFilter ?? '').includes("'D'"),
+      (call) =>
+        call[0]?.EntityName === 'MJ: Artifact Versions' &&
+        String(call[0]?.ExtraFilter ?? '').includes("'D'"),
     );
     expect(embeddedVersionCalls).toHaveLength(0);
     const errMsg = f.componentInstance.GetEmbeddedArtifactError({
@@ -1210,7 +1230,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     const mock = createDocsMockProvider();
     const baseRunView = mock.provider.RunView.bind(mock.provider);
     vi.spyOn(mock.provider, 'RunView').mockImplementation(async (params, contextUser) => {
-      if (params.EntityName === 'MJ: Artifact Versions' && params.ExtraFilter?.includes(wbArtifactId)) {
+      if (params.EntityName === 'MJ: Artifact Versions' && String(params.ExtraFilter ?? '').includes(wbArtifactId)) {
         return {
           Success: true,
           Results: [
@@ -1222,7 +1242,10 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
               Content: '{"version":1,"activePageId":"page-1","pages":[{"id":"page-1","name":"Page 1","items":[]}]}',
             },
           ],
+          RowCount: 1,
           TotalRowCount: 1,
+          ExecutionTime: 0,
+          ErrorMessage: '',
         };
       }
       return baseRunView(params, contextUser);
@@ -1260,5 +1283,221 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
 
     expect(childEvent.defaultPrevented).toBe(true);
     expect(f.nativeElement.querySelector('[data-testid="mj-context-menu-root"]')).toBeNull();
+  });
+
+  it('performs partial cuts on formatted text ("Hello **world**") without deleting the block or corrupting markers, and preserves heading prefixes on sub-element paste/cut', async () => {
+    const f = await renderDocsViewer('Hello **world**\n\n## Alpha Beta');
+    const comp = f.componentInstance;
+    const rootEl = f.nativeElement as HTMLElement;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const paraSeg = comp.DocumentSegments.find((s) => s.BlockKind === 'paragraph')!;
+    expect(paraSeg).toBeTruthy();
+
+    comp.CaptureSelectionSnapshot({
+      segmentId: paraSeg.SegmentID,
+      start: 6,
+      end: 11,
+    });
+    const paraEl = rootEl.querySelector<HTMLElement>(
+      `[data-testid="editable-paragraph-${paraSeg.SegmentID}"]`,
+    )!;
+    paraEl.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 }),
+    );
+    f.detectChanges();
+
+    comp.OnDocsContextMenuCommand({
+      Type: 'clipboard',
+      Action: 'cut',
+      SegmentID: paraSeg.SegmentID,
+    });
+    f.detectChanges();
+    expect(comp.DocumentSegments.length).toBe(2);
+    expect(comp.MarkdownContent).toContain('Hello');
+    expect(comp.MarkdownContent).not.toContain('**world**');
+    expect(comp.MarkdownContent).not.toContain('****');
+
+    // Cross-boundary cut on formatted inline tokens
+    comp.OnMarkdownChanged('Hello **world**\n\n## Alpha Beta');
+    f.detectChanges();
+    const paraSeg2 = comp.DocumentSegments.find((s) => s.BlockKind === 'paragraph')!;
+    comp.CaptureSelectionSnapshot({
+      segmentId: paraSeg2.SegmentID,
+      start: 3,
+      end: 8,
+    });
+    const paraEl2 = rootEl.querySelector<HTMLElement>(
+      `[data-testid="editable-paragraph-${paraSeg2.SegmentID}"]`,
+    )!;
+    paraEl2.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 }),
+    );
+    f.detectChanges();
+    comp.OnDocsContextMenuCommand({
+      Type: 'clipboard',
+      Action: 'cut',
+      SegmentID: paraSeg2.SegmentID,
+    });
+    f.detectChanges();
+    expect(comp.MarkdownContent).toContain('Hel**rld**');
+
+    // Heading sub-element paste preserves leading '## '
+    let resolveClipboard: ((value: string) => void) | undefined;
+    const origClipboard = navigator.clipboard;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+        readText: vi.fn(
+          () =>
+            new Promise<string>((resolve) => {
+              resolveClipboard = resolve;
+            }),
+        ),
+      },
+    });
+    try {
+      const headingSeg = comp.DocumentSegments.find((s) => s.BlockKind === 'heading')!;
+      comp.CaptureSelectionSnapshot({
+        segmentId: headingSeg.SegmentID,
+        start: 0,
+        end: 5,
+      });
+      const headingEl = rootEl.querySelector<HTMLElement>(
+        `[data-testid="editable-heading-${headingSeg.SegmentID}"]`,
+      )!;
+      headingEl.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 }),
+      );
+      f.detectChanges();
+
+      comp.PasteIntoDocsSegment(headingSeg);
+      expect(resolveClipboard).toBeDefined();
+      resolveClipboard!('Gamma');
+      await new Promise((r) => setTimeout(r, 10));
+      f.detectChanges();
+      expect(comp.MarkdownContent).toContain('## Gamma Beta');
+      expect(comp.MarkdownContent).not.toContain('Gamma##');
+
+      // Destroyed guard after async readText resolves
+      comp.PasteIntoDocsSegment(comp.DocumentSegments[0]);
+      f.destroy();
+      resolveClipboard!('ShouldNotApply');
+      await new Promise((r) => setTimeout(r, 10));
+      expect(comp.MarkdownContent).not.toContain('ShouldNotApply');
+    } finally {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: origClipboard });
+    }
+  });
+
+  it('prevents owner-lock bypass by CanShare collaborators', async () => {
+    const ownerId = '11111111-1111-4111-8111-111111111111';
+    const coEditorId = '22222222-2222-4222-8222-222222222222';
+    const collabMock = createDocsMockProvider({
+      currentUserId: coEditorId,
+      artifactOwnerId: ownerId,
+      permissionGrants: [
+        {
+          ID: 'perm-co-share',
+          UserID: coEditorId,
+          CanRead: true,
+          CanEdit: true,
+          CanShare: true,
+        },
+      ],
+    });
+    const lockedDoc = `<!-- mj-lock:${ownerId} -->\n## Locked Section\n\nProtected body\n\n## Open Section\n\nEditable body`;
+    const fCollab = await renderDocsViewer(lockedDoc, false, collabMock.provider);
+    const collabComp = fCollab.componentInstance;
+    collabComp.SetViewMode('edit');
+    fCollab.detectChanges();
+
+    const lockedHeading = collabComp.DocumentSegments[0];
+    const lockedBody = collabComp.DocumentSegments[1];
+    expect(collabComp.CanEditSegment(lockedHeading)).toBe(false);
+    expect(collabComp.CanEditSegment(lockedBody)).toBe(false);
+
+    const beforeMd = collabComp.MarkdownContent;
+    collabComp.ToggleHeadingLock(lockedHeading);
+    collabComp.MoveSegment(lockedBody, 1);
+    collabComp.DeleteSegment(lockedBody);
+    collabComp.InsertParagraphAboveSegment(lockedBody);
+    collabComp.DuplicateSegment(lockedBody);
+    fCollab.detectChanges();
+    expect(collabComp.MarkdownContent).toBe(beforeMd);
+  });
+
+  it('routes Suggest-mode block mutations to tracked suggestions without direct Markdown mutation', async () => {
+    const fSuggest = await renderDocsViewer('First paragraph\n\nSecond paragraph');
+    const sugComp = fSuggest.componentInstance;
+    sugComp.SetViewMode('suggest');
+    fSuggest.detectChanges();
+
+    const initialSuggestMd = sugComp.MarkdownContent;
+    const firstSeg = sugComp.DocumentSegments[0];
+    sugComp.MoveSegment(firstSeg, 1);
+    sugComp.InsertParagraphAboveSegment(firstSeg);
+    sugComp.DuplicateSegment(firstSeg);
+    sugComp.DeleteSegment(sugComp.DocumentSegments[1]);
+    fSuggest.detectChanges();
+
+    expect(sugComp.MarkdownContent).toBe(initialSuggestMd);
+    expect(sugComp.Suggestions.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('enforces window.open URL protocol allowlist, expands collapsed headings on anchor scroll, and orders modal footers with Primary LEFT / Cancel RIGHT', async () => {
+    const f = await renderDocsViewer('# Intro\n\nHidden details\n\n## Next');
+    const comp = f.componentInstance;
+    const origOpen = window.open;
+    const openSpy = vi.fn();
+    window.open = openSpy;
+    try {
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: 'javascript:alert(1)' });
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: 'java\tscript:alert(1)' });
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: 'data:text/html,<script>' });
+      expect(openSpy).not.toHaveBeenCalled();
+
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: 'https://memberjunction.org' });
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: 'mailto:docs@memberjunction.org' });
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: '#intro' });
+      expect(openSpy).toHaveBeenCalledTimes(3);
+    } finally {
+      window.open = origOpen;
+    }
+
+    // Collapsed heading auto-expansion on FocusSegmentByAnchorKey
+    const introHeading = comp.DocumentSegments[0];
+    const hiddenChild = comp.DocumentSegments[1];
+    comp.ToggleHeadingCollapse(introHeading);
+    f.detectChanges();
+    expect(comp.IsHeadingCollapsed(introHeading)).toBe(true);
+    expect(comp.IsSegmentHiddenByCollapsedHeading(hiddenChild)).toBe(true);
+
+    const rootEl = f.nativeElement as HTMLElement;
+    const scrolledIds: string[] = [];
+    const childEl = rootEl.querySelector<HTMLElement>(
+      `[data-segment-id="${hiddenChild.SegmentID}"]`,
+    );
+    if (childEl) {
+      childEl.scrollIntoView = () => {
+        scrolledIds.push(hiddenChild.SegmentID);
+      };
+    }
+    comp.FocusSegmentByAnchorKey(hiddenChild.SegmentID);
+    f.detectChanges();
+    expect(comp.IsHeadingCollapsed(introHeading)).toBe(false);
+    expect(comp.IsSegmentHiddenByCollapsedHeading(hiddenChild)).toBe(false);
+
+    // Modal footer order: Primary LEFT, Cancel RIGHT
+    comp.PromptFreezeBlock({ BlockID: 'blk-freeze-1', Kind: 'SavedQuery', Mode: 'Live', Title: 'Sales Query' });
+    f.detectChanges();
+    const freezeFooterBtns = Array.from(
+      rootEl.querySelectorAll<HTMLButtonElement>('[data-testid="freeze-warning-modal"] .mj-docs-modal__footer button'),
+    );
+    expect(freezeFooterBtns.length).toBeGreaterThanOrEqual(2);
+    expect(freezeFooterBtns[0].textContent).toContain('Freeze');
+    expect(freezeFooterBtns[freezeFooterBtns.length - 1].textContent).toContain('Cancel');
   });
 });

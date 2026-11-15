@@ -227,6 +227,9 @@ describe('MjContextMenuComponent (DOM)', () => {
     const swatch1 = query(f, '[data-testid="mj-context-menu-swatch-fill-color-1"]');
     expect(swatch1?.getAttribute('role')).toBe('menuitemradio');
     expect(swatch1?.getAttribute('aria-checked')).toBe('true');
+
+    const swatchList = query(f, '.mj-context-menu-swatch-list');
+    expect(swatchList?.getAttribute('role')).toBe('none');
   });
 
   it('ArrowDown / ArrowUp wraps across focusable items, skips separators/headers, and lands on aria-disabled items', () => {
@@ -541,5 +544,112 @@ describe('MjContextMenuComponent (DOM)', () => {
     window.dispatchEvent(new Event('blur'));
     expect(closed).toHaveBeenCalledTimes(1);
     expect(query(f, '[data-testid="mj-context-menu-root"]')).toBeNull();
+  });
+
+  it('restores focus to RestoreFocusElement when activating a command before emitting ItemSelected', () => {
+    TestBed.configureTestingModule({
+      imports: [CommonModule],
+      declarations: [MjContextMenuComponent, TestEscapeHostComponent],
+    });
+    const f = TestBed.createComponent(TestEscapeHostComponent);
+    f.detectChanges();
+
+    const triggerEl = query(f, '[data-testid="trigger-el"]') as HTMLElement;
+    const callOrder: string[] = [];
+    vi.spyOn(triggerEl, 'focus').mockImplementation(() => {
+      callOrder.push('focus');
+    });
+    const originalOnSelect = f.componentInstance.OnSelect.bind(f.componentInstance);
+    vi.spyOn(f.componentInstance, 'OnSelect').mockImplementation((cmd: DemoCommand) => {
+      callOrder.push(`select:${cmd.Type}`);
+      originalOnSelect(cmd);
+    });
+
+    f.componentInstance.OpenMenu(triggerEl);
+    f.detectChanges();
+
+    const copyBtn = query(f, '[data-testid="mj-context-menu-item-copy"]') as HTMLButtonElement;
+    copyBtn.click();
+    f.detectChanges();
+
+    expect(f.componentInstance.SelectedCommands).toEqual([{ Type: 'copy' }]);
+    expect(callOrder).toEqual(['focus', 'select:copy']);
+  });
+
+  it('preserves pending initial root panel focus across AnchorX/AnchorY reanchor updates before rAF', async () => {
+    const f = renderMenu();
+
+    // Update anchor coordinates right after opening (triggers reanchorRootMenu before rAF runs)
+    f.componentRef.setInput('AnchorX', 180);
+    f.componentRef.setInput('AnchorY', 210);
+    f.detectChanges();
+
+    const root = query(f, '[data-testid="mj-context-menu-root"]') as HTMLElement;
+    const panelFocusSpy = vi.spyOn(root, 'focus');
+
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    f.detectChanges();
+
+    expect(panelFocusSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes $event into OnItemMouseEnter and extends hoverSwitchTimer while moving inside safe triangle', () => {
+    vi.useFakeTimers();
+    try {
+      const f = renderMenu();
+      const formatBtn = query(f, '[data-testid="mj-context-menu-item-format"]') as HTMLElement;
+      formatBtn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, clientX: 120, clientY: 160 }));
+
+      vi.advanceTimersByTime(140);
+      f.detectChanges();
+      const subPanel = query(f, '[data-testid="mj-context-menu-submenu-format"]') as HTMLElement;
+      expect(subPanel).not.toBeNull();
+
+      vi.spyOn(subPanel, 'getBoundingClientRect').mockReturnValue({
+        top: 100,
+        left: 300,
+        right: 500,
+        bottom: 320,
+        width: 200,
+        height: 220,
+        x: 300,
+        y: 100,
+        toJSON: () => ({}),
+      });
+
+      const rootPanel = query(f, '[data-testid="mj-context-menu-root"]') as HTMLElement;
+      rootPanel.dispatchEvent(new MouseEvent('mousemove', { clientX: 150, clientY: 180 }));
+
+      // Hover sibling with mouseenter coordinates inside safe triangle (no preceding mousemove for 2nd point)
+      const gridBtn = query(f, '[data-testid="mj-context-menu-item-show-gridlines"]') as HTMLElement;
+      gridBtn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, clientX: 210, clientY: 190 }));
+      expect(query(f, '[data-testid="mj-context-menu-submenu-format"]')).not.toBeNull();
+
+      // Advance 100ms, then move again within the safe triangle: timer should extend by another 180ms
+      vi.advanceTimersByTime(100);
+      rootPanel.dispatchEvent(new MouseEvent('mousemove', { clientX: 250, clientY: 198 }));
+
+      // At t=180ms (only 80ms since last safe-triangle move), submenu must still be open
+      vi.advanceTimersByTime(80);
+      f.detectChanges();
+      expect(query(f, '[data-testid="mj-context-menu-submenu-format"]')).not.toBeNull();
+
+      // At t=280ms (180ms after last move), deferred switch completes
+      vi.advanceTimersByTime(100);
+      f.detectChanges();
+      expect(query(f, '[data-testid="mj-context-menu-submenu-format"]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('calls scrollIntoView({ block: "nearest" }) when keyboard navigation focuses an item', () => {
+    const f = renderMenu();
+    const cutBtn = query(f, '[data-testid="mj-context-menu-item-cut"]') as HTMLElement;
+    const scrollMock = vi.fn();
+    cutBtn.scrollIntoView = scrollMock;
+
+    dispatchKey('ArrowDown');
+    expect(scrollMock).toHaveBeenCalledWith({ block: 'nearest' });
   });
 });

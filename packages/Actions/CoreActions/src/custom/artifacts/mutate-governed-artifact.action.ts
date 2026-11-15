@@ -11,6 +11,8 @@ import { BaseGovernedArtifactAction } from './base-governed-artifact.action';
  */
 @RegisterClass(BaseAction, '__MutateGovernedArtifact')
 export class MutateGovernedArtifactAction extends BaseGovernedArtifactAction {
+    public static readonly AuthorizesCaller = true;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         if (!params.ContextUser) {
             return {

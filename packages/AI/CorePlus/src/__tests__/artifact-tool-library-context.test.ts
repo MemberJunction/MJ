@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
     BaseArtifactToolLibrary,
+    ResolveEmbeddedArtifactId,
+    type ArtifactToolArgs,
     type ArtifactToolDefinition,
     type ArtifactToolExecutionContext,
     type ArtifactToolResult,
@@ -23,7 +25,7 @@ class EchoContextToolLibrary extends BaseArtifactToolLibrary {
 
     protected override async invokeSubclassTool(
         toolName: string,
-        _input: Record<string, unknown>,
+        _input: ArtifactToolArgs,
         artifactContent: string | Buffer,
         context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
@@ -100,5 +102,33 @@ describe('BaseArtifactToolLibrary Execution Context & GovernedRunArtifactSummary
         expect(result.touchedArtifacts).toHaveLength(1);
         expect(result.touchedArtifacts?.[0]?.ArtifactTypeName).toBe('Excel Spreadsheet');
         expect(result.touchedArtifacts?.[0]?.Operation).toBe('created');
+    });
+
+    it('ResolveEmbeddedArtifactId rejects non-UUID strings when resolveArtifactId is omitted', () => {
+        expect(ResolveEmbeddedArtifactId('')).toEqual({
+            ok: false,
+            errorMessage: 'artifactId must be a non-empty string.',
+        });
+        expect(ResolveEmbeddedArtifactId('D')).toEqual({
+            ok: false,
+            errorMessage: "Short artifactId 'D' could not be resolved to an MJ: Artifacts UUID without an active artifact session.",
+        });
+        expect(ResolveEmbeddedArtifactId('not-a-uuid-at-all').ok).toBe(false);
+        const validUuid = '11111111-1111-4111-8111-111111111111';
+        expect(ResolveEmbeddedArtifactId(` ${validUuid} `)).toEqual({
+            ok: true,
+            artifactId: validUuid,
+        });
+    });
+
+    it('carries trusted actorUserId, ownerUserId, and isEditor fields on ArtifactToolExecutionContext', () => {
+        const ctx: ArtifactToolExecutionContext = {
+            actorUserId: '11111111-1111-4111-8111-111111111111',
+            ownerUserId: '22222222-2222-4222-8222-222222222222',
+            isEditor: true,
+        };
+        expect(ctx.actorUserId).toBe('11111111-1111-4111-8111-111111111111');
+        expect(ctx.ownerUserId).toBe('22222222-2222-4222-8222-222222222222');
+        expect(ctx.isEditor).toBe(true);
     });
 });
