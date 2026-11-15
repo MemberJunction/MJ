@@ -73,21 +73,25 @@ Method: dodgy diff. Treat this diff as if it introduced a bug. Write up to ${r.L
 /** The two run_test proof steps; `risk` names the risk the mutant must introduce. */
 function proofSteps(risk: string): string {
     return `  1. {"File": "<file>"} must report Pass on base.
-  2. {"File": "<file>", "Mutant": {"Edits": [{"File": "<a src file of this package>", "Find": "<exact text that occurs once>", "Replace": "<text that introduces exactly ${risk}>"}]}} must report Fail: the test kills the mutant.`;
+  2. {"File": "<file>", "Mutant": {"Edits": [{"File": "<a src file of this package>", "Find": "<exact text that occurs once>", "Replace": "<text that introduces exactly ${risk}>"}]}} must report Fail: the test kills the mutant.
+The mutant must edit base code that the diff changes (inside or next to a changed hunk); run_test refuses a mutant elsewhere. So the test must run the changed code for real: do not mock the changed function or the helpers it calls, and when a shared test helper lacks something that code path needs, supply it in your test.`;
 }
+
+/** How the tests of one risk must differ. */
+const VARIANTS = 'The first test of a risk uses the exact trigger the risk names (the exact input, state or order of events). Each further test uses a different edge input of the same code path: empty, zero, one element, a repeated or removed element, a different letter case, a boundary value, or a second call after the state changed. Do not write two tests on the ordinary input.';
 
 function intentAwareTask(change: string, r: GenerationRequest, c: PromptContext): string {
     const [risk, ...rest] = r.Risks;
     if (!risk) throw new Error('an intent-aware request needs a risk');
     if (rest.length === 0) return `${change}
 Method: intent-aware. The analyzer's risk ${risk.ID} is in the untrusted-diff block above.
-Write up to ${r.Limits.TestsPerRisk} tests that would detect this risk. Prove each test in two steps with run_test:
+Write up to ${r.Limits.TestsPerRisk} tests that would detect this risk. ${VARIANTS} Prove each test in two steps with run_test:
 ${proofSteps('the risk')}
 The mutant is a copy of BASE with one deliberate bug that represents the risk; edits may touch only non-test src files of ${c.PackageRelDir}. A test that does not kill its mutant does not count. When done, reply with one line per file: the file, the mutant you used, and the assertion that failed on it.`;
     return `${change}
 Method: intent-aware. The analyzer's risks ${r.Risks.map((x) => x.ID).join(', ')} are in the untrusted-diff block above. The files of each risk:
 ${r.Risks.map((x, i) => `  ${x.ID}: ${(c.TestIDsPerRisk[i] ?? []).map((id) => `${id}.jit.test.ts`).join(', ')}`).join('\n')}
-For each risk, write up to ${r.Limits.TestsPerRisk} tests in its own files that would detect that risk. Prove each test in two steps with run_test:
+For each risk, write up to ${r.Limits.TestsPerRisk} tests in its own files that would detect that risk. ${VARIANTS} Prove each test in two steps with run_test:
 ${proofSteps("that file's risk")}
 The mutant is a copy of BASE with one deliberate bug that represents the file's risk; edits may touch only non-test src files of ${c.PackageRelDir}. A test that does not kill its mutant does not count.
 Work through the risks in the order listed and reuse what you already read for earlier risks. When a risk cannot be proved after a fair attempt, go on to the next risk.

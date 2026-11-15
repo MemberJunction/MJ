@@ -164,3 +164,26 @@ describe('RunTestTool type check', () => {
     expect(tscCalls()).toHaveLength(1);
   });
 });
+
+describe('RunTestTool mutant location', () => {
+  function farSetup() {
+    const s = setup(failReport);
+    writeFileSync(join(s.root, 'packages/MJCore/src/a.ts'), `export const f = () => 1;\n${'// filler\n'.repeat(40)}export const g = () => 3;\n`);
+    const tool = new RunTestTool({ Sandbox: s.sandbox, BaseRootDir: s.root, PackageRelDir: 'packages/MJCore', PackageName: '@memberjunction/core', ScratchRoot: mkdtempSync(join(tmpdir(), 'jit-sc-')),
+      Settings: DEFAULT_SETTINGS, ChangedRanges: { 'packages/MJCore/src/a.ts': [[42, 42]] } });
+    return { ...s, tool };
+  }
+  const FILE = `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`;
+  it('refuses a mutant that edits code far from every changed line, and names the changed lines', async () => {
+    const { tool, calls } = farSetup();
+    const out = await tool.Run({ File: FILE, Mutant: { Edits: [{ File: 'packages/MJCore/src/a.ts', Find: '=> 1', Replace: '=> 2' }] } });
+    expect(out.Ran).toBe(false);
+    expect(out.Error).toContain('packages/MJCore/src/a.ts: 42');
+    expect(calls).toHaveLength(0);
+  });
+  it('runs a mutant that edits a changed line', async () => {
+    const { tool } = farSetup();
+    const out = await tool.Run({ File: FILE, Mutant: { Edits: [{ File: 'packages/MJCore/src/a.ts', Find: '=> 3', Replace: '=> 4' }] } });
+    expect(out.Status).toBe('Fail');
+  });
+});

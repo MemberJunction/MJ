@@ -64,7 +64,8 @@ export class ClaudeAgentGenerator extends BaseTestGenerator {
         const riskOf = new Map(perRisk.flatMap((group, i) => group.map((id): [string, Risk] => [id, r.Risks[i]])));
         const factory = this.o.RunTestFactory ?? ((x: RunTestToolOptions) => new RunTestTool(x));
         const s: Session = { Request: r, PackageDir: pkg.Dir, JitDir: jitDir, IDs: ids, RiskOf: riskOf, Files: new Map(), Transcript: [],
-            Tool: factory({ Sandbox: this.o.Sandbox, BaseRootDir: r.BaseRootDir, PackageRelDir: pkg.Dir, PackageName: r.Package, ScratchRoot: this.o.ScratchRoot, Settings: this.o.Settings }) };
+            Tool: factory({ Sandbox: this.o.Sandbox, BaseRootDir: r.BaseRootDir, PackageRelDir: pkg.Dir, PackageName: r.Package, ScratchRoot: this.o.ScratchRoot, Settings: this.o.Settings,
+                ChangedRanges: changedRanges(r, pkg.Dir) }) };
         let usage: TokenUsage = { Model: r.Model, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }; let subtype = 'none'; let turns = 0;
         const transcriptPath = this.transcriptPath(s);
         try {
@@ -295,4 +296,14 @@ export async function* SdkRunner(prompt: string, system: string, o: AgentRunOpti
     } finally {
         rmSync(home, { recursive: true, force: true });
     }
+}
+
+/** Base line ranges of the PR's hunks, per changed file of the package. A hunk that only adds lines gives the line it follows. */
+function changedRanges(r: GenerationRequest, packageRelDir: string): Record<string, [number, number][]> {
+    const out: Record<string, [number, number][]> = {};
+    for (const f of r.Analysis.ChangedFiles) {
+        if (!f.Path.startsWith(`${packageRelDir}/`) || f.Hunks.length === 0) continue;
+        out[f.Path] = f.Hunks.map((h): [number, number] => [h.OldStart, h.OldStart + Math.max(h.OldLines, 1) - 1]);
+    }
+    return out;
 }
