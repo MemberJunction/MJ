@@ -4201,6 +4201,10 @@ export abstract class BaseEntity<T = unknown> {
                 Visited: visited,
                 SaveSelfOnly: (entity, opts) => entity.saveAsGraphNode(opts),
                 DeleteSelfOnly: (entity, opts) => entity.deleteAsGraphNode(opts),
+                CanBatchLeaf: (entity, op) =>
+                    op === 'Save'
+                        ? entity.Save === BaseEntity.prototype.Save
+                        : entity.Delete === BaseEntity.prototype.Delete,
             });
             if (!result.Success) {
                 await scope?.Rollback();
@@ -7463,7 +7467,7 @@ export abstract class BaseEntity<T = unknown> {
                 this.init(); // wipe out current data if we're loading on top of existing record
             }
 
-            let data = await this.readRowForLoad(CompositeKey, EntityRelationshipsToLoad);
+            const data = await this.readRowForLoad(CompositeKey, EntityRelationshipsToLoad);
             this.discardJSONFieldObjects(); // a reload replaces the record's data
             if (!data) {
                 // A subtype-hint probe asks whether this row exists, so "no" is an answer, not an error
@@ -7472,71 +7476,116 @@ export abstract class BaseEntity<T = unknown> {
                 }
                 return false; // no data loaded, return false
             }
-            // Field security: denied values never enter this object, even from a provider that
-            // did not narrow its SELECT (see narrowHydrationSource).
-            data = this.narrowHydrationSource(data);
-
-            // IS-A: hydrate parent chain from loaded data before populating self when loading
-            // upward from a child/leaf instance. Skipped when an already-loaded parent links a
-            // child downward so the parent's virtual view columns are not cleared.
-            if (this._parentEntity && !this._skipParentChainHydration) {
-                this._parentEntity.Hydrate(data);
-            }
-
-            // Reset _NeverSet on all fields before SetMany so that ReadOnly/virtual fields
-            // (e.g. view-computed columns like PrimaryAddressLine1, PrimaryEmail) can be
-            // updated on reload. Without this, the EntityField Value setter silently drops
-            // writes to ReadOnly fields after the initial load, meaning InnerLoad called a
-            // second time (e.g. to refresh denormalized data after a related entity changed)
-            // would fail to update those fields even though the provider returned fresh data.
-            for (const f of this.Fields) {
-                f.ResetNeverSetFlag();
-            }
-
-            this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
-            // InnerLoad is a hydration entry point: any field the provider's row omitted (e.g.
-            // a client-side load whose server response stripped read-denied fields) is
-            // not-loaded, so its constructor state never masquerades as data on the next save.
-            this.markFieldsOmittedBySourceAsNotLoaded(data);
-            if (EntityRelationshipsToLoad) {
-                for (let relationship of EntityRelationshipsToLoad) {
-                    if (data[relationship]) {
-                        // we have some data, put into an array for ease of access
-                        this[relationship] = data[relationship]
-                    }
-                }
-            }
-            this._recordLoaded = true;
-            this._everSaved = true; // Mark as saved since we loaded from database
-            this._compositeKey = CompositeKey; // set the composite key to the one we just loaded
-
-            // Cache the record name for faster lookups
-            this.cacheRecordName();
-
-            // IS-A: discover child entity records after load completes.
-            // This populates _childEntity so Save/Delete can delegate to the leaf.
-            // Only runs for parent-type entities; idempotent via _childEntityDiscoveryDone.
-            await this.InitializeChildEntity();
-
-            // Companions declared Load:'immediate' populate here — and ONLY here.
-            //
-            // Deliberately not in LoadFromData(): that is the per-row materialization path for
-            // RunView(ResultType:'entity_object'), so an eager child query there becomes one query
-            // per row of every view. That is a live N+1 in production accounting code today
-            // (JournalEntryEntityServer.LoadFromData → LoadLines), and excluding it here is the
-            // structural fix. Set-oriented eager loading is served by RunView's batched child
-            // loading, which issues one WHERE fk IN (...) for the whole result set.
-            await this.loadEagerCompanions();
-
-            // Raise load completion event
-            this.RaiseEvent('load_complete', { CompositeKey });
-
-            return true;
+            return await this.applyLoadedRowData(data, CompositeKey, EntityRelationshipsToLoad);
         }
         finally {
             // Always clear loading state when done, regardless of success or failure
             this._isLoading = false;
         }
+    }
+
+    /**
+     * Hydrates this entity from an already-fetched database row using the exact same permission,
+     * FLS-narrowing, IS-A parent/child, and eager-companion contract as {@link InnerLoad}.
+     * Used by batched loaders (e.g. `RelatedRecordCollection.Deserialize`) to avoid N individual queries.
+     */
+    public async HydrateFromRow(
+        data: Record<string, unknown>,
+        compositeKey: CompositeKey,
+        entityRelationshipsToLoad: string[] = null
+    ): Promise<boolean> {
+        if (!this.ProviderToUse) {
+            throw new Error('No provider set');
+        }
+
+        const valResult = compositeKey.Validate();
+        if (!valResult || !valResult.IsValid) {
+            throw new Error(`Invalid CompositeKey passed to BaseEntity.HydrateFromRow(${this.EntityInfo.Name}): ${valResult.ErrorMessage}`);
+        }
+
+        this.CheckPermissions(EntityPermissionType.Read, true);
+
+        this._isLoading = true;
+        this.RaiseEvent('load_started', { CompositeKey: compositeKey });
+
+        try {
+            if (!this.IsSaved) {
+                this.init();
+            }
+            this.discardJSONFieldObjects();
+            return await this.applyLoadedRowData(data, compositeKey, entityRelationshipsToLoad);
+        }
+        finally {
+            this._isLoading = false;
+        }
+    }
+
+    /** Shared post-read hydration used by both {@link InnerLoad} and {@link HydrateFromRow}. */
+    private async applyLoadedRowData(
+        rawData: Record<string, unknown>,
+        compositeKey: CompositeKey,
+        entityRelationshipsToLoad: string[] = null
+    ): Promise<boolean> {
+        // Field security: denied values never enter this object, even from a provider that
+        // did not narrow its SELECT (see narrowHydrationSource).
+        const data = this.narrowHydrationSource(rawData);
+
+        // IS-A: hydrate parent chain from loaded data before populating self when loading
+        // upward from a child/leaf instance. Skipped when an already-loaded parent links a
+        // child downward so the parent's virtual view columns are not cleared.
+        if (this._parentEntity && !this._skipParentChainHydration) {
+            this._parentEntity.Hydrate(data);
+        }
+
+        // Reset _NeverSet on all fields before SetMany so that ReadOnly/virtual fields
+        // (e.g. view-computed columns like PrimaryAddressLine1, PrimaryEmail) can be
+        // updated on reload. Without this, the EntityField Value setter silently drops
+        // writes to ReadOnly fields after the initial load, meaning InnerLoad called a
+        // second time (e.g. to refresh denormalized data after a related entity changed)
+        // would fail to update those fields even though the provider returned fresh data.
+        for (const f of this.Fields) {
+            f.ResetNeverSetFlag();
+        }
+
+        this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
+        // InnerLoad is a hydration entry point: any field the provider's row omitted (e.g.
+        // a client-side load whose server response stripped read-denied fields) is
+        // not-loaded, so its constructor state never masquerades as data on the next save.
+        this.markFieldsOmittedBySourceAsNotLoaded(data);
+        if (entityRelationshipsToLoad) {
+            for (const relationship of entityRelationshipsToLoad) {
+                if (data[relationship]) {
+                    // we have some data, put into an array for ease of access
+                    this[relationship] = data[relationship];
+                }
+            }
+        }
+        this._recordLoaded = true;
+        this._everSaved = true; // Mark as saved since we loaded from database
+        this._compositeKey = compositeKey; // set the composite key to the one we just loaded
+
+        // Cache the record name for faster lookups
+        this.cacheRecordName();
+
+        // IS-A: discover child entity records after load completes.
+        // This populates _childEntity so Save/Delete can delegate to the leaf.
+        // Only runs for parent-type entities; idempotent via _childEntityDiscoveryDone.
+        await this.InitializeChildEntity();
+
+        // Companions declared Load:'immediate' populate here — and ONLY here.
+        //
+        // Deliberately not in LoadFromData(): that is the per-row materialization path for
+        // RunView(ResultType:'entity_object'), so an eager child query there becomes one query
+        // per row of every view. That is a live N+1 in production accounting code today
+        // (JournalEntryEntityServer.LoadFromData → LoadLines), and excluding it here is the
+        // structural fix. Set-oriented eager loading is served by RunView's batched child
+        // loading, which issues one WHERE fk IN (...) for the whole result set.
+        await this.loadEagerCompanions();
+
+        // Raise load completion event
+        this.RaiseEvent('load_complete', { CompositeKey: compositeKey });
+
+        return true;
     }
 
     /**

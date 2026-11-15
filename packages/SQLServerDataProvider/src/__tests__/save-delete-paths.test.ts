@@ -297,14 +297,16 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(sql).toContain('INSERT INTO @ResultTable');
     expect(sql).toContain('EXEC [dbo].spCreateWidget');
 
-    // Composite-key-safe @ID extraction + inline record-change EXEC
+    // Composite-key-safe @ID extraction + inline record-change EXEC (with @SuppressReturn=1 so
+    // SQL Server skips the unused @ResultChangesTable and vwRecordChanges join readback)
     expect(sql).toContain('DECLARE @ID NVARCHAR(MAX)');
-    expect(sql).toContain('DECLARE @ResultChangesTable TABLE');
-    expect(sql).toContain('[RecordID] nvarchar(750) NOT NULL'); // record-changes entity columns
+    expect(sql).not.toContain('DECLARE @ResultChangesTable TABLE');
     expect(sql).toContain('spCreateRecordChange_Internal');
     expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toContain(`@EntityID='${entityInfo.ID}'`);
     expect(sql).toContain(`@UserID='${TEST_USER.ID}'`);
     expect(sql).toContain(`@Type='Create'`);
+    expect(sql).toContain('@SuppressReturn=1');
 
     // Final result projection back to the caller
     expect(sql).toContain('SELECT * FROM @ResultTable');

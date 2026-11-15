@@ -27,6 +27,7 @@ import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
     BuildArtifactVersionConfigurationWithPreview,
+    DocumentLiveBlockEngine,
     IsValidThumbnailDataUrl,
     MJArtifactTypeEntity,
     MJArtifactVersionEntity,
@@ -47,6 +48,12 @@ import { configInfo } from '../config.js';
 import { getUserPayload } from '../context.js';
 import type { DataSourceInfo } from '../types.js';
 import { InMemoryYjsRoomRelay, type IYjsRoomRelay, type YjsRelayMessage } from './YjsRoomRelay.js';
+import {
+    ARTIFACT_AGENT_PRESENCE_HOOK_KEY,
+    ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY,
+    type ArtifactAgentPresenceEvent,
+    type ArtifactLiveRoomSnapshot,
+} from '@memberjunction/ai-agents';
 
 /** Canonical WebSocket upgrade path for Yjs artifact collaboration rooms (relative to `MJAPI_BASE_PATH`). */
 export const ARTIFACT_COLLABORATION_WS_PATH = '/collaboration/yjs';
@@ -140,6 +147,104 @@ const COLLABORATION_ALLOWED_ORIGINS_ENV = 'MJ_COLLABORATION_ALLOWED_ORIGINS';
 const REALTIME_ALLOWED_ORIGINS_ENV = 'MJ_REALTIME_PROXY_ALLOWED_ORIGINS';
 const MAX_LOGGED_ORIGIN_CHARS = 200;
 
+/** Reserved high Yjs clientID block for server-emitted AI agent awareness (browser clients cannot claim or spoof). */
+export const AGENT_AWARENESS_CLIENT_ID_BASE = 0x70000000;
+export const AGENT_AWARENESS_CLIENT_ID_MAX = 0x7fffffff;
+const DEFAULT_AGENT_PRESENCE_THROTTLE_MS = 150;
+const DEFAULT_AGENT_PRESENCE_DECAY_MS = 8_000;
+const DEFAULT_AGENT_PRESENCE_TTL_MS = 60_000;
+const DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS = 2_500;
+const SAFE_AWARENESS_COLOR_RE =
+    /^(#[0-9a-fA-F]{3,8}|var\(--mj-[a-zA-Z0-9-]+\)|(rgb|hsl)a?\([0-9.,\s%/]+\))$/;
+const DEFAULT_AWARENESS_COLOR = 'var(--mj-brand-primary)';
+
+type AwarenessJsonPrimitive = string | number | boolean | null;
+type AwarenessJsonValue = AwarenessJsonPrimitive | AwarenessJsonValue[] | AwarenessJsonObject;
+interface AwarenessJsonObject {
+    [key: string]: AwarenessJsonValue | undefined;
+}
+
+interface AgentAwarenessUserPayload {
+    userId: string;
+    userName: string;
+    name: string;
+    color: string;
+    canEdit: boolean;
+    isAgent: true;
+    agentPresenceKey: string;
+    agentRunId?: string;
+    agentName: string;
+    actingForUserId: string;
+    actingForUserName: string;
+    actingForUserEmail?: string;
+    agentPhase: ArtifactAgentPresenceEvent['Phase'];
+    toolName?: string;
+    actionSummary?: string;
+    agentLocation?: ArtifactAgentPresenceEvent['Location'];
+    timestampMs: number;
+}
+
+interface AgentAwarenessPayload {
+    isAgent: true;
+    agentPresenceKey: string;
+    agentPhase: ArtifactAgentPresenceEvent['Phase'];
+    agentLocation?: ArtifactAgentPresenceEvent['Location'];
+    cursor: null;
+    user: AgentAwarenessUserPayload;
+}
+
+function sanitizeAwarenessColor(raw: AwarenessJsonValue | undefined): string {
+    if (typeof raw === 'string') {
+        const trimmed = raw.trim();
+        if (SAFE_AWARENESS_COLOR_RE.test(trimmed)) {
+            return trimmed;
+        }
+    }
+    return DEFAULT_AWARENESS_COLOR;
+}
+
+function isAwarenessJsonObject(val: AwarenessJsonValue | undefined): val is AwarenessJsonObject {
+    return Boolean(val && typeof val === 'object' && !Array.isArray(val));
+}
+
+function isRelayedAgentAwarenessPayload(val: AwarenessJsonValue | undefined): boolean {
+    if (!isAwarenessJsonObject(val)) {
+        return false;
+    }
+    if (val['isAgent'] === true) {
+        return true;
+    }
+    const userObj = val['user'];
+    return isAwarenessJsonObject(userObj) && userObj['isAgent'] === true;
+}
+const AGENT_PRESENCE_PALETTE = [
+    '#6366f1',
+    '#8b5cf6',
+    '#06b6d4',
+    '#10b981',
+    '#f59e0b',
+    '#ec4899',
+];
+
+interface AgentRoomPresenceEntry {
+    ClientID: number;
+    Clock: number;
+    LastEvent: ArtifactAgentPresenceEvent;
+    LastBroadcastMs: number;
+    PendingWorkingEvent: ArtifactAgentPresenceEvent | null;
+    ThrottleTimer: ReturnType<typeof setTimeout> | null;
+    DecayTimer: ReturnType<typeof setTimeout> | null;
+    TtlTimer: ReturnType<typeof setTimeout> | null;
+    ExitGraceTimer: ReturnType<typeof setTimeout> | null;
+}
+
+interface DetachedAgentPresenceEntry {
+    RoomKey: string;
+    ArtifactID: string;
+    PresenceKey: string;
+    Entry: AgentRoomPresenceEntry;
+}
+
 /**
  * Pluggable atomic nonce replay store (e.g., backed by Redis `SET NX PX`) used to enforce
  * single-use WebSocket collaboration tickets across multiple `MJServer` instances (`Blocker 1`).
@@ -191,6 +296,8 @@ export interface CollaborationClientConnection {
     ArtifactID: string;
     /** Whether this connection is currently permitted to push Yjs write updates (`CanEdit`). */
     CanEdit: boolean;
+    /** Whether this connection's authenticated user is the authoritative owner of the artifact. */
+    IsOwner?: boolean;
     /** Optional API key hash if this connection was established via a scoped API key. */
     ApiKeyHash?: string;
     /** Set of Yjs awareness client IDs owned by this socket (cleaned up on disconnect). */
@@ -266,6 +373,12 @@ export interface CollaborationRoom {
         changes: { added: number[]; updated: number[]; removed: number[] },
         origin: unknown
     ) => void;
+    /** Server-owned awareness client IDs reserved for AI agents inside this room (`C3` anti-spoof). */
+    ProtectedAgentClientIDs: Set<number>;
+    /** Per-agent active awareness timers, clocks, and coalesced states inside this room. */
+    AgentPresenceEntries: Map<string, AgentRoomPresenceEntry>;
+    /** Fallback ghost-cleanup timers for agent presence relayed from peer MJServer instances. */
+    RelayedAgentPresenceTimers: Map<number, ReturnType<typeof setTimeout>>;
 }
 
 /**
@@ -442,6 +555,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private static readonly _inFlightCompactionVersionIds = new Set<string>();
     private readonly _pendingSyncWaiters = new Map<string, Set<PendingSyncWaiterEntry>>();
     private readonly _pendingUpgradesByArtifact = new Map<string, number>();
+    private readonly _detachedAgentPresence = new Map<string, DetachedAgentPresenceEntry>();
+    private readonly _agentClientClockHighWater = new Map<string, number>();
     private _relay: IYjsRoomRelay = new InMemoryYjsRoomRelay();
     private _dataSources: DataSourceInfo[] = [];
     private _providerOverride: IMetadataProvider | null = null;
@@ -453,6 +568,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private _ownedLiveMutationHook:
         | ((evt: RegisteredLiveMutationEvent) => Promise<RegisteredLiveMutationHookResult | void>)
         | null = null;
+    private _ownedLiveContentReaderHook:
+        | ((artifactId: string, contextUser?: UserInfo) => Promise<ArtifactLiveRoomSnapshot | null> | ArtifactLiveRoomSnapshot | null)
+        | null = null;
+    private _ownedAgentPresenceHook:
+        | ((evt: ArtifactAgentPresenceEvent) => Promise<void> | void)
+        | null = null;
+    private _agentPresenceThrottleMs: number = DEFAULT_AGENT_PRESENCE_THROTTLE_MS;
+    private _agentPresenceDecayMs: number = DEFAULT_AGENT_PRESENCE_DECAY_MS;
+    private _agentPresenceTtlMs: number = DEFAULT_AGENT_PRESENCE_TTL_MS;
+    private _agentPresenceExitGraceMs: number = DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS;
     private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private _idleRoomTtlMs: number = DEFAULT_IDLE_ROOM_TTL_MS;
     private _heartbeatIntervalMs: number = DEFAULT_COLLABORATION_HEARTBEAT_MS;
@@ -580,6 +705,29 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      */
     public SetIdleRoomTtlMs(ttlMs: number): void {
         this._idleRoomTtlMs = Math.max(10, ttlMs);
+    }
+
+    /**
+     * Configures AI agent presence awareness timings (throttle, working->settled decay, hard TTL, and exit grace).
+     */
+    public SetAgentPresenceTimings(options: {
+        throttleMs?: number;
+        decayMs?: number;
+        ttlMs?: number;
+        exitGraceMs?: number;
+    }): void {
+        if (typeof options.throttleMs === 'number') {
+            this._agentPresenceThrottleMs = Math.max(0, options.throttleMs);
+        }
+        if (typeof options.decayMs === 'number') {
+            this._agentPresenceDecayMs = Math.max(10, options.decayMs);
+        }
+        if (typeof options.ttlMs === 'number') {
+            this._agentPresenceTtlMs = Math.max(20, options.ttlMs);
+        }
+        if (typeof options.exitGraceMs === 'number') {
+            this._agentPresenceExitGraceMs = Math.max(0, options.exitGraceMs);
+        }
     }
 
     /**
@@ -1535,6 +1683,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         VersionID?: string;
         VersionNumber?: number;
         MergedContent?: string;
+        ErrorMessage?: string;
         HadConflict?: boolean;
         RejectedAgentHunks?: Array<{
             BaseLines: string[];
@@ -1556,6 +1705,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (!perms.CanEdit) {
             return { Success: false };
         }
+        const isOwner = perms.Source === 'Owner';
 
         if (options?.dryRun === true) {
             const roomKey = artifactId.trim().toLowerCase();
@@ -1571,6 +1721,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         if (hydratedRoom) {
                             Y.applyUpdate(tempDoc, Y.encodeStateAsUpdate(hydratedRoom.Doc));
                         }
+                    }
+                }
+
+                const existingTempContent = this.extractRoomSerializedContent(tempDoc);
+                if (options?.isRestore !== true) {
+                    const lockValidation = this.validateContentMutationAgainstLocks(
+                        existingTempContent,
+                        newContent,
+                        user.ID,
+                        isOwner
+                    );
+                    if (!lockValidation.Allowed) {
+                        return {
+                            Success: false,
+                            ErrorMessage: lockValidation.Reason
+                        };
                     }
                 }
 
@@ -1645,6 +1811,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const isRestore = options?.isRestore === true;
         const yText = room.Doc.getText('content');
         const existing = this.extractRoomSerializedContent(room.Doc);
+        if (!isRestore) {
+            const lockValidation = this.validateContentMutationAgainstLocks(existing, newContent, user.ID, isOwner);
+            if (!lockValidation.Allowed) {
+                return {
+                    Success: false,
+                    ErrorMessage: lockValidation.Reason
+                };
+            }
+        }
         const alreadyReconciledFromSameBaseline =
             !isRestore &&
             !saveVersion &&
@@ -2031,6 +2206,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
 
         this._rooms.clear();
+        for (const detached of this._detachedAgentPresence.values()) {
+            this.clearAgentPresenceTimers(detached.Entry);
+            detached.Entry.PendingWorkingEvent = null;
+        }
+        this._detachedAgentPresence.clear();
+        this._agentClientClockHighWater.clear();
         this._tickets.clear();
         this._consumedTickets.clear();
         ArtifactCollaborationServer._inFlightCompactionVersionIds.clear();
@@ -2052,6 +2233,24 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
             this._ownedLiveMutationHook = null;
         }
+        if (this._ownedLiveContentReaderHook) {
+            const store = GetGlobalObjectStore();
+            if (store && store[ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY] === this._ownedLiveContentReaderHook) {
+                delete store[ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY];
+            }
+            this._ownedLiveContentReaderHook = null;
+        }
+        if (this._ownedAgentPresenceHook) {
+            const store = GetGlobalObjectStore();
+            if (store && store[ARTIFACT_AGENT_PRESENCE_HOOK_KEY] === this._ownedAgentPresenceHook) {
+                delete store[ARTIFACT_AGENT_PRESENCE_HOOK_KEY];
+            }
+            this._ownedAgentPresenceHook = null;
+        }
+        this._agentPresenceThrottleMs = DEFAULT_AGENT_PRESENCE_THROTTLE_MS;
+        this._agentPresenceDecayMs = DEFAULT_AGENT_PRESENCE_DECAY_MS;
+        this._agentPresenceTtlMs = DEFAULT_AGENT_PRESENCE_TTL_MS;
+        this._agentPresenceExitGraceMs = DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS;
         await this._relay.Shutdown();
     }
 
@@ -2963,8 +3162,561 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] = this._ownedLiveMutationHook;
     }
 
+    private ensureLiveContentReaderHookRegistered(): void {
+        if (this._shuttingDown) {
+            return;
+        }
+        const store = GetGlobalObjectStore();
+        if (!store) {
+            return;
+        }
+        const existingHook = store[ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY];
+        if (existingHook !== undefined && existingHook !== this._ownedLiveContentReaderHook) {
+            return;
+        }
+        if (!this._ownedLiveContentReaderHook) {
+            this._ownedLiveContentReaderHook = async (
+                artifactId: string,
+                contextUser?: UserInfo
+            ): Promise<ArtifactLiveRoomSnapshot | null> => {
+                if (this._shuttingDown || !artifactId) {
+                    return null;
+                }
+                const normalizedId = artifactId.trim();
+                const roomKey = normalizedId.toLowerCase();
+                let room = this._rooms.get(roomKey);
+                if (!room) {
+                    const effectiveUser = contextUser ?? UserCache.Instance.GetSystemUser();
+                    if (effectiveUser && (await this.hasPersistedWorkingState(normalizedId, effectiveUser))) {
+                        room = (await this.GetOrCreateRoom(normalizedId, effectiveUser)) ?? undefined;
+                        if (room && room.Connections.size === 0 && !this._shuttingDown) {
+                            this.scheduleIdleRoomDisposal(room);
+                        }
+                    }
+                }
+                if (!room) {
+                    return null;
+                }
+                return {
+                    Content: this.extractRoomSerializedContent(room.Doc),
+                    VersionNumber: room.BaseVersionNumber,
+                    VersionID: room.BaseVersionID
+                };
+            };
+        }
+        store[ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY] = this._ownedLiveContentReaderHook;
+    }
+
+    private ensureAgentPresenceHookRegistered(): void {
+        if (this._shuttingDown) {
+            return;
+        }
+        const store = GetGlobalObjectStore();
+        if (!store) {
+            return;
+        }
+        const existingHook = store[ARTIFACT_AGENT_PRESENCE_HOOK_KEY];
+        if (existingHook !== undefined && existingHook !== this._ownedAgentPresenceHook) {
+            return;
+        }
+        if (!this._ownedAgentPresenceHook) {
+            this._ownedAgentPresenceHook = (evt: ArtifactAgentPresenceEvent): void => {
+                if (this._shuttingDown || !evt?.ArtifactID || !evt?.AgentPresenceKey) {
+                    return;
+                }
+                this.applyServerAgentPresenceEvent(evt);
+            };
+        }
+        store[ARTIFACT_AGENT_PRESENCE_HOOK_KEY] = this._ownedAgentPresenceHook;
+    }
+
+    private deriveAgentAwarenessClientId(agentPresenceKey: string): number {
+        const digest = createHash('sha256').update(agentPresenceKey, 'utf8').digest();
+        // Mask into [0x70000000, 0x7fffffff] (30 bits signed positive JS safe integer range)
+        const low28 = digest.readUInt32BE(0) & 0x0fffffff;
+        return AGENT_AWARENESS_CLIENT_ID_BASE + low28;
+    }
+
+    private pickAgentPresenceColor(agentPresenceKey: string): string {
+        const digest = createHash('sha256').update(agentPresenceKey, 'utf8').digest();
+        return AGENT_PRESENCE_PALETTE[digest[0] % AGENT_PRESENCE_PALETTE.length];
+    }
+
+    private clearAgentPresenceTimers(entry: AgentRoomPresenceEntry): void {
+        if (entry.ThrottleTimer) {
+            clearTimeout(entry.ThrottleTimer);
+            entry.ThrottleTimer = null;
+        }
+        if (entry.DecayTimer) {
+            clearTimeout(entry.DecayTimer);
+            entry.DecayTimer = null;
+        }
+        if (entry.TtlTimer) {
+            clearTimeout(entry.TtlTimer);
+            entry.TtlTimer = null;
+        }
+        if (entry.ExitGraceTimer) {
+            clearTimeout(entry.ExitGraceTimer);
+            entry.ExitGraceTimer = null;
+        }
+    }
+
+    private buildAgentAwarenessPayload(evt: ArtifactAgentPresenceEvent): AgentAwarenessPayload {
+        const color = sanitizeAwarenessColor(this.pickAgentPresenceColor(evt.AgentPresenceKey));
+        return {
+            isAgent: true,
+            agentPresenceKey: evt.AgentPresenceKey,
+            agentPhase: evt.Phase,
+            agentLocation: evt.Location ?? undefined,
+            cursor: null,
+            user: {
+                userId: `agent:${evt.AgentPresenceKey}`,
+                userName: evt.AgentName,
+                name: evt.AgentName,
+                color,
+                canEdit: true,
+                isAgent: true,
+                agentPresenceKey: evt.AgentPresenceKey,
+                agentRunId: evt.AgentRunID ?? undefined,
+                agentName: evt.AgentName,
+                actingForUserId: evt.ActingForUserID,
+                actingForUserName: evt.ActingForUserName,
+                actingForUserEmail: evt.ActingForUserEmail ?? undefined,
+                agentPhase: evt.Phase,
+                toolName: evt.ToolName ?? undefined,
+                actionSummary: evt.ActionSummary ?? undefined,
+                agentLocation: evt.Location ?? undefined,
+                timestampMs: evt.TimestampMs
+            }
+        };
+    }
+
+    private recordAgentClientClockHighWater(roomKey: string, clientId: number, ...candidateClocks: number[]): number {
+        const hwKey = `${roomKey}::${clientId}`;
+        const prev = this._agentClientClockHighWater.get(hwKey) ?? 0;
+        let next = prev;
+        for (const candidate of candidateClocks) {
+            if (Number.isFinite(candidate) && candidate > next) {
+                next = candidate;
+            }
+        }
+        if (next > 0) {
+            this._agentClientClockHighWater.set(hwKey, next);
+        }
+        return next;
+    }
+
+    private isClientIdInUseInRoom(room: CollaborationRoom, presenceKey: string, candidateClientId: number): boolean {
+        if (candidateClientId === room.Awareness.clientID || room.ProtectedAgentClientIDs.has(candidateClientId)) {
+            return true;
+        }
+        for (const conn of room.Connections) {
+            if (conn.ControlledClientIDs.has(candidateClientId)) {
+                return true;
+            }
+        }
+        if (room.Awareness.getStates().has(candidateClientId)) {
+            return true;
+        }
+        for (const [key, entry] of room.AgentPresenceEntries.entries()) {
+            if (key !== presenceKey && entry.ClientID === candidateClientId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private pickAvailableAgentAwarenessClientId(
+        presenceKey: string,
+        room: CollaborationRoom | undefined
+    ): number {
+        const baseClientId = this.deriveAgentAwarenessClientId(presenceKey);
+        if (!room || !this.isClientIdInUseInRoom(room, presenceKey, baseClientId)) {
+            return baseClientId;
+        }
+        const baseOffset = baseClientId - AGENT_AWARENESS_CLIENT_ID_BASE;
+        for (let step = 1; step <= 1024; step++) {
+            const candidate = AGENT_AWARENESS_CLIENT_ID_BASE + ((baseOffset + step) & 0x0fffffff);
+            if (!this.isClientIdInUseInRoom(room, presenceKey, candidate)) {
+                return candidate;
+            }
+        }
+        return baseClientId;
+    }
+
+    private buildDetachedPresenceKey(roomKey: string, presenceKey: string): string {
+        return `${roomKey}::${presenceKey}`;
+    }
+
+    private isAgentPresenceEntryActive(roomKey: string, presenceKey: string, entry: AgentRoomPresenceEntry): boolean {
+        const room = this._rooms.get(roomKey);
+        if (room && room.AgentPresenceEntries.get(presenceKey) === entry) {
+            return true;
+        }
+        const detachedKey = this.buildDetachedPresenceKey(roomKey, presenceKey);
+        return this._detachedAgentPresence.get(detachedKey)?.Entry === entry;
+    }
+
+    private encodeAgentAwarenessUpdate(clientId: number, clock: number, payloadJson: string): Uint8Array {
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint(encoder, 1);
+        encoding.writeVarUint(encoder, clientId);
+        encoding.writeVarUint(encoder, clock);
+        encoding.writeVarString(encoder, payloadJson);
+        return encoding.toUint8Array(encoder);
+    }
+
+    private publishAgentAwarenessRelay(artifactId: string, awarenessBytes: Uint8Array): void {
+        if (awarenessBytes.byteLength === 0) {
+            return;
+        }
+        void this._relay
+            .PublishToRoom({
+                ArtifactID: artifactId,
+                MessageType: 'awareness',
+                PayloadBase64: BytesToBase64(awarenessBytes)
+            })
+            .catch((err) => {
+                LogError(
+                    `ArtifactCollaborationServer agent awareness relay publish error for '${artifactId}': ${
+                        err instanceof Error ? err.message : String(err)
+                    }`
+                );
+            });
+    }
+
+    private adoptDetachedAgentPresenceForRoom(roomKey: string, room: CollaborationRoom): void {
+        for (const [detachedKey, detached] of Array.from(this._detachedAgentPresence.entries())) {
+            if (detached.RoomKey !== roomKey) {
+                continue;
+            }
+            this._detachedAgentPresence.delete(detachedKey);
+            let targetClientId = detached.Entry.ClientID;
+            if (this.isClientIdInUseInRoom(room, detached.PresenceKey, targetClientId)) {
+                targetClientId = this.pickAvailableAgentAwarenessClientId(detached.PresenceKey, room);
+                detached.Entry.ClientID = targetClientId;
+            }
+            room.ProtectedAgentClientIDs.add(targetClientId);
+            room.AgentPresenceEntries.set(detached.PresenceKey, detached.Entry);
+            if (detached.Entry.LastEvent.Phase !== 'exit') {
+                const roomClock = room.Awareness.meta.get(targetClientId)?.clock ?? 0;
+                const highWater = this._agentClientClockHighWater.get(`${roomKey}::${targetClientId}`) ?? 0;
+                if (detached.Entry.Clock <= Math.max(roomClock, highWater)) {
+                    detached.Entry.Clock = Math.max(roomClock, highWater) + 1;
+                }
+                this.recordAgentClientClockHighWater(roomKey, targetClientId, detached.Entry.Clock);
+                const awarenessBytes = this.encodeAgentAwarenessUpdate(
+                    targetClientId,
+                    detached.Entry.Clock,
+                    JSON.stringify(this.buildAgentAwarenessPayload(detached.Entry.LastEvent))
+                );
+                awarenessProtocol.applyAwarenessUpdate(room.Awareness, awarenessBytes, 'relay');
+            }
+        }
+    }
+
+    private clearRelayedAgentPresenceTimer(room: CollaborationRoom, clientID: number): void {
+        const timer = room.RelayedAgentPresenceTimers.get(clientID);
+        if (timer) {
+            clearTimeout(timer);
+            room.RelayedAgentPresenceTimers.delete(clientID);
+        }
+    }
+
+    private scheduleRelayedAgentPresenceGhostTtl(room: CollaborationRoom, clientID: number): void {
+        this.clearRelayedAgentPresenceTimer(room, clientID);
+        const roomKey = room.ArtifactID.trim().toLowerCase();
+        const graceMs = Math.min(5_000, Math.max(25, Math.round(this._agentPresenceTtlMs * 0.2)));
+        const timeoutMs = Math.max(25, this._agentPresenceTtlMs) + graceMs;
+        const timer = setTimeout(() => {
+            room.RelayedAgentPresenceTimers.delete(clientID);
+            if (this._shuttingDown || this._rooms.get(roomKey) !== room) {
+                return;
+            }
+            const ownedLocally = Array.from(room.AgentPresenceEntries.values()).some((e) => e.ClientID === clientID);
+            if (ownedLocally) {
+                return;
+            }
+            room.ProtectedAgentClientIDs.delete(clientID);
+            if (room.Awareness.getStates().has(clientID)) {
+                awarenessProtocol.removeAwarenessStates(room.Awareness, [clientID], 'agent-presence');
+            }
+        }, timeoutMs);
+        (timer as { unref?: () => void }).unref?.();
+        room.RelayedAgentPresenceTimers.set(clientID, timer);
+    }
+
+    private syncProtectedAgentClientIdsFromRelayAwareness(room: CollaborationRoom, awarenessBytes: Uint8Array): void {
+        try {
+            const roomKey = room.ArtifactID.trim().toLowerCase();
+            const decoder = decoding.createDecoder(awarenessBytes);
+            const count = decoding.readVarUint(decoder);
+            for (let i = 0; i < count; i++) {
+                const clientID = decoding.readVarUint(decoder);
+                const clock = decoding.readVarUint(decoder);
+                const rawStateJson = decoding.readVarString(decoder);
+                if (rawStateJson === 'null') {
+                    this.recordAgentClientClockHighWater(roomKey, clientID, clock);
+                    room.ProtectedAgentClientIDs.delete(clientID);
+                    this.clearRelayedAgentPresenceTimer(room, clientID);
+                    continue;
+                }
+                let parsedState: AwarenessJsonValue | undefined;
+                try {
+                    parsedState = JSON.parse(rawStateJson) as AwarenessJsonValue;
+                } catch {
+                    parsedState = undefined;
+                }
+                if (isRelayedAgentAwarenessPayload(parsedState)) {
+                    this.recordAgentClientClockHighWater(roomKey, clientID, clock);
+                    room.ProtectedAgentClientIDs.add(clientID);
+                    this.scheduleRelayedAgentPresenceGhostTtl(room, clientID);
+                } else {
+                    room.ProtectedAgentClientIDs.delete(clientID);
+                    this.clearRelayedAgentPresenceTimer(room, clientID);
+                }
+            }
+        } catch {
+            // Ignore malformed awareness payload; applyAwarenessUpdate validates as needed
+        }
+    }
+
+    private broadcastAgentAwarenessEntry(
+        roomKey: string,
+        artifactId: string,
+        entry: AgentRoomPresenceEntry,
+        evt: ArtifactAgentPresenceEvent
+    ): void {
+        const room = this._rooms.get(roomKey);
+        const roomClock = room?.Awareness.meta.get(entry.ClientID)?.clock ?? 0;
+        const highWater = this._agentClientClockHighWater.get(`${roomKey}::${entry.ClientID}`) ?? 0;
+        entry.Clock = Math.max(entry.Clock, roomClock, highWater) + 1;
+        this.recordAgentClientClockHighWater(roomKey, entry.ClientID, entry.Clock);
+        entry.LastEvent = evt;
+        entry.LastBroadcastMs = Date.now();
+        const awarenessBytes = this.encodeAgentAwarenessUpdate(
+            entry.ClientID,
+            entry.Clock,
+            JSON.stringify(this.buildAgentAwarenessPayload(evt))
+        );
+        if (room) {
+            this.clearRelayedAgentPresenceTimer(room, entry.ClientID);
+            room.ProtectedAgentClientIDs.add(entry.ClientID);
+            awarenessProtocol.applyAwarenessUpdate(room.Awareness, awarenessBytes, 'agent-presence');
+            return;
+        }
+        // No local WebSocket room on this MJServer instance: relay directly so peer nodes deliver it to their viewers.
+        this.publishAgentAwarenessRelay(artifactId, awarenessBytes);
+    }
+
+    private removeServerAgentPresenceEntry(
+        roomKey: string,
+        artifactId: string,
+        presenceKey: string,
+        entry: AgentRoomPresenceEntry
+    ): void {
+        this.clearAgentPresenceTimers(entry);
+        entry.PendingWorkingEvent = null;
+        const detachedKey = this.buildDetachedPresenceKey(roomKey, presenceKey);
+        if (this._detachedAgentPresence.get(detachedKey)?.Entry === entry) {
+            this._detachedAgentPresence.delete(detachedKey);
+        }
+        const room = this._rooms.get(roomKey);
+        const highWater = this._agentClientClockHighWater.get(`${roomKey}::${entry.ClientID}`) ?? 0;
+        if (room) {
+            if (room.AgentPresenceEntries.get(presenceKey) === entry) {
+                room.AgentPresenceEntries.delete(presenceKey);
+            }
+            this.clearRelayedAgentPresenceTimer(room, entry.ClientID);
+            room.ProtectedAgentClientIDs.delete(entry.ClientID);
+            if (room.Awareness.getStates().has(entry.ClientID)) {
+                awarenessProtocol.removeAwarenessStates(room.Awareness, [entry.ClientID], 'agent-presence');
+                const postRemoveClock = room.Awareness.meta.get(entry.ClientID)?.clock ?? 0;
+                entry.Clock = this.recordAgentClientClockHighWater(
+                    roomKey,
+                    entry.ClientID,
+                    entry.Clock + 1,
+                    highWater + 1,
+                    postRemoveClock
+                );
+                return;
+            }
+        }
+        const roomClock = room?.Awareness.meta.get(entry.ClientID)?.clock ?? 0;
+        entry.Clock = Math.max(entry.Clock, roomClock, highWater) + 1;
+        this.recordAgentClientClockHighWater(roomKey, entry.ClientID, entry.Clock);
+        const removalBytes = this.encodeAgentAwarenessUpdate(entry.ClientID, entry.Clock, 'null');
+        this.publishAgentAwarenessRelay(artifactId, removalBytes);
+    }
+
+    private scheduleAgentHardTtl(
+        roomKey: string,
+        artifactId: string,
+        presenceKey: string,
+        entry: AgentRoomPresenceEntry
+    ): void {
+        if (entry.TtlTimer) {
+            clearTimeout(entry.TtlTimer);
+        }
+        entry.TtlTimer = setTimeout(() => {
+            entry.TtlTimer = null;
+            this.removeServerAgentPresenceEntry(roomKey, artifactId, presenceKey, entry);
+        }, this._agentPresenceTtlMs);
+        (entry.TtlTimer as { unref?: () => void }).unref?.();
+    }
+
+    private scheduleAgentWorkingDecay(
+        roomKey: string,
+        artifactId: string,
+        presenceKey: string,
+        entry: AgentRoomPresenceEntry
+    ): void {
+        if (entry.DecayTimer) {
+            clearTimeout(entry.DecayTimer);
+            entry.DecayTimer = null;
+        }
+        if (entry.LastEvent.Phase === 'working' || entry.LastEvent.Phase === 'enter') {
+            entry.DecayTimer = setTimeout(() => {
+                entry.DecayTimer = null;
+                if (!this.isAgentPresenceEntryActive(roomKey, presenceKey, entry)) {
+                    return;
+                }
+                const settledEvent: ArtifactAgentPresenceEvent = {
+                    ...entry.LastEvent,
+                    Phase: 'settled',
+                    TimestampMs: Date.now()
+                };
+                this.broadcastAgentAwarenessEntry(roomKey, artifactId, entry, settledEvent);
+            }, this._agentPresenceDecayMs);
+            (entry.DecayTimer as { unref?: () => void }).unref?.();
+        }
+    }
+
+    protected applyServerAgentPresenceEvent(evt: ArtifactAgentPresenceEvent): void {
+        const roomKey = evt.ArtifactID.trim().toLowerCase();
+        const presenceKey = evt.AgentPresenceKey.trim();
+        if (!roomKey || !presenceKey) {
+            return;
+        }
+
+        const room = this._rooms.get(roomKey);
+        const detachedKey = this.buildDetachedPresenceKey(roomKey, presenceKey);
+        let entry = room ? room.AgentPresenceEntries.get(presenceKey) : this._detachedAgentPresence.get(detachedKey)?.Entry;
+
+        if (!entry && room) {
+            const detached = this._detachedAgentPresence.get(detachedKey);
+            if (detached) {
+                this._detachedAgentPresence.delete(detachedKey);
+                entry = detached.Entry;
+                room.ProtectedAgentClientIDs.add(entry.ClientID);
+                room.AgentPresenceEntries.set(presenceKey, entry);
+            }
+        }
+
+        if (!entry) {
+            if (evt.Phase === 'exit') {
+                return;
+            }
+            const clientId = this.pickAvailableAgentAwarenessClientId(presenceKey, room);
+            const roomMetaClock = room?.Awareness.meta.get(clientId)?.clock ?? 0;
+            const highWaterClock = this.recordAgentClientClockHighWater(roomKey, clientId, roomMetaClock);
+            entry = {
+                ClientID: clientId,
+                Clock: highWaterClock,
+                LastEvent: evt,
+                LastBroadcastMs: 0,
+                PendingWorkingEvent: null,
+                ThrottleTimer: null,
+                DecayTimer: null,
+                TtlTimer: null,
+                ExitGraceTimer: null
+            };
+            if (room) {
+                room.ProtectedAgentClientIDs.add(clientId);
+                room.AgentPresenceEntries.set(presenceKey, entry);
+            } else {
+                this._detachedAgentPresence.set(detachedKey, {
+                    RoomKey: roomKey,
+                    ArtifactID: evt.ArtifactID,
+                    PresenceKey: presenceKey,
+                    Entry: entry
+                });
+            }
+        }
+
+        if (entry.ExitGraceTimer) {
+            clearTimeout(entry.ExitGraceTimer);
+            entry.ExitGraceTimer = null;
+        }
+
+        if (evt.Phase === 'exit') {
+            if (entry.ThrottleTimer) {
+                clearTimeout(entry.ThrottleTimer);
+                entry.ThrottleTimer = null;
+            }
+            entry.PendingWorkingEvent = null;
+            if (entry.DecayTimer) {
+                clearTimeout(entry.DecayTimer);
+                entry.DecayTimer = null;
+            }
+            if (entry.TtlTimer) {
+                clearTimeout(entry.TtlTimer);
+                entry.TtlTimer = null;
+            }
+            if (this._agentPresenceExitGraceMs <= 0) {
+                this.removeServerAgentPresenceEntry(roomKey, evt.ArtifactID, presenceKey, entry);
+                return;
+            }
+            const settledBeforeExit: ArtifactAgentPresenceEvent = {
+                ...entry.LastEvent,
+                Phase: 'settled',
+                TimestampMs: Date.now()
+            };
+            this.broadcastAgentAwarenessEntry(roomKey, evt.ArtifactID, entry, settledBeforeExit);
+            entry.ExitGraceTimer = setTimeout(() => {
+                entry!.ExitGraceTimer = null;
+                this.removeServerAgentPresenceEntry(roomKey, evt.ArtifactID, presenceKey, entry!);
+            }, this._agentPresenceExitGraceMs);
+            (entry.ExitGraceTimer as { unref?: () => void }).unref?.();
+            return;
+        }
+
+        this.scheduleAgentHardTtl(roomKey, evt.ArtifactID, presenceKey, entry);
+
+        if (evt.Phase === 'working' && this._agentPresenceThrottleMs > 0) {
+            const elapsed = Date.now() - entry.LastBroadcastMs;
+            if (elapsed < this._agentPresenceThrottleMs) {
+                entry.PendingWorkingEvent = evt;
+                if (!entry.ThrottleTimer) {
+                    const delay = Math.max(1, this._agentPresenceThrottleMs - elapsed);
+                    entry.ThrottleTimer = setTimeout(() => {
+                        entry!.ThrottleTimer = null;
+                        const pending = entry!.PendingWorkingEvent;
+                        entry!.PendingWorkingEvent = null;
+                        if (pending && this.isAgentPresenceEntryActive(roomKey, presenceKey, entry!)) {
+                            this.broadcastAgentAwarenessEntry(roomKey, evt.ArtifactID, entry!, pending);
+                            this.scheduleAgentWorkingDecay(roomKey, evt.ArtifactID, presenceKey, entry!);
+                        }
+                    }, delay);
+                    (entry.ThrottleTimer as { unref?: () => void }).unref?.();
+                }
+                return;
+            }
+        }
+
+        if (entry.ThrottleTimer) {
+            clearTimeout(entry.ThrottleTimer);
+            entry.ThrottleTimer = null;
+        }
+        entry.PendingWorkingEvent = null;
+        this.broadcastAgentAwarenessEntry(roomKey, evt.ArtifactID, entry, evt);
+        this.scheduleAgentWorkingDecay(roomKey, evt.ArtifactID, presenceKey, entry);
+    }
+
     private ensureGlobalMutationListenerRegistered(): void {
         this.ensureLiveMutationHookRegistered();
+        this.ensureLiveContentReaderHookRegistered();
+        this.ensureAgentPresenceHookRegistered();
         if (this._globalMutationSub) {
             return;
         }
@@ -3817,7 +4569,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
 
                 this._wss.handleUpgrade(req, socket, head, (ws) => {
-                    this.attachClientToRoom(room!, ws, auth.User, effectiveCanEdit, auth.ApiKeyHash);
+                    this.attachClientToRoom(
+                        room!,
+                        ws,
+                        auth.User,
+                        effectiveCanEdit,
+                        auth.ApiKeyHash,
+                        perms.Source === 'Owner'
+                    );
                 });
             } finally {
                 const remaining = (this._pendingUpgradesByArtifact.get(roomKey) ?? 1) - 1;
@@ -3944,7 +4703,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             },
             AwarenessUpdateListener: (changes, origin) => {
                 this.onRoomAwarenessUpdate(room, changes, origin);
-            }
+            },
+            ProtectedAgentClientIDs: new Set<number>(),
+            AgentPresenceEntries: new Map<string, AgentRoomPresenceEntry>(),
+            RelayedAgentPresenceTimers: new Map<number, ReturnType<typeof setTimeout>>()
         };
 
         try {
@@ -3958,6 +4720,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             });
 
             this._rooms.set(key, room);
+            this.adoptDetachedAgentPresenceForRoom(key, room);
 
             const localHydrateClock = Y.decodeStateVector(Y.encodeStateVector(room.Doc)).get(room.Doc.clientID) ?? 0;
             if (overwriteStaleWorkingState) {
@@ -4452,7 +5215,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         ws: WsClient,
         user: UserInfo,
         canEdit: boolean,
-        apiKeyHash?: string
+        apiKeyHash?: string,
+        isOwner: boolean = false
     ): void {
         if (room.IdleDisposeTimer) {
             clearTimeout(room.IdleDisposeTimer);
@@ -4464,6 +5228,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             User: user,
             ArtifactID: room.ArtifactID,
             CanEdit: canEdit,
+            IsOwner: isOwner,
             ApiKeyHash: apiKeyHash,
             ControlledClientIDs: new Set(),
             Alive: true,
@@ -4579,6 +5344,175 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return false;
     }
 
+    /**
+     * Validates an incoming Yjs write update against Markdown heading locks, Slide Deck locks,
+     * and Spreadsheet ProtectedRanges by simulating the update against a cloned doc snapshot.
+     */
+    private isIncomingUpdateBlockedByLocks(
+        room: CollaborationRoom,
+        conn: CollaborationClientConnection,
+        incomingUpdateBytes: Uint8Array
+    ): { Allowed: boolean; Reason?: string } {
+        if (incomingUpdateBytes.byteLength === 0) {
+            return { Allowed: true };
+        }
+        const currentContent = this.extractRoomSerializedContent(room.Doc);
+        const probeDoc = new Y.Doc();
+        try {
+            Y.applyUpdate(probeDoc, Y.encodeStateAsUpdate(room.Doc));
+            Y.applyUpdate(probeDoc, incomingUpdateBytes);
+            const nextContent = this.extractRoomSerializedContent(probeDoc);
+            return this.validateContentMutationAgainstLocks(
+                currentContent,
+                nextContent,
+                conn.User?.ID,
+                conn.IsOwner === true
+            );
+        } catch {
+            return { Allowed: true };
+        } finally {
+            probeDoc.destroy();
+        }
+    }
+
+    /**
+     * Enforces protected regions across Documents (`<!-- mj-lock -->`), Slide Decks (`Locked` /
+     * `AllowEditors`), and Spreadsheets (`ProtectedRanges`) (`§6.2`).
+     */
+    private validateContentMutationAgainstLocks(
+        currentContent: string,
+        nextContent: string,
+        actorUserId?: string | null,
+        isOwner: boolean = false
+    ): { Allowed: boolean; Reason?: string } {
+        if (!currentContent || currentContent === nextContent) {
+            return { Allowed: true };
+        }
+        const effectiveOwnerId = isOwner && actorUserId ? actorUserId : '__artifact_owner__';
+        const trimmedCurrent = currentContent.trim();
+
+        if (trimmedCurrent.startsWith('{')) {
+            try {
+                const parsedCurrent = JSON.parse(trimmedCurrent) as Record<string, unknown>;
+                if (Array.isArray(parsedCurrent.Slides)) {
+                    const prevDeck = SlideDeckEngine.Instance.ParseDeckSpec(currentContent);
+                    const nextDeck = SlideDeckEngine.Instance.ParseDeckSpec(nextContent);
+                    const nextSlidesById = new Map(nextDeck.Slides.map((s) => [s.SlideID, s]));
+                    for (const prevSlide of prevDeck.Slides) {
+                        const nextSlide = nextSlidesById.get(prevSlide.SlideID);
+                        const slideCheck = SlideDeckEngine.Instance.CanActorEditSlide(
+                            prevSlide,
+                            actorUserId,
+                            effectiveOwnerId,
+                            true
+                        );
+                        if (!slideCheck.Allowed) {
+                            if (!nextSlide || JSON.stringify(prevSlide) !== JSON.stringify(nextSlide)) {
+                                return { Allowed: false, Reason: slideCheck.Reason };
+                            }
+                            continue;
+                        }
+                        if (prevSlide.Regions.length > 0 && nextSlide) {
+                            const nextRegionsById = new Map(nextSlide.Regions.map((r) => [r.RegionID, r]));
+                            for (const prevRegion of prevSlide.Regions) {
+                                const regionCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+                                    prevSlide,
+                                    prevRegion,
+                                    actorUserId,
+                                    effectiveOwnerId,
+                                    true
+                                );
+                                if (!regionCheck.Allowed) {
+                                    const nextRegion = nextRegionsById.get(prevRegion.RegionID);
+                                    if (!nextRegion || JSON.stringify(prevRegion) !== JSON.stringify(nextRegion)) {
+                                        return { Allowed: false, Reason: regionCheck.Reason };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return { Allowed: true };
+                }
+
+                if (Array.isArray(parsedCurrent.Worksheets)) {
+                    const prevWb = SpreadsheetEngine.Instance.ParseWorkbook(currentContent);
+                    const nextWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
+                    const nextSheetsById = new Map<string, WorksheetSpec>(
+                        nextWb.Worksheets.map((s) => [s.SheetID, s])
+                    );
+                    const editCtx = {
+                        UserID: actorUserId ?? undefined,
+                        OwnerUserID: effectiveOwnerId,
+                        IsEditor: true
+                    };
+                    for (const prevSheet of prevWb.Worksheets) {
+                        const rules = prevSheet.ProtectedRanges ?? [];
+                        if (rules.length === 0) {
+                            continue;
+                        }
+                        const nextSheet = nextSheetsById.get(prevSheet.SheetID);
+                        if (!nextSheet) {
+                            if (!isOwner) {
+                                return {
+                                    Allowed: false,
+                                    Reason: `Cannot delete worksheet '${prevSheet.Name}' containing protected ranges.`
+                                };
+                            }
+                            continue;
+                        }
+                        const nextRulesById = new Map((nextSheet.ProtectedRanges ?? []).map((r) => [r.RangeID, r]));
+                        const normActor = actorUserId ? NormalizeUUID(actorUserId) : '';
+                        for (const rule of rules) {
+                            const matchingNextRule = nextRulesById.get(rule.RangeID);
+                            if (
+                                (!matchingNextRule ||
+                                    matchingNextRule.Range !== rule.Range ||
+                                    Boolean(matchingNextRule.AllowEditors) !== Boolean(rule.AllowEditors)) &&
+                                !isOwner &&
+                                NormalizeUUID(rule.LockedByUserID) !== normActor
+                            ) {
+                                return {
+                                    Allowed: false,
+                                    Reason: `Cannot alter or remove protected range '${rule.Range}' without owner permission.`
+                                };
+                            }
+                        }
+
+                        const allAddresses = new Set<string>([
+                            ...Object.keys(prevSheet.Cells ?? {}),
+                            ...Object.keys(nextSheet.Cells ?? {})
+                        ]);
+                        for (const addr of allAddresses) {
+                            const prevCell = prevSheet.Cells?.[addr];
+                            const nextCell = nextSheet.Cells?.[addr];
+                            if (JSON.stringify(prevCell ?? null) === JSON.stringify(nextCell ?? null)) {
+                                continue;
+                            }
+                            const perm = SpreadsheetEngine.Instance.CheckCellWritePermission(prevSheet, addr, editCtx);
+                            if (!perm.Allowed) {
+                                return { Allowed: false, Reason: perm.Reason };
+                            }
+                        }
+                    }
+                    return { Allowed: true };
+                }
+            } catch {
+                // Fall through to markdown lock validation if content isn't valid structured JSON
+            }
+        }
+
+        const docCheck = DocumentLiveBlockEngine.Instance.ValidateDocumentEditAgainstLocks(
+            currentContent,
+            nextContent,
+            actorUserId,
+            effectiveOwnerId,
+            true
+        );
+        return docCheck.Allowed
+            ? { Allowed: true }
+            : { Allowed: false, Reason: docCheck.ViolationReason };
+    }
+
     private onClientMessage(
         room: CollaborationRoom,
         conn: CollaborationClientConnection,
@@ -4612,6 +5546,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     if (isWriteFrame) {
                         const incomingUpdateBytes = decoding.readVarUint8Array(subDecoder);
                         if (this.shouldSuppressDuplicateReconnectUpdate(room, conn, incomingUpdateBytes)) {
+                            return;
+                        }
+                        const lockCheck = this.isIncomingUpdateBlockedByLocks(room, conn, incomingUpdateBytes);
+                        if (!lockCheck.Allowed) {
+                            this.sendControlFrame(conn.Socket, {
+                                action: 'readonly-rejected',
+                                message: lockCheck.Reason || 'Write rejected: region is protected.'
+                            });
+                            this.sendControlFrame(conn.Socket, {
+                                action: 'room-reset',
+                                payload: BytesToBase64(Y.encodeStateAsUpdate(room.Doc)),
+                                roomEpoch: room.RoomEpoch,
+                                versionId: room.BaseVersionID ?? undefined,
+                                versionNumber: room.BaseVersionNumber || undefined
+                            });
                             return;
                         }
                         room.LastModifiedByUser = conn.User;
@@ -4690,7 +5639,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const clock = decoding.readVarUint(decoder);
             const rawStateJson = decoding.readVarString(decoder);
 
-            if (clientID === room.Awareness.clientID) {
+            if (clientID === room.Awareness.clientID || room.ProtectedAgentClientIDs.has(clientID)) {
                 continue;
             }
 
@@ -4705,28 +5654,56 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 continue;
             }
 
-            const parsedState = JSON.parse(rawStateJson) as Record<string, unknown> | null;
+            const parsedState = JSON.parse(rawStateJson) as AwarenessJsonValue;
             if (parsedState === null) {
                 if (!conn.ControlledClientIDs.has(clientID)) {
                     continue;
                 }
                 accepted.push({ clientID, clock, stateJson: 'null' });
-            } else if (typeof parsedState === 'object' && !Array.isArray(parsedState)) {
-                const rawUser =
-                    parsedState['user'] &&
-                    typeof parsedState['user'] === 'object' &&
-                    !Array.isArray(parsedState['user'])
-                        ? (parsedState['user'] as Record<string, unknown>)
-                        : {};
-                const verifiedState: Record<string, unknown> = {
-                    ...parsedState,
+            } else if (isAwarenessJsonObject(parsedState)) {
+                const {
+                    isAgent: _ignoredTopIsAgent,
+                    agentPresenceKey: _ignoredTopKey,
+                    agentName: _ignoredTopAgentName,
+                    agentRunId: _ignoredTopRunId,
+                    actingForUserId: _ignoredTopActingForId,
+                    actingForUserName: _ignoredTopActingForName,
+                    actingForUserEmail: _ignoredTopActingForEmail,
+                    agentPhase: _ignoredTopPhase,
+                    toolName: _ignoredTopTool,
+                    actionSummary: _ignoredTopSummary,
+                    agentLocation: _ignoredTopLocation,
+                    ...safeTopLevelState
+                } = parsedState;
+                const candidateUser = parsedState['user'];
+                const rawUser: AwarenessJsonObject = isAwarenessJsonObject(candidateUser) ? candidateUser : {};
+                const {
+                    isAgent: _ignoredUserIsAgent,
+                    agentPresenceKey: _ignoredUserKey,
+                    agentName: _ignoredUserAgentName,
+                    agentRunId: _ignoredUserRunId,
+                    actingForUserId: _ignoredUserActingForId,
+                    actingForUserName: _ignoredUserActingForName,
+                    actingForUserEmail: _ignoredUserActingForEmail,
+                    agentPhase: _ignoredUserPhase,
+                    toolName: _ignoredUserTool,
+                    actionSummary: _ignoredUserSummary,
+                    agentLocation: _ignoredUserLocation,
+                    color: rawUserColor,
+                    ...safeRawUser
+                } = rawUser;
+                const sanitizedColor = rawUserColor !== undefined ? sanitizeAwarenessColor(rawUserColor) : undefined;
+                const verifiedState: AwarenessJsonObject = {
+                    ...safeTopLevelState,
                     user: {
-                        ...rawUser,
+                        ...safeRawUser,
+                        ...(sanitizedColor !== undefined ? { color: sanitizedColor } : {}),
                         userId: conn.User.ID,
                         userName: conn.User.Name,
                         name: conn.User.Name,
                         email: conn.User.Email || undefined,
-                        canEdit: conn.CanEdit
+                        canEdit: conn.CanEdit,
+                        isAgent: false
                     }
                 };
                 conn.ControlledClientIDs.add(clientID);
@@ -4909,6 +5886,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         } else if (msg.MessageType === 'awareness' && msg.PayloadBase64) {
             const awarenessBytes = Base64ToBytes(msg.PayloadBase64);
             if (awarenessBytes.byteLength > 0) {
+                this.syncProtectedAgentClientIdsFromRelayAwareness(room, awarenessBytes);
                 awarenessProtocol.applyAwarenessUpdate(room.Awareness, awarenessBytes, 'relay');
             }
         } else if (msg.MessageType === 'permission-revoked') {
@@ -5159,6 +6137,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             clearTimeout(room.WorkingStateTimer);
             room.WorkingStateTimer = null;
         }
+        for (const timer of room.RelayedAgentPresenceTimers.values()) {
+            clearTimeout(timer);
+        }
+        room.RelayedAgentPresenceTimers.clear();
+        for (const entry of room.AgentPresenceEntries.values()) {
+            this.clearAgentPresenceTimers(entry);
+        }
+        room.AgentPresenceEntries.clear();
+        room.ProtectedAgentClientIDs.clear();
         if (room.UnsubscribeRelay) {
             try {
                 room.UnsubscribeRelay();
@@ -7340,6 +8327,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             setWorkbookMeta('Title', wb.Title);
             setWorkbookMeta('ActiveSheetID', wb.ActiveSheetID);
             setWorkbookMeta('NamedRanges', JSON.stringify(wb.NamedRanges ?? []));
+            if (typeof wb.PreferredObjectsPaneHeightPx === 'number' && Number.isFinite(wb.PreferredObjectsPaneHeightPx)) {
+                setWorkbookMeta('PreferredObjectsPaneHeightPx', String(Math.round(wb.PreferredObjectsPaneHeightPx)));
+            } else if (
+                workbookMeta.has('PreferredObjectsPaneHeightPx') &&
+                (!baselineEntries?.Meta || baselineEntries.Meta.has('PreferredObjectsPaneHeightPx'))
+            ) {
+                workbookMeta.delete('PreferredObjectsPaneHeightPx');
+            }
 
             const validSheetIds = new Set<string>();
             const validCellCoordKeys = new Set<string>();
@@ -7686,6 +8681,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 ['ActiveSheetID', wb.ActiveSheetID],
                 ['NamedRanges', JSON.stringify(wb.NamedRanges ?? [])]
             ]);
+            if (typeof wb.PreferredObjectsPaneHeightPx === 'number' && Number.isFinite(wb.PreferredObjectsPaneHeightPx)) {
+                meta.set('PreferredObjectsPaneHeightPx', String(Math.round(wb.PreferredObjectsPaneHeightPx)));
+            }
             const items = new Map<string, string>();
             const cells = new Map<string, string>();
             for (const ws of wb.Worksheets) {
@@ -7759,12 +8757,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     }
                     const now = new Date().toISOString();
                     const activeId = workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID;
+                    const prefPaneRaw = workbookMeta.get('PreferredObjectsPaneHeightPx');
+                    const prefPaneHeight = prefPaneRaw ? Number(prefPaneRaw) : NaN;
                     const wb: WorkbookSpec = SpreadsheetEngine.Instance.NormalizeWorkbook({
                         WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
                         Title: workbookMeta.get('Title') || 'Workbook',
                         ActiveSheetID: activeId,
                         Worksheets: worksheets,
                         NamedRanges: namedRanges,
+                        ...(Number.isFinite(prefPaneHeight) && prefPaneHeight > 0
+                            ? { PreferredObjectsPaneHeightPx: Math.round(prefPaneHeight) }
+                            : {}),
                         CreatedAt: now,
                         UpdatedAt: now
                     });

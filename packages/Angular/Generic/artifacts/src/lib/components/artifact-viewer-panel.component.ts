@@ -9,6 +9,10 @@ import {
   BuildArtifactVersionConfigurationWithPreview,
   BuildSvgThumbnailDataUrl,
   ConversationEngine,
+  CreateGuestShareLinkOperation,
+  GetConnectedDriveLinkFromConfig,
+  GetGuestShareLinksFromConfig,
+  MarkGuestShareLinkRevokedInConfig,
   MergeArtifactVersionPreviewConfig,
   MJArtifactEntity,
   MJArtifactTypeEntity,
@@ -22,9 +26,13 @@ import {
   MJConversationEntity,
   ParseArtifactVersionConfiguration,
   ResolveArtifactTypeThumbnailPolicy,
+  RevokeGuestShareLinkOperation,
+  UpsertGuestShareLinkInConfig,
   type ArtifactPreviewSnapshot,
   type ArtifactTypeThumbnailPolicy,
+  type ConnectedDriveLinkMetadata,
   type ConversationScope,
+  type GuestShareLinkRecord,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
@@ -238,6 +246,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   @Input() canShare?: boolean; // Whether user can share this artifact
   @Input() canEdit = false; // Default read-only unless explicitly granted edit permission
   @Input() IsMaximized: boolean = false;
+  @Input() HasConnectedDriveLink = false;
 
   /** @deprecated Use {@link IsMaximized}. */
   @Input() set isMaximized(value: boolean) {
@@ -288,6 +297,11 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   @Output() shareRequested = this.ShareRequested; // Emits artifactId when share is clicked
   @Output() VersionSaved = new EventEmitter<ArtifactVersionSavedEvent>();
+  @Output() ConnectedDriveSyncRequested = new EventEmitter<{
+    artifactId: string;
+    versionId?: string;
+    direction: 'push' | 'pull';
+  }>();
   @Output() MaximizeToggled = new EventEmitter<void>();
 
   /**
@@ -2881,5 +2895,158 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   public GetCurrentStateSnapshot(): DataSnapshot | null {
     return this.PluginViewer?.pluginInstance?.GetCurrentStateSnapshot() ?? null;
+  }
+
+  public ShowGuestShareModal = false;
+  public GuestShareLabel = '';
+  public GuestShareExpiresHours = 168;
+  public GuestShareBusy = false;
+  public GuestShareError = '';
+  public LatestCreatedGuestShareUrl = '';
+
+  public get ActiveConnectedDriveLink(): ConnectedDriveLinkMetadata | null {
+    return GetConnectedDriveLinkFromConfig(this.artifactVersion?.Configuration);
+  }
+
+  public get ShowConnectedDriveSyncControls(): boolean {
+    return Boolean(this.HasConnectedDriveLink || this.ActiveConnectedDriveLink);
+  }
+
+  public get ActiveGuestShareLinks(): GuestShareLinkRecord[] {
+    return GetGuestShareLinksFromConfig(this.artifactVersion?.Configuration).filter(
+      (link) => !link.RevokedAt,
+    );
+  }
+
+  public OnConnectedDriveSync(direction: 'push' | 'pull'): void {
+    if (!this.artifactId) {
+      return;
+    }
+    this.ConnectedDriveSyncRequested.emit({
+      artifactId: this.artifactId,
+      versionId: this.artifactVersion?.ID,
+      direction,
+    });
+  }
+
+  public OpenGuestShareModal(): void {
+    this.ShowGuestShareModal = true;
+    this.GuestShareError = '';
+    this.LatestCreatedGuestShareUrl = '';
+    this.cdr.markForCheck();
+  }
+
+  public CloseGuestShareModal(): void {
+    this.ShowGuestShareModal = false;
+    this.GuestShareError = '';
+    this.cdr.markForCheck();
+  }
+
+  public async CreateGuestShareLink(): Promise<void> {
+    if (!this.artifactId || this.GuestShareBusy) {
+      return;
+    }
+    this.GuestShareBusy = true;
+    this.GuestShareError = '';
+    this.cdr.markForCheck();
+    try {
+      const op = new CreateGuestShareLinkOperation();
+      const res = await op.Execute(
+        {
+          ArtifactID: this.artifactId,
+          VersionID: this.artifactVersion?.ID ?? null,
+          ExpiresInHours: this.GuestShareExpiresHours,
+          Label: this.GuestShareLabel.trim() || null,
+        },
+        { provider: this.ProviderToUse },
+      );
+      if (!res.Success || !res.Output) {
+        this.GuestShareError =
+          res.ErrorMessage ||
+          'Guest share links require all Live data blocks to be Frozen first.';
+        return;
+      }
+      const created = res.Output;
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      this.LatestCreatedGuestShareUrl = `${origin}${created.ShareUrlPath}`;
+      if (this.artifactVersion) {
+        this.artifactVersion.Configuration = UpsertGuestShareLinkInConfig(
+          this.artifactVersion.Configuration,
+          {
+            LinkID: created.LinkID,
+            ArtifactID: created.ArtifactID,
+            VersionID: created.VersionID,
+            VersionNumber: created.VersionNumber,
+            ShareMode: 'Frozen',
+            CreatedByUserID: this.CurrentUser?.ID ?? '',
+            CreatedAt: new Date().toISOString(),
+            ExpiresAt: created.ExpiresAt,
+            Label: created.Label,
+          },
+        );
+      }
+      this.GuestShareLabel = '';
+      this.CopyGuestShareUrl(this.LatestCreatedGuestShareUrl);
+    } catch (err) {
+      this.GuestShareError =
+        err instanceof Error ? err.message : 'Failed to create guest share link.';
+    } finally {
+      this.GuestShareBusy = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public async RevokeGuestShareLink(link: GuestShareLinkRecord): Promise<void> {
+    if (!this.artifactId || !this.artifactVersion?.ID || this.GuestShareBusy) {
+      return;
+    }
+    this.GuestShareBusy = true;
+    this.GuestShareError = '';
+    this.cdr.markForCheck();
+    try {
+      const op = new RevokeGuestShareLinkOperation();
+      const res = await op.Execute(
+        {
+          ArtifactID: this.artifactId,
+          VersionID: this.artifactVersion.ID,
+          LinkID: link.LinkID,
+        },
+        { provider: this.ProviderToUse },
+      );
+      if (!res.Success || !res.Output?.Revoked) {
+        this.GuestShareError = res.ErrorMessage || 'Failed to revoke guest link.';
+        return;
+      }
+      const revoked = MarkGuestShareLinkRevokedInConfig(
+        this.artifactVersion.Configuration,
+        link.LinkID,
+        this.CurrentUser?.ID ?? '',
+      );
+      if (revoked.Found) {
+        this.artifactVersion.Configuration = revoked.UpdatedConfigJson;
+      }
+      this.notificationService.CreateSimpleNotification(
+        'Guest share link revoked.',
+        'success',
+        2500,
+      );
+    } catch (err) {
+      this.GuestShareError =
+        err instanceof Error ? err.message : 'Failed to revoke guest share link.';
+    } finally {
+      this.GuestShareBusy = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public CopyGuestShareUrl(url: string): void {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText && url) {
+      void navigator.clipboard.writeText(url).catch(() => undefined);
+    }
+    this.notificationService.CreateSimpleNotification(
+      'Frozen guest share link copied to clipboard.',
+      'success',
+      2500,
+    );
   }
 }

@@ -148,6 +148,14 @@ export class AgentPreExecutionRAG {
      */
     public async Execute(params: AgentPreExecutionRAGParams): Promise<AgentPreExecutionRAGResult | null> {
         if (!params.agent?.ID) return null;
+        if (typeof SearchEngineBase.Instance.HasActiveAgentScopes === 'function') {
+            const hasScopes = await SearchEngineBase.Instance.HasActiveAgentScopes(
+                params.agent.ID,
+                'PreExecution',
+                params.contextUser
+            );
+            if (!hasScopes) return null;
+        }
         await SearchEngineBase.Instance.Config(false, params.contextUser);
 
         // 1. Load active PreExecution/Both scope rows for this agent (sorted by priority)

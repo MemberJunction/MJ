@@ -1,7 +1,11 @@
 import {
+  ChangeDetectionStrategy,
   Component,
   ElementRef,
+  EventEmitter,
   Input,
+  NgZone,
+  Output,
   OnInit,
   OnChanges,
   OnDestroy,
@@ -14,8 +18,8 @@ import {
   inject,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { LogError, RunView, UserInfo, type DataSnapshot, type IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { CompositeKey, LogError, RunView, UserInfo, type DataSnapshot, type IMetadataProvider } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateJsonSnapshot } from '../../snapshot-helpers';
 import {
@@ -48,6 +52,7 @@ import {
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { SlidesVersionDiffComponent } from '../version-diff/slides-version-diff.component';
+import { ARTIFACT_AI_ASSISTANT_ENABLED, RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
@@ -65,6 +70,23 @@ import {
   type PptxExportPackage,
 } from '../../services/slide-deck-export.service';
 import { EscapeHtml } from '../previews/office-preview.logic';
+import type { ContextMenuItem } from '../context-menu/context-menu.types';
+import {
+  ComputeElementContextMenuAnchor,
+  IsKeyboardContextMenuShortcut,
+  IsNativeContextMenuTarget,
+  ShouldBypassCustomContextMenu,
+  TouchContextMenuMonitor,
+} from '../context-menu/context-menu-position.util';
+import {
+  BuildSlidesContextMenu,
+  ComputeSlidesMenuAriaLabel,
+  SerializeSlideToMarkdown,
+  type SlidesContextMenuCommand,
+  type SlidesContextMenuSnapshot,
+  type SlidesContextMenuZone,
+  type SlideTransitionKind,
+} from './context-menus/slides-context-menu.helper';
 
 /**
  * Workspace mode for the MJ Slides (`Presentation`) artifact editor (`§ 5`).
@@ -110,7 +132,9 @@ export type SlidesToolbarItemKey =
   | 'theme'
   | 'md-to-deck'
   | 'export-pptx'
-  | 'export-pdf';
+  | 'export-pdf'
+  | 'ask-ai'
+  | 'lock-slide';
 
 export const DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS: readonly SlidesToolbarItemKey[] = [
   'present',
@@ -138,6 +162,7 @@ export interface ResolvedSlidesToolbarItem {
 @Component({
   selector: 'mj-slide-deck-artifact-viewer',
   standalone: false,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
       class="mj-slides-shell"
@@ -290,7 +315,7 @@ export interface ResolvedSlidesToolbarItem {
           </div>
 
           <div class="mj-slides-collaborators" data-testid="slides-collaborator-list">
-            @for (peer of Collaborators; track peer.ClientID) {
+            @for (peer of HumanCollaborators; track peer.ClientID) {
               <span
                 class="mj-slides-peer-avatar"
                 [title]="peer.Name + (peer.ActiveBlockID ? ' · ' + peer.ActiveBlockID : '')"
@@ -299,6 +324,11 @@ export interface ResolvedSlidesToolbarItem {
               </span>
             }
           </div>
+          <mj-artifact-agent-presence-bar
+            [Collaborators]="Collaborators"
+            ActiveDomain="slides"
+            (JumpToAgentLocation)="JumpToAgentSlideLocation($event)"
+          ></mj-artifact-agent-presence-bar>
 
           @for (item of PinnedRightToolbarItems; track item.Key) {
             <button
@@ -315,6 +345,32 @@ export interface ResolvedSlidesToolbarItem {
                 <span>{{ item.ShortLabel }}</span>
               }
             </button>
+          }
+
+          @if (IsEditable && WorkspaceMode === 'edit') {
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              [class.active]="!!ActiveSlide.Locked"
+              (click)="ToggleCurrentSlideLock()"
+              [title]="ActiveSlide.Locked ? 'Unlock current slide' : 'Lock current slide to owner-only'"
+              data-testid="slides-lock-slide-quick-btn"
+            >
+              <i class="fa-solid" [ngClass]="ActiveSlide.Locked ? 'fa-lock' : 'fa-lock-open'"></i>
+              <span>{{ ActiveSlide.Locked ? 'Locked' : 'Lock' }}</span>
+            </button>
+            @if (IsAiAssistantEnabled) {
+              <button
+                type="button"
+                class="mj-slides-tool-btn primary"
+                (click)="OpenAskAiForPresentation()"
+                title="Open slide-in AI Assistant for this slide"
+                data-testid="slides-ask-ai-quick-btn"
+              >
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Ask AI</span>
+              </button>
+            }
           }
 
           @if (IsEditable) {
@@ -492,7 +548,7 @@ export interface ResolvedSlidesToolbarItem {
               type="button"
               class="mj-slides-tool-btn"
               (click)="PrevSlide()"
-              [disabled]="ActiveSlideIndex <= 0"
+              [disabled]="!CanNavigatePrevSlide"
               data-testid="present-prev-slide-btn"
             >
               <i class="fa-solid fa-chevron-left"></i> Prev
@@ -504,7 +560,7 @@ export interface ResolvedSlidesToolbarItem {
               type="button"
               class="mj-slides-tool-btn"
               (click)="NextSlide()"
-              [disabled]="ActiveSlideIndex >= ActiveDeckForDisplay.Slides.length - 1"
+              [disabled]="!CanNavigateNextSlide"
               data-testid="present-next-slide-btn"
             >
               Next <i class="fa-solid fa-chevron-right"></i>
@@ -525,7 +581,11 @@ export interface ResolvedSlidesToolbarItem {
       <div class="mj-slides-workspace-body">
         <!-- Left Slide Sorter / Filmstrip Rail -->
         @if (ShowFilmstrip && WorkspaceMode !== 'present') {
-          <aside class="mj-slides-filmstrip" data-testid="slides-filmstrip-rail">
+          <aside
+            class="mj-slides-filmstrip"
+            (contextmenu)="OnFilmstripEmptyContextMenu($event)"
+            data-testid="slides-filmstrip-rail"
+          >
             <div class="mj-slides-filmstrip-header">
               <span>Slide Sorter</span>
               <span class="mj-slides-badge">{{ Deck.AspectRatio }}</span>
@@ -535,20 +595,32 @@ export interface ResolvedSlidesToolbarItem {
                 <div
                   class="mj-slides-thumbnail-card"
                   [class.active]="slide.SlideID === ActiveSlide.SlideID"
+                  [class.hidden-slide]="!!slide.Hidden"
                   [class.dragging]="DraggingSlideID === slide.SlideID"
                   [class.drag-over]="DragOverSlideID === slide.SlideID"
                   [attr.draggable]="IsEditable"
+                  [attr.data-hidden-slide]="slide.Hidden ? 'true' : null"
                   (dragstart)="OnSlideDragStart(slide.SlideID, $event)"
                   (dragover)="OnSlideDragOver(slide.SlideID, $event)"
                   (dragleave)="OnSlideDragLeave(slide.SlideID)"
                   (drop)="OnSlideDrop(slide.SlideID, $event)"
                   (dragend)="OnSlideDragEnd()"
                   (click)="SelectSlide(slide.SlideID)"
+                  (contextmenu)="OnFilmstripSlideContextMenu($event, slide)"
                   [attr.data-testid]="'filmstrip-slide-' + slide.SlideID"
                 >
                   <div class="mj-slides-thumbnail-top">
                     <span class="mj-slides-thumb-number">{{ idx + 1 }}</span>
                     <span class="mj-slides-thumb-layout">{{ slide.Layout }}</span>
+                    @if (slide.Hidden) {
+                      <span
+                        class="mj-slides-thumb-hidden-badge"
+                        title="Skipped in Presentation mode"
+                        [attr.data-testid]="'filmstrip-hidden-badge-' + slide.SlideID"
+                      >
+                        <i class="fa-solid fa-eye-slash"></i>
+                      </span>
+                    }
                     @if (IsEditable && WorkspaceMode === 'edit') {
                       <div class="mj-slides-thumb-reorder" (click)="$event.stopPropagation()">
                         <button
@@ -644,6 +716,12 @@ export interface ResolvedSlidesToolbarItem {
             <!-- 16:9 Visual Slide Stage (used in Edit, Present, and Presenter View) -->
             <div class="mj-slides-stage-layout" [class.presenter-split]="WorkspaceMode === 'presenter'">
               <div class="mj-slides-canvas-wrapper">
+                @if (GetActiveSlideAgentPresence(); as slideAgent) {
+                  <mj-artifact-agent-region-indicator
+                    [Agent]="slideAgent"
+                    (JumpToAgent)="JumpToAgentSlideLocation($event)"
+                  ></mj-artifact-agent-region-indicator>
+                }
                 <section
                   class="mj-slide-canvas-stage"
                   [attr.data-layout]="DisplayedSlide.Layout"
@@ -656,6 +734,7 @@ export interface ResolvedSlidesToolbarItem {
                   [style.--deck-muted]="ActiveDeckForDisplay.Theme.MutedTextColor"
                   [style.--deck-heading-font]="ActiveDeckForDisplay.Theme.HeadingFont || 'Inter, system-ui, sans-serif'"
                   [style.--deck-body-font]="ActiveDeckForDisplay.Theme.BodyFont || 'Inter, system-ui, sans-serif'"
+                  (contextmenu)="OnSlideStageContextMenu($event)"
                   data-testid="slide-canvas-stage"
                 >
                   <!-- Master Slide Header -->
@@ -678,7 +757,7 @@ export interface ResolvedSlidesToolbarItem {
                   <div class="mj-slide-heading-zone">
                     <h1
                       class="mj-slide-title-editable"
-                      [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                      [attr.contenteditable]="CanEditSlideElements ? 'true' : 'false'"
                       (focus)="OnFocusSlideElement(DisplayedSlide.SlideID, 'title')"
                       (blur)="OnInlineSlideTitleBlur($event)"
                       (keydown.enter)="OnInlineHeadingEnter($event)"
@@ -688,7 +767,7 @@ export interface ResolvedSlidesToolbarItem {
                     @if (DisplayedSlide.Subtitle || (IsEditable && WorkspaceMode === 'edit')) {
                       <p
                         class="mj-slide-subtitle-editable"
-                        [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                        [attr.contenteditable]="CanEditSlideElements ? 'true' : 'false'"
                         (focus)="OnFocusSlideElement(DisplayedSlide.SlideID, 'subtitle')"
                         (blur)="OnInlineSlideSubtitleBlur($event)"
                         (keydown.enter)="OnInlineHeadingEnter($event)"
@@ -707,7 +786,9 @@ export interface ResolvedSlidesToolbarItem {
                       <div
                         class="mj-slide-region-card"
                         [class.active-region]="FocusedRegionID === region.RegionID"
+                        [class.mj-slide-region--agent-active]="IsRegionEditedByAgent(region.RegionID)"
                         (click)="FocusedRegionID = region.RegionID"
+                        (contextmenu)="OnSlideRegionContextMenu($event, region)"
                         [attr.data-region-kind]="region.Kind"
                         [attr.data-testid]="'slide-region-' + region.RegionID"
                       >
@@ -760,6 +841,17 @@ export interface ResolvedSlidesToolbarItem {
                                 [attr.data-testid]="'region-insert-sheet-embed-' + region.RegionID"
                               >
                                 <i class="fa-solid fa-chart-column"></i> + Sheet Chart/Range
+                              </button>
+
+                              <button
+                                type="button"
+                                class="mj-slides-mini-btn"
+                                [class.active]="!!region.Locked"
+                                (click)="ToggleRegionLock(region)"
+                                [title]="region.Locked ? 'Unlock region' : 'Lock region to owner-only'"
+                                [attr.data-testid]="'region-lock-btn-' + region.RegionID"
+                              >
+                                <i class="fa-solid" [ngClass]="region.Locked ? 'fa-lock' : 'fa-lock-open'"></i>
                               </button>
 
                               <button
@@ -965,19 +1057,19 @@ export interface ResolvedSlidesToolbarItem {
                           <div class="mj-slide-big-number-region" [attr.data-testid]="'slide-big-number-' + region.RegionID">
                             <div
                               class="mj-slide-big-number-value"
-                              [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                              [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                               (blur)="OnBigNumberFieldBlur(region, 'value', $event)"
                               [attr.data-testid]="'editable-big-number-value-' + region.RegionID"
                             >{{ region.BigNumberValue || '99.9%' }}</div>
                             <div
                               class="mj-slide-big-number-label"
-                              [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                              [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                               (blur)="OnBigNumberFieldBlur(region, 'label', $event)"
                             >{{ region.BigNumberLabel || 'Key Performance Indicator' }}</div>
                             @if (region.BigNumberDelta || (IsEditable && WorkspaceMode === 'edit')) {
                               <span
                                 class="mj-slide-big-number-delta"
-                                [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                                [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                                 (blur)="OnBigNumberFieldBlur(region, 'delta', $event)"
                               >{{ region.BigNumberDelta || '+12% YoY' }}</span>
                             }
@@ -986,13 +1078,13 @@ export interface ResolvedSlidesToolbarItem {
                           <blockquote class="mj-slide-quote-region">
                             <div
                               class="mj-slide-quote-text"
-                              [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                              [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                               (blur)="OnInlineRegionContentBlur(region, $event)"
                               [attr.data-testid]="'editable-region-content-' + region.RegionID"
                             >{{ region.MarkdownContent }}</div>
                             <cite
                               class="mj-slide-quote-cite"
-                              [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                              [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                               (blur)="OnQuoteAttributionBlur(region, $event)"
                             >— {{ region.QuoteAttribution || 'Executive Sponsor' }}</cite>
                           </blockquote>
@@ -1001,7 +1093,7 @@ export interface ResolvedSlidesToolbarItem {
                           <div
                             class="mj-slide-richtext-region"
                             [class.callout-box]="region.Kind === 'callout'"
-                            [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                            [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                             (focus)="OnFocusSlideElement(DisplayedSlide.SlideID, region.RegionID)"
                             (blur)="OnInlineRegionContentBlur(region, $event)"
                             [innerHTML]="RenderRegionHtml(region.MarkdownContent)"
@@ -1025,7 +1117,11 @@ export interface ResolvedSlidesToolbarItem {
 
                 <!-- Collapsible Speaker Notes Bar (in Edit Mode) -->
                 @if (WorkspaceMode === 'edit') {
-                  <div class="mj-slides-speaker-notes-bar" data-testid="speaker-notes-panel">
+                  <div
+                    class="mj-slides-speaker-notes-bar"
+                    (contextmenu)="OnSpeakerNotesContextMenu($event)"
+                    data-testid="speaker-notes-panel"
+                  >
                     <div class="mj-slides-speaker-notes-header">
                       <span><i class="fa-regular fa-note-sticky"></i> Speaker Notes (Slide {{ ActiveSlideIndex + 1 }})</span>
                       <span class="mj-slides-muted-hint">Included in Presenter View &amp; PowerPoint export</span>
@@ -1072,7 +1168,11 @@ export interface ResolvedSlidesToolbarItem {
                     }
                   </div>
 
-                  <div class="mj-presenter-notes-card" data-testid="presenter-speaker-notes-card">
+                  <div
+                    class="mj-presenter-notes-card"
+                    (contextmenu)="OnSpeakerNotesContextMenu($event)"
+                    data-testid="presenter-speaker-notes-card"
+                  >
                     <div class="mj-presenter-card-label">Speaker Notes — Slide {{ ActiveSlideIndex + 1 }}</div>
                     <div class="mj-presenter-notes-body">
                       {{ DisplayedSlide.SpeakerNotes || 'No speaker notes recorded for this slide.' }}
@@ -1263,19 +1363,19 @@ export interface ResolvedSlidesToolbarItem {
             <div class="mj-slides-modal-actions">
               <button
                 type="button"
-                class="mj-slides-tool-btn"
-                (click)="CancelFreezeSlideBlock()"
-                data-testid="cancel-slide-freeze-btn"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 class="mj-slides-tool-btn primary"
                 (click)="ConfirmFreezeSlideBlock()"
                 data-testid="confirm-slide-freeze-btn"
               >
                 Acknowledge &amp; Freeze Snapshot
+              </button>
+              <button
+                type="button"
+                class="mj-slides-tool-btn"
+                (click)="CancelFreezeSlideBlock()"
+                data-testid="cancel-slide-freeze-btn"
+              >
+                Cancel
               </button>
             </div>
           </div>
@@ -1301,18 +1401,18 @@ export interface ResolvedSlidesToolbarItem {
             <div class="mj-slides-modal-actions">
               <button
                 type="button"
-                class="mj-slides-tool-btn"
-                (click)="ShowMarkdownToDeckModal = false"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 class="mj-slides-tool-btn primary"
                 (click)="ConvertDraftMarkdownToDeck()"
                 data-testid="confirm-markdown-to-deck-btn"
               >
                 Convert Document to Slides
+              </button>
+              <button
+                type="button"
+                class="mj-slides-tool-btn"
+                (click)="ShowMarkdownToDeckModal = false"
+              >
+                Cancel
               </button>
             </div>
           </div>
@@ -1433,13 +1533,6 @@ export interface ResolvedSlidesToolbarItem {
             <div class="mj-slides-modal-actions">
               <button
                 type="button"
-                class="mj-slides-tool-btn"
-                (click)="ShowSheetEmbedModal = false"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 class="mj-slides-tool-btn primary"
                 [disabled]="!SheetEmbedArtifactID"
                 (click)="ConfirmSheetEmbedModal()"
@@ -1447,10 +1540,28 @@ export interface ResolvedSlidesToolbarItem {
               >
                 Embed in Slide
               </button>
+              <button
+                type="button"
+                class="mj-slides-tool-btn"
+                (click)="ShowSheetEmbedModal = false"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       }
+
+      <mj-context-menu
+        [IsOpen]="ContextMenuOpen"
+        [AnchorX]="ContextMenuX"
+        [AnchorY]="ContextMenuY"
+        [Items]="ContextMenuItems"
+        [AriaLabel]="ContextMenuAriaLabel"
+        [RestoreFocusElement]="ContextMenuRestoreFocusEl"
+        (ItemSelected)="OnSlidesContextMenuCommand($event)"
+        (Closed)="CloseContextMenu()"
+      ></mj-context-menu>
     </div>
   `,
   styles: [
@@ -1859,6 +1970,20 @@ export interface ResolvedSlidesToolbarItem {
         border-color: var(--mj-brand-primary);
         box-shadow: var(--mj-shadow-sm);
       }
+      .mj-slides-thumbnail-card.hidden-slide {
+        opacity: 0.62;
+        border-style: dashed;
+      }
+      .mj-slides-thumb-hidden-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-muted);
+      }
       .mj-slides-thumbnail-card.dragging {
         opacity: 0.45;
       }
@@ -2050,6 +2175,10 @@ export interface ResolvedSlidesToolbarItem {
       }
       .mj-slide-region-card.active-region {
         border-color: var(--deck-primary, var(--mj-brand-primary));
+      }
+      .mj-slide-region-card.mj-slide-region--agent-active {
+        border-color: var(--mj-brand-primary);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
       }
       .mj-slide-region-toolbar {
         display: flex;
@@ -2470,6 +2599,7 @@ export class SlideDeckArtifactViewerComponent
   implements OnInit, OnChanges, OnDestroy
 {
   private static readonly USER_SETTING_PREFIX = 'MJ.Slides.WorkspaceState.';
+  public readonly IsAiAssistantEnabled = ARTIFACT_AI_ASSISTANT_ENABLED;
 
   /**
    * Optional WebSocket URL (or base URL) override for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
@@ -2477,7 +2607,16 @@ export class SlideDeckArtifactViewerComponent
    */
   @Input() public CollaborationWsUrl: string | null = null;
 
+  @Output() public OpenEntityRecord = new EventEmitter<{
+    entityName: string;
+    compositeKey: CompositeKey;
+  }>();
+  /** @deprecated Use {@link OpenEntityRecord}. */
+  @Output() public openEntityRecord = this.OpenEntityRecord;
+
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly ngZone = inject(NgZone, { optional: true });
+  private readonly hostElRef = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
   private readonly renderer = inject(Renderer2, { optional: true });
   private readonly collabService = inject(DocumentCollaborationService);
   private readonly exportService = inject(SlideDeckExportService);
@@ -2492,6 +2631,30 @@ export class SlideDeckArtifactViewerComponent
   private _localToolbarPins: SlidesToolbarItemKey[] | null = null;
   private _serverToolbarPinsRaw: string | null = null;
   private _unlistenMoreMenuDocs: Array<() => void> = [];
+  private touchPointerCleanup: (() => void) | null = null;
+  private artifactOwnerUserId: string | null = null;
+
+  // Context Menu & Clipboard State
+  public ContextMenuOpen = false;
+  public ContextMenuX = 0;
+  public ContextMenuY = 0;
+  public ContextMenuItems: ContextMenuItem<SlidesContextMenuCommand>[] = [];
+  public ContextMenuAriaLabel = 'Slide actions';
+  public ContextMenuRestoreFocusEl: HTMLElement | null = null;
+  private copiedSlideRegionSpec: SlideRegionSpec | null = null;
+  public LastClipboardText = '';
+  private readonly touchMenuMonitor = new TouchContextMenuMonitor({
+    OnLongPress: (trigger) => {
+      if (this.ngZone) {
+        this.ngZone.run(() => {
+          this.openContextMenuForTargetElement(trigger.Target, trigger.AnchorX, trigger.AnchorY);
+          this.cdr.detectChanges();
+        });
+      } else {
+        this.openContextMenuForTargetElement(trigger.Target, trigger.AnchorX, trigger.AnchorY);
+      }
+    },
+  });
 
   public readonly LayoutCatalog: ReadonlyArray<SlideLayoutMetadata> = SLIDE_LAYOUT_CATALOG;
   public readonly ThemePresets: ReadonlyArray<SlideDeckThemeSpec> = SLIDE_DECK_THEME_PRESETS;
@@ -2519,6 +2682,53 @@ export class SlideDeckArtifactViewerComponent
 
   public ConnectionStatus: CollaborationConnectionStatus = 'local';
   public Collaborators: CollaboratorPresence[] = [];
+
+  public get HumanCollaborators(): CollaboratorPresence[] {
+    return this.Collaborators.filter((c) => c.IsAgent !== true);
+  }
+
+  public GetActiveSlideAgentPresence(): CollaboratorPresence | null {
+    const activeSlideId = this.DisplayedSlide?.SlideID ?? this.ActiveSlideID;
+    const activeSlideIndex = this.Deck?.Slides?.findIndex((s) => s.SlideID === activeSlideId) ?? -1;
+    const activeSlideNumber = activeSlideIndex >= 0 ? activeSlideIndex + 1 : undefined;
+    for (const peer of this.Collaborators) {
+      if (peer.IsAgent !== true || peer.AgentPhase === 'exit') {
+        continue;
+      }
+      const loc = peer.AgentLocation;
+      if (loc?.SlideID && loc.SlideID === activeSlideId) {
+        return peer;
+      }
+      if (typeof loc?.SlideNumber === 'number' && activeSlideNumber === loc.SlideNumber) {
+        return peer;
+      }
+      if (!loc && peer.ActiveBlockID && peer.ActiveBlockID === activeSlideId) {
+        return peer;
+      }
+    }
+    return null;
+  }
+
+  public IsRegionEditedByAgent(regionId: string): boolean {
+    const slideAgent = this.GetActiveSlideAgentPresence();
+    return Boolean(slideAgent?.AgentLocation?.ElementID && slideAgent.AgentLocation.ElementID === regionId);
+  }
+
+  public JumpToAgentSlideLocation(agent: CollaboratorPresence): void {
+    const loc = agent.AgentLocation;
+    const slides = this.Deck?.Slides ?? [];
+    let target = loc?.SlideID ? slides.find((s) => s.SlideID === loc.SlideID) : undefined;
+    if (!target && typeof loc?.SlideNumber === 'number' && loc.SlideNumber >= 1) {
+      target = slides[loc.SlideNumber - 1];
+    }
+    if (target) {
+      this.SelectSlide(target.SlideID);
+      if (loc?.ElementID) {
+        this.FocusedRegionID = loc.ElementID;
+      }
+      this.cdr.markForCheck();
+    }
+  }
   public ResolvedPermissions: VerifiedArtifactPermissions | null = null;
   public AccessRevoked = false;
   public PermissionVerifyError = false;
@@ -2713,10 +2923,22 @@ export class SlideDeckArtifactViewerComponent
     return found ?? deck.Slides[0];
   }
 
+  public get IsPresentationActive(): boolean {
+    return this.WorkspaceMode === 'present' || this.WorkspaceMode === 'presenter';
+  }
+
+  public get CanNavigatePrevSlide(): boolean {
+    return this.findPrevNavigableSlideIndex(this.ActiveSlideIndex) >= 0;
+  }
+
+  public get CanNavigateNextSlide(): boolean {
+    return this.findNextNavigableSlideIndex(this.ActiveSlideIndex) >= 0;
+  }
+
   public get NextSlidePreview(): SlideSpec | null {
     const deck = this.ActiveDeckForDisplay;
-    const nextIdx = this.ActiveSlideIndex + 1;
-    return nextIdx < deck.Slides.length ? deck.Slides[nextIdx] : null;
+    const nextIdx = this.findNextNavigableSlideIndex(this.ActiveSlideIndex);
+    return nextIdx >= 0 ? deck.Slides[nextIdx] : null;
   }
 
   public get FormattedPresenterElapsed(): string {
@@ -2738,6 +2960,7 @@ export class SlideDeckArtifactViewerComponent
 
   public ngOnInit(): void {
     this.initializePresentationFromArtifactVersion();
+    this.bindTouchPointerListenersOutsideZone();
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
@@ -2781,6 +3004,8 @@ export class SlideDeckArtifactViewerComponent
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    this.unbindTouchPointerListeners();
+    this.touchMenuMonitor.Destroy();
     this.stopMoreMenuDocumentListeners();
     this.destroyCollaborationSession();
   }
@@ -2813,6 +3038,24 @@ export class SlideDeckArtifactViewerComponent
 
   @HostListener('document:keydown', ['$event'])
   public OnGlobalKeyDown(event: KeyboardEvent): void {
+    if (this.ContextMenuOpen) {
+      return;
+    }
+
+    if (IsKeyboardContextMenuShortcut(event)) {
+      const targetEl = event.target instanceof HTMLElement ? event.target : null;
+      const hostEl = this.hostElRef?.nativeElement ?? null;
+      const inHost =
+        targetEl !== null &&
+        (!hostEl || hostEl.contains(targetEl) || (targetEl === document.body && this.IsPresentationActive));
+      if (targetEl && inHost && !IsNativeContextMenuTarget(targetEl)) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.openContextMenuForTargetElement(targetEl);
+      }
+      return;
+    }
+
     if (this.WorkspaceMode === 'present' || this.WorkspaceMode === 'presenter') {
       if (event.key === 'ArrowRight' || event.key === 'PageDown') {
         event.preventDefault();
@@ -2877,7 +3120,10 @@ export class SlideDeckArtifactViewerComponent
    * Enters Presentation Mode or Presenter View (`O6`), automatically freezing all live MJ blocks
    * with the viewer's current rendered data so numbers do not shift mid-presentation.
    */
-  public EnterPresentationMode(mode: 'present' | 'presenter'): void {
+  public EnterPresentationMode(mode: 'present' | 'presenter', startSlideId?: string): void {
+    if (startSlideId) {
+      this.SelectSlide(startSlideId);
+    }
     this.PresentationFrozenDeck = SlideDeckEngine.Instance.FreezeDeckLiveBlocksForPresentation(
       this.Deck,
       this.blockResultsByBlockId,
@@ -2929,20 +3175,39 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public PrevSlide(): void {
-    const idx = this.ActiveSlideIndex;
-    if (idx > 0) {
-      const target = this.ActiveDeckForDisplay.Slides[idx - 1];
+    const targetIdx = this.findPrevNavigableSlideIndex(this.ActiveSlideIndex);
+    if (targetIdx >= 0) {
+      const target = this.ActiveDeckForDisplay.Slides[targetIdx];
       this.SelectSlide(target.SlideID);
     }
   }
 
   public NextSlide(): void {
-    const idx = this.ActiveSlideIndex;
-    const deck = this.ActiveDeckForDisplay;
-    if (idx < deck.Slides.length - 1) {
-      const target = deck.Slides[idx + 1];
+    const targetIdx = this.findNextNavigableSlideIndex(this.ActiveSlideIndex);
+    if (targetIdx >= 0) {
+      const target = this.ActiveDeckForDisplay.Slides[targetIdx];
       this.SelectSlide(target.SlideID);
     }
+  }
+
+  private findPrevNavigableSlideIndex(fromIdx: number): number {
+    const slides = this.ActiveDeckForDisplay.Slides;
+    for (let i = fromIdx - 1; i >= 0; i--) {
+      if (!this.IsPresentationActive || !slides[i].Hidden) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private findNextNavigableSlideIndex(fromIdx: number): number {
+    const slides = this.ActiveDeckForDisplay.Slides;
+    for (let i = fromIdx + 1; i < slides.length; i++) {
+      if (!this.IsPresentationActive || !slides[i].Hidden) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   public ToggleRightDrawer(tab: 'theme' | 'comments'): void {
@@ -3004,16 +3269,7 @@ export class SlideDeckArtifactViewerComponent
     if (!this.IsEditable || this.Deck.Slides.length <= 1) {
       return;
     }
-    const targetId = this.ActiveSlide.SlideID;
-    const { Deck: updatedDeck, Deleted } = SlideDeckEngine.Instance.DeleteSlide(this.Deck, targetId);
-    if (!Deleted) {
-      return;
-    }
-    this.Deck = updatedDeck;
-    this.ActiveSlideID = this.Deck.Slides[0].SlideID;
-    this.session?.DeleteSlideFromDeck(targetId, this.Deck);
-    this.syncRawDeckJson();
-    this.cdr.markForCheck();
+    this.DeleteSlideById(this.ActiveSlide.SlideID);
   }
 
   /**
@@ -3031,6 +3287,1166 @@ export class SlideDeckArtifactViewerComponent
     );
     this.syncRawDeckJson();
     this.cdr.markForCheck();
+  }
+
+  // =========================================================================
+  // Touch Long-Press & Right-Click Context Menu Support
+  // =========================================================================
+
+  private bindTouchPointerListenersOutsideZone(): void {
+    this.unbindTouchPointerListeners();
+    const hostEl = this.hostElRef?.nativeElement ?? null;
+    if (!hostEl || typeof hostEl.addEventListener !== 'function') {
+      return;
+    }
+    const onDown = (event: PointerEvent): void => this.OnTouchPointerDown(event);
+    const onMove = (event: PointerEvent): void => this.OnTouchPointerMove(event);
+    const onUp = (event: PointerEvent): void => this.OnTouchPointerUp(event);
+    const onCancel = (event: PointerEvent): void => this.OnTouchPointerCancel(event);
+    const onClickCapture = (event: MouseEvent): void => this.OnShellClick(event);
+
+    const attach = (): void => {
+      hostEl.addEventListener('pointerdown', onDown, { passive: true });
+      hostEl.addEventListener('pointermove', onMove, { passive: true });
+      hostEl.addEventListener('pointerup', onUp, { passive: true });
+      hostEl.addEventListener('pointercancel', onCancel, { passive: true });
+      // Register click suppression in true DOM capture phase (Angular templates bind '(click.capture)' as a literal event name)
+      hostEl.addEventListener('click', onClickCapture, { capture: true });
+    };
+    if (this.ngZone) {
+      this.ngZone.runOutsideAngular(attach);
+    } else {
+      attach();
+    }
+
+    this.touchPointerCleanup = () => {
+      hostEl.removeEventListener('pointerdown', onDown);
+      hostEl.removeEventListener('pointermove', onMove);
+      hostEl.removeEventListener('pointerup', onUp);
+      hostEl.removeEventListener('pointercancel', onCancel);
+      hostEl.removeEventListener('click', onClickCapture, { capture: true });
+    };
+  }
+
+  private unbindTouchPointerListeners(): void {
+    if (this.touchPointerCleanup) {
+      this.touchPointerCleanup();
+      this.touchPointerCleanup = null;
+    }
+  }
+
+  public OnTouchPointerDown(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerDown(event);
+  }
+
+  public OnTouchPointerMove(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerMove(event);
+  }
+
+  public OnTouchPointerUp(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerUp(event);
+  }
+
+  public OnTouchPointerCancel(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerCancel(event);
+  }
+
+  public OnShellClick(event: MouseEvent): void {
+    if (this.touchMenuMonitor.ConsumeSuppressedClick()) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  /**
+   * Opens the filmstrip context menu for a specific slide thumbnail (Zone 3a).
+   */
+  public OnFilmstripSlideContextMenu(event: MouseEvent, slide: SlideSpec): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const restoreEl = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    this.openContextMenuAt('filmstrip-slide', event.clientX, event.clientY, slide, undefined, restoreEl);
+  }
+
+  /**
+   * Opens the filmstrip context menu on empty rail whitespace (Zone 3a empty state).
+   */
+  public OnFilmstripEmptyContextMenu(event: MouseEvent): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const restoreEl = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    this.openContextMenuAt('filmstrip-empty', event.clientX, event.clientY, this.ActiveSlide, undefined, restoreEl);
+  }
+
+  /**
+   * Opens the stage background, viewer, or presentation navigation context menu (Zones 3b & 3d).
+   */
+  public OnSlideStageContextMenu(event: MouseEvent): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const zone: SlidesContextMenuZone = this.IsPresentationActive
+      ? 'presentation-stage'
+      : this.IsEditable
+        ? 'stage-background'
+        : 'viewer-stage';
+    const restoreEl = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    this.openContextMenuAt(zone, event.clientX, event.clientY, this.DisplayedSlide, undefined, restoreEl);
+  }
+
+  /**
+   * Opens the context menu for a slide region / live block / inline OLE card (Zone 3c),
+   * delegating to navigation/viewer zones when read-only or presenting.
+   */
+  public OnSlideRegionContextMenu(event: MouseEvent, region: SlideRegionSpec): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const zone: SlidesContextMenuZone = this.IsPresentationActive
+      ? 'presentation-stage'
+      : this.IsEditable
+        ? 'slide-region'
+        : 'viewer-stage';
+    const restoreEl = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    this.openContextMenuAt(zone, event.clientX, event.clientY, this.DisplayedSlide, region, restoreEl);
+  }
+
+  /**
+   * Opens the speaker-notes context menu (Zone 3d), bypassing when native `<textarea>` handles editing.
+   */
+  public OnSpeakerNotesContextMenu(event: MouseEvent): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const restoreEl = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    this.openContextMenuAt('speaker-notes', event.clientX, event.clientY, this.DisplayedSlide, undefined, restoreEl);
+  }
+
+  /**
+   * Closes any active context menu without exiting active presentation mode.
+   */
+  public CloseContextMenu(): void {
+    if (!this.ContextMenuOpen) {
+      return;
+    }
+    this.ContextMenuOpen = false;
+    this.ContextMenuItems = [];
+    this.ContextMenuRestoreFocusEl = null;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Executes a selected context menu command dispatched by `<mj-context-menu>`.
+   */
+  public OnSlidesContextMenuCommand(command: SlidesContextMenuCommand): void {
+    this.ContextMenuOpen = false;
+    this.ContextMenuItems = [];
+
+    switch (command.Type) {
+      case 'add-slide':
+        this.InsertSlideAfter(command.Layout, command.AfterSlideID);
+        break;
+      case 'duplicate-slide':
+        this.DuplicateSlideById(command.SlideID);
+        break;
+      case 'delete-slide':
+        this.DeleteSlideById(command.SlideID);
+        break;
+      case 'move-slide':
+        this.OnMoveSlide(command.SlideID, command.Delta);
+        break;
+      case 'move-slide-edge':
+        this.MoveSlideToEdge(command.SlideID, command.Edge);
+        break;
+      case 'change-layout':
+        this.ChangeSlideLayoutById(command.SlideID, command.Layout);
+        break;
+      case 'set-transition':
+        this.SetSlideTransition(command.SlideID, command.Transition);
+        break;
+      case 'toggle-slide-hidden':
+        this.ToggleSlideHidden(command.SlideID);
+        break;
+      case 'toggle-slide-lock':
+        this.ToggleSlideLockById(command.SlideID);
+        break;
+      case 'focus-speaker-notes':
+        this.FocusSpeakerNotesForSlide(command.SlideID);
+        break;
+      case 'comment-slide': {
+        this.SelectSlide(command.SlideID);
+        const slide = this.Deck.Slides.find((s) => s.SlideID === command.SlideID) ?? this.ActiveSlide;
+        const primaryRegion = slide.Regions[0];
+        this.OpenCommentForSlideRegion(
+          slide.SlideID,
+          primaryRegion?.RegionID ?? 'main',
+          primaryRegion?.Label ?? 'Slide',
+        );
+        break;
+      }
+      case 'copy-slide-markdown':
+        this.CopySlideAsMarkdown(command.SlideID);
+        break;
+      case 'select-theme-preset':
+        this.OnSelectThemePreset(command.ThemeID);
+        break;
+      case 'open-theme-drawer':
+        this.RightDrawerTab = 'theme';
+        this.persistWorkspacePreferences();
+        this.cdr.markForCheck();
+        break;
+      case 'ask-ai-slide':
+        this.SelectSlide(command.SlideID);
+        this.OpenAskAiForPresentation();
+        break;
+      case 'present':
+        this.EnterPresentationMode(command.Mode, command.SlideID);
+        break;
+      case 'exit-presentation':
+        this.ExitPresentationMode();
+        break;
+      case 'navigate-slide':
+        if (command.Direction === 'prev') {
+          this.PrevSlide();
+        } else {
+          this.NextSlide();
+        }
+        break;
+      case 'jump-to-slide':
+        this.SelectSlide(command.SlideID);
+        break;
+      case 'refresh-presentation-live-blocks':
+        void this.RefreshLiveBlocksDuringPresentation();
+        break;
+      case 'export':
+        if (command.Format === 'pptx') {
+          this.OnExportPptx();
+        } else {
+          this.OnExportPdf();
+        }
+        break;
+      case 'insert-region-content':
+        this.InsertRegionContentPreset(command.SlideID, command.RegionID, command.Preset);
+        break;
+      case 'edit-region-inline':
+        this.FocusRegionInlineEditor(command.SlideID, command.RegionID);
+        break;
+      case 'toggle-ole-edit':
+        this.ToggleOleRegionEditing(command.RegionID);
+        break;
+      case 'cut-region':
+        this.CutSlideRegion(command.SlideID, command.RegionID);
+        break;
+      case 'copy-region':
+        this.CopySlideRegion(command.SlideID, command.RegionID);
+        break;
+      case 'duplicate-region':
+        this.DuplicateSlideRegion(command.SlideID, command.RegionID);
+        break;
+      case 'paste-region':
+        this.PasteIntoSlideRegion(command.SlideID, command.RegionID);
+        break;
+      case 'change-region-kind': {
+        this.SelectSlide(command.SlideID);
+        const slide = this.Deck.Slides.find((s) => s.SlideID === command.SlideID);
+        const region = slide?.Regions.find((r) => r.RegionID === command.RegionID);
+        if (region) {
+          this.OnChangeRegionKind(region, command.Kind);
+        }
+        break;
+      }
+      case 'swap-region':
+        this.SwapSlideRegion(command.SlideID, command.RegionID, command.Delta);
+        break;
+      case 'clear-region':
+        this.ClearSlideRegion(command.SlideID, command.RegionID);
+        break;
+      case 'toggle-region-lock':
+        this.ToggleRegionLockById(command.SlideID, command.RegionID);
+        break;
+      case 'comment-region': {
+        this.SelectSlide(command.SlideID);
+        const slide = this.Deck.Slides.find((s) => s.SlideID === command.SlideID);
+        const region = slide?.Regions.find((r) => r.RegionID === command.RegionID);
+        this.OpenCommentForSlideRegion(command.SlideID, command.RegionID, region?.Label ?? 'Region');
+        break;
+      }
+      case 'refresh-region-block': {
+        const slide = this.Deck.Slides.find((s) => s.SlideID === command.SlideID);
+        const region = slide?.Regions.find((r) => r.RegionID === command.RegionID);
+        const block = region ? this.GetRegionBlockSpec(region) : null;
+        if (region && block) {
+          void this.ExecuteSlideRegionBlock(region, block);
+        }
+        break;
+      }
+      case 'open-sheet-embed': {
+        this.SelectSlide(command.SlideID);
+        const slide = this.Deck.Slides.find((s) => s.SlideID === command.SlideID);
+        const region = slide?.Regions.find((r) => r.RegionID === command.RegionID);
+        if (region) {
+          void this.OpenSheetEmbedModal(region);
+        }
+        break;
+      }
+      case 'update-workbook-version': {
+        this.SelectSlide(command.SlideID);
+        const slide = this.Deck.Slides.find((s) => s.SlideID === command.SlideID);
+        const region = slide?.Regions.find((r) => r.RegionID === command.RegionID);
+        const block = region ? this.GetRegionBlockSpec(region) : null;
+        if (region && block) {
+          this.UpdateRegionBlockToLatestWorkbookVersion(region, block);
+        }
+        break;
+      }
+      case 'freeze-region-block': {
+        this.SelectSlide(command.SlideID);
+        const slide = this.Deck.Slides.find((s) => s.SlideID === command.SlideID);
+        const region = slide?.Regions.find((r) => r.RegionID === command.RegionID);
+        const block = region ? this.GetRegionBlockSpec(region) : null;
+        if (region && block) {
+          this.PromptFreezeSlideRegionBlock(region, block);
+        }
+        break;
+      }
+      case 'unfreeze-region-block': {
+        this.SelectSlide(command.SlideID);
+        const slide = this.Deck.Slides.find((s) => s.SlideID === command.SlideID);
+        const region = slide?.Regions.find((r) => r.RegionID === command.RegionID);
+        const block = region ? this.GetRegionBlockSpec(region) : null;
+        if (region && block) {
+          this.UnfreezeSlideRegionBlock(region, block);
+        }
+        break;
+      }
+      case 'open-source-artifact':
+        this.OpenSourceArtifactById(command.ArtifactID);
+        break;
+      case 'copy-block-json':
+        this.CopyBlockJson(command.SlideID, command.RegionID);
+        break;
+      case 'copy-speaker-notes':
+        this.CopySpeakerNotesForSlide(command.SlideID);
+        break;
+      case 'copy-slide-and-notes-markdown':
+        this.CopySlideAndNotesAsMarkdown(command.SlideID);
+        break;
+      case 'reset-presenter-timer':
+        this.ResetPresenterTimer();
+        break;
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Inserts a new slide immediately after `afterSlideId` (or after the active slide).
+   */
+  public InsertSlideAfter(layout: SlideLayoutKind = 'TitleAndBody', afterSlideId?: string): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    const afterIdx = afterSlideId
+      ? this.Deck.Slides.findIndex((s) => s.SlideID === afterSlideId)
+      : this.ActiveSlideIndex;
+    const insertIdx = afterIdx >= 0 ? afterIdx + 1 : this.Deck.Slides.length;
+    const { Deck: updatedDeck, AddedSlide } = SlideDeckEngine.Instance.AddSlide(this.Deck, {
+      Layout: layout,
+      Title: `Slide ${this.Deck.Slides.length + 1}: Strategic Overview`,
+      Subtitle: 'Click to edit subtitle or choose a layout',
+      InsertAtIndex: insertIdx,
+    });
+    const orderedSlideIds = updatedDeck.Slides.map((s) => s.SlideID);
+    this.Deck = updatedDeck;
+    this.ActiveSlideID = AddedSlide.SlideID;
+    this.FocusedRegionID = AddedSlide.Regions[0]?.RegionID ?? 'main';
+
+    if (this.session) {
+      this.session.UpdateSlideInDeck(AddedSlide, updatedDeck);
+      this.session.ReorderSlidesInDeck(orderedSlideIds, updatedDeck);
+    }
+    this.syncRawDeckJson();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Duplicates the specified slide and focuses the copy.
+   */
+  public DuplicateSlideById(slideId: string): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    const { Deck: updatedDeck, DuplicatedSlide } = SlideDeckEngine.Instance.DuplicateSlide(
+      this.Deck,
+      slideId,
+    );
+    if (!DuplicatedSlide) {
+      return;
+    }
+    const orderedSlideIds = updatedDeck.Slides.map((s) => s.SlideID);
+    this.Deck = updatedDeck;
+    this.ActiveSlideID = DuplicatedSlide.SlideID;
+    this.FocusedRegionID = DuplicatedSlide.Regions[0]?.RegionID ?? 'main';
+    if (this.session) {
+      this.session.UpdateSlideInDeck(DuplicatedSlide, updatedDeck);
+      this.session.ReorderSlidesInDeck(orderedSlideIds, updatedDeck);
+    }
+    this.syncRawDeckJson();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Deletes `slideId` when more than one slide exists and the actor may edit the slide.
+   */
+  public DeleteSlideById(slideId: string): void {
+    if (!this.IsEditable || this.Deck.Slides.length <= 1) {
+      return;
+    }
+    const targetSlide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    if (targetSlide) {
+      const check = SlideDeckEngine.Instance.CanActorEditSlide(
+        targetSlide,
+        userId,
+        ownerId,
+        this.IsEditable,
+      );
+      if (!check.Allowed) {
+        this.StatusBannerMessage = check.Reason || 'This slide is locked.';
+        this.cdr.markForCheck();
+        return;
+      }
+    }
+    const targetIdx = this.Deck.Slides.findIndex((s) => s.SlideID === slideId);
+    const { Deck: updatedDeck, Deleted } = SlideDeckEngine.Instance.DeleteSlide(this.Deck, slideId, {
+      ActorUserID: userId,
+      OwnerUserID: ownerId,
+      IsEditor: this.IsEditable,
+    });
+    if (!Deleted) {
+      return;
+    }
+    this.Deck = updatedDeck;
+    if (this.ActiveSlideID === slideId || !this.Deck.Slides.some((s) => s.SlideID === this.ActiveSlideID)) {
+      const fallbackIdx = Math.min(Math.max(targetIdx, 0), this.Deck.Slides.length - 1);
+      const nextSlide = this.Deck.Slides[fallbackIdx];
+      this.ActiveSlideID = nextSlide.SlideID;
+      this.FocusedRegionID = nextSlide.Regions[0]?.RegionID ?? 'main';
+    }
+    this.session?.DeleteSlideFromDeck(slideId, this.Deck);
+    this.syncRawDeckJson();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Moves `slideId` directly to the beginning (`start`) or end (`end`) of the deck.
+   */
+  public MoveSlideToEdge(slideId: string, edge: 'start' | 'end'): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    const slides = this.Deck.Slides;
+    const currentIdx = slides.findIndex((s) => s.SlideID === slideId);
+    if (currentIdx < 0) {
+      return;
+    }
+    if ((edge === 'start' && currentIdx === 0) || (edge === 'end' && currentIdx === slides.length - 1)) {
+      return;
+    }
+    const remainingIds = slides.filter((s) => s.SlideID !== slideId).map((s) => s.SlideID);
+    const orderedSlideIds = edge === 'start' ? [slideId, ...remainingIds] : [...remainingIds, slideId];
+    this.Deck = SlideDeckEngine.Instance.ReorderSlides(this.Deck, orderedSlideIds);
+    this.SelectSlide(slideId);
+    this.session?.ReorderSlidesInDeck(orderedSlideIds, this.Deck);
+    this.syncRawDeckJson();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Changes the layout of a specific slide (selecting it if not already active).
+   */
+  public ChangeSlideLayoutById(slideId: string, newLayout: SlideLayoutKind): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    this.applySingleSlideMetadataPatch(slideId, { Layout: newLayout });
+    const updatedSlide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    if (updatedSlide) {
+      this.ActiveSlideID = updatedSlide.SlideID;
+      this.FocusedRegionID = updatedSlide.Regions[0]?.RegionID ?? 'main';
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Sets the slide transition (`none`, `fade`, or `slide`) on `slideId`.
+   */
+  public SetSlideTransition(slideId: string, transition: SlideTransitionKind): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    this.applySingleSlideMetadataPatch(slideId, { Transition: transition });
+  }
+
+  /**
+   * Toggles `SlideSpec.Hidden` so the slide shows a skip badge in Studio and is skipped in Presentation Mode.
+   */
+  public ToggleSlideHidden(slideId: string): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    const target = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    if (!target) {
+      return;
+    }
+    this.applySingleSlideMetadataPatch(slideId, { Hidden: !target.Hidden });
+  }
+
+  /**
+   * Toggles the lock state of a specific slide by ID.
+   */
+  public ToggleSlideLockById(slideId: string): void {
+    this.SelectSlide(slideId);
+    this.ToggleCurrentSlideLock();
+  }
+
+  /**
+   * Selects `slideId` and focuses the speaker notes textarea.
+   */
+  public FocusSpeakerNotesForSlide(slideId: string): void {
+    this.SelectSlide(slideId);
+    const hostEl = this.hostElRef?.nativeElement ?? this.captureHostElementRef?.nativeElement ?? null;
+    const focusNotes = () => {
+      const textarea = hostEl?.querySelector<HTMLTextAreaElement>('[data-testid="speaker-notes-input"]');
+      textarea?.focus();
+    };
+    focusNotes();
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(focusNotes);
+    }
+  }
+
+  /**
+   * Copies the serialized Markdown of `slideId` to the clipboard.
+   */
+  public CopySlideAsMarkdown(slideId: string): void {
+    const slide = this.ActiveDeckForDisplay.Slides.find((s) => s.SlideID === slideId) ?? this.DisplayedSlide;
+    const markdown = SerializeSlideToMarkdown(slide, false);
+    this.writeTextToClipboard(markdown, `Copied Slide ${slide.SlideNumber} as Markdown.`);
+  }
+
+  /**
+   * Copies only the speaker notes for `slideId` to the clipboard.
+   */
+  public CopySpeakerNotesForSlide(slideId: string): void {
+    const slide = this.ActiveDeckForDisplay.Slides.find((s) => s.SlideID === slideId) ?? this.DisplayedSlide;
+    const notes = slide.SpeakerNotes ?? '';
+    this.writeTextToClipboard(notes, `Copied Speaker Notes for Slide ${slide.SlideNumber}.`);
+  }
+
+  /**
+   * Copies the serialized Markdown of `slideId` together with its speaker notes.
+   */
+  public CopySlideAndNotesAsMarkdown(slideId: string): void {
+    const slide = this.ActiveDeckForDisplay.Slides.find((s) => s.SlideID === slideId) ?? this.DisplayedSlide;
+    const markdown = SerializeSlideToMarkdown(slide, true);
+    this.writeTextToClipboard(markdown, `Copied Slide ${slide.SlideNumber} and Speaker Notes.`);
+  }
+
+  /**
+   * Inserts a starter text, bullet list, Live View, Sheet chart, or inline Whiteboard into a slide region.
+   */
+  public InsertRegionContentPreset(
+    slideId: string,
+    regionId: string,
+    preset: 'text' | 'bullets' | 'live-view' | 'sheet-chart' | 'whiteboard',
+  ): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    this.SelectSlide(slideId);
+    this.FocusedRegionID = regionId;
+    const slide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const region = slide?.Regions.find((r) => r.RegionID === regionId);
+    if (!region) {
+      return;
+    }
+
+    switch (preset) {
+      case 'text':
+        this.applySingleSlideRegionPatch(slideId, {
+          RegionID: regionId,
+          Kind: 'rich-text',
+          MarkdownContent: region.MarkdownContent?.trim()
+            ? `${region.MarkdownContent.trim()}\n\nNew section narrative`
+            : 'Key takeaway summary — click to edit',
+        });
+        this.FocusRegionInlineEditor(slideId, regionId);
+        break;
+      case 'bullets':
+        this.applySingleSlideRegionPatch(slideId, {
+          RegionID: regionId,
+          Kind: 'rich-text',
+          MarkdownContent: region.MarkdownContent?.trim()
+            ? `${region.MarkdownContent.trim()}\n- New bullet point`
+            : '- Strategic priority 1\n- Strategic priority 2\n- Strategic priority 3',
+        });
+        this.FocusRegionInlineEditor(slideId, regionId);
+        break;
+      case 'live-view':
+        this.EmbedLiveEntityViewInRegion(region);
+        break;
+      case 'sheet-chart':
+        void this.OpenSheetEmbedModal(region);
+        break;
+      case 'whiteboard':
+        void this.EmbedInlineWhiteboardInRegion(region);
+        break;
+    }
+  }
+
+  /**
+   * Focuses the inline contenteditable surface inside `regionId`.
+   */
+  public FocusRegionInlineEditor(slideId: string, regionId: string): void {
+    this.SelectSlide(slideId);
+    this.FocusedRegionID = regionId;
+    this.cdr.detectChanges();
+    const hostEl = this.hostElRef?.nativeElement ?? this.captureHostElementRef?.nativeElement ?? null;
+    const regionCard = hostEl?.querySelector<HTMLElement>(`[data-testid="slide-region-${regionId}"]`);
+    const editableEl = regionCard?.querySelector<HTMLElement>('[contenteditable="true"]') ?? regionCard;
+    editableEl?.focus();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Copies `regionId` into the internal slide region clipboard without mutating the slide.
+   */
+  public CopySlideRegion(slideId: string, regionId: string): void {
+    const slide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const region = slide?.Regions.find((r) => r.RegionID === regionId);
+    if (!region) {
+      return;
+    }
+    this.copiedSlideRegionSpec = this.cloneRegionSpec(region);
+    this.StatusBannerMessage = `Copied region "${region.Label}".`;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Copies `regionId` into the region clipboard and clears the original region.
+   */
+  public CutSlideRegion(slideId: string, regionId: string): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    const slide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const region = slide?.Regions.find((r) => r.RegionID === regionId);
+    if (!slide || !region) {
+      return;
+    }
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    const check = SlideDeckEngine.Instance.CanActorEditRegion(
+      slide,
+      region,
+      userId,
+      ownerId,
+      this.IsEditable,
+    );
+    if (!check.Allowed) {
+      this.StatusBannerMessage = check.Reason || 'This slide region is locked.';
+      this.cdr.markForCheck();
+      return;
+    }
+    this.CopySlideRegion(slideId, regionId);
+    this.ClearSlideRegion(slideId, regionId);
+  }
+
+  /**
+   * Inserts a duplicate copy of `regionId` directly after the source region on `slideId`.
+   */
+  public DuplicateSlideRegion(slideId: string, regionId: string): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    const slide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const idx = slide?.Regions.findIndex((r) => r.RegionID === regionId) ?? -1;
+    if (!slide || idx < 0) {
+      return;
+    }
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    const slideCheck = SlideDeckEngine.Instance.CanActorEditSlide(slide, userId, ownerId, this.IsEditable);
+    if (!slideCheck.Allowed) {
+      this.StatusBannerMessage = slideCheck.Reason || 'This slide is locked.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const sourceRegion = slide.Regions[idx];
+    const cloned = this.cloneRegionSpec(sourceRegion);
+    const duplicatedRegion: SlideRegionSpec = {
+      ...cloned,
+      RegionID: `${sourceRegion.RegionID}-copy-${Date.now()}`,
+      Label: `${sourceRegion.Label} (Copy)`,
+      Locked: false,
+      LockedByUserID: undefined,
+    };
+    const nextRegions = [
+      ...slide.Regions.slice(0, idx + 1),
+      duplicatedRegion,
+      ...slide.Regions.slice(idx + 1),
+    ];
+    this.commitSlideRegionsOrder(slideId, nextRegions);
+    this.FocusedRegionID = duplicatedRegion.RegionID;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Pastes `copiedSlideRegionSpec` content into `regionId` on `slideId`.
+   */
+  public PasteIntoSlideRegion(slideId: string, regionId: string): void {
+    if (!this.IsEditable || !this.copiedSlideRegionSpec) {
+      return;
+    }
+    const copied = this.cloneRegionSpec(this.copiedSlideRegionSpec);
+    this.applySingleSlideRegionPatch(slideId, {
+      RegionID: regionId,
+      Kind: copied.Kind,
+      MarkdownContent: copied.MarkdownContent,
+      BlockSpec: copied.BlockSpec,
+      BigNumberValue: copied.BigNumberValue,
+      BigNumberLabel: copied.BigNumberLabel,
+      BigNumberDelta: copied.BigNumberDelta,
+      QuoteAttribution: copied.QuoteAttribution,
+      CalloutTone: copied.CalloutTone,
+      ImageUrl: copied.ImageUrl,
+      ImageAlt: copied.ImageAlt,
+    });
+    this.FocusedRegionID = regionId;
+  }
+
+  /**
+   * Swaps `regionId` earlier (`-1`) or later (`+1`) within `slideId.Regions`.
+   */
+  public SwapSlideRegion(slideId: string, regionId: string, delta: -1 | 1): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    const slide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    if (!slide) {
+      return;
+    }
+    const idx = slide.Regions.findIndex((r) => r.RegionID === regionId);
+    const targetIdx = idx + delta;
+    if (idx < 0 || targetIdx < 0 || targetIdx >= slide.Regions.length) {
+      return;
+    }
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    const sourceCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+      slide,
+      slide.Regions[idx],
+      userId,
+      ownerId,
+      this.IsEditable,
+    );
+    if (!sourceCheck.Allowed) {
+      this.StatusBannerMessage = sourceCheck.Reason || 'This slide region is locked.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const targetCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+      slide,
+      slide.Regions[targetIdx],
+      userId,
+      ownerId,
+      this.IsEditable,
+    );
+    if (!targetCheck.Allowed) {
+      this.StatusBannerMessage = targetCheck.Reason || 'The target slide region is locked.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const nextRegions = [...slide.Regions];
+    const currentRegion = nextRegions[idx];
+    nextRegions[idx] = nextRegions[targetIdx];
+    nextRegions[targetIdx] = currentRegion;
+    this.commitSlideRegionsOrder(slideId, nextRegions);
+  }
+
+  /**
+   * Resets `regionId` on `slideId` to an empty `rich-text` region while preserving its slot metadata.
+   */
+  public ClearSlideRegion(slideId: string, regionId: string): void {
+    if (!this.IsEditable) {
+      return;
+    }
+    this.oleEditingRegionIds.delete(regionId);
+    this.applySingleSlideRegionPatch(slideId, {
+      RegionID: regionId,
+      Kind: 'rich-text',
+      MarkdownContent: '',
+      BlockSpec: undefined,
+      BigNumberValue: undefined,
+      BigNumberLabel: undefined,
+      BigNumberDelta: undefined,
+      QuoteAttribution: undefined,
+      CalloutTone: undefined,
+      ImageUrl: undefined,
+      ImageAlt: undefined,
+    });
+  }
+
+  /**
+   * Toggles the lock state of `regionId` on `slideId`.
+   */
+  public ToggleRegionLockById(slideId: string, regionId: string): void {
+    this.SelectSlide(slideId);
+    const slide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const region = slide?.Regions.find((r) => r.RegionID === regionId);
+    if (region) {
+      this.ToggleRegionLock(region);
+    }
+  }
+
+  /**
+   * Emits `OpenEntityRecord` for an embedded source artifact ID.
+   */
+  public OpenSourceArtifactById(artifactId: string): void {
+    if (!artifactId) {
+      return;
+    }
+    this.OpenEntityRecord.emit({
+      entityName: 'MJ: Artifacts',
+      compositeKey: CompositeKey.FromID(artifactId),
+    });
+  }
+
+  /**
+   * Copies the serialized JSON of the live block in `regionId`.
+   */
+  public CopyBlockJson(slideId: string, regionId: string): void {
+    const slide = this.ActiveDeckForDisplay.Slides.find((s) => s.SlideID === slideId);
+    const region = slide?.Regions.find((r) => r.RegionID === regionId);
+    const block = region ? this.GetRegionBlockSpec(region) : null;
+    if (!block) {
+      return;
+    }
+    this.writeTextToClipboard(
+      JSON.stringify(block, null, 2),
+      `Copied Live Block JSON for "${block.Title || region?.Label || regionId}".`,
+    );
+  }
+
+  /**
+   * Resets the presenter view elapsed timer back to `00:00`.
+   */
+  public ResetPresenterTimer(): void {
+    this.PresenterElapsedSeconds = 0;
+    if (this.WorkspaceMode === 'presenter') {
+      this.startPresenterTimer();
+    }
+    this.cdr.markForCheck();
+  }
+
+  private commitSlideRegionsOrder(slideId: string, nextRegions: SlideRegionSpec[]): void {
+    let updatedSlide: SlideSpec | null = null;
+    const nextSlides = this.Deck.Slides.map((s) => {
+      if (s.SlideID !== slideId) {
+        return s;
+      }
+      updatedSlide = { ...s, Regions: nextRegions };
+      return updatedSlide;
+    });
+    if (!updatedSlide) {
+      return;
+    }
+    this.Deck = {
+      ...this.Deck,
+      Slides: nextSlides,
+      UpdatedAt: new Date().toISOString(),
+    };
+    this.session?.UpdateSlideInDeck(updatedSlide, this.Deck);
+    this.syncRawDeckJson();
+    this.cdr.markForCheck();
+  }
+
+  private cloneRegionSpec(region: SlideRegionSpec): SlideRegionSpec {
+    let clonedBlock: DocumentBlockSpec | undefined;
+    if (region.BlockSpec) {
+      const parsed = SafeJSONParse<DocumentBlockSpec>(JSON.stringify(region.BlockSpec));
+      const baseBlock: DocumentBlockSpec = parsed ?? { ...region.BlockSpec };
+      clonedBlock = {
+        ...baseBlock,
+        BlockID: generateSlideBlockUuid(),
+      };
+    }
+    const nextMarkdown =
+      clonedBlock && (region.Kind === 'mj-block' || (region.MarkdownContent ?? '').includes(':::mj-block'))
+        ? DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(clonedBlock)
+        : region.MarkdownContent;
+    return {
+      ...region,
+      MarkdownContent: nextMarkdown,
+      BlockSpec: clonedBlock,
+    };
+  }
+
+  private writeTextToClipboard(text: string, statusBanner: string): void {
+    this.LastClipboardText = text;
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      void navigator.clipboard.writeText(text).catch(() => {
+        // Ignore clipboard permission errors in headless/sandbox environments
+      });
+    }
+    this.StatusBannerMessage = statusBanner;
+    this.cdr.markForCheck();
+  }
+
+  private openContextMenuAt(
+    zone: SlidesContextMenuZone,
+    clientX: number,
+    clientY: number,
+    slide: SlideSpec,
+    region?: SlideRegionSpec,
+    restoreFocusEl: HTMLElement | null = null,
+  ): void {
+    const snapshot = this.buildContextMenuSnapshot(zone, slide, region);
+    this.ContextMenuItems = BuildSlidesContextMenu(snapshot);
+    this.ContextMenuAriaLabel = ComputeSlidesMenuAriaLabel(zone);
+    this.ContextMenuX = clientX;
+    this.ContextMenuY = clientY;
+    this.ContextMenuRestoreFocusEl = restoreFocusEl;
+    this.ContextMenuOpen = this.ContextMenuItems.length > 0;
+    this.cdr.markForCheck();
+  }
+
+  private openContextMenuForTargetElement(
+    rawTarget: EventTarget | null,
+    overrideX?: number,
+    overrideY?: number,
+  ): void {
+    const targetEl =
+      rawTarget instanceof HTMLElement
+        ? rawTarget
+        : rawTarget instanceof Node && rawTarget.parentElement instanceof HTMLElement
+          ? rawTarget.parentElement
+          : null;
+    if (!targetEl) {
+      return;
+    }
+
+    const anchor =
+      typeof overrideX === 'number' && typeof overrideY === 'number'
+        ? { X: overrideX, Y: overrideY }
+        : ComputeElementContextMenuAnchor(targetEl);
+
+    const thumbCard = targetEl.closest<HTMLElement>('.mj-slides-thumbnail-card');
+    if (thumbCard) {
+      const testId = thumbCard.getAttribute('data-testid') ?? '';
+      const slideId = testId.startsWith('filmstrip-slide-') ? testId.slice('filmstrip-slide-'.length) : '';
+      const slide = this.Deck.Slides.find((s) => s.SlideID === slideId) ?? this.ActiveSlide;
+      this.openContextMenuAt('filmstrip-slide', anchor.X, anchor.Y, slide, undefined, thumbCard);
+      return;
+    }
+
+    const regionCard = targetEl.closest<HTMLElement>('.mj-slide-region-card');
+    if (regionCard) {
+      const testId = regionCard.getAttribute('data-testid') ?? '';
+      const regionId = testId.startsWith('slide-region-') ? testId.slice('slide-region-'.length) : '';
+      const slide = this.DisplayedSlide;
+      const region = slide.Regions.find((r) => r.RegionID === regionId);
+      const zone: SlidesContextMenuZone = this.IsPresentationActive
+        ? 'presentation-stage'
+        : this.IsEditable
+          ? 'slide-region'
+          : 'viewer-stage';
+      this.openContextMenuAt(zone, anchor.X, anchor.Y, slide, region, regionCard);
+      return;
+    }
+
+    const notesEl = targetEl.closest<HTMLElement>('.mj-slides-speaker-notes-bar, .mj-presenter-notes-card');
+    if (notesEl) {
+      this.openContextMenuAt('speaker-notes', anchor.X, anchor.Y, this.DisplayedSlide, undefined, notesEl);
+      return;
+    }
+
+    const filmstripEl = targetEl.closest<HTMLElement>('.mj-slides-filmstrip');
+    if (filmstripEl) {
+      this.openContextMenuAt('filmstrip-empty', anchor.X, anchor.Y, this.ActiveSlide, undefined, filmstripEl);
+      return;
+    }
+
+    const stageEl = targetEl.closest<HTMLElement>('.mj-slide-canvas-stage');
+    const zone: SlidesContextMenuZone = this.IsPresentationActive
+      ? 'presentation-stage'
+      : this.IsEditable
+        ? 'stage-background'
+        : 'viewer-stage';
+    this.openContextMenuAt(zone, anchor.X, anchor.Y, this.DisplayedSlide, undefined, stageEl ?? targetEl);
+  }
+
+  private buildContextMenuSnapshot(
+    zone: SlidesContextMenuZone,
+    slide: SlideSpec,
+    region?: SlideRegionSpec,
+  ): SlidesContextMenuSnapshot {
+    const deck = this.ActiveDeckForDisplay;
+    const slides = deck.Slides;
+    const slideIdx = Math.max(
+      0,
+      slides.findIndex((s) => s.SlideID === slide.SlideID),
+    );
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    const slideEditCheck = SlideDeckEngine.Instance.CanActorEditSlide(
+      slide,
+      userId,
+      ownerId,
+      this.IsEditable,
+    );
+    const slideLockToggleCheck = !userId
+      ? { Allowed: false, Reason: 'Sign in to lock or unlock slides' }
+      : slide.Locked
+        ? SlideDeckEngine.Instance.CanActorEditSlide(slide, userId, ownerId, false)
+        : { Allowed: this.IsEditable, Reason: undefined };
+
+    let regionIdx: number | undefined;
+    let regionEditAllowed: boolean | undefined;
+    let regionLockedReason: string | undefined;
+    let regionLockToggleAllowed: boolean | undefined;
+    let regionLockToggleDisabledReason: string | undefined;
+    let canSwapEarlier: boolean | undefined;
+    let swapEarlierDisabledReason: string | undefined;
+    let canSwapLater: boolean | undefined;
+    let swapLaterDisabledReason: string | undefined;
+    let isOleBlock = false;
+    let isOleEditing = false;
+    let isSheetBacked = false;
+    let blockMode: DocumentBlockSpec['Mode'] | undefined;
+    let sourceArtifactId: string | undefined;
+    let newerWorkbookVersionNumber: number | null = null;
+
+    if (region) {
+      regionIdx = slide.Regions.findIndex((r) => r.RegionID === region.RegionID);
+      const regionCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+        slide,
+        region,
+        userId,
+        ownerId,
+        this.IsEditable,
+      );
+      regionEditAllowed = regionCheck.Allowed;
+      regionLockedReason = regionCheck.Reason;
+
+      const regionLockCheck = !userId
+        ? { Allowed: false, Reason: 'Sign in to lock or unlock regions' }
+        : region.Locked
+          ? SlideDeckEngine.Instance.CanActorEditRegion(slide, region, userId, ownerId, false)
+          : { Allowed: this.IsEditable, Reason: undefined };
+      regionLockToggleAllowed = regionLockCheck.Allowed;
+      regionLockToggleDisabledReason = regionLockCheck.Reason;
+
+      if (regionIdx > 0) {
+        const prevCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+          slide,
+          slide.Regions[regionIdx - 1],
+          userId,
+          ownerId,
+          this.IsEditable,
+        );
+        canSwapEarlier = regionCheck.Allowed && prevCheck.Allowed;
+        swapEarlierDisabledReason = !regionCheck.Allowed ? regionCheck.Reason : prevCheck.Reason;
+      }
+      if (regionIdx >= 0 && regionIdx < slide.Regions.length - 1) {
+        const nextCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+          slide,
+          slide.Regions[regionIdx + 1],
+          userId,
+          ownerId,
+          this.IsEditable,
+        );
+        canSwapLater = regionCheck.Allowed && nextCheck.Allowed;
+        swapLaterDisabledReason = !regionCheck.Allowed ? regionCheck.Reason : nextCheck.Reason;
+      }
+
+      const block = this.GetRegionBlockSpec(region);
+      if (block) {
+        blockMode = block.Mode;
+        sourceArtifactId = block.ArtifactID;
+        isOleBlock = this.IsInlineOleArtifactBlock(block);
+        isOleEditing = isOleBlock && this.IsOleRegionEditing(region.RegionID);
+        isSheetBacked =
+          block.Kind === 'Artifact' &&
+          Boolean(block.SheetChartID || block.SheetRange || block.ArtifactType === 'Spreadsheet');
+        if (isSheetBacked) {
+          const newer = this.GetNewerSourceWorkbookVersion(block);
+          newerWorkbookVersionNumber = newer ? newer.VersionNumber : null;
+        }
+      }
+    }
+
+    const isMac =
+      typeof navigator !== 'undefined' &&
+      /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+
+    return {
+      Zone: zone,
+      IsEditable: this.IsEditable,
+      CanComment: this.CanComment,
+      IsAiAssistantEnabled: this.IsAiAssistantEnabled,
+      WorkspaceMode: this.WorkspaceMode,
+      TotalSlides: slides.length,
+      Slides: slides.map((s) => ({
+        SlideID: s.SlideID,
+        SlideNumber: s.SlideNumber,
+        Title: s.Title,
+        Hidden: Boolean(s.Hidden),
+      })),
+      Slide: slide,
+      SlideIndex: slideIdx,
+      CanEditSlide: slideEditCheck.Allowed,
+      SlideLockedReason: slideEditCheck.Reason,
+      CanToggleSlideLock: slideLockToggleCheck.Allowed,
+      SlideLockToggleDisabledReason: slideLockToggleCheck.Reason,
+      TargetRegion: region,
+      RegionIndex: regionIdx,
+      TotalRegions: slide.Regions.length,
+      CanEditRegion: regionEditAllowed,
+      RegionLockedReason: regionLockedReason,
+      CanToggleRegionLock: regionLockToggleAllowed,
+      RegionLockToggleDisabledReason: regionLockToggleDisabledReason,
+      CanSwapEarlier: canSwapEarlier,
+      SwapEarlierDisabledReason: swapEarlierDisabledReason,
+      CanSwapLater: canSwapLater,
+      SwapLaterDisabledReason: swapLaterDisabledReason,
+      IsOleBlock: isOleBlock,
+      IsOleEditing: isOleEditing,
+      IsSheetBackedBlock: isSheetBacked,
+      BlockMode: blockMode,
+      SourceArtifactID: sourceArtifactId,
+      NewerWorkbookVersionNumber: newerWorkbookVersionNumber,
+      HasCopiedRegion: this.copiedSlideRegionSpec !== null,
+      HasPreviousVisibleSlide: this.findPrevNavigableSlideIndex(slideIdx) >= 0,
+      HasNextVisibleSlide: this.findNextNavigableSlideIndex(slideIdx) >= 0,
+      ActiveThemeID: deck.Theme.ThemeID,
+      LayoutCatalog: this.LayoutCatalog,
+      ThemePresets: this.ThemePresets,
+      IsMac: isMac,
+    };
   }
 
   public OnSlideDragStart(slideId: string, event: DragEvent): void {
@@ -3085,11 +4501,10 @@ export class SlideDeckArtifactViewerComponent
     }
     const [moved] = slides.splice(fromIdx, 1);
     slides.splice(toIdx, 0, moved);
-    this.Deck = { ...this.Deck, Slides: slides };
-    this.session?.ReorderSlidesInDeck(
-      this.Deck.Slides.map((s) => s.SlideID),
-      this.Deck,
-    );
+    const orderedSlideIds = slides.map((s) => s.SlideID);
+    this.Deck = SlideDeckEngine.Instance.ReorderSlides(this.Deck, orderedSlideIds);
+    this.SelectSlide(draggedId);
+    this.session?.ReorderSlidesInDeck(orderedSlideIds, this.Deck);
     this.syncRawDeckJson();
     this.cdr.markForCheck();
   }
@@ -3111,14 +4526,10 @@ export class SlideDeckArtifactViewerComponent
     const engine = UserInfoEngine.Instance;
     const raw = engine?.GetSetting(SLIDES_TOOLBAR_PINS_SETTING_KEY) ?? null;
     if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) {
-          const valid = parsed.filter((k): k is SlidesToolbarItemKey => typeof k === 'string');
-          return valid.slice(0, this.MaxPinnedToolbarActions);
-        }
-      } catch {
-        // Fallback to defaults
+      const parsed = SafeJSONParse<string[]>(raw);
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((k): k is SlidesToolbarItemKey => typeof k === 'string');
+        return valid.slice(0, this.MaxPinnedToolbarActions);
       }
     }
     return [...DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS];
@@ -3301,6 +4712,30 @@ export class SlideDeckArtifactViewerComponent
         Active: false,
         Visible: true,
       },
+      {
+        Key: 'ask-ai',
+        Label: 'Ask AI Assistant',
+        ShortLabel: 'Ask AI',
+        Description: 'Open slide-in AI Assistant for this slide',
+        Icon: 'fa-wand-magic-sparkles',
+        Category: 'Design & AI',
+        Placement: 'right',
+        TestId: 'slides-ask-ai-btn',
+        Active: false,
+        Visible: ARTIFACT_AI_ASSISTANT_ENABLED && this.IsEditable,
+      },
+      {
+        Key: 'lock-slide',
+        Label: 'Lock / Unlock Slide',
+        ShortLabel: 'Lock',
+        Description: 'Protect current slide against unauthorized edits',
+        Icon: 'fa-lock',
+        Category: 'Slide Actions',
+        Placement: 'right',
+        TestId: 'slides-lock-slide-btn',
+        Active: Boolean(this.ActiveSlide?.Locked),
+        Visible: this.IsEditable,
+      },
     ];
   }
 
@@ -3373,6 +4808,12 @@ export class SlideDeckArtifactViewerComponent
         break;
       case 'export-pdf':
         this.OnExportPdf();
+        break;
+      case 'ask-ai':
+        this.OpenAskAiForPresentation();
+        break;
+      case 'lock-slide':
+        this.ToggleCurrentSlideLock();
         break;
     }
   }
@@ -3885,6 +5326,15 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
 
+    if (!IsValidUUID(artifactId) || (versionId && !IsValidUUID(versionId))) {
+      this.failedEmbeddedVersionMessages.set(
+        key,
+        `Embedded artifact reference "${artifactId}" is not a valid artifact UUID.`,
+      );
+      this.cdr.markForCheck();
+      return;
+    }
+
     const provider = this.getSafeProvider();
     const user = this.getSafeCurrentUser();
     if (!provider || !user) {
@@ -4116,7 +5566,7 @@ export class SlideDeckArtifactViewerComponent
 
   public GetDisplayRowsForBlock(block: DocumentBlockSpec): {
     Columns: DocumentBlockColumn[];
-    Rows: Array<Record<string, unknown>>;
+    Rows: DocumentBlockExecutionResult['Rows'];
   } {
     if (block.Mode === 'Frozen' && block.FrozenSnapshot) {
       return {
@@ -4134,7 +5584,7 @@ export class SlideDeckArtifactViewerComponent
     return { Columns: [], Rows: [] };
   }
 
-  public FormatCellValue(value: unknown): string {
+  public FormatCellValue(value: DocumentBlockExecutionResult['Rows'][number][string]): string {
     if (value === null || value === undefined) {
       return '';
     }
@@ -4494,25 +5944,325 @@ export class SlideDeckArtifactViewerComponent
   }
 
   private convertEditableRegionDomToMarkdown(el: HTMLElement): string {
-    const rawText = (el.innerText ?? '').replace(/\r\n/g, '\n').trim();
-    return rawText
-      .split('\n')
+    if (!el.childNodes || el.childNodes.length === 0) {
+      const rawText = (el.innerText ?? el.textContent ?? '').replace(/\r\n/g, '\n').trim();
+      return rawText
+        .split('\n')
+        .map((line) => line.replace(/^•\s+/, '- ').trimEnd())
+        .join('\n');
+    }
+    const lines: string[] = [];
+    this.collectEditableBlockLines(el, lines);
+    return lines
       .map((line) => line.replace(/^•\s+/, '- ').trimEnd())
-      .join('\n');
+      .filter((line, idx, arr) => line.length > 0 || (idx > 0 && idx < arr.length - 1))
+      .join('\n')
+      .trim();
+  }
+
+  private collectEditableBlockLines(container: Node, outLines: string[]): void {
+    const blockTags = new Set(['H1', 'H2', 'H3', 'P', 'DIV', 'BLOCKQUOTE', 'UL', 'OL', 'LI']);
+    let inlineBuf = '';
+    const flushInline = (): void => {
+      const normalized = inlineBuf.replace(/\r\n/g, '\n');
+      if (normalized.trim().length > 0) {
+        for (const l of normalized.split('\n')) {
+          if (l.trim().length > 0) {
+            outLines.push(l.trimEnd());
+          }
+        }
+      }
+      inlineBuf = '';
+    };
+
+    for (const child of Array.from(container.childNodes)) {
+      if (child.nodeType === 3) {
+        inlineBuf += child.textContent ?? '';
+        continue;
+      }
+      if (child.nodeType !== 1) {
+        continue;
+      }
+      const el = child as HTMLElement;
+      const tag = el.tagName.toUpperCase();
+      if (!blockTags.has(tag)) {
+        inlineBuf += this.serializeEditableInlineNode(el);
+        continue;
+      }
+      flushInline();
+
+      if (tag === 'H1') {
+        const text = this.serializeEditableInlineChildren(el).trim();
+        if (text) outLines.push(`# ${text}`);
+      } else if (tag === 'H2') {
+        const text = this.serializeEditableInlineChildren(el).trim();
+        if (text) outLines.push(`## ${text}`);
+      } else if (tag === 'H3') {
+        const text = this.serializeEditableInlineChildren(el).trim();
+        if (text) outLines.push(`### ${text}`);
+      } else if (tag === 'UL' || tag === 'OL') {
+        const listItems = Array.from(el.childNodes).filter(
+          (n) => n.nodeType === 1 && (n as HTMLElement).tagName.toUpperCase() === 'LI',
+        );
+        listItems.forEach((li, index) => {
+          const prefix = tag === 'OL' ? `${index + 1}. ` : '- ';
+          const text = this.serializeEditableInlineChildren(li).trim();
+          if (text) outLines.push(`${prefix}${text}`);
+        });
+      } else if (tag === 'LI') {
+        const text = this.serializeEditableInlineChildren(el).trim();
+        if (text) outLines.push(`- ${text}`);
+      } else {
+        const hasNestedBlock = Array.from(el.childNodes).some(
+          (n) => n.nodeType === 1 && blockTags.has((n as HTMLElement).tagName.toUpperCase()),
+        );
+        if (hasNestedBlock) {
+          this.collectEditableBlockLines(el, outLines);
+        } else {
+          const text = this.serializeEditableInlineChildren(el).replace(/\r\n/g, '\n');
+          for (const l of text.split('\n')) {
+            const trimmed = l.trimEnd();
+            if (trimmed.trim().length > 0) {
+              outLines.push(trimmed);
+            }
+          }
+        }
+      }
+    }
+    flushInline();
+  }
+
+  private serializeEditableInlineChildren(parent: Node): string {
+    let out = '';
+    for (const child of Array.from(parent.childNodes)) {
+      out += this.serializeEditableInlineNode(child);
+    }
+    return out;
+  }
+
+  private serializeEditableInlineNode(node: Node): string {
+    if (node.nodeType === 3) {
+      return node.textContent ?? '';
+    }
+    if (node.nodeType !== 1) {
+      return '';
+    }
+    const el = node as HTMLElement;
+    const tag = el.tagName.toUpperCase();
+    if (tag === 'BR') {
+      return '\n';
+    }
+    if (tag === 'STRONG' || tag === 'B') {
+      const inner = this.serializeEditableInlineChildren(el);
+      return inner ? `**${inner}**` : '';
+    }
+    if (tag === 'EM' || tag === 'I') {
+      const inner = this.serializeEditableInlineChildren(el);
+      return inner ? `*${inner}*` : '';
+    }
+    if (tag === 'CODE') {
+      const inner = el.textContent ?? '';
+      return inner ? `\`${inner}\`` : '';
+    }
+    return this.serializeEditableInlineChildren(el);
+  }
+
+  private resolveArtifactOwnerUserId(currentUserId: string | null): string | null {
+    if (this.artifactOwnerUserId) {
+      return this.artifactOwnerUserId;
+    }
+    if (this.ResolvedPermissions?.Source === 'Owner' && currentUserId) {
+      return currentUserId;
+    }
+    return null;
   }
 
   /**
    * Updates ONLY the targeted slide's metadata in `this.Deck` and broadcasts the single-slide
    * update via `session.UpdateSlideInDeck` (`Accept #1`).
    */
+  public get CanEditSlideElements(): boolean {
+    if (!this.IsEditable || this.WorkspaceMode !== 'edit' || !this.ActiveSlide) {
+      return false;
+    }
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    return SlideDeckEngine.Instance.CanActorEditSlide(
+      this.ActiveSlide,
+      userId,
+      ownerId,
+      this.IsEditable,
+    ).Allowed;
+  }
+
+  public CanEditRegion(region: SlideRegionSpec): boolean {
+    if (!this.IsEditable || this.WorkspaceMode !== 'edit' || !this.ActiveSlide) {
+      return false;
+    }
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    return SlideDeckEngine.Instance.CanActorEditRegion(
+      this.ActiveSlide,
+      region,
+      userId,
+      ownerId,
+      this.IsEditable,
+    ).Allowed;
+  }
+
+  public ToggleCurrentSlideLock(): void {
+    const userId = this.getSafeCurrentUser()?.ID;
+    if (!this.IsEditable || !userId || !this.ActiveSlide) {
+      return;
+    }
+    const nextLocked = !this.ActiveSlide.Locked;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    if (!nextLocked) {
+      const canUnlock = SlideDeckEngine.Instance.CanActorEditSlide(
+        this.ActiveSlide,
+        userId,
+        ownerId,
+        false,
+      );
+      if (!canUnlock.Allowed) {
+        this.StatusBannerMessage = canUnlock.Reason || 'Only the locker or owner can unlock this slide.';
+        this.cdr.markForCheck();
+        return;
+      }
+    }
+    const res = SlideDeckEngine.Instance.SetSlideLock(
+      this.Deck,
+      this.ActiveSlide.SlideID,
+      nextLocked,
+      userId,
+      false,
+      ownerId,
+    );
+    if (!res.UpdatedSlide) {
+      this.StatusBannerMessage = 'Only the locker or owner can unlock this slide.';
+      this.cdr.markForCheck();
+      return;
+    }
+    this.Deck = res.Deck;
+    this.session?.UpdateSlideInDeck(res.UpdatedSlide, this.Deck);
+    this.syncRawDeckJson();
+    this.StatusBannerMessage = nextLocked
+      ? `Locked Slide ${res.UpdatedSlide.SlideNumber} (${res.UpdatedSlide.Title}).`
+      : `Unlocked Slide ${res.UpdatedSlide.SlideNumber}.`;
+    this.cdr.markForCheck();
+  }
+
+  public ToggleRegionLock(region: SlideRegionSpec): void {
+    const userId = this.getSafeCurrentUser()?.ID;
+    if (!this.IsEditable || !userId || !this.ActiveSlide) {
+      return;
+    }
+    const nextLocked = !region.Locked;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    if (region.Locked || this.ActiveSlide.Locked) {
+      const canUnlock = SlideDeckEngine.Instance.CanActorEditRegion(
+        this.ActiveSlide,
+        region,
+        userId,
+        ownerId,
+        false,
+      );
+      if (!canUnlock.Allowed) {
+        this.StatusBannerMessage = canUnlock.Reason || 'Only the locker or owner can unlock this region.';
+        this.cdr.markForCheck();
+        return;
+      }
+    }
+    const res = SlideDeckEngine.Instance.SetRegionLock(
+      this.Deck,
+      this.ActiveSlide.SlideID,
+      region.RegionID,
+      nextLocked,
+      userId,
+      false,
+      ownerId,
+    );
+    if (!res.UpdatedRegion) {
+      this.StatusBannerMessage = 'Only the locker or owner can unlock this region.';
+      this.cdr.markForCheck();
+      return;
+    }
+    this.Deck = res.Deck;
+    const updatedSlide = this.Deck.Slides.find((s) => s.SlideID === this.ActiveSlide.SlideID);
+    if (updatedSlide) {
+      this.session?.UpdateSlideInDeck(updatedSlide, this.Deck);
+    }
+    this.syncRawDeckJson();
+    this.StatusBannerMessage = nextLocked
+      ? `Locked slide region "${region.Label}".`
+      : `Unlocked slide region "${region.Label}".`;
+    this.cdr.markForCheck();
+  }
+
+  public OpenAskAiForPresentation(): void {
+    if (!ARTIFACT_AI_ASSISTANT_ENABLED) {
+      return;
+    }
+    const slide = this.ActiveSlide;
+    const targetRegion =
+      slide?.Regions.find((r) => r.RegionID === this.FocusedRegionID) ?? slide?.Regions[0];
+    RequestArtifactAiAssistant({
+      ArtifactID: this.artifactVersion?.ArtifactID ?? null,
+      ArtifactTitle: this.Deck.Title || 'Presentation',
+      ArtifactKind: 'slides',
+      ContextLabel: slide
+        ? `Slide ${slide.SlideNumber}: ${slide.Title}${targetRegion ? ' · ' + targetRegion.Label : ''}`
+        : 'Presentation',
+      SelectedContent: targetRegion?.MarkdownContent || slide?.Title || '',
+      SuggestingModeDefault: true,
+      TargetSlideID: slide?.SlideID,
+      ApplySuggestion: (proposedText: string, _asSuggestion: boolean) => {
+        if (!proposedText.trim() || !slide) {
+          return;
+        }
+        if (targetRegion) {
+          this.applySingleSlideRegionPatch(slide.SlideID, {
+            RegionID: targetRegion.RegionID,
+            MarkdownContent: proposedText.trim(),
+          });
+          this.StatusBannerMessage = `Applied AI Assistant draft to Slide ${slide.SlideNumber} (${targetRegion.Label}).`;
+        } else {
+          this.applySingleSlideMetadataPatch(slide.SlideID, { Title: proposedText.trim() });
+        }
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
   private applySingleSlideMetadataPatch(
     slideId: string,
     patch: Parameters<typeof SlideDeckEngine.Instance.UpdateSlideMetadata>[2],
   ): void {
+    const targetSlide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    if (targetSlide) {
+      const check = SlideDeckEngine.Instance.CanActorEditSlide(
+        targetSlide,
+        userId,
+        ownerId,
+        this.IsEditable,
+      );
+      if (!check.Allowed) {
+        this.StatusBannerMessage = check.Reason || 'This slide is locked.';
+        this.cdr.markForCheck();
+        return;
+      }
+    }
     const { Deck: updatedDeck, UpdatedSlide } = SlideDeckEngine.Instance.UpdateSlideMetadata(
       this.Deck,
       slideId,
       patch,
+      {
+        ActorUserID: userId,
+        OwnerUserID: ownerId,
+        IsEditor: this.IsEditable,
+      },
     );
     if (!UpdatedSlide) {
       return;
@@ -4531,6 +6281,24 @@ export class SlideDeckArtifactViewerComponent
     slideId: string,
     regionPatch: Partial<SlideRegionSpec> & { RegionID: string },
   ): void {
+    const targetSlide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const targetRegion = targetSlide?.Regions.find((r) => r.RegionID === regionPatch.RegionID);
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    if (targetSlide && targetRegion) {
+      const check = SlideDeckEngine.Instance.CanActorEditRegion(
+        targetSlide,
+        targetRegion,
+        userId,
+        ownerId,
+        this.IsEditable,
+      );
+      if (!check.Allowed) {
+        this.StatusBannerMessage = check.Reason || 'This slide region is locked.';
+        this.cdr.markForCheck();
+        return;
+      }
+    }
     const { Deck: updatedDeck, UpdatedRegion } = SlideDeckEngine.Instance.UpsertSlideRegion(
       this.Deck,
       slideId,
@@ -4572,6 +6340,7 @@ export class SlideDeckArtifactViewerComponent
     this.failedEmbeddedVersionMessages.clear();
     this.AnchoredThreads = [];
     this.ResolvedPermissions = null;
+    this.artifactOwnerUserId = null;
     this.ConnectionStatus = 'local';
 
     const rawContent = this.extractArtifactVersionContent();
@@ -4864,6 +6633,16 @@ export class SlideDeckArtifactViewerComponent
         return;
       }
       this.ResolvedPermissions = perms;
+      if (perms?.Source === 'Owner') {
+        this.artifactOwnerUserId = currentUser.ID;
+      } else if (perms?.CanRead) {
+        await this.resolveArtifactOwnerFromProvider(persistedArtifactId, currentUser, provider, gen);
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
+      } else {
+        this.artifactOwnerUserId = null;
+      }
       if (!perms) {
         this.AccessRevoked = false;
         this.PermissionVerifyError = false;
@@ -4989,6 +6768,33 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
     this.cdr.markForCheck();
+  }
+
+  private async resolveArtifactOwnerFromProvider(
+    artifactId: string,
+    user: UserInfo,
+    provider: IMetadataProvider,
+    gen: number,
+  ): Promise<void> {
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const artRes = await rv.RunView<{ ID: string; UserID?: string }>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
+          Fields: ['ID', 'UserID'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
+      this.artifactOwnerUserId = artRes.Success ? (artRes.Results?.[0]?.UserID ?? null) : null;
+    } catch {
+      // Leave null on query failure so non-owners never elevate to owner privileges
+    }
   }
 
   private async hydrateAnchoredSlideThreadsFromServer(
@@ -5472,4 +7278,22 @@ export class SlideDeckArtifactViewerComponent
       }),
     );
   }
+}
+
+function generateSlideBlockUuid(): string {
+  if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.getRandomValues === 'function') {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
