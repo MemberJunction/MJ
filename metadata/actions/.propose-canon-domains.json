@@ -1,0 +1,208 @@
+[
+  {
+    "fields": {
+      "Name": "Propose Canon Domains",
+      "Description": "Groups entities into candidate business domains by community detection over their foreign-key and IS-A links (deterministic, no AI call) and proposes each as a Domain concept in a semantic graph (default \"MJ Canon\"). With DryRun (the default) it only returns the proposals. With DryRun = false it writes each as a Proposed Domain concept plus Inferred, Proposed Describes edges from its member entities, for a person to rename, approve or reject. A domain name already in the graph is never proposed again.",
+      "DriverClass": "Propose Canon Domains",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-object-group",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GraphName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name or ID of an active graph to traverse. Default: \"MJ Canon\".",
+            "IsRequired": false,
+            "DefaultValue": "MJ Canon"
+          },
+          "primaryKey": {
+            "ID": "AB4AE859-6720-492B-9AEC-0615B7995544"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SchemaNames",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Only entities in these schemas take part (array, JSON string or comma-separated list). All schemas when omitted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "84119636-6137-4636-A10D-769BFEC055A6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinClusterSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Smallest group worth proposing. Default: 3.",
+            "IsRequired": false,
+            "DefaultValue": "3"
+          },
+          "primaryKey": {
+            "ID": "DA54AA0F-6394-4CFF-90D0-A479D94BC539"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxDomains",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Most domains proposed, largest first. Default: 25.",
+            "IsRequired": false,
+            "DefaultValue": "25"
+          },
+          "primaryKey": {
+            "ID": "32CFF5F7-8FF6-4AF0-81BC-A9D3BEF0D28F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Resolution",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Community detection resolution; above 1 gives more, smaller domains. Default: 1.",
+            "IsRequired": false,
+            "DefaultValue": "1"
+          },
+          "primaryKey": {
+            "ID": "75C569FC-DE88-4057-8A8B-030FF3BA8908"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DryRun",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true (the default), only return the proposals; when false, write them for review.",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "A9200920-47B4-4E76-A511-692CEC2B2AB3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Proposals",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "The proposals: { Name, Description, Members: [{ EntityID, EntityName, Confidence }], Cohesion }.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D578D97F-D516-4521-B63C-402AA7C4F8C8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConceptsCreated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of Proposed Domain concepts written (0 on a dry run).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "399073AC-8F52-487C-9868-4CFEA13B29C2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EdgesCreated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of Proposed Describes edges written (0 on a dry run).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "60665D89-62AC-4569-B12D-4B56C830585F"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Proposals were returned (dry run) or written for review."
+          },
+          "primaryKey": {
+            "ID": "72785902-0B9A-4F1E-95D6-8F79EA34FF74"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROPOSALS",
+            "IsSuccess": true,
+            "Description": "There is no new domain to propose."
+          },
+          "primaryKey": {
+            "ID": "D718D7BC-4BA3-4F91-A733-798226126195"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "There is no context user."
+          },
+          "primaryKey": {
+            "ID": "20389DD8-0CD8-494E-97A5-4C1DB327DD05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GRAPH_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The graph is unknown or not active."
+          },
+          "primaryKey": {
+            "ID": "CD0FD2EF-4D72-4FEE-B0D9-B8E19CDC327A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred, including a failed save; the message says which."
+          },
+          "primaryKey": {
+            "ID": "46673A9C-2FF1-4572-89E8-D2C2578E327E"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2CA35490-62E2-4461-A5F4-883668390C34"
+    }
+  }
+]

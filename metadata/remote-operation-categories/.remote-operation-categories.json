@@ -152,5 +152,15 @@
       "lastModified": "2026-11-01T22:54:28.653Z",
       "checksum": "9f321d4f98b9e6fdfdc7c5e731d983714303f3f5ebc1bcfa3952a4cfb79f2e67"
     }
+  },
+  {
+    "fields": {
+      "Name": "Semantic Graph",
+      "Description": "Semantic graph operations (paths and neighborhoods over named graphs such as MJ Canon), checked as the caller.",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "56D42C30-E17B-45B9-947C-AFBAC109414A"
+    }
   }
 ]

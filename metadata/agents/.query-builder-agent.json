@@ -417,6 +417,26 @@
                 "primaryKey": {
                   "ID": "E066FBBC-4268-4845-9E70-E64370E880DB"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Graph Context",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "81F24722-81C5-4A2C-A3AE-A2B3A8E05003"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Find Graph Path",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4B7BEFDF-66C2-484E-BFA5-8181D668B181"
+                }
               }
             ],
             "MJ: AI Agent Rubrics": [

@@ -862,12 +862,13 @@ import {
     ApolloSearchPeopleAction,
 } from '@memberjunction/actions-apollo';
 
-// @memberjunction/actions-bizapps-accounting (19 classes)
+// @memberjunction/actions-bizapps-accounting (21 classes)
 import {
     CreateBusinessCentralJournalEntryAction,
     CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
     GetAccountBalancesAction,
+    GetBudgetAction,
     GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
     GetBusinessCentralDimensionsAction,
@@ -883,6 +884,7 @@ import {
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
     GetSalesInvoicesAction,
+    GetVendorBillsAction,
 } from '@memberjunction/actions-bizapps-accounting';
 
 // @memberjunction/actions-bizapps-crm (4 classes)
@@ -1489,9 +1491,10 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (84 classes)
+// @memberjunction/core-entities-server (85 classes)
 import {
     FieldSuggestionCommentDriver,
+    GraphFindPathServerOperation,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -1648,7 +1651,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (187 classes)
+// @memberjunction/core-actions (189 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1712,6 +1715,7 @@ import {
     FindCandidateActionsAction,
     FindCandidateAgentsAction,
     FindCandidateSkillsAction,
+    FindGraphPathAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -1785,6 +1789,7 @@ import {
     PostalCodeLookupAction,
     PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
+    ProposeCanonDomainsAction,
     QRCodeAction,
     ReadRSSFeedAction,
     ReembedLocalVectorsAction,
@@ -1862,7 +1867,7 @@ import {
     WorkQueueValidateBindingsServerOperation,
 } from '@memberjunction/work-queue-engine';
 
-// @memberjunction/server (8 classes)
+// @memberjunction/server (9 classes)
 import {
     AWSIoTCoreBroadcastProvider,
     AzureWebPubSubBroadcastProvider,
@@ -1872,6 +1877,7 @@ import {
     RateLimitMiddleware,
     RedisStreamBroadcastProvider,
     SequencedRoleBucketBroadcastProvider,
+    SynthesizeArtifactFromSourcesServerOperation,
 } from '@memberjunction/server';
 
 // @memberjunction/diagnostics-server (14 classes)
@@ -2546,6 +2552,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
     GetAccountBalancesAction,
+    GetBudgetAction,
     GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
     GetBusinessCentralDimensionsAction,
@@ -2561,6 +2568,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
     GetSalesInvoicesAction,
+    GetVendorBillsAction,
     AssociateContactToCompanyAction,
     GetActivitiesByContactAction,
     LogActivityAction,
@@ -2721,12 +2729,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     HealthRecentRingBufferEventsOperation,
     HealthRunCheckOperation,
     HealthTelemetryAggregatesOperation,
-    LiveEntityCrudProbe,
-    MetadataCacheParityProbe,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    LiveEntityCrudProbe,
+    MetadataCacheParityProbe,
     OpenAppFleetStatusProbe,
     QueueWorkerHeartbeatProbe,
     SchemaMigrationParityProbe,
@@ -2925,12 +2933,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
     TaskGraphUpdateTaskInputServerOperation,
-    WorkflowDraftServerOperation,
-    WorkflowSaveServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    WorkflowDraftServerOperation,
+    WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
     SlackMessagingExtension,
     TeamsMessagingExtension,
@@ -2946,6 +2954,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
     FieldSuggestionCommentDriver,
+    GraphFindPathServerOperation,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -3128,13 +3137,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     FindBestAgentAction,
     FindBestSkillAction,
     FindCandidateActionsAction,
-    FindCandidateAgentsAction,
-    FindCandidateSkillsAction,
-    GammaGeneratePresentationAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    FindCandidateAgentsAction,
+    FindCandidateSkillsAction,
+    FindGraphPathAction,
+    GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
     GenerateVideoAction,
@@ -3207,6 +3217,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     PostalCodeLookupAction,
     PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
+    ProposeCanonDomainsAction,
     QRCodeAction,
     ReadRSSFeedAction,
     ReembedLocalVectorsAction,
@@ -3282,6 +3293,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RateLimitMiddleware,
     RedisStreamBroadcastProvider,
     SequencedRoleBucketBroadcastProvider,
+    SynthesizeArtifactFromSourcesServerOperation,
     DiagnosticRetentionScheduledJobDriver,
     DiagnosticsBuildBundleServerOperation,
     DiagnosticsEnrolSenderServerOperation,
@@ -3315,7 +3327,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1363;
+export const CLASS_REGISTRATIONS_COUNT = 1369;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

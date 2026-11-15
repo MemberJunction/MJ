@@ -5,7 +5,8 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { CanonGraphEngine } from '../../engines/CanonGraphEngine';
+import { CanonGraphEngine, ClassifyConceptMatches, type ConceptMatch } from '../../engines/CanonGraphEngine';
+import type { EntityInfo } from '@memberjunction/core';
 import { GraphEngine } from '../../graph/GraphEngine';
 import { LoadGraphEdgeProviders } from '../../graph';
 import { QueryEngine } from '../../engines/QueryEngine';
@@ -261,6 +262,111 @@ describe('CanonGraphEngine', () => {
             const result = await service.Expand({ Seeds: [{ EntityName: 'MJ: Graph Concepts', RecordID: IDS.ConceptOpenAr }], GraphNames: ['No Such Graph'] }, analyst);
             expect(result.Nodes).toEqual([]);
             expect(result.Messages?.[0]).toContain('not found or is not active');
+        });
+    });
+    describe('ResolveConcepts and ambiguity', () => {
+        const rows = (): FakeRow[] => CanonMetadataRows()['MJ: Graph Concepts'];
+        const openOrders = (): FakeRow => ({ ...rows()[1], ID: '77777777-7777-4777-8777-777777777791', Name: 'Open Orders', Synonyms: null });
+        const openSecrets = (): FakeRow => ({ ...rows()[1], ID: '77777777-7777-4777-8777-777777777792', Name: 'Open Secrets', Synonyms: null });
+
+        it('matches a whole name exactly, and a question naming two concepts as two matches, not an ambiguity', async () => {
+            await setup({ 'MJ: Graph Concepts': [openOrders()] });
+            const exact = await CanonGraphEngine.Instance.ResolveConcepts('Open AR', analyst);
+            expect(exact.Status).toBe('Matched');
+            expect(exact.Matches[0]).toMatchObject({ Kind: 'Exact', Score: 1 });
+            const both = await CanonGraphEngine.Instance.ResolveConcepts('how does open ar relate to net revenue?', analyst);
+            expect(both.Status).toBe('Matched');
+            expect(both.Matches.slice(0, 2).map((m) => m.Node.Label).sort()).toEqual(['Net Revenue', 'Open AR']);
+        });
+
+        it('calls a fragment that fits several concepts equally well ambiguous, with the tied candidates', async () => {
+            await setup({ 'MJ: Graph Concepts': [openOrders()] });
+            const result = await CanonGraphEngine.Instance.ResolveConcepts('open', analyst);
+            expect(result.Status).toBe('Ambiguous');
+            expect(result.Candidates.map((c) => c.Node.Label).sort()).toEqual(['Open AR', 'Open Orders']);
+            expect(await CanonGraphEngine.Instance.FindConcepts('open', analyst)).toHaveLength(2); // FindConcepts is unchanged
+        });
+
+        it('never lets a concept the caller cannot see make a visible one ambiguous', async () => {
+            await setup({ 'MJ: Graph Concepts': [openSecrets()] });
+            provider.HiddenFor[analyst.ID] = ['MJ: Graph Concepts|77777777-7777-4777-8777-777777777792'];
+            const result = await CanonGraphEngine.Instance.ResolveConcepts('open', analyst);
+            expect(result.Status).toBe('Matched');
+            expect(result.Matches.map((m) => m.Node.Label)).toEqual(['Open AR']);
+        });
+
+        it('reports NoMatch when nothing matches', async () => {
+            await setup();
+            expect((await CanonGraphEngine.Instance.ResolveConcepts('zebra crossings', analyst)).Status).toBe('NoMatch');
+        });
+
+        it('ClassifyConceptMatches: two exact matches tie; partial matches tie only within the margin', () => {
+            const m = (label: string, score: number, kind: ConceptMatch['Kind']): ConceptMatch => ({
+                Node: { Key: label, EntityName: 'MJ: Graph Concepts', RecordID: label, Label: label, Icon: null, Description: null },
+                Score: score,
+                Kind: kind,
+            });
+            expect(ClassifyConceptMatches([m('A', 1, 'Exact'), m('B', 1, 'Exact')]).Status).toBe('Ambiguous');
+            expect(ClassifyConceptMatches([m('A', 1, 'Exact'), m('B', 0.9, 'Partial')]).Status).toBe('Matched');
+            expect(ClassifyConceptMatches([m('A', 0.5, 'Token'), m('B', 0.46, 'Token')]).Status).toBe('Ambiguous');
+            expect(ClassifyConceptMatches([m('A', 0.5, 'Token'), m('B', 0.25, 'Token')]).Status).toBe('Matched');
+            expect(ClassifyConceptMatches([m('A', 0.9, 'Mention'), m('B', 0.9, 'Mention')]).Status).toBe('Matched');
+            expect(ClassifyConceptMatches([]).Status).toBe('NoMatch');
+        });
+    });
+
+    describe('ResolveGraphEndpoint', () => {
+        it('takes a record reference as given, a concept by ID or exact name, and reports ambiguous and unknown names', async () => {
+            const rows = CanonMetadataRows()['MJ: Graph Concepts'];
+            await setup({ 'MJ: Graph Concepts': [{ ...rows[1], ID: '77777777-7777-4777-8777-777777777791', Name: 'Open Orders', Synonyms: null }] });
+            const canon = CanonGraphEngine.Instance;
+            expect(await canon.ResolveGraphEndpoint({ EntityName: 'Accounts', RecordID: 'acc-1', Concept: 'ignored' }, 'MJ Canon', analyst)).toEqual({
+                Status: 'Resolved',
+                Node: { EntityName: 'Accounts', RecordID: 'acc-1' },
+                Candidates: [],
+            });
+            const byId = await canon.ResolveGraphEndpoint({ Concept: IDS.ConceptRevenue.toLowerCase() }, 'MJ Canon', analyst);
+            expect(byId.Node).toEqual({ EntityName: 'MJ: Graph Concepts', RecordID: IDS.ConceptRevenue });
+            const byName = await canon.ResolveGraphEndpoint({ Concept: 'Unpaid Invoices' }, 'MJ Canon', analyst);
+            expect(byName.Node?.RecordID).toBe(IDS.ConceptOpenAr);
+            const ambiguous = await canon.ResolveGraphEndpoint({ Concept: 'open' }, 'MJ Canon', analyst);
+            expect(ambiguous.Status).toBe('Ambiguous');
+            expect(ambiguous.Candidates).toHaveLength(2);
+            expect((await canon.ResolveGraphEndpoint({ Concept: 'zebra' }, 'MJ Canon', analyst)).Status).toBe('NotFound');
+            expect((await canon.ResolveGraphEndpoint({}, 'MJ Canon', analyst)).Status).toBe('NotFound');
+        });
+    });
+
+    describe('ProposeDomainConcepts', () => {
+        function fakeEntity(id: string, name: string, refs: string[], canRead = true): EntityInfo {
+            return {
+                ID: id,
+                Name: name,
+                SchemaName: 'sales',
+                ParentID: null,
+                Fields: refs.map((r) => ({ RelatedEntityID: r })),
+                GetUserPermisions: () => ({ CanRead: canRead }),
+            } as unknown as EntityInfo;
+        }
+
+        it('proposes domains only over entities the caller can read, and skips names already in the graph', async () => {
+            const e = (n: number): string => `EEEEEEEE-0000-4000-8000-${String(n).padStart(12, '0')}`;
+            await setup({ 'MJ: Graph Concepts': [{ ...CanonMetadataRows()['MJ: Graph Concepts'][1], ID: '77777777-7777-4777-8777-777777777793', Name: 'Quotes domain', Status: 'Proposed' }] });
+            const entities = [
+                fakeEntity(e(1), 'Sales: Deals', [e(2), e(3)]),
+                fakeEntity(e(2), 'Sales: Deal Lines', [e(1), e(3)]),
+                fakeEntity(e(3), 'Sales: Products', [e(1)]),
+                fakeEntity(e(4), 'Sales: Quotes', [e(5), e(6)]),
+                fakeEntity(e(5), 'Sales: Quote Lines', [e(4), e(6)]),
+                fakeEntity(e(6), 'Sales: Quote Terms', [e(4)]),
+                fakeEntity(e(7), 'Sales: Secret Margins', [e(1), e(2)], false),
+            ];
+            const stub = { Entities: entities } as unknown as IMetadataProvider;
+            vi.spyOn(CanonGraphEngine.Instance, 'EnsureConfigured').mockResolvedValue(undefined);
+            const proposals = await CanonGraphEngine.Instance.ProposeDomainConcepts('MJ Canon', analyst, {}, stub);
+            expect(proposals.map((p) => p.Name)).toEqual(['Deals domain']); // 'Quotes domain' already exists
+            expect(proposals[0].Members.map((m) => m.EntityName)).not.toContain('Sales: Secret Margins');
+            expect(await CanonGraphEngine.Instance.ProposeDomainConcepts('No Such Graph', analyst, {}, stub)).toEqual([]);
         });
     });
 });

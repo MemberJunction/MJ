@@ -249,6 +249,97 @@ export interface DiagnosticsReactivateSenderOutput {
     Status: 'Active';
 }
 
+/**
+ * One end of a `Graph.FindPath` request: a record (`EntityName` + `RecordID`), or a concept
+ * (`Concept` = its name, a synonym, or its ID). A record reference wins when both are given.
+ */
+export interface GraphFindPathEndpoint {
+    /** Registered entity name of the record, e.g. "MJ: Queries" or "Invoices". */
+    EntityName?: string;
+    /** The record's key, in compact URL-segment form (the bare value for a single-column key). */
+    RecordID?: string;
+    /** A concept's name, synonym or ID in the graph. */
+    Concept?: string;
+}
+
+/** Input for `Graph.FindPath`. */
+export interface GraphFindPathInput {
+    /** Name or ID of an active graph. Default: "MJ Canon". */
+    GraphName?: string;
+    /** Start of the path. */
+    From: GraphFindPathEndpoint;
+    /** End of the path. */
+    To: GraphFindPathEndpoint;
+    /** Maximum hops, 1 to 4. Default: 4. */
+    Depth?: number;
+    /** Maximum nodes the search may visit, 1 to 200. Default: 200. */
+    MaxNodes?: number;
+    /** Optional allow-list of edge type names to follow. */
+    EdgeTypes?: string[];
+    /** Optional minimum edge weight to follow, 0 to 1. */
+    MinWeight?: number;
+    /** When true, also follow edges and match concepts still awaiting review. Default: false. */
+    IncludeProposed?: boolean;
+}
+
+/** A node on a `Graph.FindPath` path. */
+export interface GraphFindPathNode {
+    /** Canonical node key. */
+    Key: string;
+    EntityName: string;
+    RecordID: string;
+    Label: string;
+    Icon: string | null;
+    Description: string | null;
+}
+
+/** An edge on a `Graph.FindPath` path, in its own direction (a hop may run against it). */
+export interface GraphFindPathEdge {
+    /** Stored edge ID, or `derived:<provider>:<type>:<sourceKey>:<targetKey>`. */
+    ID: string;
+    TypeName: string;
+    SourceEntityName: string;
+    SourceRecordID: string;
+    TargetEntityName: string;
+    TargetRecordID: string;
+    IsDirected: boolean;
+    Weight: number;
+    Description: string | null;
+    Origin: 'Derived' | 'Declared' | 'Inferred';
+    Status: 'Proposed' | 'Approved' | 'Rejected';
+}
+
+/** A concept an ambiguous endpoint fits, for the caller to choose from. */
+export interface GraphFindPathCandidate {
+    Name: string;
+    RecordID: string;
+    Description: string | null;
+    Score: number;
+}
+
+/**
+ * Output of `Graph.FindPath`. `Status` says what kind of answer this is:
+ * - `Found`: `Nodes` run from From to To, and `Edges[i]` joins `Nodes[i]` and `Nodes[i + 1]`.
+ * - `NoPath`: the endpoints are not connected within the limits by anything the caller may see.
+ *   A record the caller cannot see gives this same answer.
+ * - `AmbiguousEndpoint`: `AmbiguousEndpoint` names the side and `Candidates` lists the concepts it fits.
+ * - `EndpointNotFound`: an endpoint names no concept the caller may see.
+ * - `GraphNotFound`: the graph is unknown or not active.
+ */
+export interface GraphFindPathOutput {
+    Status: 'Found' | 'NoPath' | 'AmbiguousEndpoint' | 'EndpointNotFound' | 'GraphNotFound';
+    Nodes: GraphFindPathNode[];
+    Edges: GraphFindPathEdge[];
+    /** Product of the path's edge weights, decayed per hop (0 when none was found). */
+    PathWeight: number;
+    /** The path as compact Markdown, one line per hop. */
+    PromptText: string;
+    /** Which endpoint was ambiguous or not found, when that is the status. */
+    AmbiguousEndpoint?: 'From' | 'To';
+    Candidates: GraphFindPathCandidate[];
+    Message?: string;
+}
+
 /** The control action to apply to a running/paused experiment session. */
 export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
 
@@ -1987,6 +2078,22 @@ export class DiagnosticsUploadClientCaptureOperation extends BaseRemotableOperat
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_97adc6e3d5d0c6a6";
+}
+
+// ============================================================
+// Graph.FindPath — Find Graph Path
+// ============================================================
+/**
+ * Find Graph Path
+ * Find the fewest-hop path between two nodes of a semantic graph (default MJ Canon) that the caller may see. Each endpoint is a record or a concept name, synonym or ID; an endpoint that fits several concepts comes back AmbiguousEndpoint with the candidates. Read-only. Implemented by GraphFindPathServerOperation in @memberjunction/core-entities-server over GraphEngine.FindPath.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Graph.FindPath'. This generated base provides the typed contract only (client-safe).
+ */
+export class GraphFindPathOperation extends BaseRemotableOperation<GraphFindPathInput, GraphFindPathOutput> {
+    public readonly OperationKey = "Graph.FindPath";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_b3d8130afd9fc1c7";
 }
 
 // ============================================================

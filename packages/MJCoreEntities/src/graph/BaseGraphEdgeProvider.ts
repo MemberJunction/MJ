@@ -104,6 +104,21 @@ export interface GraphSubgraph {
 }
 
 /**
+ * A path between two nodes returned by {@link GraphEngine.FindPath}. `Nodes` run from the start node
+ * to the end node; `Edges[i]` joins `Nodes[i]` and `Nodes[i + 1]`, in either of its directions.
+ */
+export interface GraphPath {
+    /** `true` when a path the caller may see was found within the limits. */
+    Found: boolean;
+    Nodes: GraphNodeView[];
+    Edges: GraphEdgeView[];
+    /** Product of the path's edge weights, decayed per hop (`0` when not found). */
+    PathWeight: number;
+    /** Why nothing was found: an unknown graph, no connection within the limits, or a cap reached. */
+    Message?: string;
+}
+
+/**
  * Request passed to a {@link BaseGraphEdgeProvider} for one expansion step.
  */
 export interface GraphEdgeRequest {
