@@ -12783,6 +12783,9 @@ importers:
       '@memberjunction/ai-bridge-livekit-native':
         specifier: 6.3.0-edge.0
         version: link:../AI/RealtimeBridge/Providers/LiveKitNative
+      '@memberjunction/ai-mcp-server':
+        specifier: 6.3.0-edge.0
+        version: link:../AI/MCPServer
       '@memberjunction/communication-sendgrid':
         specifier: 6.3.0-edge.0
         version: link:../Communication/providers/sendgrid

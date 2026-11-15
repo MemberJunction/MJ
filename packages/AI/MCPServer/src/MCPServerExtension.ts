@@ -148,7 +148,7 @@ export class MCPServerExtension extends BaseServerExtension {
             const mount = ResolveMCPMount(context.config.RootPath, context.apiRootPath, sub => server.ApiRoute(sub, { absolute: true }));
 
             await InitConfig();
-            refuseUnauthenticatedMode();
+            refuseOpenSystemAccess();
             SetHostedResourceIdentifier(mount.PublicEndpointUrl);
             warnAboutHostedSettings(context.config, mount);
             const routers = await CreateMCPRouters({
@@ -234,13 +234,18 @@ function refuseMultiTenancy(multiTenancyEnabled: boolean): void {
 const PLACEHOLDER_SYSTEM_API_KEY = 'MY_API_KEY_FOR_MCP_SERVER';
 
 /**
- * Fails closed on `auth.mode: 'none'`. That mode gives every request the system user, with no
- * credentials; inside MJAPI the MCP routes mount before MJAPI's own authentication and share its
- * public port, so MCP's auth mode is the only gate.
+ * Fails closed on settings that hand out the system user: `auth.mode: 'none'` (no credentials at
+ * all) and the published placeholder `systemApiKey`. Inside MJAPI the MCP routes mount before
+ * MJAPI's own authentication and share its public port, so MCP's own settings are the only gate.
  */
-function refuseUnauthenticatedMode(): void {
+function refuseOpenSystemAccess(): void {
     if (GetAuthMode() === 'none') {
         throw new Error("MCPServerExtension refuses to mount with mcpServerSettings.auth.mode 'none': every request would run as the system user, with no credentials, on MJAPI's public port. Use 'apiKey', 'oauth' or 'both'.");
+    }
+    // The placeholder is published in the repo's mj.config.cjs, so anyone could send it and get
+    // every tool as the system user. The standalone server still accepts it (local dev default).
+    if (McpServerSettings?.systemApiKey === PLACEHOLDER_SYSTEM_API_KEY) {
+        throw new Error(`MCPServerExtension refuses to mount while mcpServerSettings.systemApiKey is the stock placeholder '${PLACEHOLDER_SYSTEM_API_KEY}': it is published, and it grants every MCP tool as the system user on MJAPI's public port. Set it to a secret value or remove it.`);
     }
 }
 
@@ -252,9 +257,6 @@ function warnAboutHostedSettings(config: ServerExtensionConfig, mount: MCPMount)
     const advertised = GetResourceIdentifier();
     if (advertised !== mount.PublicEndpointUrl) {
         console.warn(`[MCPServerExtension] mcpServerSettings.auth.resourceIdentifier (${advertised}) overrides the URL MCP is served at (${mount.PublicEndpointUrl}). OAuth clients will look for metadata under ${advertised}; remove the setting unless a proxy maps it here.`);
-    }
-    if (McpServerSettings?.systemApiKey === PLACEHOLDER_SYSTEM_API_KEY) {
-        console.warn(`[MCPServerExtension] mcpServerSettings.systemApiKey is the stock placeholder '${PLACEHOLDER_SYSTEM_API_KEY}'. Anyone who sends it gets every MCP tool as the system user, now on MJAPI's public port. Set a secret value or remove the setting.`);
     }
     if (McpServerSettings?.trustProxy !== undefined) {
         console.warn('[MCPServerExtension] mcpServerSettings.trustProxy has no effect inside MJAPI: Express reads trust proxy from MJAPI\'s app, which the extension does not change. Set it with an MJAPI server middleware if the OAuth proxy rate limit needs real client IPs.');

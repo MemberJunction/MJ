@@ -143,14 +143,23 @@ describe('MCPServerExtension.Initialize', () => {
         expect(fakes.createMCPRouters).not.toHaveBeenCalled();
     });
 
-    it('warns when systemApiKey is still the stock mj.config.cjs placeholder', async () => {
+    it('refuses to load while systemApiKey is the stock mj.config.cjs placeholder (a public superuser key)', async () => {
         fakes.systemApiKey = 'MY_API_KEY_FOR_MCP_SERVER';
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
         const result = await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'));
 
-        expect(result.Success).toBe(true);
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining('systemApiKey'));
+        expect(result.Success).toBe(false);
+        expect(result.Message).toMatch(/systemApiKey/);
+        expect(fakes.createMCPRouters).not.toHaveBeenCalled();
+        expect(GetResourceIdentifier()).toBe('http://localhost:3100');
+    });
+
+    it('loads with a real systemApiKey, or none', async () => {
+        fakes.systemApiKey = 'a-real-secret-value';
+        expect((await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'))).Success).toBe(true);
+
+        fakes.systemApiKey = undefined;
+        expect((await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'))).Success).toBe(true);
     });
 
     it('turns off API keys in the URL query string', async () => {

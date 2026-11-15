@@ -89,8 +89,7 @@ npx @memberjunction/ai-mcp-server --tools-file ./my-tools.json
 
 The MCP server can run as part of MJAPI instead of as its own process. It then uses MJAPI's database connection and caches, and is served under MJAPI's base path: at `/mcp` by default, or `/api/mcp` when `MJAPI_BASE_PATH=/api` (MJExplorer at `/`, MJAPI at `/api`).
 
-1. Add `@memberjunction/ai-mcp-server` to your MJAPI's dependencies.
-2. List it in `mj.config.cjs`:
+Stock MJAPI already depends on this package; it stays off, and is not even imported, until you list it in `mj.config.cjs`. (A custom host adds `@memberjunction/ai-mcp-server` to its own dependencies first.)
 
 ```javascript
 dynamicPackages: {
@@ -126,7 +125,7 @@ serverExtensions: [
 - `auth.mode: 'none'` is refused: the extension does not mount. That mode runs every request as the system user with no credentials, and inside MJAPI the MCP routes sit on its public port, before its own authentication.
 - MJAPI multi-tenancy (`multiTenancy.enabled`) is refused too. MJAPI stamps the tenant in middleware that runs after its own authentication, so MCP requests would carry no tenant.
 - An API key is accepted only in a header (`x-api-key`, `x-mj-api-key` or `Authorization: Bearer`), never in the URL query string, which ends up in access logs.
-- `systemApiKey` gives whoever sends it every tool as the system user. MJAPI logs a warning while it is still the stock placeholder `MY_API_KEY_FOR_MCP_SERVER`.
+- `systemApiKey` gives whoever sends it every tool as the system user. While it is the stock placeholder `MY_API_KEY_FOR_MCP_SERVER`, which is published in this repo, the extension refuses to mount: set a secret value or remove it. The standalone server still accepts the placeholder for local development.
 - `trustProxy` has no effect, because Express reads `trust proxy` from MJAPI's app. MJAPI logs a warning when it is set.
 - `auth.resourceIdentifier` should normally be left unset. The extension builds it from MJAPI's public URL (`MJAPI_PUBLIC_URL`, e.g. `https://app.example.com/api` gives `https://app.example.com/api/mcp`). A leftover value such as `http://localhost:3100` sends OAuth clients to the wrong place, and MJAPI logs a warning.
 - CORS follows MJAPI's `cors.allowedOrigins`. With the default `['*']`, any origin may call MCP; it authenticates with a header, never a cookie.
