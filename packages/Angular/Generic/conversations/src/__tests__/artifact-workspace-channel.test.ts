@@ -655,11 +655,13 @@ describe('ArtifactWorkspaceChannel & Partitioning with InteractiveComponentChann
       const permSpy = vi
         .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
         .mockImplementation(async (_provider, artifactId): Promise<ResolvedArtifactPermissions> => ({
-          ArtifactID: artifactId,
+          ArtifactID: artifactId ?? '',
           CanRead: artifactId === docId || artifactId === compId,
           CanEdit: artifactId === docId,
           CanShare: false,
           CanDelete: false,
+          Source: artifactId === docId || artifactId === compId ? 'ArtifactPermission' : 'Denied',
+          Reason: 'test permission double',
         }));
 
       const fakeUser = { ID: 'u-name', Name: 'Name Lookup User' } as UserInfo;

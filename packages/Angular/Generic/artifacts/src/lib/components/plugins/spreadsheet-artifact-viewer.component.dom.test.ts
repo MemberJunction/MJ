@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
-import type { IMetadataProvider } from '@memberjunction/core';
+import type { IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity, SpreadsheetEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
@@ -280,7 +280,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
       },
     });
     const runViewSpy = vi.fn();
-    const partialProvider: Partial<IMetadataProvider> = {
+    const partialProvider: Partial<IMetadataProvider & IRunViewProvider> = {
       Entities: [],
       RunView: runViewSpy,
     };
@@ -625,6 +625,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         ChartType: 'bar',
         SheetID: sheet.SheetID,
         SourceRange: 'A1:A1',
+        PositionCell: 'C1',
       });
       sheet.LiveTables.push({
         TableID: 'tbl-orig',
@@ -640,6 +641,10 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         Title: 'Board',
         ArtifactID: '11111111-1111-4111-8111-111111111111',
         ArtifactTypeName: 'Whiteboard',
+        AnchorCell: 'A3',
+        WidthPx: 320,
+        HeightPx: 200,
+        AllowInlineEdit: false,
       });
       sheet.ProtectedRanges = [
         {
@@ -698,10 +703,13 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
     };
     f.componentInstance.Provider = nonOwnerProvider as IMetadataProvider;
     f.componentInstance.Permissions = {
+      ArtifactID: 'art-protected-range',
       CanRead: true,
       CanEdit: true,
+      CanDelete: false,
       CanShare: true,
-      Source: 'Share',
+      Source: 'ArtifactPermission',
+      Reason: 'shared with the user (test)',
     };
 
     // Non-owner even with CanShare=true MUST be blocked from clearing protected cell A1
@@ -716,10 +724,13 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
     };
     f.componentInstance.Provider = ownerProvider as IMetadataProvider;
     f.componentInstance.Permissions = {
+      ArtifactID: 'art-protected-range',
       CanRead: true,
       CanEdit: true,
+      CanDelete: true,
       CanShare: true,
       Source: 'Owner',
+      Reason: 'artifact owner (test)',
     };
     f.componentInstance.OnContextMenuCommand({ Type: 'clear-range', Kind: 'all', RangeA1: 'A1' });
     expect(f.componentInstance.Workbook.Worksheets[0].Cells['A1']).toBeUndefined();
@@ -762,6 +773,10 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
         Title: 'Broken Embed',
         ArtifactID: 'not-a-valid-uuid',
         ArtifactTypeName: 'Whiteboard',
+        AnchorCell: 'A3',
+        WidthPx: 320,
+        HeightPx: 200,
+        AllowInlineEdit: false,
       });
     });
     await Promise.resolve();

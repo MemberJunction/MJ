@@ -8,7 +8,8 @@ import { FormsModule } from '@angular/forms';
 import { getTestBed, TestBed, type ComponentFixture } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { EntityFieldInfo, EntityInfo, EntityUserPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { ResolvedArtifactPermissions } from '@memberjunction/core-entities';
 import {
   SpreadsheetEngine,
   type MJArtifactVersionEntity,
@@ -101,11 +102,13 @@ function createProviderWithUser(userId: string, userName: string, ownerId: strin
     Name: 'MJ: Artifacts',
     DisplayNameOrName: 'MJ: Artifacts',
     FieldLevelSecurityApplies: false,
-    GetUserPermisions: () => ({ CanRead: true }),
-    Fields: [{ Name: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' }],
-  };
+    GetUserPermisions: () => ({ CanRead: true }) as Partial<EntityUserPermissionInfo> as EntityUserPermissionInfo,
+    Fields: [
+      { Name: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' } as Partial<EntityFieldInfo> as EntityFieldInfo,
+    ],
+  } as Partial<EntityInfo> as EntityInfo;
   const providerStub: {
-    CurrentUser: Pick<UserInfo, 'ID' | 'Name' | 'Email' | 'IsActive'>;
+    CurrentUser: UserInfo;
     Entities: Array<typeof artifactsEntityMeta>;
     EntityByName: (name: string) => typeof artifactsEntityMeta | undefined;
     RunView: (params: { EntityName: string }) => Promise<{
@@ -114,7 +117,7 @@ function createProviderWithUser(userId: string, userName: string, ownerId: strin
       TotalRowCount: number;
     }>;
   } = {
-    CurrentUser: user,
+    CurrentUser: user as Partial<UserInfo> as UserInfo,
     Entities: [artifactsEntityMeta],
     EntityByName: (name: string) => (name === 'MJ: Artifacts' ? artifactsEntityMeta : undefined),
     RunView: async (params: { EntityName: string }) => {
@@ -128,7 +131,7 @@ function createProviderWithUser(userId: string, userName: string, ownerId: strin
       return { Success: true, Results: [], TotalRowCount: 0 };
     },
   };
-  return providerStub as IMetadataProvider;
+  return providerStub as Partial<IMetadataProvider> as IMetadataProvider;
 }
 
 function createArtifactVersionStub(wb: WorkbookSpec): MJArtifactVersionEntity {
@@ -183,7 +186,7 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
       userId?: string;
       userName?: string;
       ownerId?: string;
-      permissionsSource?: 'Owner' | 'Shared';
+      permissionsSource?: ResolvedArtifactPermissions['Source'];
     } = {},
   ): Promise<DocumentCollaborationSession> {
     const userId = options.userId ?? OWNER_USER_ID;
@@ -192,11 +195,13 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
     const source = options.permissionsSource ?? 'Owner';
 
     vi.spyOn(collabService, 'ResolvePermissionsFromServer').mockResolvedValue({
+      ArtifactID: 'art-r4-1',
       CanRead: true,
       CanEdit: true,
-      CanComment: true,
+      CanDelete: source === 'Owner',
       CanShare: source === 'Owner',
       Source: source,
+      Reason: `${source} (test)`,
     });
 
     component.Provider = createProviderWithUser(userId, userName, ownerId);
@@ -359,7 +364,7 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
         userId: EDITOR_USER_ID,
         userName: 'Non-Owner Editor',
         ownerId: OWNER_USER_ID,
-        permissionsSource: 'Shared',
+        permissionsSource: 'ArtifactPermission',
       });
 
       component.OnContextMenuCommand({
@@ -496,7 +501,7 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
         userId: EDITOR_USER_ID,
         userName: 'Non-Owner Editor',
         ownerId: OWNER_USER_ID,
-        permissionsSource: 'Shared',
+        permissionsSource: 'ArtifactPermission',
       });
       const liveSheet1 = component.Workbook.Worksheets[0];
       const liveSheet2 = component.Workbook.Worksheets[1];
@@ -581,11 +586,13 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
         OWNER_USER_ID.toLowerCase(),
       );
       component.Permissions = {
+        ArtifactID: 'art-r4-1',
         CanRead: true,
         CanEdit: true,
-        CanComment: true,
+        CanDelete: true,
         CanShare: true,
         Source: 'Owner',
+        Reason: 'Owner (test)',
       };
       fixture.detectChanges();
 
