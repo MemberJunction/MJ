@@ -138,6 +138,12 @@ export interface SlideRegionSpec {
     ImageUrl?: string;
     /** Accessible alt text / caption when `Kind === 'image'`. */
     ImageAlt?: string;
+    /** When true, editing/deleting this region is locked to its locker/owner (`§6.2`). */
+    Locked?: boolean;
+    /** User ID that locked this region. */
+    LockedByUserID?: string;
+    /** When true, artifact editors (not only the owner/locker) may still edit this locked region. */
+    AllowEditors?: boolean;
 }
 
 /**
@@ -162,6 +168,12 @@ export interface SlideSpec {
     Transition?: 'none' | 'fade' | 'slide';
     /** Whether this slide is skipped during full-screen Present mode. */
     Hidden?: boolean;
+    /** When true, edits/deletions on this slide are locked to its locker/owner (`§6.2`). */
+    Locked?: boolean;
+    /** User ID that locked this slide. */
+    LockedByUserID?: string;
+    /** When true, artifact editors may edit this locked slide. */
+    AllowEditors?: boolean;
 }
 
 /**
@@ -1048,6 +1060,152 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     }
 
     /**
+     * Checks whether an actor is allowed to mutate a slide given its lock settings (`§6.2`).
+     */
+    public CanActorEditSlide(
+        slide: Pick<SlideSpec, 'SlideID' | 'Locked' | 'LockedByUserID' | 'AllowEditors'>,
+        actorUserId?: string | null,
+        ownerUserId?: string | null,
+        isEditor = false
+    ): { Allowed: boolean; Reason?: string } {
+        if (!slide.Locked) {
+            return { Allowed: true };
+        }
+        const actor = (actorUserId ?? '').trim();
+        if (actor && ownerUserId && UUIDsEqual(actor, ownerUserId)) {
+            return { Allowed: true };
+        }
+        if (actor && slide.LockedByUserID && UUIDsEqual(actor, slide.LockedByUserID)) {
+            return { Allowed: true };
+        }
+        if (slide.AllowEditors && isEditor) {
+            return { Allowed: true };
+        }
+        return {
+            Allowed: false,
+            Reason: `Slide '${slide.SlideID}' is locked (owner-only protection).`
+        };
+    }
+
+    /**
+     * Checks whether an actor is allowed to mutate a region within a slide (`§6.2`).
+     */
+    public CanActorEditRegion(
+        slide: Pick<SlideSpec, 'SlideID' | 'Locked' | 'LockedByUserID' | 'AllowEditors'>,
+        region: Pick<SlideRegionSpec, 'RegionID' | 'Locked' | 'LockedByUserID' | 'AllowEditors'>,
+        actorUserId?: string | null,
+        ownerUserId?: string | null,
+        isEditor = false
+    ): { Allowed: boolean; Reason?: string } {
+        const slideCheck = this.CanActorEditSlide(slide, actorUserId, ownerUserId, isEditor);
+        if (!slideCheck.Allowed) {
+            return slideCheck;
+        }
+        if (!region.Locked) {
+            return { Allowed: true };
+        }
+        const actor = (actorUserId ?? '').trim();
+        if (actor && ownerUserId && UUIDsEqual(actor, ownerUserId)) {
+            return { Allowed: true };
+        }
+        if (actor && region.LockedByUserID && UUIDsEqual(actor, region.LockedByUserID)) {
+            return { Allowed: true };
+        }
+        if (region.AllowEditors && isEditor) {
+            return { Allowed: true };
+        }
+        return {
+            Allowed: false,
+            Reason: `Region '${region.RegionID}' on slide '${slide.SlideID}' is locked (owner-only protection).`
+        };
+    }
+
+    /**
+     * Toggles lock state on a slide (`§6.2`). Only the locker or artifact owner may unlock a locked slide.
+     */
+    public SetSlideLock(
+        deck: SlideDeckSpec,
+        slideId: string,
+        locked: boolean,
+        actorUserId: string,
+        allowEditors = false,
+        ownerUserId?: string | null
+    ): { Deck: SlideDeckSpec; UpdatedSlide: SlideSpec | null } {
+        const existing = deck.Slides.find((s) => s.SlideID === slideId || UUIDsEqual(s.SlideID, slideId));
+        if (!existing) {
+            return { Deck: deck, UpdatedSlide: null };
+        }
+        if (existing.Locked) {
+            const canUnlock = this.CanActorEditSlide(existing, actorUserId, ownerUserId, false);
+            if (!canUnlock.Allowed) {
+                throw new Error(canUnlock.Reason);
+            }
+        }
+        let updatedSlide: SlideSpec | null = null;
+        const nextSlides = deck.Slides.map((s) => {
+            if (s.SlideID !== existing.SlideID) return s;
+            updatedSlide = {
+                ...s,
+                Locked: locked,
+                LockedByUserID: locked ? actorUserId : undefined,
+                AllowEditors: locked ? allowEditors : undefined
+            };
+            return updatedSlide;
+        });
+        return {
+            Deck: { ...deck, Slides: nextSlides, UpdatedAt: new Date().toISOString() },
+            UpdatedSlide: updatedSlide
+        };
+    }
+
+    /**
+     * Toggles lock state on a specific region within a slide (`§6.2`).
+     */
+    public SetRegionLock(
+        deck: SlideDeckSpec,
+        slideId: string,
+        regionId: string,
+        locked: boolean,
+        actorUserId: string,
+        allowEditors = false,
+        ownerUserId?: string | null
+    ): { Deck: SlideDeckSpec; UpdatedRegion: SlideRegionSpec | null } {
+        const slide = deck.Slides.find((s) => s.SlideID === slideId || UUIDsEqual(s.SlideID, slideId));
+        if (!slide) {
+            return { Deck: deck, UpdatedRegion: null };
+        }
+        const region = slide.Regions.find((r) => r.RegionID === regionId);
+        if (!region) {
+            return { Deck: deck, UpdatedRegion: null };
+        }
+        if (region.Locked || slide.Locked) {
+            const check = this.CanActorEditRegion(slide, region, actorUserId, ownerUserId, false);
+            if (!check.Allowed) {
+                throw new Error(check.Reason);
+            }
+        }
+        let updatedRegion: SlideRegionSpec | null = null;
+        const nextSlides = deck.Slides.map((s) => {
+            if (s.SlideID !== slide.SlideID) return s;
+            const nextRegions = s.Regions.map((r) => {
+                if (r.RegionID !== regionId) return r;
+                updatedRegion = {
+                    ...r,
+                    Locked: locked,
+                    LockedByUserID: locked ? actorUserId : undefined,
+                    AllowEditors: locked ? allowEditors : undefined
+                };
+                return updatedRegion;
+            });
+            return { ...s, Regions: nextRegions };
+        });
+        return {
+            Deck: { ...deck, Slides: nextSlides, UpdatedAt: new Date().toISOString() },
+            UpdatedRegion: updatedRegion
+        };
+    }
+
+    /**
      * Updates a single slide's metadata (`Title`, `Subtitle`, `Layout`, `SpeakerNotes`, `Transition`, `Hidden`)
      * by `SlideID` without modifying any other slide in the deck (`Accept #3`).
      */
@@ -1061,12 +1219,24 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             SpeakerNotes?: string;
             Transition?: 'none' | 'fade' | 'slide';
             Hidden?: boolean;
-        }
+        },
+        lockContext?: { ActorUserID?: string | null; OwnerUserID?: string | null; IsEditor?: boolean; BypassLock?: boolean }
     ): { Deck: SlideDeckSpec; UpdatedSlide: SlideSpec | null } {
         let updatedSlide: SlideSpec | null = null;
         const nextSlides = deck.Slides.map((slide) => {
             if (slide.SlideID !== slideId && !UUIDsEqual(slide.SlideID, slideId)) {
                 return slide;
+            }
+            if (!lockContext?.BypassLock) {
+                const check = this.CanActorEditSlide(
+                    slide,
+                    lockContext?.ActorUserID,
+                    lockContext?.OwnerUserID,
+                    lockContext?.IsEditor
+                );
+                if (!check.Allowed) {
+                    throw new Error(check.Reason);
+                }
             }
             const nextLayout = patch.Layout ?? slide.Layout;
             const nextRegions =
@@ -1108,7 +1278,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     public UpsertSlideRegion(
         deck: SlideDeckSpec,
         slideId: string,
-        regionPatch: Partial<SlideRegionSpec> & { RegionID: string }
+        regionPatch: Partial<SlideRegionSpec> & { RegionID: string },
+        lockContext?: { ActorUserID?: string | null; OwnerUserID?: string | null; IsEditor?: boolean; BypassLock?: boolean }
     ): { Deck: SlideDeckSpec; UpdatedRegion: SlideRegionSpec | null } {
         let updatedRegion: SlideRegionSpec | null = null;
 
@@ -1116,12 +1287,35 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             if (slide.SlideID !== slideId && !UUIDsEqual(slide.SlideID, slideId)) {
                 return slide;
             }
+            if (!lockContext?.BypassLock) {
+                const slideCheck = this.CanActorEditSlide(
+                    slide,
+                    lockContext?.ActorUserID,
+                    lockContext?.OwnerUserID,
+                    lockContext?.IsEditor
+                );
+                if (!slideCheck.Allowed) {
+                    throw new Error(slideCheck.Reason);
+                }
+            }
 
             const existingIndex = slide.Regions.findIndex((r) => r.RegionID === regionPatch.RegionID);
             const nextRegions = slide.Regions.map((r) => ({ ...r }));
 
             if (existingIndex >= 0) {
                 const current = nextRegions[existingIndex];
+                if (!lockContext?.BypassLock) {
+                    const regionCheck = this.CanActorEditRegion(
+                        slide,
+                        current,
+                        lockContext?.ActorUserID,
+                        lockContext?.OwnerUserID,
+                        lockContext?.IsEditor
+                    );
+                    if (!regionCheck.Allowed) {
+                        throw new Error(regionCheck.Reason);
+                    }
+                }
                 const merged: SlideRegionSpec = {
                     ...current,
                     ...regionPatch,
@@ -1190,14 +1384,30 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     /**
      * Deletes a slide by `slideId` (preserving at least 1 slide in the deck) and renumbers remaining slides.
      */
-    public DeleteSlide(deck: SlideDeckSpec, slideId: string): { Deck: SlideDeckSpec; Deleted: boolean } {
+    public DeleteSlide(
+        deck: SlideDeckSpec,
+        slideId: string,
+        lockContext?: { ActorUserID?: string | null; OwnerUserID?: string | null; IsEditor?: boolean; BypassLock?: boolean }
+    ): { Deck: SlideDeckSpec; Deleted: boolean } {
         if (deck.Slides.length <= 1) {
             return { Deck: deck, Deleted: false };
         }
-        const filtered = deck.Slides.filter((s) => s.SlideID !== slideId && !UUIDsEqual(s.SlideID, slideId));
-        if (filtered.length === deck.Slides.length) {
+        const target = deck.Slides.find((s) => s.SlideID === slideId || UUIDsEqual(s.SlideID, slideId));
+        if (!target) {
             return { Deck: deck, Deleted: false };
         }
+        if (!lockContext?.BypassLock) {
+            const check = this.CanActorEditSlide(
+                target,
+                lockContext?.ActorUserID,
+                lockContext?.OwnerUserID,
+                lockContext?.IsEditor
+            );
+            if (!check.Allowed) {
+                throw new Error(check.Reason);
+            }
+        }
+        const filtered = deck.Slides.filter((s) => s.SlideID !== target.SlideID);
         return {
             Deck: {
                 ...deck,
@@ -1563,7 +1773,10 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                           QuoteAttribution: r.QuoteAttribution,
                           CalloutTone: r.CalloutTone,
                           ImageUrl: r.ImageUrl,
-                          ImageAlt: r.ImageAlt
+                          ImageAlt: r.ImageAlt,
+                          Locked: r.Locked,
+                          LockedByUserID: r.LockedByUserID,
+                          AllowEditors: r.AllowEditors
                       };
                   })
                 : this.BuildRegionsForLayout(layout);
@@ -1577,7 +1790,10 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                 Regions: normalizedSlidesRegions(rawRegions),
                 SpeakerNotes: s.SpeakerNotes ?? '',
                 Transition: s.Transition || 'fade',
-                Hidden: Boolean(s.Hidden)
+                Hidden: Boolean(s.Hidden),
+                Locked: s.Locked,
+                LockedByUserID: s.LockedByUserID,
+                AllowEditors: s.AllowEditors
             };
         });
 

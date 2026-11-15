@@ -15,6 +15,7 @@ export * from './lib/services/document-collaboration.service';
 export * from './lib/services/document-import-export.service';
 export * from './lib/services/slide-deck-export.service';
 export * from './lib/services/artifact-version-diff.service';
+export * from './lib/services/artifact-ai-assistant-bridge';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';

@@ -28,6 +28,7 @@ import {
   ComputeLineDiff as computeLineDiffFromUtil,
   type SequenceDiffOp,
 } from '../utils/line-diff';
+import { ARTIFACT_AI_ASSISTANT_ENABLED } from './artifact-ai-assistant-bridge';
 
 export type { SequenceDiffOp } from '../utils/line-diff';
 export type ArtifactEffectivePermissions = ResolvedArtifactPermissions;
@@ -491,7 +492,7 @@ export interface DocumentSlashCommand {
   Command: string;
   Label: string;
   Description: string;
-  Category: 'Structure' | 'Live Data' | 'Embedded Artifact';
+  Category: 'Structure' | 'Live Data' | 'Embedded Artifact' | 'AI Assistant';
   Icon: string;
   BlockType?: DocumentBlockKind;
   Snippet?: string;
@@ -2449,6 +2450,13 @@ export class DocumentCollaborationService implements OnDestroy {
   }
   private readonly slashCommands: ReadonlyArray<DocumentSlashCommand> = [
     {
+      Command: '/ai',
+      Label: 'Ask AI',
+      Description: 'Open the slide-in AI Assistant to draft, rewrite, or summarize using this document',
+      Category: 'AI Assistant',
+      Icon: 'fa-wand-magic-sparkles',
+    },
+    {
       Command: '/paragraph',
       Label: 'Paragraph',
       Description: 'Standard body text paragraph block',
@@ -3508,11 +3516,14 @@ export class DocumentCollaborationService implements OnDestroy {
    * Returns `/slash` commands filtered by an optional query string.
    */
   public GetSlashCommands(query = ''): DocumentSlashCommand[] {
+    const enabledCommands = ARTIFACT_AI_ASSISTANT_ENABLED
+      ? this.slashCommands
+      : this.slashCommands.filter((cmd) => cmd.Command !== '/ai');
     const trimmed = query.trim().toLowerCase().replace(/^\//, '');
     if (!trimmed) {
-      return [...this.slashCommands];
+      return [...enabledCommands];
     }
-    return this.slashCommands.filter(
+    return enabledCommands.filter(
       (cmd) =>
         cmd.Command.toLowerCase().includes(trimmed) ||
         cmd.Label.toLowerCase().includes(trimmed) ||

@@ -671,7 +671,9 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             return this.errorResult('Parameter "cells" must be a non-empty array of cell updates.');
         }
 
+        const editCtx = this.extractCellEditContext(input);
         const updatedAddresses: string[] = [];
+        // Pre-validate protected ranges atomically before mutating any cell in the batch
         for (const item of rawCells) {
             if (!item || typeof item !== 'object') continue;
             const rec = item as Record<string, unknown>;
@@ -684,6 +686,20 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 return this.errorResult(
                     `Cell address '${addr}' exceeds maximum worksheet bounds (${MAX_SHEET_ROW_COUNT} rows x ${MAX_SHEET_COLUMN_COUNT} columns).`
                 );
+            }
+            const perm = engine.CheckCellWritePermission(sheet, FormatCellAddress(parsedAddr.row, parsedAddr.col), editCtx);
+            if (!perm.Allowed) {
+                return this.errorResult(perm.Reason || `Cell '${addr}' is inside a protected range.`);
+            }
+        }
+
+        for (const item of rawCells) {
+            if (!item || typeof item !== 'object') continue;
+            const rec = item as Record<string, unknown>;
+            const addr = typeof rec.address === 'string' ? rec.address.trim() : '';
+            const parsedAddr = addr ? ParseCellAddress(addr) : null;
+            if (!addr || !parsedAddr) {
+                return this.errorResult(`Invalid cell address '${addr}'.`);
             }
             const val =
                 rec.value === null ||
@@ -721,7 +737,8 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                             : undefined,
                     Note: note
                 },
-                false
+                false,
+                editCtx
             );
             const p = ParseCellAddress(addr)!;
             updatedAddresses.push(FormatCellAddress(p.row, p.col));
@@ -764,12 +781,30 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (!bounds) {
             return this.errorResult(`Invalid A1 range '${range}'.`);
         }
-        const clearedAddresses = engine.ClearRange(workbook, sheet.SheetID, range, true);
+        const editCtx = this.extractCellEditContext(input);
+        let clearedAddresses: string[];
+        try {
+            clearedAddresses = engine.ClearRange(workbook, sheet.SheetID, range, true, editCtx);
+        } catch (err) {
+            return this.errorResult(err instanceof Error ? err.message : String(err));
+        }
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             clearedRange: range,
             clearedAddresses
         });
+    }
+
+    private extractCellEditContext(input: Record<string, unknown>): {
+        UserID?: string | null;
+        OwnerUserID?: string | null;
+        IsEditor?: boolean;
+    } {
+        return {
+            UserID: typeof input._actorUserId === 'string' ? input._actorUserId : undefined,
+            OwnerUserID: typeof input._ownerUserId === 'string' ? input._ownerUserId : undefined,
+            IsEditor: typeof input._isEditor === 'boolean' ? input._isEditor : undefined
+        };
     }
 
     private handleInsertRows(

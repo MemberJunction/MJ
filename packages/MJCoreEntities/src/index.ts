@@ -74,6 +74,9 @@ export * from './custom/FormScope/FormContributionLifecycle';
 export * from './custom/FormScope/FormPanelHides';
 export * from './custom/operations/EvaluateAuthorizationChecks';
 export * from './custom/operations/SynthesizeArtifactFromSourcesOperation';
+export * from './custom/operations/ArtifactEvaluateAiFormulaOperation';
+export * from './custom/operations/ArtifactGuestShareOperations';
+export * from './custom/operations/ArtifactComplianceAuditOperation';
 export { AuthorizationCheckServerOperation, LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
 
 export * from './artifact-extraction/artifact-extract-rules';
