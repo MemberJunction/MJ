@@ -28,6 +28,7 @@ import {
   ComputeLineDiff as computeLineDiffFromUtil,
   type SequenceDiffOp,
 } from '../utils/line-diff';
+import { ARTIFACT_AI_ASSISTANT_ENABLED } from './artifact-ai-assistant-bridge';
 
 export type { SequenceDiffOp } from '../utils/line-diff';
 export type ArtifactEffectivePermissions = ResolvedArtifactPermissions;
@@ -43,6 +44,20 @@ export interface VerifiedArtifactPermissions extends ResolvedArtifactPermissions
 }
 
 const ANCHORED_COMMENT_MENTION_SOURCE = '(?:^|[\\s([{"\'])@([A-Za-z][A-Za-z0-9_-]*)';
+const SAFE_AWARENESS_COLOR_RE =
+  /^(#[0-9a-fA-F]{3,8}|var\(--mj-[a-zA-Z0-9-]+\)|(rgb|hsl)a?\([0-9.,\s%/]+\))$/;
+
+/**
+ * Validates a CSS color or `--mj-*` design token from untrusted Yjs awareness state,
+ * rejecting arbitrary CSS payloads such as `url(...)` exfiltration beacons.
+ */
+export function SanitizeAwarenessColor(rawColor: string | null | undefined): string {
+  if (typeof rawColor !== 'string') {
+    return 'var(--mj-brand-primary)';
+  }
+  const trimmed = rawColor.trim();
+  return SAFE_AWARENESS_COLOR_RE.test(trimmed) ? trimmed : 'var(--mj-brand-primary)';
+}
 
 /**
  * Extracts unique `@handle` mentions from comment text while strictly ignoring email addresses
@@ -443,6 +458,23 @@ export type CollaborationConnectionStatus =
   | 'error';
 
 /**
+ * Structural coordinate for live agent presence across Docs, Slides, Sheets, and Whiteboards.
+ */
+export interface CollaboratorAgentLocation {
+  Domain: 'spreadsheet' | 'document' | 'slides' | 'whiteboard' | 'generic';
+  SheetID?: string;
+  SheetName?: string;
+  Range?: string;
+  SlideID?: string;
+  SlideNumber?: number;
+  ElementID?: string;
+  SectionHeading?: string;
+  BlockID?: string;
+  StartLine?: number;
+  EndLine?: number;
+}
+
+/**
  * Active collaborator presence metadata broadcast via Yjs awareness.
  */
 export interface CollaboratorPresence {
@@ -454,6 +486,17 @@ export interface CollaboratorPresence {
   ActiveBlockID?: string;
   CanEdit: boolean;
   IsAgent?: boolean;
+  AgentPresenceKey?: string;
+  AgentRunID?: string;
+  AgentName?: string;
+  ActingForUserID?: string;
+  ActingForUserName?: string;
+  ActingForUserEmail?: string;
+  AgentPhase?: 'enter' | 'working' | 'settled' | 'exit';
+  ToolName?: string;
+  ActionSummary?: string;
+  AgentLocation?: CollaboratorAgentLocation;
+  TimestampMs?: number;
 }
 
 /**
@@ -491,7 +534,7 @@ export interface DocumentSlashCommand {
   Command: string;
   Label: string;
   Description: string;
-  Category: 'Structure' | 'Live Data' | 'Embedded Artifact';
+  Category: 'Structure' | 'Live Data' | 'Embedded Artifact' | 'AI Assistant';
   Icon: string;
   BlockType?: DocumentBlockKind;
   Snippet?: string;
@@ -891,7 +934,7 @@ export class DocumentCollaborationSession {
       userId: user.id,
       name: user.name,
       email: user.email,
-      color: user.color ?? 'var(--mj-brand-primary)',
+      color: SanitizeAwarenessColor(user.color),
       canEdit,
       isAgent: user.isAgent,
       role: user.role,
@@ -1681,11 +1724,40 @@ export class DocumentCollaborationSession {
   /**
    * Returns all active collaborators from the Yjs Awareness state map.
    */
+  private deriveActiveBlockIdFromLocation(
+    loc: CollaboratorAgentLocation | undefined,
+  ): string | undefined {
+    if (!loc) {
+      return undefined;
+    }
+    if (loc.Domain === 'spreadsheet') {
+      const sheet = loc.SheetID || loc.SheetName;
+      if (sheet && loc.Range) {
+        return `${sheet}:${loc.Range}`;
+      }
+      return loc.Range || sheet || undefined;
+    }
+    if (loc.Domain === 'slides') {
+      if (loc.SlideID) {
+        return loc.SlideID;
+      }
+      if (typeof loc.SlideNumber === 'number') {
+        return `Slide ${loc.SlideNumber}`;
+      }
+    }
+    if (loc.Domain === 'document') {
+      return loc.BlockID || loc.SectionHeading || undefined;
+    }
+    return loc.ElementID || loc.BlockID || undefined;
+  }
+
   public GetCollaborators(): CollaboratorPresence[] {
     const result: CollaboratorPresence[] = [];
     this.Awareness.getStates().forEach(
       (
         state: {
+          agentPhase?: CollaboratorPresence['AgentPhase'];
+          agentLocation?: CollaboratorAgentLocation;
           user?: {
             userId?: string | number;
             name?: string;
@@ -1695,21 +1767,56 @@ export class DocumentCollaborationSession {
             canEdit?: boolean;
             isAgent?: boolean;
             role?: string;
+            agentPresenceKey?: string;
+            agentRunId?: string;
+            agentName?: string;
+            actingForUserId?: string;
+            actingForUserName?: string;
+            actingForUserEmail?: string;
+            agentPhase?: CollaboratorPresence['AgentPhase'];
+            toolName?: string;
+            actionSummary?: string;
+            agentLocation?: CollaboratorAgentLocation;
+            timestampMs?: number;
           };
         },
         clientId: number,
       ) => {
         const u = state.user;
         if (u && typeof u.name === 'string') {
+          const isAgent = u.isAgent === true;
+          const agentLocation = state.agentLocation ?? u.agentLocation;
+          const activeBlockId =
+            typeof u.activeBlockId === 'string'
+              ? u.activeBlockId
+              : this.deriveActiveBlockIdFromLocation(agentLocation);
           result.push({
             ClientID: clientId,
             UserID: String(u.userId ?? clientId),
             Name: u.name,
             Email: typeof u.email === 'string' ? u.email : undefined,
-            Color: typeof u.color === 'string' ? u.color : 'var(--mj-brand-primary)',
-            ActiveBlockID: typeof u.activeBlockId === 'string' ? u.activeBlockId : undefined,
+            Color: SanitizeAwarenessColor(typeof u.color === 'string' ? u.color : undefined),
+            ActiveBlockID: activeBlockId,
             CanEdit: u.canEdit !== false,
-            IsAgent: u.isAgent === true || u.role === 'agent' || /\bagent\b/i.test(u.name),
+            IsAgent: isAgent,
+            AgentPresenceKey:
+              isAgent && typeof u.agentPresenceKey === 'string' ? u.agentPresenceKey : undefined,
+            AgentRunID: isAgent && typeof u.agentRunId === 'string' ? u.agentRunId : undefined,
+            AgentName: isAgent && typeof u.agentName === 'string' ? u.agentName : undefined,
+            ActingForUserID:
+              isAgent && typeof u.actingForUserId === 'string' ? u.actingForUserId : undefined,
+            ActingForUserName:
+              isAgent && typeof u.actingForUserName === 'string' ? u.actingForUserName : undefined,
+            ActingForUserEmail:
+              isAgent && typeof u.actingForUserEmail === 'string'
+                ? u.actingForUserEmail
+                : undefined,
+            AgentPhase: isAgent ? (state.agentPhase ?? u.agentPhase) : undefined,
+            ToolName: isAgent && typeof u.toolName === 'string' ? u.toolName : undefined,
+            ActionSummary:
+              isAgent && typeof u.actionSummary === 'string' ? u.actionSummary : undefined,
+            AgentLocation: isAgent ? agentLocation : undefined,
+            TimestampMs: isAgent && typeof u.timestampMs === 'number' ? u.timestampMs : undefined,
           });
         }
       },
@@ -2106,6 +2213,15 @@ export class DocumentCollaborationSession {
     workbookMeta.set('Title', parsed.Title || 'Workbook');
     workbookMeta.set('ActiveSheetID', parsed.ActiveSheetID || parsed.Worksheets[0].SheetID);
     workbookMeta.set('NamedRanges', JSON.stringify(parsed.NamedRanges ?? []));
+    if (
+      typeof parsed.PreferredObjectsPaneHeightPx === 'number' &&
+      Number.isFinite(parsed.PreferredObjectsPaneHeightPx) &&
+      parsed.PreferredObjectsPaneHeightPx > 0
+    ) {
+      workbookMeta.set('PreferredObjectsPaneHeightPx', String(Math.round(parsed.PreferredObjectsPaneHeightPx)));
+    } else {
+      workbookMeta.delete('PreferredObjectsPaneHeightPx');
+    }
 
     const nextSheetIds: string[] = [];
     const activeCellKeys = new Set<string>();
@@ -2237,6 +2353,9 @@ export class DocumentCollaborationSession {
       namedRanges = SafeJSONParse<SpreadsheetNamedRangeSpec[]>(rawNamedRanges) ?? [];
     }
 
+    const rawPrefPaneHeight = workbookMeta.get('PreferredObjectsPaneHeightPx');
+    const parsedPrefPaneHeight = rawPrefPaneHeight ? Number(rawPrefPaneHeight) : NaN;
+
     const nowIso = new Date().toISOString();
     const wb: WorkbookSpec = {
       WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
@@ -2244,10 +2363,16 @@ export class DocumentCollaborationSession {
       ActiveSheetID: workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID,
       Worksheets: worksheets,
       NamedRanges: namedRanges,
+      ...(Number.isFinite(parsedPrefPaneHeight) && parsedPrefPaneHeight > 0
+        ? { PreferredObjectsPaneHeightPx: Math.round(parsedPrefPaneHeight) }
+        : {}),
       CreatedAt: nowIso,
       UpdatedAt: nowIso,
     };
 
+    // Bind `wb` in SpreadsheetEngine before per-sheet reindex so cross-sheet
+    // `FormulaStable` references (@SHEET_CELL, @SHEET_RANGE, etc.) resolve instead of #REF!
+    SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
     for (const ws of wb.Worksheets) {
       SpreadsheetEngine.Instance.ReindexWorksheetAndResolveFormulas(ws);
     }
@@ -2448,6 +2573,13 @@ export class DocumentCollaborationService implements OnDestroy {
     return true;
   }
   private readonly slashCommands: ReadonlyArray<DocumentSlashCommand> = [
+    {
+      Command: '/ai',
+      Label: 'Ask AI',
+      Description: 'Open the slide-in AI Assistant to draft, rewrite, or summarize using this document',
+      Category: 'AI Assistant',
+      Icon: 'fa-wand-magic-sparkles',
+    },
     {
       Command: '/paragraph',
       Label: 'Paragraph',
@@ -3508,11 +3640,14 @@ export class DocumentCollaborationService implements OnDestroy {
    * Returns `/slash` commands filtered by an optional query string.
    */
   public GetSlashCommands(query = ''): DocumentSlashCommand[] {
+    const enabledCommands = ARTIFACT_AI_ASSISTANT_ENABLED
+      ? this.slashCommands
+      : this.slashCommands.filter((cmd) => cmd.Command !== '/ai');
     const trimmed = query.trim().toLowerCase().replace(/^\//, '');
     if (!trimmed) {
-      return [...this.slashCommands];
+      return [...enabledCommands];
     }
-    return this.slashCommands.filter(
+    return enabledCommands.filter(
       (cmd) =>
         cmd.Command.toLowerCase().includes(trimmed) ||
         cmd.Label.toLowerCase().includes(trimmed) ||
