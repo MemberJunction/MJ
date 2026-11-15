@@ -33,6 +33,7 @@ import {
 } from '../collaboration/ArtifactCollaborationServer.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
+import { WriteArtifactComplianceAudit } from '../operations/ArtifactComplianceAuditHelper.js';
 
 @ObjectType()
 export class CollaborationTicketResult {
@@ -436,6 +437,18 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 acknowledgeSecurityWarning,
                 provider
             );
+            if (res.Success) {
+                void WriteArtifactComplianceAudit(provider, user, {
+                    AuditLogTypeName: 'Artifact Block Frozen',
+                    ArtifactID: normalizedHostId,
+                    Summary: `Froze live block '${spec.BlockID}' (${spec.Kind}) into immutable snapshot.`,
+                    Details: {
+                        blockId: spec.BlockID,
+                        blockKind: spec.Kind,
+                        sourceArtifactId: spec.ArtifactID ?? null,
+                    },
+                });
+            }
             return {
                 Success: res.Success,
                 ErrorMessage: res.ErrorMessage,

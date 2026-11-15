@@ -1,7 +1,60 @@
 <!-- ========================================================================= -->
-<!-- 1. FULL-CANVAS STUDIO MODE (100% Viewport Focus from Hub or Maximize)     -->
+<!-- 0. EXTERNAL GUEST SHARE LINK READ-ONLY FROZEN SNAPSHOT VIEW (§6.3)       -->
 <!-- ========================================================================= -->
-@if (IsFullCanvasOpen && ActiveArtifactId) {
+@if (ActiveGuestToken) {
+  <div class="library-guest-view" data-testid="library-guest-share-view">
+    <header class="library-guest-banner">
+      <div class="library-guest-banner-left">
+        <span class="library-guest-badge">
+          <i class="fa-solid fa-lock"></i>
+          Frozen Read-Only Guest Snapshot
+        </span>
+        @if (ActiveGuestShareSnapshot; as guest) {
+          <strong class="library-guest-title">{{ guest.Title || 'Shared Artifact' }}</strong>
+          <span class="library-guest-meta">
+            v{{ guest.VersionNumber ?? 1 }}
+            @if (guest.ExpiresAt) {
+              · Expires {{ guest.ExpiresAt | date: 'medium' }}
+            }
+          </span>
+        }
+      </div>
+      <button
+        type="button"
+        mjButton
+        variant="secondary"
+        size="sm"
+        (click)="ExitGuestShareView()"
+        data-testid="guest-share-exit-btn"
+      >
+        <i class="fa-solid fa-arrow-left"></i>
+        Back to Library
+      </button>
+    </header>
+
+    <div class="library-guest-stage">
+      @if (IsGuestShareLoading) {
+        <mj-loading text="Loading frozen guest snapshot..."></mj-loading>
+      } @else if (GuestShareLoadError) {
+        <mj-empty-state
+          Icon="fa-solid fa-link-slash"
+          Title="Guest Link Unavailable"
+          [Message]="GuestShareLoadError"
+          ActionText="Open Library"
+          ActionIcon="fa-solid fa-book-open"
+          (Action)="ExitGuestShareView()"
+        ></mj-empty-state>
+      } @else if (GuestShareVersionEntity && ActiveGuestShareSnapshot) {
+        <mj-artifact-type-plugin-viewer
+          [artifactVersion]="GuestShareVersionEntity"
+          [ArtifactTypeName]="ActiveGuestShareSnapshot.ArtifactTypeName || 'Document'"
+          [readonly]="true"
+          height="100%"
+        ></mj-artifact-type-plugin-viewer>
+      }
+    </div>
+  </div>
+} @else if (IsFullCanvasOpen && ActiveArtifactId) {
   <div class="library-full-canvas" data-testid="library-full-canvas">
     <header class="full-canvas-topbar">
       <div class="full-canvas-left">
@@ -65,6 +118,7 @@
 
     <div class="full-canvas-stage">
       <mj-artifact-viewer-panel
+        #fullCanvasViewerPanel
         [artifactId]="ActiveArtifactId"
         [VersionNumber]="ActiveVersionNumber"
         [CurrentUser]="EffectiveUser"
@@ -73,6 +127,7 @@
         [ContextCollectionId]="SelectedCollectionId || undefined"
         [canEdit]="ActiveItem?.CanEdit ?? false"
         [canShare]="ActiveItem?.CanShare ?? false"
+        [HasConnectedDriveLink]="ConnectedDrives.length > 0"
         [IsMaximized]="true"
         [ShowMaximizeButton]="true"
         [ShowCloseButton]="false"
@@ -83,6 +138,7 @@
         (OpenEntityRecord)="OnViewerOpenEntityRecord($event)"
         (NavigateToLink)="OnViewerNavigateToLink($event)"
         (VersionSaved)="OnViewerVersionSaved($event)"
+        (ConnectedDriveSyncRequested)="OnConnectedDriveSyncRequested($event)"
       ></mj-artifact-viewer-panel>
     </div>
   </div>
@@ -506,6 +562,7 @@
                 }
                 <div class="split-studio-viewer-host">
                   <mj-artifact-viewer-panel
+                    #splitViewerPanel
                     [artifactId]="ActiveArtifactId"
                     [VersionNumber]="ActiveVersionNumber"
                     [CurrentUser]="EffectiveUser"
@@ -514,6 +571,7 @@
                     [ContextCollectionId]="SelectedCollectionId || undefined"
                     [canEdit]="ActiveItem?.CanEdit ?? false"
                     [canShare]="ActiveItem?.CanShare ?? false"
+                    [HasConnectedDriveLink]="ConnectedDrives.length > 0"
                     [IsMaximized]="false"
                     [ShowMaximizeButton]="true"
                     [ShowCloseButton]="true"
@@ -525,6 +583,7 @@
                     (OpenEntityRecord)="OnViewerOpenEntityRecord($event)"
                     (NavigateToLink)="OnViewerNavigateToLink($event)"
                     (VersionSaved)="OnViewerVersionSaved($event)"
+                    (ConnectedDriveSyncRequested)="OnConnectedDriveSyncRequested($event)"
                   ></mj-artifact-viewer-panel>
                 </div>
               </div>

@@ -1028,10 +1028,17 @@ Client tools run **in the user's browser** and interact with the user and their 
 
 {% if __agentTypePromptParams.includeArtifactToolsDocs != false and _ARTIFACT_MANIFEST %}
 ## Artifact Tools
-{% if _NATIVE_ONLY %}All artifacts created across this conversation are listed in **Available Artifacts** below. Explore, inspect, or combine any of them by calling the `artifact_tool` tool with the artifact ID (A, B, C, etc.), the tool name and its `input`. Each call's result comes back as that call's result, on this turn.
-{% else %}All artifacts created across this conversation are listed in **Available Artifacts** below. Explore, inspect, or combine any of them using `artifactToolCalls` in your response.
-Each call specifies an artifact ID (A, B, C, etc.), a tool name, and input parameters.
+You can create, open, inspect, and edit collaborative artifacts (Markdown Documents, Slide Presentations, and Excel Spreadsheets) at any time — even when no artifact was attached at the start of the turn — using workspace tools (`create_artifact`, `open_artifact`, `list_workspace_artifacts`) alongside per-artifact tools.
+When working with live Spreadsheet tables (`upsert_live_table` or `=MJ.QUERY` formulas), the server materializes `headers`, `rowCount`, and `boundingRange` (`dataRange`) immediately on return so you can add Excel formulas (`=SUM(...)`, `=AVERAGE(...)`) and charts (`upsert_chart`) in the very next step.
+
+{% if _NATIVE_ONLY %}Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them by calling `artifact_tool` with the artifact ID (A, B, C, etc., or `'*'` / omitted for workspace tools), the tool name, and its `input`. Each call's result comes back on this turn.
+{% else %}Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them using `artifactToolCalls` in your response.
+Each call specifies an artifact ID (A, B, C, etc., or `'*'` for workspace tools), a tool name, and input parameters.
 Multiple calls can be batched in one response. When emitting a payload update, use `artifactDirective` (`behavior: "create-new"` for a brand-new artifact/topic, or `behavior: "version-source"` with `targetArtifactId` set to the artifact's alpha ID or `artifactId` UUID when refining an existing artifact).
+
+**Critical constraints:**
+- **NEVER** put artifact or workspace tool names (`create_artifact`, `open_artifact`, `get_blocks`, `insert_block_after`, `replace_block`, etc.) in `nextStep.actions` — they are NOT Action entities. Always call them via `{% if _NATIVE_ONLY %}artifact_tool{% else %}artifactToolCalls{% endif %}`.
+- **Do NOT** emit `open:resource` `actionableCommands` for conversation artifacts you created or updated via artifact tools — inline artifact cards are attached automatically and auto-open in the side viewer.
 
 **How results reach you:** the result of each tool call is delivered as a regular
 conversation message on your next turn (header `Artifact tool result:` /

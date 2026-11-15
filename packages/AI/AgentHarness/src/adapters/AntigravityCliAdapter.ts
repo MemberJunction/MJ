@@ -134,8 +134,17 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
 
         const args: string[] = ['-p', effectivePrompt, '--output-format', 'stream-json'];
 
+        const seenDirs = new Set<string>();
         if (this.config?.WorkspacePath && !this.config.WorkspacePath.startsWith('cloud://')) {
+            seenDirs.add(this.config.WorkspacePath);
             args.push('--add-dir', this.config.WorkspacePath);
+        }
+        for (const extraDir of this.config?.AdditionalDirectories ?? []) {
+            const trimmed = extraDir.trim();
+            if (trimmed && !trimmed.startsWith('cloud://') && !seenDirs.has(trimmed)) {
+                seenDirs.add(trimmed);
+                args.push('--add-dir', trimmed);
+            }
         }
 
         if (this.sessionId && (!isFirstTurn || this.didResume)) {

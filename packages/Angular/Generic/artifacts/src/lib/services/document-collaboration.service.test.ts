@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import * as Y from 'yjs';
 import * as encoding from 'lib0/encoding';
 import type { IMetadataProvider } from '@memberjunction/core';
+import { SpreadsheetEngine, type WorkbookSpec } from '@memberjunction/core-entities';
 import {
   COLLAB_SECRET_UNCONFIGURED_CODE,
   DocumentCollaborationService,
   ExtractAnchoredCommentMentions,
   MAX_RECONNECT_ATTEMPTS,
   MERGE_CONFLICT_WARNING_MESSAGE,
+  SanitizeAwarenessColor,
   type CollaborationMergeConflictEvent,
   type CollaborationNotificationSink,
 } from './document-collaboration.service';
@@ -1224,7 +1226,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     conflictService.ngOnDestroy();
   });
 
-  it('correctly sets IsAgent flag in GetCollaborators for isAgent boolean, role, and regex match on name', () => {
+  it('strictly sets IsAgent flag in GetCollaborators only when isAgent is true (anti-spoofing)', () => {
     const session = service.CreateSession('art-agent-test', '{}', {
       id: 'agent-1',
       name: 'Sheets AI Agent',
@@ -1235,24 +1237,24 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     expect(collabs).toHaveLength(1);
     expect(collabs[0].IsAgent).toBe(true);
 
-    // Test with awareness state containing role === 'agent'
+    // Role hint alone without isAgent: true must NOT elevate to agent
     session.Awareness.setLocalStateField('user', {
       userId: 'agent-2',
       name: 'Worker 42',
       role: 'agent',
     });
     const roleCollabs = session.GetCollaborators();
-    expect(roleCollabs[0].IsAgent).toBe(true);
+    expect(roleCollabs[0].IsAgent).toBe(false);
 
-    // Test with awareness state matching /\bagent\b/i
+    // Name containing "Agent" without isAgent: true must NOT elevate to agent
     session.Awareness.setLocalStateField('user', {
       userId: 'agent-3',
       name: 'Agent Smith',
     });
     const nameCollabs = session.GetCollaborators();
-    expect(nameCollabs[0].IsAgent).toBe(true);
+    expect(nameCollabs[0].IsAgent).toBe(false);
 
-    // Test with regular human user
+    // Regular human user
     session.Awareness.setLocalStateField('user', {
       userId: 'human-1',
       name: 'Alice Developer',
@@ -1261,5 +1263,79 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     expect(humanCollabs[0].IsAgent).toBe(false);
 
     session.Destroy();
+  });
+
+  it('sanitizes untrusted Yjs awareness user.color values against CSS url(...) beacon injection', () => {
+    expect(SanitizeAwarenessColor('#3b82f6')).toBe('#3b82f6');
+    expect(SanitizeAwarenessColor('var(--mj-status-success)')).toBe('var(--mj-status-success)');
+    expect(SanitizeAwarenessColor('rgb(12, 34, 56)')).toBe('rgb(12, 34, 56)');
+    expect(SanitizeAwarenessColor('hsla(210, 50%, 40%, 0.5)')).toBe('hsla(210, 50%, 40%, 0.5)');
+    expect(SanitizeAwarenessColor('url(https://evil.example/leak.png)')).toBe('var(--mj-brand-primary)');
+    expect(SanitizeAwarenessColor('red; background-image: url(https://evil.example)')).toBe('var(--mj-brand-primary)');
+    expect(SanitizeAwarenessColor('var(--non-mj-token)')).toBe('var(--mj-brand-primary)');
+    expect(SanitizeAwarenessColor(undefined)).toBe('var(--mj-brand-primary)');
+
+    const session = service.CreateSession('art-color-sanitize', '{}', {
+      id: 'human-1',
+      name: 'Alice',
+      color: 'url(https://evil.example/local)',
+    });
+    expect(session.GetCollaborators()[0].Color).toBe('var(--mj-brand-primary)');
+
+    session.Awareness.setLocalStateField('user', {
+      userId: 'human-1',
+      name: 'Alice',
+      color: 'var(--mj-status-warning)',
+    });
+    expect(session.GetCollaborators()[0].Color).toBe('var(--mj-status-warning)');
+
+    session.Destroy();
+  });
+
+  it('reconstructWorkbookJsonFromCrdt binds workbook in SpreadsheetEngine so cross-sheet FormulaStable references resolve', () => {
+    const engine = SpreadsheetEngine.Instance;
+    const wb = engine.CreateEmptyWorkbook('Cross Sheet Test', ['Calc', 'Data'], 5, 3);
+    const calcSheet = wb.Worksheets[0];
+    const dataSheet = wb.Worksheets[1];
+
+    engine.SetCell(wb, dataSheet.SheetID, 'B2', { Value: 25 });
+    engine.SetCell(wb, dataSheet.SheetID, 'B3', { Value: 75 });
+    engine.SetCell(wb, calcSheet.SheetID, 'A1', { Formula: '=Data!B2+Data!B3' });
+
+    const serialized = engine.SerializeWorkbook(wb);
+
+    // Spy on ReindexWorksheetAndResolveFormulas to confirm cross-sheet FormulaStable resolves
+    // DURING ReindexWorksheetAndResolveFormulas (not #REF!) because wb is bound first
+    const origReindex = engine.ReindexWorksheetAndResolveFormulas.bind(engine);
+    const formulasAfterReindex: string[] = [];
+    const reindexSpy = vi
+      .spyOn(engine, 'ReindexWorksheetAndResolveFormulas')
+      .mockImplementation((ws) => {
+        origReindex(ws);
+        if (ws.SheetID === calcSheet.SheetID) {
+          const cell = ws.Cells['A1'];
+          if (cell?.Formula) {
+            formulasAfterReindex.push(cell.Formula);
+          }
+        }
+      });
+
+    const session = service.CreateSession('art-xsheet-crdt', serialized, {
+      id: 'u1',
+      name: 'Alice',
+    });
+
+    try {
+      const reconstructedJson = session.GetContent();
+      expect(formulasAfterReindex).toEqual(['=Data!B2+Data!B3']);
+
+      const reconstructed = JSON.parse(reconstructedJson) as WorkbookSpec;
+      const calcCell = reconstructed.Worksheets[0].Cells['A1'];
+      expect(calcCell.Formula).toBe('=Data!B2+Data!B3');
+      expect(calcCell.ComputedValue).toBe(100);
+    } finally {
+      reindexSpy.mockRestore();
+      session.Destroy();
+    }
   });
 });

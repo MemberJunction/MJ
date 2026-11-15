@@ -5015,3 +5015,83 @@ describe('RealtimeClientSessionResolver — catalog timing reaches the browser (
         expect(result).toMatchObject({ Success: true, ...TIMING });
     });
 });
+
+describe('RealtimeClientSessionResolver — conversation artifact hydration', () => {
+    it('hydrates deduplicated latest ConversationArtifacts from branch details into PrepareClientSession', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const runViewMock = vi.fn(async (params: { EntityName?: string }) => {
+            switch (params.EntityName) {
+                case 'MJ: Conversation Details':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'cd-1', Role: 'User', Message: 'Write a Diffusion doc', HiddenToUser: false, AgentSessionID: null },
+                            { ID: 'cd-2', Role: 'AI', Message: 'Created doc v1 and v2', HiddenToUser: false, AgentSessionID: null },
+                        ],
+                    };
+                case 'MJ: Conversation Detail Artifacts':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ConversationDetailID: 'cd-2', ArtifactVersionID: 'ver-1' },
+                            { ConversationDetailID: 'cd-2', ArtifactVersionID: 'ver-2' },
+                        ],
+                    };
+                case 'MJ: Artifact Versions':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'ver-1', ArtifactID: 'art-1', VersionNumber: 1, Name: 'Diffusion Doc' },
+                            { ID: 'ver-2', ArtifactID: 'art-1', VersionNumber: 2, Name: 'Diffusion Doc' },
+                        ],
+                    };
+                case 'MJ: Artifacts':
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 'art-1', Name: 'Diffusion Doc', Type: 'Markdown Document' },
+                        ],
+                    };
+                default:
+                    return { Success: true, Results: [] };
+            }
+        });
+        const runViewsMock = vi.fn(async (list: Array<{ EntityName?: string }>) => Promise.all(list.map((p) => runViewMock(p))));
+        currentProvider = makeProvider(() => makeSessionEntity(), { RunView: runViewMock, RunViews: runViewsMock });
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-art-1', ConversationID: 'conv-art-1' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'gemini',
+                Model: 'gemini-live',
+                EphemeralToken: 'ek',
+                ExpiresAt: '2099-01-01T00:00:00Z',
+                SessionConfig: {},
+            },
+        });
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-art-1');
+
+        expect(prepareClientSessionMock).toHaveBeenCalledTimes(1);
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as {
+            ConversationMessages?: Array<{ role: string; content: string }>;
+            ConversationArtifacts?: Array<{
+                ArtifactID: string;
+                Name: string;
+                Type?: string;
+                LatestVersionID?: string;
+                LatestVersionNumber?: number;
+            }>;
+        };
+        expect(prepArg.ConversationMessages).toHaveLength(2);
+        expect(prepArg.ConversationArtifacts).toEqual([
+            {
+                ArtifactID: 'art-1',
+                Name: 'Diffusion Doc',
+                Type: 'Markdown Document',
+                LatestVersionID: 'ver-2',
+                LatestVersionNumber: 2,
+            },
+        ]);
+    });
+});
