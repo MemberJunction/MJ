@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import type { Sandbox, SandboxMount, SandboxRunResult } from '../sandbox/Sandbox';
 import type { FailureDetail, MutantEdit } from '../types';
@@ -12,10 +12,19 @@ import { ApplyMutantEdits, CopyPackageForMutant, ValidateMutantEdits } from './M
 
 export interface RunTestInput { File: string; Mutant?: { Edits: MutantEdit[] }; }
 export interface RunTestOutput { Ran: boolean; Status: 'Pass' | 'Fail' | 'Timeout' | 'CompileError' | 'RunnerError'; TestName: string | null; Failure: FailureDetail | null; DurationMs: number; Error?: string; }
-export interface RunTestToolOptions { Sandbox: Sandbox; BaseRootDir: string; PackageRelDir: string; PackageName: string; ScratchRoot: string; Settings: Settings; }
+/**
+ * `ChangedRanges` maps each file the PR changes (repo-relative) to the base line ranges of its hunks. When set, a mutant
+ * must edit base code within {@link MUTANT_MAX_DISTANCE} lines of one of those ranges.
+ */
+export interface RunTestToolOptions {
+    Sandbox: Sandbox; BaseRootDir: string; PackageRelDir: string; PackageName: string; ScratchRoot: string; Settings: Settings;
+    ChangedRanges?: Record<string, [number, number][]>;
+}
 export interface LastMutantRecord { Edits: MutantEdit[]; Patch: string; Failure: FailureDetail | null; }
 
 const ROOT = '/work';
+/** The most base lines between a mutant edit and the nearest line the PR changes. */
+export const MUTANT_MAX_DISTANCE = 10;
 
 /** A mutant prepared on the host: the scratch package copy and the patch that produced it. */
 interface PreparedMutant { Scratch: string; Patch: string; }
@@ -92,11 +101,33 @@ export class RunTestTool {
     private prepareMutant(edits: MutantEdit[]): PreparedMutant | string {
         const err = ValidateMutantEdits(this.o.PackageRelDir, edits);
         if (err) return `invalid mutant: ${err}`;
+        const far = this.farFromChange(edits);
+        if (far) return `invalid mutant: ${far}`;
         const scratch = CopyPackageForMutant(join(this.o.BaseRootDir, this.o.PackageRelDir), this.o.ScratchRoot);
         const linkError = this.checkEditTargets(scratch, edits);
         if (linkError) { rmSync(dirname(scratch), { recursive: true, force: true }); return `invalid mutant: ${linkError}`; }
         try { return { Scratch: scratch, Patch: ApplyMutantEdits(scratch, edits, this.o.PackageRelDir).Patch }; }
         catch (e) { rmSync(dirname(scratch), { recursive: true, force: true }); return `invalid mutant: ${(e as Error).message}`; }
+    }
+
+    /**
+     * Returns an error, with the changed lines of the package, unless at least one edit starts within
+     * {@link MUTANT_MAX_DISTANCE} base lines of a line the PR changes. Returns null when no ranges are known.
+     */
+    private farFromChange(edits: MutantEdit[]): string | null {
+        const ranges = this.o.ChangedRanges;
+        if (!ranges || Object.keys(ranges).length === 0) return null;
+        const near = edits.some((e) => {
+            const abs = join(this.o.BaseRootDir, e.File);
+            const text = ranges[e.File] && existsSync(abs) ? readFileSync(abs, 'utf8') : null;
+            const at = text === null ? -1 : text.indexOf(e.Find);
+            if (text === null || at < 0) return false;
+            const line = text.slice(0, at).split('\n').length;
+            return ranges[e.File].some(([from, to]) => line >= from - MUTANT_MAX_DISTANCE && line <= to + MUTANT_MAX_DISTANCE);
+        });
+        if (near) return null;
+        const listed = Object.entries(ranges).map(([file, rs]) => `${file}: ${rs.map(([a, b]) => (a === b ? `${a}` : `${a}-${b}`)).join(', ')}`).join('; ');
+        return `the mutant must change code that the PR changes. Edit within ${MUTANT_MAX_DISTANCE} lines of one of these base lines, and make the test reach that code: ${listed.slice(0, 1500)}`;
     }
 
     /** Returns an error when an edit target in the scratch copy is a symlink or resolves outside the copy. */
