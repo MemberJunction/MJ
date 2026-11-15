@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import type { Observable } from 'rxjs';
+import type { Subject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { UserInfo, type IMetadataProvider } from '@memberjunction/core';
@@ -15,7 +15,7 @@ class ArtifactViewerPanelStub {
   @Input() public currentUser: UserInfo | null = null;
   @Input() public Provider: IMetadataProvider | null = null;
   @Input() public environmentId = '';
-  @Input() public refreshTrigger: Observable<void> | undefined;
+  @Input() public refreshTrigger: Subject<{ artifactId: string; versionNumber: number }> | undefined;
   @Input() public canEdit = false;
   @Input() public showHeader = true;
   @Input() public showTabs = true;
