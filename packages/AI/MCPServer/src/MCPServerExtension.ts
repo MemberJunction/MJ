@@ -19,14 +19,14 @@
  * @module @memberjunction/ai-mcp-server/MCPServerExtension
  */
 
-import type { Application } from 'express';
+import type { Application, RequestHandler } from 'express';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseServerExtension } from '@memberjunction/server-extensions-core';
 import type {
     ExtensionHealthResult, ExtensionInitResult, ServerExtensionConfig, ServerExtensionInitContext, ServerExtensionPhase,
 } from '@memberjunction/server-extensions-core';
-import { CreateMCPRouters, MCPCorsMiddleware, ToolFilterOptions } from './Server.js';
-import type { MCPTransportRouter } from './Server.js';
+import { CreateMCPRouters, CreateMCPCorsMiddleware, ToolFilterOptions } from './Server.js';
+import type { MCPRouters, MCPTransportRouter } from './Server.js';
 import { GetAuthMode, GetResourceIdentifier, SetHostedResourceIdentifier } from './auth/OAuthConfig.js';
 import { InitConfig, McpServerSettings } from './config.js';
 
@@ -46,6 +46,8 @@ export interface MCPMount {
     PublicEndpointUrl: string;
     /** The SSE messages path as clients see it (e.g. `/api/mcp/messages`). */
     SSEMessagesPath: string;
+    /** The mount path relative to MJAPI's base path (e.g. `/mcp`). */
+    RelativeRoot: string;
 }
 
 /**
@@ -73,7 +75,12 @@ export function ResolveMCPMount(rootPath: string, apiRootPath: string | undefine
     }
     const publicEndpointUrl = trimTrailingSlashes(absoluteApiRoute(relativeRoot));
     const publicPath = trimTrailingSlashes(new URL(publicEndpointUrl).pathname);
-    return { MountPath: mountPath, PublicEndpointUrl: publicEndpointUrl, SSEMessagesPath: `${publicPath}/messages` };
+    return {
+        MountPath: mountPath,
+        PublicEndpointUrl: publicEndpointUrl,
+        SSEMessagesPath: `${publicPath}/messages`,
+        RelativeRoot: relativeRoot,
+    };
 }
 
 /**
@@ -136,8 +143,9 @@ export class MCPServerExtension extends BaseServerExtension {
             // Dynamic import, as in auth/TokenValidator.ts: @memberjunction/server reads process.env when
             // first evaluated, and the standalone server (which also loads this module) must load its .env
             // first. Inside MJAPI the module is already loaded, so this costs nothing.
-            const { ApiRoute } = await import('@memberjunction/server');
-            const mount = ResolveMCPMount(context.config.RootPath, context.apiRootPath, sub => ApiRoute(sub, { absolute: true }));
+            const server = await import('@memberjunction/server');
+            refuseMultiTenancy(server.configInfo.multiTenancy?.enabled === true);
+            const mount = ResolveMCPMount(context.config.RootPath, context.apiRootPath, sub => server.ApiRoute(sub, { absolute: true }));
 
             await InitConfig();
             refuseUnauthenticatedMode();
@@ -146,12 +154,11 @@ export class MCPServerExtension extends BaseServerExtension {
             const routers = await CreateMCPRouters({
                 SSEMessagesPath: mount.SSEMessagesPath,
                 filterOptions: ParseMCPExtensionToolFilter(context.config.Settings),
+                AllowQueryStringApiKey: false,
             });
-            // Transport before Discovery, so MCP traffic skips the OAuth proxy's per-IP limit: see MCPRouters.Discovery
-            context.app.use(mount.MountPath, MCPCorsMiddleware, routers.Transport.Router, routers.Discovery);
 
+            this.routes = mountMCPRoutes(context.app, mount, routers, server.configInfo.cors.allowedOrigins, sub => server.ApiRoute(sub));
             this.transport = routers.Transport;
-            this.routes = [`ALL ${mount.MountPath}`, `GET ${mount.MountPath}/sse`, `POST ${mount.MountPath}/messages`];
             return {
                 Success: true,
                 Message: `MCP server mounted at ${mount.MountPath} (public endpoint ${mount.PublicEndpointUrl})`,
@@ -166,6 +173,7 @@ export class MCPServerExtension extends BaseServerExtension {
     public async Shutdown(): Promise<void> {
         await this.transport?.Shutdown();
         this.transport = null;
+        SetHostedResourceIdentifier(undefined);
     }
 
     public async HealthCheck(): Promise<ExtensionHealthResult> {
@@ -174,6 +182,51 @@ export class MCPServerExtension extends BaseServerExtension {
             Name: 'MCPServerExtension',
             Details: { Routes: [...this.routes], OpenSessions: this.transport?.SessionCount() ?? 0 },
         };
+    }
+}
+
+/**
+ * Mounts the MCP routes and returns them for the health report.
+ *
+ * Besides the routes under the mount, it serves the discovery documents at the RFC 9728 / RFC 8414
+ * "path insertion" URLs a client builds from the endpoint URL (`/.well-known/<doc>/mcp` for an
+ * endpoint at `/mcp`): the MCP SDK looks for the OAuth proxy's metadata only there. They go through
+ * `ApiRoute`, so with MJAPI at the host root they answer directly; with a base path, the web server
+ * forwards them (see the README).
+ */
+function mountMCPRoutes(
+    app: Application,
+    mount: MCPMount,
+    routers: MCPRouters,
+    allowedOrigins: readonly string[],
+    apiRoute: (subpath: string) => string
+): string[] {
+    const routes = [`ALL ${mount.MountPath}`, `GET ${mount.MountPath}/sse`, `POST ${mount.MountPath}/messages`];
+    const wellKnown: Array<[string, RequestHandler | undefined]> = [
+        ['oauth-protected-resource', routers.WellKnown.ProtectedResource],
+        ['oauth-authorization-server', routers.WellKnown.AuthorizationServer],
+    ];
+    for (const [document, handler] of wellKnown) {
+        if (!handler) {
+            continue;
+        }
+        const path = apiRoute(`/.well-known/${document}${mount.RelativeRoot}`);
+        app.get(path, handler);
+        routes.push(`GET ${path}`);
+    }
+    // Transport before Discovery, so MCP traffic skips the OAuth proxy's per-IP limit: see MCPRouters.Discovery
+    app.use(mount.MountPath, CreateMCPCorsMiddleware(allowedOrigins), routers.Transport.Router, routers.Discovery);
+    return routes;
+}
+
+/**
+ * Fails closed when MJAPI multi-tenancy is on. MJAPI stamps the tenant on the user in middleware
+ * that runs after its own authentication; the MCP routes mount before it, so tools would run with
+ * no tenant and the tenant row filters would not apply.
+ */
+function refuseMultiTenancy(multiTenancyEnabled: boolean): void {
+    if (multiTenancyEnabled) {
+        throw new Error('MCPServerExtension refuses to mount while MJAPI multi-tenancy is enabled: MCP requests would not carry a tenant, so tenant row filters would not apply. Hosted MCP does not support multi-tenancy yet.');
     }
 }
 

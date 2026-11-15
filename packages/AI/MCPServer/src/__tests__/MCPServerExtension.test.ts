@@ -16,6 +16,7 @@ describe('ResolveMCPMount', () => {
             MountPath: '/api/mcp',
             PublicEndpointUrl: 'https://app.example.com/api/mcp',
             SSEMessagesPath: '/api/mcp/messages',
+            RelativeRoot: '/mcp',
         });
     });
 
@@ -24,6 +25,7 @@ describe('ResolveMCPMount', () => {
             MountPath: '/mcp',
             PublicEndpointUrl: 'https://api.example.com/mcp',
             SSEMessagesPath: '/mcp/messages',
+            RelativeRoot: '/mcp',
         });
     });
 

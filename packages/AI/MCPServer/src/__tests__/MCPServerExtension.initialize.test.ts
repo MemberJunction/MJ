@@ -5,6 +5,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import type { RequestHandler } from 'express';
+import type { AddressInfo } from 'net';
+import {
+    discoverAuthorizationServerMetadata,
+    discoverOAuthProtectedResourceMetadata,
+} from '@modelcontextprotocol/sdk/client/auth.js';
 import { ServerExtensionLoader } from '@memberjunction/server-extensions-core';
 import type { ServerExtensionInitContext } from '@memberjunction/server-extensions-core';
 
@@ -16,15 +21,27 @@ const fakes = vi.hoisted(() => ({
     trustProxy: undefined as boolean | undefined,
     authMode: undefined as 'apiKey' | 'oauth' | 'both' | 'none' | undefined,
     systemApiKey: undefined as string | undefined,
+    /** MJAPI_BASE_PATH as ApiRoute composes it. */
+    basePath: '/api',
+    multiTenancyEnabled: false,
 }));
 
 vi.mock('@memberjunction/server', () => ({
     ApiRoute: (subpath: string, options?: { absolute?: boolean }) =>
-        options?.absolute ? fakes.apiRoute(subpath) : `/api${subpath}`,
+        options?.absolute ? fakes.apiRoute(subpath) : `${fakes.basePath}${subpath}`,
+    get configInfo() {
+        return { cors: { allowedOrigins: ['*'] }, multiTenancy: { enabled: fakes.multiTenancyEnabled } };
+    },
 }));
 vi.mock('../Server.js', () => ({
     CreateMCPRouters: fakes.createMCPRouters,
-    MCPCorsMiddleware: ((_req, _res, next) => next()) as RequestHandler,
+    CreateMCPCorsMiddleware: () => ((_req, _res, next) => next()) as RequestHandler,
+}));
+// ScopeService reaches @memberjunction/server's config loader; the metadata handler never consults it.
+vi.mock('../auth/ScopeService.js', () => ({
+    LoadActiveScopes: async () => [],
+    GetDefaultScopes: () => [],
+    GroupScopesHierarchically: () => ({ fullAccessScope: null, categories: new Map() }),
 }));
 vi.mock('../config.js', () => ({
     get McpServerSettings() {
@@ -41,6 +58,7 @@ vi.mock('../config.js', () => ({
 }));
 
 import { MCPServerExtension } from '../MCPServerExtension.js';
+import { CreateAuthorizationServerMetadataHandler } from '../auth/OAuthProxyRouter.js';
 import { GetResourceIdentifier, SetHostedResourceIdentifier } from '../auth/OAuthConfig.js';
 
 function contextFor(rootPath: string, apiRootPath: string, publicUrl: string): ServerExtensionInitContext {
@@ -59,10 +77,14 @@ beforeEach(() => {
     fakes.trustProxy = undefined;
     fakes.authMode = undefined;
     fakes.systemApiKey = undefined;
+    fakes.basePath = '/api';
+    fakes.multiTenancyEnabled = false;
+    fakes.apiRoute = (subpath: string) => `http://localhost:4000/api${subpath}`;
     fakes.createMCPRouters.mockReset();
     fakes.createMCPRouters.mockResolvedValue({
         Transport: { Router: express.Router(), SessionCount: () => 0, Shutdown: async () => undefined },
         Discovery: express.Router(),
+        WellKnown: { ProtectedResource: undefined, AuthorizationServer: undefined },
     });
 });
 
@@ -131,6 +153,32 @@ describe('MCPServerExtension.Initialize', () => {
         expect(warn).toHaveBeenCalledWith(expect.stringContaining('systemApiKey'));
     });
 
+    it('turns off API keys in the URL query string', async () => {
+        await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'));
+
+        expect(fakes.createMCPRouters).toHaveBeenCalledWith(expect.objectContaining({ AllowQueryStringApiKey: false }));
+    });
+
+    it('refuses to load while MJAPI multi-tenancy is on (MCP requests would carry no tenant)', async () => {
+        fakes.multiTenancyEnabled = true;
+
+        const result = await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'));
+
+        expect(result.Success).toBe(false);
+        expect(result.Message).toMatch(/multi-tenancy/);
+        expect(fakes.createMCPRouters).not.toHaveBeenCalled();
+    });
+
+    it('clears the hosted identifier on shutdown', async () => {
+        const extension = new MCPServerExtension();
+        await extension.Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'));
+        expect(GetResourceIdentifier()).toBe('http://localhost:4000/api/mcp');
+
+        await extension.Shutdown();
+
+        expect(GetResourceIdentifier()).toBe('http://localhost:3100');
+    });
+
     it('clears the hosted identifier when building the routers fails', async () => {
         fakes.createMCPRouters.mockRejectedValue(new Error('System user not found'));
 
@@ -150,5 +198,57 @@ describe('MCPServerExtension through MJAPI\'s ServerExtensionLoader', () => {
 
         expect(loader.ExtensionCount).toBe(1);
         expect(GetResourceIdentifier()).toBe('http://localhost:4000/api/mcp');
+    });
+});
+
+describe('MCPServerExtension discovery with the real MCP SDK client', () => {
+    /**
+     * MJAPI at the host root (no base path): every route the extension does not serve answers 401,
+     * as MJAPI's authentication would.
+     */
+    async function withBareMJAPI(run: (origin: string) => Promise<void>): Promise<void> {
+        const app = express();
+        const server = app.listen(0);
+        await new Promise<void>(resolve => server.once('listening', () => resolve()));
+        const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        try {
+            fakes.basePath = '';
+            fakes.apiRoute = (subpath: string) => `${origin}${subpath}`;
+            const issuer = `${origin}/mcp`;
+            fakes.createMCPRouters.mockResolvedValue({
+                Transport: { Router: express.Router(), SessionCount: () => 0, Shutdown: async () => undefined },
+                Discovery: express.Router(),
+                WellKnown: {
+                    ProtectedResource: ((_req, res) => { res.json({ resource: issuer, authorization_servers: [issuer] }); }) as RequestHandler,
+                    AuthorizationServer: CreateAuthorizationServerMetadataHandler({
+                        baseUrl: issuer,
+                        upstream: { authorizationEndpoint: 'https://idp.example/authorize', tokenEndpoint: 'https://idp.example/token', clientId: 'c', scopes: ['openid'] },
+                        enableDynamicRegistration: true,
+                    }),
+                },
+            });
+            const result = await new MCPServerExtension().Initialize({ ...contextFor('/mcp', '', `${origin}/`), app });
+            expect(result.Success).toBe(true);
+            app.use((_req, res) => { res.status(401).json({ error: 'unauthorized' }); });
+            await run(origin);
+        } finally {
+            server.closeAllConnections();
+            await new Promise<void>((resolve, reject) => server.close(err => (err ? reject(err) : resolve())));
+        }
+    }
+
+    it('REGRESSION: the SDK finds the OAuth proxy at /.well-known/oauth-authorization-server/mcp', async () => {
+        await withBareMJAPI(async (origin) => {
+            const metadata = await discoverAuthorizationServerMetadata(`${origin}/mcp`);
+            expect(metadata?.issuer).toBe(`${origin}/mcp`);
+            expect(metadata?.token_endpoint).toBe(`${origin}/mcp/oauth/token`);
+        });
+    });
+
+    it('the SDK finds protected resource metadata by path insertion, with no 401 header to follow', async () => {
+        await withBareMJAPI(async (origin) => {
+            const metadata = await discoverOAuthProtectedResourceMetadata(`${origin}/mcp`);
+            expect(metadata.resource).toBe(`${origin}/mcp`);
+        });
     });
 });

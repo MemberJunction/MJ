@@ -17,7 +17,7 @@ vi.mock('../auth/ScopeService.js', () => ({
 }));
 
 import { discoverAuthorizationServerMetadata } from '@modelcontextprotocol/sdk/client/auth.js';
-import { CreateOAuthProxyRouter } from '../auth/OAuthProxyRouter.js';
+import { CreateOAuthProxyRouter, CreateAuthorizationServerMetadataHandler } from '../auth/OAuthProxyRouter.js';
 import { GetAuthorizationStateManager } from '../auth/AuthorizationStateManager.js';
 import { BuildProtectedResourceMetadata } from '../auth/ProtectedResourceMetadata.js';
 import { SetHostedResourceIdentifier } from '../auth/OAuthConfig.js';
@@ -109,46 +109,52 @@ describe('Protected Resource Metadata when hosted', () => {
     });
 });
 
-describe('MCP SDK login-server discovery with a web app at the host root', () => {
-    /** RFC 8414 path insertion: where clients first look for the metadata of issuer `{origin}/api/mcp`. */
-    const ROOT_DISCOVERY = `/.well-known/oauth-authorization-server${MOUNT}`;
+describe('MCP SDK login-server discovery with MJExplorer at the host root and MJAPI at /api', () => {
+    /**
+     * The README's web-server rule: the RFC 8414 / RFC 9728 path-insertion URLs for an endpoint at
+     * `/api/mcp` go to MJAPI's aliases at `/api/.well-known/<doc>/mcp`.
+     */
+    const REWRITE = /^\/\.well-known\/(oauth-authorization-server|oauth-protected-resource)\/api\/(.*)$/;
 
     /**
-     * An app shaped like MJExplorer + MJAPI on one host: the proxy at /api/mcp, a web app answering
-     * everything else with its page. `rewrite` stands in for the web-server rule the README gives.
+     * One host: MJAPI under /api, serving the proxy at /api/mcp and the metadata alias the extension
+     * mounts at /api/.well-known/oauth-authorization-server/mcp; a web app answering everything else
+     * with its page. `rewrite` stands in for the web-server rule.
      */
     async function withHost(rewrite: boolean, run: (issuer: string) => Promise<void>): Promise<void> {
         const app = express();
-        if (rewrite) {
-            app.use((req, _res, next) => {
-                if (req.url === ROOT_DISCOVERY) {
-                    req.url = `${MOUNT}/.well-known/oauth-authorization-server`;
-                }
-                next();
-            });
-        }
-        app.use(MOUNT, CreateOAuthProxyRouter({ ...config, baseUrl: 'http://placeholder' }));
-        app.use((_req, res) => {
-            res.status(200).type('html').send('<!doctype html><html><body>MJExplorer</body></html>');
-        });
         const s = app.listen(0);
         await new Promise<void>(resolve => s.once('listening', () => resolve()));
+        const issuer = `http://127.0.0.1:${(s.address() as AddressInfo).port}${MOUNT}`;
         try {
-            await run(`http://127.0.0.1:${(s.address() as AddressInfo).port}${MOUNT}`);
+            if (rewrite) {
+                app.use((req, _res, next) => {
+                    req.url = req.url.replace(REWRITE, '/api/.well-known/$1/$2');
+                    next();
+                });
+            }
+            const proxyConfig = { ...config, baseUrl: issuer };
+            app.get('/api/.well-known/oauth-authorization-server/mcp', CreateAuthorizationServerMetadataHandler(proxyConfig));
+            app.use(MOUNT, CreateOAuthProxyRouter(proxyConfig));
+            app.use((_req, res) => {
+                res.status(200).type('html').send('<!doctype html><html><body>MJExplorer</body></html>');
+            });
+            await run(issuer);
         } finally {
             s.closeAllConnections();
             await new Promise<void>((resolve, reject) => s.close(err => (err ? reject(err) : resolve())));
         }
     }
 
-    it('finds the proxy when the web server rewrites the root discovery URL to MJAPI', async () => {
+    it('finds the proxy when the web server forwards the path-insertion URL to MJAPI', async () => {
         await withHost(true, async (issuer) => {
             const metadata = await discoverAuthorizationServerMetadata(issuer);
-            expect(metadata?.token_endpoint).toBe('http://placeholder/oauth/token');
+            expect(metadata?.issuer).toBe(issuer);
+            expect(metadata?.token_endpoint).toBe(`${issuer}/oauth/token`);
         });
     });
 
-    it('fails without the rewrite, when the web app answers with its page (why the README requires it)', async () => {
+    it('fails without the rule, when the web app answers with its page (why the README requires it)', async () => {
         await withHost(false, async (issuer) => {
             await expect(discoverAuthorizationServerMetadata(issuer)).rejects.toThrow();
         });

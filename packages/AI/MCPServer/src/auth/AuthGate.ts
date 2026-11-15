@@ -18,7 +18,7 @@ import type * as http from 'http';
 import { RunView, type UserInfo } from '@memberjunction/core';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import type { MCPSessionContext, AuthMode, AuthResult } from './types.js';
-import { GetAuthMode, IsOAuthEnabled } from './OAuthConfig.js';
+import { GetAuthMode } from './OAuthConfig.js';
 import { ValidateBearerToken, ResolveOAuthUser } from './TokenValidator.js';
 import { Send401Response, Send403Response, Send503Response } from './WWWAuthenticate.js';
 
@@ -51,6 +51,17 @@ export interface AuthGateConfig {
   }>;
   /** Function to get system user for 'none' mode */
   getSystemUser: () => UserInfo | undefined;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
+  /**
+   * Whether an API key may arrive in the URL query string (`apiKey` / `api_key`). Defaults to
+   * `true` for the standalone server's existing clients; MJAPI-hosted MCP sets `false`.
+   */
+  AllowQueryStringApiKey?: boolean;
+}
+
+/** Options for {@link ExtractCredentials}. */
+export interface ExtractCredentialsOptions {
+  /** See {@link AuthGateConfig.AllowQueryStringApiKey}. Defaults to `true`. */
+  AllowQueryStringApiKey?: boolean;
 }
 
 /**
@@ -65,7 +76,10 @@ export interface AuthGateConfig {
  * @param request - The incoming HTTP request
  * @returns Extracted credentials
  */
-export function ExtractCredentials(request: Request | http.IncomingMessage): ExtractedCredentials {
+export function ExtractCredentials(
+  request: Request | http.IncomingMessage,
+  options: ExtractCredentialsOptions = {}
+): ExtractedCredentials {
   const result: ExtractedCredentials = {};
 
   // Check dedicated API key headers
@@ -100,8 +114,8 @@ export function ExtractCredentials(request: Request | http.IncomingMessage): Ext
     }
   }
 
-  // Check query parameters as fallback for API key
-  if (!result.apiKey && request.url) {
+  // Check query parameters as fallback for API key (off when hosted in MJAPI)
+  if (!result.apiKey && request.url && options.AllowQueryStringApiKey !== false) {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
       const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
@@ -134,7 +148,7 @@ export async function AuthenticateRequest(
   config: AuthGateConfig
 ): Promise<AuthResult> {
   const mode = GetAuthMode();
-  const credentials = ExtractCredentials(request);
+  const credentials = ExtractCredentials(request, { AllowQueryStringApiKey: config.AllowQueryStringApiKey });
 
   // Mode: none - skip authentication, use system user
   if (mode === 'none') {
@@ -501,8 +515,8 @@ export function SendAuthErrorResponse(res: Response, result: AuthResult): void {
     Send403Response(res, error.message, error.message);
   } else {
     // 401 Unauthorized
-    const options = IsOAuthEnabled() ? {} : { resourceMetadataUrl: undefined };
-    Send401Response(res, error.message, options);
+    // BuildWWWAuthenticateHeader leaves resource_metadata out when OAuth is off
+    Send401Response(res, error.message);
   }
 }
 

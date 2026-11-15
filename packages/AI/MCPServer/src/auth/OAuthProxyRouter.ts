@@ -11,7 +11,7 @@
  * @module @memberjunction/ai-mcp-server/auth/OAuthProxyRouter
  */
 
-import { Router, Request, Response, urlencoded, json } from 'express';
+import { Router, Request, RequestHandler, Response, urlencoded, json } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import * as crypto from 'crypto';
 import jwt from 'jsonwebtoken';
@@ -118,9 +118,7 @@ export function CreateOAuthProxyRouter(config: OAuthProxyConfig): Router {
   router.use('/oauth', urlencoded({ extended: true }), json());
 
   // Authorization Server Metadata (RFC 8414)
-  router.get('/.well-known/oauth-authorization-server', (req: Request, res: Response) => {
-    handleMetadataEndpoint(req, res, config);
-  });
+  router.get('/.well-known/oauth-authorization-server', CreateAuthorizationServerMetadataHandler(config));
 
   // Dynamic Client Registration (RFC 7591)
   if (config.enableDynamicRegistration) {
@@ -178,6 +176,15 @@ export function createOAuthProxyRouter(config: OAuthProxyConfig): Router {
 /**
  * Handles the Authorization Server Metadata endpoint.
  */
+/**
+ * The authorization server metadata (RFC 8414) endpoint as a bare handler, so a host can also serve
+ * it at the path-insertion URL clients build from the issuer
+ * (`/.well-known/oauth-authorization-server/<issuer path>`), which sits outside this router.
+ */
+export function CreateAuthorizationServerMetadataHandler(config: OAuthProxyConfig): RequestHandler {
+  return (req: Request, res: Response) => handleMetadataEndpoint(req, res, config);
+}
+
 function handleMetadataEndpoint(
   req: Request,
   res: Response,

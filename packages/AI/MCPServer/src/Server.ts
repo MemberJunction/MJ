@@ -21,8 +21,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { randomUUID } from 'crypto';
-import { Readable } from 'stream';
-import express, { Request, Response, NextFunction, Router } from 'express';
+import express, { Request, Response, NextFunction, Router, RequestHandler } from 'express';
 import sql from "mssql";
 import { z } from "zod";
 import { InitConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
@@ -72,10 +71,13 @@ import {
 import { HasAuthProviders, SetProxyTokenConfig } from './auth/TokenValidator.js';
 import { Send401Response } from './auth/WWWAuthenticate.js';
 // OAuth Proxy imports
-import { CreateOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
+import { CreateOAuthProxyRouter, CreateAuthorizationServerMetadataHandler } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
 import { ResolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
 import { ApplyTrustProxy } from './ProxySettings.js';
+import { BuildAPIKeySessionUser, SystemKeyMatches } from './auth/APIKeySessionUser.js';
+import { MCPSessionRegistry } from './sessionRegistry.js';
+import type { APIKeySessionUserDeps } from './auth/APIKeySessionUser.js';
 
 
 /*******************************************************************************
@@ -324,7 +326,7 @@ async function validateApiKey(
         const sharedApiKey = _config.apiKey;
         const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
 
-        if (configuredSystemApiKey && apiKey === configuredSystemApiKey) {
+        if (SystemKeyMatches(apiKey, configuredSystemApiKey)) {
             return {
                 valid: true,
                 user: systemUser,
@@ -363,9 +365,16 @@ async function validateApiKey(
             return { valid: false, error: 'User not found in cache' };
         }
 
+        // Clone and stamp the key's row filters and acting context, as MJAPI does for GraphQL.
+        // Throws (fail closed) if the API key cache cannot supply the row-filter bindings.
+        const sessionUser = await BuildAPIKeySessionUser(cachedUser, validation.APIKeyId!, request, {
+            ...(await loadSessionUserServerDeps()),
+            GetRowFilterBindingsForKey: (apiKeyId: string) => apiKeyEngine.GetRowFilterBindingsForKey(apiKeyId),
+        });
+
         return {
             valid: true,
-            user: cachedUser,
+            user: sessionUser,
             apiKeyId: validation.APIKeyId!,
             apiKeyHash: validation.APIKeyHash!,
         };
@@ -375,6 +384,19 @@ async function validateApiKey(
             error: error instanceof Error ? error.message : 'API key validation failed',
         };
     }
+}
+
+/**
+ * The MJServer helpers {@link BuildAPIKeySessionUser} needs. Loaded with a dynamic import, like
+ * auth/TokenValidator.ts and config.ts do: @memberjunction/server reads process.env when first
+ * evaluated, and the standalone server must load its .env before that.
+ */
+async function loadSessionUserServerDeps(): Promise<Pick<APIKeySessionUserDeps, 'CloneUser' | 'ActingContextResolver'>> {
+    const server = await import('@memberjunction/server');
+    return {
+        CloneUser: server.CloneUserForSessionContext,
+        ActingContextResolver: server.GetAPIKeyActingContextResolver(),
+    };
 }
 
 /** AuthGate configuration - populated during server initialization */
@@ -495,6 +517,11 @@ async function authorizeApiKeyToolCall(
                 endpoint: '/mcp',
                 method: 'POST',
                 operation: scopeInfo.scopePath,
+            },
+            {
+                // Server-derived (stamped in validateApiKey, never client input): rules whose row
+                // filter needs {{Acting*}} tokens fail closed without it.
+                actingContext: sessionContext.user.APIKeyActingContext,
             }
         );
 
@@ -1014,7 +1041,14 @@ export interface MCPTransportRouterOptions {
      */
     SSEMessagesPath: string;
     Sessions: MCPSessionFactory;
+    /** A Streamable HTTP session with no request for this long is closed. Default 30 minutes. */
+    IdleSessionTimeoutMs?: number;
+    /** How often idle sessions are swept. Default: half the idle timeout, at most one minute. */
+    SweepIntervalMs?: number;
 }
+
+/** Default idle timeout for Streamable HTTP sessions. */
+const DEFAULT_IDLE_SESSION_TIMEOUT_MS = 30 * 60_000;
 
 /** A transport router plus the live sessions it holds. */
 export interface MCPTransportRouter {
@@ -1037,23 +1071,33 @@ export function BuildMCPTransportRouter(options: MCPTransportRouterOptions): MCP
     }
     const router = express.Router();
     const sseTransports = new Map<string, SSEServerTransport>();
-    const streamableTransports = new Map<string, StreamableHTTPServerTransport>();
+    const idleTimeoutMs = options.IdleSessionTimeoutMs ?? DEFAULT_IDLE_SESSION_TIMEOUT_MS;
+    const streamable = new MCPSessionRegistry<StreamableHTTPServerTransport>(idleTimeoutMs);
+
+    const sweepTimer = setInterval(() => {
+        streamable.SweepIdle().catch(error => console.error('[StreamableHTTP] Idle session sweep failed:', error));
+    }, options.SweepIntervalMs ?? Math.min(idleTimeoutMs / 2, 60_000));
+    // The sweep alone never keeps the process alive.
+    sweepTimer.unref();
 
     router.get('/sse', (req: Request, res: Response) =>
         handleSSEConnect(req, res, options.Sessions, options.SSEMessagesPath, sseTransports));
     router.post('/messages', (req: Request, res: Response) => handleSSEMessage(req, res, sseTransports));
     router.all('/', (req: Request, res: Response) =>
-        handleStreamableRequest(req, res, options.Sessions, streamableTransports));
+        handleStreamableRequest(req, res, options.Sessions, streamable));
 
     return {
         Router: router,
-        SessionCount: () => sseTransports.size + streamableTransports.size,
-        Shutdown: () => closeAllTransports([...sseTransports.values(), ...streamableTransports.values()]),
+        SessionCount: () => sseTransports.size + streamable.Size,
+        Shutdown: async () => {
+            clearInterval(sweepTimer);
+            await Promise.all([closeAllTransports([...sseTransports.values()]), streamable.CloseAll()]);
+        },
     };
 }
 
 /** Closes every transport, logging (not throwing) individual failures so the rest still close. */
-async function closeAllTransports(all: Array<SSEServerTransport | StreamableHTTPServerTransport>): Promise<void> {
+async function closeAllTransports(all: SSEServerTransport[]): Promise<void> {
     const results = await Promise.allSettled(all.map(t => t.close()));
     for (const r of results) {
         if (r.status === 'rejected') {
@@ -1167,31 +1211,10 @@ async function handleSSEMessage(req: Request, res: Response, transports: Map<str
         return;
     }
 
-    // Buffer the body then pass to transport
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
-    }
-    const bodyBuffer = Buffer.concat(chunks as unknown as Uint8Array[]);
-
-    // Create a new readable stream from the buffered body for the transport
-    const bodyStream = new Readable({
-        read() {
-            this.push(bodyBuffer);
-            this.push(null);
-        }
-    });
-
-    // Create a mock request with the buffered body stream
-    const mockReq = Object.assign(bodyStream, {
-        headers: req.headers,
-        method: req.method,
-        url: req.url,
-        query: req.query
-    });
-
     try {
-        await transport.handlePostMessage(mockReq as unknown as Request, res);
+        // The SDK reads the raw body itself, with its own size limit. req.body is set only if a host
+        // middleware already parsed it; the SDK then uses that instead of reading the stream.
+        await transport.handlePostMessage(req, res, req.body);
     } catch (error) {
         console.error('[Messages] Error handling message:', error);
         if (!res.headersSent) {
@@ -1202,74 +1225,96 @@ async function handleSSEMessage(req: Request, res: Response, transports: Map<str
     }
 }
 
-/** ALL `/`: the Streamable HTTP transport (the current MCP transport — one endpoint, GET and POST). */
+/**
+ * ALL `/`: the Streamable HTTP transport (the current MCP transport — one endpoint, GET, POST and
+ * DELETE). Every request is authenticated, as the MCP spec requires, so a revoked key or an
+ * expired token stops working on an open session too.
+ */
 async function handleStreamableRequest(
     req: Request,
     res: Response,
     sessions: MCPSessionFactory,
-    streamableTransports: Map<string, StreamableHTTPServerTransport>
+    registry: MCPSessionRegistry<StreamableHTTPServerTransport>
 ): Promise<void> {
-    // Get or validate session ID from header
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-
-    // For existing sessions, route to the existing transport
-    if (sessionId && streamableTransports.has(sessionId)) {
-        const transport = streamableTransports.get(sessionId)!;
-        try {
-            // Pass parsed body to handleRequest - required for SDK to properly parse the message
-            await transport.handleRequest(req, res, req.body);
-        } catch (error) {
-            console.error(`[StreamableHTTP] Error on session ${sessionId}:`, error);
-            if (!res.headersSent) {
-                res.status(500).json({ error: 'Internal server error' });
-            }
-        }
-        return;
-    }
-
-    // For new sessions (no session ID or unknown session ID with initialization request)
-    // We need to authenticate and create a new transport
     const authResult = await sessions.Authenticate(req);
     if (!authResult.authenticated) {
         SendAuthErrorResponse(res, authResult);
         return;
     }
-
     const sessionContext = ToSessionContext(authResult);
 
+    const sessionId = req.headers['mcp-session-id'];
+    if (typeof sessionId === 'string' && sessionId) {
+        await continueStreamableSession(req, res, sessionId, sessionContext, registry);
+        return;
+    }
+    await startStreamableSession(req, res, sessions, sessionContext, registry);
+}
+
+/**
+ * Routes a request to its open session. An unknown session, or one another user opened, gets the
+ * spec's 404 so the client starts a new session.
+ */
+async function continueStreamableSession(
+    req: Request,
+    res: Response,
+    sessionId: string,
+    sessionContext: MCPSessionContext,
+    registry: MCPSessionRegistry<StreamableHTTPServerTransport>
+): Promise<void> {
+    const entry = registry.GetForUser(sessionId, sessionContext.user.ID);
+    if (!entry) {
+        res.status(404).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Session not found' }, id: null });
+        return;
+    }
+    try {
+        // Pass parsed body to handleRequest - required for SDK to properly parse the message
+        await entry.Transport.handleRequest(req, res, req.body);
+    } catch (error) {
+        console.error(`[StreamableHTTP] Error on session ${sessionId}:`, error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+}
+
+/**
+ * Starts a session for an initialize request. The session is registered from the SDK's
+ * `onsessioninitialized` hook, before the response goes out, so the client's next request finds
+ * it. A request that does not initialize a session has its transport closed straight away.
+ */
+async function startStreamableSession(
+    req: Request,
+    res: Response,
+    sessions: MCPSessionFactory,
+    sessionContext: MCPSessionContext,
+    registry: MCPSessionRegistry<StreamableHTTPServerTransport>
+): Promise<void> {
     try {
         // Create a new MCP server for this session, with tools scoped to the session's user
         const mcpServer = await sessions.CreateSessionServer(sessionContext);
 
-        // Create Streamable HTTP transport with session ID generation
-        const transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => randomUUID()
+        const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => randomUUID(),
+            onsessioninitialized: (newSessionId: string) => {
+                registry.Add(newSessionId, transport, sessionContext.user.ID);
+                console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
+            },
         });
-
-        // Connect the server to the transport
-        await mcpServer.connect(transport);
-
-        // Store for future requests (after first request establishes session)
+        // Set before connect(): the SDK wraps an existing onclose, while assigning one after
+        // connect() would replace the server's own close handling.
         transport.onclose = () => {
-            const sid = transport.sessionId;
-            if (sid) {
-                streamableTransports.delete(sid);
+            if (transport.sessionId) {
+                registry.Delete(transport.sessionId);
             }
         };
 
-        // Handle the current request
-        // Pass the parsed body to help the SDK recognize the initialize request
+        await mcpServer.connect(transport);
         await transport.handleRequest(req, res, req.body);
 
-        // Store the transport after successful request handling
-        const newSessionId = transport.sessionId;
-        if (newSessionId) {
-            streamableTransports.set(newSessionId, transport);
-            console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
-        } else {
-            console.warn(`[StreamableHTTP] WARNING: No session ID assigned after handleRequest`);
+        if (!transport.sessionId) {
+            await transport.close();
         }
-
     } catch (error) {
         console.error('[StreamableHTTP] Connection error:', error);
         if (!res.headersSent) {
@@ -1281,29 +1326,59 @@ async function handleStreamableRequest(
     }
 }
 
+/** Request headers an MCP client sends (the MCP SDK's Streamable HTTP and SSE transports, plus MJ keys). */
+const MCP_CORS_ALLOWED_HEADERS = [
+    'Content-Type', 'Authorization', 'Accept', 'x-api-key', 'x-mj-api-key',
+    'mcp-session-id', 'mcp-protocol-version', 'last-event-id',
+].join(', ');
+
+/**
+ * Response headers a browser client must be able to read: the session ID it echoes on every later
+ * request, and the 401 challenge that points it at OAuth discovery.
+ */
+const MCP_CORS_EXPOSED_HEADERS = ['Content-Type', 'mcp-session-id', 'WWW-Authenticate'].join(', ');
+
 /**
  * CORS for the MCP routes. Answers preflights itself, so when the routes are mounted inside MJAPI
  * the extension entry must set `OwnsCORS: true` (MJAPI's global CORS would answer them first).
+ *
+ * @param allowedOrigins - `['*']` allows every origin (no credentials: MCP authenticates with a
+ *   header, never a cookie). Otherwise only the listed origins get CORS headers; a browser on any
+ *   other origin cannot read the response. MJAPI passes its own `cors.allowedOrigins`.
  */
-export function MCPCorsMiddleware(req: Request, res: Response, next: NextFunction): void {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, x-api-key, x-mj-api-key');
-    res.header('Access-Control-Expose-Headers', 'Content-Type');
+export function CreateMCPCorsMiddleware(allowedOrigins: readonly string[] = ['*']): RequestHandler {
+    const wildcard = allowedOrigins.includes('*');
+    return (req: Request, res: Response, next: NextFunction): void => {
+        const origin = req.headers.origin;
+        if (wildcard) {
+            res.header('Access-Control-Allow-Origin', '*');
+        } else {
+            res.vary('Origin');
+            if (origin && allowedOrigins.includes(origin)) {
+                res.header('Access-Control-Allow-Origin', origin);
+            }
+        }
+        res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', MCP_CORS_ALLOWED_HEADERS);
+        res.header('Access-Control-Expose-Headers', MCP_CORS_EXPOSED_HEADERS);
 
-    // Handle preflight requests immediately - don't let other middleware process them
-    if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
-        return;
-    }
-    next();
+        // Handle preflight requests immediately - don't let other middleware process them
+        if (req.method === 'OPTIONS') {
+            res.sendStatus(200);
+            return;
+        }
+        next();
+    };
 }
+
+/** CORS for the standalone server: every origin. See {@link CreateMCPCorsMiddleware}. */
+export const MCPCorsMiddleware: RequestHandler = CreateMCPCorsMiddleware(['*']);
 
 /**
  * Loads the engines authentication needs and validates the auth configuration.
  * @returns the system user, used for server-level work (tool discovery), never for tool execution
  */
-async function initializeAuth(): Promise<UserInfo> {
+async function initializeAuth(allowQueryStringApiKey: boolean): Promise<UserInfo> {
     // Use system user for server initialization tasks (loading credentials, discovering agents)
     // Note: Individual tool executions use the authenticated session user, not this system user
     const systemUser = UserCache.Instance.GetSystemUser();
@@ -1326,6 +1401,7 @@ async function initializeAuth(): Promise<UserInfo> {
     authGateConfig = {
         validateApiKey: validateApiKey,
         getSystemUser: () => UserCache.Instance.GetSystemUser(),
+        AllowQueryStringApiKey: allowQueryStringApiKey,
     };
 
     // Validate OAuth configuration if OAuth is enabled
@@ -1370,13 +1446,19 @@ async function initializeAuth(): Promise<UserInfo> {
     return systemUser;
 }
 
-/**
- * Mounts the OAuth proxy authorization server (RFC 7591, RFC 8414) on `router` when enabled.
- * @returns the proxy's base URL (its issuer), or `undefined` when the proxy is not running
- */
-function mountOAuthProxy(router: Router): string | undefined {
+/** What {@link mountOAuthProxy} mounted. */
+interface MountedOAuthProxy {
+    /** The proxy's base URL (its issuer), or `undefined` when the proxy is not running. */
+    BaseUrl: string | undefined;
+    /** Serves the proxy's authorization server metadata (RFC 8414), when the proxy is running. */
+    MetadataHandler: RequestHandler | undefined;
+}
+
+/** Mounts the OAuth proxy authorization server (RFC 7591, RFC 8414) on `router` when enabled. */
+function mountOAuthProxy(router: Router): MountedOAuthProxy {
     const oauthProxyEnabled = _config.mcpServerSettings?.auth?.proxy?.enabled ?? false;
     let oauthProxyBaseUrl: string | undefined;
+    let metadataHandler: RequestHandler | undefined;
 
     if (IsOAuthEnabled() && oauthProxyEnabled) {
         try {
@@ -1475,6 +1557,7 @@ function mountOAuthProxy(router: Router): string | undefined {
                     // Create and mount OAuth proxy router
                     const oauthProxyRouter = CreateOAuthProxyRouter(proxyConfig);
                     router.use(oauthProxyRouter);
+                    metadataHandler = CreateAuthorizationServerMetadataHandler(proxyConfig);
 
                     console.log(`[OAuth Proxy] Enabled with upstream provider: ${provider.name}`);
                     console.log(`[OAuth Proxy] Authorization endpoint: ${authorizationEndpoint}`);
@@ -1498,59 +1581,72 @@ function mountOAuthProxy(router: Router): string | undefined {
         }
     }
 
-    return oauthProxyBaseUrl;
+    return { BaseUrl: oauthProxyBaseUrl, MetadataHandler: metadataHandler };
 }
 
-/** Mounts the Protected Resource Metadata endpoint (RFC 9728) when OAuth is enabled. */
-function mountProtectedResourceMetadata(router: Router, oauthProxyEnabled: boolean, oauthProxyBaseUrl: string | undefined): void {
-    if (IsOAuthEnabled()) {
-        router.get('/.well-known/oauth-protected-resource', async (_req: Request, res: Response) => {
-            try {
-                const factory = AuthProviderFactory.Instance;
-                const providers = factory.getAllProviders();
-
-                // Extract issuer URLs from configured auth providers
-                const authorizationServers = ExtractAuthorizationServers(
-                    providers.map((p: { issuer: string }) => ({ issuer: p.issuer }))
-                );
-
-                if (authorizationServers.length === 0 && !oauthProxyBaseUrl) {
-                    console.warn('[OAuth] No authorization servers configured - metadata endpoint returning empty list');
-                }
-
-                const metadata: ProtectedResourceMetadata = BuildProtectedResourceMetadata({
-                    authorizationServers,
-                    resourceName: 'MemberJunction MCP Server',
-                    providers, // Pass providers for automatic scope generation
-                    // When OAuth proxy is enabled, point to ourselves as the authorization server
-                    useOAuthProxy: oauthProxyEnabled && !!oauthProxyBaseUrl,
-                    oauthProxyBaseUrl,
-                });
-
-                res.json(metadata);
-            } catch (error) {
-                console.error('[OAuth] Error building Protected Resource Metadata:', error);
-                res.status(500).json({
-                    error: 'internal_error',
-                    message: 'Failed to generate protected resource metadata',
-                });
-            }
-        });
-        console.log('[OAuth] Protected Resource Metadata endpoint registered at /.well-known/oauth-protected-resource');
+/**
+ * Mounts the Protected Resource Metadata endpoint (RFC 9728) when OAuth is enabled.
+ * @returns its handler, or `undefined` when OAuth is off
+ */
+function mountProtectedResourceMetadata(
+    router: Router,
+    oauthProxyEnabled: boolean,
+    oauthProxyBaseUrl: string | undefined
+): RequestHandler | undefined {
+    if (!IsOAuthEnabled()) {
+        return undefined;
     }
+    const handler: RequestHandler = async (_req: Request, res: Response) => {
+        try {
+            const factory = AuthProviderFactory.Instance;
+            const providers = factory.getAllProviders();
+
+            // Extract issuer URLs from configured auth providers
+            const authorizationServers = ExtractAuthorizationServers(
+                providers.map((p: { issuer: string }) => ({ issuer: p.issuer }))
+            );
+
+            if (authorizationServers.length === 0 && !oauthProxyBaseUrl) {
+                console.warn('[OAuth] No authorization servers configured - metadata endpoint returning empty list');
+            }
+
+            const metadata: ProtectedResourceMetadata = BuildProtectedResourceMetadata({
+                authorizationServers,
+                resourceName: 'MemberJunction MCP Server',
+                providers, // Pass providers for automatic scope generation
+                // When OAuth proxy is enabled, point to ourselves as the authorization server
+                useOAuthProxy: oauthProxyEnabled && !!oauthProxyBaseUrl,
+                oauthProxyBaseUrl,
+            });
+
+            res.json(metadata);
+        } catch (error) {
+            console.error('[OAuth] Error building Protected Resource Metadata:', error);
+            res.status(500).json({
+                error: 'internal_error',
+                message: 'Failed to generate protected resource metadata',
+            });
+        }
+    };
+    router.get('/.well-known/oauth-protected-resource', handler);
+    console.log('[OAuth] Protected Resource Metadata endpoint registered at /.well-known/oauth-protected-resource');
+    return handler;
 }
 
-/** OAuth discovery, the OAuth proxy, and `/health`. Paths are relative to the mount point. */
-function buildDiscoveryRouter(): Router {
+/**
+ * OAuth discovery, the OAuth proxy, and `/health`. Paths are relative to the mount point. Also
+ * returns the two discovery handlers, for hosts that serve them at extra paths.
+ */
+function buildDiscoveryRouter(): { Router: Router; WellKnown: MCPWellKnownHandlers } {
     const router = express.Router();
-    const oauthProxyBaseUrl = mountOAuthProxy(router);
+    const proxy = mountOAuthProxy(router);
     const oauthProxyEnabled = _config.mcpServerSettings?.auth?.proxy?.enabled ?? false;
-    mountProtectedResourceMetadata(router, oauthProxyEnabled, oauthProxyBaseUrl);
+    const protectedResource = mountProtectedResourceMetadata(router, oauthProxyEnabled, proxy.BaseUrl);
 
     router.get('/health', (_req: Request, res: Response) => {
         res.json({ status: 'ok', timestamp: new Date().toISOString() });
     });
-    return router;
+    return { Router: router, WellKnown: { ProtectedResource: protectedResource, AuthorizationServer: proxy.MetadataHandler } };
 }
 
 /** The production session factory: real authentication, and the full tool set per session. */
@@ -1569,6 +1665,11 @@ function createSessionFactory(systemUser: UserInfo): MCPSessionFactory {
 export interface MCPRouterOptions extends MCPServerOptions {
     /** See {@link MCPTransportRouterOptions.SSEMessagesPath}. */
     SSEMessagesPath: string;
+    /**
+     * Accept an API key in the URL query string (`?apiKey=`). Defaults to `true` for the standalone
+     * server's existing clients; `MCPServerExtension` passes `false`.
+     */
+    AllowQueryStringApiKey?: boolean;
 }
 
 /** Everything the MCP server serves, as routers a host mounts. */
@@ -1584,6 +1685,20 @@ export interface MCPRouters {
      * by default, and behind a proxy every MCP client would then share one bucket.
      */
     Discovery: Router;
+    /**
+     * The discovery documents as bare handlers, for the RFC 9728 / RFC 8414 "path insertion" URLs
+     * a client builds from the endpoint URL (`/.well-known/<doc>/<endpoint path>`). Those sit
+     * outside the mount, so a host mounts them itself; `MCPServerExtension` does.
+     */
+    WellKnown: MCPWellKnownHandlers;
+}
+
+/** See {@link MCPRouters.WellKnown}. Each is `undefined` when that document is not served. */
+export interface MCPWellKnownHandlers {
+    /** Protected Resource Metadata (RFC 9728); served when OAuth is enabled. */
+    ProtectedResource: RequestHandler | undefined;
+    /** The OAuth proxy's authorization server metadata (RFC 8414); served when the proxy runs. */
+    AuthorizationServer: RequestHandler | undefined;
 }
 
 /**
@@ -1601,12 +1716,13 @@ export async function CreateMCPRouters(options: MCPRouterOptions): Promise<MCPRo
     activeFilterOptions = options.filterOptions || {};
     activeCustomToolProviders = options.customToolProviders || [];
 
-    const systemUser = await initializeAuth();
+    const systemUser = await initializeAuth(options.AllowQueryStringApiKey ?? true);
     const transport = BuildMCPTransportRouter({
         SSEMessagesPath: options.SSEMessagesPath,
         Sessions: createSessionFactory(systemUser),
     });
-    return { Transport: transport, Discovery: buildDiscoveryRouter() };
+    const discovery = buildDiscoveryRouter();
+    return { Transport: transport, Discovery: discovery.Router, WellKnown: discovery.WellKnown };
 }
 
 /** Connects the standalone server's own pool and sets up the SQL Server data provider. */

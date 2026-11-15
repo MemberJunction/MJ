@@ -12,7 +12,7 @@
  */
 
 import type { Response } from 'express';
-import { GetResourceIdentifier } from './OAuthConfig.js';
+import { GetResourceIdentifier, IsOAuthEnabled } from './OAuthConfig.js';
 
 /**
  * Options for building a WWW-Authenticate header.
@@ -57,8 +57,11 @@ export function BuildWWWAuthenticateHeader(options: WWWAuthenticateOptions = {})
     parts.push(`error="${options.error}"`);
   }
 
-  // Always include resource_metadata (required by MCP spec and RFC 9728)
-  parts.push(`resource_metadata="${metadataUrl}"`);
+  // Include resource_metadata (required by the MCP spec and RFC 9728) whenever OAuth is on. With
+  // OAuth off the metadata endpoint is not served, so pointing at it would send clients to a 404.
+  if (IsOAuthEnabled() || options.resourceMetadataUrl) {
+    parts.push(`resource_metadata="${metadataUrl}"`);
+  }
 
   // Add scope if specified
   if (options.scope) {
@@ -74,7 +77,7 @@ export function BuildWWWAuthenticateHeader(options: WWWAuthenticateOptions = {})
 
   // Join with comma and space for readability
   // First part is "Bearer", rest are parameters
-  return `${parts[0]} ${parts.slice(1).join(', ')}`;
+  return parts.length === 1 ? parts[0] : `${parts[0]} ${parts.slice(1).join(', ')}`;
 }
 
 /** @deprecated Use {@link BuildWWWAuthenticateHeader}. */

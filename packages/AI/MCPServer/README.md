@@ -124,20 +124,26 @@ serverExtensions: [
 
 - `enableMCPServer` and `port` apply only to the standalone server. Inside MJAPI, the extension entry turns MCP on or off.
 - `auth.mode: 'none'` is refused: the extension does not mount. That mode runs every request as the system user with no credentials, and inside MJAPI the MCP routes sit on its public port, before its own authentication.
+- MJAPI multi-tenancy (`multiTenancy.enabled`) is refused too. MJAPI stamps the tenant in middleware that runs after its own authentication, so MCP requests would carry no tenant.
+- An API key is accepted only in a header (`x-api-key`, `x-mj-api-key` or `Authorization: Bearer`), never in the URL query string, which ends up in access logs.
 - `systemApiKey` gives whoever sends it every tool as the system user. MJAPI logs a warning while it is still the stock placeholder `MY_API_KEY_FOR_MCP_SERVER`.
 - `trustProxy` has no effect, because Express reads `trust proxy` from MJAPI's app. MJAPI logs a warning when it is set.
 - `auth.resourceIdentifier` should normally be left unset. The extension builds it from MJAPI's public URL (`MJAPI_PUBLIC_URL`, e.g. `https://app.example.com/api` gives `https://app.example.com/api/mcp`). A leftover value such as `http://localhost:3100` sends OAuth clients to the wrong place, and MJAPI logs a warning.
+- CORS follows MJAPI's `cors.allowedOrigins`. With the default `['*']`, any origin may call MCP; it authenticates with a header, never a cookie.
 - With the OAuth proxy, register the upstream redirect URI under the mount: `https://app.example.com/api/mcp/oauth/callback`.
 
-**OAuth proxy with another app at the host root: add one rewrite.** MCP clients read the resource metadata URL from the `WWW-Authenticate` header of a 401, so that step works under any prefix. Finding the login server is different. Without the OAuth proxy, the login server is your identity provider on its own host, and nothing more is needed. With the proxy, the login server is `https://host/api/mcp`, and clients first ask for `https://host/.well-known/oauth-authorization-server/api/mcp` (RFC 8414). That URL is at the host root, which MJExplorer's web server owns, and a single-page-app host answers it with `index.html`: the MCP SDK client then stops with a parse error. Rewrite it to the route the proxy serves. In nginx, alongside the rule that sends `/api/` to MJAPI:
+**OAuth discovery.** MCP clients find the discovery documents from the endpoint URL by inserting the document name after the host: for an endpoint at `https://host/mcp`, they ask for `https://host/.well-known/oauth-protected-resource/mcp` and, with the OAuth proxy, `https://host/.well-known/oauth-authorization-server/mcp`. The extension serves both, through `ApiRoute`, at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server/mcp` under MJAPI's base path.
+
+- **MJAPI at the host root:** nothing more to do.
+- **MJExplorer at the host root and MJAPI at `/api`:** clients ask for `https://host/.well-known/oauth-authorization-server/api/mcp`, which MJExplorer's web server owns, and a single-page-app host answers it with `index.html`: the MCP SDK client then stops. Forward both paths to MJAPI's copies. In nginx, alongside the rule that sends `/api/` to MJAPI:
 
 ```nginx
-rewrite ^/\.well-known/oauth-authorization-server(/api/mcp)$ $1/.well-known/oauth-authorization-server last;
+rewrite ^/\.well-known/(oauth-authorization-server|oauth-protected-resource)/api/(.*)$ /api/.well-known/$1/$2 last;
 ```
 
-The proxy does not serve `/.well-known/openid-configuration`: it is not an OpenID provider (it signs tokens with a shared secret and issues no ID tokens), and MCP clients validate that document as one.
+Without the OAuth proxy, the login server is your identity provider on its own host, and only the protected-resource document matters; clients usually take its URL from the 401's `WWW-Authenticate` header, which needs no forwarding. The proxy does not serve `/.well-known/openid-configuration`: it is not an OpenID provider (it signs tokens with a shared secret and issues no ID tokens), and MCP clients validate that document as one.
 
-**Sessions are kept in memory.** Behind a load balancer with several MJAPI instances, enable sticky sessions keyed on the `mcp-session-id` header, as you would for the standalone server.
+**Sessions.** Every request on a Streamable HTTP session is authenticated again, as the MCP spec requires, and must come from the user who opened the session; anything else gets a 404 and the client starts a new session. A revoked key or an expired token therefore stops working at once. A session with no request for 30 minutes is closed. Sessions live in memory, so behind a load balancer with several MJAPI instances, enable sticky sessions keyed on the `mcp-session-id` header, as you would for the standalone server.
 
 ## Tool Types
 
