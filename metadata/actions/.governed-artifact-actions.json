@@ -1,0 +1,1044 @@
+[
+  {
+    "fields": {
+      "Name": "Create Governed Artifact",
+      "Description": "Create a permission-checked collaborative Markdown Document, Presentation, or Excel Spreadsheet artifact in MJ: Artifacts with Version 1 persisted, optional initial content or worksheets, and live presence hooks.",
+      "DriverClass": "__CreateGovernedArtifact",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-circle-plus",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Title of the collaborative artifact to create.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "CB52F918-5778-46D8-8869-00D0C21934ED"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.571Z",
+            "checksum": "51bbfd1f492dc8ea65e6d4b0fe70425206066457e301fa3e5367380a97f935fa"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactType",
+            "DefaultValue": "Markdown Document",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Artifact type name: 'Markdown Document', 'Presentation', or 'Excel Spreadsheet'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CCF835BF-4B18-435D-82B3-F49ED54C9E62"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.599Z",
+            "checksum": "a6e69ba4a1aaeebb83a1bf913e58086bb8e99ac174de9bc76744165cb62999e6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional description of the artifact.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AEEE1997-D8E2-49EA-B5C7-420F868EA1F6"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.627Z",
+            "checksum": "beaad02ed0764f9f936ca1630c83ffd43353dd16c61817d9ffa64194dde511eb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SheetNames",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Optional initial worksheet names when creating an Excel Spreadsheet.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "111DAAD4-6CE2-4067-A252-8B7D1FA30B9F"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.653Z",
+            "checksum": "f8f5506a4945b9a2465f3e839bc1e03efa5e68215d4ff17806b32e94509686f0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Content",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional initial artifact payload (markdown string, slide deck spec JSON, or workbook spec JSON).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3195BEBA-2ADF-48BF-9292-12E7BCF42489"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.679Z",
+            "checksum": "89dcd5acf779a5f1ae9e1e06127a50e12839c17b8eed0245e535a91451e4b9a5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CollectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ Collection ID to add the new artifact into (requires CanEdit permission on the collection).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7A33414A-515F-44D7-B2A9-709AA19A7CA0"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.708Z",
+            "checksum": "a3d4b868363fbc5e7cc67b19b6bab9a55be323f9f3dff807b33233575952a45e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EnvironmentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ Environment ID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "58099E2E-4BBA-4A96-9091-6AB5D97ACD4C"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.749Z",
+            "checksum": "48816d58408c198861df73be37fa4b110adb831b4541f117f2d7e0fe6aa7311c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Created Artifact ID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "26AA770A-128F-45CA-919D-BBB32510E6E0"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.774Z",
+            "checksum": "a6241659ebaea9bbfc208bb73d445d7c3caf878a111160687e63bdeb364244b3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Created Version 1 ID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4BE5C363-A383-46DE-845F-1216AEAB4AA6"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.799Z",
+            "checksum": "4070abb2a5c1af670b693d9afd4eded8aab53676ee99f3b674faa1c842d74115"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionNumber",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Created version number (1).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B9A36D29-363D-4AB6-AD83-0170549DB64A"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.825Z",
+            "checksum": "2b73b9752c03d8c8e7c71a60221918ba790b406941e0414333a3561a889e363a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Persisted artifact name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BD81CAE9-87F1-4FE3-86C9-B098BBC76E0B"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.849Z",
+            "checksum": "0f9a14b13619925c5da7e8d2a659f53e24884a6583f610a7750bf19f8342718e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactTypeName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolved artifact type name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C505A301-1AFE-4859-A316-7735D1134B76"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.877Z",
+            "checksum": "24a658d9bcab481249977c9afae6084d8b994a97dddb3eb2a6ae08405a6af1de"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DriverClass",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Associated Angular viewer driver class.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F746BB43-0842-47AA-A678-EF0A3D5D5BAD"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.915Z",
+            "checksum": "a595691190260009e0bcac4ae1b9154be040873243065680ad4a16196ef10cb2"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Governed collaborative artifact created successfully."
+          },
+          "primaryKey": {
+            "ID": "010AFDEA-1862-4EB9-A0ED-241778C8816E"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.947Z",
+            "checksum": "1a4e139f1a945198c81e1f1b3cfc1908bca69a8e24da490a1b2c4feea122961e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONTEXT_USER",
+            "IsSuccess": false,
+            "Description": "ContextUser is required to create a governed artifact."
+          },
+          "primaryKey": {
+            "ID": "29EB9688-B9A3-49F4-8262-A4CE3C7BE344"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.968Z",
+            "checksum": "9a4438ae9e0aa93ea1d784a391bc755d100da95225859d22b0bcad2ed79e6bb0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required parameter (such as Title) is missing."
+          },
+          "primaryKey": {
+            "ID": "BD21E81A-95A7-4B7E-A705-26963061C288"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:12.986Z",
+            "checksum": "54f26d322fad12c7c9bea196471e2c33989931b91df267bde5a182cb98f9bbc6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CREATE_FAILED",
+            "IsSuccess": false,
+            "Description": "Artifact creation failed validation, permission, or persistence checks."
+          },
+          "primaryKey": {
+            "ID": "12AEE4E9-014B-4C1E-9994-A435421B3EF9"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.005Z",
+            "checksum": "97f1c3ed318b11f5e510d7b8a2e602becfb6c1db3900c63df8dc2747afa75aa2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "40261865-845E-451D-BDC7-532514878BAB"
+    },
+    "sync": {
+      "lastModified": "2026-11-15T14:43:12.478Z",
+      "checksum": "38978e9cad7431079d1878a0fd49d760f8b67b1fba146c2ffee8a297c02f6f0a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inspect Governed Artifact",
+      "Description": "Inspect a permission-checked collaborative Markdown Document, Presentation, or Excel Spreadsheet artifact (summary or read-only tool such as get_outline, get_workbook_outline, read_deck, get_sheets, read_range, search_cells), hydrating uncompacted edits from any active live Yjs collaboration room.",
+      "DriverClass": "__InspectGovernedArtifact",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass-chart",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Artifact ID (UUID) to inspect.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "095CCB87-0D96-4191-8C84-5894D2207618"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.027Z",
+            "checksum": "956b42510e33906ac6e279b6f9a038579dfa24e8364f3bcaafbe898fee72d4b9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tool",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional read-only tool name from the artifact type's tool library (e.g., get_outline, get_workbook_outline, read_deck, get_deck_outline, get_sheets, read_range, search_cells).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E7EF8750-F06A-4012-A3EA-EB7BFCA4E217"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.050Z",
+            "checksum": "ccbb11ee25482d967a385e05c7561359486017a67e6522c38ca7988557d13e97"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Input",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Optional input object passed to the read-only inspection tool.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "770C0FB4-7A8F-4F39-BB29-CBBB7FF55525"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.073Z",
+            "checksum": "5c65897811c71a5bc0e84a893df3fd50fcb877b1f4b87354dca0de1f8a0b2fc0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Latest Version ID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FDBB9D1A-6282-4767-A772-7CEAEC71C562"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.098Z",
+            "checksum": "0d4f343cfc1141c4f596c0b502ac08b121ef36023f669c6fd3ff674b790791ae"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionNumber",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Latest version number.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4785E3B-6A34-4755-BD18-FAE98FF100D5"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.121Z",
+            "checksum": "6a41c7ab95c3e9eb418c14b484f7ae55b4e35c415f3595c5dc94305a28e26e50"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Artifact name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "760C3583-A57D-48DF-A8C4-449C642F59C9"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.145Z",
+            "checksum": "21e629bd9acc784d0d1f36ea03b0f6c28d243c97dff6920d998d7e6bfba53e72"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactTypeName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Artifact type name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E93DAB7A-4D42-4D7A-8828-958350E85FD7"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.169Z",
+            "checksum": "76b4b2ea5909df9f279795f973fd73e9cd293c3d82ad7634d5f6e43cce01740a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DriverClass",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Associated Angular viewer driver class.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F795B06E-B686-46A4-A0DE-8FE0E966E661"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.192Z",
+            "checksum": "a595691190260009e0bcac4ae1b9154be040873243065680ad4a16196ef10cb2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CanEdit",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether the current user has edit permission on the artifact.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5BE08016-BBB9-4C0A-8E6A-C92D70E588C6"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.216Z",
+            "checksum": "aea20fcb1f885815a91c151ff2f2c945b81f1fc95abfc481cf0629315282cff1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LiveRoomHydrated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether state was hydrated from an active live Yjs collaboration room.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3A93265B-73BD-4796-9700-928A49D07697"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.243Z",
+            "checksum": "a077fe40b202183376b6b54e63e38b888c01c2061d71e3ed85bfa4278b714708"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InspectionResult",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Structured inspection output from the artifact tool library.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BABC3C2E-E24C-459B-A74B-7D27BD678D36"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.267Z",
+            "checksum": "0d3807313b92d1cfa3412d0fc4bdf8b71c36330498287ae965e945b368dcfa60"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Governed artifact inspected successfully."
+          },
+          "primaryKey": {
+            "ID": "AAFC8DB7-40A6-4717-8FF5-BA8E22CA1AD3"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.287Z",
+            "checksum": "b71d252d27011d7e275f9f7dd52a7fbe1e12512c4c617394090d77ca36c2e3e2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONTEXT_USER",
+            "IsSuccess": false,
+            "Description": "ContextUser is required to inspect a governed artifact."
+          },
+          "primaryKey": {
+            "ID": "56C598C7-CE97-4241-BB24-36AE2EF4CB32"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.303Z",
+            "checksum": "61d99088be1b6fba056caf644513dc5eca27842cb2b582790503edccf003c4f6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "ArtifactID parameter is required."
+          },
+          "primaryKey": {
+            "ID": "C8DC8D97-FB5A-4553-A28A-3325ECBCF213"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.318Z",
+            "checksum": "f4bbb291926d4b552df6c8486b3487f8dd78f9435f558f67fb87a3b376b9f110"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INSPECT_FAILED",
+            "IsSuccess": false,
+            "Description": "Artifact inspection failed permission, lookup, or tool validation."
+          },
+          "primaryKey": {
+            "ID": "F65BEE10-B9FE-4EA0-8273-03EB0C18AC86"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.335Z",
+            "checksum": "70c77b62b9a4a328bd3e248f02a0d0d2f038a5e33a0444ceb6aecc12a9ee5b16"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5CD2C263-9F87-4CED-BB72-7BB4DD2C6D0F"
+    },
+    "sync": {
+      "lastModified": "2026-11-15T14:43:12.501Z",
+      "checksum": "3419ba6f874bdfb78ceab9cf4512a72d87264a5848ca0e808be7d3c7e73ea022"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mutate Governed Artifact",
+      "Description": "Apply one or more typed tool mutations to an existing collaborative Markdown Document, Presentation, or Excel Spreadsheet artifact (e.g., upsert_live_table, write_cells, format_range, upsert_chart, add_sheet, insert_block_after, replace_block, add_slide, upsert_slide_element), synchronizing through any live Yjs collaboration room and broadcasting spoof-proof agent presence.",
+      "DriverClass": "__MutateGovernedArtifact",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-pen-to-square",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Target Artifact ID (UUID) to mutate.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "6CADB59D-CC47-4F3C-B2BC-87D4179A44BC"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.357Z",
+            "checksum": "b22b58e3faba7131060e772323f6a74612bc72f0763925284729254918fd6c61"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tool",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Single tool name to execute (e.g., upsert_live_table, write_cells, format_range, add_sheet, upsert_chart, insert_block_after, replace_block, add_slide, upsert_slide_element).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "53B4795F-EE18-4CFC-8E57-2B4CF559C069"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.381Z",
+            "checksum": "be20b2165f86c717e2bf37f4404fe513170acef2a89579216a61b0260218dc4a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Input",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Input payload for the specified Tool.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8615AEA6-F71B-4A0C-B3C7-A11B717E63A8"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.406Z",
+            "checksum": "d62a0f5b2587ff4565f823db90b64fc4bea7b18be34c5411c9f89e5ec93ce062"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operations",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Batch array of { tool, input } mutations executed sequentially against the same artifact.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AAD2EE0E-021B-4849-8E1F-01236606EFFE"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.428Z",
+            "checksum": "74e526f3fce1d480cdc0dbb2b1afeef4fa0ee2a2c659b28bf9368fd8e6ffd260"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Updated Version ID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AD97B186-6FD4-4261-AA64-2BE7ACD2CCC3"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.453Z",
+            "checksum": "53feea0733b040c4f107b66bd0416a65eacc03ee6dc1cc725c225249425bee5d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionNumber",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Updated version number.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AB3D4340-42BF-4B34-A262-750BFD1971A0"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.493Z",
+            "checksum": "f75f63f94ce14f2a5effee68155e5ae197329845a2722baf1d38f2a90cafc395"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Artifact name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "455AFC46-A810-4E8F-BB95-47AEE3C8D26E"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.518Z",
+            "checksum": "21e629bd9acc784d0d1f36ea03b0f6c28d243c97dff6920d998d7e6bfba53e72"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactTypeName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Artifact type name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "24CB4349-1D91-44BB-99F7-F8CDE301FE67"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.545Z",
+            "checksum": "76b4b2ea5909df9f279795f973fd73e9cd293c3d82ad7634d5f6e43cce01740a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DriverClass",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Associated Angular viewer driver class.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "79CF7DB0-0F68-4525-8735-1152C3223C57"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.573Z",
+            "checksum": "a595691190260009e0bcac4ae1b9154be040873243065680ad4a16196ef10cb2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Materialized tool results per executed operation (including boundingRange, headers, rowCount for spreadsheets).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "97B84C21-ECC8-4B16-8605-3E06E886175B"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.598Z",
+            "checksum": "b12c878a0ea0f99f99f931d9e76b8b2b2cc323b0667a88e7ab5c353f8356f05f"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Governed artifact mutated and synchronized successfully."
+          },
+          "primaryKey": {
+            "ID": "E98E9EE1-2609-4D9B-90C2-7EC0E3D43EF4"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.619Z",
+            "checksum": "25b1bdef978b09ab6e4b8df6018f4f633f6fd959a08f67ac934a0ff794d2ee31"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONTEXT_USER",
+            "IsSuccess": false,
+            "Description": "ContextUser is required to mutate a governed artifact."
+          },
+          "primaryKey": {
+            "ID": "6C5E1448-FBE5-4566-B5B9-CDB780290B1D"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.634Z",
+            "checksum": "00037d4f5927f38a1e813272623dd062ee7ec8c2d6542ae5413ef174636a513d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "ArtifactID and either Tool or Operations are required."
+          },
+          "primaryKey": {
+            "ID": "E59891DC-AD65-45A2-AB0C-411C1DE2CE62"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.649Z",
+            "checksum": "95eaf73f671eae2e29c4c3066ae604cb8e9a0f63fb0e5038f037aa468e1fe636"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MUTATE_FAILED",
+            "IsSuccess": false,
+            "Description": "Artifact mutation failed permission, validation, or live sync checks."
+          },
+          "primaryKey": {
+            "ID": "FDEDF832-90A4-495F-ADC4-BD2204CD84B0"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.665Z",
+            "checksum": "aa54ea0c0e025a29f5a6af4e50aa39834caa50826029ac3db595cae8a573413f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7EBC0DFD-ECEF-4442-8F6D-1521ED2FB5AC"
+    },
+    "sync": {
+      "lastModified": "2026-11-15T14:43:12.524Z",
+      "checksum": "6e85c57e1c861ebebe657d29d13eb3b240edbef0b4a3e0064b58237a69d8b746"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Workspace Artifacts",
+      "Description": "List collaborative Docs, Slides, and Sheets readable by the current user, optionally filtered by CollectionID, TypeFilter, or Search text.",
+      "DriverClass": "__ListWorkspaceArtifacts",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-layer-group",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CollectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional Collection ID to scope results.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "90B6970F-1401-4208-BD30-C91B7C3B05E1"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.687Z",
+            "checksum": "ad86fa0cb01241ffce6321b3f779b6f63821e7313a5331605e64065f870b95b0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TypeFilter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional artifact type filter (e.g., 'Excel Spreadsheet', 'Presentation', 'Markdown Document').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "03D0F632-BE77-4549-953D-14254CCAC58A"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.712Z",
+            "checksum": "d02f396e21ca441851891e5ae03f997fe522ef2bba5c3e96509caa726e2625bc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Search",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional name search string.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7983B0AD-B6C2-4CE9-AF85-2019175E1E81"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.738Z",
+            "checksum": "5dda589466db46ddc42bc884108b0fe1e2fc979748dc986f20f07d9ff6ac0c9b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional maximum number of artifacts to return.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "54E2FAAF-E6B5-40BC-B140-6FA5710BA2CA"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.763Z",
+            "checksum": "5305d08ddbb4fb17a26f1d3793f1b7fc97fd96898de36fa7fc2d3008bf239c92"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Artifacts",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of readable workspace artifact descriptors.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "97C9818B-D962-4C95-8023-AA5E7FEB910F"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.788Z",
+            "checksum": "6468bc82651941b4349eb55f017f93fb4ba9dcefd8386b6b6886d4b9ed94d9cd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Count",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of matching artifacts returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A3FC903E-6154-411A-9D23-65F95936555E"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.815Z",
+            "checksum": "3867da35bac2d9f14d5a2b752a1d99df6fd17201e96423ed099bdedca75dec91"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Listed workspace artifacts successfully."
+          },
+          "primaryKey": {
+            "ID": "670E00C7-B37F-42CE-9627-AFB61422C54B"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.834Z",
+            "checksum": "7ee46e39e0f2d51d8f48ecaf98ee7be65f805b78e9c0be48f5856c3ec8db721f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONTEXT_USER",
+            "IsSuccess": false,
+            "Description": "ContextUser is required to list workspace artifacts."
+          },
+          "primaryKey": {
+            "ID": "F3CC7C15-830F-4AF1-9DF9-A7C192817ED1"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.851Z",
+            "checksum": "aacd312c0f0cfc32646232fd0221ae27c2cbfaeacf9350e2b88bc0f27f26c030"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LIST_FAILED",
+            "IsSuccess": false,
+            "Description": "Listing workspace artifacts failed."
+          },
+          "primaryKey": {
+            "ID": "2DB788CE-0987-4ED5-9EE1-D3D4C5F76CE1"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.867Z",
+            "checksum": "878a4d427d9e76c0983bb7732f0078979d6f737e94af7499ed4635e9189f0278"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "48FBEED1-6C33-412E-860E-B350C6E267A9"
+    },
+    "sync": {
+      "lastModified": "2026-11-15T14:43:12.549Z",
+      "checksum": "2047cfa1a7fd133f131887b6523fbb0765192d942fcf0ce0616f1478998ea610"
+    }
+  }
+]

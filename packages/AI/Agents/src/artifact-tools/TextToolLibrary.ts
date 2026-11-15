@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import { BaseArtifactToolLibrary, ArtifactToolArgs, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import { ExecuteStructuredLineGrep, LineMatch } from './grepHelper';
 
 /**
@@ -62,7 +62,7 @@ export class TextToolLibrary extends BaseArtifactToolLibrary {
 
     protected async invokeSubclassTool(
         toolName: string,
-        input: Record<string, unknown>,
+        input: ArtifactToolArgs,
         artifactContent: string | Buffer
     ): Promise<ArtifactToolResult> {
         const contentStr = typeof artifactContent === 'string' ? artifactContent : artifactContent.toString('utf-8');
@@ -81,7 +81,7 @@ export class TextToolLibrary extends BaseArtifactToolLibrary {
         return ExecuteStructuredLineGrep(content, input);
     }
 
-    private handleGetLines(content: string, input: Record<string, unknown>): ArtifactToolResult {
+    private handleGetLines(content: string, input: ArtifactToolArgs): ArtifactToolResult {
         const start = Number(input.start ?? 0);
         const count = Number(input.count ?? 20);
         const lines = content.split('\n');

@@ -2,7 +2,7 @@ import { Component, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactViewerPluginComponent } from '@memberjunction/ng-artifacts';
+import { BaseArtifactViewerPluginComponent, SerializeSvgToDataUrl } from '@memberjunction/ng-artifacts';
 import {
   BuildWhiteboardExportHtml,
   BuildWhiteboardExportSvg,
@@ -190,6 +190,14 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
   /** Declares that WhiteboardArtifactViewerComponent supports inline OLE canvas editing when `[readonly]="false"`. */
   public override get SupportsInlineEdit(): boolean {
     return true;
+  }
+
+  public override async CaptureRenderedThumbnail(): Promise<string | null> {
+    const state = this.editableState ?? this.BoardState;
+    if (!state || state.Items.length === 0) {
+      return null;
+    }
+    return SerializeSvgToDataUrl(BuildWhiteboardExportSvg(state));
   }
 
   /** Raw board payload fed to the snapshot component (setter-driven re-parse there). */
