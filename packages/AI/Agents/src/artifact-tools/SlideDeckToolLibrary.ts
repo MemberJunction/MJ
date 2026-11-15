@@ -7,6 +7,7 @@ import {
     ArtifactToolDefinition,
     ArtifactToolResult,
     ResolveEmbeddedArtifactId,
+    ResolveEmbeddedVersionId,
     type ArtifactToolExecutionContext
 } from '@memberjunction/ai-core-plus';
 import {
@@ -415,10 +416,20 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             if (!resolved.ok) {
                 return { ok: false, errorMessage: resolved.errorMessage };
             }
-            if (resolved.artifactId !== seg.BlockSpec.ArtifactID) {
+            const rawVersionId = typeof seg.BlockSpec.VersionID === 'string' ? seg.BlockSpec.VersionID.trim() : '';
+            let resolvedVersionId = seg.BlockSpec.VersionID;
+            if (rawVersionId) {
+                const verResult = ResolveEmbeddedVersionId(rawVersionId, context);
+                if (!verResult.ok) {
+                    return { ok: false, errorMessage: verResult.errorMessage };
+                }
+                resolvedVersionId = verResult.versionId;
+            }
+            if (resolved.artifactId !== seg.BlockSpec.ArtifactID || resolvedVersionId !== seg.BlockSpec.VersionID) {
                 const normalizedDirective = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective({
                     ...seg.BlockSpec,
-                    ArtifactID: resolved.artifactId
+                    ArtifactID: resolved.artifactId,
+                    VersionID: resolvedVersionId
                 });
                 updated = updated.replace(seg.RawText, () => normalizedDirective);
             }
@@ -839,6 +850,16 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 }
                 resolvedArtifactId = resolved.artifactId;
             }
+            let resolvedVersionId: string | null | undefined;
+            if (typeof rawBlock.VersionID === 'string' && rawBlock.VersionID.trim()) {
+                const verResult = ResolveEmbeddedVersionId(rawBlock.VersionID, context);
+                if (!verResult.ok) {
+                    return { success: false, data: null, errorMessage: verResult.errorMessage };
+                }
+                resolvedVersionId = verResult.versionId;
+            } else if (rawBlock.VersionID === null) {
+                resolvedVersionId = null;
+            }
             const rawFields = Array.isArray(rawBlock.Fields)
                 ? rawBlock.Fields.filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
                 : undefined;
@@ -903,12 +924,7 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 ComponentSpec: rawComponentSpec,
                 ArtifactID: resolvedArtifactId,
                 ArtifactType: typeof rawBlock.ArtifactType === 'string' ? rawBlock.ArtifactType : undefined,
-                VersionID:
-                    typeof rawBlock.VersionID === 'string' && rawBlock.VersionID.trim()
-                        ? rawBlock.VersionID.trim()
-                        : rawBlock.VersionID === null
-                          ? null
-                          : undefined,
+                VersionID: resolvedVersionId,
                 EmbedMode: (typeof rawBlock.EmbedMode === 'string' ? rawBlock.EmbedMode : 'Inline') as ArtifactEmbedMode,
                 HeightPx:
                     typeof rawBlock.HeightPx === 'number' && Number.isFinite(rawBlock.HeightPx)

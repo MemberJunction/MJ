@@ -250,35 +250,65 @@ export class ArtifactToolManager {
     return alphaId;
   }
 
+  private parseIdentifierRef(idOrAlpha: string | undefined | null) {
+    if (typeof idOrAlpha !== 'string') return undefined;
+    const trimmed = idOrAlpha.trim();
+    if (!trimmed) return undefined;
+    const normalizedAlpha = trimmed.replace(/^artifact\s+/i, '').trim().toUpperCase();
+    return {
+      trimmed,
+      byAlpha: this.artifacts.get(normalizedAlpha),
+      isUuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed),
+    };
+  }
+
   /**
    * Resolves a manifest alpha ID (e.g. `"A"`, `"B"`), an artifact UUID, or a version UUID
    * to the underlying `MJ: Artifacts` record UUID (`artifactId`).
    * Allows agents to reference either `"A"` or the full UUID in `artifactDirective.targetArtifactId`.
    */
   ResolveArtifactUuid(idOrAlpha: string | undefined | null): string | undefined {
-    if (typeof idOrAlpha !== 'string') return undefined;
-    const trimmed = idOrAlpha.trim();
-    if (!trimmed) return undefined;
+    const parsed = this.parseIdentifierRef(idOrAlpha);
+    if (!parsed) return undefined;
 
     // 1. Direct alpha ID lookup (case-insensitive, e.g. 'A', 'B', 'AA', or 'Artifact B')
-    const normalizedAlpha = trimmed.replace(/^artifact\s+/i, '').trim().toUpperCase();
-    const byAlpha = this.artifacts.get(normalizedAlpha);
-    if (byAlpha?.artifactId) {
-      return byAlpha.artifactId;
+    if (parsed.byAlpha?.artifactId) {
+      return parsed.byAlpha.artifactId;
     }
 
     // 2. Match by artifactId or versionId UUID
     for (const entry of this.artifacts.values()) {
-      if (entry.artifactId && (UUIDsEqual(entry.artifactId, trimmed) || (entry.versionId && UUIDsEqual(entry.versionId, trimmed)))) {
+      if (entry.artifactId && (UUIDsEqual(entry.artifactId, parsed.trimmed) || (entry.versionId && UUIDsEqual(entry.versionId, parsed.trimmed)))) {
         return entry.artifactId;
       }
     }
 
     // 3. Pass through well-formed UUIDs so callers can pass an explicit artifact UUID directly
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
-      return trimmed;
+    return parsed.isUuid ? parsed.trimmed : undefined;
+  }
+
+  /**
+   * Resolves a manifest alpha ID (e.g. `"E"`, `"Artifact E"`) or version UUID
+   * to the underlying `MJ: Artifact Versions` record UUID (`versionId`).
+   */
+  ResolveArtifactVersionUuid(idOrAlpha: string | undefined | null): string | undefined {
+    const parsed = this.parseIdentifierRef(idOrAlpha);
+    if (!parsed) return undefined;
+
+    // 1. Direct alpha ID lookup: map session short ID to its tracked ArtifactVersion UUID
+    if (parsed.byAlpha) {
+      return parsed.byAlpha.versionId ?? undefined;
     }
-    return undefined;
+
+    // 2. Match by tracked versionId UUID
+    for (const entry of this.artifacts.values()) {
+      if (entry.versionId && UUIDsEqual(entry.versionId, parsed.trimmed)) {
+        return entry.versionId;
+      }
+    }
+
+    // 3. Pass through well-formed UUIDs so callers can pass an explicit version UUID directly
+    return parsed.isUuid ? parsed.trimmed : undefined;
   }
 
   /** Reset all state */
@@ -1022,6 +1052,7 @@ export class ArtifactToolManager {
         agentRunId: activeRunIdForCall,
         agentName: activeAgentNameForCall,
         resolveArtifactId: (idOrAlpha: string) => this.ResolveArtifactUuid(idOrAlpha),
+        resolveVersionId: (idOrAlpha: string) => this.ResolveArtifactVersionUuid(idOrAlpha),
       };
       let result: ArtifactToolResult;
       try {

@@ -15,10 +15,15 @@ import { SpreadsheetToolLibrary } from '../artifact-tools/SpreadsheetToolLibrary
 describe('Artifact Tool Libraries — SLICE B Parity & Security Suite', () => {
     const VALID_WB_UUID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const VALID_SHEET_UUID = '11111111-2222-4333-8444-555555555555';
+    const VALID_VERSION_UUID = '99999999-8888-4777-8666-555555555555';
     const shortIdContext = {
         resolveArtifactId: (ref: string): string | null => {
             if (ref === 'D') return VALID_WB_UUID;
             if (ref === 'S') return VALID_SHEET_UUID;
+            return null;
+        },
+        resolveVersionId: (ref: string): string | null => {
+            if (ref === 'E') return VALID_VERSION_UUID;
             return null;
         }
     };
@@ -224,7 +229,7 @@ describe('Artifact Tool Libraries — SLICE B Parity & Security Suite', () => {
                         Kind: 'Artifact',
                         ArtifactID: 'S',
                         ArtifactType: 'Excel Spreadsheet',
-                        VersionID: 'ver-1',
+                        VersionID: 'E',
                         SheetName: 'Q4',
                         Range: 'A1:B4',
                         ChartID: 'chart-2',
@@ -245,7 +250,7 @@ describe('Artifact Tool Libraries — SLICE B Parity & Security Suite', () => {
                 revisionHash: string;
             };
             expect(afterMj.updatedRegion.BlockSpec?.ArtifactID).toBe(VALID_SHEET_UUID);
-            expect(afterMj.updatedRegion.BlockSpec?.VersionID).toBe('ver-1');
+            expect(afterMj.updatedRegion.BlockSpec?.VersionID).toBe(VALID_VERSION_UUID);
             expect(afterMj.updatedRegion.BlockSpec?.SheetID).toBe('Q4');
             expect(afterMj.updatedRegion.BlockSpec?.SheetRange).toBe('A1:B4');
             expect(afterMj.updatedRegion.BlockSpec?.SheetChartID).toBe('chart-2');
@@ -539,7 +544,7 @@ describe('Artifact Tool Libraries — SLICE B Parity & Security Suite', () => {
                     sheet: 'Data',
                     embedId: 'emb-1',
                     artifactId: 'D',
-                    versionId: 'v-99',
+                    versionId: 'E',
                     widthPx: 640,
                     heightPx: 400,
                     allowInlineEdit: false
@@ -557,11 +562,25 @@ describe('Artifact Tool Libraries — SLICE B Parity & Security Suite', () => {
                 };
                 updatedContent: string;
             };
-            expect(embedData.embeddedArtifact.ArtifactVersionID).toBe('v-99');
+            expect(embedData.embeddedArtifact.ArtifactVersionID).toBe(VALID_VERSION_UUID);
             expect(embedData.embeddedArtifact.WidthPx).toBe(640);
             expect(embedData.embeddedArtifact.HeightPx).toBe(400);
             expect(embedData.embeddedArtifact.AllowInlineEdit).toBe(false);
             content = embedData.updatedContent;
+
+            const badVersionRes = await lib.InvokeTool(
+                'embed_artifact',
+                {
+                    sheet: 'Data',
+                    embedId: 'emb-bad-ver',
+                    artifactId: 'D',
+                    versionId: 'v-99'
+                },
+                content,
+                shortIdContext
+            );
+            expect(badVersionRes.success).toBe(false);
+            expect(badVersionRes.errorMessage).toContain('MJ: Artifact Versions UUID');
 
             // upsert_live_table -> duplicate_sheet -> reorder_sheets -> deletions
             const liveTblRes = await lib.InvokeTool(

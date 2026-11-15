@@ -7,6 +7,7 @@ import {
     ArtifactToolDefinition,
     ArtifactToolResult,
     ResolveEmbeddedArtifactId,
+    ResolveEmbeddedVersionId,
     type ArtifactToolExecutionContext
 } from '@memberjunction/ai-core-plus';
 import {
@@ -407,7 +408,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                         },
                         versionId: {
                             type: 'string',
-                            description: 'Optional pinned ArtifactVersion ID (omit to track latest version).'
+                            description: 'Optional pinned MJ: Artifact Versions UUID (or session short ID such as "E"; omit to track latest version).'
                         },
                         sheetId: {
                             type: 'string',
@@ -1091,10 +1092,20 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             if (!resolved.ok) {
                 return { ok: false, errorMessage: resolved.errorMessage };
             }
-            if (resolved.artifactId !== seg.BlockSpec.ArtifactID) {
+            const rawVersionId = typeof seg.BlockSpec.VersionID === 'string' ? seg.BlockSpec.VersionID.trim() : '';
+            let resolvedVersionId = seg.BlockSpec.VersionID;
+            if (rawVersionId) {
+                const verResult = ResolveEmbeddedVersionId(rawVersionId, context);
+                if (!verResult.ok) {
+                    return { ok: false, errorMessage: verResult.errorMessage };
+                }
+                resolvedVersionId = verResult.versionId;
+            }
+            if (resolved.artifactId !== seg.BlockSpec.ArtifactID || resolvedVersionId !== seg.BlockSpec.VersionID) {
                 const normalizedDirective = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective({
                     ...seg.BlockSpec,
-                    ArtifactID: resolved.artifactId
+                    ArtifactID: resolved.artifactId,
+                    VersionID: resolvedVersionId
                 });
                 updated = updated.replace(seg.RawText, () => normalizedDirective);
             }
@@ -1451,6 +1462,14 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             return { success: false, data: null, errorMessage: resolved.errorMessage };
         }
         const artifactId = resolved.artifactId;
+        let resolvedVersionId: string | null = null;
+        if (typeof input.versionId === 'string' && input.versionId.trim()) {
+            const verResult = ResolveEmbeddedVersionId(input.versionId, context);
+            if (!verResult.ok) {
+                return { success: false, data: null, errorMessage: verResult.errorMessage };
+            }
+            resolvedVersionId = verResult.versionId;
+        }
         const replaceBlockId =
             typeof input.replaceBlockId === 'string' && input.replaceBlockId.trim()
                 ? input.replaceBlockId.trim()
@@ -1471,7 +1490,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             ArtifactID: artifactId,
             ArtifactType: typeof input.artifactType === 'string' ? input.artifactType : 'Whiteboard',
             EmbedMode: embedMode,
-            VersionID: typeof input.versionId === 'string' && input.versionId.trim() ? input.versionId.trim() : null,
+            VersionID: resolvedVersionId,
             SheetID: rawSheetId ?? rawSheetName,
             SheetRange: typeof input.range === 'string' && input.range.trim() ? input.range.trim() : undefined,
             SheetChartID: typeof input.chartId === 'string' && input.chartId.trim() ? input.chartId.trim() : undefined,

@@ -828,23 +828,27 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
     const docLib = new DocumentToolLibrary();
     const slideLib = new SlideDeckToolLibrary();
     const targetUuid = '5B83B8FC-0C19-4584-BC21-B7DFCDC518DD';
+    const targetVersionUuid = 'BA9AF0C9-1B00-40EA-A206-425F38FAB36B';
     const ctx = {
       resolveArtifactId: (id: string) => (id.trim().toUpperCase() === 'D' ? targetUuid : undefined),
+      resolveVersionId: (id: string) => (id.trim().toUpperCase() === 'E' ? targetVersionUuid : undefined),
     };
 
-    // 1. DocumentToolLibrary.embed_artifact_block resolves "D" -> UUID
+    // 1. DocumentToolLibrary.embed_artifact_block resolves "D" -> UUID and "E" -> version UUID
     const embedRes = await docLib.InvokeTool(
       'embed_artifact_block',
-      { artifactId: 'D', title: 'Silk Road Trade Analysis', artifactType: 'Excel Spreadsheet' },
+      { artifactId: 'D', versionId: 'E', title: 'Silk Road Trade Analysis', artifactType: 'Excel Spreadsheet' },
       '# Silk Road\n\nIntro paragraph.',
       ctx,
     );
     expect(embedRes.success).toBe(true);
     const updatedDoc = (embedRes.data as { updatedContent: string }).updatedContent;
     expect(updatedDoc).toContain(`"ArtifactID": "${targetUuid}"`);
+    expect(updatedDoc).toContain(`"VersionID": "${targetVersionUuid}"`);
     expect(updatedDoc).not.toContain('"ArtifactID": "D"');
+    expect(updatedDoc).not.toContain('"VersionID": "E"');
 
-    // 2. DocumentToolLibrary rejects unresolved short-ID "D" without resolver context
+    // 2. DocumentToolLibrary rejects unresolved short-ID "D" or short version "E" without resolver context
     const unlinkedEmbed = await docLib.InvokeTool(
       'embed_artifact_block',
       { artifactId: 'D', title: 'Should Fail' },
@@ -853,7 +857,15 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
     expect(unlinkedEmbed.success).toBe(false);
     expect(unlinkedEmbed.errorMessage).toContain('could not be resolved');
 
-    // 3. DocumentToolLibrary.insert_block_after & replace_block normalize hand-crafted :::mj-block JSON with "ArtifactID": "D"
+    const unlinkedVersionEmbed = await docLib.InvokeTool(
+      'embed_artifact_block',
+      { artifactId: targetUuid, versionId: 'E', title: 'Should Fail Version' },
+      '# Silk Road',
+    );
+    expect(unlinkedVersionEmbed.success).toBe(false);
+    expect(unlinkedVersionEmbed.errorMessage).toContain('MJ: Artifact Versions UUID');
+
+    // 3. DocumentToolLibrary.insert_block_after & replace_block normalize hand-crafted :::mj-block JSON with "ArtifactID": "D" and "VersionID": "E"
     const rawDirective = [
       ':::mj-block',
       JSON.stringify(
@@ -863,6 +875,7 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
           Mode: 'Live',
           Title: 'Embedded Sheet',
           ArtifactID: 'D',
+          VersionID: 'E',
           ArtifactType: 'Excel Spreadsheet',
           EmbedMode: 'Inline',
         },
@@ -878,9 +891,11 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
       ctx,
     );
     expect(insertRawRes.success).toBe(true);
-    expect((insertRawRes.data as { updatedContent: string }).updatedContent).toContain(`"ArtifactID": "${targetUuid}"`);
+    const insertedRaw = (insertRawRes.data as { updatedContent: string }).updatedContent;
+    expect(insertedRaw).toContain(`"ArtifactID": "${targetUuid}"`);
+    expect(insertedRaw).toContain(`"VersionID": "${targetVersionUuid}"`);
 
-    // 4. SlideDeckToolLibrary.upsert_slide_element resolves mjBlock.ArtifactID "D" -> UUID
+    // 4. SlideDeckToolLibrary.upsert_slide_element resolves mjBlock.ArtifactID "D" -> UUID and mjBlock.VersionID "E" -> UUID
     const deckRes = await slideLib.InvokeTool(
       'add_slide',
       { title: 'Trade Sheet Slide', layout: 'title-body' },
@@ -902,6 +917,7 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
           Mode: 'Live',
           Title: 'Embedded Workbook',
           ArtifactID: 'D',
+          VersionID: 'E',
           ArtifactType: 'Excel Spreadsheet',
           EmbedMode: 'Inline',
         },
@@ -910,6 +926,28 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
       ctx,
     );
     expect(slideUpsert.success).toBe(true);
-    expect((slideUpsert.data as { updatedContent: string }).updatedContent).toContain(targetUuid);
+    const slideUpdated = (slideUpsert.data as { updatedContent: string }).updatedContent;
+    expect(slideUpdated).toContain(targetUuid);
+    expect(slideUpdated).toContain(targetVersionUuid);
+
+    const badSlideVersion = await slideLib.InvokeTool(
+      'upsert_slide_element',
+      {
+        slideId,
+        regionId: 'body',
+        mjBlock: {
+          Kind: 'Artifact',
+          Mode: 'Live',
+          Title: 'Embedded Workbook',
+          ArtifactID: targetUuid,
+          VersionID: 'E',
+          ArtifactType: 'Excel Spreadsheet',
+          EmbedMode: 'Inline',
+        },
+      },
+      deckJson,
+    );
+    expect(badSlideVersion.success).toBe(false);
+    expect(badSlideVersion.errorMessage).toContain('MJ: Artifact Versions UUID');
   });
 });

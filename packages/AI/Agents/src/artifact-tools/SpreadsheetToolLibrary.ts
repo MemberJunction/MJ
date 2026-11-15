@@ -7,7 +7,8 @@ import {
     ArtifactToolExecutionContext,
     ArtifactToolResult,
     BaseArtifactToolLibrary,
-    ResolveEmbeddedArtifactId
+    ResolveEmbeddedArtifactId,
+    ResolveEmbeddedVersionId
 } from '@memberjunction/ai-core-plus';
 import {
     ColumnIndexToLetter,
@@ -693,7 +694,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                         },
                         versionId: {
                             type: 'string',
-                            description: 'Optional pinned MJ: Artifact Versions ID (omit to track latest).'
+                            description: 'Optional pinned MJ: Artifact Versions UUID (or session short ID such as "E"; omit to track latest).'
                         },
                         artifactTypeName: {
                             type: 'string',
@@ -2359,6 +2360,16 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             return this.errorResult(resolved.errorMessage);
         }
         const artifactId = resolved.artifactId;
+        let resolvedVersionId: string | null | undefined;
+        if (typeof input.versionId === 'string' && input.versionId.trim()) {
+            const verResult = ResolveEmbeddedVersionId(input.versionId, context);
+            if (!verResult.ok) {
+                return this.errorResult(verResult.errorMessage);
+            }
+            resolvedVersionId = verResult.versionId;
+        } else if (input.versionId === null) {
+            resolvedVersionId = null;
+        }
         const embedId =
             typeof input.embedId === 'string' && input.embedId.trim()
                 ? input.embedId.trim()
@@ -2371,11 +2382,9 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             Title: typeof input.title === 'string' ? input.title : existing?.Title ?? `${typeName} Canvas`,
             ArtifactID: artifactId,
             ArtifactVersionID:
-                typeof input.versionId === 'string' && input.versionId.trim()
-                    ? input.versionId.trim()
-                    : input.versionId === null
-                      ? null
-                      : existing?.ArtifactVersionID ?? null,
+                resolvedVersionId !== undefined
+                    ? resolvedVersionId
+                    : existing?.ArtifactVersionID ?? null,
             ArtifactTypeName: typeName,
             DriverClass:
                 typeName === 'Whiteboard' ? 'WhiteboardArtifactViewerPlugin' : existing?.DriverClass,

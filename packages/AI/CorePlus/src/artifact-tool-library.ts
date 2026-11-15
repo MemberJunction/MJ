@@ -59,6 +59,8 @@ export interface ArtifactToolExecutionContext {
     agentName?: string;
     /** Resolves a session-scoped alpha short-ID (e.g. `"D"`) or UUID string to its real `MJ: Artifacts` UUID. */
     resolveArtifactId?: (idOrAlpha: string) => string | undefined;
+    /** Resolves a session-scoped alpha short-ID (e.g. `"E"`) or UUID string to its real `MJ: Artifact Versions` UUID. */
+    resolveVersionId?: (idOrAlpha: string) => string | undefined;
 }
 
 export interface ArtifactToolDefinition {
@@ -179,6 +181,54 @@ export type ResolveEmbeddedArtifactResult =
     | { ok: true; artifactId: string; errorMessage?: never }
     | { ok: false; artifactId?: never; errorMessage: string };
 
+export type ResolveEmbeddedVersionResult =
+    | { ok: true; versionId: string; errorMessage?: never }
+    | { ok: false; versionId?: never; errorMessage: string };
+
+interface EmbeddedUuidLookupOutcome {
+    resolvedId?: string;
+    errorMessage?: string;
+}
+
+function resolveEmbeddedUuidReference(
+    rawId: string,
+    fieldName: 'artifactId' | 'versionId',
+    entityLabel: 'MJ: Artifacts' | 'MJ: Artifact Versions',
+    resolver?: (idOrAlpha: string) => string | undefined
+): EmbeddedUuidLookupOutcome {
+    const trimmed = (rawId ?? '').trim();
+    if (!trimmed) {
+        return { errorMessage: `${fieldName} must be a non-empty string.` };
+    }
+
+    if (resolver) {
+        const resolved = resolver(trimmed);
+        if (resolved && EMBEDDED_ARTIFACT_UUID_RE.test(resolved.trim())) {
+            return { resolvedId: resolved.trim() };
+        }
+        if (EMBEDDED_ARTIFACT_UUID_RE.test(trimmed)) {
+            return { resolvedId: trimmed };
+        }
+        return {
+            errorMessage: `Unable to resolve ${fieldName} '${trimmed}' to a valid ${entityLabel} UUID. Pass a full ${entityLabel} UUID or a valid short ID from the current session.`,
+        };
+    }
+
+    if (EMBEDDED_ARTIFACT_ALPHA_SHORT_ID_RE.test(trimmed)) {
+        return {
+            errorMessage: `Short ${fieldName} '${trimmed}' could not be resolved to an ${entityLabel} UUID without an active artifact session.`,
+        };
+    }
+
+    if (EMBEDDED_ARTIFACT_UUID_RE.test(trimmed)) {
+        return { resolvedId: trimmed };
+    }
+
+    return {
+        errorMessage: `Invalid ${fieldName} '${trimmed}': expected a valid ${entityLabel} UUID.`,
+    };
+}
+
 /**
  * Resolves a session-scoped alpha short-ID (e.g. `"D"`) or full UUID provided to an
  * embed tool into a canonical `MJ: Artifacts` UUID, rejecting unresolvable short IDs
@@ -188,38 +238,25 @@ export function ResolveEmbeddedArtifactId(
     rawId: string,
     context?: ArtifactToolExecutionContext
 ): ResolveEmbeddedArtifactResult {
-    const trimmed = (rawId ?? '').trim();
-    if (!trimmed) {
-        return { ok: false, errorMessage: 'artifactId must be a non-empty string.' };
+    const outcome = resolveEmbeddedUuidReference(rawId, 'artifactId', 'MJ: Artifacts', context?.resolveArtifactId);
+    if (!outcome.resolvedId) {
+        return { ok: false, errorMessage: outcome.errorMessage ?? 'Unable to resolve artifactId.' };
     }
+    return { ok: true, artifactId: outcome.resolvedId };
+}
 
-    if (context?.resolveArtifactId) {
-        const resolved = context.resolveArtifactId(trimmed);
-        if (resolved && EMBEDDED_ARTIFACT_UUID_RE.test(resolved.trim())) {
-            return { ok: true, artifactId: resolved.trim() };
-        }
-        if (EMBEDDED_ARTIFACT_UUID_RE.test(trimmed)) {
-            return { ok: true, artifactId: trimmed };
-        }
-        return {
-            ok: false,
-            errorMessage: `Unable to resolve artifactId '${trimmed}' to a valid MJ: Artifacts UUID. Pass a full artifact UUID or a valid short ID from the current session.`,
-        };
+/**
+ * Resolves a session-scoped alpha short-ID (e.g. `"E"`) or full UUID provided to an
+ * embed tool into a canonical `MJ: Artifact Versions` UUID, rejecting unresolvable short
+ * IDs before they can be persisted into artifact content.
+ */
+export function ResolveEmbeddedVersionId(
+    rawId: string,
+    context?: ArtifactToolExecutionContext
+): ResolveEmbeddedVersionResult {
+    const outcome = resolveEmbeddedUuidReference(rawId, 'versionId', 'MJ: Artifact Versions', context?.resolveVersionId);
+    if (!outcome.resolvedId) {
+        return { ok: false, errorMessage: outcome.errorMessage ?? 'Unable to resolve versionId.' };
     }
-
-    if (EMBEDDED_ARTIFACT_ALPHA_SHORT_ID_RE.test(trimmed)) {
-        return {
-            ok: false,
-            errorMessage: `Short artifactId '${trimmed}' could not be resolved to an MJ: Artifacts UUID without an active artifact session.`,
-        };
-    }
-
-    if (EMBEDDED_ARTIFACT_UUID_RE.test(trimmed)) {
-        return { ok: true, artifactId: trimmed };
-    }
-
-    return {
-        ok: false,
-        errorMessage: `Invalid artifactId '${trimmed}': expected a valid MJ: Artifacts UUID.`,
-    };
+    return { ok: true, versionId: outcome.resolvedId };
 }

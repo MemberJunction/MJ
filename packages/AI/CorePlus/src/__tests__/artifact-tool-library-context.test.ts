@@ -3,6 +3,7 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
     BaseArtifactToolLibrary,
     ResolveEmbeddedArtifactId,
+    ResolveEmbeddedVersionId,
     type ArtifactToolArgs,
     type ArtifactToolDefinition,
     type ArtifactToolExecutionContext,
@@ -118,6 +119,27 @@ describe('BaseArtifactToolLibrary Execution Context & GovernedRunArtifactSummary
         expect(ResolveEmbeddedArtifactId(` ${validUuid} `)).toEqual({
             ok: true,
             artifactId: validUuid,
+        });
+    });
+
+    it('ResolveEmbeddedVersionId resolves alpha short-IDs when resolveVersionId is provided and rejects invalid strings', () => {
+        const versionUuid = '33333333-3333-4333-8333-333333333333';
+        expect(ResolveEmbeddedVersionId('E')).toEqual({
+            ok: false,
+            errorMessage: "Short versionId 'E' could not be resolved to an MJ: Artifact Versions UUID without an active artifact session.",
+        });
+        expect(ResolveEmbeddedVersionId('E', {
+            resolveVersionId: (id) => (id.trim().toUpperCase() === 'E' ? versionUuid : undefined),
+        })).toEqual({
+            ok: true,
+            versionId: versionUuid,
+        });
+        expect(ResolveEmbeddedVersionId('Z', {
+            resolveVersionId: (id) => (id.trim().toUpperCase() === 'E' ? versionUuid : undefined),
+        }).ok).toBe(false);
+        expect(ResolveEmbeddedVersionId(` ${versionUuid} `)).toEqual({
+            ok: true,
+            versionId: versionUuid,
         });
     });
 
