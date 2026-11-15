@@ -583,7 +583,7 @@ export class ArtifactToolManager {
     }
     lines.push('IMPORTANT: For per-artifact tools, pass the single-letter artifact ID (A, B, C, etc.) as `artifactId` in `artifactToolCalls` (for workspace-wide tools such as `create_artifact`, `open_artifact`, or `list_workspace_artifacts`, pass `artifactId: "workspace"`).');
     if (this.artifacts.size > 0) {
-      lines.push('When setting `artifactDirective.targetArtifactId` (with `behavior: "version-source"`), you may use either the artifact\'s `artifactId` UUID or its single-letter ID (A, B, C, etc.).');
+      lines.push('Artifact tools persist and version your edits directly — do NOT write artifact contents or tool state into `payload`/`payloadChangeRequest`, and do NOT emit `artifactDirective` (`version-source`) for artifacts you edited via artifact tools. Reserve `artifactDirective.targetArtifactId` (UUID or single-letter ID) only when persisting a standalone JSON `payload` deliverable.');
     }
     return lines.join('\n');
   }

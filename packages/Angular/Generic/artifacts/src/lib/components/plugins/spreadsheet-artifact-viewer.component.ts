@@ -1083,8 +1083,10 @@ export interface ResolvedSheetsToolbarItem {
                     <div class="mj-sheets-cards-row">
                       @for (emb of ActiveSheet.EmbeddedArtifacts; track emb.EmbedID) {
                         @let childVer = EmbeddedArtifactVersions[emb.ArtifactID];
+                        @let isEditingEmb = IsEditingEmbeddedArtifact(emb);
                         <div
                           class="mj-sheets-object-card mj-sheets-ole-card"
+                          [style.flex-basis.px]="emb.WidthPx && emb.WidthPx > 0 ? emb.WidthPx : 560"
                           [attr.data-testid]="'sheet-embedded-artifact-' + emb.EmbedID"
                           (contextmenu)="OnEmbeddedArtifactContextMenu($event, emb)"
                         >
@@ -1096,18 +1098,48 @@ export interface ResolvedSheetsToolbarItem {
                                 Delegate Inherited
                               </span>
                             </div>
-                            <span class="mj-sheets-mode-badge">
-                              <i class="fa-solid fa-pen-nib"></i> Inline Canvas
-                            </span>
+                            <div class="mj-sheets-action-btns">
+                              @if (CanEdit && emb.AllowInlineEdit !== false) {
+                                <button
+                                  type="button"
+                                  class="mj-sheets-mini-btn"
+                                  [attr.data-testid]="'toggle-inline-ole-btn-' + emb.EmbedID"
+                                  (click)="ToggleInlineEmbeddedArtifactEdit(emb)"
+                                >
+                                  <i class="fa-solid" [ngClass]="isEditingEmb ? 'fa-check' : 'fa-pen-nib'"></i>
+                                  <span>{{ isEditingEmb ? 'Done Inline Editing' : 'Edit Inline Canvas' }}</span>
+                                </button>
+                              } @else {
+                                <span class="mj-sheets-mode-badge frozen">
+                                  <i class="fa-solid fa-lock"></i> Read-Only
+                                </span>
+                              }
+                              @if (emb.ArtifactID) {
+                                <button
+                                  type="button"
+                                  class="mj-sheets-mini-btn"
+                                  title="Open artifact in full view"
+                                  [attr.data-testid]="'open-inline-ole-btn-' + emb.EmbedID"
+                                  (click)="OpenEmbeddedArtifactRecord(emb)"
+                                >
+                                  <i class="fa-solid fa-up-right-from-square"></i>
+                                  <span>Open</span>
+                                </button>
+                              }
+                            </div>
                           </div>
-                          <div class="mj-sheets-ole-host" [attr.data-testid]="'sheet-ole-host-' + emb.EmbedID">
+                          <div
+                            class="mj-sheets-ole-host"
+                            [style.height.px]="emb.HeightPx && emb.HeightPx > 0 ? emb.HeightPx : 380"
+                            [attr.data-testid]="'sheet-ole-host-' + emb.EmbedID"
+                          >
                             @let embError = EmbeddedArtifactErrors[emb.EmbedID];
                             @if (childVer) {
                               <mj-artifact-type-plugin-viewer
                                 [Provider]="Provider"
                                 [artifactVersion]="childVer"
                                 [ArtifactTypeName]="emb.ArtifactTypeName"
-                                [readonly]="!CanEdit"
+                                [readonly]="!isEditingEmb"
                                 (ContentCommitted)="OnEmbeddedArtifactCommitted(emb, $event)"
                               ></mj-artifact-type-plugin-viewer>
                             } @else if (embError) {
@@ -3135,6 +3167,12 @@ export interface ResolvedSheetsToolbarItem {
         gap: 8px;
       }
 
+      .mj-sheets-ole-card {
+        min-width: 360px;
+        max-width: 100%;
+        flex: 1 1 560px;
+      }
+
       .mj-sheets-object-card.has-error {
         border-color: var(--mj-status-error);
       }
@@ -3312,12 +3350,21 @@ export interface ResolvedSheetsToolbarItem {
       }
 
       .mj-sheets-ole-host {
-        min-height: 190px;
-        max-height: 240px;
+        min-height: 260px;
+        display: flex;
+        flex-direction: column;
         border: 1px solid var(--mj-border-subtle);
         border-radius: 6px;
         overflow: hidden;
         background: var(--mj-bg-surface);
+      }
+
+      .mj-sheets-ole-host mj-artifact-type-plugin-viewer {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
       }
 
       .mj-sheets-ole-fallback {
@@ -3925,6 +3972,7 @@ export class SpreadsheetArtifactViewerComponent
 
   public EmbeddedArtifactVersions: Record<string, MJArtifactVersionEntity> = {};
   public EmbeddedArtifactErrors: Record<string, string> = {};
+  public EditingEmbeddedArtifactIDs = new Set<string>();
   private lastTableResults: Record<string, DocumentBlockExecutionResult> = {};
 
   private readonly subs: Subscription[] = [];
@@ -4266,6 +4314,7 @@ export class SpreadsheetArtifactViewerComponent
     this.AnchoredThreads = [];
     this.EmbeddedArtifactVersions = {};
     this.EmbeddedArtifactErrors = {};
+    this.EditingEmbeddedArtifactIDs.clear();
 
     const rawContent = this.artifactVersion?.Content ?? '';
     const configJson = this.artifactVersion?.Configuration ?? null;
@@ -6656,18 +6705,25 @@ export class SpreadsheetArtifactViewerComponent
       Number.isFinite(this.localObjectsPaneHeightPx) &&
       this.localObjectsPaneHeightPx > 0
     ) {
-      return Math.max(140, Math.min(640, Math.round(this.localObjectsPaneHeightPx)));
+      return Math.max(140, Math.min(760, Math.round(this.localObjectsPaneHeightPx)));
     }
     const savedRaw = UserInfoEngine.Instance?.GetSetting(SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY) ?? null;
     if (savedRaw) {
       const savedNum = Number(savedRaw);
       if (Number.isFinite(savedNum) && savedNum > 0) {
-        return Math.max(140, Math.min(640, Math.round(savedNum)));
+        return Math.max(140, Math.min(760, Math.round(savedNum)));
       }
     }
     const raw = this.Workbook?.PreferredObjectsPaneHeightPx;
     if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
-      return Math.max(140, Math.min(640, Math.round(raw)));
+      return Math.max(140, Math.min(760, Math.round(raw)));
+    }
+    const embedded = this.ActiveSheet?.EmbeddedArtifacts ?? [];
+    if (embedded.length > 0) {
+      const tallestEmb = Math.max(
+        ...embedded.map((emb) => (typeof emb.HeightPx === 'number' && emb.HeightPx > 0 ? emb.HeightPx : 380)),
+      );
+      return Math.max(360, Math.min(560, tallestEmb + 110));
     }
     return 270;
   }
@@ -6680,7 +6736,7 @@ export class SpreadsheetArtifactViewerComponent
     this.bindDocumentDragListeners(
       (moveEvt: MouseEvent) => {
         const deltaUp = startY - moveEvt.clientY;
-        const nextHeight = Math.max(140, Math.min(640, Math.round(startHeight + deltaUp)));
+        const nextHeight = Math.max(140, Math.min(760, Math.round(startHeight + deltaUp)));
         this.localObjectsPaneHeightPx = nextHeight;
         this.cdr.markForCheck();
       },
@@ -10412,6 +10468,24 @@ export class SpreadsheetArtifactViewerComponent
     this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.cdr.markForCheck();
+  }
+
+  public IsEditingEmbeddedArtifact(emb: SpreadsheetEmbeddedArtifactSpec): boolean {
+    return this.CanEdit && emb.AllowInlineEdit !== false && this.EditingEmbeddedArtifactIDs.has(emb.EmbedID);
+  }
+
+  public ToggleInlineEmbeddedArtifactEdit(emb: SpreadsheetEmbeddedArtifactSpec): void {
+    if (!this.CanEdit || emb.AllowInlineEdit === false) return;
+    if (this.EditingEmbeddedArtifactIDs.has(emb.EmbedID)) {
+      this.EditingEmbeddedArtifactIDs.delete(emb.EmbedID);
+    } else {
+      this.EditingEmbeddedArtifactIDs.add(emb.EmbedID);
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OpenEmbeddedArtifactRecord(emb: SpreadsheetEmbeddedArtifactSpec): void {
+    this.openEmbeddedArtifact(emb.EmbedID);
   }
 
   private openEmbeddedArtifact(embedId: string): void {

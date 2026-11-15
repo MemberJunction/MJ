@@ -1918,6 +1918,24 @@ export class AgentRunner {
                 return undefined;
             }
 
+            // Governed collaborative artifacts created/mutated mid-run via ArtifactToolManager or
+            // GovernedArtifactService already persisted their authoritative MJ: Artifact Versions row.
+            // Never overwrite those artifacts with JSON.stringify(agentResult.payload), and do not emit
+            // a legacy payload artifact when the run's deliverable was produced via artifact tools without
+            // an explicit create-new directive.
+            const touchedArtifactIds = new Set<string>(
+                (agentResult.touchedArtifacts ?? [])
+                    .map((item) => (item.ArtifactID ?? '').trim().toLowerCase())
+                    .filter(Boolean)
+            );
+            if (plan.kind === 'legacy' && touchedArtifactIds.size > 0) {
+                LogStatus(
+                    `Skipping legacy payload artifact creation for agent "${agent?.Name}" - ` +
+                    `${touchedArtifactIds.size} governed artifact(s) already persisted via artifact tools`
+                );
+                return undefined;
+            }
+
             // Vet whatever artifact we are about to version, then walk DOWN the fallback ladder on
             // failure: a directive-named target degrades to the caller's sourceArtifactId, and a bad
             // sourceArtifactId degrades to the historical chain. Each rung is re-vetted, so a value
@@ -1930,6 +1948,13 @@ export class AgentRunner {
                 const candidateId = typeof plan.artifactId === 'string' && IsValidUUID(plan.artifactId)
                     ? plan.artifactId.trim()
                     : undefined;
+                if (candidateId && touchedArtifactIds.has(candidateId.toLowerCase())) {
+                    LogStatus(
+                        `Skipping payload artifact version for ${candidateId} - ` +
+                        `artifact was already persisted via governed artifact tools in this run`
+                    );
+                    return undefined;
+                }
                 const vetted = await this.VetArtifactVersionTarget(plan, contextUser, md, agent?.Name, rejectedIds);
                 if (vetted) {
                     plan = vetted;
@@ -1991,6 +2016,13 @@ export class AgentRunner {
                 }
 
                 if (previousArtifact) {
+                    if (touchedArtifactIds.has(previousArtifact.artifactId.trim().toLowerCase())) {
+                        LogStatus(
+                            `Skipping payload artifact version for ${previousArtifact.artifactId} - ` +
+                            `artifact was already persisted via governed artifact tools in this run`
+                        );
+                        return undefined;
+                    }
                     artifactId = previousArtifact.artifactId;
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);

@@ -791,4 +791,36 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
     f.componentInstance.Collaborators = [];
     expect(f.componentInstance.Collaborators.some((c) => c.IsAgent === true)).toBe(false);
   });
+
+  it('sizes embedded artifact hosts cleanly and respects AllowInlineEdit + Edit Inline Canvas toggle', async () => {
+    const f = createEditableWorkbookFixture('Embedded Doc Card UX', (wb) => {
+      wb.Worksheets[0].EmbeddedArtifacts.push({
+        EmbedID: 'emb-doc-1',
+        Title: 'Embedded Article',
+        ArtifactID: 'd96f4ba5-16cc-41ad-b937-4e7d181288a9',
+        ArtifactTypeName: 'Markdown Document',
+        AnchorCell: 'H2',
+        WidthPx: 540,
+        HeightPx: 420,
+        AllowInlineEdit: true,
+      });
+    });
+    const host = query(f, '[data-testid="sheet-ole-host-emb-doc-1"]') as HTMLElement;
+    const card = query(f, '[data-testid="sheet-embedded-artifact-emb-doc-1"]') as HTMLElement;
+    expect(host.style.height).toBe('420px');
+    expect(card.style.flexBasis).toBe('540px');
+    expect(f.componentInstance.ResolvedObjectsPaneHeightPx).toBe(530);
+
+    const toggleBtn = query(f, '[data-testid="toggle-inline-ole-btn-emb-doc-1"]') as HTMLButtonElement;
+    expect(toggleBtn).not.toBeNull();
+    expect(f.componentInstance.IsEditingEmbeddedArtifact(f.componentInstance.ActiveSheet.EmbeddedArtifacts[0])).toBe(false);
+
+    toggleBtn.click();
+    f.detectChanges();
+    expect(f.componentInstance.IsEditingEmbeddedArtifact(f.componentInstance.ActiveSheet.EmbeddedArtifacts[0])).toBe(true);
+
+    toggleBtn.click();
+    f.detectChanges();
+    expect(f.componentInstance.IsEditingEmbeddedArtifact(f.componentInstance.ActiveSheet.EmbeddedArtifacts[0])).toBe(false);
+  });
 });
