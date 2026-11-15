@@ -4021,3 +4021,50 @@ describe('RealtimeClientSessionService — the mint snapshot persisted on the ow
     });
 });
 
+describe('ConversationArtifacts & ArtifactWorkspace ContextTool framing', () => {
+    it('frames existing conversation artifacts and ArtifactWorkspace ContextTool instructions in the system prompt', async () => {
+        const model = new MockRealtimeModel();
+        const svc = new TestableService();
+        svc.ResolveModelResult = { Model: model, ModelID: 'm1', VendorID: 'v1', APIName: 'mock-realtime' };
+        const user = { ID: 'u-1', Name: 'Caller', Email: 'c@test.com' } as UserInfo;
+        const provider = {} as IMetadataProvider;
+
+        const prep = await svc.PrepareClientSession(
+            makePrepInput({
+                AgentSessionID: 'b0b0b0b0-0000-4000-8000-000000000001',
+                ExtraTools: [
+                    { Name: 'ContextTool', Description: 'Runs client context & channel verbs', ParametersSchema: { type: 'object' } },
+                ],
+                ConversationArtifacts: [
+                    {
+                        ArtifactID: '9905B267-9D57-4F24-ACC1-8CFCA099D518',
+                        Name: 'AI That Thinks in Pictures',
+                        Type: 'Markdown Document',
+                        LatestVersionID: '2ADF5E7D-6A31-44C5-8A46-48401C8E6E9C',
+                        LatestVersionNumber: 3,
+                    },
+                    {
+                        ArtifactID: '9DE9F9A2-3EA1-40F1-9C8E-62F4D8C03561',
+                        Name: 'Diffusion Model Comparison',
+                        Type: 'Excel Spreadsheet',
+                        LatestVersionNumber: 2,
+                    },
+                ],
+            }),
+            user,
+            provider,
+        );
+
+        expect(prep.Success).toBe(true);
+        const prompt = model.LastParams?.SystemPrompt ?? '';
+        expect(prompt).toContain('ArtifactWorkspace');
+        expect(prompt).toContain('Artifacts already in this conversation');
+        expect(prompt).toContain('9905B267-9D57-4F24-ACC1-8CFCA099D518');
+        expect(prompt).toContain('AI That Thinks in Pictures');
+        expect(prompt).toContain('Markdown Document');
+        expect(prompt).toContain('LatestVersion: v3');
+        expect(prompt).toContain('9DE9F9A2-3EA1-40F1-9C8E-62F4D8C03561');
+    });
+});
+
+

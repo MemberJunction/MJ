@@ -648,5 +648,75 @@ describe('ArtifactWorkspaceChannel & Partitioning with InteractiveComponentChann
         permSpy.mockRestore();
       }
     });
+
+    it('resolves collaborative artifact by name when artifactId and artifactVersionId are omitted, while rejecting missing identifiers or unreadable names', async () => {
+      const docId = '77777777-7777-4777-8777-777777777777';
+      const compId = '88888888-8888-4888-8888-888888888888';
+      const permSpy = vi
+        .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
+        .mockImplementation(async (_provider, artifactId): Promise<ResolvedArtifactPermissions> => ({
+          ArtifactID: artifactId,
+          CanRead: artifactId === docId || artifactId === compId,
+          CanEdit: artifactId === docId,
+          CanShare: false,
+          CanDelete: false,
+        }));
+
+      const fakeUser = { ID: 'u-name', Name: 'Name Lookup User' } as UserInfo;
+      const fakeProvider: Partial<IMetadataProvider> & { RunView: ReturnType<typeof vi.fn> } = {
+        CurrentUser: fakeUser,
+        RunView: vi.fn(async (params: RunViewParams) => {
+          const filter = String(params.ExtraFilter ?? '');
+          if (params.EntityName === 'MJ: Artifacts') {
+            if (filter.includes('Diffusion Architecture')) {
+              return {
+                Success: true,
+                Results: [{ ID: docId, Name: 'Diffusion Architecture', Type: 'Markdown Document' }],
+                TotalRowCount: 1,
+              };
+            }
+            if (filter.includes('Widget Only')) {
+              return {
+                Success: true,
+                Results: [{ ID: compId, Name: 'Widget Only', Type: 'Component' }],
+                TotalRowCount: 1,
+              };
+            }
+          }
+          return { Success: true, Results: [], TotalRowCount: 0 };
+        }),
+      };
+
+      const channel = new ArtifactWorkspaceChannel();
+      await channel.Initialize({
+        ...MakeContext({ Notes: [] }),
+        Provider: fakeProvider as IMetadataProvider,
+      });
+
+      try {
+        const missingAll = await channel.Open({});
+        expect(missingAll.Success).toBe(false);
+        expect(missingAll.ErrorCode).toBe('invalid_params');
+
+        const missingByName = await channel.Open({ name: 'Nonexistent Doc' });
+        expect(missingByName.Success).toBe(false);
+        expect(missingByName.ErrorCode).toBe('not_found');
+
+        const componentByName = await channel.Open({ name: 'Widget Only' });
+        expect(componentByName.Success).toBe(false);
+        expect(componentByName.ErrorCode).toBe('use_interactive_component');
+
+        const openedByName = await channel.Open({ name: 'Diffusion Architecture' });
+        expect(openedByName.Success).toBe(true);
+        expect(channel.Engine.Instances).toHaveLength(1);
+        expect(channel.Engine.Instances[0]?.ArtifactID).toBe(docId);
+        expect(channel.Engine.Instances[0]?.Name).toBe('Diffusion Architecture');
+        expect(channel.Engine.Instances[0]?.ArtifactTypeName).toBe('Markdown Document');
+        expect(channel.Engine.Instances[0]?.CanEdit).toBe(true);
+      } finally {
+        channel.Dispose();
+        permSpy.mockRestore();
+      }
+    });
   });
 });

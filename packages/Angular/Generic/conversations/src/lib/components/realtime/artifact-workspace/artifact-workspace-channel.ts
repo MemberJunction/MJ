@@ -178,7 +178,7 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       OwningPackage: '@memberjunction/ng-conversations',
       Instructions:
         'Shows collaborative Docs (Markdown Document), Spreadsheets (Excel Spreadsheet), Slide Decks (Presentation), ' +
-        'and Whiteboards beside the conversation. Open with artifactId (or artifactVersionId); use focus, refresh, ' +
+        'and Whiteboards beside the conversation. Open with artifactId, artifactVersionId, or name; use focus, refresh, ' +
         'show_version, and close to manage workspace tabs. For Component artifacts, use InteractiveComponent instead.',
       Nouns: [
         {
@@ -194,7 +194,10 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
           artifactId: { type: 'string', description: 'ID of the collaborative artifact to open.' },
           artifactVersionId: { type: 'string', description: 'Optional specific artifact version ID.' },
           versionNumber: { type: 'number', description: 'Optional version number to show.' },
-          name: { type: 'string', description: 'Optional display title.' },
+          name: {
+            type: 'string',
+            description: 'Optional display title (used to look up the artifact when artifactId/artifactVersionId is omitted).',
+          },
           artifactTypeName: { type: 'string', description: 'Optional canonical artifact type name.' },
           driverClass: { type: 'string', description: 'Optional driver class name.' },
         },
@@ -398,10 +401,11 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
   protected override async OnOpen(inputs: JSONObject): Promise<RealtimeChannelVerbResult> {
     const suppliedArtifactId = readString(inputs, 'artifactId');
     const suppliedVersionId = readString(inputs, 'artifactVersionId');
-    if (!suppliedArtifactId && !suppliedVersionId) {
+    const suppliedName = readString(inputs, 'name');
+    if (!suppliedArtifactId && !suppliedVersionId && !suppliedName) {
       return failure(
         'invalid_params',
-        'Provide artifactId or artifactVersionId to open a workspace artifact.',
+        'Provide artifactId, artifactVersionId, or name to open a workspace artifact.',
       );
     }
 
@@ -418,7 +422,7 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       artifactId: suppliedArtifactId,
       artifactVersionId: suppliedVersionId,
       versionNumber: readNumber(inputs, 'versionNumber'),
-      name: readString(inputs, 'name'),
+      name: suppliedName,
       artifactTypeName: suppliedType,
       driverClass: suppliedDriver,
     });
@@ -744,6 +748,22 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       }
     }
 
+    if (!resolvedArtifactId && !resolvedVersionId && resolvedName) {
+      const byName = await this.resolveArtifactByName(rv, provider, user, resolvedName);
+      if ('Success' in byName) {
+        return byName;
+      }
+      return {
+        ArtifactID: byName.ArtifactEntity.ID,
+        ArtifactVersionID: undefined,
+        VersionNumber: resolvedVersionNumber,
+        Name: byName.ArtifactEntity.Name || resolvedName || params.fallbackName || 'Artifact',
+        ArtifactTypeName: params.artifactTypeName || byName.ArtifactEntity.Type || undefined,
+        DriverClass: params.driverClass,
+        CanEdit: byName.CanEdit,
+      };
+    }
+
     if (!resolvedArtifactId || !UUID_PATTERN.test(resolvedArtifactId)) {
       return failure('invalid_params', 'A valid artifactId (or artifactVersionId) is required.');
     }
@@ -782,6 +802,65 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       DriverClass: params.driverClass,
       CanEdit: canEdit,
     };
+  }
+
+  /**
+   * Resolves a readable artifact by exact or partial display name when `artifactId` and
+   * `artifactVersionId` are omitted. Prefers collaborative (non-Component) artifacts ordered most
+   * recently updated first; falls back to Component matches so `OnOpen` can emit the specific
+   * `use_interactive_component` guidance.
+   */
+  private async resolveArtifactByName(
+    rv: RunView,
+    provider: IMetadataProvider,
+    user: UserInfo,
+    name: string,
+  ): Promise<{ ArtifactEntity: MJArtifactEntity; CanEdit: boolean } | RealtimeChannelVerbResult> {
+    const escaped = EscapeSQLString(name);
+    const filters = [`Name='${escaped}'`, `Name LIKE '%${escaped}%'`];
+    let componentFallback: { ArtifactEntity: MJArtifactEntity; CanEdit: boolean } | null = null;
+
+    for (const extraFilter of filters) {
+      const res = await rv.RunView<MJArtifactEntity>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: extraFilter,
+          OrderBy: '__mj_UpdatedAt DESC',
+          MaxRows: 15,
+          ResultType: 'entity_object',
+        },
+        user,
+      );
+      if (!res.Success || !res.Results?.length) {
+        continue;
+      }
+
+      for (const candidate of res.Results) {
+        try {
+          const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            candidate.ID,
+            user,
+          );
+          if (!perms.CanRead) {
+            continue;
+          }
+          if (!IsComponentArtifactDescriptor(candidate.Type ?? undefined, undefined)) {
+            return { ArtifactEntity: candidate, CanEdit: perms.CanEdit };
+          }
+          if (!componentFallback) {
+            componentFallback = { ArtifactEntity: candidate, CanEdit: perms.CanEdit };
+          }
+        } catch {
+          // Permission resolution failure skips this candidate rather than widening access.
+        }
+      }
+    }
+
+    if (componentFallback) {
+      return componentFallback;
+    }
+    return failure('not_found', `Artifact named "${name}" was not found or is inaccessible.`);
   }
 }
 

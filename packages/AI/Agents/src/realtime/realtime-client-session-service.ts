@@ -191,6 +191,24 @@ export interface RealtimeHostToolsResolutionContext {
 export type RealtimeHostToolsResolver = (resolved: RealtimeHostToolsResolutionContext) => RealtimeToolDefinition[] | undefined;
 
 /**
+ * Compact descriptor of an artifact already created or referenced in the conversation,
+ * injected into the co-agent's system prompt so a voice call started mid-thread can
+ * open or revise existing Docs, Sheets, Slides, or Components by ID instead of recreating them.
+ */
+export interface ConversationArtifactSummary {
+    /** Canonical `MJ: Artifacts.ID` UUID. */
+    ArtifactID: string;
+    /** Display name of the artifact. */
+    Name: string;
+    /** Canonical artifact type name (e.g. `Markdown Document`, `Excel Spreadsheet`, `Presentation`). */
+    Type?: string;
+    /** Latest saved `MJ: Artifact Versions.ID` on the conversation branch, if known. */
+    LatestVersionID?: string;
+    /** Latest saved version number on the conversation branch, if known. */
+    LatestVersionNumber?: number;
+}
+
+/**
  * Input for {@link RealtimeClientSessionService.PrepareClientSession}.
  *
  * The co-agent may be supplied either as a fully-loaded entity (`CoAgent`) or by id (`CoAgentID`),
@@ -263,6 +281,11 @@ export interface PrepareClientSessionInput {
     AppContext?: AppContextSnapshot;
     /** Prior conversation history to seed the model's context. Optional. */
     ConversationMessages?: ChatMessage[];
+    /**
+     * Artifacts already created or attached in the conversation before this call started,
+     * surfaced so the co-agent can open or update existing artifacts by ID without recreating them.
+     */
+    ConversationArtifacts?: ConversationArtifactSummary[];
     /**
      * Tools the HOST (not the co-agent runtime) declares AND executes — e.g. a phone call's `transfer_call`,
      * `send_dtmf` and `end_call`. They are added to the session's tool set but, unlike {@link ExtraTools}, are
@@ -3751,9 +3774,10 @@ export class RealtimeClientSessionService {
         const appContextSection = this.buildAppContextSection(input.AppContext);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
+        const artifacts = this.formatConversationArtifacts(input.ConversationArtifacts);
         const memory = memoryContext ?? await this.assembleMemoryContext(input, coAgent, contextUser, provider);
 
-        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memory]
+        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, artifacts, memory]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
     }
@@ -3888,9 +3912,12 @@ export class RealtimeClientSessionService {
                 `Knowledge Hub" → ContextTool with action 'NavigateToApp'; "open this record"; "switch to the X tab"). ` +
                 `Do NOT route in-app navigation/actions through '${INVOKE_TARGET_AGENT_TOOL_NAME}', and NEVER say you ` +
                 `need an active session id or a screen snapshot to do them — calling 'ContextTool' is all that's ` +
-                `needed. Reserve '${INVOKE_TARGET_AGENT_TOOL_NAME}' for actual analysis / data work, not navigation. ` +
+                `needed. Reserve '${INVOKE_TARGET_AGENT_TOOL_NAME}' for actual analysis / data / artifact creation work, not navigation. ` +
                 `When a channel note lists interactive channels you can use, 'ContextTool' also addresses ONE of ` +
-                `them: add "target": { "channel": "<channel name>" } and use that channel's action names.`;
+                `them: add "target": { "channel": "<channel name>" } and use that channel's action names (for example, ` +
+                `to open an existing Doc, Spreadsheet, or Presentation beside the conversation in 'ArtifactWorkspace', call ` +
+                `ContextTool with action 'open', target { "channel": "ArtifactWorkspace" }, and params { "artifactId": "<id>" } ` +
+                `or { "name": "<title>" }).`;
         }
 
         return clause;
@@ -3994,6 +4021,35 @@ export class RealtimeClientSessionService {
             })
             .filter(line => line.length > 0);
         return lines.length > 0 ? `Conversation so far:\n${lines.join('\n')}` : '';
+    }
+
+    /**
+     * Formats artifacts already created or attached in the conversation before this call started
+     * so the co-agent can open or revise them by ID rather than duplicating them.
+     *
+     * @param artifacts The deduplicated conversation artifact summaries, or undefined.
+     * @returns The formatted section, or empty string when none exist.
+     */
+    private formatConversationArtifacts(artifacts?: ConversationArtifactSummary[]): string {
+        if (!artifacts || artifacts.length === 0) {
+            return '';
+        }
+        const lines = artifacts
+            .filter(a => a.ArtifactID && a.Name)
+            .map(a => {
+                const typePart = a.Type ? `, Type: ${a.Type}` : '';
+                const verPart = typeof a.LatestVersionNumber === 'number' ? `, LatestVersion: v${a.LatestVersionNumber}` : '';
+                return `- "${a.Name}" (ArtifactID: ${a.ArtifactID}${typePart}${verPart})`;
+            });
+        if (lines.length === 0) {
+            return '';
+        }
+        return (
+            'Artifacts already in this conversation (to display a Doc, Spreadsheet, or Presentation in the workspace use ContextTool with ' +
+            'target={ "channel": "ArtifactWorkspace" }, action="open", params={ "artifactId": "<ArtifactID>" }; ' +
+            'to revise an existing artifact via invoke-target-agent, include its ArtifactID so the agent updates it instead of creating a duplicate):\n' +
+            lines.join('\n')
+        );
     }
 
     /**
