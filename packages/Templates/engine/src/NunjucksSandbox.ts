@@ -331,27 +331,66 @@ function guardMemberLookup(_original: NunjucksRuntimeHooks['memberLookup']): Nun
         if (obj === undefined || obj === null || typeof val === 'symbol') {
             return undefined;
         }
-        const key = String(val);
-        if (isNunjucksObject(obj)) {
-            throw new TemplateSandboxError(`Templates may not read members of the render context or other nunjucks objects (reading "${key}")`);
-        }
-        if (RESTRICTED_MEMBER_NAMES.has(key) && !isOwnDataValue(obj, key)) {
-            return undefined;
-        }
-        if (RESTRICTED_VALUES.has(obj)) {
-            throw new TemplateSandboxError(`Templates may not access members of a restricted value (reading "${key}")`);
-        }
-        const memberVal = readMember(obj, key);
-        if (isRestrictedOrNunjucksValue(memberVal)) {
-            throw new TemplateSandboxError(`Templates may not access the member "${key}"`);
-        }
-        if (typeof memberVal === 'function') {
-            return function (...args: unknown[]): unknown {
-                return (memberVal as (...callArgs: unknown[]) => unknown).apply(obj, args);
-            };
-        }
-        return memberVal;
+        return resolveGuardedMember(obj, String(val));
     };
+}
+
+/**
+ * Safely resolves a single member access (`obj[key]`) under the exact same rules enforced by
+ * {@link HardenNunjucksRuntime}'s `memberLookup` guard. Shared between the compiled-Nunjucks
+ * sandbox and the pure-interpolation fast path so both uphold identical invariants.
+ */
+export function ResolveSafeMemberLookup(obj: unknown, key: string): unknown {
+    if (obj === undefined || obj === null) {
+        return undefined;
+    }
+    return resolveGuardedMember(obj, key);
+}
+
+function resolveGuardedMember(obj: unknown, key: string): unknown {
+    if (isNunjucksObject(obj)) {
+        throw new TemplateSandboxError(`Templates may not read members of the render context or other nunjucks objects (reading "${key}")`);
+    }
+    if (RESTRICTED_MEMBER_NAMES.has(key) && !isOwnDataValue(obj, key)) {
+        return undefined;
+    }
+    if (RESTRICTED_VALUES.has(obj)) {
+        throw new TemplateSandboxError(`Templates may not access members of a restricted value (reading "${key}")`);
+    }
+    const memberVal = readMember(obj, key);
+    if (isRestrictedOrNunjucksValue(memberVal)) {
+        throw new TemplateSandboxError(`Templates may not access the member "${key}"`);
+    }
+    if (typeof memberVal === 'function') {
+        return function (...args: unknown[]): unknown {
+            return (memberVal as (...callArgs: unknown[]) => unknown).apply(obj, args);
+        };
+    }
+    return memberVal;
+}
+
+/**
+ * Safely resolves a root binding name (`{{ name }}`) against own keys of `data` then own keys of
+ * `globals`, enforcing the same prototype/singleton restrictions as `guardContextOrFrameLookup`.
+ */
+export function ResolveSafeRootBinding(
+    data: Record<string, unknown>,
+    globals: Record<string, unknown> | undefined,
+    name: string,
+): unknown {
+    if (name === '__proto__') {
+        return undefined;
+    }
+    const value = Object.hasOwn(data, name)
+        ? readMember(data, name)
+        : (globals && Object.hasOwn(globals, name) ? readMember(globals, name) : undefined);
+    if (value === undefined || (RESTRICTED_MEMBER_NAMES.has(name) && typeof value === 'function')) {
+        return undefined;
+    }
+    if (isRestrictedOrNunjucksValue(value)) {
+        throw new TemplateSandboxError(`Templates may not access the name "${name}"`);
+    }
+    return value;
 }
 
 /**

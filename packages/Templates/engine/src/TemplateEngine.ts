@@ -3,7 +3,7 @@ import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTyp
 import nunjucks from 'nunjucks';
 import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
-import { HardenNunjucksRuntime } from "./NunjucksSandbox";
+import { HardenNunjucksRuntime, ResolveSafeMemberLookup, ResolveSafeRootBinding } from "./NunjucksSandbox";
 import { CollectReferencedVariables, ReferencedVariablesResult } from "./TemplateVariableAnalysis";
 import { CurrentTemplateRenderUser, IsInsideTemplateRender, RunAsTemplateRenderUser } from "./TemplateRenderUser";
 import { TemplateRenderOptions, TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
@@ -24,19 +24,47 @@ const BUILTIN_ASYNC_NUNJUCKS_TAGS: ReadonlySet<string> = new Set([
 
 const NUNJUCKS_BLOCK_TAG_REGEX = /\{%-?\s*([A-Za-z_][A-Za-z0-9_]*)/g;
 
-interface SimpleCachedTemplateEntry {
-    template: nunjucks.Template;
-    syncExtensionFree: boolean;
-}
-
-interface StoredCachedTemplateEntry {
-    template: nunjucks.Template;
-    sourceText: string;
-    syncExtensionFree: boolean;
-}
+type FastRenderFn = (data: Record<string, unknown>) => string;
 
 interface NunjucksEnvAsyncCheck {
     asyncFilters?: string[];
+    globals?: Record<string, unknown>;
+    opts?: { autoescape?: boolean };
+}
+
+interface SimpleCachedTemplateEntry {
+    template?: nunjucks.Template;
+    sourceText: string;
+    env: nunjucks.Environment;
+    syncExtensionFree: boolean;
+    fastRender: FastRenderFn | null;
+}
+
+interface StoredCachedTemplateEntry extends SimpleCachedTemplateEntry {}
+
+const FAST_PATH_EXPR_REGEX = /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;
+const RESERVED_NUNJUCKS_IDENTIFIERS: ReadonlySet<string> = new Set([
+    'true',
+    'false',
+    'null',
+    'none',
+    'undefined',
+    'and',
+    'or',
+    'not',
+    'in',
+    'is',
+]);
+
+function formatFastInterpolatedValue(value: unknown, autoescape: boolean): string {
+    if (value === undefined || value === null) {
+        return '';
+    }
+    if (value instanceof nunjucks.runtime.SafeString) {
+        return value.toString();
+    }
+    const text = typeof value === 'string' ? value : String(value);
+    return autoescape ? nunjucks.lib.escape(text) : text;
 }
 
 /**
@@ -379,11 +407,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
                 }
             } else {
                 const env = this.getSimpleRenderEnv(autoescape);
-                const template = this.createNunjucksTemplate(templateText, env);
-                entry = {
-                    template,
-                    syncExtensionFree: this.isSyncExtensionFreeTemplate(templateText, env),
-                };
+                entry = this.buildTemplateEntry(templateText, env, autoescape);
                 if (this._simpleTemplateCache.size >= TemplateEngineServer.MAX_SIMPLE_TEMPLATE_CACHE_SIZE) {
                     const oldestKey = this._simpleTemplateCache.keys().next().value;
                     if (oldestKey !== undefined) {
@@ -445,7 +469,96 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param env the environment to compile against; defaults to the shared autoescape environment
      */
     protected getNunjucksTemplate(templateContentId: string, templateText: string, cacheTemplate: boolean, env: nunjucks.Environment = this._nunjucksEnv): nunjucks.Template {
-        return this.getNunjucksTemplateEntry(templateContentId, templateText, cacheTemplate, env).template;
+        return this.ensureEntryTemplate(this.getNunjucksTemplateEntry(templateContentId, templateText, cacheTemplate, env));
+    }
+
+    /** Ensures `entry.template` is compiled when a caller requests the Nunjucks template or falls back to Nunjucks execution. */
+    private ensureEntryTemplate(entry: SimpleCachedTemplateEntry): nunjucks.Template {
+        if (!entry.template) {
+            entry.template = this.createNunjucksTemplate(entry.sourceText, entry.env);
+        }
+        return entry.template;
+    }
+
+    /** Builds a cached template entry, preferring the zero-Nunjucks interpolator when eligible. */
+    private buildTemplateEntry(templateText: string, env: nunjucks.Environment, autoescapeOverride?: boolean): StoredCachedTemplateEntry {
+        const autoescape = autoescapeOverride ?? ((env as unknown as NunjucksEnvAsyncCheck | undefined)?.opts?.autoescape !== false);
+        const fastRender = this.compileFastInterpolator(templateText, autoescape, env);
+        return {
+            template: fastRender ? undefined : this.createNunjucksTemplate(templateText, env),
+            sourceText: templateText,
+            env,
+            syncExtensionFree: fastRender !== null || this.isSyncExtensionFreeTemplate(templateText, env),
+            fastRender,
+        };
+    }
+
+    /**
+     * Compiles a direct synchronous string-interpolator when `templateText` consists purely of
+     * literal text and plain `{{ path.to.value }}` expressions (no tags, comments, filters, calls,
+     * literals, or whitespace trim markers). Returns `null` otherwise so full Nunjucks compiles it.
+     */
+    private compileFastInterpolator(templateText: string, autoescape: boolean, env: nunjucks.Environment | undefined): FastRenderFn | null {
+        if (templateText.includes('{%') || templateText.includes('{#')) {
+            return null;
+        }
+        if (!templateText.includes('{{')) {
+            return () => templateText;
+        }
+
+        const literals: string[] = [];
+        const placeholders: string[][] = [];
+        let pos = 0;
+
+        while (pos < templateText.length) {
+            const openIdx = templateText.indexOf('{{', pos);
+            if (openIdx === -1) {
+                literals.push(templateText.slice(pos));
+                break;
+            }
+            const afterOpenCode = templateText.charCodeAt(openIdx + 2);
+            if (afterOpenCode === 123 /* '{' */ || afterOpenCode === 45 /* '-' */) {
+                return null;
+            }
+            const closeIdx = templateText.indexOf('}}', openIdx + 2);
+            if (closeIdx === -1 || templateText.charCodeAt(closeIdx - 1) === 45 /* '-' */) {
+                return null;
+            }
+            const inner = templateText.slice(openIdx + 2, closeIdx);
+            if (inner.includes('{{')) {
+                return null;
+            }
+            const expr = inner.trim();
+            if (!FAST_PATH_EXPR_REGEX.test(expr)) {
+                return null;
+            }
+            const segments = expr.split('.');
+            if (RESERVED_NUNJUCKS_IDENTIFIERS.has(segments[0])) {
+                return null;
+            }
+            literals.push(templateText.slice(pos, openIdx));
+            placeholders.push(segments);
+            pos = closeIdx + 2;
+        }
+
+        if (literals.length === placeholders.length) {
+            literals.push('');
+        }
+
+        const envGlobals = (env as unknown as NunjucksEnvAsyncCheck | undefined)?.globals;
+        return (data: Record<string, unknown>): string => {
+            const safeData = data ?? {};
+            let output = literals[0];
+            for (let i = 0; i < placeholders.length; i++) {
+                const segments = placeholders[i];
+                let value = ResolveSafeRootBinding(safeData, envGlobals, segments[0]);
+                for (let s = 1; s < segments.length && value !== undefined && value !== null; s++) {
+                    value = ResolveSafeMemberLookup(value, segments[s]);
+                }
+                output += formatFastInterpolatedValue(value, autoescape) + literals[i + 1];
+            }
+            return output;
+        };
     }
 
     /**
@@ -465,22 +578,14 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
             if (cached && cached.sourceText !== templateText) {
                 this._referencedVariablesCache.clear();
             }
-            const template = this.createNunjucksTemplate(templateText, env);
-            const entry: StoredCachedTemplateEntry = {
-                template,
-                sourceText: templateText,
-                syncExtensionFree: this.isSyncExtensionFreeTemplate(templateText, env),
-            };
+            const entry = this.buildTemplateEntry(templateText, env);
             envCache.set(templateContentId, entry);
             return entry;
         }
         else {
             // we don't have a template ID which means this is a dynamic template, and so we don't want to do
             // anything with the cache, we just create a new nunjucks template and return it
-            return {
-                template: this.createNunjucksTemplate(templateText, env),
-                syncExtensionFree: this.isSyncExtensionFreeTemplate(templateText, env),
-            };
+            return this.buildTemplateEntry(templateText, env);
         }
     }
 
@@ -557,11 +662,15 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * delegates to {@link renderTemplateAsync} inside {@link RunAsTemplateRenderUser}.
      */
     private renderEntry(entry: SimpleCachedTemplateEntry, data: Record<string, unknown>, options?: TemplateRenderOptions): string | Promise<string> {
+        if (entry.fastRender && !options?.ContextUser && !IsInsideTemplateRender()) {
+            return entry.fastRender(data);
+        }
+        const template = this.ensureEntryTemplate(entry);
         if (entry.syncExtensionFree && !options?.ContextUser && !IsInsideTemplateRender()) {
             HardenNunjucksRuntime();
-            return entry.template.render(data);
+            return template.render(data);
         }
-        return this.renderTemplateAsync(entry.template, data, this.resolveRenderUser(options));
+        return this.renderTemplateAsync(template, data, this.resolveRenderUser(options));
     }
 
     /** Clears the compiled-template cache and the cached {@link GetReferencedVariables} results. */

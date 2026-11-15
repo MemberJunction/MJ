@@ -23,7 +23,7 @@
  * @module @memberjunction/core
  */
 
-import { NormalizeUUID } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import type { BaseEntity } from './baseEntity';
 import { BaseEngineRegistry } from './baseEngineRegistry';
 import { IsVerboseLoggingEnabled, LogStatus } from './logging';
@@ -31,7 +31,7 @@ import { CompositeKey, KeyValuePair } from './compositeKey';
 import { EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
 import { EmbeddedRecord } from './embeddedRecord';
 import type { EntitySavePlan } from './entitySavePlan';
-import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
+import { EntityFieldInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
 import type { EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunViewProvider } from './interfaces';
 import type { UserInfo } from './securityInfo';
 import { LogError } from './logging';
@@ -1308,11 +1308,39 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         rows: RelatedRecordCollectionWireItem[],
         mode: EntityCompanionDeserializeMode,
     ): Promise<T[]> {
-        const out: T[] = [];
+        if (rows.length === 0) {
+            return [];
+        }
+
+        interface PreparedItem {
+            row: RelatedRecordCollectionWireItem;
+            entityName: string;
+            child: T;
+            key: CompositeKey | null;
+        }
+
+        const prepared: PreparedItem[] = [];
+        const existingTargets: Array<{ child: T; entityName: string; key: CompositeKey; fieldsForKey: Record<string, unknown> }> = [];
+
         for (const row of rows) {
             const entityName = row.EntityName || this.RelatedEntityName;
             const child = await provider.GetEntityObject<T>(entityName, this.Owner.ContextCurrentUser);
 
+            if (mode === 'result' || row.IsNew) {
+                prepared.push({ row, entityName, child, key: null });
+            } else {
+                const key = new CompositeKey(
+                    child.EntityInfo.PrimaryKeys.map(pk => new KeyValuePair(pk.Name, row.Fields[pk.Name])),
+                );
+                prepared.push({ row, entityName, child, key });
+                existingTargets.push({ child, entityName, key, fieldsForKey: row.Fields });
+            }
+        }
+
+        const { prefetchedRows, batchedChildren } = await this.prefetchExistingRows(provider, existingTargets);
+
+        const out: T[] = [];
+        for (const { row, entityName, child, key } of prepared) {
             if (mode === 'result') {
                 // Authoritative post-save state: adopt it verbatim and land clean. No query — the
                 // sender just persisted these rows and is telling us what they now contain.
@@ -1332,25 +1360,24 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
                 child.NewRecord();
                 child.SetMany(row.Fields, true);
             } else {
-                // AN EXISTING CHILD MUST BE LOADED BEFORE THE WIRE VALUES ARE APPLIED.
-                //
-                // The tempting shortcut — LoadFromData(row, replaceOldValues: true) — sets each
-                // field's OLD value to the value that arrived over the wire. The record then reports
-                // Dirty === false, its Save() takes the not-dirty early return, and the caller's edit
-                // is silently discarded while every layer reports success.
-                //
-                // Loading first gives genuine old values, so dirty tracking is accurate and the
-                // old-values concurrency check has something real to compare against. It costs one
-                // query per edited child; correctness first, and a batched variant can follow.
-                const key = new CompositeKey(
-                    child.EntityInfo.PrimaryKeys.map(pk => new KeyValuePair(pk.Name, row.Fields[pk.Name])),
-                );
-                const loaded = await child.InnerLoad(key);
-                if (!loaded) {
+                // AN EXISTING CHILD MUST BE LOADED BEFORE THE WIRE VALUES ARE APPLIED so dirty
+                // tracking and old-values concurrency checks have genuine DB values to compare against.
+                const prefetched = prefetchedRows.get(child);
+                if (prefetched) {
+                    await child.HydrateFromRow(prefetched, key!);
+                } else if (batchedChildren.has(child)) {
                     throw new Error(
                         `RelatedRecordCollection '${this.Name}': cannot load existing ${entityName} ` +
-                        `record ${key.ToString()} referenced by the incoming payload.`,
+                        `record ${key!.ToString()} referenced by the incoming payload.`,
                     );
+                } else {
+                    const loaded = await child.InnerLoad(key!);
+                    if (!loaded) {
+                        throw new Error(
+                            `RelatedRecordCollection '${this.Name}': cannot load existing ${entityName} ` +
+                            `record ${key!.ToString()} referenced by the incoming payload.`,
+                        );
+                    }
                 }
                 child.SetMany(row.Fields, true);
             }
@@ -1376,18 +1403,160 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @returns Loaded child entities to delete.
      */
     private async rehydrateRemovals(provider: IMetadataProvider, rows: Record<string, unknown>[]): Promise<T[]> {
-        const out: T[] = [];
+        if (rows.length === 0) {
+            return [];
+        }
+
+        const targets: Array<{ child: T; entityName: string; key: CompositeKey; fieldsForKey: Record<string, unknown> }> = [];
         for (const row of rows) {
             const entityName = (row['__entityName'] as string) || this.RelatedEntityName;
             const child = await provider.GetEntityObject<T>(entityName, this.Owner.ContextCurrentUser);
             const key = new CompositeKey(
                 child.EntityInfo.PrimaryKeys.map(pk => new KeyValuePair(pk.Name, row[pk.Name])),
             );
-            if (await child.InnerLoad(key)) {
-                out.push(child);
+            targets.push({ child, entityName, key, fieldsForKey: row });
+        }
+
+        const { prefetchedRows, batchedChildren } = await this.prefetchExistingRows(provider, targets);
+
+        const out: T[] = [];
+        for (const { child, key } of targets) {
+            const prefetched = prefetchedRows.get(child);
+            if (prefetched) {
+                if (await child.HydrateFromRow(prefetched, key)) {
+                    out.push(child);
+                }
+            } else if (!batchedChildren.has(child)) {
+                if (await child.InnerLoad(key)) {
+                    out.push(child);
+                }
             }
         }
         return out;
+    }
+
+    /**
+     * Batch-loads existing rows by primary key via chunked `RunView` queries so wire deserialization
+     * of N edited/removed children costs O(1) queries per entity type instead of N serial `InnerLoad` calls.
+     * Falls back per-entity whenever `RunView` is unavailable, a subclass overrides `InnerLoad`, or a
+     * group has fewer than 2 eligible rows.
+     */
+    private async prefetchExistingRows(
+        provider: IMetadataProvider,
+        targets: Array<{ child: T; entityName: string; key: CompositeKey; fieldsForKey: Record<string, unknown> }>,
+    ): Promise<{ prefetchedRows: Map<T, Record<string, unknown>>; batchedChildren: Set<T> }> {
+        const prefetchedRows = new Map<T, Record<string, unknown>>();
+        const batchedChildren = new Set<T>();
+        if (targets.length < 2) {
+            return { prefetchedRows, batchedChildren };
+        }
+
+        const rvProvider = provider as unknown as Partial<IRunViewProvider>;
+        if (typeof rvProvider.RunView !== 'function') {
+            return { prefetchedRows, batchedChildren };
+        }
+
+        const byEntity = new Map<string, typeof targets>();
+        for (const target of targets) {
+            let list = byEntity.get(target.entityName);
+            if (!list) {
+                list = [];
+                byEntity.set(target.entityName, list);
+            }
+            list.push(target);
+        }
+
+        for (const [entityName, group] of byEntity) {
+            if (group.length < 2) {
+                continue;
+            }
+            const pks = group[0].child.EntityInfo?.PrimaryKeys;
+            if (!pks || pks.length === 0) {
+                continue;
+            }
+            if (!group.every(t =>
+                typeof t.child.HydrateFromRow === 'function' &&
+                !hasCustomInnerLoadOverride(t.child) &&
+                t.key.Validate()?.IsValid === true
+            )) {
+                continue;
+            }
+
+            const predicates: string[] = [];
+            let allFormattable = true;
+            for (const target of group) {
+                if (pks.length === 1) {
+                    const lit = formatPrimaryKeySQLValue(pks[0], target.fieldsForKey[pks[0].Name]);
+                    if (lit === null) {
+                        allFormattable = false;
+                        break;
+                    }
+                    predicates.push(lit);
+                } else {
+                    const parts: string[] = [];
+                    for (const pk of pks) {
+                        const lit = formatPrimaryKeySQLValue(pk, target.fieldsForKey[pk.Name]);
+                        if (lit === null) {
+                            allFormattable = false;
+                            break;
+                        }
+                        parts.push(`[${pk.Name}]=${lit}`);
+                    }
+                    if (!allFormattable) {
+                        break;
+                    }
+                    predicates.push(`(${parts.join(' AND ')})`);
+                }
+            }
+            if (!allFormattable) {
+                continue;
+            }
+
+            const chunkSize = pks.length === 1 ? 200 : 100;
+            const rowByLookupKey = new Map<string, Record<string, unknown>>();
+            let batchSucceeded = true;
+
+            for (let start = 0; start < group.length; start += chunkSize) {
+                const slicePreds = predicates.slice(start, start + chunkSize);
+                const extraFilter = pks.length === 1
+                    ? `[${pks[0].Name}] IN (${slicePreds.join(',')})`
+                    : slicePreds.join(' OR ');
+
+                const res = await rvProvider.RunView<Record<string, unknown>>(
+                    {
+                        EntityName: entityName,
+                        ExtraFilter: extraFilter,
+                        ResultType: 'simple',
+                        BypassCache: true,
+                        SkipTotalRowCount: true,
+                        MaxRows: slicePreds.length,
+                        IgnoreMaxRows: true,
+                    },
+                    this.Owner.ContextCurrentUser,
+                );
+                if (!res?.Success) {
+                    batchSucceeded = false;
+                    break;
+                }
+                for (const row of res.Results ?? []) {
+                    rowByLookupKey.set(normalizePrimaryKeyLookup(pks, row), row);
+                }
+            }
+
+            if (!batchSucceeded) {
+                continue;
+            }
+
+            for (const target of group) {
+                batchedChildren.add(target.child);
+                const match = rowByLookupKey.get(normalizePrimaryKeyLookup(pks, target.fieldsForKey));
+                if (match) {
+                    prefetchedRows.set(target.child, match);
+                }
+            }
+        }
+
+        return { prefetchedRows, batchedChildren };
     }
 
     /**
@@ -1470,4 +1639,60 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             }
         }
     }
+}
+
+/** True when `entity` or a subclass above `BaseEntity` overrides `InnerLoad`. */
+function hasCustomInnerLoadOverride(entity: BaseEntity): boolean {
+    if (Object.prototype.hasOwnProperty.call(entity, 'InnerLoad')) {
+        return true;
+    }
+    let proto: object | null = Object.getPrototypeOf(entity);
+    while (proto && proto !== Object.prototype) {
+        const parent: object | null = Object.getPrototypeOf(proto);
+        if (
+            Object.prototype.hasOwnProperty.call(proto, 'InnerLoad') &&
+            parent !== null &&
+            'InnerLoad' in parent
+        ) {
+            return true;
+        }
+        proto = parent;
+    }
+    return false;
+}
+
+/** Formats a primary-key value safely for a SQL `ExtraFilter` predicate, or returns `null` to fall back to `InnerLoad`. */
+function formatPrimaryKeySQLValue(pkField: EntityFieldInfo, value: unknown): string | null {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    if (!pkField.NeedsQuotes) {
+        const trimmed = String(value).trim();
+        return /^-?\d+(\.\d+)?$/.test(trimmed) ? trimmed : null;
+    }
+    return `'${EscapeSQLString(String(value))}'`;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Builds a case/format-normalized composite lookup key for matching wire PKs to `RunView` rows. */
+function normalizePrimaryKeyLookup(pks: EntityFieldInfo[], record: Record<string, unknown>): string {
+    if (pks.length === 1) {
+        const raw = record[pks[0].Name];
+        if (raw === null || raw === undefined) {
+            return '';
+        }
+        const str = String(raw);
+        return (pks[0].IsUniqueIdentifier || UUID_PATTERN.test(str)) ? NormalizeUUID(str) : str;
+    }
+    return pks
+        .map((pk) => {
+            const raw = record[pk.Name];
+            if (raw === null || raw === undefined) {
+                return '';
+            }
+            const str = String(raw);
+            return (pk.IsUniqueIdentifier || UUID_PATTERN.test(str)) ? NormalizeUUID(str) : str;
+        })
+        .join('\u0000');
 }
