@@ -1641,16 +1641,32 @@ export interface SpreadsheetChartSpec {
     ChartType: SpreadsheetChartType;
     /** Worksheet ID owning the source range. */
     SheetID: string;
-    /** A1 range feeding the chart (e.g. `'A1:C6'`). First column provides category labels; subsequent numeric columns become series. */
+    /** A1 range or comma-separated range union feeding the chart (e.g. `'A1:C6'` or `'A1:A6,D1:D6'`). */
     SourceRange: string;
     /** Anchor cell where the floating chart card sits on the worksheet (e.g. `'E2'`). */
     PositionCell: string;
+    /** Where the chart renders: `'dock'` in the bottom strip (default) or `'sheet'` floating over the grid. */
+    Placement?: 'dock' | 'sheet';
+    /** Optional horizontal pixel offset within the grid canvas when `Placement === 'sheet'`. */
+    OffsetX?: number;
+    /** Optional vertical pixel offset within the grid canvas when `Placement === 'sheet'`. */
+    OffsetY?: number;
     /** Optional width in pixels. */
     WidthPx?: number;
     /** Optional height in pixels. */
     HeightPx?: number;
     /** Whether to display the series legend (default `true`). */
     ShowLegend?: boolean;
+    /** Header row handling (`'auto'` detects automatically, `true` uses first row/col as labels, `false` treats all as data). */
+    HasHeaderRow?: boolean | 'auto';
+    /** Series orientation (`'columns'` = each column is a series, `'rows'` = each row is a series). Default `'columns'`. */
+    SeriesOrientation?: 'columns' | 'rows';
+    /** Zero-based index within the extracted grid for the category/X-axis column (or row when `SeriesOrientation === 'rows'`). */
+    CategoryColumnIndex?: number;
+    /** Zero-based grid column (or transposed row) indices to include as plotted numeric series. Omit or empty for all numeric series. */
+    IncludedSeriesIndices?: number[];
+    /** Whether to render value data labels directly on chart bars/points/slices. */
+    ShowDataLabels?: boolean;
 }
 
 /**
@@ -1663,10 +1679,14 @@ export interface SpreadsheetChartDataset {
     SheetID: string;
     SourceRange: string;
     Categories: string[];
-    Series: Array<{ Name: string; Values: number[] }>;
+    Series: Array<{ Name: string; Values: number[]; ColumnIndex?: number }>;
     Columns: DocumentBlockColumn[];
-    Rows: Array<Record<string, unknown>>;
+    Rows: Array<Record<string, string | number>>;
     RevisionHash: string;
+    /** Detected columns (or transposed rows when `SeriesOrientation === 'rows'`) available in the source range. */
+    DetectedColumns?: Array<{ Index: number; Name: string; IsNumeric: boolean }>;
+    /** Effective header detection result after applying `HasHeaderRow`. */
+    EffectiveHasHeaderRow?: boolean;
 }
 
 /**
@@ -1763,6 +1783,8 @@ export interface WorkbookSpec {
     Worksheets: WorksheetSpec[];
     /** Workbook-level named ranges. */
     NamedRanges: SpreadsheetNamedRangeSpec[];
+    /** Persisted preferred height (px) of the docked bottom strip containing charts, live tables, and embedded canvases. */
+    PreferredObjectsPaneHeightPx?: number;
     /** ISO creation timestamp. */
     CreatedAt: string;
     /** ISO last-modified timestamp. */
@@ -2800,6 +2822,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ActiveSheetID: activeId,
             Worksheets: worksheets,
             NamedRanges: Array.isArray(raw.NamedRanges) ? raw.NamedRanges : [],
+            ...(typeof raw.PreferredObjectsPaneHeightPx === 'number' &&
+            Number.isFinite(raw.PreferredObjectsPaneHeightPx) &&
+            raw.PreferredObjectsPaneHeightPx > 0
+                ? { PreferredObjectsPaneHeightPx: Math.round(raw.PreferredObjectsPaneHeightPx) }
+                : {}),
             CreatedAt: raw.CreatedAt || now,
             UpdatedAt: raw.UpdatedAt || now
         };
@@ -2981,6 +3008,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     // -----------------------------------------------------------------------
     // Stable Row & Column ID Formula Translation (§ 6.2 & Accept #1)
     // -----------------------------------------------------------------------
+
+    /**
+     * Shifts relative A1 cell and range references inside `formula` by `(rowDelta, colDelta)`
+     * using the formula tokenizer so string literals, sheet prefixes, and function names (e.g. `LOG10`)
+     * are never corrupted, and `$`-anchored coordinates stay fixed.
+     */
+    public ShiftFormulaReferences(formula: string, rowDelta: number, colDelta: number): string {
+        if (!formula || (rowDelta === 0 && colDelta === 0)) {
+            return formula;
+        }
+        const eqIdx = formula.indexOf('=');
+        if (eqIdx === -1 || formula.slice(0, eqIdx).trim() !== '') {
+            return formula;
+        }
+        const shiftedBody = shiftFormulaBodyReferences(formula.slice(eqIdx + 1), rowDelta, colDelta);
+        return `${formula.slice(0, eqIdx + 1)}${shiftedBody}`;
+    }
 
     /**
      * Translates an A1 formula (e.g. `'=SUM(B2:B9) + $C$2'`) into a stable-ID formula
@@ -3961,6 +4005,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 return shifted ? { ...cf, Range: shifted } : null;
             })
             .filter((cf): cf is SpreadsheetConditionalFormatRuleSpec => cf !== null);
+        if (Array.isArray(sheet.ProtectedRanges) && sheet.ProtectedRanges.length > 0) {
+            sheet.ProtectedRanges = sheet.ProtectedRanges
+                .map((pr) => {
+                    const shifted = shiftA1RangeRows(pr.Range, op, startRow1Based, count, false, maxSurvivingRow);
+                    return shifted ? { ...pr, Range: shifted } : null;
+                })
+                .filter((pr): pr is SpreadsheetProtectedRangeSpec => pr !== null);
+        }
         for (const ws of workbook.Worksheets) {
             for (const chart of ws.Charts) {
                 if (chart.SheetID === sheet.SheetID && chart.SourceRange !== '#REF!') {
@@ -4025,6 +4077,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 return shifted ? { ...cf, Range: shifted } : null;
             })
             .filter((cf): cf is SpreadsheetConditionalFormatRuleSpec => cf !== null);
+        if (Array.isArray(sheet.ProtectedRanges) && sheet.ProtectedRanges.length > 0) {
+            sheet.ProtectedRanges = sheet.ProtectedRanges
+                .map((pr) => {
+                    const shifted = shiftA1RangeCols(pr.Range, op, startCol1Based, count, false, maxSurvivingCol);
+                    return shifted ? { ...pr, Range: shifted } : null;
+                })
+                .filter((pr): pr is SpreadsheetProtectedRangeSpec => pr !== null);
+        }
         for (const ws of workbook.Worksheets) {
             for (const chart of ws.Charts) {
                 if (chart.SheetID === sheet.SheetID && chart.SourceRange !== '#REF!') {
@@ -10349,31 +10409,138 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * Extracts a live {@link SpreadsheetChartDataset} from a chart spec (or ad-hoc range) on `workbook`.
      * Always evaluates the workbook first so formula cells in the chart range reflect latest values (`Accept #5`).
      */
+    /**
+     * Reads one or more comma-separated A1 ranges (supporting optional `'SheetName'!` prefixes)
+     * into a single aligned 2D cell grid for chart dataset extraction.
+     */
+    private readChartSourceGrid(
+        workbook: WorkbookSpec,
+        defaultSheet: WorksheetSpec,
+        sourceRange: string
+    ): Array<Array<SpreadsheetCellSpec | null>> | null {
+        const parts = sourceRange
+            .split(',')
+            .map((p) => p.trim())
+            .filter((p) => p.length > 0);
+        if (parts.length === 0) return null;
+
+        const segmentGrids: Array<{
+            bounds: { startRow: number; endRow: number; startCol: number; endCol: number };
+            grid: Array<Array<SpreadsheetCellSpec | null>>;
+        }> = [];
+
+        for (const part of parts) {
+            let segSheet = defaultSheet;
+            let addrPart = part;
+            const bangIdx = part.lastIndexOf('!');
+            if (bangIdx > 0) {
+                const rawSheetToken = part.slice(0, bangIdx).trim().replace(/^'+|'+$/g, '').replace(/''/g, "'");
+                const matched = this.GetWorksheet(workbook, rawSheetToken);
+                if (!matched) {
+                    return null;
+                }
+                segSheet = matched;
+                addrPart = part.slice(bangIdx + 1).trim();
+            }
+            const bounds = ParseRangeAddress(addrPart);
+            if (!bounds) {
+                return null;
+            }
+            const grid = this.ReadRange(workbook, segSheet.SheetID, addrPart);
+            if (grid.length > 0 && grid[0].length > 0) {
+                segmentGrids.push({ bounds, grid });
+            }
+        }
+
+        if (segmentGrids.length === 0) return null;
+        if (segmentGrids.length === 1) {
+            return segmentGrids[0].grid;
+        }
+
+        const firstBounds = segmentGrids[0].bounds;
+        const allSameColumns = segmentGrids.every(
+            (s) => s.bounds.startCol === firstBounds.startCol && s.bounds.endCol === firstBounds.endCol
+        );
+        if (allSameColumns) {
+            const stacked: Array<Array<SpreadsheetCellSpec | null>> = [];
+            for (const seg of segmentGrids) {
+                for (const row of seg.grid) {
+                    stacked.push(row);
+                }
+            }
+            return stacked;
+        }
+
+        const maxRows = Math.max(...segmentGrids.map((s) => s.grid.length));
+        const combined: Array<Array<SpreadsheetCellSpec | null>> = [];
+        for (let r = 0; r < maxRows; r++) {
+            const rowCells: Array<SpreadsheetCellSpec | null> = [];
+            for (const seg of segmentGrids) {
+                const segWidth = seg.grid[0]?.length ?? 0;
+                const segRow = seg.grid[r];
+                if (segRow) {
+                    rowCells.push(...segRow);
+                } else {
+                    for (let c = 0; c < segWidth; c++) {
+                        rowCells.push(null);
+                    }
+                }
+            }
+            combined.push(rowCells);
+        }
+        return combined;
+    }
+
+    /**
+     * Transposes a 2D cell grid for row-oriented chart extraction (`SeriesOrientation === 'rows'`).
+     */
+    private transposeChartGrid(
+        grid: Array<Array<SpreadsheetCellSpec | null>>
+    ): Array<Array<SpreadsheetCellSpec | null>> {
+        const rowCount = grid.length;
+        const colCount = Math.max(0, ...grid.map((r) => r.length));
+        const transposed: Array<Array<SpreadsheetCellSpec | null>> = [];
+        for (let c = 0; c < colCount; c++) {
+            const outRow: Array<SpreadsheetCellSpec | null> = [];
+            for (let r = 0; r < rowCount; r++) {
+                outRow.push(grid[r]?.[c] ?? null);
+            }
+            transposed.push(outRow);
+        }
+        return transposed;
+    }
+
     public ExtractChartDataset(
         workbook: WorkbookSpec,
         sheetIdOrName: string,
-        chartIdOrRange: string
+        chartIdOrRange: string,
+        overrideSpec?: Partial<SpreadsheetChartSpec>
     ): SpreadsheetChartDataset | null {
         this.EvaluateWorkbook(workbook);
         const sheet = this.GetWorksheet(workbook, sheetIdOrName) ?? workbook.Worksheets[0];
         if (!sheet) return null;
 
         const existingChart = sheet.Charts.find((c) => c.ChartID === chartIdOrRange);
-        const sourceRange = existingChart ? existingChart.SourceRange : chartIdOrRange;
-        const bounds = ParseRangeAddress(sourceRange);
-        if (!bounds) return null;
+        const effectiveChart: Partial<SpreadsheetChartSpec> | undefined =
+            existingChart || overrideSpec ? { ...existingChart, ...overrideSpec } : undefined;
+        const sourceRange = effectiveChart?.SourceRange ?? chartIdOrRange;
+        const rawGrid = this.readChartSourceGrid(workbook, sheet, sourceRange);
+        if (!rawGrid || rawGrid.length === 0 || rawGrid[0].length === 0) return null;
 
-        const grid = this.ReadRange(workbook, sheet.SheetID, sourceRange);
+        const orientation = effectiveChart?.SeriesOrientation === 'rows' ? 'rows' : 'columns';
+        const grid = orientation === 'rows' ? this.transposeChartGrid(rawGrid) : rawGrid;
         if (grid.length === 0 || grid[0].length === 0) return null;
 
-        // Determine if row 0 is headers (has string text that isn't purely a formatted number)
         const firstRow = grid[0];
-        const hasHeaderRow =
+        const autoHasHeader =
             grid.length > 1 &&
             firstRow.some((cell) => {
                 const raw = cell?.ComputedValue ?? cell?.RawValue;
                 return typeof raw === 'string' && raw.trim() !== '' && parseChartNumericValue(raw) === null;
             });
+        const hasHeaderPref = effectiveChart?.HasHeaderRow ?? 'auto';
+        const hasHeaderRow =
+            hasHeaderPref === true ? grid.length > 1 : hasHeaderPref === false ? false : autoHasHeader;
 
         const dataRows = hasHeaderRow ? grid.slice(1) : grid;
         const colCount = firstRow.length;
@@ -10396,34 +10563,77 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             columnNonEmptyCounts.push(nonEmptyCount);
         }
 
-        // Identify numeric value columns vs non-numeric category/dimension columns.
-        // Column 0 defaults to category whenever > 1 columns exist unless all columns are purely numeric.
+        const explicitCatIdx =
+            typeof effectiveChart?.CategoryColumnIndex === 'number' &&
+            Number.isInteger(effectiveChart.CategoryColumnIndex) &&
+            effectiveChart.CategoryColumnIndex >= 0 &&
+            effectiveChart.CategoryColumnIndex < colCount
+                ? effectiveChart.CategoryColumnIndex
+                : undefined;
+
+        const detectedColumns: Array<{ Index: number; Name: string; IsNumeric: boolean }> = [];
         const numericColIndices: number[] = [];
         const textColIndices: number[] = [];
         for (let c = 0; c < colCount; c++) {
             const nonEmpty = columnNonEmptyCounts[c];
-            const isNumericCol = nonEmpty > 0 && columnNumericCounts[c] >= Math.ceil(nonEmpty * 0.5);
-            if (isNumericCol && (colCount === 1 || c > 0)) {
+            const isNumericDataCol = nonEmpty > 0 && columnNumericCounts[c] >= Math.ceil(nonEmpty * 0.5);
+            const rawHeader = firstRow[c]?.ComputedValue ?? firstRow[c]?.RawValue;
+            const colLabel =
+                hasHeaderRow && rawHeader !== null && rawHeader !== undefined && String(rawHeader).trim() !== ''
+                    ? String(rawHeader).trim()
+                    : colCount === 1
+                      ? 'Value'
+                      : orientation === 'rows'
+                        ? `Row ${c + 1}`
+                        : `Series ${c}`;
+            detectedColumns.push({ Index: c, Name: colLabel, IsNumeric: isNumericDataCol });
+
+            if (explicitCatIdx !== undefined) {
+                if (c === explicitCatIdx) {
+                    textColIndices.push(c);
+                } else if (isNumericDataCol) {
+                    numericColIndices.push(c);
+                }
+            } else if (isNumericDataCol && (colCount === 1 || c > 0)) {
                 numericColIndices.push(c);
             } else {
                 textColIndices.push(c);
             }
         }
 
-        // If every column in range is numeric and colCount > 1 (e.g., B2:C5), treat all after col 0 as series,
-        // unless col 0 itself looks like an integer series with no non-numeric label columns; keep existing col-0 category contract.
-        const activeSeriesIndices =
+        let activeSeriesIndices =
             numericColIndices.length > 0
                 ? numericColIndices
                 : colCount === 1
                   ? [0]
                   : [];
+
+        if (Array.isArray(effectiveChart?.IncludedSeriesIndices) && effectiveChart.IncludedSeriesIndices.length > 0) {
+            const explicitIndices: number[] = [];
+            const seen = new Set<number>();
+            for (const idx of effectiveChart.IncludedSeriesIndices) {
+                if (Number.isInteger(idx) && idx >= 0 && idx < colCount && !seen.has(idx)) {
+                    seen.add(idx);
+                    explicitIndices.push(idx);
+                }
+            }
+            if (explicitIndices.length > 0) {
+                activeSeriesIndices = explicitIndices;
+            }
+        }
+
         const categoryColIndices =
-            textColIndices.length > 0 ? textColIndices : colCount > 1 ? [0] : [];
+            explicitCatIdx !== undefined
+                ? [explicitCatIdx]
+                : textColIndices.length > 0
+                  ? textColIndices
+                  : colCount > 1
+                    ? [0]
+                    : [];
 
         const categories: string[] = dataRows.map((r, idx) => {
             if (categoryColIndices.length === 0) {
-                return `Row ${idx + 1}`;
+                return orientation === 'rows' ? `Column ${idx + 1}` : `Row ${idx + 1}`;
             }
             const parts = categoryColIndices
                 .map((cIdx) => {
@@ -10431,23 +10641,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     return v !== null && v !== undefined ? String(v).trim() : '';
                 })
                 .filter((s) => s.length > 0);
-            return parts.length > 0 ? parts.join(' · ') : `Row ${idx + 1}`;
-        });
-
-        const series: Array<{ Name: string; Values: number[] }> = activeSeriesIndices.map((c) => {
-            const headerCell = firstRow[c];
-            const rawHeader = headerCell?.ComputedValue ?? headerCell?.RawValue;
-            const sName =
-                hasHeaderRow && rawHeader !== null && rawHeader !== undefined && String(rawHeader).trim() !== ''
-                    ? String(rawHeader)
-                    : colCount === 1
-                      ? 'Value'
-                      : `Series ${c}`;
-            const vals = dataRows.map((r) => {
-                const raw = r[c]?.ComputedValue ?? r[c]?.RawValue;
-                return parseChartNumericValue(raw) ?? 0;
-            });
-            return { Name: sName, Values: vals };
+            return parts.length > 0 ? parts.join(' · ') : orientation === 'rows' ? `Column ${idx + 1}` : `Row ${idx + 1}`;
         });
 
         const categoryColName =
@@ -10457,12 +10651,40 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                       .filter((s) => s.length > 0)
                       .join(' · ') || 'Category'
                 : 'Category';
+
+        const rawSeriesNameCounts = new Map<string, number>();
+        for (const c of activeSeriesIndices) {
+            const rawName = detectedColumns[c]?.Name ?? `Series ${c}`;
+            rawSeriesNameCounts.set(rawName, (rawSeriesNameCounts.get(rawName) ?? 0) + 1);
+        }
+        const usedColumnKeys = new Set<string>([categoryColName]);
+
+        const series: Array<{ Name: string; Values: number[]; ColumnIndex?: number }> = activeSeriesIndices.map((c) => {
+            const colMeta = detectedColumns[c];
+            const baseName = colMeta ? colMeta.Name : `Series ${c}`;
+            const hasCollision = (rawSeriesNameCounts.get(baseName) ?? 0) > 1 || usedColumnKeys.has(baseName);
+            let sName = hasCollision ? `${baseName} (${ColumnIndexToLetter(c + 1)})` : baseName;
+            if (usedColumnKeys.has(sName)) {
+                let suffix = 2;
+                while (usedColumnKeys.has(`${sName}_${suffix}`)) {
+                    suffix++;
+                }
+                sName = `${sName}_${suffix}`;
+            }
+            usedColumnKeys.add(sName);
+            const vals = dataRows.map((r) => {
+                const raw = r[c]?.ComputedValue ?? r[c]?.RawValue;
+                return parseChartNumericValue(raw) ?? 0;
+            });
+            return { Name: sName, Values: vals, ColumnIndex: c };
+        });
+
         const columns: DocumentBlockColumn[] = [
             { Name: categoryColName, DisplayName: categoryColName, Type: 'string' },
             ...series.map((s) => ({ Name: s.Name, DisplayName: s.Name, Type: 'number' }))
         ];
-        const rows: Array<Record<string, unknown>> = categories.map((cat, rIdx) => {
-            const rowObj: Record<string, unknown> = { [categoryColName]: cat };
+        const rows: Array<Record<string, string | number>> = categories.map((cat, rIdx) => {
+            const rowObj: Record<string, string | number> = { [categoryColName]: cat };
             for (const s of series) {
                 rowObj[s.Name] = s.Values[rIdx] ?? 0;
             }
@@ -10470,16 +10692,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         });
 
         return {
-            ChartID: existingChart?.ChartID ?? `range-${sourceRange}`,
-            Title: existingChart?.Title ?? `${sheet.Name} (${sourceRange})`,
-            ChartType: existingChart?.ChartType ?? 'bar',
+            ChartID: effectiveChart?.ChartID ?? `range-${sourceRange}`,
+            Title: effectiveChart?.Title ?? `${sheet.Name} (${sourceRange})`,
+            ChartType: effectiveChart?.ChartType ?? 'bar',
             SheetID: sheet.SheetID,
             SourceRange: sourceRange,
             Categories: categories,
             Series: series,
             Columns: columns,
             Rows: rows,
-            RevisionHash: this.ComputeRevisionHash(workbook)
+            RevisionHash: this.ComputeRevisionHash(workbook),
+            DetectedColumns: detectedColumns,
+            EffectiveHasHeaderRow: hasHeaderRow
         };
     }
 
@@ -10761,23 +10985,60 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     public ExportToXlsxBytes(workbook: WorkbookSpec, includeMjMetadataSheet = true): Uint8Array {
         this.EvaluateWorkbook(workbook);
 
-        // Build custom numFmt + xf style table
+        // Build custom numFmt + font + fill + xf style table
         const numFmts: Array<{ Id: number; FormatCode: string }> = [];
         const numFmtIdByPattern = new Map<string, number>();
         let nextNumFmtId = 164;
 
+        interface OoxmlFontEntry {
+            Bold: boolean;
+            Italic: boolean;
+            ColorArgb?: string;
+        }
+        const fonts: OoxmlFontEntry[] = [
+            { Bold: false, Italic: false },
+            { Bold: true, Italic: false }
+        ];
+        const fontIndexByKey = new Map<string, number>([
+            ['0:0:', 0],
+            ['1:0:', 1]
+        ]);
+        const getFontIndex = (bold: boolean, italic: boolean, colorArgb?: string): number => {
+            const key = `${bold ? 1 : 0}:${italic ? 1 : 0}:${colorArgb ?? ''}`;
+            const existing = fontIndexByKey.get(key);
+            if (existing !== undefined) return existing;
+            const idx = fonts.length;
+            fonts.push({ Bold: bold, Italic: italic, ColorArgb: colorArgb });
+            fontIndexByKey.set(key, idx);
+            return idx;
+        };
+
+        const fillFgs: string[] = []; // index 0 = none, index 1 = gray125, index >= 2 -> fillFgs[idx - 2]
+        const fillIndexByArgb = new Map<string, number>();
+        const getFillIndex = (colorArgb?: string): number => {
+            if (!colorArgb) return 0;
+            const existing = fillIndexByArgb.get(colorArgb);
+            if (existing !== undefined) return existing;
+            const idx = 2 + fillFgs.length;
+            fillFgs.push(colorArgb);
+            fillIndexByArgb.set(colorArgb, idx);
+            return idx;
+        };
+
         interface XfStyleEntry {
             NumFmtId: number;
             FontId: number;
+            FillId: number;
+            HorizontalAlign?: 'left' | 'center' | 'right';
         }
         // Index 0 = default general, Index 1 = bold general
         const cellXfs: XfStyleEntry[] = [
-            { NumFmtId: 0, FontId: 0 },
-            { NumFmtId: 0, FontId: 1 }
+            { NumFmtId: 0, FontId: 0, FillId: 0 },
+            { NumFmtId: 0, FontId: 1, FillId: 0 }
         ];
         const xfIndexByKey = new Map<string, number>([
-            ['0:0', 0],
-            ['0:1', 1]
+            ['0:0:0:', 0],
+            ['0:1:0:', 1]
         ]);
 
         const getStyleIndex = (style?: SpreadsheetCellStyleSpec): number => {
@@ -10794,12 +11055,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     numFmts.push({ Id: numFmtId, FormatCode: pattern });
                 }
             }
-            const fontId = style.Bold ? 1 : 0;
-            const key = `${numFmtId}:${fontId}`;
+            const textArgb = cssColorToOoxmlArgb(style.TextColor);
+            const fillArgb = cssColorToOoxmlArgb(style.BackgroundColor);
+            const fontId = getFontIndex(Boolean(style.Bold), Boolean(style.Italic), textArgb);
+            const fillId = getFillIndex(fillArgb);
+            const align = style.HorizontalAlign;
+            const key = `${numFmtId}:${fontId}:${fillId}:${align ?? ''}`;
             const existingXf = xfIndexByKey.get(key);
             if (existingXf !== undefined) return existingXf;
             const newIdx = cellXfs.length;
-            cellXfs.push({ NumFmtId: numFmtId, FontId: fontId });
+            cellXfs.push({ NumFmtId: numFmtId, FontId: fontId, FillId: fillId, HorizontalAlign: align });
             xfIndexByKey.set(key, newIdx);
             return newIdx;
         };
@@ -10858,7 +11123,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 Name: 'xl/_rels/workbook.xml.rels',
                 Data: this.encodeUtf8(this.buildWorkbookRelsXml(sheetDefs, stylesRelId, metadataRelId))
             },
-            { Name: 'xl/styles.xml', Data: this.encodeUtf8(this.buildStylesXml(numFmts, cellXfs)) }
+            { Name: 'xl/styles.xml', Data: this.encodeUtf8(this.buildStylesXml(numFmts, cellXfs, fonts, fillFgs)) }
         );
 
         return this.buildZipArchive(zipEntries);
@@ -11718,6 +11983,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     metaWorkbook.Worksheets[i];
                 if (metaWs) {
                     ws.SheetID = metaWs.SheetID || ws.SheetID;
+                    ws.SortSpec = metaWs.SortSpec ?? null;
+                    ws.FilterSpecs = Array.isArray(metaWs.FilterSpecs) ? metaWs.FilterSpecs : ws.FilterSpecs;
                     ws.LiveTables = Array.isArray(metaWs.LiveTables) ? metaWs.LiveTables : ws.LiveTables;
                     ws.Charts = Array.isArray(metaWs.Charts) ? metaWs.Charts : ws.Charts;
                     ws.EmbeddedArtifacts = Array.isArray(metaWs.EmbeddedArtifacts)
@@ -11729,6 +11996,47 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     ws.ConditionalFormats = Array.isArray(metaWs.ConditionalFormats)
                         ? metaWs.ConditionalFormats
                         : ws.ConditionalFormats;
+                    ws.ProtectedRanges = Array.isArray(metaWs.ProtectedRanges)
+                        ? metaWs.ProtectedRanges
+                        : (ws.ProtectedRanges ?? []);
+                    if (Array.isArray(metaWs.Rows) && metaWs.Rows.length > 0) {
+                        let maxMetaRow = ws.Rows.length;
+                        for (const mr of metaWs.Rows) {
+                            if (typeof mr.Index === 'number' && mr.Index > maxMetaRow) {
+                                maxMetaRow = mr.Index;
+                            }
+                        }
+                        this.ensureSheetCapacity(ws, maxMetaRow, 1);
+                        for (const mr of metaWs.Rows) {
+                            if (typeof mr.Index !== 'number' || mr.Index < 1 || mr.Index > ws.Rows.length) continue;
+                            const targetRow = ws.Rows[mr.Index - 1];
+                            if (typeof mr.Height === 'number' && Number.isFinite(mr.Height) && mr.Height > 0) {
+                                targetRow.Height = mr.Height;
+                            }
+                            if (mr.Hidden !== undefined) {
+                                targetRow.Hidden = Boolean(mr.Hidden);
+                            }
+                        }
+                    }
+                    if (Array.isArray(metaWs.Columns) && metaWs.Columns.length > 0) {
+                        let maxMetaCol = ws.Columns.length;
+                        for (const mc of metaWs.Columns) {
+                            if (typeof mc.Index === 'number' && mc.Index > maxMetaCol) {
+                                maxMetaCol = mc.Index;
+                            }
+                        }
+                        this.ensureSheetCapacity(ws, 1, maxMetaCol);
+                        for (const mc of metaWs.Columns) {
+                            if (typeof mc.Index !== 'number' || mc.Index < 1 || mc.Index > ws.Columns.length) continue;
+                            const targetCol = ws.Columns[mc.Index - 1];
+                            if (typeof mc.Width === 'number' && Number.isFinite(mc.Width) && mc.Width > 0) {
+                                targetCol.Width = mc.Width;
+                            }
+                            if (mc.Hidden !== undefined) {
+                                targetCol.Hidden = Boolean(mc.Hidden);
+                            }
+                        }
+                    }
                     if (Array.isArray(metaWs.ClearedSpillChildren) && metaWs.ClearedSpillChildren.length > 0) {
                         for (const addr of metaWs.ClearedSpillChildren) {
                             if (typeof addr === 'string') {
@@ -11736,26 +12044,37 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                             }
                         }
                     }
-                    // Restore any =MJ.QUERY / =MJ.VIEW formulas and notes preserved in metaWs
+                    // Restore =MJ.* formulas, notes, and extended/CSS-token styles preserved in metaWs
                     if (metaWs.Cells) {
                         for (const [addr, metaCell] of Object.entries(metaWs.Cells)) {
                             if (!metaCell) continue;
                             const isMjFormula = Boolean(
                                 metaCell.Formula && this.ParseMjCustomFunctionFormula(metaCell.Formula)
                             );
-                            if (isMjFormula) {
-                                let targetCell = ws.Cells[addr];
-                                if (!targetCell) {
-                                    const pos = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
-                                    if (pos) {
-                                        this.ensureSheetCapacity(ws, pos.row, pos.col);
-                                        const canonical = FormatCellAddress(pos.row, pos.col);
+                            const hasMetaStyle = Boolean(
+                                metaCell.Style &&
+                                    (metaCell.Style.Bold ||
+                                        metaCell.Style.Italic ||
+                                        metaCell.Style.TextColor ||
+                                        metaCell.Style.BackgroundColor ||
+                                        metaCell.Style.HorizontalAlign ||
+                                        metaCell.Style.FormatType ||
+                                        metaCell.Style.NumberFormatPattern)
+                            );
+                            let targetCell = ws.Cells[addr];
+                            if (!targetCell && (isMjFormula || hasMetaStyle || Boolean(metaCell.Note))) {
+                                const pos = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
+                                if (pos) {
+                                    this.ensureSheetCapacity(ws, pos.row, pos.col);
+                                    const canonical = FormatCellAddress(pos.row, pos.col);
+                                    targetCell = ws.Cells[canonical];
+                                    if (!targetCell) {
                                         targetCell = {
                                             RowID: this.getStableRowIdForIndex(ws, pos.row),
                                             ColumnID: this.getStableColIdForIndex(ws, pos.col),
                                             Address: canonical,
                                             RawValue: null,
-                                            Formula: metaCell.Formula,
+                                            Formula: isMjFormula ? metaCell.Formula : null,
                                             FormulaStable: null,
                                             ComputedValue: null,
                                             DisplayValue: '',
@@ -11764,16 +12083,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                         ws.Cells[canonical] = targetCell;
                                     }
                                 }
-                                if (targetCell && metaCell.Formula) {
-                                    targetCell.Formula = metaCell.Formula;
-                                    targetCell.FormulaStable =
-                                        metaCell.FormulaStable ??
-                                        this.CompileFormulaToStableIds(ws, metaCell.Formula);
-                                    this.syncCellVirtualAxisIndex(ws, targetCell);
-                                }
                             }
-                            if (metaCell.Note && ws.Cells[addr]) {
-                                ws.Cells[addr].Note = metaCell.Note;
+                            if (targetCell && isMjFormula && metaCell.Formula) {
+                                targetCell.Formula = metaCell.Formula;
+                                targetCell.FormulaStable =
+                                    metaCell.FormulaStable ??
+                                    this.CompileFormulaToStableIds(ws, metaCell.Formula);
+                                this.syncCellVirtualAxisIndex(ws, targetCell);
+                            }
+                            if (targetCell && hasMetaStyle && metaCell.Style) {
+                                targetCell.Style = { ...(targetCell.Style ?? {}), ...metaCell.Style };
+                                targetCell.DisplayValue = this.FormatCellValue(
+                                    targetCell.ComputedValue ?? targetCell.RawValue,
+                                    targetCell.Style
+                                );
+                            }
+                            if (targetCell && metaCell.Note) {
+                                targetCell.Note = metaCell.Note;
                             }
                         }
                     }
@@ -11787,6 +12113,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ActiveSheetID: finalWorksheets[0].SheetID,
             Worksheets: finalWorksheets,
             NamedRanges: Array.isArray(metaWorkbook?.NamedRanges) ? metaWorkbook!.NamedRanges! : [],
+            ...(typeof metaWorkbook?.PreferredObjectsPaneHeightPx === 'number' &&
+            Number.isFinite(metaWorkbook.PreferredObjectsPaneHeightPx) &&
+            metaWorkbook.PreferredObjectsPaneHeightPx > 0
+                ? { PreferredObjectsPaneHeightPx: Math.round(metaWorkbook.PreferredObjectsPaneHeightPx) }
+                : {}),
             CreatedAt: metaWorkbook?.CreatedAt || now,
             UpdatedAt: now
         };
@@ -11817,9 +12148,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
         const colsXmlParts: string[] = [];
         for (const col of ws.Columns) {
-            if (col.Width && col.Width !== DEFAULT_COLUMN_WIDTH) {
+            const hasCustomWidth = typeof col.Width === 'number' && col.Width !== DEFAULT_COLUMN_WIDTH;
+            if (hasCustomWidth || col.Hidden) {
+                const widthVal = col.Width ?? DEFAULT_COLUMN_WIDTH;
+                const customAttr = hasCustomWidth ? ' customWidth="1"' : '';
+                const hiddenAttr = col.Hidden ? ' hidden="1"' : '';
                 colsXmlParts.push(
-                    `<col min="${col.Index}" max="${col.Index}" width="${col.Width}" customWidth="1"/>`
+                    `<col min="${col.Index}" max="${col.Index}" width="${widthVal}"${customAttr}${hiddenAttr}/>`
                 );
             }
         }
@@ -11844,10 +12179,31 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             cellsByRow.set(pos.row, list);
         }
 
-        const rowNums = Array.from(cellsByRow.keys()).sort((a, b) => a - b);
+        const rowSpecByIndex = new Map<number, SpreadsheetRowSpec>();
+        const rowNumSet = new Set<number>(cellsByRow.keys());
+        for (const row of ws.Rows) {
+            rowSpecByIndex.set(row.Index, row);
+            const hasCustomHeight = typeof row.Height === 'number' && row.Height !== DEFAULT_ROW_HEIGHT;
+            if (hasCustomHeight || row.Hidden) {
+                rowNumSet.add(row.Index);
+                if (row.Index > maxRow) maxRow = row.Index;
+            }
+        }
+
+        const rowNums = Array.from(rowNumSet).sort((a, b) => a - b);
         const rowsXmlParts: string[] = [];
 
         for (const rNum of rowNums) {
+            const rowSpec = rowSpecByIndex.get(rNum);
+            const hasCustomHeight =
+                typeof rowSpec?.Height === 'number' &&
+                Number.isFinite(rowSpec.Height) &&
+                rowSpec.Height > 0 &&
+                rowSpec.Height !== DEFAULT_ROW_HEIGHT;
+            const rowAttrs = `${hasCustomHeight ? ` ht="${rowSpec!.Height}" customHeight="1"` : ''}${
+                rowSpec?.Hidden ? ' hidden="1"' : ''
+            }`;
+
             const rowCells = (cellsByRow.get(rNum) ?? []).sort((a, b) => {
                 const pA = ParseCellAddress(a.Address);
                 const pB = ParseCellAddress(b.Address);
@@ -11913,10 +12269,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     }
                 } else if (formulaXml) {
                     cellTags.push(`<c r="${cell.Address}"${sAttr}${cExtraMetaAttrs}>${formulaXml}</c>`);
+                } else if (sIdx > 0) {
+                    cellTags.push(`<c r="${cell.Address}"${sAttr}/>`);
                 }
             }
             if (cellTags.length > 0) {
-                rowsXmlParts.push(`<row r="${rNum}">${cellTags.join('')}</row>`);
+                rowsXmlParts.push(`<row r="${rNum}"${rowAttrs}>${cellTags.join('')}</row>`);
+            } else if (rowAttrs.length > 0) {
+                rowsXmlParts.push(`<row r="${rNum}"${rowAttrs}/>`);
             }
         }
 
@@ -11942,19 +12302,49 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             Title: sanitized.Title,
             ActiveSheetID: sanitized.ActiveSheetID,
             NamedRanges: sanitized.NamedRanges,
+            ...(typeof sanitized.PreferredObjectsPaneHeightPx === 'number' &&
+            Number.isFinite(sanitized.PreferredObjectsPaneHeightPx) &&
+            sanitized.PreferredObjectsPaneHeightPx > 0
+                ? { PreferredObjectsPaneHeightPx: Math.round(sanitized.PreferredObjectsPaneHeightPx) }
+                : {}),
             CreatedAt: sanitized.CreatedAt,
             UpdatedAt: sanitized.UpdatedAt,
             Worksheets: sanitized.Worksheets.map((ws) => {
                 const mjOnlyCells: Record<string, SpreadsheetCellSpec> = {};
                 for (const [addr, cell] of Object.entries(ws.Cells)) {
                     if (!cell) continue;
+                    const hasExtendedStyle = Boolean(
+                        cell.Style &&
+                            (cell.Style.Italic ||
+                                cell.Style.TextColor ||
+                                cell.Style.BackgroundColor ||
+                                cell.Style.HorizontalAlign)
+                    );
                     if (
                         (cell.Formula && this.ParseMjCustomFunctionFormula(cell.Formula)) ||
-                        Boolean(cell.Note)
+                        Boolean(cell.Note) ||
+                        hasExtendedStyle
                     ) {
                         mjOnlyCells[addr] = cell;
                     }
                 }
+                const nonDefaultRows = ws.Rows.filter(
+                    (r) => Boolean(r.Hidden) || (typeof r.Height === 'number' && r.Height !== DEFAULT_ROW_HEIGHT)
+                ).map((r) => ({
+                    RowID: r.RowID,
+                    Index: r.Index,
+                    ...(typeof r.Height === 'number' && r.Height !== DEFAULT_ROW_HEIGHT ? { Height: r.Height } : {}),
+                    ...(r.Hidden ? { Hidden: true } : {})
+                }));
+                const nonDefaultCols = ws.Columns.filter(
+                    (c) => Boolean(c.Hidden) || (typeof c.Width === 'number' && c.Width !== DEFAULT_COLUMN_WIDTH)
+                ).map((c) => ({
+                    ColumnID: c.ColumnID,
+                    Index: c.Index,
+                    Letter: c.Letter,
+                    ...(typeof c.Width === 'number' && c.Width !== DEFAULT_COLUMN_WIDTH ? { Width: c.Width } : {}),
+                    ...(c.Hidden ? { Hidden: true } : {})
+                }));
                 return {
                     SheetID: ws.SheetID,
                     Name: ws.Name,
@@ -11967,6 +12357,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     LiveTables: ws.LiveTables,
                     Charts: ws.Charts,
                     EmbeddedArtifacts: ws.EmbeddedArtifacts,
+                    ProtectedRanges: ws.ProtectedRanges ?? [],
+                    Rows: nonDefaultRows,
+                    Columns: nonDefaultCols,
                     Cells: mjOnlyCells
                 };
             })
@@ -12055,7 +12448,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheetId: string,
         sheetName: string,
         sharedStrings: string[],
-        styleLookup: Array<{ FormatPattern?: string; Bold?: boolean }>
+        styleLookup: Array<{
+            FormatPattern?: string;
+            Bold?: boolean;
+            Italic?: boolean;
+            TextColor?: string;
+            BackgroundColor?: string;
+            HorizontalAlign?: 'left' | 'center' | 'right';
+        }>
     ): WorksheetSpec {
         const ws = this.CreateEmptyWorksheet(sheetId, sheetName);
 
@@ -12101,8 +12501,34 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        // Parse column widths
-        const parsedColWidths: Array<{ min: number; max: number; width: number }> = [];
+        // Parse row height & hidden overrides when present
+        const parsedRowProps: Array<{ row: number; height?: number; hidden: boolean }> = [];
+        if (wsXml.indexOf('ht=') !== -1 || wsXml.indexOf('hidden=') !== -1) {
+            const rowOpenRegex = /<row\b([^>]*?)(?:\/>|>)/g;
+            let rowMatch: RegExpExecArray | null;
+            while ((rowMatch = rowOpenRegex.exec(wsXml)) !== null) {
+                const attrs = rowMatch[1];
+                if (attrs.indexOf('ht=') === -1 && attrs.indexOf('hidden=') === -1) {
+                    continue;
+                }
+                const rNum = parseInt(this.extractXmlAttr(attrs, 'r') || '0', 10);
+                if (rNum <= 0) continue;
+                const htNum = parseFloat(this.extractXmlAttr(attrs, 'ht') || '0');
+                const hiddenAttr = this.extractXmlAttr(attrs, 'hidden');
+                const isHidden = hiddenAttr === '1' || hiddenAttr?.toLowerCase() === 'true';
+                if (htNum > 0 || isHidden) {
+                    if (rNum > preMaxRow) preMaxRow = rNum;
+                    parsedRowProps.push({
+                        row: rNum,
+                        height: htNum > 0 ? Number(htNum.toFixed(2)) : undefined,
+                        hidden: isHidden
+                    });
+                }
+            }
+        }
+
+        // Parse column widths & hidden flags
+        const parsedCols: Array<{ min: number; max: number; width?: number; hidden: boolean }> = [];
         const colRegex = /<col\b([^>]*?)\/?>/g;
         let colMatch: RegExpExecArray | null;
         while ((colMatch = colRegex.exec(wsXml)) !== null) {
@@ -12110,9 +12536,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const min = parseInt(this.extractXmlAttr(attrs, 'min') || '0', 10);
             const max = parseInt(this.extractXmlAttr(attrs, 'max') || '0', 10);
             const width = parseFloat(this.extractXmlAttr(attrs, 'width') || '0');
-            if (min > 0 && max >= min && width > 0) {
+            const hiddenAttr = this.extractXmlAttr(attrs, 'hidden');
+            const isHidden = hiddenAttr === '1' || hiddenAttr?.toLowerCase() === 'true';
+            if (min > 0 && max >= min && (width > 0 || isHidden)) {
                 if (max > preMaxCol) preMaxCol = max;
-                parsedColWidths.push({ min, max, width });
+                parsedCols.push({
+                    min,
+                    max,
+                    width: width > 0 ? width : undefined,
+                    hidden: isHidden
+                });
             }
         }
 
@@ -12149,11 +12582,27 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         // Single upfront capacity allocation for the entire worksheet!
         this.ensureSheetCapacity(ws, preMaxRow, preMaxCol);
 
-        for (const cw of parsedColWidths) {
+        for (const cw of parsedCols) {
             const maxDenseCol = Math.min(cw.max, ws.Columns.length);
-            const roundedWidth = Number(cw.width.toFixed(2));
+            const roundedWidth = cw.width !== undefined ? Number(cw.width.toFixed(2)) : undefined;
             for (let c = cw.min; c <= maxDenseCol; c++) {
-                ws.Columns[c - 1].Width = roundedWidth;
+                if (roundedWidth !== undefined) {
+                    ws.Columns[c - 1].Width = roundedWidth;
+                }
+                if (cw.hidden) {
+                    ws.Columns[c - 1].Hidden = true;
+                }
+            }
+        }
+
+        for (const rp of parsedRowProps) {
+            if (rp.row <= ws.Rows.length) {
+                if (rp.height !== undefined) {
+                    ws.Rows[rp.row - 1].Height = rp.height;
+                }
+                if (rp.hidden) {
+                    ws.Rows[rp.row - 1].Hidden = true;
+                }
             }
         }
 
@@ -12175,10 +12624,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const styleInfo = styleLookup[styleIdx];
 
             let cellStyle: SpreadsheetCellStyleSpec | undefined;
-            if (styleInfo && (styleInfo.FormatPattern || styleInfo.Bold)) {
+            if (
+                styleInfo &&
+                (styleInfo.FormatPattern ||
+                    styleInfo.Bold ||
+                    styleInfo.Italic ||
+                    styleInfo.TextColor ||
+                    styleInfo.BackgroundColor ||
+                    styleInfo.HorizontalAlign)
+            ) {
                 cellStyle = {
-                    Bold: styleInfo.Bold,
-                    NumberFormatPattern: styleInfo.FormatPattern,
+                    ...(styleInfo.Bold ? { Bold: true } : {}),
+                    ...(styleInfo.Italic ? { Italic: true } : {}),
+                    ...(styleInfo.TextColor ? { TextColor: styleInfo.TextColor } : {}),
+                    ...(styleInfo.BackgroundColor ? { BackgroundColor: styleInfo.BackgroundColor } : {}),
+                    ...(styleInfo.HorizontalAlign ? { HorizontalAlign: styleInfo.HorizontalAlign } : {}),
+                    ...(styleInfo.FormatPattern ? { NumberFormatPattern: styleInfo.FormatPattern } : {}),
                     FormatType: this.InferFormatTypeFromPattern(styleInfo.FormatPattern)
                 };
             }
@@ -12315,7 +12776,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return ws;
     }
 
-    private parseStylesXml(stylesXml: string): Array<{ FormatPattern?: string; Bold?: boolean }> {
+    private parseStylesXml(stylesXml: string): Array<{
+        FormatPattern?: string;
+        Bold?: boolean;
+        Italic?: boolean;
+        TextColor?: string;
+        BackgroundColor?: string;
+        HorizontalAlign?: 'left' | 'center' | 'right';
+    }> {
         if (!stylesXml) return [{ FormatPattern: undefined, Bold: false }];
 
         // Map all standard OOXML built-in number, currency, percent, date, and datetime numFmtIds (E6)
@@ -12366,28 +12834,79 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        const fontBoldFlags: boolean[] = [];
+        const parsedFonts: Array<{ bold: boolean; italic: boolean; color?: string }> = [];
         const fontsSection = /<fonts\b[^>]*>([\s\S]*?)<\/fonts>/.exec(stylesXml);
         if (fontsSection) {
             const fontRegex = /<font\b[^>]*>([\s\S]*?)<\/font>/g;
             let fMatch: RegExpExecArray | null;
             while ((fMatch = fontRegex.exec(fontsSection[1])) !== null) {
-                fontBoldFlags.push(/<b\b/.test(fMatch[1]));
+                const body = fMatch[1];
+                const bold = /<b\b/.test(body) && !/<b\b[^>]*\bval=["']?(?:0|false)["']?/i.test(body);
+                const italic = /<i\b/.test(body) && !/<i\b[^>]*\bval=["']?(?:0|false)["']?/i.test(body);
+                const colorMatch = /<color\b([^>]*?)\/?>/.exec(body);
+                const rgbAttr = colorMatch ? this.extractXmlAttr(colorMatch[1], 'rgb') : null;
+                parsedFonts.push({
+                    bold,
+                    italic,
+                    color: ooxmlRgbToCssHex(rgbAttr)
+                });
             }
         }
 
-        const result: Array<{ FormatPattern?: string; Bold?: boolean }> = [];
+        const parsedFills: Array<string | undefined> = [];
+        const fillsSection = /<fills\b[^>]*>([\s\S]*?)<\/fills>/.exec(stylesXml);
+        if (fillsSection) {
+            const fillRegex = /<fill\b[^>]*>([\s\S]*?)<\/fill>/g;
+            let fillMatch: RegExpExecArray | null;
+            while ((fillMatch = fillRegex.exec(fillsSection[1])) !== null) {
+                const body = fillMatch[1];
+                const patMatch = /<patternFill\b([^>]*?)(?:\/>|>([\s\S]*?)<\/patternFill>)/.exec(body);
+                const patType = patMatch ? this.extractXmlAttr(patMatch[1], 'patternType') : null;
+                if (patType === 'solid' && patMatch?.[2]) {
+                    const fgMatch = /<fgColor\b([^>]*?)\/?>/.exec(patMatch[2]);
+                    const fgRgb = fgMatch ? this.extractXmlAttr(fgMatch[1], 'rgb') : null;
+                    parsedFills.push(ooxmlRgbToCssHex(fgRgb));
+                } else {
+                    parsedFills.push(undefined);
+                }
+            }
+        }
+
+        const result: Array<{
+            FormatPattern?: string;
+            Bold?: boolean;
+            Italic?: boolean;
+            TextColor?: string;
+            BackgroundColor?: string;
+            HorizontalAlign?: 'left' | 'center' | 'right';
+        }> = [];
         const cellXfsSection = /<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/.exec(stylesXml);
         if (cellXfsSection) {
-            const xfRegex = /<xf\b([^>]*?)(?:\/>|>[\s\S]*?<\/xf>)/g;
+            const xfRegex = /<xf\b([^>]*?)(?:\/>|>([\s\S]*?)<\/xf>)/g;
             let xfMatch: RegExpExecArray | null;
             while ((xfMatch = xfRegex.exec(cellXfsSection[1])) !== null) {
                 const attrs = xfMatch[1];
+                const inner = xfMatch[2] || '';
                 const nfId = parseInt(this.extractXmlAttr(attrs, 'numFmtId') || '0', 10);
                 const fontId = parseInt(this.extractXmlAttr(attrs, 'fontId') || '0', 10);
+                const fillId = parseInt(this.extractXmlAttr(attrs, 'fillId') || '0', 10);
+                const fontMeta = parsedFonts[fontId];
+                const bgHex = fillId > 1 ? parsedFills[fillId] : undefined;
+                let align: 'left' | 'center' | 'right' | undefined;
+                if (inner) {
+                    const alignMatch = /<alignment\b([^>]*?)\/?>/.exec(inner);
+                    const horiz = alignMatch ? this.extractXmlAttr(alignMatch[1], 'horizontal')?.toLowerCase() : null;
+                    if (horiz === 'left' || horiz === 'center' || horiz === 'right') {
+                        align = horiz;
+                    }
+                }
                 result.push({
                     FormatPattern: formatById.get(nfId),
-                    Bold: fontBoldFlags[fontId] ?? false
+                    Bold: fontMeta?.bold ?? false,
+                    ...(fontMeta?.italic ? { Italic: true } : {}),
+                    ...(fontMeta?.color ? { TextColor: fontMeta.color } : {}),
+                    ...(bgHex ? { BackgroundColor: bgHex } : {}),
+                    ...(align ? { HorizontalAlign: align } : {})
                 });
             }
         }
@@ -12488,7 +13007,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
     private buildStylesXml(
         numFmts: Array<{ Id: number; FormatCode: string }>,
-        cellXfs: Array<{ NumFmtId: number; FontId: number }>
+        cellXfs: Array<{
+            NumFmtId: number;
+            FontId: number;
+            FillId: number;
+            HorizontalAlign?: 'left' | 'center' | 'right';
+        }>,
+        fonts: Array<{ Bold: boolean; Italic: boolean; ColorArgb?: string }>,
+        fillFgs: string[]
     ): string {
         const numFmtsXml =
             numFmts.length > 0
@@ -12496,20 +13022,42 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                       .map((nf) => `<numFmt numFmtId="${nf.Id}" formatCode="${this.escapeXml(nf.FormatCode)}"/>`)
                       .join('')}</numFmts>`
                 : '';
-        const xfsXml = cellXfs
+        const fontsXml = fonts
             .map(
-                (xf) =>
-                    `<xf numFmtId="${xf.NumFmtId}" fontId="${xf.FontId}" fillId="0" borderId="0" xfId="0"${
-                        xf.NumFmtId > 0 ? ' applyNumberFormat="1"' : ''
-                    }${xf.FontId > 0 ? ' applyFont="1"' : ''}/>`
+                (f) =>
+                    `<font>${f.Bold ? '<b/>' : ''}${f.Italic ? '<i/>' : ''}<sz val="11"/>${
+                        f.ColorArgb ? `<color rgb="${this.escapeXml(f.ColorArgb)}"/>` : ''
+                    }<name val="Calibri"/></font>`
             )
+            .join('');
+        const fillsXml = [
+            '<fill><patternFill patternType="none"/></fill>',
+            '<fill><patternFill patternType="gray125"/></fill>',
+            ...fillFgs.map(
+                (argb) =>
+                    `<fill><patternFill patternType="solid"><fgColor rgb="${this.escapeXml(argb)}"/></patternFill></fill>`
+            )
+        ].join('');
+        const xfsXml = cellXfs
+            .map((xf) => {
+                const attrs =
+                    `numFmtId="${xf.NumFmtId}" fontId="${xf.FontId}" fillId="${xf.FillId}" borderId="0" xfId="0"` +
+                    `${xf.NumFmtId > 0 ? ' applyNumberFormat="1"' : ''}` +
+                    `${xf.FontId > 0 ? ' applyFont="1"' : ''}` +
+                    `${xf.FillId > 1 ? ' applyFill="1"' : ''}` +
+                    `${xf.HorizontalAlign ? ' applyAlignment="1"' : ''}`;
+                if (xf.HorizontalAlign) {
+                    return `<xf ${attrs}><alignment horizontal="${xf.HorizontalAlign}"/></xf>`;
+                }
+                return `<xf ${attrs}/>`;
+            })
             .join('');
         return [
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
             '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
             numFmtsXml,
-            '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>',
-            '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>',
+            `<fonts count="${fonts.length}">${fontsXml}</fonts>`,
+            `<fills count="${2 + fillFgs.length}">${fillsXml}</fills>`,
             '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>',
             '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
             `<cellXfs count="${cellXfs.length}">${xfsXml}</cellXfs>`,
@@ -13291,8 +13839,22 @@ function compileFormulaAstCached(exprBody: string): FormulaAstNode {
     return ast;
 }
 
+interface ScannedFormulaToken {
+    token: FormulaToken;
+    start: number;
+    end: number;
+}
+
 function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
-    const tokens: FormulaToken[] = [];
+    const scanned = scanFormulaTokens(expr);
+    if (!Array.isArray(scanned)) {
+        return scanned;
+    }
+    return scanned.map((entry) => entry.token);
+}
+
+function scanFormulaTokens(expr: string): ScannedFormulaToken[] | { error: string } {
+    const tokens: ScannedFormulaToken[] = [];
     let i = 0;
     const len = expr.length;
 
@@ -13302,6 +13864,7 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
             i++;
             continue;
         }
+        const tokenStart = i;
 
         // String literal with doubled "" escapes
         if (ch === '"') {
@@ -13324,7 +13887,7 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
             if (!closed) {
                 return { error: '#VALUE!' };
             }
-            tokens.push({ type: 'String', value: buf });
+            tokens.push({ token: { type: 'String', value: buf }, start: tokenStart, end: i });
             continue;
         }
 
@@ -13350,7 +13913,7 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
                 return { error: '#VALUE!' };
             }
             i++; // consume '!'
-            tokens.push({ type: 'SheetPrefix', sheetName: sheetBuf });
+            tokens.push({ token: { type: 'SheetPrefix', sheetName: sheetBuf }, start: tokenStart, end: i });
             continue;
         }
 
@@ -13359,8 +13922,8 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
             const rest = expr.slice(i);
             const errMatch = /^#(REF!|DIV\/0!|VALUE!|NAME\?|N\/A|NUM!|NULL!|CYCLE!|SPILL!|CALC!|MJ_ACCESS_DENIED!|MJ_PENDING!)/i.exec(rest);
             if (errMatch) {
-                tokens.push({ type: 'Error', value: `#${errMatch[1].toUpperCase()}` });
                 i += errMatch[0].length;
+                tokens.push({ token: { type: 'Error', value: `#${errMatch[1].toUpperCase()}` }, start: tokenStart, end: i });
                 continue;
             }
             return { error: '#VALUE!' };
@@ -13370,8 +13933,8 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
         if ((ch >= '0' && ch <= '9') || (ch === '.' && i + 1 < len && expr[i + 1] >= '0' && expr[i + 1] <= '9')) {
             const numMatch = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(expr.slice(i));
             if (numMatch) {
-                tokens.push({ type: 'Number', value: Number(numMatch[0]) });
                 i += numMatch[0].length;
+                tokens.push({ token: { type: 'Number', value: Number(numMatch[0]) }, start: tokenStart, end: i });
                 continue;
             }
         }
@@ -13379,55 +13942,55 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
         // Two-character comparison operators
         const twoChar = expr.slice(i, i + 2);
         if (twoChar === '<>' || twoChar === '<=' || twoChar === '>=') {
-            tokens.push({ type: 'Op', value: twoChar });
             i += 2;
+            tokens.push({ token: { type: 'Op', value: twoChar }, start: tokenStart, end: i });
             continue;
         }
 
         // Single-character operators and punctuation
         if (ch === '=' || ch === '<' || ch === '>' || ch === '&' || ch === '+' || ch === '-' || ch === '*' || ch === '/' || ch === '^') {
-            tokens.push({ type: 'Op', value: ch });
             i++;
+            tokens.push({ token: { type: 'Op', value: ch }, start: tokenStart, end: i });
             continue;
         }
         if (ch === '%') {
-            tokens.push({ type: 'Percent' });
             i++;
+            tokens.push({ token: { type: 'Percent' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === ':') {
-            tokens.push({ type: 'Colon' });
             i++;
+            tokens.push({ token: { type: 'Colon' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === ',') {
-            tokens.push({ type: 'Comma' });
             i++;
+            tokens.push({ token: { type: 'Comma' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === '(') {
-            tokens.push({ type: 'LParen' });
             i++;
+            tokens.push({ token: { type: 'LParen' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === ')') {
-            tokens.push({ type: 'RParen' });
             i++;
+            tokens.push({ token: { type: 'RParen' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === '{') {
-            tokens.push({ type: 'LBrace' });
             i++;
+            tokens.push({ token: { type: 'LBrace' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === '}') {
-            tokens.push({ type: 'RBrace' });
             i++;
+            tokens.push({ token: { type: 'RBrace' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === ';') {
-            tokens.push({ type: 'Semicolon' });
             i++;
+            tokens.push({ token: { type: 'Semicolon' }, start: tokenStart, end: i });
             continue;
         }
 
@@ -13439,9 +14002,9 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
                 i += rawIdent.length;
                 if (expr[i] === '!') {
                     i++; // consume '!'
-                    tokens.push({ type: 'SheetPrefix', sheetName: rawIdent });
+                    tokens.push({ token: { type: 'SheetPrefix', sheetName: rawIdent }, start: tokenStart, end: i });
                 } else {
-                    tokens.push({ type: 'Ident', value: rawIdent });
+                    tokens.push({ token: { type: 'Ident', value: rawIdent }, start: tokenStart, end: i });
                 }
                 continue;
             }
@@ -14517,36 +15080,97 @@ function matchExcelWildcard(pattern: string, candidate: string): boolean {
     return pi === tokens.length;
 }
 
-function shiftSharedFormulaRelativeRefs(formulaBody: string, dRow: number, dCol: number): string {
-    if (dRow === 0 && dCol === 0) return formulaBody;
-    const strLiterals: string[] = [];
-    let masked = formulaBody.replace(/"(?:""|[^"])*"/g, (m) => {
-        strLiterals.push(m);
-        return `__SF_STR_${strLiterals.length - 1}__`;
-    });
-    const sheetPrefixes: string[] = [];
-    masked = masked.replace(/(?:'(?:''|[^'])*'|[A-Za-z_][A-Za-z0-9_.]*)!/g, (m) => {
-        sheetPrefixes.push(m);
-        return `__SF_SH_${sheetPrefixes.length - 1}__!`;
-    });
+function parseWholeColumnToken(raw: string): { abs: boolean; col: number } | null {
+    const match = /^(\$?)([A-Za-z]{1,3})$/.exec(raw);
+    if (!match) return null;
+    const col = ColumnLetterToIndex(match[2]);
+    if (col < 1 || col > EXCEL_MAX_COLS) return null;
+    return { abs: match[1] === '$', col };
+}
 
-    const shifted = masked.replace(
-        /(?<![A-Za-z0-9_.])(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*)(?![A-Za-z0-9_.(\[])/g,
-        (_full, absC: string, colLet: string, absR: string, rowStr: string) => {
-            const origRow = parseInt(rowStr, 10);
-            const origCol = ColumnLetterToIndex(colLet);
-            const nextRow = absR === '$' ? origRow : origRow + dRow;
-            const nextCol = absC === '$' ? origCol : origCol + dCol;
-            if (nextRow < 1 || nextCol < 1) return '#REF!';
-            return FormatCellAddress(nextRow, nextCol, absR === '$', absC === '$');
+function parseWholeRowToken(raw: string): { abs: boolean; row: number } | null {
+    const match = /^(\$?)([1-9][0-9]*)$/.exec(raw);
+    if (!match) return null;
+    const row = parseInt(match[2], 10);
+    if (!Number.isFinite(row) || row < 1 || row > EXCEL_MAX_ROWS) return null;
+    return { abs: match[1] === '$', row };
+}
+
+function shiftFormulaBodyReferences(formulaBody: string, dRow: number, dCol: number): string {
+    if (!formulaBody || (dRow === 0 && dCol === 0)) return formulaBody;
+    const scanned = scanFormulaTokens(formulaBody);
+    if (!Array.isArray(scanned)) return formulaBody;
+
+    const edits: Array<{ start: number; end: number; text: string }> = [];
+    for (let idx = 0; idx < scanned.length; idx++) {
+        const entry = scanned[idx];
+        const tok = entry.token;
+        const prev = idx > 0 ? scanned[idx - 1].token : null;
+        const next = idx + 1 < scanned.length ? scanned[idx + 1].token : null;
+        const colonSiblingIdx = next?.type === 'Colon' ? idx + 2 : prev?.type === 'Colon' ? idx - 2 : -1;
+        const colonSiblingRaw =
+            colonSiblingIdx >= 0 && colonSiblingIdx < scanned.length
+                ? formulaBody.slice(scanned[colonSiblingIdx].start, scanned[colonSiblingIdx].end)
+                : null;
+
+        if (tok.type === 'Ident') {
+            if (next?.type === 'LParen') {
+                continue; // Function identifier (e.g. LOG10(, ATAN2()
+            }
+            const parsed = ParseCellAddress(tok.value);
+            if (parsed) {
+                const nextRow = parsed.absRow ? parsed.row : parsed.row + dRow;
+                const nextCol = parsed.absCol ? parsed.col : parsed.col + dCol;
+                const text =
+                    nextRow < 1 || nextRow > EXCEL_MAX_ROWS || nextCol < 1 || nextCol > EXCEL_MAX_COLS
+                        ? '#REF!'
+                        : FormatCellAddress(nextRow, nextCol, parsed.absRow, parsed.absCol);
+                edits.push({ start: entry.start, end: entry.end, text });
+                continue;
+            }
+            if (colonSiblingRaw !== null) {
+                const colSpec = parseWholeColumnToken(tok.value);
+                if (colSpec && parseWholeColumnToken(colonSiblingRaw)) {
+                    const nextCol = colSpec.abs ? colSpec.col : colSpec.col + dCol;
+                    const text =
+                        nextCol < 1 || nextCol > EXCEL_MAX_COLS
+                            ? '#REF!'
+                            : `${colSpec.abs ? '$' : ''}${ColumnIndexToLetter(nextCol)}`;
+                    edits.push({ start: entry.start, end: entry.end, text });
+                    continue;
+                }
+                const rowSpec = parseWholeRowToken(tok.value);
+                if (rowSpec && parseWholeRowToken(colonSiblingRaw)) {
+                    const nextRow = rowSpec.abs ? rowSpec.row : rowSpec.row + dRow;
+                    const text =
+                        nextRow < 1 || nextRow > EXCEL_MAX_ROWS ? '#REF!' : `${rowSpec.abs ? '$' : ''}${nextRow}`;
+                    edits.push({ start: entry.start, end: entry.end, text });
+                }
+            }
+        } else if (tok.type === 'Number' && colonSiblingRaw !== null) {
+            const rawSlice = formulaBody.slice(entry.start, entry.end);
+            const rowSpec = parseWholeRowToken(rawSlice);
+            if (rowSpec && parseWholeRowToken(colonSiblingRaw)) {
+                const nextRow = rowSpec.abs ? rowSpec.row : rowSpec.row + dRow;
+                const text = nextRow < 1 || nextRow > EXCEL_MAX_ROWS ? '#REF!' : String(nextRow);
+                edits.push({ start: entry.start, end: entry.end, text });
+            }
         }
-    );
+    }
 
-    const withSheets = shifted.replace(
-        /__SF_SH_(\d+)__!/g,
-        (_m, idx: string) => sheetPrefixes[parseInt(idx, 10)] ?? ''
-    );
-    return withSheets.replace(/__SF_STR_(\d+)__/g, (_m, idx: string) => strLiterals[parseInt(idx, 10)] ?? '');
+    if (edits.length === 0) return formulaBody;
+    const parts: string[] = [];
+    let cursor = 0;
+    for (const edit of edits) {
+        parts.push(formulaBody.slice(cursor, edit.start), edit.text);
+        cursor = edit.end;
+    }
+    parts.push(formulaBody.slice(cursor));
+    return parts.join('');
+}
+
+function shiftSharedFormulaRelativeRefs(formulaBody: string, dRow: number, dCol: number): string {
+    return shiftFormulaBodyReferences(formulaBody, dRow, dCol);
 }
 
 function shiftA1RangeRows(
@@ -14759,7 +15383,49 @@ export function LoadSpreadsheetEngine(): void {
     );
 }
 
-function parseChartNumericValue(raw: unknown): number | null {
+function cssColorToOoxmlArgb(color: string | undefined): string | undefined {
+    if (!color) return undefined;
+    const trimmed = color.trim();
+    if (!trimmed) return undefined;
+    const hex3 = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(trimmed);
+    if (hex3) {
+        return `FF${hex3[1]}${hex3[1]}${hex3[2]}${hex3[2]}${hex3[3]}${hex3[3]}`.toUpperCase();
+    }
+    const hex6 = /^#([0-9a-fA-F]{6})$/.exec(trimmed);
+    if (hex6) {
+        return `FF${hex6[1]}`.toUpperCase();
+    }
+    const hex8 = /^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})$/.exec(trimmed);
+    if (hex8) {
+        return `${hex8[2]}${hex8[1]}`.toUpperCase();
+    }
+    const rgbMatch = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*([0-9]*\.?[0-9]+))?\s*\)$/i.exec(trimmed);
+    if (rgbMatch) {
+        const toHex = (n: number): string => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+        const r = toHex(Number(rgbMatch[1]));
+        const g = toHex(Number(rgbMatch[2]));
+        const b = toHex(Number(rgbMatch[3]));
+        const a = rgbMatch[4] !== undefined ? toHex(Number(rgbMatch[4]) * 255) : 'FF';
+        return `${a}${r}${g}${b}`.toUpperCase();
+    }
+    return undefined;
+}
+
+function ooxmlRgbToCssHex(rgb: string | null | undefined): string | undefined {
+    if (!rgb) return undefined;
+    const clean = rgb.trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{8}$/.test(clean)) {
+        const alpha = clean.slice(0, 2).toUpperCase();
+        const hex6 = clean.slice(2).toLowerCase();
+        return alpha === 'FF' ? `#${hex6}` : `#${hex6}${alpha.toLowerCase()}`;
+    }
+    if (/^[0-9a-fA-F]{6}$/.test(clean)) {
+        return `#${clean.toLowerCase()}`;
+    }
+    return undefined;
+}
+
+function parseChartNumericValue(raw: SpreadsheetCellValue | undefined): number | null {
     if (typeof raw === 'number') {
         return Number.isFinite(raw) ? raw : null;
     }

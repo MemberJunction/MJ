@@ -15,7 +15,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ArtifactID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "UUID of the MJ: Artifacts record to refresh and snapshot",
@@ -23,6 +23,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000002"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.927Z",
+            "checksum": "d441ef0a957355e197a372736648ddd86581a6f8a240f9024ba4645c4a6baf35"
           }
         },
         {
@@ -37,6 +41,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000003"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.950Z",
+            "checksum": "29336dd883789a0cad9853b81c2a45bcc3e867dc3ff6bfe4aeb575a2cf0d70c5"
           }
         },
         {
@@ -51,6 +59,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000004"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.975Z",
+            "checksum": "b91bbd62e378da345bb55989b724ea2ee4ab202f47dd41d64b190ba1376d4c05"
           }
         },
         {
@@ -65,6 +77,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000005"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:13.998Z",
+            "checksum": "ff49de759a1cba8dd4996a5e7c3221806f00006bc2c4a2eb1fdeec44700dff2b"
           }
         },
         {
@@ -79,6 +95,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000006"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.031Z",
+            "checksum": "c21533320a613c35adf4e270abed1c61d17bfd35e966921358523d3955bb01f5"
           }
         },
         {
@@ -93,6 +113,46 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000007"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.059Z",
+            "checksum": "a0ae5902ace07b30d9ccda6de36a79b562483c3341cef03ea71834c334e2a2a1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousVersionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the previous artifact version before refresh",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "19136719-6D85-4372-9DB4-421B298A0367"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.085Z",
+            "checksum": "adbc78bb388ddf5944e1e182b5046ae34a2901f4ac8d871278e85034264dc540"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousVersionNumber",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version number before refresh",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FA7F3B42-A61D-4EC0-9AFA-0504F62894F1"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.113Z",
+            "checksum": "feba0b9810c1b71a735e3a98132dc82024380f009e4ea48bfca1b12eb1553bd9"
           }
         },
         {
@@ -107,6 +167,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000008"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.140Z",
+            "checksum": "f612d587236dac87d3b9dbb53d770bc646805559d754f8505c3eafbbacabdfc4"
           }
         },
         {
@@ -121,6 +185,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000009"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.165Z",
+            "checksum": "33d199a6c00fd9e0b4cb216a6210d2856ac3a33c68159094af8ed39d708f3c86"
           }
         },
         {
@@ -135,6 +203,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-10000000000A"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.191Z",
+            "checksum": "5e80a28c33005cc6168d47b504484fb4f8e80a34c8c2fba7dfc08f6dfe5223ed"
           }
         },
         {
@@ -149,6 +221,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-10000000000B"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.216Z",
+            "checksum": "94ec89b0c9cf8d969d1bb8af268c2d83d88c601592a612b836a54af55ee7e84d"
           }
         }
       ],
@@ -162,6 +238,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000010"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.236Z",
+            "checksum": "1b3ae8ef55e8a700c13ea9eefbeae17e2f3690bc91609bb27ea6b4d55d2c5514"
           }
         },
         {
@@ -173,6 +253,10 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000011"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.251Z",
+            "checksum": "065e286e80aae48d9cf760fca72c92aae703484f927704d8e9abea035a24e798"
           }
         },
         {
@@ -184,12 +268,110 @@
           },
           "primaryKey": {
             "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000012"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.266Z",
+            "checksum": "c2e7b4449470000759f96bd7a9035bd933745deb56753adf2d2a6e93bc7140e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONTEXT_USER",
+            "Description": "ContextUser is required to refresh an artifact",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "2BAD400E-5EB3-4515-A164-9130BF95E6D5"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.281Z",
+            "checksum": "948472e549cba4afdad04305eb6a1b9db8d1fdd620e194f9b32f058c1915c64e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ARTIFACT_ID",
+            "Description": "ArtifactID parameter is required",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "CED00463-C096-4EBF-AF61-FA81148AD481"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.295Z",
+            "checksum": "4e1900d8d5aa76083edf9bd9fbe5d2c037ff42e4ea42f4d1b15396b56aed2ed7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ARTIFACT_NOT_FOUND",
+            "Description": "Target artifact record was not found",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "55176662-7241-4EEB-9505-E8812C47C932"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.311Z",
+            "checksum": "30ce1a0873c9dc50e5dab2883a38eafc2640f40e46ccb537ef691a33dcf8a3db"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VERSION_NOT_FOUND",
+            "Description": "No artifact versions exist for the target artifact",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "422D0C07-8FBE-49FC-91B5-BE53D5DB980D"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.327Z",
+            "checksum": "843baf0f514f4446a667b605db179ab7bff5a47b1724f144d3792febf3bdc9af"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SAVE_VERSION_FAILED",
+            "Description": "Failed to save the refreshed artifact version record",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "0512A291-B1EF-4F62-A7F9-B32E24AE9757"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.343Z",
+            "checksum": "59e502f0bdff8aefbabd40e74837a8761157072197e7e09b7038181306f243af"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "Description": "Unexpected error while refreshing and snapshotting the artifact",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "89A36105-E241-4239-8C0B-A647FB38464E"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:14.359Z",
+            "checksum": "440b74670bf7c300587337bd0aad934e68167b1797befce9f217ee782cef0b7a"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "A4D18C20-5B3E-4C1A-9E8F-100000000001"
+    },
+    "sync": {
+      "lastModified": "2026-11-15T14:43:13.908Z",
+      "checksum": "71753ff202f22889e017af27d08cf2fbdb1c58633ba39fee4bec9f2acad8af89"
     }
   }
 ]
