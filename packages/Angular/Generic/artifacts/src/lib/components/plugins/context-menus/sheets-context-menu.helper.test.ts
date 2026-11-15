@@ -581,6 +581,7 @@ describe('BuildSheetsContextMenu', () => {
           VisibleCols: 3,
           VisibleColsInRange: 3,
           CurrentFrozenColumns: 0,
+          CurrentFormat: 'general',
           HasAdjacentHiddenCols: false,
           ProtectedReason: null,
           RangeThreadCount: 0,
