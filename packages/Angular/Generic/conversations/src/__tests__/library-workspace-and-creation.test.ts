@@ -659,6 +659,7 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       NavigatorSection: 'all',
       ListStyle: 'cards',
       LeftRailCollapsed: false,
+      PreferredItemViewMode: 'split',
       SelectedCollectionId: null,
       SelectedDriveId: null,
       DriveFolderPrefix: '',
@@ -784,22 +785,36 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(component.SurfaceMode).toBe('hub');
     expect(component.HubTab).toBe('overview');
 
-    // Clicking a card in Hub opens Full-Canvas Studio
+    // Clicking an item defaults to Split View while remembering preference
     component.OpenArtifactStudio('item-doc-1');
-    expect(component.IsFullCanvasOpen).toBe(true);
-    expect(component.FullCanvasOriginMode).toBe('hub');
+    expect(component.IsFullCanvasOpen).toBe(false);
+    expect(component.SurfaceMode).toBe('navigator');
+    expect(component.UnifiedLayout).toBe('split');
     expect(component.ActiveItem?.Name).toBe('Product Roadmap 2026');
 
-    // Clicking "Split Navigator" docks into Power Navigator alongside the left tree & item list
+    // Closing Split Studio clears ActiveArtifactId and returns cleanly to Grid/List browse layout
+    component.CloseSplitStudio();
+    expect(component.ActiveArtifactId).toBeNull();
+    expect(component.SurfaceMode).toBe('hub');
+    expect(component.UnifiedLayout).toBe('grid');
+
+    // Explicit Full-Canvas open from Hub works and remembers Full-Canvas preference on maximize
+    component.OpenArtifactStudio('item-doc-1', { fullCanvas: true });
+    expect(component.IsFullCanvasOpen).toBe(true);
+    expect(component.FullCanvasOriginMode).toBe('hub');
+
+    // Clicking "Split View" docks into Split beside the item list
     component.SwitchFullCanvasToSplitNavigator();
     expect(component.IsFullCanvasOpen).toBe(false);
     expect(component.SurfaceMode).toBe('navigator');
     expect(component.ActiveArtifactId).toBe('item-doc-1');
+    expect(component.PreferredItemViewMode).toBe('split');
 
-    // Maximizing from Split Navigator and returning restores Split Navigator
+    // Maximizing from Split and returning restores Split View (and records full preference)
     component.ToggleStudioMaximize();
     expect(component.IsFullCanvasOpen).toBe(true);
     expect(component.FullCanvasOriginMode).toBe('navigator');
+    expect(component.PreferredItemViewMode).toBe('full');
     component.ExitFullCanvasToOrigin();
     expect(component.IsFullCanvasOpen).toBe(false);
     expect(component.SurfaceMode).toBe('navigator');
@@ -1858,6 +1873,54 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(component.IsLoadingMoreArtifacts).toBe(false);
   });
 
+  it('preserves collection context across Grid, List, and Split layouts and clears ActiveArtifactId when leaving Split', () => {
+    const { component } = buildWorkspaceComponent();
+    component.IsLoading = false;
+
+    component.OpenCollectionById('col-1');
+    expect(component.UnifiedScope).toBe('collection');
+    expect(component.SelectedCollectionId).toBe('col-1');
+    expect(component.FilteredItems.map((i) => i.Id)).toEqual(['item-doc-1']);
+
+    // Switch to Split layout: stays inside col-1 and opens first item in Split pane
+    component.SetUnifiedLayout('split');
+    expect(component.UnifiedLayout).toBe('split');
+    expect(component.UnifiedScope).toBe('collection');
+    expect(component.SelectedCollectionId).toBe('col-1');
+    expect(component.ActiveArtifactId).toBe('item-doc-1');
+    expect(component.IsFullCanvasOpen).toBe(false);
+
+    // Switch to Grid or List layout: clears ActiveArtifactId so item grid/list stays visible (never bounces to full canvas)
+    component.SetUnifiedLayout('grid');
+    expect(component.UnifiedLayout).toBe('grid');
+    expect(component.UnifiedScope).toBe('collection');
+    expect(component.SelectedCollectionId).toBe('col-1');
+    expect(component.ActiveArtifactId).toBeNull();
+    expect(component.IsFullCanvasOpen).toBe(false);
+    expect(component.FilteredItems.map((i) => i.Id)).toEqual(['item-doc-1']);
+
+    // Simulating route param echo after switching to hub/grid keeps item grid visible
+    component.ApplyExternalRouteState({
+      mode: 'hub',
+      collectionId: 'col-1',
+      section: 'collection',
+      artifactId: null,
+    });
+    expect(component.UnifiedScope).toBe('collection');
+    expect(component.SelectedCollectionId).toBe('col-1');
+    expect(component.IsFullCanvasOpen).toBe(false);
+
+    component.SetUnifiedLayout('split');
+    expect(component.ActiveArtifactId).toBe('item-doc-1');
+
+    component.SetUnifiedLayout('list');
+    expect(component.UnifiedLayout).toBe('list');
+    expect(component.UnifiedScope).toBe('collection');
+    expect(component.SelectedCollectionId).toBe('col-1');
+    expect(component.ActiveArtifactId).toBeNull();
+    expect(component.IsFullCanvasOpen).toBe(false);
+  });
+
   it('uses 100% --mj-* semantic CSS design tokens with zero hardcoded hex or rgb colors', () => {
     const filesToCheck = [
       resolve(__dirname, '../lib/components/library/library-workspace.component.css'),
@@ -1869,5 +1932,36 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       expect(text).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
       expect(text).not.toMatch(/\brgba?\s*\(/);
     }
+  });
+
+  it('updates live item card preview snapshot & thumbnail when OnViewerVersionSaved fires and unifies root Library without 8-item cap', () => {
+    const { component } = buildWorkspaceComponent();
+    expect(component.UnifiedScope).toBe('home');
+    expect(component.LibraryBreadcrumbs.map((b) => b.Label)).toEqual(['Library']);
+    expect(component.ContinueWorkingItems).toHaveLength(component.FilteredItems.length);
+
+    component.OnViewerVersionSaved({
+      ArtifactID: 'item-doc-1',
+      VersionID: 'ver-doc-99',
+      VersionNumber: 9,
+      PreviewSnapshot: {
+        Kind: 'doc',
+        Heading: 'Updated Plan',
+        Excerpt: 'Live thumbnail refreshed from save event',
+      },
+      ThumbnailDataUrl: 'data:image/svg+xml;base64,dGVzdA==',
+      UpdatedAt: new Date('2026-11-13T16:00:00.000Z'),
+    });
+
+    const updated = component.AllItems.find((i) => i.Id === 'item-doc-1');
+    expect(updated?.LatestVersionId).toBe('ver-doc-99');
+    expect(updated?.LatestVersionNumber).toBe(9);
+    expect(updated?.VersionCount).toBe(9);
+    expect(updated?.PreviewSnapshot).toEqual({
+      Kind: 'doc',
+      Heading: 'Updated Plan',
+      Excerpt: 'Live thumbnail refreshed from save event',
+    });
+    expect(updated?.ThumbnailDataUrl).toBe('data:image/svg+xml;base64,dGVzdA==');
   });
 });
