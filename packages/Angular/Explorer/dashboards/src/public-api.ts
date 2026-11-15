@@ -274,3 +274,6 @@ export * from './ChiefOfStaff/chief-of-staff-live-refresh';
 
 // Health & Telemetry Observatory
 export * from './HealthObservatory';
+
+// Live-Sheet Client Tool Helper
+export * from './shared/live-sheet-client-tool.helper';

@@ -1,8 +1,9 @@
-import { Component, EventEmitter, Input, Type } from '@angular/core';
+import { Component, ElementRef, EventEmitter, inject, Input, Type } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
+import { CaptureRenderedElementThumbnail } from '../utils/artifact-dom-capture';
 import type { PdfOrientation } from '@memberjunction/ng-react';
 
 /**
@@ -340,6 +341,35 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    * @returns A DataSnapshot describing the current state, or null if no data is available.
    */
   public abstract GetCurrentStateSnapshot(): DataSnapshot | null;
+
+  protected readonly captureHostElementRef: ElementRef<HTMLElement> | null = (() => {
+    try {
+      return inject(ElementRef, { optional: true }) as ElementRef<HTMLElement> | null;
+    } catch {
+      return null;
+    }
+  })();
+
+  /**
+   * Captures a rendered visual thumbnail (`data:image/webp|jpeg|png|svg+xml;base64,...`) of this
+   * plugin's primary display surface, masking live data blocks when requested by the Artifact Type policy.
+   */
+  public async CaptureRenderedThumbnail(options?: { maskLiveDataBlocks?: boolean }): Promise<string | null> {
+    const target = this.resolveCaptureRootElement();
+    if (!target) {
+      return null;
+    }
+    return CaptureRenderedElementThumbnail(target, {
+      MaskLiveDataBlocks: options?.maskLiveDataBlocks !== false,
+    });
+  }
+
+  /**
+   * Returns the DOM element representing the visual canvas/stage to screenshot (excluding viewer chrome).
+   */
+  protected resolveCaptureRootElement(): HTMLElement | null {
+    return this.captureHostElementRef?.nativeElement ?? null;
+  }
 
   /**
    * Get the raw text content from the artifact version.

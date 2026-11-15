@@ -1,16 +1,20 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Renderer2, Type, inject } from '@angular/core';
-import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo } from '@memberjunction/core';
-import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { Component, ChangeDetectionStrategy, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, NgZone, Renderer2, Type, inject } from '@angular/core';
+import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo, type UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
   ArtifactMetadataEngine,
+  BuildArtifactVersionConfigurationWithPreview,
   DocumentLiveBlockEngine,
   ArtifactPermissionEngine,
   FilterReadableAnchoredConversations,
+  SpreadsheetEngine,
   UserInfoEngine,
+  type WorksheetSpec,
   type DocumentBlockColumn,
   type DocumentBlockSpec,
   type DocumentBlockExecutionResult,
   type DocumentBlockKind,
+  type DocumentLockedRange,
   type MJArtifactEntity,
   type MJArtifactPermissionEntity,
   type MJArtifactVersionEntity,
@@ -21,6 +25,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subscription } from 'rxjs';
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { DocsVersionDiffComponent } from '../version-diff/docs-version-diff.component';
 import { EscapeHtml } from '../previews/office-preview.logic';
 import { CreateMarkdownSnapshot } from '../../snapshot-helpers';
@@ -42,10 +47,30 @@ import {
   type DocumentWordDiffResult,
 } from '../../services/document-collaboration.service';
 import { DocumentImportExportService } from '../../services/document-import-export.service';
+import { ARTIFACT_AI_ASSISTANT_ENABLED, RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import { ComputeBoundedSequenceDiff } from '../../utils/line-diff';
+import type { ContextMenuItem, TouchContextMenuTrigger } from '../context-menu/context-menu.types';
+import {
+  ComputeElementContextMenuAnchor,
+  IsKeyboardContextMenuShortcut,
+  IsNativeContextMenuTarget,
+  ShouldBypassCustomContextMenu,
+  TouchContextMenuMonitor,
+} from '../context-menu/context-menu-position.util';
+import {
+  BuildDocsContextMenu,
+  type DocsCalloutType,
+  type DocsContextMenuCommand,
+  type DocsContextMenuSnapshot,
+  type DocsContextTarget,
+  type DocsLiveRecordLinkContext,
+  type DocsTableAlignment,
+} from './context-menus/docs-context-menu.helper';
 
 export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
 export type DocsEditingStyle = 'simple' | 'blocks';
+type DocsBlockRow = DocumentBlockExecutionResult['Rows'][number];
+type DocsBlockCellValue = DocsBlockRow[string];
 
 /** User setting key storing the toolbar actions a user pinned across documents. */
 export const DOCS_TOOLBAR_PINS_SETTING_KEY = 'MJ.Docs.Toolbar.PinnedActions';
@@ -66,7 +91,8 @@ export type DocsToolbarItemKey =
   | 'diff-mode'
   | 'export-docx'
   | 'export-md'
-  | 'copy-md';
+  | 'copy-md'
+  | 'ask-ai';
 
 export const DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS: readonly DocsToolbarItemKey[] = [
   'outline',
@@ -180,8 +206,14 @@ interface DocsInlineToken {
 @Component({
   standalone: false,
   selector: 'mj-markdown-artifact-viewer',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="mj-docs-workspace" [ngClass]="cssClass" data-testid="mj-docs-workspace">
+    <div
+      class="mj-docs-workspace"
+      [ngClass]="cssClass"
+      data-testid="mj-docs-workspace"
+      (keydown)="OnDocsWorkspaceKeydown($event)"
+    >
       <!-- Tier 1: Calm Progressive Disclosure Collaboration & Mode Toolbar -->
       <div class="mj-docs-toolbar" data-testid="mj-docs-toolbar">
         <div class="mj-docs-toolbar__left">
@@ -209,6 +241,33 @@ interface DocsInlineToken {
               </button>
             }
           </div>
+
+          @if (CanUserEdit) {
+            <div class="mj-docs-undo-group" role="group" aria-label="Undo and Redo">
+              <button
+                type="button"
+                class="mj-docs-btn mj-docs-btn--icon-only"
+                [disabled]="!CanUndo"
+                title="Undo (Cmd/Ctrl+Z)"
+                data-testid="docs-undo-btn"
+                (mousedown)="OnToolbarActionMousedown($event)"
+                (click)="UndoDocument()"
+              >
+                <i class="fas fa-rotate-left"></i>
+              </button>
+              <button
+                type="button"
+                class="mj-docs-btn mj-docs-btn--icon-only"
+                [disabled]="!CanRedo"
+                title="Redo (Cmd/Ctrl+Shift+Z)"
+                data-testid="docs-redo-btn"
+                (mousedown)="OnToolbarActionMousedown($event)"
+                (click)="RedoDocument()"
+              >
+                <i class="fas fa-rotate-right"></i>
+              </button>
+            </div>
+          }
 
           <!-- Active Non-Default Mode / Editing Style Chips (revealed only when active & not pinned) -->
           @if (CanUserEdit && (ViewMode === 'suggest' || PendingSuggestionsCount > 0) && !IsToolbarItemShownOnBar('suggest-mode')) {
@@ -289,6 +348,19 @@ interface DocsInlineToken {
         </div>
 
         <div class="mj-docs-toolbar__right">
+          @if (IsAiAssistantEnabled && CanUserEdit && !IsToolbarItemShownOnBar('ask-ai')) {
+            <button
+              type="button"
+              class="mj-docs-btn mj-docs-btn--accent"
+              title="Open slide-in AI Assistant for this document (/ai)"
+              data-testid="docs-ask-ai-quick-btn"
+              (mousedown)="OnToolbarActionMousedown($event)"
+              (click)="OpenAskAiAssistant()"
+            >
+              <i class="fas fa-wand-magic-sparkles"></i>
+              <span>Ask AI</span>
+            </button>
+          }
           <!-- Compact Collaboration Presence Pill -->
           <div
             class="mj-docs-presence-pill"
@@ -314,15 +386,20 @@ interface DocsInlineToken {
                 Retry
               </button>
             }
-            @if (Collaborators.length > 0) {
+            @if (HumanCollaborators.length > 0) {
               <div class="mj-docs-avatar-stack">
-                @for (peer of Collaborators; track peer.ClientID) {
+                @for (peer of HumanCollaborators; track peer.ClientID) {
                   <span class="mj-docs-avatar" [title]="peer.Name + (peer.CanEdit ? ' (Editing)' : ' (Viewing)')">
                     {{ GetInitials(peer.Name) }}
                   </span>
                 }
               </div>
             }
+            <mj-artifact-agent-presence-bar
+              [Collaborators]="Collaborators"
+              ActiveDomain="document"
+              (JumpToAgentLocation)="JumpToAgentDocumentLocation($event)"
+            ></mj-artifact-agent-presence-bar>
           </div>
 
           <!-- Hidden File Input for .md / .docx Import -->
@@ -660,7 +737,9 @@ interface DocsInlineToken {
                     class="mj-docs-outline-item"
                     [class.mj-docs-outline-item--active]="IsOutlineItemActive(item)"
                     [style.padding-left.px]="(item.Level - 1) * 12 + 10"
+                    [attr.data-outline-id]="item.ID"
                     (click)="SelectOutlineItem(item)"
+                    (contextmenu)="OnDocsOutlineContextMenu($event, item)"
                   >
                     @if (item.Kind === 'heading') {
                       <i class="fas fa-hashtag mj-docs-outline-icon"></i>
@@ -796,7 +875,15 @@ interface DocsInlineToken {
                     [attr.data-segment-id]="seg.SegmentID"
                     [hidden]="IsSegmentHiddenByCollapsedHeading(seg)"
                     (focusin)="OnSegmentFocusIn(seg)"
+                    (contextmenu)="OnDocsSegmentContextMenu($event, seg)"
                   >
+                    @if (GetAgentForSegment(seg); as segAgent) {
+                      <mj-artifact-agent-region-indicator
+                        [Agent]="segAgent"
+                        [Compact]="true"
+                        (JumpToAgent)="JumpToAgentDocumentLocation($event)"
+                      ></mj-artifact-agent-region-indicator>
+                    }
                     @if (IsInteractiveCanvasMode && IsSimpleNoteMode) {
                       <button
                         type="button"
@@ -906,9 +993,22 @@ interface DocsInlineToken {
                                 >
                                   H{{ seg.HeadingLevel || 1 }}
                                 </button>
+                                <button
+                                  type="button"
+                                  class="mj-docs-collapse-btn"
+                                  [hidden]="IsSimpleNoteMode && !IsSegmentLocked(seg)"
+                                  [title]="IsSegmentLocked(seg) ? 'Unlock section (currently protected)' : 'Lock section to owner-only'"
+                                  [attr.data-testid]="'toggle-heading-lock-' + seg.SegmentID"
+                                  (click)="ToggleHeadingLock(seg)"
+                                >
+                                  <i
+                                    class="fas"
+                                    [ngClass]="IsSegmentLocked(seg) ? 'fa-lock' : 'fa-lock-open'"
+                                  ></i>
+                                </button>
                                 <div
                                   class="mj-docs-editable-surface mj-docs-editable-heading__text"
-                                  contenteditable="true"
+                                  [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                   role="textbox"
                                   data-placeholder="Heading title (press Enter for paragraph below)…"
                                   [attr.data-testid]="'editable-heading-' + seg.SegmentID"
@@ -918,6 +1018,15 @@ interface DocsInlineToken {
                                   (blur)="CommitEditableHeading(seg, $event)"
                                   (keydown)="OnEditableBlockKeydown(seg, $event)"
                                 ></div>
+                                @if (IsSegmentLocked(seg)) {
+                                  <span
+                                    class="mj-docs-badge"
+                                    title="This section is protected by a document lock"
+                                    [attr.data-testid]="'locked-section-badge-' + seg.SegmentID"
+                                  >
+                                    <i class="fas fa-lock"></i> Locked
+                                  </span>
+                                }
                                 @if (IsHeadingCollapsed(seg)) {
                                   <button
                                     type="button"
@@ -962,11 +1071,13 @@ interface DocsInlineToken {
                                       <tr>
                                         @for (hdr of table.Headers; track $index; let cIdx = $index) {
                                           <th
-                                            contenteditable="true"
+                                            [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                             [attr.data-testid]="'table-header-' + seg.SegmentID + '-' + cIdx"
+                                            [style.text-align]="GetColumnTextAlign(table, cIdx)"
                                             [innerHTML]="RenderInlineEditableHtml(hdr)"
                                             (focus)="OnTableCellFocus(seg, 0, cIdx, true)"
                                             (blur)="UpdateTableHeaderCell(seg, cIdx, $event)"
+                                            (contextmenu)="OnDocsTableCellContextMenu($event, seg, 0, cIdx, true)"
                                           ></th>
                                         }
                                       </tr>
@@ -976,11 +1087,13 @@ interface DocsInlineToken {
                                         <tr>
                                           @for (cell of row; track $index; let cIdx = $index) {
                                             <td
-                                              contenteditable="true"
+                                              [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                               [attr.data-testid]="'table-cell-' + seg.SegmentID + '-' + rIdx + '-' + cIdx"
+                                              [style.text-align]="GetColumnTextAlign(table, cIdx)"
                                               [innerHTML]="RenderInlineEditableHtml(cell)"
                                               (focus)="OnTableCellFocus(seg, rIdx, cIdx, false)"
                                               (blur)="UpdateTableBodyCell(seg, rIdx, cIdx, $event)"
+                                              (contextmenu)="OnDocsTableCellContextMenu($event, seg, rIdx, cIdx, false)"
                                             ></td>
                                           }
                                         </tr>
@@ -1012,7 +1125,7 @@ interface DocsInlineToken {
                                       <span
                                         class="mj-docs-editable-surface mj-docs-editable-list__text"
                                         [class.mj-docs-editable-list__text--checked]="item.Checked"
-                                        contenteditable="true"
+                                        [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                         role="textbox"
                                         data-placeholder="List item (press Enter for next, or Enter when empty to exit)…"
                                         [attr.data-testid]="'list-item-text-' + seg.SegmentID + '-' + item.Index"
@@ -1058,7 +1171,7 @@ interface DocsInlineToken {
                                   </div>
                                   <div
                                     class="mj-docs-editable-surface mj-docs-editable-callout__body"
-                                    contenteditable="true"
+                                    [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                     role="textbox"
                                     data-placeholder="Callout details (press Enter for paragraph below)…"
                                     [attr.data-testid]="'editable-callout-body-' + seg.SegmentID"
@@ -1089,7 +1202,7 @@ interface DocsInlineToken {
                                   </div>
                                   <pre
                                     class="mj-docs-editable-surface mj-docs-editable-code__pre"
-                                    contenteditable="true"
+                                    [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                     role="textbox"
                                     data-placeholder="Code snippet…"
                                     [attr.data-testid]="'editable-code-body-' + seg.SegmentID"
@@ -1103,7 +1216,7 @@ interface DocsInlineToken {
                             @default {
                               <div
                                 class="mj-docs-editable-surface mj-docs-editable-paragraph"
-                                contenteditable="true"
+                                [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                 role="textbox"
                                 aria-multiline="true"
                                 data-placeholder="Type text, '/' for commands, '#' for heading, or '-' for list…"
@@ -1176,6 +1289,20 @@ interface DocsInlineToken {
                                 <span class="mj-docs-badge">
                                   {{ seg.Descriptor.VersionID ? 'Pinned' : 'Latest' }}
                                 </span>
+                              }
+                              @if (GetNewerEmbeddedArtifactVersion(seg.Descriptor); as newerVer) {
+                                <button
+                                  type="button"
+                                  class="mj-docs-btn mj-docs-btn--accent"
+                                  title="Update pinned snapshot to latest workbook version"
+                                  [attr.data-testid]="'update-from-source-workbook-btn-' + seg.Descriptor.BlockID"
+                                  (click)="UpdateEmbeddedArtifactToLatestVersion(seg.Descriptor)"
+                                >
+                                  <i class="fas fa-arrow-up-from-bracket"></i>
+                                  <span>
+                                    Update from Source Workbook (v{{ GetEmbeddedArtifactVersion(seg.Descriptor)?.VersionNumber || 1 }} → v{{ newerVer.VersionNumber }})
+                                  </span>
+                                </button>
                               }
                             </div>
 
@@ -1473,7 +1600,7 @@ interface DocsInlineToken {
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      @for (row of GetPaginatedBlockRows(seg.Descriptor, execResult.Rows); track $index) {
+                                      @for (row of GetPaginatedBlockRows(seg.Descriptor, execResult.Rows); track $index; let rIdx = $index) {
                                         <tr>
                                           @for (col of execResult.Columns; track col.Name) {
                                             <td>
@@ -1491,6 +1618,8 @@ interface DocsInlineToken {
                                                   [attr.data-testid]="
                                                     'record-link-' + seg.Descriptor.BlockID + '-' + col.Name
                                                   "
+                                                  [attr.data-record-col]="col.Name"
+                                                  [attr.data-record-row-idx]="rIdx"
                                                   (click)="OnBlockRecordCellClick(seg.Descriptor, col, row, $event)"
                                                 >
                                                   <i
@@ -1573,7 +1702,12 @@ interface DocsInlineToken {
                       <!-- Pending Suggestion Cards attached to this Segment (Word / Google-Docs Granular Redline) -->
                       @for (sug of GetSuggestionsForBlock(seg.SegmentID); track sug.SuggestionID) {
                         @if (GetSuggestionWordDiff(sug); as wordDiff) {
-                          <div class="mj-docs-suggestion-card" [attr.data-testid]="'suggestion-card-' + sug.SuggestionID">
+                          <div
+                            class="mj-docs-suggestion-card"
+                            [attr.data-testid]="'suggestion-card-' + sug.SuggestionID"
+                            [attr.data-suggestion-id]="sug.SuggestionID"
+                            (contextmenu)="OnDocsSuggestionContextMenu($event, sug)"
+                          >
                             <div class="mj-docs-suggestion-card__header">
                               <span>
                                 <i class="fas fa-code-pull-request"></i>
@@ -1857,7 +1991,6 @@ interface DocsInlineToken {
               </label>
             </div>
             <div class="mj-docs-modal__footer">
-              <button type="button" class="mj-docs-btn" (click)="CancelFreezeBlock()">Cancel</button>
               <button
                 type="button"
                 class="mj-docs-btn mj-docs-btn--primary"
@@ -1867,6 +2000,7 @@ interface DocsInlineToken {
               >
                 <i class="fas fa-snowflake"></i> Confirm Freeze Snapshot
               </button>
+              <button type="button" class="mj-docs-btn" (click)="CancelFreezeBlock()">Cancel</button>
             </div>
           </div>
         </div>
@@ -2144,9 +2278,110 @@ interface DocsInlineToken {
                   <input
                     type="text"
                     [(ngModel)]="NewBlockArtifactTypeName"
-                    placeholder="e.g., Whiteboard"
+                    placeholder="e.g., Spreadsheet or Whiteboard"
                   />
                 </label>
+
+                @if (IsSpreadsheetArtifactPickerSelected) {
+                  <div class="mj-docs-field" data-testid="sheet-embed-guided-picker">
+                    <span>Step 2 · What to Embed from Workbook</span>
+                    <div class="mj-docs-mode-group" role="radiogroup" aria-label="Spreadsheet Embed Mode">
+                      <button
+                        type="button"
+                        class="mj-docs-mode-btn"
+                        [class.mj-docs-mode-btn--active]="NewBlockSheetMode === 'chart'"
+                        data-testid="sheet-embed-mode-chart"
+                        (click)="SetSheetEmbedMode('chart')"
+                      >
+                        <i class="fas fa-chart-column"></i> Chart
+                      </button>
+                      <button
+                        type="button"
+                        class="mj-docs-mode-btn"
+                        [class.mj-docs-mode-btn--active]="NewBlockSheetMode === 'range'"
+                        data-testid="sheet-embed-mode-range"
+                        (click)="SetSheetEmbedMode('range')"
+                      >
+                        <i class="fas fa-table-cells"></i> Cell Range
+                      </button>
+                      <button
+                        type="button"
+                        class="mj-docs-mode-btn"
+                        [class.mj-docs-mode-btn--active]="NewBlockSheetMode === 'full'"
+                        data-testid="sheet-embed-mode-full"
+                        (click)="SetSheetEmbedMode('full')"
+                      >
+                        <i class="fas fa-file-excel"></i> Full Workbook
+                      </button>
+                    </div>
+                  </div>
+
+                  @if (SelectedWorkbookSheets.length > 0 && NewBlockSheetMode !== 'full') {
+                    <label class="mj-docs-field">
+                      <span>Worksheet</span>
+                      <select
+                        [(ngModel)]="NewBlockSheetName"
+                        (ngModelChange)="OnSelectedWorkbookSheetChanged($event)"
+                        data-testid="sheet-embed-worksheet-select"
+                      >
+                        @for (ws of SelectedWorkbookSheets; track ws.SheetID) {
+                          <option [value]="ws.SheetID">{{ ws.Name }}</option>
+                        }
+                      </select>
+                    </label>
+                  }
+
+                  @if (NewBlockSheetMode === 'chart') {
+                    <label class="mj-docs-field">
+                      <span>Chart</span>
+                      @if (SelectedWorkbookSheetCharts.length > 0) {
+                        <select
+                          [(ngModel)]="NewBlockSheetChartID"
+                          data-testid="sheet-embed-chart-select"
+                        >
+                          @for (ch of SelectedWorkbookSheetCharts; track ch.ChartID) {
+                            <option [value]="ch.ChartID">{{ ch.Title || ch.ChartID }} ({{ ch.ChartType }})</option>
+                          }
+                        </select>
+                      } @else {
+                        <input
+                          type="text"
+                          [(ngModel)]="NewBlockSheetChartID"
+                          placeholder="Chart ID (e.g., chart-1)"
+                          data-testid="sheet-embed-chart-input"
+                        />
+                      }
+                    </label>
+                  } @else if (NewBlockSheetMode === 'range') {
+                    <label class="mj-docs-field">
+                      <span>Cell Range (e.g., A1:D8)</span>
+                      <input
+                        type="text"
+                        [(ngModel)]="NewBlockSheetRange"
+                        placeholder="A1:D8"
+                        data-testid="sheet-embed-range-input"
+                      />
+                    </label>
+                  }
+
+                  <div class="mj-docs-field">
+                    <span>Step 3 · Version Sync</span>
+                    <label class="mj-docs-checkbox-row">
+                      <input
+                        type="checkbox"
+                        [(ngModel)]="NewBlockPinToCurrentVersion"
+                        data-testid="sheet-embed-pin-version-checkbox"
+                      />
+                      <span>
+                        Pin to current version
+                        @if (SelectedArtifactLatestVersionNumber > 0) {
+                          (v{{ SelectedArtifactLatestVersionNumber }})
+                        }
+                        instead of tracking latest
+                      </span>
+                    </label>
+                  </div>
+                }
               }
 
               <!-- Block Display Title -->
@@ -2221,7 +2456,6 @@ interface DocsInlineToken {
               </div>
             </div>
             <div class="mj-docs-modal__footer">
-              <button type="button" class="mj-docs-btn" (click)="CancelBlockInsertModal()">Cancel</button>
               <button
                 type="button"
                 class="mj-docs-btn mj-docs-btn--primary"
@@ -2230,6 +2464,7 @@ interface DocsInlineToken {
               >
                 {{ GetInsertConfirmButtonLabel() }}
               </button>
+              <button type="button" class="mj-docs-btn" (click)="CancelBlockInsertModal()">Cancel</button>
             </div>
           </div>
         </div>
@@ -2345,6 +2580,17 @@ interface DocsInlineToken {
           </div>
         </div>
       }
+
+      <mj-context-menu
+        [IsOpen]="ContextMenuOpen"
+        [AnchorX]="ContextMenuX"
+        [AnchorY]="ContextMenuY"
+        [Items]="ContextMenuItems"
+        [AriaLabel]="ContextMenuAriaLabel"
+        [RestoreFocusElement]="ContextMenuRestoreFocusEl"
+        (ItemSelected)="OnDocsContextMenuCommand($event)"
+        (Closed)="CloseDocsContextMenu()"
+      ></mj-context-menu>
     </div>
   `,
   styles: [
@@ -2379,7 +2625,8 @@ interface DocsInlineToken {
       }
 
       .mj-docs-mode-group,
-      .mj-docs-format-group {
+      .mj-docs-format-group,
+      .mj-docs-undo-group {
         display: inline-flex;
         align-items: center;
         gap: 2px;
@@ -2387,6 +2634,15 @@ interface DocsInlineToken {
         background: var(--mj-bg-surface);
         border: 1px solid var(--mj-border-default);
         border-radius: 6px;
+      }
+
+      .mj-docs-btn--icon-only {
+        padding: 5px 8px;
+      }
+
+      .mj-docs-btn:disabled {
+        opacity: 0.42;
+        cursor: not-allowed;
       }
 
       .mj-docs-mode-btn,
@@ -4466,6 +4722,8 @@ export class MarkdownArtifactViewerComponent
   /** @deprecated Use {@link OpenEntityRecord}. */
   @Output() public openEntityRecord = this.OpenEntityRecord;
 
+  public readonly IsAiAssistantEnabled = ARTIFACT_AI_ASSISTANT_ENABLED;
+
   /**
    * Optional WebSocket URL (or base URL) override for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
    * When omitted, `DocumentCollaborationService` mints a single-use ticket via `GraphQLDataProvider`.
@@ -4488,6 +4746,7 @@ export class MarkdownArtifactViewerComponent
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
   private readonly renderer = inject(Renderer2, { optional: true });
+  private readonly ngZone = inject(NgZone, { optional: true });
 
   public MarkdownContent = '';
   private initialLoadedMarkdown = '';
@@ -4554,6 +4813,19 @@ export class MarkdownArtifactViewerComponent
   private draftSegmentCounter = 0;
   private isApplyingBlockTransaction = false;
 
+  // Context Menu State
+  public ContextMenuOpen = false;
+  public ContextMenuX = 0;
+  public ContextMenuY = 0;
+  public ContextMenuItems: ContextMenuItem<DocsContextMenuCommand>[] = [];
+  public ContextMenuAriaLabel = 'Document context menu';
+  public ContextMenuRestoreFocusEl: HTMLElement | null = null;
+  private contextMenuSelectionSnapshot: DocsSelectionSnapshot | null = null;
+  private contextMenuSelectionText = '';
+  private readonly touchMenuMonitor = new TouchContextMenuMonitor({
+    OnLongPress: (trigger) => this.onTouchLongPressContextMenu(trigger),
+  });
+
   // Parsed state
   public DocumentSegments: DocumentRenderSegment[] = [];
   public OutlineItems: DocumentOutlineItem[] = [];
@@ -4566,8 +4838,148 @@ export class MarkdownArtifactViewerComponent
   private permissionUnsub: (() => void) | null = null;
   private sessionInitGeneration = 0;
   private isComponentDestroyed = false;
+  private isCurrentUserArtifactOwner = false;
+  private artifactOwnerUserId: string | null = null;
+  private unlistenTouchPointerListeners: Array<() => void> = [];
   public CollaborationStatus: CollaborationConnectionStatus = 'local';
   public Collaborators: CollaboratorPresence[] = [];
+
+  public get HumanCollaborators(): CollaboratorPresence[] {
+    return this.Collaborators.filter((c) => c.IsAgent !== true);
+  }
+
+  public GetAgentForSegment(seg: DocumentRenderSegment): CollaboratorPresence | null {
+    for (const peer of this.Collaborators) {
+      if (peer.IsAgent !== true || peer.AgentPhase === 'exit') {
+        continue;
+      }
+      const loc = peer.AgentLocation;
+      if (!loc) {
+        if (peer.ActiveBlockID && peer.ActiveBlockID === seg.SegmentID) {
+          return peer;
+        }
+        continue;
+      }
+      if (loc.BlockID && (loc.BlockID === seg.SegmentID || loc.BlockID === seg.Descriptor?.BlockID)) {
+        return peer;
+      }
+      if (
+        loc.SectionHeading &&
+        seg.HeadingText &&
+        seg.HeadingText.trim().toLowerCase() === loc.SectionHeading.trim().toLowerCase()
+      ) {
+        return peer;
+      }
+      if (
+        typeof loc.StartLine === 'number' &&
+        loc.StartLine > 0 &&
+        seg.StartLine <= (loc.EndLine ?? loc.StartLine) &&
+        seg.EndLine >= loc.StartLine
+      ) {
+        return peer;
+      }
+    }
+    return null;
+  }
+
+  public JumpToAgentDocumentLocation(agent: CollaboratorPresence): void {
+    const match = this.DocumentSegments.find((seg) => this.GetAgentForSegment(seg) === agent)
+      ?? this.DocumentSegments.find((seg) => {
+        const loc = agent.AgentLocation;
+        return Boolean(
+          (loc?.BlockID && (loc.BlockID === seg.SegmentID || loc.BlockID === seg.Descriptor?.BlockID)) ||
+          (loc?.SectionHeading &&
+            seg.HeadingText &&
+            seg.HeadingText.trim().toLowerCase() === loc.SectionHeading.trim().toLowerCase()),
+        );
+      });
+    if (match) {
+      this.SelectedAnchorKey = match.SegmentID;
+      this.scrollToSegmentElement(match);
+      this.cdr.markForCheck();
+    }
+  }
+
+  private scrollToSegmentElement(seg: DocumentRenderSegment): void {
+    this.expandCollapsedHeadingsForSegment(seg);
+    const root = this.PrintableCanvas?.nativeElement ?? this.hostElement?.nativeElement ?? null;
+    if (!root) {
+      return;
+    }
+    const selector = `[data-segment-id="${this.escapeCssSelectorValue(seg.SegmentID)}"]`;
+    const tryScroll = (): boolean => {
+      const el = root.querySelector<HTMLElement>(selector);
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return true;
+      }
+      return Boolean(el);
+    };
+    if (!tryScroll() && typeof queueMicrotask === 'function') {
+      queueMicrotask(() => {
+        if (this.isComponentDestroyed) {
+          return;
+        }
+        tryScroll();
+      });
+    }
+  }
+
+  private expandCollapsedHeadingsForSegment(seg: DocumentRenderSegment): void {
+    if (this.collapsedHeadingIds.size === 0) {
+      return;
+    }
+    const targetIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    if (targetIdx <= 0) {
+      return;
+    }
+    const ancestorHeadings: Array<{ id: string; level: number }> = [];
+    for (let i = 0; i < targetIdx; i++) {
+      const candidate = this.DocumentSegments[i];
+      if (candidate.Kind === 'markdown' && candidate.BlockKind === 'heading') {
+        const level = candidate.HeadingLevel ?? 1;
+        while (ancestorHeadings.length > 0 && ancestorHeadings[ancestorHeadings.length - 1].level >= level) {
+          ancestorHeadings.pop();
+        }
+        ancestorHeadings.push({ id: candidate.SegmentID, level });
+      }
+    }
+    const targetLevel =
+      seg.Kind === 'markdown' && seg.BlockKind === 'heading' ? (seg.HeadingLevel ?? 1) : Number.POSITIVE_INFINITY;
+    let expandedAny = false;
+    for (const anc of ancestorHeadings) {
+      if (anc.level < targetLevel && this.collapsedHeadingIds.delete(anc.id)) {
+        expandedAny = true;
+      }
+    }
+    if (expandedAny) {
+      this.persistCollapsedStateToUserSettings();
+      this.cdr.markForCheck();
+    }
+  }
+
+  private escapeCssSelectorValue(value: string): string {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(value);
+    }
+    return value.replace(/["\\]/g, '\\$&');
+  }
+
+  private isSafeLinkUrl(url: string): boolean {
+    const trimmed = url.trim();
+    if (!trimmed) {
+      return false;
+    }
+    if (trimmed.startsWith('#')) {
+      return true;
+    }
+    try {
+      const parsed = new URL(trimmed, 'https://localhost');
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'mailto:';
+    } catch {
+      return false;
+    }
+  }
   public HasEditPermission = false;
   public CanUserShareArtifact = false;
   public CurrentUserEffectiveRoleLabel = 'Viewer';
@@ -4587,6 +4999,7 @@ export class MarkdownArtifactViewerComponent
   private userCollapsedBlockOverrides = new Map<string, boolean>();
   private collapsedHeadingIds = new Set<string>();
   private embeddedArtifactVersions = new Map<string, MJArtifactVersionEntity>();
+  private latestArtifactVersions = new Map<string, MJArtifactVersionEntity>();
   private inFlightEmbeddedVersionKeys = new Set<string>();
   private failedEmbeddedVersionMessages = new Map<string, string>();
   private inlineEditingBlockIds = new Set<string>();
@@ -4612,6 +5025,14 @@ export class MarkdownArtifactViewerComponent
   public NewBlockQueryName = '';
   public NewBlockArtifactID = '';
   public NewBlockArtifactTypeName = 'Whiteboard';
+  public NewBlockSheetMode: 'full' | 'chart' | 'range' = 'full';
+  public NewBlockSheetName = '';
+  public NewBlockSheetChartID = '';
+  public NewBlockSheetRange = 'A1:D8';
+  public NewBlockPinToCurrentVersion = false;
+  public SelectedWorkbookSheets: WorksheetSpec[] = [];
+  public SelectedArtifactLatestVersionID = '';
+  public SelectedArtifactLatestVersionNumber = 0;
   public ShowEntityPickerDropdown = false;
   public EntityPickerHighlightIndex = 0;
   public ShowAdvancedBlockOptions = false;
@@ -4683,6 +5104,64 @@ export class MarkdownArtifactViewerComponent
     return !this.LiveSyncUnavailable && this.hasPermissionToEdit;
   }
 
+  public get CanUndo(): boolean {
+    return this.CanUserEdit && Boolean(this.session?.CanUndo);
+  }
+
+  public get CanRedo(): boolean {
+    return this.CanUserEdit && Boolean(this.session?.CanRedo);
+  }
+
+  public UndoDocument(): void {
+    if (!this.CanUndo || !this.session) {
+      return;
+    }
+    if (this.session.Undo()) {
+      this.cdr.detectChanges();
+    }
+  }
+
+  public RedoDocument(): void {
+    if (!this.CanRedo || !this.session) {
+      return;
+    }
+    if (this.session.Redo()) {
+      this.cdr.detectChanges();
+    }
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  public OnViewerKeydown(event: KeyboardEvent): void {
+    if (!this.CanUserEdit || this.ViewMode === 'preview' || this.isComponentDestroyed) {
+      return;
+    }
+    const isMod = event.metaKey || event.ctrlKey;
+    if (!isMod || event.altKey) {
+      return;
+    }
+    const key = event.key.toLowerCase();
+    const target = event.target as HTMLElement | null;
+    const isModalOrCommentInput =
+      target !== null &&
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'SELECT' ||
+        (target.tagName === 'TEXTAREA' && !target.classList.contains('mj-docs-source-editor')));
+    if (isModalOrCommentInput) {
+      return;
+    }
+    if (key === 'z' && !event.shiftKey) {
+      if (this.CanUndo) {
+        event.preventDefault();
+        this.UndoDocument();
+      }
+    } else if ((key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey && event.ctrlKey)) {
+      if (this.CanRedo) {
+        event.preventDefault();
+        this.RedoDocument();
+      }
+    }
+  }
+
   /**
    * True when the document canvas renders in-place WYSIWYG editable blocks (`Edit` or `Suggest` mode).
    */
@@ -4721,6 +5200,7 @@ export class MarkdownArtifactViewerComponent
 
   public ngOnInit(): void {
     this.initializeDocument();
+    this.attachTouchPointerListenersOutsideZone();
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
@@ -4753,8 +5233,79 @@ export class MarkdownArtifactViewerComponent
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    this.detachTouchPointerListeners();
+    this.touchMenuMonitor.Destroy();
     this.stopMoreMenuDocumentListeners();
     this.destroyCollaborationSession();
+  }
+
+  private attachTouchPointerListenersOutsideZone(): void {
+    this.detachTouchPointerListeners();
+    const targetEl =
+      this.hostElement?.nativeElement?.querySelector<HTMLElement>('[data-testid="mj-docs-workspace"]') ??
+      this.hostElement?.nativeElement;
+    if (!targetEl || typeof targetEl.addEventListener !== 'function') {
+      return;
+    }
+    const register = (): void => {
+      const asPointerEvent = (event: Event): PointerEvent | null => {
+        if (typeof PointerEvent !== 'undefined' && event instanceof PointerEvent) {
+          return event;
+        }
+        return 'pointerId' in event || 'clientX' in event ? (event as PointerEvent) : null;
+      };
+      const onDown = (event: Event): void => {
+        const pe = asPointerEvent(event);
+        if (pe) {
+          this.OnDocsPointerDown(pe);
+        }
+      };
+      const onMove = (event: Event): void => {
+        const pe = asPointerEvent(event);
+        if (pe) {
+          this.OnDocsPointerMove(pe);
+        }
+      };
+      const onUp = (event: Event): void => {
+        const pe = asPointerEvent(event);
+        if (pe) {
+          this.OnDocsPointerUp(pe);
+        }
+      };
+      const onCancel = (event: Event): void => {
+        const pe = asPointerEvent(event);
+        if (pe) {
+          this.OnDocsPointerCancel(pe);
+        }
+      };
+      const onClickCapture = (event: Event): void => {
+        this.OnDocsClickCapture(event);
+      };
+      targetEl.addEventListener('pointerdown', onDown, { passive: true });
+      targetEl.addEventListener('pointermove', onMove, { passive: true });
+      targetEl.addEventListener('pointerup', onUp, { passive: true });
+      targetEl.addEventListener('pointercancel', onCancel, { passive: true });
+      targetEl.addEventListener('click', onClickCapture, { capture: true });
+      this.unlistenTouchPointerListeners = [
+        () => targetEl.removeEventListener('pointerdown', onDown),
+        () => targetEl.removeEventListener('pointermove', onMove),
+        () => targetEl.removeEventListener('pointerup', onUp),
+        () => targetEl.removeEventListener('pointercancel', onCancel),
+        () => targetEl.removeEventListener('click', onClickCapture, { capture: true }),
+      ];
+    };
+    if (this.ngZone) {
+      this.ngZone.runOutsideAngular(register);
+    } else {
+      register();
+    }
+  }
+
+  private detachTouchPointerListeners(): void {
+    for (const unlisten of this.unlistenTouchPointerListeners) {
+      unlisten();
+    }
+    this.unlistenTouchPointerListeners = [];
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
@@ -4827,6 +5378,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public OnSegmentSurfaceFocus(seg: DocumentRenderSegment): void {
+    if (this.lastFocusedSegmentId && this.lastFocusedSegmentId !== seg.SegmentID) {
+      this.session?.StopUndoCapture();
+    }
     this.lastFocusedSegmentId = seg.SegmentID;
     this.SelectedAnchorKey = seg.SegmentID;
     this.lastFocusedListItemIndex = null;
@@ -4835,6 +5389,12 @@ export class MarkdownArtifactViewerComponent
   }
 
   public OnListItemFocus(seg: DocumentRenderSegment, itemIndex: number): void {
+    if (
+      (this.lastFocusedSegmentId && this.lastFocusedSegmentId !== seg.SegmentID) ||
+      (this.lastFocusedListItemIndex !== null && this.lastFocusedListItemIndex !== itemIndex)
+    ) {
+      this.session?.StopUndoCapture();
+    }
     this.lastFocusedSegmentId = seg.SegmentID;
     this.SelectedAnchorKey = seg.SegmentID;
     this.lastFocusedListItemIndex = itemIndex;
@@ -4952,12 +5512,23 @@ export class MarkdownArtifactViewerComponent
   }
 
   public InsertParagraphBelowSegment(seg: DocumentRenderSegment): void {
-    if (!this.CanUserEdit) {
+    if (!this.CanEditSegment(seg)) {
+      if (this.CanUserEdit) {
+        this.StatusBannerMessage = 'This section is protected by an owner lock and cannot be edited.';
+        this.cdr.markForCheck();
+      }
       return;
     }
-    const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    if (this.ViewMode === 'suggest') {
+      const nextMd = seg.RawMarkdown.trim().length > 0 ? `${seg.RawMarkdown}\n\nNew paragraph` : 'New paragraph';
+      this.CreateOrUpdatePendingSuggestion(seg.SegmentID, seg.RawMarkdown, nextMd, 'Insert paragraph below');
+      this.StatusBannerMessage = 'Queued tracked suggestion to insert paragraph below.';
+      this.cdr.markForCheck();
+      return;
+    }
     const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
     this.syncDirtySegmentsFromDomIntoBlocks(blocks);
+    const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
     const insertIdx = idx >= 0 ? idx + 1 : blocks.length;
     blocks.splice(insertIdx, 0, '');
     this.applyBlockFlowTransaction(blocks, { segmentIndex: insertIdx, position: 'start' });
@@ -5093,19 +5664,15 @@ export class MarkdownArtifactViewerComponent
       return [...this._toolbarPinsParsed];
     }
 
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const stringItems = parsed.filter((entry): entry is string => typeof entry === 'string');
-        const normalized = this.normalizeToolbarPins(stringItems);
-        this._serverToolbarPinsRaw = raw;
-        this._localToolbarPins = null;
-        this._toolbarPinsRaw = raw;
-        this._toolbarPinsParsed = normalized;
-        return [...normalized];
-      }
-    } catch {
-      // Fall back to default pins when stored JSON is malformed
+    const parsed = SafeJSONParse<string[]>(raw, false);
+    if (Array.isArray(parsed)) {
+      const stringItems = parsed.filter((entry): entry is string => typeof entry === 'string');
+      const normalized = this.normalizeToolbarPins(stringItems);
+      this._serverToolbarPinsRaw = raw;
+      this._localToolbarPins = null;
+      this._toolbarPinsRaw = raw;
+      this._toolbarPinsParsed = [...normalized];
+      return [...normalized];
     }
 
     return [...DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS];
@@ -5401,6 +5968,21 @@ export class MarkdownArtifactViewerComponent
         MenuTestId: 'menu-export-md-btn',
       },
       {
+        Key: 'ask-ai',
+        Label: 'Ask AI',
+        MenuLabel: 'Ask AI Assistant',
+        Description: 'Open slide-in AI Assistant for this section (/ai)',
+        Icon: 'fa-wand-magic-sparkles',
+        Placement: 'right',
+        Category: 'writing',
+        Order: 25,
+        Visible: ARTIFACT_AI_ASSISTANT_ENABLED && canEdit,
+        Active: false,
+        Accent: true,
+        TestId: 'docs-ask-ai-btn',
+        MenuTestId: 'menu-docs-ask-ai-btn',
+      },
+      {
         Key: 'copy-md',
         Label: 'Copy',
         MenuLabel: 'Copy Markdown',
@@ -5530,6 +6112,9 @@ export class MarkdownArtifactViewerComponent
         break;
       case 'copy-md':
         this.OnCopy();
+        break;
+      case 'ask-ai':
+        this.OpenAskAiAssistant();
         break;
     }
     if (fromMenu) {
@@ -6099,10 +6684,13 @@ export class MarkdownArtifactViewerComponent
   }
 
   public CommitEditableHeading(seg: DocumentRenderSegment, event: Event): void {
+    this.commitEditableHeadingElement(seg, event.target as HTMLElement | null);
+  }
+
+  private commitEditableHeadingElement(seg: DocumentRenderSegment, el: HTMLElement | null): void {
     if (this.isApplyingBlockTransaction) {
       return;
     }
-    const el = event.target as HTMLElement | null;
     const rawText = this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ').trim();
     if (rawText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
       return;
@@ -6115,16 +6703,19 @@ export class MarkdownArtifactViewerComponent
   }
 
   public CommitEditableParagraph(seg: DocumentRenderSegment, event: Event): void {
+    this.commitEditableParagraphElement(seg, event.target as HTMLElement | null);
+  }
+
+  private commitEditableParagraphElement(seg: DocumentRenderSegment, el: HTMLElement | null): void {
     if (this.isApplyingBlockTransaction) {
       return;
     }
-    const el = event.target as HTMLElement | null;
     const nextText = this.ExtractMarkdownFromEditableElement(el).trim();
     if (nextText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
       return;
     }
     if (!nextText) {
-      if (seg.RawMarkdown.trim().length > 0 && this.CanUserEdit && this.ViewMode === 'edit') {
+      if (seg.RawMarkdown.trim().length > 0 && this.CanEditSegment(seg) && this.ViewMode === 'edit') {
         const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
         if (segIdx >= 0) {
           const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
@@ -6139,7 +6730,11 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
-  public GetParsedTable(seg: DocumentRenderSegment): { Headers: string[]; Rows: string[][] } {
+  public GetParsedTable(seg: DocumentRenderSegment): {
+    Headers: string[];
+    Rows: string[][];
+    Alignments: DocsTableAlignment[];
+  } {
     const lines = seg.RawMarkdown
       .split('\n')
       .map((l) => l.trim())
@@ -6151,11 +6746,24 @@ export class MarkdownArtifactViewerComponent
         .map((c) => c.trim());
 
     const headers = lines.length > 0 ? parseCells(lines[0]) : ['Column 1', 'Column 2'];
+    const alignments: DocsTableAlignment[] = headers.map(() => 'none');
     const rows: string[][] = [];
     for (let i = 1; i < lines.length; i++) {
       const cells = parseCells(lines[i]);
-      // Skip GFM separator row (| --- | --- |)
-      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) {
+      // Parse & skip GFM separator row (| --- | :---: | ---: | :--- |)
+      if (cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c))) {
+        for (let cIdx = 0; cIdx < headers.length; cIdx++) {
+          const marker = cells[cIdx] ?? '';
+          if (marker.startsWith(':') && marker.endsWith(':')) {
+            alignments[cIdx] = 'center';
+          } else if (marker.startsWith(':')) {
+            alignments[cIdx] = 'left';
+          } else if (marker.endsWith(':')) {
+            alignments[cIdx] = 'right';
+          } else {
+            alignments[cIdx] = 'none';
+          }
+        }
         continue;
       }
       while (cells.length < headers.length) {
@@ -6163,12 +6771,36 @@ export class MarkdownArtifactViewerComponent
       }
       rows.push(cells.slice(0, headers.length));
     }
-    return { Headers: headers, Rows: rows };
+    return { Headers: headers, Rows: rows, Alignments: alignments };
   }
 
-  private serializeParsedTable(headers: string[], rows: string[][]): string {
+  public GetColumnTextAlign(
+    table: { Alignments: ReadonlyArray<DocsTableAlignment> },
+    colIndex: number,
+  ): string | null {
+    const align = table.Alignments[colIndex] ?? 'none';
+    return align === 'none' ? null : align;
+  }
+
+  private serializeParsedTable(
+    headers: string[],
+    rows: string[][],
+    alignments: ReadonlyArray<DocsTableAlignment> = [],
+  ): string {
     const headerLine = `| ${headers.join(' | ')} |`;
-    const sepLine = `| ${headers.map(() => '---').join(' | ')} |`;
+    const sepMarkers = headers.map((_, idx) => {
+      switch (alignments[idx] ?? 'none') {
+        case 'left':
+          return ':---';
+        case 'center':
+          return ':---:';
+        case 'right':
+          return '---:';
+        default:
+          return '---';
+      }
+    });
+    const sepLine = `| ${sepMarkers.join(' | ')} |`;
     const bodyLines = rows.map((r) => `| ${headers.map((_, idx) => r[idx] ?? '').join(' | ')} |`);
     return [headerLine, sepLine, ...bodyLines].join('\n');
   }
@@ -6186,7 +6818,7 @@ export class MarkdownArtifactViewerComponent
     parsed.Headers[colIndex] = nextVal;
     this.ApplyInPlaceSegmentChange(
       seg,
-      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
       `Updated table header column ${colIndex + 1}`,
     );
   }
@@ -6208,33 +6840,197 @@ export class MarkdownArtifactViewerComponent
     targetRow.splice(colIndex, 1, nextVal);
     this.ApplyInPlaceSegmentChange(
       seg,
-      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
       `Updated table cell (${rowIndex + 1}, ${colIndex + 1})`,
     );
   }
 
   public AddTableRow(seg: DocumentRenderSegment): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    seg = this.flushDirtyDomBeforeContextMutation(seg);
     const parsed = this.GetParsedTable(seg);
     parsed.Rows.push(parsed.Headers.map((_, idx) => `Value ${idx + 1}`));
     this.ApplyInPlaceSegmentChange(
       seg,
-      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
       'Added table row',
     );
   }
 
   public AddTableColumn(seg: DocumentRenderSegment): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    seg = this.flushDirtyDomBeforeContextMutation(seg);
     const parsed = this.GetParsedTable(seg);
     const colNum = parsed.Headers.length + 1;
     parsed.Headers.push(`Column ${colNum}`);
+    parsed.Alignments.push('none');
     for (const row of parsed.Rows) {
       row.push('—');
     }
     this.ApplyInPlaceSegmentChange(
       seg,
-      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
       'Added table column',
     );
+  }
+
+  public InsertTableRowAt(
+    seg: DocumentRenderSegment,
+    rowIndex: number,
+    placement: 'above' | 'below',
+    isHeaderRow = false,
+  ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    seg = this.flushDirtyDomBeforeContextMutation(seg);
+    const parsed = this.GetParsedTable(seg);
+    const emptyRow = parsed.Headers.map(() => '');
+    const insertIdx = isHeaderRow
+      ? 0
+      : placement === 'above'
+        ? Math.max(0, Math.min(parsed.Rows.length, rowIndex))
+        : Math.max(0, Math.min(parsed.Rows.length, rowIndex + 1));
+    parsed.Rows.splice(insertIdx, 0, emptyRow);
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
+      `Inserted table row ${placement}`,
+    );
+  }
+
+  public DeleteTableRowAt(seg: DocumentRenderSegment, rowIndex: number): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    seg = this.flushDirtyDomBeforeContextMutation(seg);
+    const parsed = this.GetParsedTable(seg);
+    if (parsed.Rows.length <= 1 || rowIndex < 0 || rowIndex >= parsed.Rows.length) {
+      return;
+    }
+    parsed.Rows.splice(rowIndex, 1);
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
+      'Deleted table row',
+    );
+  }
+
+  public InsertTableColumnAt(
+    seg: DocumentRenderSegment,
+    colIndex: number,
+    placement: 'left' | 'right',
+  ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    seg = this.flushDirtyDomBeforeContextMutation(seg);
+    const parsed = this.GetParsedTable(seg);
+    const insertIdx =
+      placement === 'left'
+        ? Math.max(0, Math.min(parsed.Headers.length, colIndex))
+        : Math.max(0, Math.min(parsed.Headers.length, colIndex + 1));
+    parsed.Headers.splice(insertIdx, 0, `Column ${parsed.Headers.length + 1}`);
+    parsed.Alignments.splice(insertIdx, 0, 'none');
+    for (const row of parsed.Rows) {
+      row.splice(insertIdx, 0, '');
+    }
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
+      `Inserted table column ${placement}`,
+    );
+  }
+
+  public DeleteTableColumnAt(seg: DocumentRenderSegment, colIndex: number): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    seg = this.flushDirtyDomBeforeContextMutation(seg);
+    const parsed = this.GetParsedTable(seg);
+    if (parsed.Headers.length <= 1 || colIndex < 0 || colIndex >= parsed.Headers.length) {
+      return;
+    }
+    parsed.Headers.splice(colIndex, 1);
+    parsed.Alignments.splice(colIndex, 1);
+    for (const row of parsed.Rows) {
+      row.splice(colIndex, 1);
+    }
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
+      'Deleted table column',
+    );
+  }
+
+  public SetTableColumnAlignment(
+    seg: DocumentRenderSegment,
+    colIndex: number,
+    alignment: 'left' | 'center' | 'right',
+  ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    seg = this.flushDirtyDomBeforeContextMutation(seg);
+    const parsed = this.GetParsedTable(seg);
+    if (colIndex < 0 || colIndex >= parsed.Headers.length) {
+      return;
+    }
+    parsed.Alignments[colIndex] = alignment;
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments),
+      `Aligned column ${colIndex + 1} ${alignment}`,
+    );
+  }
+
+  public SortTableByColumn(
+    seg: DocumentRenderSegment,
+    colIndex: number,
+    direction: 'asc' | 'desc',
+  ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    seg = this.flushDirtyDomBeforeContextMutation(seg);
+    const parsed = this.GetParsedTable(seg);
+    if (colIndex < 0 || colIndex >= parsed.Headers.length || parsed.Rows.length <= 1) {
+      return;
+    }
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+    const factor = direction === 'asc' ? 1 : -1;
+    const sortedRows = [...parsed.Rows].sort((a, b) => {
+      const av = (a[colIndex] ?? '').trim();
+      const bv = (b[colIndex] ?? '').trim();
+      return collator.compare(av, bv) * factor;
+    });
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, sortedRows, parsed.Alignments),
+      `Sorted table by column ${colIndex + 1} (${direction})`,
+    );
+  }
+
+  public CopyTableAs(seg: DocumentRenderSegment, format: 'markdown' | 'csv' | 'tsv'): void {
+    if (format === 'markdown') {
+      this.writeClipboardText(seg.RawMarkdown, 'Copied table as Markdown.');
+      return;
+    }
+    const parsed = this.GetParsedTable(seg);
+    const allRows = [parsed.Headers, ...parsed.Rows];
+    if (format === 'csv') {
+      const csv = allRows.map((row) => row.map((cell) => this.escapeCsvCell(cell)).join(',')).join('\n');
+      this.writeClipboardText(csv, 'Copied table as CSV.');
+      return;
+    }
+    const tsv = allRows
+      .map((row) => row.map((cell) => cell.replace(/[\t\r\n]+/g, ' ')).join('\t'))
+      .join('\n');
+    this.writeClipboardText(tsv, 'Copied table as TSV.');
   }
 
   public GetParsedListItems(seg: DocumentRenderSegment): Array<{
@@ -6607,6 +7403,10 @@ export class MarkdownArtifactViewerComponent
     seg: DocumentRenderSegment,
     nextType: 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION',
   ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    seg = this.flushDirtyDomBeforeContextMutation(seg);
     const parsed = this.GetParsedCallout(seg);
     const bodyLines = parsed.BodyText.split('\n').map((l) => `> ${l}`);
     const nextMd = [`> [!${nextType}]`, ...bodyLines].join('\n');
@@ -6614,10 +7414,13 @@ export class MarkdownArtifactViewerComponent
   }
 
   public CommitEditableCallout(seg: DocumentRenderSegment, event: Event): void {
+    this.commitEditableCalloutElement(seg, event.target as HTMLElement | null);
+  }
+
+  private commitEditableCalloutElement(seg: DocumentRenderSegment, el: HTMLElement | null): void {
     if (this.isApplyingBlockTransaction) {
       return;
     }
-    const el = event.target as HTMLElement | null;
     const nextBody = this.ExtractMarkdownFromEditableElement(el).trim();
     const parsed = this.GetParsedCallout(seg);
     if (nextBody === parsed.BodyText) {
@@ -6671,7 +7474,11 @@ export class MarkdownArtifactViewerComponent
     nextBlockMarkdown: string,
     rationale = 'In-place block edit',
   ): void {
-    if (!this.CanUserEdit || nextBlockMarkdown === seg.RawMarkdown) {
+    if (!this.CanEditSegment(seg) || nextBlockMarkdown === seg.RawMarkdown) {
+      if (this.CanUserEdit && !this.CanEditSegment(seg)) {
+        this.StatusBannerMessage = 'This section is protected by an owner lock and cannot be edited.';
+        this.cdr.markForCheck();
+      }
       return;
     }
     if (this.ViewMode === 'suggest') {
@@ -6802,7 +7609,7 @@ export class MarkdownArtifactViewerComponent
     }
     for (let i = 0; i < this.DocumentSegments.length; i++) {
       const seg = this.DocumentSegments[i];
-      if (seg.Kind !== 'markdown') {
+      if (seg.Kind !== 'markdown' || !this.CanEditSegment(seg)) {
         continue;
       }
       if (seg.BlockKind === 'heading') {
@@ -6833,6 +7640,47 @@ export class MarkdownArtifactViewerComponent
         if (changed) {
           blocks[i] = this.serializeParsedListItems(items);
         }
+      } else if (seg.BlockKind === 'table') {
+        const parsed = this.GetParsedTable(seg);
+        let changed = false;
+        parsed.Headers.forEach((hdr, cIdx) => {
+          const el = root.querySelector<HTMLElement>(
+            `[data-testid="table-header-${seg.SegmentID}-${cIdx}"]`,
+          );
+          if (el && this.isDomNode(el)) {
+            const domText = this.ExtractMarkdownFromEditableElement(el).replace(/\|/g, '/').trim();
+            if (domText !== hdr) {
+              parsed.Headers[cIdx] = domText;
+              changed = true;
+            }
+          }
+        });
+        parsed.Rows.forEach((row, rIdx) => {
+          row.forEach((cell, cIdx) => {
+            const el = root.querySelector<HTMLElement>(
+              `[data-testid="table-cell-${seg.SegmentID}-${rIdx}-${cIdx}"]`,
+            );
+            if (el && this.isDomNode(el)) {
+              const domText = this.ExtractMarkdownFromEditableElement(el).replace(/\|/g, '/').trim();
+              if (domText !== cell) {
+                row[cIdx] = domText;
+                changed = true;
+              }
+            }
+          });
+        });
+        if (changed) {
+          blocks[i] = this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments);
+        }
+      } else if (seg.BlockKind === 'code') {
+        const el = root.querySelector<HTMLElement>(`[data-testid="editable-code-body-${seg.SegmentID}"]`);
+        if (el && this.isDomNode(el)) {
+          const parsed = this.GetParsedCodeBlock(seg);
+          const domCode = el.textContent ?? '';
+          if (domCode !== parsed.Code) {
+            blocks[i] = ['```' + parsed.Language, domCode, '```'].join('\n');
+          }
+        }
       } else if (seg.BlockKind === 'callout') {
         const el = root.querySelector<HTMLElement>(`[data-testid="editable-callout-body-${seg.SegmentID}"]`);
         if (el && this.isDomNode(el)) {
@@ -6852,6 +7700,32 @@ export class MarkdownArtifactViewerComponent
         }
       }
     }
+  }
+
+  private flushDirtyDomBeforeContextMutation(targetSeg: DocumentRenderSegment): DocumentRenderSegment {
+    if (this.ViewMode !== 'edit') {
+      return targetSeg;
+    }
+    const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === targetSeg.SegmentID);
+    const previousSegments = this.DocumentSegments;
+    const blocks = previousSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
+    const dirtyChanged = blocks.some((b, i) => b !== previousSegments[i]?.RawMarkdown);
+    if (!dirtyChanged) {
+      return targetSeg;
+    }
+    const nonEmpty = blocks.filter((b) => b.trim().length > 0).join('\n\n');
+    this.OnMarkdownChanged(nonEmpty);
+    if (blocks.some((b) => b.trim().length === 0)) {
+      this.preserveEmptyDraftSegments(blocks, previousSegments);
+    }
+    return (
+      this.findSegmentById(targetSeg.SegmentID) ??
+      (segIdx >= 0 && this.DocumentSegments.length > 0
+        ? this.DocumentSegments[Math.min(segIdx, this.DocumentSegments.length - 1)]
+        : undefined) ??
+      targetSeg
+    );
   }
 
   private syncRenderedEditableSurfacesWithModel(): void {
@@ -7101,6 +7975,9 @@ export class MarkdownArtifactViewerComponent
 
     if (!attemptFocus() && typeof queueMicrotask === 'function') {
       queueMicrotask(() => {
+        if (this.isComponentDestroyed) {
+          return;
+        }
         attemptFocus();
       });
     }
@@ -7295,6 +8172,9 @@ export class MarkdownArtifactViewerComponent
 
     if (!applyRange() && typeof queueMicrotask === 'function') {
       queueMicrotask(() => {
+        if (this.isComponentDestroyed) {
+          return;
+        }
         applyRange();
       });
     }
@@ -7369,14 +8249,14 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     if (seg.BlockKind === 'heading') {
-      this.CommitEditableHeading(seg, { target: el } as unknown as Event);
+      this.commitEditableHeadingElement(seg, el);
     } else if (seg.BlockKind === 'paragraph' || !seg.BlockKind) {
       const text = this.ExtractMarkdownFromEditableElement(el).trim();
       if (text && text !== seg.RawMarkdown.trim()) {
-        this.CommitEditableParagraph(seg, { target: el } as unknown as Event);
+        this.commitEditableParagraphElement(seg, el);
       }
     } else if (seg.BlockKind === 'callout') {
-      this.CommitEditableCallout(seg, { target: el } as unknown as Event);
+      this.commitEditableCalloutElement(seg, el);
     }
   }
 
@@ -7384,7 +8264,11 @@ export class MarkdownArtifactViewerComponent
    * Moves a segment up (`direction = -1`) or down (`direction = 1`) in the document flow.
    */
   public MoveSegment(seg: DocumentRenderSegment, direction: -1 | 1): void {
-    if (!this.CanUserEdit) {
+    if (!this.CanEditSegment(seg)) {
+      if (this.CanUserEdit) {
+        this.StatusBannerMessage = 'This section is protected by an owner lock and cannot be edited.';
+        this.cdr.markForCheck();
+      }
       return;
     }
     const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
@@ -7392,22 +8276,58 @@ export class MarkdownArtifactViewerComponent
     if (idx < 0 || targetIdx < 0 || targetIdx >= this.DocumentSegments.length) {
       return;
     }
+    const targetSeg = this.DocumentSegments[targetIdx];
+    if (!targetSeg || !this.CanEditSegment(targetSeg)) {
+      this.StatusBannerMessage = 'Cannot move a block across an owner-locked section.';
+      this.cdr.markForCheck();
+      return;
+    }
+    if (this.ViewMode === 'suggest') {
+      const firstSeg = idx < targetIdx ? seg : targetSeg;
+      const secondSeg = idx < targetIdx ? targetSeg : seg;
+      const originalPair = `${firstSeg.RawMarkdown}\n\n${secondSeg.RawMarkdown}`;
+      const swappedPair = `${secondSeg.RawMarkdown}\n\n${firstSeg.RawMarkdown}`;
+      this.CreateOrUpdatePendingSuggestion(
+        seg.SegmentID,
+        originalPair,
+        swappedPair,
+        direction < 0 ? 'Move block up' : 'Move block down',
+      );
+      this.StatusBannerMessage = `Queued tracked suggestion to move block ${direction < 0 ? 'up' : 'down'}.`;
+      this.cdr.markForCheck();
+      return;
+    }
     const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
     const [moved] = blocks.splice(idx, 1);
     blocks.splice(targetIdx, 0, moved);
-    this.OnMarkdownChanged(blocks.join('\n\n'));
+    this.OnMarkdownChanged(blocks.filter((b) => b.trim().length > 0).join('\n\n'));
   }
 
   /**
    * Deletes a segment from the document.
    */
   public DeleteSegment(seg: DocumentRenderSegment): void {
-    if (!this.CanUserEdit || this.DocumentSegments.length <= 1) {
+    if (!this.CanEditSegment(seg)) {
+      if (this.CanUserEdit) {
+        this.StatusBannerMessage = 'This section is protected by an owner lock and cannot be edited.';
+        this.cdr.markForCheck();
+      }
       return;
     }
-    const remaining = this.DocumentSegments.filter((s) => s.SegmentID !== seg.SegmentID).map(
-      (s) => s.RawMarkdown,
-    );
+    if (this.DocumentSegments.length <= 1) {
+      return;
+    }
+    if (this.ViewMode === 'suggest') {
+      this.CreateOrUpdatePendingSuggestion(seg.SegmentID, seg.RawMarkdown, '', 'Delete block');
+      this.StatusBannerMessage = 'Queued tracked suggestion to delete block.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
+    const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    const remaining = blocks.filter((b, i) => i !== idx && b.trim().length > 0);
     this.OnMarkdownChanged(remaining.join('\n\n'));
   }
 
@@ -7489,13 +8409,25 @@ export class MarkdownArtifactViewerComponent
    * Formats the active selection in-place (`**bold**`, `*italic*`, headings, lists, callouts)
    * or inserts a structured block when the current target is empty or requires a new block (such as tables).
    */
-  public InsertFormattingSnippet(prefix: string, suffix: string): void {
+  public InsertFormattingSnippet(
+    prefix: string,
+    suffix: string,
+    preserveSelectionSnapshot = false,
+  ): void {
     if (!this.CanUserEdit) {
       return;
     }
 
-    this.CaptureSelectionSnapshot();
+    if (!preserveSelectionSnapshot) {
+      this.CaptureSelectionSnapshot();
+    }
     const segIdx = this.resolveFormattingTargetSegmentIndex();
+    const targetSeg = segIdx >= 0 && segIdx < this.DocumentSegments.length ? this.DocumentSegments[segIdx] : undefined;
+    if (targetSeg && !this.CanEditSegment(targetSeg)) {
+      this.StatusBannerMessage = 'This section is protected by an owner lock and cannot be edited.';
+      this.cdr.markForCheck();
+      return;
+    }
 
     if (suffix.length > 0) {
       if (segIdx >= 0 && segIdx < this.DocumentSegments.length && this.DocumentSegments[segIdx]?.Kind === 'markdown') {
@@ -7964,7 +8896,13 @@ export class MarkdownArtifactViewerComponent
           const range = sel.getRangeAt(0);
           if (el.contains(range.startContainer) && el.contains(range.endContainer)) {
             const caret = this.getCaretCharacterOffsetWithin(el);
-            return this.mapVisibleRangeToMarkdownRange(currentMarkdown, caret.start, caret.end);
+            const hasNonCollapsedSnapshot =
+              snapshotMatchesTarget &&
+              this.lastSelectionSnapshot !== null &&
+              this.lastSelectionSnapshot.end > this.lastSelectionSnapshot.start;
+            if (caret.end > caret.start || !hasNonCollapsedSnapshot) {
+              return this.mapVisibleRangeToMarkdownRange(currentMarkdown, caret.start, caret.end);
+            }
           }
         }
       }
@@ -8208,7 +9146,7 @@ export class MarkdownArtifactViewerComponent
       } else {
         parsed.Rows[rowIdx].splice(colIdx, 1, sanitizedCellText);
       }
-      const nextMd = this.serializeParsedTable(parsed.Headers, parsed.Rows);
+      const nextMd = this.serializeParsedTable(parsed.Headers, parsed.Rows, parsed.Alignments);
       const visStart = this.mapMarkdownOffsetToVisibleOffset(sanitizedCellText, wrapped.selectStart);
       const visEnd = this.mapMarkdownOffsetToVisibleOffset(sanitizedCellText, wrapped.selectEnd);
       this.commitFormattedSegmentMarkdown(seg, segIdx, nextMd, visStart, visEnd, coords);
@@ -8390,6 +9328,23 @@ export class MarkdownArtifactViewerComponent
     this.ActiveSlashTargetSegmentID = null;
 
     if (idx >= 0 && idx < this.DocumentSegments.length) {
+      const targetSeg = this.DocumentSegments[idx];
+      if (targetSeg && !this.CanEditSegment(targetSeg)) {
+        this.StatusBannerMessage = 'This section is protected by an owner lock and cannot be edited.';
+        this.cdr.markForCheck();
+        return;
+      }
+      if (this.ViewMode === 'suggest' && targetSeg) {
+        const trimmedSnippet = snippet.replace(/\n+$/, '');
+        if (trimmedSnippet.trim().length > 0) {
+          this.ApplyInPlaceSegmentChange(
+            targetSeg,
+            `${targetSeg.RawMarkdown}\n\n${trimmedSnippet}`,
+            'Insert block via / menu',
+          );
+        }
+        return;
+      }
       const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
       const cleanedTarget = blocks[idx].replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '').trim();
       const trimmedSnippet = snippet.replace(/\n+$/, '');
@@ -8440,6 +9395,25 @@ export class MarkdownArtifactViewerComponent
     this.ShowSlashMenu = false;
     this.SlashMenuHighlightIndex = 0;
 
+    if (cmd.Command === '/ai') {
+      if (!ARTIFACT_AI_ASSISTANT_ENABLED) {
+        return;
+      }
+      let targetSeg =
+        this.DocumentSegments.find((s) => s.SegmentID === this.ActiveSlashTargetSegmentID) ??
+        this.DocumentSegments[0];
+      if (targetSeg && targetSeg.Kind === 'markdown') {
+        const cleanedSegMd = targetSeg.RawMarkdown.replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '');
+        if (cleanedSegMd !== targetSeg.RawMarkdown && this.CanEditSegment(targetSeg)) {
+          this.ReplaceSegmentMarkdown(targetSeg, cleanedSegMd);
+          targetSeg =
+            this.DocumentSegments.find((s) => s.SegmentID === targetSeg!.SegmentID) ?? targetSeg;
+        }
+      }
+      this.OpenAskAiAssistant(targetSeg);
+      return;
+    }
+
     if (cmd.Snippet !== undefined) {
       this.insertMarkdownAtTargetSegment(cmd.Snippet);
       return;
@@ -8486,8 +9460,26 @@ export class MarkdownArtifactViewerComponent
         this.NewBlockLabel = this.NewBlockQueryName;
       } else if (cmd.BlockType === 'Artifact') {
         this.NewBlockArtifactID = '';
-        this.NewBlockArtifactTypeName = 'Whiteboard';
-        this.NewBlockLabel = 'Embedded Artifact';
+        this.NewBlockArtifactTypeName = cmd.Command === '/sheet-chart' || cmd.Command === '/sheet-range' ? 'Spreadsheet' : 'Whiteboard';
+        this.NewBlockSheetMode =
+          cmd.Command === '/sheet-chart'
+            ? 'chart'
+            : cmd.Command === '/sheet-range'
+              ? 'range'
+              : 'full';
+        this.NewBlockSheetName = '';
+        this.NewBlockSheetChartID = '';
+        this.NewBlockSheetRange = 'A1:D8';
+        this.NewBlockPinToCurrentVersion = false;
+        this.SelectedWorkbookSheets = [];
+        this.SelectedArtifactLatestVersionID = '';
+        this.SelectedArtifactLatestVersionNumber = 0;
+        this.NewBlockLabel =
+          cmd.Command === '/sheet-chart'
+            ? 'Embedded Spreadsheet Chart'
+            : cmd.Command === '/sheet-range'
+              ? 'Embedded Spreadsheet Range'
+              : 'Embedded Artifact';
         void this.loadAvailableArtifactsForPicker();
       } else {
         this.NewBlockLabel = cmd.Label;
@@ -8539,7 +9531,16 @@ export class MarkdownArtifactViewerComponent
     } else if (block.Kind === 'Artifact') {
       this.NewBlockArtifactID = block.ArtifactID || '';
       this.NewBlockArtifactTypeName = block.ArtifactType || 'Whiteboard';
+      this.NewBlockSheetMode = block.SheetChartID ? 'chart' : block.SheetRange ? 'range' : 'full';
+      this.NewBlockSheetName = block.SheetID || '';
+      this.NewBlockSheetChartID = block.SheetChartID || '';
+      this.NewBlockSheetRange = block.SheetRange || 'A1:D8';
+      this.NewBlockPinToCurrentVersion = Boolean(block.VersionID);
+      this.SelectedWorkbookSheets = [];
       void this.loadAvailableArtifactsForPicker();
+      if (this.NewBlockArtifactID && this.IsSpreadsheetArtifactPickerSelected) {
+        void this.loadSelectedWorkbookSheets(this.NewBlockArtifactID);
+      }
     }
 
     this.cdr.markForCheck();
@@ -8713,7 +9714,83 @@ export class MarkdownArtifactViewerComponent
     this.NewBlockArtifactID = artOpt.ID;
     this.NewBlockArtifactTypeName = artOpt.Type || 'Whiteboard';
     this.NewBlockLabel = artOpt.Name;
+    if (this.IsSpreadsheetArtifactPickerSelected) {
+      if (this.NewBlockSheetMode === 'full' && !this.EditingBlockID) {
+        this.NewBlockSheetMode = 'chart';
+      }
+      void this.loadSelectedWorkbookSheets(artOpt.ID);
+    } else {
+      this.SelectedWorkbookSheets = [];
+    }
     this.cdr.markForCheck();
+  }
+
+  public get IsSpreadsheetArtifactPickerSelected(): boolean {
+    const t = (this.NewBlockArtifactTypeName || '').toLowerCase();
+    return t.includes('spreadsheet') || t.includes('sheet') || t.includes('workbook') || t.includes('excel');
+  }
+
+  public get SelectedWorkbookSheetCharts(): Array<{ ChartID: string; Title?: string; ChartType: string }> {
+    const ws =
+      this.SelectedWorkbookSheets.find((s) => s.SheetID === this.NewBlockSheetName || s.Name === this.NewBlockSheetName) ??
+      this.SelectedWorkbookSheets[0];
+    return (ws?.Charts ?? []).map((c) => ({
+      ChartID: c.ChartID,
+      Title: c.Title,
+      ChartType: c.ChartType,
+    }));
+  }
+
+  public SetSheetEmbedMode(mode: 'full' | 'chart' | 'range'): void {
+    this.NewBlockSheetMode = mode;
+    if (mode === 'chart' && !this.NewBlockSheetChartID && this.SelectedWorkbookSheetCharts.length > 0) {
+      this.NewBlockSheetChartID = this.SelectedWorkbookSheetCharts[0].ChartID;
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OnSelectedWorkbookSheetChanged(sheetName: string): void {
+    this.NewBlockSheetName = sheetName;
+    if (this.NewBlockSheetMode === 'chart' && this.SelectedWorkbookSheetCharts.length > 0) {
+      this.NewBlockSheetChartID = this.SelectedWorkbookSheetCharts[0].ChartID;
+    }
+    this.cdr.markForCheck();
+  }
+
+  private async loadSelectedWorkbookSheets(artifactId: string): Promise<void> {
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!provider || !user || !artifactId) {
+      return;
+    }
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const res = await rv.RunView<MJArtifactVersionEntity>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+          OrderBy: 'VersionNumber DESC',
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        },
+        user,
+      );
+      const latest = res.Success ? res.Results?.[0] : undefined;
+      if (!latest) return;
+      this.SelectedArtifactLatestVersionID = latest.ID;
+      this.SelectedArtifactLatestVersionNumber = latest.VersionNumber ?? 1;
+      const wb = SpreadsheetEngine.Instance.ParseWorkbook(latest.Content || '{}');
+      this.SelectedWorkbookSheets = wb.Worksheets ?? [];
+      if (this.SelectedWorkbookSheets.length > 0 && !this.NewBlockSheetName) {
+        this.NewBlockSheetName = this.SelectedWorkbookSheets[0].SheetID;
+      }
+      if (this.NewBlockSheetMode === 'chart' && !this.NewBlockSheetChartID && this.SelectedWorkbookSheetCharts.length > 0) {
+        this.NewBlockSheetChartID = this.SelectedWorkbookSheetCharts[0].ChartID;
+      }
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+    }
   }
 
   public GetInsertModalTitle(): string {
@@ -8985,6 +10062,26 @@ export class MarkdownArtifactViewerComponent
           return;
         }
         descriptor.ArtifactID = artifactId;
+        if (this.IsSpreadsheetArtifactPickerSelected) {
+          if (this.NewBlockSheetMode !== 'full' && this.NewBlockSheetName.trim()) {
+            descriptor.SheetID = this.NewBlockSheetName.trim();
+          }
+          if (this.NewBlockSheetMode === 'chart' && this.NewBlockSheetChartID.trim()) {
+            descriptor.SheetChartID = this.NewBlockSheetChartID.trim();
+            descriptor.SheetRange = undefined;
+          } else if (this.NewBlockSheetMode === 'range' && this.NewBlockSheetRange.trim()) {
+            descriptor.SheetRange = this.NewBlockSheetRange.trim();
+            descriptor.SheetChartID = undefined;
+          } else {
+            descriptor.SheetChartID = undefined;
+            descriptor.SheetRange = undefined;
+          }
+          if (this.NewBlockPinToCurrentVersion && this.SelectedArtifactLatestVersionID) {
+            descriptor.VersionID = this.SelectedArtifactLatestVersionID;
+          } else if (!this.NewBlockPinToCurrentVersion) {
+            descriptor.VersionID = undefined;
+          }
+        }
       }
     }
 
@@ -9045,6 +10142,166 @@ export class MarkdownArtifactViewerComponent
     }
     this.persistCollapsedStateToUserSettings();
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Opens the slide-in `@memberjunction/ng-conversations` AI Assistant with context
+   * from the currently focused or `/ai`-invoked document segment.
+   */
+  public OpenAskAiAssistant(explicitSegment?: DocumentRenderSegment): void {
+    if (!ARTIFACT_AI_ASSISTANT_ENABLED) {
+      return;
+    }
+    const targetSeg =
+      explicitSegment ??
+      this.DocumentSegments.find(
+        (s) => s.SegmentID === (this.ActiveSlashTargetSegmentID ?? this.lastFocusedSegmentId),
+      ) ??
+      this.DocumentSegments[0];
+
+    const originalMd = targetSeg?.RawMarkdown ?? this.MarkdownContent;
+    const contextLabel = targetSeg?.HeadingText
+      ? `Heading: ${targetSeg.HeadingText}`
+      : targetSeg
+        ? `Section (${targetSeg.BlockKind})`
+        : 'Document';
+
+    RequestArtifactAiAssistant({
+      ArtifactID: this.artifactVersion?.ArtifactID ?? null,
+      ArtifactTitle:
+        this.OutlineItems.find((item) => item.Kind === 'heading')?.Title || 'Document',
+      ArtifactKind: 'doc',
+      ContextLabel: contextLabel,
+      SelectedContent: originalMd.slice(0, 4000),
+      SuggestingModeDefault: true,
+      TargetSegmentID: targetSeg?.SegmentID,
+      ApplySuggestion: (proposedText: string, asSuggestion: boolean) => {
+        const cleaned = proposedText ?? '';
+        if (!cleaned.trim() || !this.CanUserEdit) {
+          return;
+        }
+        const liveSeg =
+          (targetSeg
+            ? this.DocumentSegments.find((s) => s.SegmentID === targetSeg.SegmentID)
+            : undefined) ?? this.DocumentSegments[0];
+
+        if (asSuggestion || this.ViewMode === 'suggest') {
+          this.CreateOrUpdatePendingSuggestion(
+            liveSeg?.SegmentID ?? 'doc-root',
+            liveSeg?.RawMarkdown ?? this.MarkdownContent,
+            cleaned,
+            'Proposed by AI Assistant',
+            'AI Assistant',
+          );
+          if (this.ViewMode !== 'suggest') {
+            this.SetViewMode('suggest');
+          }
+          this.StatusBannerMessage = 'AI Assistant proposal added as a tracked suggestion.';
+          this.cdr.markForCheck();
+          return;
+        }
+
+        if (liveSeg && this.CanEditSegment(liveSeg)) {
+          this.ReplaceSegmentMarkdown(liveSeg, cleaned);
+        } else if (!liveSeg) {
+          this.OnMarkdownChanged(cleaned);
+        } else {
+          this.StatusBannerMessage = 'Target section is locked and cannot be edited directly.';
+        }
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  /**
+   * Returns parsed lock ranges from `<!-- mj-lock -->` directives and locked blocks in the document.
+   */
+  public GetDocumentLockedRanges(): DocumentLockedRange[] {
+    return DocumentLiveBlockEngine.Instance.ParseDocumentLocks(this.MarkdownContent);
+  }
+
+  private findLocksForSegment(seg: DocumentRenderSegment): DocumentLockedRange[] {
+    const locks = this.GetDocumentLockedRanges();
+    return locks.filter(
+      (lock) => seg.StartLine <= lock.EndLine && seg.EndLine >= lock.StartLine,
+    );
+  }
+
+  /**
+   * Returns true if `seg` intersects any `<!-- mj-lock -->` section or block lock.
+   */
+  public IsSegmentLocked(seg: DocumentRenderSegment): boolean {
+    return this.findLocksForSegment(seg).length > 0;
+  }
+
+  /**
+   * Returns true if the current user can edit `seg` after checking document lock governance rules.
+   */
+  public CanEditSegment(seg: DocumentRenderSegment): boolean {
+    if (!this.CanUserEdit) {
+      return false;
+    }
+    const intersecting = this.findLocksForSegment(seg);
+    if (intersecting.length === 0) {
+      return true;
+    }
+    const actorId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerEntry = this.ArtifactPermissionEntries.find((entry) => entry.IsOwner);
+    const ownerId =
+      ownerEntry?.UserID ??
+      this.artifactOwnerUserId ??
+      (this.artifactVersion?.ArtifactID
+        ? (this.isCurrentUserArtifactOwner ? actorId : null)
+        : (this.CanUserShareArtifact || this.HasEditPermission ? actorId : null));
+    for (const lock of intersecting) {
+      if (
+        !DocumentLiveBlockEngine.Instance.CanActorEditLockedRange(
+          lock,
+          actorId,
+          ownerId,
+          this.HasEditPermission,
+        )
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Toggles `<!-- mj-lock: owner-only -->` immediately above the specified heading segment.
+   */
+  public ToggleHeadingLock(seg: DocumentRenderSegment): void {
+    if (!this.CanUserEdit || seg.BlockKind !== 'heading') {
+      return;
+    }
+    const userId = this.getSafeCurrentUser()?.ID ?? undefined;
+    const isOwner =
+      this.isCurrentUserArtifactOwner ||
+      Boolean(
+        userId &&
+          this.ArtifactPermissionEntries.some((entry) => entry.IsOwner && UUIDsEqual(entry.UserID, userId)),
+      );
+    const canToggle = this.artifactVersion?.ArtifactID ? isOwner : (isOwner || this.CanUserShareArtifact);
+    if (!canToggle) {
+      this.StatusBannerMessage = 'Only the artifact owner can toggle section locks.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const currentlyLocked = this.IsSegmentLocked(seg);
+    const nextMarkdown = DocumentLiveBlockEngine.Instance.ToggleHeadingLockInMarkdown(
+      this.MarkdownContent,
+      seg.StartLine,
+      !currentlyLocked,
+      userId,
+    );
+    if (nextMarkdown !== this.MarkdownContent) {
+      this.OnMarkdownChanged(nextMarkdown);
+      this.StatusBannerMessage = !currentlyLocked
+        ? `Locked section "${seg.HeadingText || 'Heading'}" to owner-only editing.`
+        : `Unlocked section "${seg.HeadingText || 'Heading'}".`;
+      this.cdr.markForCheck();
+    }
   }
 
   /**
@@ -9184,8 +10441,8 @@ export class MarkdownArtifactViewerComponent
 
   public GetPaginatedBlockRows(
     block: DocumentBlockSpec,
-    rows: Record<string, unknown>[],
-  ): Record<string, unknown>[] {
+    rows: DocumentBlockExecutionResult['Rows'],
+  ): DocumentBlockExecutionResult['Rows'] {
     if (!Array.isArray(rows) || rows.length === 0) {
       return [];
     }
@@ -9212,7 +10469,7 @@ export class MarkdownArtifactViewerComponent
   /**
    * Returns true when a cell in a Live View or Query table represents a clickable Primary Key, NameField, or Foreign Key record link.
    */
-  public IsCellRecordLink(col: DocumentBlockColumn, row: Record<string, unknown>): boolean {
+  public IsCellRecordLink(col: DocumentBlockColumn, row: DocsBlockRow): boolean {
     const cellVal = row[col.Name];
     if (cellVal === null || cellVal === undefined || cellVal === '') {
       return false;
@@ -9231,7 +10488,7 @@ export class MarkdownArtifactViewerComponent
   public OnBlockRecordCellClick(
     block: DocumentBlockSpec,
     col: DocumentBlockColumn,
-    row: Record<string, unknown>,
+    row: DocsBlockRow,
     event?: MouseEvent,
   ): void {
     if (event) {
@@ -9387,6 +10644,10 @@ export class MarkdownArtifactViewerComponent
       ]);
 
       const ownerUserId = artRes.Success ? artRes.Results?.[0]?.UserID : undefined;
+      if (ownerUserId) {
+        this.artifactOwnerUserId = ownerUserId;
+        this.isCurrentUserArtifactOwner = UUIDsEqual(ownerUserId, user.ID);
+      }
       const allUsers = usersRes.Success && Array.isArray(usersRes.Results) ? usersRes.Results : [];
       const usersById = IndexByUUID(allUsers);
       this.AvailableUsersForSharing = allUsers.filter(
@@ -9922,6 +11183,45 @@ export class MarkdownArtifactViewerComponent
    * Returns the loaded `MJArtifactVersionEntity` for an embedded OLE `Artifact` block, or `null`
    * while asynchronously fetching from `MJ: Artifact Versions` via `RunView` (or when unavailable).
    */
+  public GetNewerEmbeddedArtifactVersion(block: DocumentBlockSpec): MJArtifactVersionEntity | null {
+    const artifactId = block.ArtifactID?.trim();
+    const pinnedVersionId = block.VersionID?.trim();
+    if (!artifactId || !pinnedVersionId) {
+      return null;
+    }
+    const latest = this.latestArtifactVersions.get(artifactId);
+    if (!latest || UUIDsEqual(latest.ID, pinnedVersionId)) {
+      return null;
+    }
+    const current = this.GetEmbeddedArtifactVersion(block);
+    if (current && (latest.VersionNumber ?? 0) <= (current.VersionNumber ?? 0)) {
+      return null;
+    }
+    return latest;
+  }
+
+  public UpdateEmbeddedArtifactToLatestVersion(block: DocumentBlockSpec): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const newer = this.GetNewerEmbeddedArtifactVersion(block);
+    if (!newer) {
+      return;
+    }
+    const updatedDescriptor: DocumentBlockSpec = {
+      ...block,
+      VersionID: newer.ID,
+    };
+    const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
+      this.MarkdownContent,
+      block.BlockID,
+      updatedDescriptor,
+    );
+    this.OnMarkdownChanged(updatedRes.Markdown);
+    this.StatusBannerMessage = `Updated ${block.Title || 'embedded workbook'} to v${newer.VersionNumber}.`;
+    this.cdr.markForCheck();
+  }
+
   public GetEmbeddedArtifactVersion(block: DocumentBlockSpec): MJArtifactVersionEntity | null {
     const artifactId = block.ArtifactID?.trim();
     if (!artifactId) {
@@ -9941,6 +11241,15 @@ export class MarkdownArtifactViewerComponent
   private async loadEmbeddedArtifactVersion(artifactId: string, versionId?: string | null): Promise<void> {
     const key = this.getEmbeddedVersionCacheKey(artifactId, versionId);
     if (this.inFlightEmbeddedVersionKeys.has(key)) {
+      return;
+    }
+
+    if (!IsValidUUID(artifactId) || (versionId && !IsValidUUID(versionId))) {
+      this.failedEmbeddedVersionMessages.set(
+        key,
+        `Embedded artifact reference "${artifactId}" is not a valid artifact UUID.`,
+      );
+      this.cdr.markForCheck();
       return;
     }
 
@@ -9973,6 +11282,22 @@ export class MarkdownArtifactViewerComponent
         this.embeddedArtifactVersions.set(key, entity);
         if (!versionId && entity.ID) {
           this.embeddedArtifactVersions.set(this.getEmbeddedVersionCacheKey(artifactId, entity.ID), entity);
+          this.latestArtifactVersions.set(artifactId, entity);
+        } else if (versionId && !this.latestArtifactVersions.has(artifactId)) {
+          const latestRes = await rv.RunView<MJArtifactVersionEntity>(
+            {
+              EntityName: 'MJ: Artifact Versions',
+              ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+              OrderBy: 'VersionNumber DESC',
+              MaxRows: 1,
+              ResultType: 'entity_object',
+            },
+            user,
+          );
+          const latestEntity = latestRes.Success ? latestRes.Results?.[0] : undefined;
+          if (latestEntity) {
+            this.latestArtifactVersions.set(artifactId, latestEntity);
+          }
         }
         this.failedEmbeddedVersionMessages.delete(key);
       } else {
@@ -10034,6 +11359,15 @@ export class MarkdownArtifactViewerComponent
       ver.Name = block.Title || 'Embedded Artifact';
       ver.UserID = user.ID;
       ver.Content = serializedContent;
+      const embedConfig = BuildArtifactVersionConfigurationWithPreview(
+        null,
+        serializedContent,
+        null,
+        ver.Name,
+      );
+      if (embedConfig) {
+        ver.Configuration = embedConfig;
+      }
 
       const saved = await ver.Save();
       if (!saved || !ver.ID) {
@@ -10117,9 +11451,11 @@ export class MarkdownArtifactViewerComponent
       targetSeg &&
       (targetSeg.RawMarkdown === originalMarkdown || targetSeg.RawMarkdown.trim() === originalMarkdown.trim())
     ) {
-      const nextMd = segments
-        .map((s) => (s.SegmentID === targetSeg.SegmentID ? replacementMarkdown : s.RawMarkdown))
-        .join('\n\n');
+      const nextParts = segments.map((s) => (s.SegmentID === targetSeg.SegmentID ? replacementMarkdown : s.RawMarkdown));
+      const nextMd =
+        replacementMarkdown.trim().length === 0
+          ? nextParts.filter((part) => part.trim().length > 0).join('\n\n')
+          : nextParts.join('\n\n');
       return { matched: true, markdown: nextMd };
     }
     if (currentMarkdown.includes(originalMarkdown)) {
@@ -10186,7 +11522,7 @@ export class MarkdownArtifactViewerComponent
     this.StatusBannerMessage = 'Suggest Mode active — edit the selected block to propose your suggestion.';
     this.cdr.markForCheck();
     queueMicrotask(() => {
-      if (typeof document === 'undefined') {
+      if (this.isComponentDestroyed || typeof document === 'undefined') {
         return;
       }
       const host = this.PrintableCanvas?.nativeElement;
@@ -10838,6 +12174,10 @@ export class MarkdownArtifactViewerComponent
     if (this.session) {
       this.session.SetActiveBlock(item.ID);
     }
+    const seg = this.DocumentSegments.find((s) => UUIDsEqual(s.SegmentID, item.ID));
+    if (seg) {
+      this.scrollToSegmentElement(seg);
+    }
     this.cdr.markForCheck();
   }
 
@@ -10905,7 +12245,12 @@ export class MarkdownArtifactViewerComponent
         return;
       }
 
-      const sentViaSocket = this.session?.RequestSaveVersion() ?? false;
+      const { Policy, CapturedThumbnailDataUrl } = await CaptureThumbnailForDriverIfAllowed(
+        'MarkdownArtifactViewerPlugin',
+        this.resolveCaptureRootElement(),
+      );
+
+      const sentViaSocket = this.session?.RequestSaveVersion(CapturedThumbnailDataUrl) ?? false;
       if (sentViaSocket) {
         this.StatusBannerMessage = 'Saving collaborative document version…';
         return;
@@ -10914,7 +12259,12 @@ export class MarkdownArtifactViewerComponent
       const artifactId = this.artifactVersion?.ArtifactID;
       let savedVersionNumber: number;
       if (artifactId) {
-        const persisted = await this.persistDocumentVersionToProvider(artifactId, this.MarkdownContent);
+        const persisted = await this.persistDocumentVersionToProvider(
+          artifactId,
+          this.MarkdownContent,
+          CapturedThumbnailDataUrl,
+          Policy,
+        );
         if (!persisted.ok) {
           this.notifyError(persisted.errorMessage || 'Failed to save document version.');
           return;
@@ -10945,9 +12295,21 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
+  protected override resolveCaptureRootElement(): HTMLElement | null {
+    const el = this.captureHostElementRef?.nativeElement;
+    if (!el) return null;
+    return (
+      el.querySelector<HTMLElement>('.mj-docs-page') ??
+      el.querySelector<HTMLElement>('.mj-docs-canvas') ??
+      el
+    );
+  }
+
   private async persistDocumentVersionToProvider(
     artifactId: string,
     content: string,
+    capturedThumbnailDataUrl?: string | null,
+    policy?: import('@memberjunction/core-entities').ArtifactTypeThumbnailPolicy,
   ): Promise<{ ok: boolean; versionNumber: number; errorMessage?: string }> {
     const user = this.getSafeCurrentUser();
     const provider = this.getSafeProvider();
@@ -10964,6 +12326,7 @@ export class MarkdownArtifactViewerComponent
       content,
       true,
       provider,
+      capturedThumbnailDataUrl,
     );
     if (serverCommit.HandledByServer) {
       if (!serverCommit.Success) {
@@ -11013,6 +12376,19 @@ export class MarkdownArtifactViewerComponent
       ver.Name = this.getDisplayTitle() || 'Document';
       ver.UserID = user.ID;
       ver.Content = content;
+      const docConfig = BuildArtifactVersionConfigurationWithPreview(
+        this.artifactVersion?.Configuration,
+        content,
+        'MarkdownArtifactViewerPlugin',
+        ver.Name,
+        {
+          Policy: policy,
+          CapturedThumbnailDataUrl: capturedThumbnailDataUrl,
+        },
+      );
+      if (docConfig) {
+        ver.Configuration = docConfig;
+      }
       const ok = await ver.Save();
       if (!ok) {
         const msg = ver.LatestResult?.Message || 'Failed to save document version.';
@@ -11161,7 +12537,7 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
-  public FormatCellValue(value: unknown): string {
+  public FormatCellValue(value: DocsBlockCellValue): string {
     if (value === null || value === undefined) {
       return '—';
     }
@@ -11213,10 +12589,14 @@ export class MarkdownArtifactViewerComponent
     if (hasPersistedArtifact) {
       this.HasEditPermission = false;
       this.CanUserShareArtifact = false;
+      this.artifactOwnerUserId = null;
+      this.isCurrentUserArtifactOwner = false;
       this.CurrentUserEffectiveRoleLabel = 'Viewer';
     } else {
       this.HasEditPermission = !this.readonly;
       this.CanUserShareArtifact = false;
+      this.artifactOwnerUserId = null;
+      this.isCurrentUserArtifactOwner = false;
       this.CurrentUserEffectiveRoleLabel = this.readonly ? 'Viewer' : 'Editor';
     }
 
@@ -11342,6 +12722,7 @@ export class MarkdownArtifactViewerComponent
             Content: this.MarkdownContent,
             Timestamp: new Date().toLocaleTimeString(),
           });
+          this.ContentCommitted.emit(this.MarkdownContent);
         }
         this.StatusBannerMessage = `Saved document version v${savedEvt.versionNumber}.`;
         this.cdr.markForCheck();
@@ -11354,6 +12735,16 @@ export class MarkdownArtifactViewerComponent
           return;
         }
         this.handleCollaborationMergeConflict(conflictEvt);
+      }),
+      this.session.CanUndo$.subscribe(() => {
+        if (!this.isComponentDestroyed) {
+          this.cdr.markForCheck();
+        }
+      }),
+      this.session.CanRedo$.subscribe(() => {
+        if (!this.isComponentDestroyed) {
+          this.cdr.markForCheck();
+        }
       }),
     );
 
@@ -11394,6 +12785,8 @@ export class MarkdownArtifactViewerComponent
     if (!provider || !user) {
       this.HasEditPermission = false;
       this.CanUserShareArtifact = false;
+      this.artifactOwnerUserId = null;
+      this.isCurrentUserArtifactOwner = false;
       this.CurrentUserEffectiveRoleLabel = 'Viewer';
       this.session?.SetCanEdit(false);
       if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
@@ -11413,6 +12806,8 @@ export class MarkdownArtifactViewerComponent
         this.PermissionVerifyError = false;
         this.HasEditPermission = false;
         this.CanUserShareArtifact = false;
+        this.artifactOwnerUserId = null;
+        this.isCurrentUserArtifactOwner = false;
         this.CurrentUserEffectiveRoleLabel = 'Viewer';
         this.session?.SetCanEdit(false);
         this.cdr.markForCheck();
@@ -11423,6 +12818,8 @@ export class MarkdownArtifactViewerComponent
         this.PermissionVerifyError = true;
         this.HasEditPermission = false;
         this.CanUserShareArtifact = false;
+        this.artifactOwnerUserId = null;
+        this.isCurrentUserArtifactOwner = false;
         this.CurrentUserEffectiveRoleLabel = 'Viewer';
         this.CollaborationStatus = 'readonly';
         if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
@@ -11435,6 +12832,9 @@ export class MarkdownArtifactViewerComponent
       this.PermissionVerifyError = false;
       this.HasEditPermission = perms.CanEdit;
       this.CanUserShareArtifact = perms.CanShare;
+      if (!(await this.resolveOwnerFromPermissions(artifactId, perms, user, provider, gen))) {
+        return;
+      }
       this.CurrentUserEffectiveRoleLabel = perms.CanShare
         ? 'Owner / Co-Owner'
         : perms.CanEdit
@@ -11471,6 +12871,8 @@ export class MarkdownArtifactViewerComponent
       this.PermissionVerifyError = true;
       this.HasEditPermission = false;
       this.CanUserShareArtifact = false;
+      this.artifactOwnerUserId = null;
+      this.isCurrentUserArtifactOwner = false;
       this.CurrentUserEffectiveRoleLabel = 'Viewer';
       this.CollaborationStatus = 'readonly';
       this.session?.SetCanEdit(false);
@@ -11506,6 +12908,8 @@ export class MarkdownArtifactViewerComponent
             this.PermissionVerifyError = true;
             this.HasEditPermission = false;
             this.CanUserShareArtifact = false;
+            this.artifactOwnerUserId = null;
+            this.isCurrentUserArtifactOwner = false;
             this.CollaborationStatus = 'readonly';
             if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
               this.ViewMode = 'preview';
@@ -11517,6 +12921,9 @@ export class MarkdownArtifactViewerComponent
           this.PermissionVerifyError = false;
           this.HasEditPermission = updated.CanEdit;
           this.CanUserShareArtifact = updated.CanShare;
+          if (!(await this.resolveOwnerFromPermissions(artifactId, updated, user, provider, gen))) {
+            return;
+          }
           this.CurrentUserEffectiveRoleLabel = updated.CanShare
             ? 'Owner / Co-Owner'
             : updated.CanEdit
@@ -11552,6 +12959,58 @@ export class MarkdownArtifactViewerComponent
         }
       }
     });
+  }
+
+  private async resolveOwnerFromPermissions(
+    artifactId: string,
+    perms: { Source?: string | null; CanRead: boolean },
+    user: UserInfo,
+    provider: IMetadataProvider,
+    gen: number,
+  ): Promise<boolean> {
+    if (perms.Source === 'Owner') {
+      this.artifactOwnerUserId = user.ID;
+      this.isCurrentUserArtifactOwner = true;
+      return true;
+    }
+    if (perms.CanRead) {
+      await this.resolveArtifactOwnerFromProvider(artifactId, user, provider, gen);
+      return !this.isComponentDestroyed && gen === this.sessionInitGeneration;
+    }
+    this.artifactOwnerUserId = null;
+    this.isCurrentUserArtifactOwner = false;
+    return true;
+  }
+
+  private async resolveArtifactOwnerFromProvider(
+    artifactId: string,
+    user: UserInfo,
+    provider: IMetadataProvider,
+    gen: number,
+  ): Promise<void> {
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const artRes = await rv.RunView<{ ID: string; UserID?: string | null }>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
+          Fields: ['ID', 'UserID'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
+      const ownerUserId = artRes.Success ? (artRes.Results?.[0]?.UserID ?? null) : null;
+      this.artifactOwnerUserId = ownerUserId;
+      this.isCurrentUserArtifactOwner = Boolean(ownerUserId && UUIDsEqual(ownerUserId, user.ID));
+    } catch {
+      // Leave null/false on query failure so non-owners never elevate to owner privileges
+      this.artifactOwnerUserId = null;
+      this.isCurrentUserArtifactOwner = false;
+    }
   }
 
   private async hydrateAnchoredThreadsFromServer(
@@ -11745,5 +13204,1332 @@ export class MarkdownArtifactViewerComponent
       this.notifyError(err instanceof Error ? err.message : 'Failed to save anchored comment.');
       return false;
     }
+  }
+
+  // =========================================================================
+  // Right-Click Context Menu (Zones 2a–2d)
+  // =========================================================================
+
+  public OnDocsSegmentContextMenu(event: MouseEvent, seg: DocumentRenderSegment): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    const targetEl = event.target instanceof Element ? event.target : null;
+    if (targetEl?.closest('select') != null) {
+      return;
+    }
+    this.CaptureSelectionSnapshot();
+    event.preventDefault();
+    event.stopPropagation();
+
+    this.openSegmentContextMenuAt(event.clientX, event.clientY, targetEl, seg);
+  }
+
+  private openSegmentContextMenuAt(
+    anchorX: number,
+    anchorY: number,
+    targetEl: Element | null,
+    seg: DocumentRenderSegment,
+  ): void {
+    const activeEl =
+      targetEl instanceof HTMLElement
+        ? targetEl
+        : (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null);
+
+    if (seg.Kind === 'mj-block' && seg.Descriptor) {
+      if (seg.Descriptor.Kind === 'Artifact') {
+        const block = seg.Descriptor;
+        const newerVer = this.GetNewerEmbeddedArtifactVersion(block);
+        this.openDocsContextMenuForTarget(
+          anchorX,
+          anchorY,
+          seg,
+          {
+            Kind: 'embedded-artifact',
+            Segment: seg,
+            Block: block,
+            IsCollapsed: this.IsBlockCollapsed(block),
+            IsInlineEditing: this.IsInlineEditingBlock(block.BlockID),
+            CanInlineEdit: this.CanInlineEditEmbeddedArtifact(block),
+            IsFullScreen: this.ExpandedOleBlockID === block.BlockID,
+            NewerVersionNumber: newerVer?.VersionNumber ?? null,
+          },
+          'Embedded artifact actions',
+          activeEl,
+        );
+        return;
+      }
+
+      const block = seg.Descriptor;
+      const execResult = this.GetBlockExecutionResult(block);
+      const recordLinkEl = targetEl?.closest<HTMLElement>('[data-record-col]') ?? null;
+      let recordLinkContext: DocsLiveRecordLinkContext | undefined;
+      if (recordLinkEl) {
+        const colName = recordLinkEl.getAttribute('data-record-col') ?? '';
+        const rawRowIdx = recordLinkEl.getAttribute('data-record-row-idx');
+        const rowIdx = rawRowIdx ? Number.parseInt(rawRowIdx, 10) : -1;
+        const matchedCol = execResult.Columns.find((c) => c.Name === colName);
+        if (colName && rowIdx >= 0) {
+          recordLinkContext = {
+            ColumnName: colName,
+            TargetEntityName: matchedCol?.TargetEntityName || block.EntityName || 'Record',
+            RowIndex: rowIdx,
+          };
+        }
+      }
+      this.openDocsContextMenuForTarget(
+        anchorX,
+        anchorY,
+        seg,
+        {
+          Kind: 'live-block',
+          Segment: seg,
+          Block: block,
+          HasResultRows: execResult.Rows.length > 0,
+          IsCollapsed: this.IsBlockCollapsed(block),
+          RecordLinkContext: recordLinkContext,
+        },
+        'Live data block actions',
+        activeEl,
+      );
+      return;
+    }
+
+    if (!this.IsInteractiveCanvasMode) {
+      if (seg.BlockKind === 'table') {
+        const cellEl = targetEl?.closest<HTMLTableCellElement>('th, td') ?? null;
+        const parsed = this.GetParsedTable(seg);
+        let rowIndex = 0;
+        let colIndex = 0;
+        let isHeaderRow = true;
+        if (cellEl) {
+          colIndex = Math.max(
+            0,
+            Math.min(parsed.Headers.length - 1, cellEl.cellIndex >= 0 ? cellEl.cellIndex : 0),
+          );
+          isHeaderRow = cellEl.tagName === 'TH' || cellEl.closest('thead') !== null;
+          if (!isHeaderRow) {
+            const tr = cellEl.closest('tr');
+            const tbody = tr?.closest('tbody');
+            if (tr && tbody) {
+              const foundIdx = Array.from(tbody.querySelectorAll('tr')).indexOf(tr);
+              rowIndex = foundIdx >= 0 ? foundIdx : 0;
+            }
+          }
+        }
+        const cellText = isHeaderRow
+          ? (parsed.Headers[colIndex] ?? '')
+          : (parsed.Rows[rowIndex]?.[colIndex] ?? '');
+        this.openDocsContextMenuForTarget(
+          anchorX,
+          anchorY,
+          seg,
+          {
+            Kind: 'table',
+            Segment: seg,
+            RowIndex: rowIndex,
+            ColIndex: colIndex,
+            IsHeaderRow: isHeaderRow,
+            TableHeadersCount: parsed.Headers.length,
+            TableBodyRowCount: parsed.Rows.length,
+            ColumnAlignment: parsed.Alignments[colIndex] ?? 'none',
+            CellText: cellText,
+          },
+          'Table actions',
+          activeEl,
+        );
+        return;
+      }
+
+      const anchorEl = targetEl?.closest<HTMLAnchorElement>('a[href]') ?? null;
+      const rawHref = anchorEl?.getAttribute('href') ?? null;
+      const linkUrl = rawHref && rawHref !== 'javascript:void(0)' ? rawHref : null;
+      const imgEl = targetEl?.closest<HTMLImageElement>('img[src]') ?? null;
+      const imageUrl = imgEl?.getAttribute('src') ?? null;
+      const isInsidePre = targetEl?.closest('pre') !== null;
+      const isInsideTable = targetEl?.closest('table') !== null;
+
+      this.openDocsContextMenuForTarget(
+        anchorX,
+        anchorY,
+        seg,
+        {
+          Kind: 'preview-prose',
+          Segment: seg,
+          LinkUrl: linkUrl,
+          ImageUrl: imageUrl,
+          IsInsidePre: isInsidePre,
+          IsInsideTable: isInsideTable,
+        },
+        'Reader block actions',
+        activeEl,
+      );
+      return;
+    }
+
+    if (seg.BlockKind === 'table') {
+      const parsed = this.GetParsedTable(seg);
+      const colIndex = Math.max(
+        0,
+        Math.min(parsed.Headers.length - 1, this.lastFocusedTableCell?.colIndex ?? 0),
+      );
+      const isHeaderRow = this.lastFocusedTableCell?.isHeader ?? true;
+      const rowIndex = isHeaderRow
+        ? 0
+        : Math.max(0, Math.min(Math.max(0, parsed.Rows.length - 1), this.lastFocusedTableCell?.rowIndex ?? 0));
+      const cellText = isHeaderRow
+        ? (parsed.Headers[colIndex] ?? '')
+        : (parsed.Rows[rowIndex]?.[colIndex] ?? '');
+      this.openDocsContextMenuForTarget(
+        anchorX,
+        anchorY,
+        seg,
+        {
+          Kind: 'table',
+          Segment: seg,
+          RowIndex: rowIndex,
+          ColIndex: colIndex,
+          IsHeaderRow: isHeaderRow,
+          TableHeadersCount: parsed.Headers.length,
+          TableBodyRowCount: parsed.Rows.length,
+          ColumnAlignment: parsed.Alignments[colIndex] ?? 'none',
+          CellText: cellText,
+        },
+        'Table actions',
+        activeEl,
+      );
+      return;
+    }
+
+    const listItems = seg.BlockKind === 'list' ? this.GetParsedListItems(seg) : [];
+    const currentListKind: 'bullet' | 'ordered' | 'task' | undefined =
+      seg.BlockKind === 'list'
+        ? listItems.some((i) => i.IsTask)
+          ? 'task'
+          : listItems.some((i) => Boolean(i.OrderedPrefix))
+            ? 'ordered'
+            : 'bullet'
+        : undefined;
+    const currentCalloutType: DocsCalloutType | undefined =
+      seg.BlockKind === 'callout' ? this.GetParsedCallout(seg).CalloutType : undefined;
+    const hasCodeContent =
+      seg.BlockKind === 'code' ? this.GetParsedCodeBlock(seg).Code.trim().length > 0 : undefined;
+
+    this.openDocsContextMenuForTarget(
+      anchorX,
+      anchorY,
+      seg,
+      {
+        Kind: 'prose',
+        Segment: seg,
+        CurrentCalloutType: currentCalloutType,
+        CurrentListKind: currentListKind,
+        HasCodeContent: hasCodeContent,
+      },
+      'Block actions',
+      activeEl,
+    );
+  }
+
+  public OnDocsTableCellContextMenu(
+    event: MouseEvent,
+    seg: DocumentRenderSegment,
+    rowIndex: number,
+    colIndex: number,
+    isHeaderRow: boolean,
+  ): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    this.lastFocusedSegmentId = seg.SegmentID;
+    this.lastFocusedTableCell = { rowIndex, colIndex, isHeader: isHeaderRow };
+    this.CaptureSelectionSnapshot();
+    event.preventDefault();
+    event.stopPropagation();
+
+    const parsed = this.GetParsedTable(seg);
+    const cellText = isHeaderRow
+      ? (parsed.Headers[colIndex] ?? '')
+      : (parsed.Rows[rowIndex]?.[colIndex] ?? '');
+    const activeEl = event.target instanceof HTMLElement ? event.target : null;
+
+    this.openDocsContextMenuForTarget(
+      event.clientX,
+      event.clientY,
+      seg,
+      {
+        Kind: 'table',
+        Segment: seg,
+        RowIndex: rowIndex,
+        ColIndex: colIndex,
+        IsHeaderRow: isHeaderRow,
+        TableHeadersCount: parsed.Headers.length,
+        TableBodyRowCount: parsed.Rows.length,
+        ColumnAlignment: parsed.Alignments[colIndex] ?? 'none',
+        CellText: cellText,
+      },
+      'Table cell actions',
+      activeEl,
+    );
+  }
+
+  public OnDocsOutlineContextMenu(event: MouseEvent, item: DocumentOutlineItem): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+
+    const segIdx = this.DocumentSegments.findIndex((s) => UUIDsEqual(s.SegmentID, item.ID));
+    const targetSeg = segIdx >= 0 ? this.DocumentSegments[segIdx] : null;
+    const activeEl = event.target instanceof HTMLElement ? event.target : null;
+
+    this.openDocsContextMenuForTarget(
+      event.clientX,
+      event.clientY,
+      targetSeg,
+      {
+        Kind: 'outline-item',
+        OutlineItem: item,
+        TargetSegment: targetSeg,
+        TargetSegmentIndex: segIdx,
+      },
+      'Outline item actions',
+      activeEl,
+    );
+  }
+
+  public OnDocsSuggestionContextMenu(event: MouseEvent, sug: DocumentSuggestionItem): void {
+    if (ShouldBypassCustomContextMenu(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+
+    const targetSeg = this.DocumentSegments.find((s) => s.SegmentID === sug.BlockID) ?? null;
+    const activeEl = event.target instanceof HTMLElement ? event.target : null;
+
+    this.openDocsContextMenuForTarget(
+      event.clientX,
+      event.clientY,
+      targetSeg,
+      {
+        Kind: 'suggestion-card',
+        Suggestion: sug,
+      },
+      'Suggestion actions',
+      activeEl,
+    );
+  }
+
+  public OnDocsWorkspaceKeydown(event: KeyboardEvent): void {
+    if (!IsKeyboardContextMenuShortcut(event) || IsNativeContextMenuTarget(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.CaptureSelectionSnapshot();
+
+    const activeEl =
+      typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : event.target instanceof HTMLElement
+          ? event.target
+          : null;
+
+    const anchorPoint = activeEl
+      ? ComputeElementContextMenuAnchor(activeEl)
+      : { X: 40, Y: 80 };
+
+    const sugEl = activeEl?.closest<HTMLElement>('[data-suggestion-id]') ?? null;
+    if (sugEl) {
+      const sugId = sugEl.getAttribute('data-suggestion-id');
+      const sug = this.Suggestions.find((s) => s.SuggestionID === sugId);
+      if (sug) {
+        this.openDocsContextMenuForTarget(
+          anchorPoint.X,
+          anchorPoint.Y,
+          this.DocumentSegments.find((s) => s.SegmentID === sug.BlockID) ?? null,
+          { Kind: 'suggestion-card', Suggestion: sug },
+          'Suggestion actions',
+          activeEl,
+        );
+        return;
+      }
+    }
+
+    const outlineEl = activeEl?.closest<HTMLElement>('[data-outline-id]') ?? null;
+    if (outlineEl) {
+      const outlineId = outlineEl.getAttribute('data-outline-id');
+      const outlineItem = this.OutlineItems.find((o) => UUIDsEqual(o.ID, outlineId));
+      if (outlineItem) {
+        const segIdx = this.DocumentSegments.findIndex((s) => UUIDsEqual(s.SegmentID, outlineItem.ID));
+        const seg = segIdx >= 0 ? this.DocumentSegments[segIdx] : null;
+        this.openDocsContextMenuForTarget(
+          anchorPoint.X,
+          anchorPoint.Y,
+          seg,
+          {
+            Kind: 'outline-item',
+            OutlineItem: outlineItem,
+            TargetSegment: seg,
+            TargetSegmentIndex: segIdx,
+          },
+          'Outline item actions',
+          activeEl,
+        );
+        return;
+      }
+    }
+
+    const segEl = activeEl?.closest<HTMLElement>('[data-segment-id]') ?? null;
+    const segId =
+      segEl?.getAttribute('data-segment-id') ??
+      this.lastFocusedSegmentId ??
+      (this.SelectedAnchorKey !== 'doc-root' ? this.SelectedAnchorKey : null);
+    const seg =
+      (segId ? this.DocumentSegments.find((s) => s.SegmentID === segId) : undefined) ??
+      this.DocumentSegments[0];
+    if (!seg) {
+      return;
+    }
+
+    this.openSegmentContextMenuAt(anchorPoint.X, anchorPoint.Y, activeEl, seg);
+  }
+
+  public OnDocsPointerDown(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerDown(event);
+  }
+
+  public OnDocsPointerMove(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerMove(event);
+  }
+
+  public OnDocsPointerUp(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerUp(event);
+  }
+
+  public OnDocsPointerCancel(event: PointerEvent): void {
+    this.touchMenuMonitor.OnPointerCancel(event);
+  }
+
+  public OnDocsClickCapture(event: Event): void {
+    if (this.touchMenuMonitor.ConsumeSuppressedClick()) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  private onTouchLongPressContextMenu(trigger: TouchContextMenuTrigger): void {
+    if (IsNativeContextMenuTarget(trigger.Target)) {
+      return;
+    }
+    const targetEl = trigger.Target instanceof Element ? trigger.Target : null;
+    const segEl = targetEl?.closest<HTMLElement>('[data-segment-id]') ?? null;
+    const segId = segEl?.getAttribute('data-segment-id');
+    const seg = segId ? this.DocumentSegments.find((s) => s.SegmentID === segId) : undefined;
+    if (!seg) {
+      return;
+    }
+    if (seg.Kind === 'mj-block' && seg.Descriptor?.Kind === 'Artifact' && this.IsInlineEditingBlock(seg.Descriptor.BlockID)) {
+      return;
+    }
+    const openMenu = (): void => {
+      this.CaptureSelectionSnapshot();
+      this.openSegmentContextMenuAt(trigger.AnchorX, trigger.AnchorY, targetEl, seg);
+    };
+    if (this.ngZone) {
+      this.ngZone.run(openMenu);
+    } else {
+      openMenu();
+    }
+  }
+
+  private openDocsContextMenuForTarget(
+    anchorX: number,
+    anchorY: number,
+    seg: DocumentRenderSegment | null,
+    target: DocsContextTarget,
+    ariaLabel: string,
+    restoreFocusEl: HTMLElement | null,
+  ): void {
+    if (seg) {
+      this.SelectedAnchorKey = seg.SegmentID;
+      this.lastFocusedSegmentId = seg.SegmentID;
+    }
+
+    const selectedText = this.resolveContextMenuSelectedText(seg);
+    this.contextMenuSelectionText = selectedText;
+    this.contextMenuSelectionSnapshot = this.lastSelectionSnapshot ? { ...this.lastSelectionSnapshot } : null;
+
+    const segIndex = seg
+      ? this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID)
+      : -1;
+    const snapshot: DocsContextMenuSnapshot = {
+      ViewMode: this.ViewMode,
+      CanUserEdit: this.CanUserEdit,
+      CanUserShareArtifact: this.CanUserShareArtifact,
+      IsArtifactOwner: this.artifactVersion?.ArtifactID ? this.isCurrentUserArtifactOwner : this.CanUserShareArtifact,
+      IsSimpleNoteMode: this.IsSimpleNoteMode,
+      IsAiAssistantEnabled: this.IsAiAssistantEnabled,
+      CommentsEnabled: true,
+      SegmentCount: this.DocumentSegments.length,
+      SegmentIndex: segIndex,
+      SegmentEditable: seg ? this.CanEditSegment(seg) : this.CanUserEdit,
+      IsSegmentLocked: seg ? this.IsSegmentLocked(seg) : false,
+      IsHeadingCollapsed: seg ? this.IsHeadingCollapsed(seg) : false,
+      SelectedText: selectedText,
+      Target: target,
+    };
+
+    this.ContextMenuItems = BuildDocsContextMenu(snapshot);
+    this.ContextMenuX = anchorX;
+    this.ContextMenuY = anchorY;
+    this.ContextMenuAriaLabel = ariaLabel;
+    this.ContextMenuRestoreFocusEl = restoreFocusEl;
+    this.ContextMenuOpen = this.ContextMenuItems.length > 0;
+    this.cdr.markForCheck();
+  }
+
+  private resolveContextMenuSelectedText(seg: DocumentRenderSegment | null): string {
+    if (typeof window !== 'undefined' && typeof window.getSelection === 'function') {
+      const selText = window.getSelection()?.toString() ?? '';
+      if (selText.length > 0) {
+        return selText;
+      }
+    }
+    if (
+      seg &&
+      this.lastSelectionSnapshot?.segmentId === seg.SegmentID &&
+      this.lastSelectionSnapshot.end > this.lastSelectionSnapshot.start
+    ) {
+      const el = this.findEditableElementForSegment(seg, {
+        listItemIndex: this.lastSelectionSnapshot.listItemIndex,
+        tableRowIndex: this.lastSelectionSnapshot.tableRowIndex,
+        tableColIndex: this.lastSelectionSnapshot.tableColIndex,
+        isTableHeader: this.lastSelectionSnapshot.isTableHeader,
+      });
+      const sourceText =
+        el?.textContent ?? this.resolveSegmentSubElementContext(seg, this.lastSelectionSnapshot).text;
+      return sourceText.slice(this.lastSelectionSnapshot.start, this.lastSelectionSnapshot.end);
+    }
+    return '';
+  }
+
+  public CloseDocsContextMenu(): void {
+    if (!this.ContextMenuOpen) {
+      return;
+    }
+    this.ContextMenuOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  public OnDocsContextMenuCommand(cmd: DocsContextMenuCommand): void {
+    this.CloseDocsContextMenu();
+
+    switch (cmd.Type) {
+      case 'clipboard': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (!seg) return;
+        if (cmd.Action === 'cut') {
+          this.CutDocsSelectionOrBlock(seg);
+        } else if (cmd.Action === 'copy-rich') {
+          this.CopyDocsSelectionOrBlock(seg, 'rich');
+        } else if (cmd.Action === 'copy-markdown') {
+          this.CopyDocsSelectionOrBlock(seg, 'markdown');
+        } else if (cmd.Action === 'copy-code') {
+          this.CopyCodeBlockText(seg);
+        } else {
+          this.PasteIntoDocsSegment(seg);
+        }
+        return;
+      }
+      case 'format-text': {
+        this.SelectedAnchorKey = cmd.SegmentID;
+        this.lastFocusedSegmentId = cmd.SegmentID;
+        if (this.contextMenuSelectionSnapshot?.segmentId === cmd.SegmentID) {
+          this.lastSelectionSnapshot = { ...this.contextMenuSelectionSnapshot };
+        }
+        const pair = this.getFormatPrefixSuffix(cmd.Format);
+        this.InsertFormattingSnippet(
+          pair.prefix,
+          pair.suffix,
+          Boolean(this.contextMenuSelectionSnapshot?.segmentId === cmd.SegmentID),
+        );
+        return;
+      }
+      case 'turn-into': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.ConvertSegmentBlockType(seg, cmd.Target);
+        }
+        return;
+      }
+      case 'callout-style': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.UpdateCalloutType(seg, cmd.CalloutType);
+        }
+        return;
+      }
+      case 'insert-block': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (!seg) return;
+        if (cmd.Placement === 'above') {
+          this.InsertParagraphAboveSegment(seg);
+        } else if (cmd.Placement === 'below') {
+          this.InsertParagraphBelowSegment(seg);
+        } else {
+          this.OpenSlashMenuForSegment(seg);
+        }
+        return;
+      }
+      case 'duplicate-block': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.DuplicateSegment(seg);
+        }
+        return;
+      }
+      case 'move-block': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.MoveSegment(seg, cmd.Direction);
+        }
+        return;
+      }
+      case 'delete-block': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.DeleteSegment(seg);
+        }
+        return;
+      }
+      case 'toggle-heading-collapse': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.ToggleHeadingCollapse(seg);
+        }
+        return;
+      }
+      case 'toggle-heading-lock': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.ToggleHeadingLock(seg);
+        }
+        return;
+      }
+      case 'add-comment': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.OpenAnchorCommentForSegment(seg, cmd.SelectedText ?? this.contextMenuSelectionText);
+        }
+        return;
+      }
+      case 'propose-suggestion': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.OpenSuggestionModalForSegment(seg);
+        }
+        return;
+      }
+      case 'ask-ai': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.OpenAskAiAssistant(seg);
+        }
+        return;
+      }
+      case 'table-insert-row': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.InsertTableRowAt(seg, cmd.RowIndex, cmd.Placement, cmd.IsHeaderRow);
+        }
+        return;
+      }
+      case 'table-delete-row': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.DeleteTableRowAt(seg, cmd.RowIndex);
+        }
+        return;
+      }
+      case 'table-insert-col': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.InsertTableColumnAt(seg, cmd.ColIndex, cmd.Placement);
+        }
+        return;
+      }
+      case 'table-delete-col': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.DeleteTableColumnAt(seg, cmd.ColIndex);
+        }
+        return;
+      }
+      case 'table-align-col': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.SetTableColumnAlignment(seg, cmd.ColIndex, cmd.Alignment);
+        }
+        return;
+      }
+      case 'table-sort-col': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.SortTableByColumn(seg, cmd.ColIndex, cmd.Direction);
+        }
+        return;
+      }
+      case 'table-copy-cell': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          const parsed = this.GetParsedTable(seg);
+          const cellText = cmd.IsHeaderRow
+            ? (parsed.Headers[cmd.ColIndex] ?? '')
+            : (parsed.Rows[cmd.RowIndex]?.[cmd.ColIndex] ?? '');
+          this.writeClipboardText(cellText, 'Copied cell text to clipboard.');
+        }
+        return;
+      }
+      case 'table-copy-as': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.CopyTableAs(seg, cmd.Format);
+        }
+        return;
+      }
+      case 'live-block-refresh': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          void this.RefreshLiveBlock(block);
+        }
+        return;
+      }
+      case 'live-block-configure': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.OpenConfigureBlockModal(block);
+        }
+        return;
+      }
+      case 'live-block-open-record': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          const execResult = this.GetBlockExecutionResult(block);
+          const rows = this.GetPaginatedBlockRows(block, execResult.Rows);
+          const col = execResult.Columns.find((c) => c.Name === cmd.ColumnName);
+          const row = rows[cmd.RowIndex];
+          if (col && row) {
+            this.OnBlockRecordCellClick(block, col, row);
+          }
+        }
+        return;
+      }
+      case 'live-block-toggle-freeze': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          if (cmd.Action === 'freeze') {
+            this.PromptFreezeBlock(block);
+          } else {
+            this.UnfreezeLiveBlock(block);
+          }
+        }
+        return;
+      }
+      case 'live-block-copy-csv': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.CopyLiveBlockResultAsCsv(block);
+        }
+        return;
+      }
+      case 'live-block-copy-json': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.CopyBlockDirectiveJson(block);
+        }
+        return;
+      }
+      case 'live-block-toggle-collapse': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.ToggleBlockCollapsed(block);
+        }
+        return;
+      }
+      case 'ole-toggle-inline-edit': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.ToggleInlineArtifactEdit(block);
+        }
+        return;
+      }
+      case 'ole-toggle-fullscreen': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.ToggleExpandOleBlock(block);
+        }
+        return;
+      }
+      case 'ole-open-source': {
+        this.OpenSourceArtifactRecord(cmd.ArtifactID);
+        return;
+      }
+      case 'ole-update-latest': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.UpdateEmbeddedArtifactToLatestVersion(block);
+        }
+        return;
+      }
+      case 'ole-toggle-pin': {
+        const block = this.findBlockDescriptorById(cmd.BlockID);
+        if (block) {
+          this.TogglePinArtifactVersion(block);
+        }
+        return;
+      }
+      case 'preview-copy-selection': {
+        this.writeClipboardText(cmd.SelectedText, 'Copied selection to clipboard.');
+        return;
+      }
+      case 'preview-copy-link': {
+        this.writeClipboardText(cmd.Url, 'Copied link URL to clipboard.');
+        return;
+      }
+      case 'preview-open-link': {
+        if (!this.isSafeLinkUrl(cmd.Url)) {
+          this.StatusBannerMessage = 'Blocked opening unsafe link protocol.';
+          this.cdr.markForCheck();
+          return;
+        }
+        if (typeof window !== 'undefined' && typeof window.open === 'function') {
+          window.open(cmd.Url, '_blank', 'noopener,noreferrer');
+        }
+        return;
+      }
+      case 'preview-copy-image': {
+        this.writeClipboardText(cmd.Url, 'Copied image URL to clipboard.');
+        return;
+      }
+      case 'preview-copy-anchor': {
+        this.SelectedAnchorKey = cmd.AnchorKey;
+        this.writeClipboardText(`#${cmd.AnchorKey}`, 'Copied section reference to clipboard.');
+        return;
+      }
+      case 'preview-switch-to-write': {
+        const seg = this.findSegmentById(cmd.SegmentID);
+        if (seg) {
+          this.OnPreviewBlockDoubleClick(seg);
+        }
+        return;
+      }
+      case 'suggestion-accept': {
+        const sug = this.Suggestions.find((s) => s.SuggestionID === cmd.SuggestionID);
+        if (sug) {
+          this.AcceptSuggestion(sug);
+        }
+        return;
+      }
+      case 'suggestion-reject': {
+        const sug = this.Suggestions.find((s) => s.SuggestionID === cmd.SuggestionID);
+        if (sug) {
+          this.RejectSuggestion(sug);
+        }
+        return;
+      }
+      case 'suggestion-jump': {
+        this.FocusSegmentByAnchorKey(cmd.AnchorKey);
+        return;
+      }
+      case 'suggestion-copy-proposed': {
+        const sug = this.Suggestions.find((s) => s.SuggestionID === cmd.SuggestionID);
+        if (sug) {
+          this.writeClipboardText(sug.ProposedMarkdown, 'Copied proposed Markdown to clipboard.');
+        }
+        return;
+      }
+      case 'outline-jump': {
+        const item = this.OutlineItems.find((o) => UUIDsEqual(o.ID, cmd.ItemID));
+        if (item) {
+          this.SelectOutlineItem(item);
+          this.FocusSegmentByAnchorKey(item.ID);
+        }
+        return;
+      }
+    }
+  }
+
+  public InsertParagraphAboveSegment(seg: DocumentRenderSegment): void {
+    if (!this.CanEditSegment(seg)) {
+      if (this.CanUserEdit) {
+        this.StatusBannerMessage = 'This section is protected by an owner lock and cannot be edited.';
+        this.cdr.markForCheck();
+      }
+      return;
+    }
+    if (this.ViewMode === 'suggest') {
+      const nextMd = seg.RawMarkdown.trim().length > 0 ? `New paragraph\n\n${seg.RawMarkdown}` : 'New paragraph';
+      this.CreateOrUpdatePendingSuggestion(seg.SegmentID, seg.RawMarkdown, nextMd, 'Insert paragraph above');
+      this.StatusBannerMessage = 'Queued tracked suggestion to insert paragraph above.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
+    const insertIdx = idx >= 0 ? idx : 0;
+    blocks.splice(insertIdx, 0, '');
+    this.applyBlockFlowTransaction(blocks, { segmentIndex: insertIdx, position: 'start' });
+  }
+
+  public DuplicateSegment(seg: DocumentRenderSegment): void {
+    if (!this.CanEditSegment(seg)) {
+      if (this.CanUserEdit) {
+        this.StatusBannerMessage = 'This section is protected by an owner lock and cannot be edited.';
+        this.cdr.markForCheck();
+      }
+      return;
+    }
+    if (this.ViewMode === 'suggest') {
+      const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+      const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+      const cloneMd = (idx >= 0 ? blocks[idx] : undefined) ?? seg.RawMarkdown;
+      const nextMd = cloneMd.trim().length > 0 ? `${cloneMd}\n\n${cloneMd}` : cloneMd;
+      this.CreateOrUpdatePendingSuggestion(seg.SegmentID, seg.RawMarkdown, nextMd, 'Duplicate block');
+      this.StatusBannerMessage = 'Queued tracked suggestion to duplicate block.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    if (idx < 0) {
+      return;
+    }
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
+    const cloneMd = blocks[idx] ?? seg.RawMarkdown;
+    blocks.splice(idx + 1, 0, cloneMd);
+    this.applyBlockFlowTransaction(blocks, { segmentIndex: idx + 1, position: 'end' });
+  }
+
+  public ConvertSegmentBlockType(
+    seg: DocumentRenderSegment,
+    target:
+      | 'paragraph'
+      | 'heading-1'
+      | 'heading-2'
+      | 'heading-3'
+      | 'bullet-list'
+      | 'ordered-list'
+      | 'task-list'
+      | 'callout'
+      | 'code',
+  ): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    if (segIdx < 0) {
+      return;
+    }
+
+    let plainText: string;
+    if (seg.BlockKind === 'heading') {
+      plainText = (seg.HeadingText ?? this.GetEditableHeadingText(seg)).trim();
+    } else if (seg.BlockKind === 'callout') {
+      plainText = this.GetParsedCallout(seg).BodyText.trim();
+    } else if (seg.BlockKind === 'list') {
+      plainText = this.GetParsedListItems(seg)
+        .map((i) => i.Text)
+        .join('\n')
+        .trim();
+    } else if (seg.BlockKind === 'code') {
+      plainText = this.GetParsedCodeBlock(seg).Code.trim();
+    } else {
+      plainText = seg.RawMarkdown.trim();
+    }
+
+    const lines = (plainText || 'Text').split('\n');
+    const singleLine = lines.join(' ').trim() || 'Heading';
+    let nextMd: string;
+    switch (target) {
+      case 'paragraph':
+        nextMd = plainText;
+        break;
+      case 'heading-1':
+        nextMd = `# ${singleLine}`;
+        break;
+      case 'heading-2':
+        nextMd = `## ${singleLine}`;
+        break;
+      case 'heading-3':
+        nextMd = `### ${singleLine}`;
+        break;
+      case 'bullet-list':
+        nextMd = lines.map((l) => `- ${l}`).join('\n');
+        break;
+      case 'ordered-list':
+        nextMd = lines.map((l, idx) => `${idx + 1}. ${l}`).join('\n');
+        break;
+      case 'task-list':
+        nextMd = lines.map((l) => `- [ ] ${l}`).join('\n');
+        break;
+      case 'callout':
+        nextMd = ['> [!NOTE]', ...lines.map((l) => `> ${l}`)].join('\n');
+        break;
+      case 'code':
+        nextMd = ['```typescript', plainText, '```'].join('\n');
+        break;
+    }
+
+    if (this.ViewMode === 'suggest') {
+      this.ApplyInPlaceSegmentChange(seg, nextMd, `Converted block to ${target}`);
+      return;
+    }
+    this.commitBlockTransform(seg, segIdx, nextMd, 'end');
+  }
+
+  public CopyDocsSelectionOrBlock(seg: DocumentRenderSegment, mode: 'rich' | 'markdown'): void {
+    const text =
+      mode === 'rich' && this.contextMenuSelectionText.trim().length > 0
+        ? this.contextMenuSelectionText
+        : seg.RawMarkdown;
+    this.writeClipboardText(
+      text,
+      mode === 'markdown' ? 'Copied block Markdown to clipboard.' : 'Copied to clipboard.',
+    );
+  }
+
+  private resolveSegmentSubElementContext(
+    seg: DocumentRenderSegment,
+    snapshot: DocsSelectionSnapshot | null,
+  ): { text: string; isCodeBlock: boolean; applySubMarkdown: (nextSubMd: string) => string } {
+    if (seg.BlockKind === 'heading') {
+      const level = seg.HeadingLevel ?? 1;
+      const prefix = `${'#'.repeat(level)} `;
+      const text = seg.HeadingText ?? this.GetEditableHeadingText(seg);
+      return {
+        text,
+        isCodeBlock: false,
+        applySubMarkdown: (nextSubMd) => `${prefix}${nextSubMd}`,
+      };
+    }
+    if (seg.BlockKind === 'list') {
+      const items = this.GetParsedListItems(seg);
+      const itemIndex = snapshot?.listItemIndex;
+      if (itemIndex !== undefined && itemIndex !== null && items[itemIndex]) {
+        return {
+          text: items[itemIndex].Text,
+          isCodeBlock: false,
+          applySubMarkdown: (nextSubMd) => {
+            const nextItems = items.map((item) => ({ ...item }));
+            nextItems[itemIndex].Text = nextSubMd;
+            return this.serializeParsedListItems(nextItems);
+          },
+        };
+      }
+    }
+    if (seg.BlockKind === 'table' && snapshot?.tableColIndex !== undefined && snapshot.tableColIndex !== null) {
+      const parsed = this.GetParsedTable(seg);
+      const colIdx = Math.max(0, Math.min(parsed.Headers.length - 1, snapshot.tableColIndex));
+      if (snapshot.isTableHeader) {
+        return {
+          text: parsed.Headers[colIdx] ?? '',
+          isCodeBlock: false,
+          applySubMarkdown: (nextSubMd) => {
+            const nextHeaders = [...parsed.Headers];
+            nextHeaders[colIdx] = nextSubMd.replace(/\|/g, '/');
+            return this.serializeParsedTable(nextHeaders, parsed.Rows, parsed.Alignments);
+          },
+        };
+      }
+      if (
+        snapshot.tableRowIndex !== undefined &&
+        snapshot.tableRowIndex !== null &&
+        parsed.Rows[snapshot.tableRowIndex]
+      ) {
+        const rowIdx = snapshot.tableRowIndex;
+        return {
+          text: parsed.Rows[rowIdx][colIdx] ?? '',
+          isCodeBlock: false,
+          applySubMarkdown: (nextSubMd) => {
+            const nextRows = parsed.Rows.map((r) => [...r]);
+            nextRows[rowIdx][colIdx] = nextSubMd.replace(/\|/g, '/');
+            return this.serializeParsedTable(parsed.Headers, nextRows, parsed.Alignments);
+          },
+        };
+      }
+    }
+    if (seg.BlockKind === 'callout') {
+      const parsed = this.GetParsedCallout(seg);
+      return {
+        text: parsed.BodyText,
+        isCodeBlock: false,
+        applySubMarkdown: (nextSubMd) =>
+          [`> [!${parsed.CalloutType}]`, ...nextSubMd.split('\n').map((l) => `> ${l}`)].join('\n'),
+      };
+    }
+    if (seg.BlockKind === 'code') {
+      const parsed = this.GetParsedCodeBlock(seg);
+      return {
+        text: parsed.Code,
+        isCodeBlock: true,
+        applySubMarkdown: (nextSubMd) => ['```' + parsed.Language, nextSubMd, '```'].join('\n'),
+      };
+    }
+    return {
+      text: seg.RawMarkdown,
+      isCodeBlock: false,
+      applySubMarkdown: (nextSubMd) => nextSubMd,
+    };
+  }
+
+  private cutVisibleRangeFromMarkdown(markdown: string, rawVisStart: number, rawVisEnd: number): string {
+    const tokens = this.tokenizeInlineMarkdown(markdown);
+    if (tokens.length === 0) {
+      return markdown;
+    }
+    const totalVis = tokens[tokens.length - 1].visEnd;
+    const visStart = Math.max(0, Math.min(totalVis, Math.min(rawVisStart, rawVisEnd)));
+    const visEnd = Math.max(visStart, Math.min(totalVis, Math.max(rawVisStart, rawVisEnd)));
+    if (visStart === visEnd) {
+      return markdown;
+    }
+
+    const parts: string[] = [];
+    for (const tok of tokens) {
+      const cutStart = Math.max(visStart, tok.visStart);
+      const cutEnd = Math.min(visEnd, tok.visEnd);
+      if (cutStart >= cutEnd) {
+        parts.push(markdown.slice(tok.mdStart, tok.mdEnd));
+        continue;
+      }
+      const relStart = cutStart - tok.visStart;
+      const relEnd = cutEnd - tok.visStart;
+      const keptContent = tok.content.slice(0, relStart) + tok.content.slice(relEnd);
+      if (keptContent.length === 0) {
+        continue;
+      }
+      if (tok.kind === 'text') {
+        parts.push(keptContent);
+        continue;
+      }
+      if (keptContent.trim().length === 0) {
+        parts.push(keptContent);
+        continue;
+      }
+      const openMarker = markdown.slice(tok.mdStart, tok.mdStart + tok.markerLen);
+      const closeMarker = markdown.slice(tok.mdEnd - tok.markerLen, tok.mdEnd);
+      parts.push(`${openMarker}${keptContent}${closeMarker}`);
+    }
+    return parts.join('');
+  }
+
+  public CutDocsSelectionOrBlock(seg: DocumentRenderSegment): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    const snap = this.contextMenuSelectionSnapshot ? { ...this.contextMenuSelectionSnapshot } : null;
+    const selectedText = this.contextMenuSelectionText;
+    const originalSegId = seg.SegmentID;
+    const currentSeg = this.ViewMode === 'edit' ? this.flushDirtyDomBeforeContextMutation(seg) : seg;
+    const snapMatchesSeg =
+      snap !== null && (snap.segmentId === originalSegId || snap.segmentId === currentSeg.SegmentID);
+
+    if (snapMatchesSeg && snap.end > snap.start) {
+      const subCtx = this.resolveSegmentSubElementContext(currentSeg, snap);
+      const nextSubMd = subCtx.isCodeBlock
+        ? subCtx.text.slice(0, snap.start) + subCtx.text.slice(snap.end)
+        : this.cutVisibleRangeFromMarkdown(subCtx.text, snap.start, snap.end);
+      const clipText = selectedText.length > 0 ? selectedText : subCtx.text.slice(snap.start, snap.end);
+      this.writeClipboardText(clipText, 'Cut selection to clipboard.');
+      const nextSegMd = subCtx.applySubMarkdown(nextSubMd.trimEnd());
+      this.ApplyInPlaceSegmentChange(currentSeg, nextSegMd.trim() || '', 'Cut selection');
+      return;
+    }
+
+    if (selectedText.length > 0) {
+      const subCtx = this.resolveSegmentSubElementContext(currentSeg, snap);
+      const idx = subCtx.text.indexOf(selectedText);
+      if (idx >= 0) {
+        this.writeClipboardText(selectedText, 'Cut selection to clipboard.');
+        const nextSubMd = subCtx.text.slice(0, idx) + subCtx.text.slice(idx + selectedText.length);
+        const nextSegMd = subCtx.applySubMarkdown(nextSubMd.trimEnd());
+        this.ApplyInPlaceSegmentChange(currentSeg, nextSegMd.trim() || '', 'Cut selection');
+        return;
+      }
+      this.writeClipboardText(selectedText, 'Copied selection to clipboard.');
+      return;
+    }
+
+    this.writeClipboardText(currentSeg.RawMarkdown, 'Cut block to clipboard.');
+    if (this.DocumentSegments.length > 1) {
+      this.DeleteSegment(currentSeg);
+    } else {
+      this.ApplyInPlaceSegmentChange(currentSeg, '', 'Cut block');
+    }
+  }
+
+  public PasteIntoDocsSegment(seg: DocumentRenderSegment): void {
+    if (!this.CanEditSegment(seg)) {
+      return;
+    }
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.clipboard ||
+      typeof navigator.clipboard.readText !== 'function'
+    ) {
+      this.StatusBannerMessage = 'Clipboard paste requires browser permission — press Cmd/Ctrl+V in the block.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const snap = this.contextMenuSelectionSnapshot ? { ...this.contextMenuSelectionSnapshot } : null;
+    const originalSegId = seg.SegmentID;
+    navigator.clipboard
+      .readText()
+      .then((clipText) => {
+        if (this.isComponentDestroyed || !clipText) {
+          return;
+        }
+        let liveSeg = this.findSegmentById(originalSegId) ?? seg;
+        if (!this.CanEditSegment(liveSeg)) {
+          return;
+        }
+        if (this.ViewMode === 'edit') {
+          liveSeg = this.flushDirtyDomBeforeContextMutation(liveSeg);
+        }
+        const snapMatchesSeg =
+          snap !== null && (snap.segmentId === originalSegId || snap.segmentId === liveSeg.SegmentID);
+        if (snapMatchesSeg && snap.end >= snap.start) {
+          const subCtx = this.resolveSegmentSubElementContext(liveSeg, snap);
+          const range = subCtx.isCodeBlock
+            ? {
+                start: Math.max(0, Math.min(subCtx.text.length, snap.start)),
+                end: Math.max(0, Math.min(subCtx.text.length, snap.end)),
+              }
+            : this.mapVisibleRangeToMarkdownRange(subCtx.text, snap.start, snap.end, snap.start === snap.end);
+          const nextSubMd =
+            subCtx.text.slice(0, range.start) + clipText + subCtx.text.slice(range.end);
+          const nextSegMd = subCtx.applySubMarkdown(nextSubMd);
+          this.ApplyInPlaceSegmentChange(liveSeg, nextSegMd, 'Pasted clipboard text');
+        } else {
+          const subCtx = this.resolveSegmentSubElementContext(liveSeg, null);
+          const sep = subCtx.text.trim().length > 0 ? ' ' : '';
+          const nextSegMd = subCtx.applySubMarkdown(`${subCtx.text}${sep}${clipText}`);
+          this.ApplyInPlaceSegmentChange(liveSeg, nextSegMd, 'Pasted clipboard text');
+        }
+      })
+      .catch(() => {
+        if (this.isComponentDestroyed) {
+          return;
+        }
+        this.StatusBannerMessage = 'Clipboard paste requires browser permission — press Cmd/Ctrl+V in the block.';
+        this.cdr.markForCheck();
+      });
+  }
+
+  public CopyCodeBlockText(seg: DocumentRenderSegment): void {
+    const parsed = this.GetParsedCodeBlock(seg);
+    this.writeClipboardText(parsed.Code, 'Copied code to clipboard.');
+  }
+
+  public CopyLiveBlockResultAsCsv(block: DocumentBlockSpec): void {
+    const execResult = this.GetBlockExecutionResult(block);
+    if (execResult.Columns.length === 0 || execResult.Rows.length === 0) {
+      return;
+    }
+    const header = execResult.Columns.map((c) => this.escapeCsvCell(c.DisplayName || c.Name)).join(',');
+    const body = execResult.Rows.map((row) =>
+      execResult.Columns.map((c) => this.escapeCsvCell(this.FormatCellValue(row[c.Name]))).join(','),
+    );
+    this.writeClipboardText([header, ...body].join('\n'), 'Copied live block result as CSV.');
+  }
+
+  public CopyBlockDirectiveJson(block: DocumentBlockSpec): void {
+    const directive = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(block);
+    this.writeClipboardText(directive, 'Copied :::mj-block directive to clipboard.');
+  }
+
+  public OpenSourceArtifactRecord(artifactId: string): void {
+    const trimmed = artifactId.trim();
+    if (!trimmed) {
+      return;
+    }
+    const entityName = 'MJ: Artifacts';
+    const compositeKey = CompositeKey.FromID(trimmed);
+    this.OpenEntityRecord.emit({ entityName, compositeKey });
+    this.StatusBannerMessage = 'Opening source artifact…';
+    this.cdr.markForCheck();
+  }
+
+  public CanInlineEditEmbeddedArtifact(block: DocumentBlockSpec): boolean {
+    return (
+      this.CanUserEdit &&
+      Boolean(block.ArtifactID?.trim()) &&
+      (block.EmbedMode ?? 'Inline') === 'Inline'
+    );
+  }
+
+  public FocusSegmentByAnchorKey(anchorKey: string): void {
+    const seg =
+      this.DocumentSegments.find((s) => s.SegmentID === anchorKey) ?? this.DocumentSegments[0];
+    if (!seg) {
+      return;
+    }
+    this.SelectedAnchorKey = seg.SegmentID;
+    this.lastFocusedSegmentId = seg.SegmentID;
+    this.scrollToSegmentElement(seg);
+    if (this.IsInteractiveCanvasMode) {
+      this.FocusEditableSegment(seg.SegmentID, 'start');
+    } else {
+      this.cdr.markForCheck();
+    }
+  }
+
+  private findSegmentById(segmentId: string): DocumentRenderSegment | undefined {
+    return this.DocumentSegments.find((s) => s.SegmentID === segmentId);
+  }
+
+  private findBlockDescriptorById(blockId: string): DocumentBlockSpec | undefined {
+    return this.DocumentSegments.find((s) => s.Descriptor?.BlockID === blockId)?.Descriptor;
+  }
+
+  private getFormatPrefixSuffix(
+    format: 'bold' | 'italic' | 'strikethrough' | 'inline-code' | 'link',
+  ): { prefix: string; suffix: string } {
+    switch (format) {
+      case 'bold':
+        return { prefix: '**', suffix: '**' };
+      case 'italic':
+        return { prefix: '*', suffix: '*' };
+      case 'strikethrough':
+        return { prefix: '~~', suffix: '~~' };
+      case 'inline-code':
+        return { prefix: '`', suffix: '`' };
+      case 'link':
+        return { prefix: '[', suffix: '](https://)' };
+    }
+  }
+
+  private escapeCsvCell(raw: string): string {
+    const text = raw ?? '';
+    if (/[",\r\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  }
+
+  private writeClipboardText(text: string, successMessage: string): void {
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      void navigator.clipboard.writeText(text).catch((err) => {
+        LogError(err);
+      });
+    }
+    this.StatusBannerMessage = successMessage;
+    this.cdr.markForCheck();
   }
 }

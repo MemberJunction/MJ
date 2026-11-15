@@ -8,14 +8,20 @@
       "ExtractRules": "@file:extract-rules/video-production.json",
       "DriverClass": "VideoProductionViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-clapperboard"
+      "Icon": "fa-solid fa-clapperboard",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "2E23F219-E790-4A77-9C86-CB19C711B71E"
     },
     "sync": {
-      "lastModified": "2026-11-01T22:53:23.056Z",
-      "checksum": "2d4cb691e07511fe4fe80facaffbdd42f16da29f3c5cc82473a8daa90df636ce"
+      "lastModified": "2026-11-13T23:26:26.400Z",
+      "checksum": "0f7b178b310cfcfdccf622564f98ed42fd11704996a5829fb0d5e951e63d0642"
     }
   }
 ]
