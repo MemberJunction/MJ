@@ -8,14 +8,20 @@
       "DriverClass": "DataArtifactViewerPlugin",
       "ToolLibraryClass": "DataSnapshotToolLibrary",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-camera"
+      "Icon": "fa-solid fa-camera",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "511B217C-B2BB-490D-8AC2-095893C3048B"
     },
     "sync": {
-      "lastModified": "2026-04-22T21:08:13.728Z",
-      "checksum": "390e6f24d196ee62594ad97cde6a7b5c4ce59742bbd23c6ebcd5778086469511"
+      "lastModified": "2026-11-13T23:26:26.342Z",
+      "checksum": "62f06f478e1d59a1cb684965a24f86b5ac584a67bf5fafb14e7588ba1d2d869d"
     }
   }
 ]

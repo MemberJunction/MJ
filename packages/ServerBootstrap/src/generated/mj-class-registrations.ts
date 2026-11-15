@@ -862,12 +862,13 @@ import {
     ApolloSearchPeopleAction,
 } from '@memberjunction/actions-apollo';
 
-// @memberjunction/actions-bizapps-accounting (19 classes)
+// @memberjunction/actions-bizapps-accounting (21 classes)
 import {
     CreateBusinessCentralJournalEntryAction,
     CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
     GetAccountBalancesAction,
+    GetBudgetAction,
     GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
     GetBusinessCentralDimensionsAction,
@@ -883,6 +884,7 @@ import {
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
     GetSalesInvoicesAction,
+    GetVendorBillsAction,
 } from '@memberjunction/actions-bizapps-accounting';
 
 // @memberjunction/actions-bizapps-crm (4 classes)
@@ -1307,10 +1309,11 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (29 classes)
+// @memberjunction/ai-agents (30 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
+    ArtifactWorkspaceChannelServer,
     CSVToolLibrary,
     ClientContextChannelServer,
     ClientOnlyChannelServer,
@@ -1649,7 +1652,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (187 classes)
+// @memberjunction/core-actions (192 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1678,6 +1681,7 @@ import {
     CreateDocumentAction,
     CreateEmployeeAction,
     CreateFormContributionAction,
+    CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -1760,12 +1764,14 @@ import {
     GraphQLQueryAction,
     HTTPRequestAction,
     IPGeolocationAction,
+    InspectGovernedArtifactAction,
     IntegrationActionExecutor,
     InviteToListAction,
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
     ListStorageAccountsAction,
+    ListWorkspaceArtifactsAction,
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
@@ -1777,6 +1783,7 @@ import {
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
+    MutateGovernedArtifactAction,
     OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
@@ -1789,6 +1796,7 @@ import {
     QRCodeAction,
     ReadRSSFeedAction,
     ReembedLocalVectorsAction,
+    RefreshAndSnapshotArtifactAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     RenderArchitectureDiagramAction,
@@ -1863,16 +1871,22 @@ import {
     WorkQueueValidateBindingsServerOperation,
 } from '@memberjunction/work-queue-engine';
 
-// @memberjunction/server (8 classes)
+// @memberjunction/server (14 classes)
 import {
     AWSIoTCoreBroadcastProvider,
+    ArtifactComplianceAuditServerOperation,
+    ArtifactEvaluateAiFormulaServerOperation,
     AzureWebPubSubBroadcastProvider,
+    CreateGuestShareLinkServerOperation,
     GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
     RedisStreamBroadcastProvider,
+    ResolveGuestShareLinkServerOperation,
+    RevokeGuestShareLinkServerOperation,
     SequencedRoleBucketBroadcastProvider,
+    SynthesizeArtifactFromSourcesServerOperation,
 } from '@memberjunction/server';
 
 // @memberjunction/diagnostics-server (14 classes)
@@ -2547,6 +2561,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
     GetAccountBalancesAction,
+    GetBudgetAction,
     GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
     GetBusinessCentralDimensionsAction,
@@ -2562,6 +2577,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
     GetSalesInvoicesAction,
+    GetVendorBillsAction,
     AssociateContactToCompanyAction,
     GetActivitiesByContactAction,
     LogActivityAction,
@@ -2722,12 +2738,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     HealthRecentRingBufferEventsOperation,
     HealthRunCheckOperation,
     HealthTelemetryAggregatesOperation,
-    LiveEntityCrudProbe,
-    MetadataCacheParityProbe,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    LiveEntityCrudProbe,
+    MetadataCacheParityProbe,
     OpenAppFleetStatusProbe,
     QueueWorkerHeartbeatProbe,
     SchemaMigrationParityProbe,
@@ -2814,6 +2830,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
+    ArtifactWorkspaceChannelServer,
     CSVToolLibrary,
     ClientContextChannelServer,
     ClientOnlyChannelServer,
@@ -2925,13 +2942,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TaskGraphSkipTaskServerOperation,
     TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
-    TaskGraphUpdateTaskInputServerOperation,
-    WorkflowDraftServerOperation,
-    WorkflowSaveServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    TaskGraphUpdateTaskInputServerOperation,
+    WorkflowDraftServerOperation,
+    WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
     SlackMessagingExtension,
     TeamsMessagingExtension,
@@ -3097,6 +3114,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateDocumentAction,
     CreateEmployeeAction,
     CreateFormContributionAction,
+    CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -3128,14 +3146,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
-    FindBestSkillAction,
-    FindCandidateActionsAction,
-    FindCandidateAgentsAction,
-    FindCandidateSkillsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    FindBestSkillAction,
+    FindCandidateActionsAction,
+    FindCandidateAgentsAction,
+    FindCandidateSkillsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -3183,12 +3201,14 @@ const CLASS_REGISTRATIONS_6: any[] = [
     GraphQLQueryAction,
     HTTPRequestAction,
     IPGeolocationAction,
+    InspectGovernedArtifactAction,
     IntegrationActionExecutor,
     InviteToListAction,
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
     ListStorageAccountsAction,
+    ListWorkspaceArtifactsAction,
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
@@ -3200,6 +3220,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
+    MutateGovernedArtifactAction,
     OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
@@ -3212,6 +3233,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     QRCodeAction,
     ReadRSSFeedAction,
     ReembedLocalVectorsAction,
+    RefreshAndSnapshotArtifactAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     RenderArchitectureDiagramAction,
@@ -3277,13 +3299,19 @@ const CLASS_REGISTRATIONS_6: any[] = [
     WorkQueueReplayDeadLetterServerOperation,
     WorkQueueValidateBindingsServerOperation,
     AWSIoTCoreBroadcastProvider,
+    ArtifactComplianceAuditServerOperation,
+    ArtifactEvaluateAiFormulaServerOperation,
     AzureWebPubSubBroadcastProvider,
+    CreateGuestShareLinkServerOperation,
     GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
     RedisStreamBroadcastProvider,
+    ResolveGuestShareLinkServerOperation,
+    RevokeGuestShareLinkServerOperation,
     SequencedRoleBucketBroadcastProvider,
+    SynthesizeArtifactFromSourcesServerOperation,
     DiagnosticRetentionScheduledJobDriver,
     DiagnosticsBuildBundleServerOperation,
     DiagnosticsEnrolSenderServerOperation,
@@ -3317,7 +3345,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1364;
+export const CLASS_REGISTRATIONS_COUNT = 1378;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

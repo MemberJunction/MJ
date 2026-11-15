@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { extractBaseEntityRegistrations, parseManifestImports, stripComments } from '../check-manifest-registrations.mjs';
+import {
+   extractBaseEntityRegistrations,
+   extractMonitoredRegistrations,
+   parseManifestImports,
+   stripComments,
+} from '../check-manifest-registrations.mjs';
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'check-manifest-registrations.mjs');
 
@@ -144,11 +149,44 @@ describe('parseManifestImports', () => {
          `import { MJUserEntity, MJRoleEntity } from '@memberjunction/core-entities';`,
          `import { SomeServerEntity as Aliased } from '@memberjunction/core-entities-server';`,
       ].join('\n');
-      const { identifiers, packages } = parseManifestImports(src);
+      const { identifiers, packages, byPackage } = parseManifestImports(src);
       expect(identifiers.get('MJUserEntity')).toBe('@memberjunction/core-entities');
       expect(identifiers.get('MJRoleEntity')).toBe('@memberjunction/core-entities');
       expect(identifiers.get('SomeServerEntity')).toBe('@memberjunction/core-entities-server');
       expect([...packages].sort()).toEqual(['@memberjunction/core-entities', '@memberjunction/core-entities-server']);
+      expect(byPackage.get('@memberjunction/core-entities')?.has('MJUserEntity')).toBe(true);
+      expect(byPackage.get('@memberjunction/core-entities-server')?.has('SomeServerEntity')).toBe(true);
+   });
+
+   it('tracks colliding class names imported from distinct packages without overwriting', () => {
+      const src = [
+         `import { CreateUserAction } from '@memberjunction/actions-bizapps-lms';`,
+         `import { CreateUserAction as CoreCreateUserAction } from '@memberjunction/core-actions';`,
+      ].join('\n');
+      const { byPackage } = parseManifestImports(src);
+      expect(byPackage.get('@memberjunction/actions-bizapps-lms')?.has('CreateUserAction')).toBe(true);
+      expect(byPackage.get('@memberjunction/core-actions')?.has('CreateUserAction')).toBe(true);
+   });
+});
+
+describe('extractMonitoredRegistrations', () => {
+   it('captures concrete BaseRealtimeChannelServer/Client, BaseArtifactToolLibrary, and BaseArtifactViewerPluginComponent while skipping non-BaseEntity abstracts', () => {
+      const src = [
+         `@RegisterClass(BaseRealtimeChannelServer, 'ChanSrv')`,
+         `export class MyChannelServer extends BaseRealtimeChannelServer {}`,
+         `@RegisterClass(BaseArtifactToolLibrary, 'AbsTool')`,
+         `export abstract class AbstractToolLib extends BaseArtifactToolLibrary {}`,
+         `@RegisterClass(BaseArtifactToolLibrary, 'ToolLib')`,
+         `export class MyToolLib extends BaseArtifactToolLibrary {}`,
+         `@RegisterClass(BaseArtifactViewerPluginComponent, 'Viewer')`,
+         `export class MyViewerPlugin extends BaseArtifactViewerPluginComponent {}`,
+      ].join('\n');
+      const hits = extractMonitoredRegistrations(src);
+      expect(hits.map((h) => [h.className, h.baseClass])).toEqual([
+         ['MyChannelServer', 'BaseRealtimeChannelServer'],
+         ['MyToolLib', 'BaseArtifactToolLibrary'],
+         ['MyViewerPlugin', 'BaseArtifactViewerPluginComponent'],
+      ]);
    });
 });
 
@@ -271,6 +309,39 @@ describe('the gate end to end', () => {
          const r = run(root);
          expect(r.status).toBe(2);
          expect(r.stderr).toContain('would check nothing');
+      } finally {
+         rmSync(root, { recursive: true, force: true });
+      }
+   });
+
+   it('detects sibling parity drift between ServerBootstrap and ServerBootstrapLite on shared packages while ignoring excluded packages', () => {
+      const root = fixtureRepo({ listed: true });
+      try {
+         writeFileSync(
+            join(root, 'packages', 'ServerBootstrap', 'src', 'generated', 'mj-class-registrations.ts'),
+            [
+               `import { MJThingEntity } from '@acme/core-entities';`,
+               `import { MyAction, ExtraAction } from '@acme/core-actions';`,
+               `import { ExcludedPkgClass } from '@acme/excluded-only';`,
+               `export const COUNT = 4;`,
+            ].join('\n')
+         );
+         const liteDir = join(root, 'packages', 'ServerBootstrapLite', 'src', 'generated');
+         mkdirSync(liteDir, { recursive: true });
+         writeFileSync(join(root, 'packages', 'ServerBootstrapLite', 'package.json'), JSON.stringify({ name: '@acme/server-bootstrap-lite' }));
+         writeFileSync(
+            join(liteDir, 'mj-class-registrations.ts'),
+            [
+               `import { MJThingEntity } from '@acme/core-entities';`,
+               `import { MyAction } from '@acme/core-actions';`,
+               `export const COUNT = 2;`,
+            ].join('\n')
+         );
+         const r = run(root);
+         expect(r.status).toBe(1);
+         expect(r.stderr).toContain('ExtraAction');
+         expect(r.stderr).toContain('ServerBootstrapLite');
+         expect(r.stderr).not.toContain('ExcludedPkgClass');
       } finally {
          rmSync(root, { recursive: true, force: true });
       }

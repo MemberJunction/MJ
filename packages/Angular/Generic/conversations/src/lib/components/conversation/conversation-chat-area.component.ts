@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type ExecuteAgentResult, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -256,6 +256,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Trigger change handler after initialization is complete
       // Only skip during Angular's initial binding before ngOnInit completes
       if (this.isInitialized) {
+        this.prepareStandbyRemoteBrowser(value);
         this.onConversationChanged(value);
       }
     }
@@ -439,6 +440,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.standbyPreparedConversationId = null;
       this.CloseRemoteBrowserPanel();
       void this.remoteBrowser?.Close();
+    } else if (this.isInitialized) {
+      this.prepareStandbyRemoteBrowser(this.ConversationId);
     }
   }
   get AllowRemoteBrowser(): boolean {
@@ -1443,6 +1446,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
 
   /**
+   * Emitted after an agent response message has been committed to the active conversation.
+   */
+  @Output() AgentMessageReceived = new EventEmitter<{
+    message: MJConversationDetailEntity;
+    agentResult: ExecuteAgentResult;
+  }>();
+
+  /**
    * @deprecated Use {@link AfterAgentTurn}.
    *
    * The same emitter under the old binding name, so a template still binding
@@ -1691,11 +1702,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() pendingMessageRequested = this.PendingMessageRequested;
 
   private scrollContainer?: ElementRef<HTMLElement>;
+  private messageScrollRootEl: HTMLElement | null = null;
 
   /** The transcript scroller; watched so the scroll-to-bottom arrow follows content that grows or shrinks without a scroll. */
   @ViewChild('scrollContainer') private set scrollContainerRef(ref: ElementRef<HTMLElement> | undefined) {
     this.scrollContainer = ref;
-    this.watchScrollContent(ref?.nativeElement ?? null);
+    const nextEl = ref?.nativeElement ?? null;
+    if (nextEl !== this.messageScrollRootEl) {
+      // Defer updating the template-bound [ScrollRoot] reference past ViewChild resolution so
+      // Angular does not observe null -> HTMLDivElement within the same change-detection pass (NG0100).
+      Promise.resolve().then(() => {
+        if (!this.destroy$?.closed && (this.scrollContainer?.nativeElement ?? null) === nextEl && this.messageScrollRootEl !== nextEl) {
+          this.messageScrollRootEl = nextEl;
+          this.cdr?.markForCheck?.();
+        }
+      });
+    }
+    this.watchScrollContent(nextEl);
   }
 
   /** Re-checks the scroll state when the transcript or its content changes size; null when nothing is watched. */
@@ -2851,7 +2874,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * discover it, which depends on layout having settled.
    */
   public get MessageScrollRoot(): HTMLElement | null {
-    return this.scrollContainer?.nativeElement ?? null;
+    return this.messageScrollRootEl;
   }
 
   /** @deprecated Use {@link MessageScrollRoot}. */
@@ -3816,7 +3839,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
-    return UUIDsEqual(conversationId, this.ConversationId);
+    return !this.destroy$?.closed && UUIDsEqual(conversationId, this.ConversationId);
   }
 
   private isActiveConversationLoad(conversationId: string | null | undefined, loadToken: number): boolean {
@@ -3841,6 +3864,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.standbyPreparedConversationId = null;
       void this.remoteBrowser?.Close();
     }
+    this.prepareStandbyRemoteBrowser(this._conversationId);
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
     this.hostInterceptedArtifactId = null;
@@ -6794,6 +6818,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // the shown artifact when it gained a version, and switch to a retargeted one.
     await this.decideAndApplyArtifactPanel(artifactBaseline, event.message.ConversationID);
 
+    this.AgentMessageReceived?.emit({
+      message: event.message,
+      agentResult: event.agentResult as ExecuteAgentResult,
+    });
+
     // Force change detection to update the UI
     this.cdr.detectChanges();
   }
@@ -7084,7 +7113,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
         this.SelectedArtifactId = action.artifactId;
         this.SelectedVersionNumber = action.versionNumber;
+        this.SelectedTaskGraphPanel = null;
+        this.ShowRemoteBrowserPanel = false;
         this.ShowArtifactPanel = true;
+        this.cdr?.markForCheck?.();
         this.AfterArtifactPanelOpen?.emit(
           new AfterArtifactPanelOpenEventArgs(action.artifactId, action.versionNumber)
         );
@@ -7094,6 +7126,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, action.artifactId)) {
           return;
         }
+        this.cdr?.detectChanges?.();
         LogStatusEx({
           message: `🎨 Opening artifact ${action.artifactId} v${action.versionNumber} after agent run (decided from the conversation-wide version diff, so no single detail id applies)`,
           verboseOnly: true
@@ -8183,19 +8216,27 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
-   * chat area owns them). Cached: it is bound to an input, so a fresh object per check would re-fire it.
+   * Prepares the standby remote browser controller for a conversation outside of template checking
+   * so `OnStateChange` (`cdr.detectChanges()`) never fires during change detection.
    */
-  public get EffectiveAppContext(): Record<string, unknown> | null {
+  private prepareStandbyRemoteBrowser(conversationId: string | null): void {
     if (
-      this.AllowRemoteBrowser &&
-      this.ConversationId &&
-      this.agentClientService &&
-      !UUIDsEqual(this.standbyPreparedConversationId, this.ConversationId)
+      !this.AllowRemoteBrowser ||
+      !conversationId ||
+      !this.agentClientService ||
+      UUIDsEqual(this.standbyPreparedConversationId, conversationId)
     ) {
-      this.standbyPreparedConversationId = this.ConversationId;
-      this.ensureRemoteBrowser().SetConversation(this.ConversationId);
+      return;
     }
+    this.standbyPreparedConversationId = conversationId;
+    this.ensureRemoteBrowser().SetConversation(conversationId);
+  }
+
+  /**
+   * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
+   * chat area owns them). Pure & cached: it is bound to an input, so it never mutates state or fires CD.
+   */
+  public get EffectiveAppContext(): ConversationChatAreaComponent['AppContext'] {
     const controller = this.remoteBrowser;
     if (!controller) {
       return this.AppContext;
@@ -8209,7 +8250,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return memo.Value;
   }
   private standbyPreparedConversationId: string | null = null;
-  private effectiveAppContextMemo: { Base: Record<string, unknown> | null; Version: number; Owns: boolean; Value: Record<string, unknown> | null } | null = null;
+  private effectiveAppContextMemo: { Base: ConversationChatAreaComponent['AppContext']; Version: number; Owns: boolean; Value: ConversationChatAreaComponent['AppContext'] } | null = null;
 
   /**
    * Persists the currently displayed Task Graph in the chat side-panel as a reusable
