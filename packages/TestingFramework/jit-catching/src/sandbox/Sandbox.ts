@@ -101,8 +101,16 @@ export class Sandbox {
         return this.deniedRoots.some((d) => p === d || p.startsWith(`${d}/`) || d.startsWith(`${p}/`));
     }
 
-    /** Builds the image from `dockerfileDir/Dockerfile` on the host (network allowed here; nothing untrusted runs). */
+    /**
+     * Builds the image from `dockerfileDir/Dockerfile` on the host (network allowed here; nothing untrusted runs).
+     * With `BuildImage` false it builds nothing and only checks that the image is on the machine.
+     */
     public async EnsureImage(dockerfileDir: string): Promise<void> {
+        if (!this.settings.BuildImage) {
+            const found = await this.runner('docker', ['image', 'inspect', this.settings.Image], { timeoutMs: 60_000 });
+            if (found.ExitCode !== 0) throw new Error(`Sandbox.BuildImage is false and the image ${this.settings.Image} is not on this machine`);
+            return;
+        }
         const r = await this.runner('docker', ['build', '-q', '-t', this.settings.Image, dockerfileDir], { timeoutMs: 15 * 60_000 });
         if (r.ExitCode !== 0) throw new Error(`docker build failed: ${r.Stderr}`);
     }

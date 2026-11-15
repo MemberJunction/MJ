@@ -37,6 +37,16 @@ describe('ChangeAnalyzer', () => {
     const a = await new ChangeAnalyzer({ Repo: repo, PackageMap: pm, LLM: llm, Model: 'm', Settings: DEFAULT_SETTINGS }).Analyze(run, { Title: 'x', Body: '' });
     expect(a.PackagesToTest).toEqual(['@memberjunction/core']);
   });
+  it('tests the packages of the highest-ranked risks before the other packages the LLM lists', async () => {
+    const paths = ['packages/A/src/a.ts', 'packages/B/src/b.ts', 'packages/C/src/c.ts'];
+    const threeRepo = { ChangedPaths: async () => paths, Diff: async () => '' } as never;
+    const threePm = { PackageForPath: (p: string) => { const d = /^packages\/([ABC])\//.exec(p)?.[1]; return d ? { Name: `@x/${d.toLowerCase()}`, Dir: `packages/${d}`, HasVitest: true, HasTests: true } : null; } } as never;
+    const risk = (file: string) => ({ file, symbol: 's', what_could_break: 'w', how_observed: 'h' });
+    const llm = new TestLLM().Script({ kind: 'succeed', content: JSON.stringify({ ...answer, risks: [risk('packages/C/src/c.ts'), risk('packages/A/src/a.ts')], packages_to_test: ['@x/a', '@x/b'] }) });
+    const settings = { ...DEFAULT_SETTINGS, Limits: { ...DEFAULT_SETTINGS.Limits, PackagesPerPR: 2 } };
+    const a = await new ChangeAnalyzer({ Repo: threeRepo, PackageMap: threePm, LLM: llm, Model: 'm', Settings: settings }).Analyze(run, { Title: 'x', Body: '' });
+    expect(a.PackagesToTest).toEqual(['@x/c', '@x/a']);
+  });
   it('retries once on malformed JSON and then falls back to intent other with no risks', async () => {
     const llm = new TestLLM().Script({ kind: 'succeed', content: 'not json' }, { kind: 'succeed', content: 'still not json' });
     const a = await new ChangeAnalyzer({ Repo: repo, PackageMap: pm, LLM: llm, Model: 'm', Settings: DEFAULT_SETTINGS }).Analyze(run, { Title: 'chore: x', Body: '' });

@@ -120,3 +120,16 @@ describe('Sandbox identity', () => {
     expect(readFileSync(group, 'utf8')).toContain('jit:x:5678:');
   });
 });
+
+describe('Sandbox.EnsureImage', () => {
+  it('uses the image on the machine without a build when BuildImage is false', async () => {
+    const calls: string[][] = [];
+    const runner = async (_file: string, args: string[]) => { calls.push(args); return { ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 }; };
+    await new Sandbox({ ...DEFAULT_SETTINGS.Sandbox, BuildImage: false }, runner).EnsureImage('/dockerfile-dir');
+    expect(calls).toEqual([['image', 'inspect', DEFAULT_SETTINGS.Sandbox.Image]]);
+  });
+  it('fails when BuildImage is false and the machine has no such image', async () => {
+    const runner = async () => ({ ExitCode: 1, TimedOut: false, Stdout: '', Stderr: 'No such image', DurationMs: 1 });
+    await expect(new Sandbox({ ...DEFAULT_SETTINGS.Sandbox, BuildImage: false }, runner).EnsureImage('/dockerfile-dir')).rejects.toThrow(/BuildImage/);
+  });
+});

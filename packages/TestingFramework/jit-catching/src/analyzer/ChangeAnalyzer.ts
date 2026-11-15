@@ -59,7 +59,7 @@ export class ChangeAnalyzer {
         if (asked === null) process.stderr.write(`run ${run.ID}: analyzer reply was not valid JSON twice; continuing with no risk notes\n`);
         const answer: Answer = asked ?? { intent_type: 'other', summary: pr.Title, risks: [], packages_to_test: [] };
         const risks: Risk[] = answer.risks.map((r, i) => ({ ID: `R${i + 1}`, File: r.file, Symbol: r.symbol, WhatCouldBreak: r.what_could_break, HowObserved: r.how_observed }));
-        const packagesToTest = this.pickPackages(answer.packages_to_test, changedPackages);
+        const packagesToTest = this.pickPackages(risks, answer.packages_to_test, changedPackages);
         const intent: IntentType = answer.intent_type !== 'other' ? answer.intent_type : (prefix && PREFIX_TO_INTENT[prefix]) || 'other';
         const sourceLines = changedFiles.reduce((s, f) => s + f.AddedLines.length + f.RemovedLineCount, 0);
         return {
@@ -69,12 +69,16 @@ export class ChangeAnalyzer {
         };
     }
 
-    /** Keeps the LLM's ranked packages that the diff touches and that run vitest, then fills from the other changed packages, up to `PackagesPerPR`. */
-    private pickPackages(ranked: string[], changed: Map<string, WorkspacePackage>): string[] {
+    /**
+     * Packages in this order: the packages of the risks in rank order, then the LLM's ranked packages, then the other changed
+     * packages. Keeps the ones the diff touches that run vitest, up to `PackagesPerPR`.
+     */
+    private pickPackages(risks: Risk[], ranked: string[], changed: Map<string, WorkspacePackage>): string[] {
         const cap = this.o.Settings.Limits.PackagesPerPR;
         const testable = (n: string): boolean => changed.get(n)?.HasVitest === true;
+        const ofRisks = risks.flatMap((r) => this.o.PackageMap.PackageForPath(r.File)?.Name ?? []);
         const out: string[] = [];
-        for (const n of [...ranked, ...changed.keys()]) if (out.length < cap && !out.includes(n) && testable(n)) out.push(n);
+        for (const n of [...ofRisks, ...ranked, ...changed.keys()]) if (out.length < cap && !out.includes(n) && testable(n)) out.push(n);
         return out;
     }
 
