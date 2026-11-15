@@ -1,6 +1,6 @@
 import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import type { MJGraphConceptEntity, MJGraphEntity } from '../generated/entity_subclasses';
+import type { MJGraphConceptEntity } from '../generated/entity_subclasses';
 import type { MJGraphConceptEntityType } from '../generated/entities/__mj';
 import {
     IsGraphDataProvider,
@@ -10,7 +10,7 @@ import {
     type GraphSubgraph,
     type GraphTraversalOptions,
 } from '../graph/BaseGraphEdgeProvider';
-import { CanUserReadEntity, ClampGraphDepth, ClampGraphMaxNodes, GraphEngine, IsFieldReadableByAll, IsGraphConceptStatusVisible } from '../graph/GraphEngine';
+import { CanUserReadEntity, ClampGraphDepth, ClampGraphMaxNodes, GraphEngine, IsCanonGraph, IsFieldReadableByAll, IsGraphConceptStatusVisible } from '../graph/GraphEngine';
 import type {
     GraphExpandedEdge,
     GraphExpandedNode,
@@ -102,6 +102,9 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         if (!query || !user) {
             return [];
         }
+        if ((!options.GraphNames || options.GraphNames.length === 0) && !(await GraphEngine.Instance.HasActiveCanonGraphs(user, options.provider))) {
+            return [];
+        }
         await this.EnsureConfigured(user, options.provider);
         const graphIDs = this.ResolveGraphIDs(options.GraphNames);
         if (graphIDs.Size === 0) {
@@ -158,12 +161,15 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
      */
     public async ExplainEntity(entityName: string, user: UserInfo, provider?: IMetadataProvider): Promise<CanonEntityExplanation> {
         const empty: CanonEntityExplanation = { EntityName: entityName, DescribedConcepts: [], AlternateBaseViews: [], ReadingQueries: [], MeasuringQueries: [], Edges: [] };
-        await this.EnsureConfigured(user, provider);
         const md = provider ?? GraphEngine.Instance.ProviderToUse;
         const entityInfo = md.EntityByName(entityName);
         if (!entityInfo || !CanUserReadEntity(entityInfo, user)) {
             return empty;
         }
+        if (!(await GraphEngine.Instance.HasActiveCanonGraphs(user, provider))) {
+            return { ...empty, EntityName: entityInfo.Name };
+        }
+        await this.EnsureConfigured(user, provider);
         if (this.ResolveGraphIDs(undefined).Size === 0) {
             return { ...empty, EntityName: entityInfo.Name };
         }
@@ -276,7 +282,7 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         }
         const canonTypeIds = new UUIDSet(engine.GraphTypes.filter((gt) => gt.IsCanon).map((gt) => gt.ID));
         for (const g of engine.Graphs) {
-            if (g.Status === 'Active' && isCanonGraph(g, canonTypeIds)) {
+            if (g.Status === 'Active' && IsCanonGraph(g, canonTypeIds)) {
                 ids.Add(g.ID);
             }
         }
@@ -539,11 +545,6 @@ export class CanonGraphExpansionService implements IGraphExpansionService {
         }
         return seeds.sort((a, b) => compareText(a.Title ?? '', b.Title ?? ''));
     }
-}
-
-/** True for a graph of a canon graph type, or named "MJ Canon". */
-function isCanonGraph(graph: MJGraphEntity, canonTypeIds: UUIDSet): boolean {
-    return canonTypeIds.Has(graph.GraphTypeID) || graph.Name.trim().toLowerCase() === PRIMARY_CANON_GRAPH_NAME.toLowerCase();
 }
 
 function classifyNodeKind(entityName: string): GraphNodeKind {

@@ -32,6 +32,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 import { AgentDataPreloader } from '../AgentDataPreloader';
 import { EntityPermissionType, IMetadataProvider, Metadata, type UserInfo } from '@memberjunction/core';
+import { QueryEngine } from '@memberjunction/core-entities';
 
 const AGENT_ID = 'agent-cache-isolation';
 const USER_A = { ID: 'USER-A', Name: 'Alice' } as UserInfo;
@@ -201,6 +202,66 @@ describe('AgentDataPreloader PerAgent cache', () => {
             ]);
         } finally {
             globalSpy.mockRestore();
+        }
+    });
+
+    it('serves unfiltered field-scoped MJ: Query Categories views from QueryEngine when loaded and falls back otherwise', async () => {
+        dataSources.length = 0;
+        dataSources.push({
+            AgentID: AGENT_ID,
+            Name: 'QUERY_CATEGORIES',
+            Status: 'Active',
+            ExecutionOrder: 1,
+            SourceType: 'RunView',
+            EntityName: 'MJ: Query Categories',
+            OrderBy: 'Name ASC',
+            FieldsToRetrieve: JSON.stringify(['ID', 'Name', 'Description', 'ParentID']),
+            ResultType: 'simple',
+            DestinationType: 'Data',
+            DestinationPath: null,
+            CachePolicy: 'None',
+            CacheTimeoutSeconds: 0,
+        });
+
+        const fakeCategoriesMeta = {
+            GetUserPermisions: vi.fn().mockReturnValue({ CanRead: true }),
+            UserExemptFromRowLevelSecurity: vi.fn().mockReturnValue(true),
+            GetUserRowLevelSecurityInfo: vi.fn().mockReturnValue([]),
+            Fields: [{ Name: 'ID' }, { Name: 'Name' }, { Name: 'Description' }, { Name: 'ParentID' }],
+        };
+        const fakeProvider = {
+            Entities: [],
+            EntityByName: (name: string) => (name === 'MJ: Query Categories' ? fakeCategoriesMeta : undefined),
+        } as unknown as IMetadataProvider;
+        const fakeCategories = [
+            { ID: 'cat-2', Name: 'Sales', Description: 'Sales metrics', ParentID: null },
+            { ID: 'cat-1', Name: 'Finance', Description: null, ParentID: null },
+        ];
+        const queryEngineSpy = vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({
+            Loaded: true,
+            ProviderToUse: fakeProvider,
+            Categories: fakeCategories,
+        } as unknown as QueryEngine);
+
+        try {
+            const userWithRoles = { ID: 'user-qc', Name: 'QC', UserRoles: [] } as UserInfo;
+            const res = await AgentDataPreloader.Instance.PreloadAgentData(AGENT_ID, userWithRoles, undefined, fakeProvider);
+            expect(runViewCalls).toHaveLength(0);
+            expect(res.data.QUERY_CATEGORIES).toEqual([
+                { ID: 'cat-1', Name: 'Finance', Description: null, ParentID: null },
+                { ID: 'cat-2', Name: 'Sales', Description: 'Sales metrics', ParentID: null },
+            ]);
+
+            // Fall back cleanly to RunView when QueryEngine is unloaded
+            queryEngineSpy.mockReturnValue({
+                Loaded: false,
+                ProviderToUse: fakeProvider,
+                Categories: fakeCategories,
+            } as unknown as QueryEngine);
+            await AgentDataPreloader.Instance.PreloadAgentData(AGENT_ID, userWithRoles, undefined, fakeProvider);
+            expect(runViewCalls).toEqual(['user-qc']);
+        } finally {
+            queryEngineSpy.mockRestore();
         }
     });
 });

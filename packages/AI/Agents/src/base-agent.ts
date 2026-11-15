@@ -6972,7 +6972,7 @@ export class BaseAgent {
             this._lastVolatileStateMessage = rebuilt;
             // The fingerprints were taken before the swap; without this, an append-only history
             // reads the swapped message as changed next turn and drops the reasoning after it.
-            if (promptParams.conversationMessages) {
+            if (this._lastSentFingerprints !== undefined && promptParams.conversationMessages) {
                 this._lastSentFingerprints = promptParams.conversationMessages.map(BaseAgent.messageFingerprint);
             }
         } catch (error) {
@@ -6993,6 +6993,10 @@ export class BaseAgent {
      * are not a change.
      */
     private dropReasoningBehindChangedHistory(params: ExecuteAgentParams, outgoing: ChatMessage[], promptParams: AIPromptParams): ChatMessage[] {
+        if (!this.shouldTrackSentFingerprints(outgoing)) {
+            this._lastSentFingerprints = undefined;
+            return outgoing;
+        }
         const fingerprints = outgoing.map(BaseAgent.messageFingerprint);
         const previous = this._lastSentFingerprints;
         this._lastSentFingerprints = fingerprints;
@@ -7032,6 +7036,21 @@ export class BaseAgent {
         const selection = this._lastModelSelectionInfo;
         return this._nativeToolBindings !== undefined
             && this.DriverRequiresStableReasoningPrefix(selection?.ModelSelected, selection?.vendorSelected);
+    }
+
+    /**
+     * Returns `true` when outgoing message fingerprinting is needed to detect prefix changes
+     * for replayed reasoning blocks. Skips hashing on envelope runs (`_nativeToolBindings === undefined`)
+     * and on subsequent turns once a non-prefix-bound model is selected and no message carries reasoning.
+     */
+    private shouldTrackSentFingerprints(outgoing: ChatMessage[]): boolean {
+        if (this._nativeToolBindings === undefined) {
+            return false;
+        }
+        if (this._lastModelSelectionInfo === undefined || this.replaysPrefixBoundReasoning()) {
+            return true;
+        }
+        return outgoing.some((m) => Boolean((m as AgentChatMessage).reasoning?.length));
     }
 
     /**

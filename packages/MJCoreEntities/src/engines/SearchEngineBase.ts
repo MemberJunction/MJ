@@ -1,5 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { RegisterForStartup } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityPermissionType, IMetadataProvider, RegisterForStartup, RunView, UserInfo } from "@memberjunction/core";
 import { IsBrowser, UUIDsEqual } from "@memberjunction/global";
 import {
     MJSearchProviderEntity,
@@ -10,6 +9,16 @@ import {
     MJSearchScopeStorageAccountEntity,
     MJAIAgentSearchScopeEntity,
 } from "../generated/entity_subclasses";
+import type { MJAIAgentSearchScopeEntityType } from "../generated/entities/__mj";
+
+const AI_AGENT_SEARCH_SCOPES_ENTITY = 'MJ: AI Agent Search Scopes';
+
+type AgentSearchScopeSummary = Pick<MJAIAgentSearchScopeEntityType, 'AgentID' | 'Status' | 'Phase' | 'StartAt' | 'EndAt'>;
+type ActiveWindowRecord = {
+    Status?: string | null;
+    StartAt?: Date | string | null;
+    EndAt?: Date | string | null;
+};
 
 /**
  * SearchEngineBase provides cached access to SearchProvider + Search Scope metadata.
@@ -62,6 +71,110 @@ export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
     private _scopeEntities: MJSearchScopeEntityEntity[] = [];
     private _scopeStorageAccounts: MJSearchScopeStorageAccountEntity[] = [];
     private _agentScopes: MJAIAgentSearchScopeEntity[] = [];
+    private agentScopeSummaryCache = new WeakMap<IMetadataProvider, AgentSearchScopeSummary[]>();
+    private agentScopeSummaryInFlight = new WeakMap<IMetadataProvider, Promise<AgentSearchScopeSummary[] | null>>();
+    private agentScopeProbeGeneration = 0;
+
+    protected override async Load(
+        configs: Partial<BaseEnginePropertyConfig>[],
+        provider: IMetadataProvider,
+        forceRefresh: boolean = false,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        if (forceRefresh || !this.Loaded) {
+            this.invalidateAgentScopeSummaryCache();
+        }
+        return super.Load(configs, provider, forceRefresh, contextUser);
+    }
+
+    protected override async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
+        const entityName = (event.baseEntity?.EntityInfo?.Name ?? event.entityName ?? '').trim().toLowerCase();
+        const changed = event.type === 'save' || event.type === 'delete' || event.type === 'remote-invalidate';
+        if (changed && entityName === AI_AGENT_SEARCH_SCOPES_ENTITY.toLowerCase()) {
+            this.invalidateAgentScopeSummaryCache();
+        }
+        return super.HandleIndividualBaseEntityEvent(event);
+    }
+
+    /**
+     * Returns `true` when `agentID` has at least one active search scope assignment matching `phase`
+     * (including `'Both'`). When unloaded (for example on deferred browser startup or selective engine
+     * bootstrap), runs a single lightweight `RunView` over `MJ: AI Agent Search Scopes` cached per
+     * provider so agents with no search scopes skip loading all 7 Search entities.
+     */
+    public async HasActiveAgentScopes(
+        agentID: string,
+        phase?: 'PreExecution' | 'AgentInvoked',
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<boolean> {
+        if (!agentID) return false;
+        const resolvedProvider = provider ?? this.ProviderToUse;
+        if (this.Loaded && resolvedProvider === this.ProviderToUse) {
+            return this.GetAgentScopes(agentID, phase).length > 0;
+        }
+
+        const cached = this.agentScopeSummaryCache.get(resolvedProvider);
+        if (cached !== undefined) {
+            const now = new Date();
+            return cached.some(row => this.matchesAgentScopeRow(row, agentID, phase, now));
+        }
+
+        let pending = this.agentScopeSummaryInFlight.get(resolvedProvider);
+        if (!pending) {
+            pending = this.probeAgentScopeSummaries(resolvedProvider, contextUser).finally(() => {
+                this.agentScopeSummaryInFlight.delete(resolvedProvider);
+            });
+            this.agentScopeSummaryInFlight.set(resolvedProvider, pending);
+        }
+
+        const rows = await pending;
+        if (rows === null) {
+            // Fail open on query error so the caller falls back to full Config().
+            return true;
+        }
+        const now = new Date();
+        return rows.some(row => this.matchesAgentScopeRow(row, agentID, phase, now));
+    }
+
+    private async probeAgentScopeSummaries(
+        resolvedProvider: IMetadataProvider,
+        contextUser?: UserInfo
+    ): Promise<AgentSearchScopeSummary[] | null> {
+        const agentScopesMeta = resolvedProvider.EntityByName(AI_AGENT_SEARCH_SCOPES_ENTITY);
+        if (!agentScopesMeta) {
+            return [];
+        }
+
+        await this.SetupGlobalEventListener();
+        const generation = this.agentScopeProbeGeneration;
+
+        const rv = RunView.FromMetadataProvider(resolvedProvider);
+        const res = await rv.RunView<AgentSearchScopeSummary>(
+            {
+                EntityName: AI_AGENT_SEARCH_SCOPES_ENTITY,
+                ExtraFilter: "[Status] = 'Active'",
+                Fields: ['AgentID', 'Status', 'Phase', 'StartAt', 'EndAt'],
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        if (!res.Success) {
+            return null;
+        }
+
+        const rows = res.Results ?? [];
+        const rlsExempt = !contextUser || agentScopesMeta.UserExemptFromRowLevelSecurity(contextUser, EntityPermissionType.Read);
+        if (rlsExempt && generation === this.agentScopeProbeGeneration) {
+            this.agentScopeSummaryCache.set(resolvedProvider, rows);
+        }
+        return rows;
+    }
+
+    private invalidateAgentScopeSummaryCache(): void {
+        this.agentScopeProbeGeneration++;
+        this.agentScopeSummaryCache = new WeakMap<IMetadataProvider, AgentSearchScopeSummary[]>();
+    }
 
     /**
      * Configures the engine by loading all search provider and scope records from the database.
@@ -153,7 +266,7 @@ export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
      */
     public get ActiveScopes(): MJSearchScopeEntity[] {
         const now = new Date();
-        return this.Scopes.filter(s => this.isScopeActiveNow(s, now));
+        return this.Scopes.filter(s => this.isWindowActiveNow(s, now));
     }
 
     /** All scope-provider join rows. */
@@ -256,7 +369,7 @@ export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
     public GetActiveScopeByID(id: string): MJSearchScopeEntity | undefined {
         const scope = this.GetScopeByID(id);
         if (!scope) return undefined;
-        return this.isScopeActiveNow(scope, new Date()) ? scope : undefined;
+        return this.isWindowActiveNow(scope, new Date()) ? scope : undefined;
     }
 
     /** Find a scope by Name (any status). */
@@ -332,15 +445,7 @@ export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
     ): MJAIAgentSearchScopeEntity[] {
         if (!agentID) return [];
         const now = new Date();
-        return this.AgentScopes.filter(row => {
-            if (!UUIDsEqual(row.AgentID, agentID)) return false;
-            if (row.Status !== 'Active') return false;
-            if (!this.isAgentScopeActiveNow(row, now)) return false;
-            if (phase) {
-                if (row.Phase !== phase && row.Phase !== 'Both') return false;
-            }
-            return true;
-        });
+        return this.AgentScopes.filter(row => this.matchesAgentScopeRow(row, agentID, phase, now));
     }
 
     /**
@@ -359,17 +464,28 @@ export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
     // Time-window helpers
     // ================================================================
 
-    private isScopeActiveNow(scope: MJSearchScopeEntity, now: Date): boolean {
-        if (scope.Status !== 'Active') return false;
-        if (scope.StartAt && scope.StartAt > now) return false;
-        if (scope.EndAt && scope.EndAt < now) return false;
+    private matchesAgentScopeRow(
+        row: AgentSearchScopeSummary,
+        agentID: string,
+        phase: 'PreExecution' | 'AgentInvoked' | undefined,
+        now: Date
+    ): boolean {
+        if (!UUIDsEqual(row.AgentID, agentID)) return false;
+        if (!this.isWindowActiveNow(row, now)) return false;
+        if (phase && row.Phase !== phase && row.Phase !== 'Both') return false;
         return true;
     }
 
-    private isAgentScopeActiveNow(row: MJAIAgentSearchScopeEntity, now: Date): boolean {
+    private isWindowActiveNow(row: ActiveWindowRecord, now: Date): boolean {
         if (row.Status !== 'Active') return false;
-        if (row.StartAt && row.StartAt > now) return false;
-        if (row.EndAt && row.EndAt < now) return false;
+        if (row.StartAt) {
+            const startAt = row.StartAt instanceof Date ? row.StartAt : new Date(row.StartAt);
+            if (startAt > now) return false;
+        }
+        if (row.EndAt) {
+            const endAt = row.EndAt instanceof Date ? row.EndAt : new Date(row.EndAt);
+            if (endAt < now) return false;
+        }
         return true;
     }
 }
