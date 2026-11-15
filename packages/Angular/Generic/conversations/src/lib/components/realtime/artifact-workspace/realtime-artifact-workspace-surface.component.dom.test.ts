@@ -1,8 +1,9 @@
 import { Component, Input } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import type { Observable } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { ArtifactWorkspaceEngine } from './artifact-workspace-engine';
 import { RealtimeArtifactWorkspaceSurfaceComponent } from './realtime-artifact-workspace-surface.component';
 
@@ -12,9 +13,9 @@ class ArtifactViewerPanelStub {
   @Input() public artifactId = '';
   @Input() public versionNumber: number | undefined;
   @Input() public currentUser: UserInfo | null = null;
-  @Input() public Provider: unknown = null;
+  @Input() public Provider: IMetadataProvider | null = null;
   @Input() public environmentId = '';
-  @Input() public refreshTrigger: unknown = null;
+  @Input() public refreshTrigger: Observable<void> | undefined;
   @Input() public canEdit = false;
   @Input() public showHeader = true;
   @Input() public showTabs = true;

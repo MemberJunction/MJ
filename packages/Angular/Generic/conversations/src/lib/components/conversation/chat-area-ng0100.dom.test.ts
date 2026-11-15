@@ -28,7 +28,7 @@ function stubChild(selector: string, inputs: string[], outputs: string[]): Type<
   class ChildStub {
     constructor() {
       for (const output of outputs) {
-        Reflect.set(this, output, new EventEmitter<unknown>());
+        Reflect.set(this, output, new EventEmitter<void>());
       }
     }
   }
