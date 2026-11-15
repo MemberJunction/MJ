@@ -87,6 +87,7 @@ import {
     IsDiagnosticCaptureSuppressed,
     PostCommitTask,
     PostCommitToken,
+    PostCommitCoalesceMode,
     StripStopWords,
     DatabasePlatform,
     QueryExecutionSpec,
@@ -204,6 +205,10 @@ interface PostCommitEntry {
     Description: string;
     /** Transaction frame that owns the entry (1 = outermost). */
     Depth: number;
+    /** Optional coalescing key deduplicated at outermost commit. */
+    CoalesceKey?: string;
+    /** Deduplication policy when multiple entries share `CoalesceKey`. */
+    CoalesceMode?: PostCommitCoalesceMode;
 }
 
 /** How one dataset item reads for the caller, or why it is refused. */
@@ -10247,6 +10252,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Savepoint- and token-aware coalesced post-commit scheduling.
+     *
+     * Entries recorded inside an open transaction retain their owning depth so savepoint rollbacks
+     * drop rolled-back registrations without touching earlier frames' registrations under the same
+     * key; surviving entries deduplicate once at outermost commit (`'last-wins'` or `'first-wins'`).
+     */
+    public override ScheduleAfterCommit(
+        coalesceKey: string,
+        task: PostCommitTask,
+        description: string = 'post-commit task',
+        token?: PostCommitToken,
+        mode: PostCommitCoalesceMode = 'last-wins',
+    ): void {
+        if (!coalesceKey) {
+            this.RunAfterCommit(task, description, token);
+            return;
+        }
+        if (token) {
+            this.registerPostCommitTaskWithToken(task, description, token, coalesceKey, mode);
+            return;
+        }
+        if (!this.IsCallerInAmbientTransaction()) {
+            this.EnqueueDetachedCoalescedTask(coalesceKey, task, description, mode);
+            return;
+        }
+        this._postCommitTasks.push({
+            Task: task,
+            Description: description,
+            Depth: this._transactionDepth,
+            CoalesceKey: coalesceKey,
+            CoalesceMode: mode,
+        });
+    }
+
+    protected override ExecuteDetachedPostCommitTask(task: PostCommitTask, description: string): void {
+        this.runDetachedTask(task, description);
+    }
+
+    /**
      * Snapshot of the caller's transaction frames. Synchronous, and never `undefined` on this
      * provider: outside a transaction it returns a token whose epoch is `null`, which says the work
      * is already durable rather than saying nothing. See
@@ -10261,14 +10305,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return this._frameTracker.Capture();
     }
 
-    private registerPostCommitTaskWithToken(task: PostCommitTask, description: string, token: PostCommitToken): void {
+    private registerPostCommitTaskWithToken(
+        task: PostCommitTask,
+        description: string,
+        token: PostCommitToken,
+        coalesceKey?: string,
+        coalesceMode?: PostCommitCoalesceMode,
+    ): void {
         const resolution = this._frameTracker.Resolve(token, this._doomed);
         switch (resolution.Kind) {
             case 'run':
-                this.runDetachedTask(task, description);
+                if (coalesceKey) {
+                    this.EnqueueDetachedCoalescedTask(coalesceKey, task, description, coalesceMode ?? 'last-wins');
+                } else {
+                    this.runDetachedTask(task, description);
+                }
                 return;
             case 'queue':
-                this._postCommitTasks.push({ Task: task, Description: description, Depth: resolution.Depth });
+                this._postCommitTasks.push({
+                    Task: task,
+                    Description: description,
+                    Depth: resolution.Depth,
+                    ...(coalesceKey ? { CoalesceKey: coalesceKey, CoalesceMode: coalesceMode ?? 'last-wins' } : {}),
+                });
                 return;
             case 'drop':
                 if (resolution.Unknown) {
@@ -10308,14 +10367,39 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /** Run tasks detached from a committed transaction, one at a time, in order. Never throws. */
     private async runPostCommitTasks(tasks: PostCommitEntry[]): Promise<void> {
-        if (tasks.length === 0) {
+        const effectiveTasks = this.coalescePostCommitTasks(tasks);
+        if (effectiveTasks.length === 0) {
             return;
         }
-        LogStatus(`Running ${tasks.length} post-commit task(s) after transaction commit`);
-        for (const entry of tasks) {
+        LogStatus(`Running ${effectiveTasks.length} post-commit task(s) after transaction commit`);
+        for (const entry of effectiveTasks) {
             // Detached from the committer's (now stale) membership explicitly, not merely by epoch mismatch.
             await this._affinity.RunDetached(() => this.RunPostCommitTaskSafely(entry.Task, entry.Description));
         }
+    }
+
+    /** Deduplicates entries sharing a `CoalesceKey` after savepoint rollbacks have already been pruned. */
+    private coalescePostCommitTasks(tasks: PostCommitEntry[]): PostCommitEntry[] {
+        let hasCoalesced = false;
+        const winnerIndex = new Map<string, number>();
+        for (let i = 0; i < tasks.length; i++) {
+            const entry = tasks[i];
+            if (!entry.CoalesceKey) {
+                continue;
+            }
+            hasCoalesced = true;
+            if ((entry.CoalesceMode ?? 'last-wins') === 'first-wins') {
+                if (!winnerIndex.has(entry.CoalesceKey)) {
+                    winnerIndex.set(entry.CoalesceKey, i);
+                }
+            } else {
+                winnerIndex.set(entry.CoalesceKey, i);
+            }
+        }
+        if (!hasCoalesced) {
+            return tasks;
+        }
+        return tasks.filter((entry, idx) => !entry.CoalesceKey || winnerIndex.get(entry.CoalesceKey) === idx);
     }
 
     /** Detach the whole queue (outermost commit succeeded). */

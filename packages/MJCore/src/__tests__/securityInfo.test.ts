@@ -567,4 +567,21 @@ describe('RowLevelSecurityFilterInfo — $ in substituted values (#3171)', () =>
             expect(filter.MarkupFilterText(user)).toBe("CompanyID IN ('a$&b','c$`d')");
         });
     });
+
+    describe('UserInfo LinkedEntityID and LinkedEntityRecordID typing', () => {
+        it('accepts UUID strings and null on LinkedEntityID and LinkedEntityRecordID', () => {
+            const linkedEntityId: string | null = '11111111-1111-1111-1111-111111111111';
+            const linkedRecordId: string | null = '22222222-2222-2222-2222-222222222222';
+            const user = new UserInfo(null, {
+                ID: 'u-linked',
+                LinkedEntityID: linkedEntityId,
+                LinkedEntityRecordID: linkedRecordId,
+            });
+
+            const readEntityId: string = user.LinkedEntityID;
+            const readRecordId: string = user.LinkedEntityRecordID;
+            expect(readEntityId).toBe(linkedEntityId);
+            expect(readRecordId).toBe(linkedRecordId);
+        });
+    });
 });
