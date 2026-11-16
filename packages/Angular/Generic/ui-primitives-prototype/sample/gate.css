@@ -1,0 +1,101 @@
+/* Hostile host CSS + 3-look theme switcher + unlayered host override test (zero !important) */
+
+/* Hostile global rules that would break unlayered / poorly isolated components */
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: system-ui, sans-serif;
+  background: var(--mj-bg-canvas, #f1f5f9);
+  color: var(--mj-text-primary, #1e293b);
+}
+
+.host-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.host-btn {
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  font: inherit;
+}
+
+.host-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* Unlayered host override: must beat @layer primitives without !important */
+.host-override-surface {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+/* Look 1: MJ Default (uses foundation defaults) */
+[data-look='mj'] {
+  --mj-brand-primary: #0076b6;
+}
+
+/* Look 2: LXP (warm violet/teal pill look) */
+[data-look='lxp'] {
+  --mj-brand-primary: #7c3aed;
+  --mj-radius-control: var(--mj-radius-pill);
+  --mj-radius-surface: var(--mj-radius-xl);
+  --mj-radius-overlay: var(--mj-radius-xl);
+  --mj-surface-base-bg: #faf5ff;
+  --mj-surface-elevated-bg: #ffffff;
+  --mj-surface-base-border: #e9d5ff;
+}
+
+[data-theme='dark'][data-look='lxp'] {
+  --mj-brand-primary: #a78bfa;
+  --mj-surface-base-bg: #1e1b2e;
+  --mj-surface-elevated-bg: #2a2540;
+  --mj-surface-base-border: #4c1d95;
+}
+
+/* Look 3: Dense, flat, square-cornered serif look (shares nothing with MJ or LXP) */
+[data-look='editorial'] {
+  --mj-font-family: Georgia, 'Times New Roman', serif;
+  --mj-font-family-display: Georgia, 'Times New Roman', serif;
+  --mj-radius-control: 0px;
+  --mj-radius-surface: 0px;
+  --mj-radius-overlay: 0px;
+  --mj-shadow-sm: none;
+  --mj-shadow-md: none;
+  --mj-shadow-lg: none;
+  --mj-shadow-xl: none;
+  --mj-surface-elevated-shadow: none;
+  --mj-surface-overlay-shadow: none;
+  --mj-surface-padding: var(--mj-space-2);
+  --mj-row-min-height: var(--mj-control-height-sm);
+  --mj-brand-primary: #111827;
+  --mj-surface-base-border: #111827;
+  --mj-surface-elevated-border: #111827;
+}
+
+[data-theme='dark'][data-look='editorial'] {
+  --mj-brand-primary: #f8fafc;
+  --mj-surface-base-border: #94a3b8;
+  --mj-surface-elevated-border: #94a3b8;
+}
+
+/* Open-axis custom tone not shipped in the library */
+.mj-row[data-tone='plum'] {
+  --mj-row-text: #701a75;
+  --mj-row-bg-selected: #fae8ff;
+}
+
+[data-theme='dark'] .mj-row[data-tone='plum'] {
+  --mj-row-text: #f0abfc;
+  --mj-row-bg-selected: #4a044e;
+}

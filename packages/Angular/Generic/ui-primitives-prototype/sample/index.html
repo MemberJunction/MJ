@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-look="mj">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"
+    />
+    <title>Project Lego Wave 0 Prototype Gate</title>
+    <link rel="stylesheet" href="./gate.css" />
+    <script defer src="../dist/element/mj-wave0-prototype.js"></script>
+    <script defer src="./gate.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Project Lego: Wave 0 Prototype Gate</h1>
+
+      <div class="host-controls" role="toolbar" aria-label="Look and layer controls">
+        <button type="button" class="host-btn" data-set-look="mj">Look: MJ Default</button>
+        <button type="button" class="host-btn" data-set-look="lxp">Look: LXP</button>
+        <button type="button" class="host-btn" data-set-look="editorial">Look: Editorial</button>
+        <button type="button" class="host-btn" id="toggle-theme">Toggle Dark</button>
+        <button type="button" class="host-btn" id="open-dialog">Open Dialog</button>
+        <button type="button" class="host-btn" id="open-sheet">Open Sheet</button>
+        <button type="button" class="host-btn" id="open-popover">Open Popover</button>
+        <span id="gate-status">Look: mj</span>
+      </div>
+
+      <div class="host-grid">
+        <mj-surface level="base" elevation="sm">
+          <div class="mj-surface-header">Base Surface</div>
+          <div class="mj-surface-body">
+            <mj-row interactive="true" selected="true">
+              <span class="mj-row-leading" aria-hidden="true">★</span>
+              <span class="mj-row-content">Selected Row (default tone)</span>
+              <span class="mj-row-trailing">12</span>
+            </mj-row>
+            <mj-row interactive="true" tone="plum" mj-role="nav-item">
+              <span class="mj-row-leading" aria-hidden="true">◆</span>
+              <span class="mj-row-content">Custom Open-Axis Tone (plum)</span>
+              <span class="mj-row-trailing">New</span>
+            </mj-row>
+          </div>
+          <div class="mj-surface-footer">
+            <span>Footer part</span>
+          </div>
+        </mj-surface>
+
+        <mj-surface level="elevated" elevation="md" class="host-override-surface">
+          <div class="mj-surface-body">
+            <span>Reordered / headerless elevated surface with unlayered host dashed border</span>
+            <mj-row density="sm" interactive="true">
+              <span class="mj-row-content">Compact sm row (44px on coarse pointer)</span>
+            </mj-row>
+          </div>
+        </mj-surface>
+      </div>
+
+      <mj-layer id="proto-dialog" kind="dialog" modal="true" closeable="true" label="Prototype Dialog">
+        <div class="mj-layer-header">
+          <h2 class="mj-layer-title">Dialog on MJLayerService</h2>
+        </div>
+        <div class="mj-layer-body">
+          <p>Focus is trapped here, Escape closes it, and it collapses to a bottom sheet on phones.</p>
+        </div>
+        <div class="mj-layer-footer">
+          <button type="button" class="host-btn" id="close-dialog" data-autofocus>Confirm</button>
+        </div>
+      </mj-layer>
+
+      <mj-layer id="proto-sheet" kind="sheet" placement="end" modal="true" closeable="true" label="Prototype Sheet">
+        <div class="mj-layer-header">
+          <h2 class="mj-layer-title">Slide Sheet on MJLayerService</h2>
+        </div>
+        <div class="mj-layer-body">
+          <p>Shares the same layer base, Escape handling, and ref-counted scroll lock.</p>
+        </div>
+        <div class="mj-layer-footer">
+          <button type="button" class="host-btn" id="close-sheet" data-autofocus>Done</button>
+        </div>
+      </mj-layer>
+
+      <mj-layer id="proto-popover" kind="popover" modal="false" closeable="true" label="Prototype Popover">
+        <div class="mj-layer-body">
+          <p>Non-modal popover on MJLayerService.</p>
+          <button type="button" class="host-btn" id="close-popover">Dismiss</button>
+        </div>
+      </mj-layer>
+    </main>
+  </body>
+</html>
