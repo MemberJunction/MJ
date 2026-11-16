@@ -73,7 +73,7 @@ const VERSION_LIST_FIELDS = [
 ];
 
 /** A row of the version list read: version metadata without Content. The ID-only read fills ID alone. */
-type ArtifactVersionListRow = Pick<MJArtifactVersionEntity, 'ID' | 'ArtifactID' | 'VersionNumber' | 'Name' | 'Description' | '__mj_CreatedAt' | '__mj_UpdatedAt'>;
+type ArtifactVersionListRow = Pick<MJArtifactVersionEntity, 'ID' | 'ArtifactID' | 'VersionNumber' | 'Name' | 'Description' | 'Configuration' | '__mj_CreatedAt' | '__mj_UpdatedAt'>;
 
 /** A row of the collection read keyed by version. */
 type CollectionArtifactRow = Pick<MJCollectionArtifactEntity, 'ID' | 'CollectionID' | 'ArtifactVersionID' | 'Sequence'>;
