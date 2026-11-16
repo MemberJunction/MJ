@@ -1394,6 +1394,22 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     await this.OnBeforeSaveExecute(entity, user, options, saveContext);
                 }
 
+                // Step 3b: Update post-image RLS check. Step 2b checks the row as it is stored;
+                // this checks the row as it will be after the save, so a user cannot move a row
+                // they may edit out of their own row scope (for example by changing the column
+                // the Update filter tests). It runs after the before-save hooks because they can
+                // change field values, and the values that get written are the ones that count.
+                // The message is specific because the caller could already see the stored row.
+                if (!bReplay && !bNewRecord) {
+                    const postImagePass = await this.CheckUpdateRLSPostImage(entity, user);
+                    if (!postImagePass) {
+                        entityResult.Success = false;
+                        entityResult.EndedAt = new Date();
+                        entityResult.Message = `Access denied: the requested changes would move this ${entity.EntityInfo.Name} record outside your permitted row scope`;
+                        throw new Error(entityResult.Message);
+                    }
+                }
+
                 // Step 4: Generate provider-specific SQL
                 const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user);
 
@@ -1636,6 +1652,18 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Subclasses must implement the actual RLS check logic.
      */
     protected abstract CheckCreateRLS(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean>;
+
+    /**
+     * Checks whether an UPDATE's pending (post-image) field values still pass the Update RLS
+     * filter. {@link CheckRecordRLS} checks the row as stored; this checks the row as it will be
+     * after the update, so a caller cannot move a row they may edit outside their own row scope.
+     * Runs after the before-save hooks so it sees the final values. Return true when no Update
+     * filter applies.
+     */
+    protected abstract CheckUpdateRLSPostImage(
         entity: BaseEntity,
         user: UserInfo
     ): Promise<boolean>;
