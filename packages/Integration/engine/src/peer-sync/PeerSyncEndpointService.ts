@@ -1,7 +1,9 @@
 import { IMetadataProvider, IRunViewProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     BuildCompositeWatermarkWhereClause,
     CoalesceRecordChanges,
+    PlanPeerEntityOrder,
 } from './ChangeSetPlanner.js';
 import { PeerSyncApplier } from './PeerSyncApplier.js';
 import type { PeerSyncApplyContext } from './PeerSyncApplier.js';
@@ -14,6 +16,7 @@ import type {
     PeerApplyBatchResponse,
     PeerChangeCursor,
     PeerDatabaseEngine,
+    PeerDeferredFKApplyResult,
     PeerDeferredFKUpdate,
     PeerDoorbellNotification,
     PeerDoorbellResponse,
@@ -74,8 +77,10 @@ export interface PeerSyncEndpointConfig {
  * - `ApplyChangeBatch`
  * - `NotifyChangeBatch`
  *
- * Enforces `AllowedEntityNames` on every entity-scoped operation so a peer can
- * never read or mutate entities outside the configured integration scope.
+ * When `AllowedEntityNames` is non-empty, enforces that allowlist on every
+ * entity-scoped operation in addition to the authenticated `contextUser`'s
+ * entity permissions and API-key row filters. When `AllowedEntityNames` is empty,
+ * entity-level authorization relies solely on `contextUser` permissions and API-key scopes/filters.
  */
 export class PeerSyncEndpointService {
     private readonly config: PeerSyncEndpointConfig;
@@ -89,6 +94,12 @@ export class PeerSyncEndpointService {
         this.allowedLowerSet = new Set(
             config.AllowedEntityNames.map(n => n.toLowerCase())
         );
+        if (this.allowedLowerSet.size === 0) {
+            console.warn(
+                `[PeerSyncEndpointService] AllowedEntityNames is empty on peer '${config.InstanceName}'; ` +
+                `entity access relies solely on contextUser permissions and API-key row filters.`
+            );
+        }
     }
 
     /**
@@ -168,9 +179,7 @@ export class PeerSyncEndpointService {
         this.assertEntityAllowed(request.EntityName);
 
         const md = this.config.MetadataProvider ?? Metadata.Provider;
-        const entityInfo = md.Entities.find(
-            e => e.Name.toLowerCase() === request.EntityName.toLowerCase()
-        );
+        const entityInfo = md.EntityByName(request.EntityName);
         if (!entityInfo) {
             throw new Error(`Entity '${request.EntityName}' not found on peer '${this.config.InstanceName}'.`);
         }
@@ -231,8 +240,28 @@ export class PeerSyncEndpointService {
     ): Promise<PeerApplyBatchResponse> {
         this.assertEntityAllowed(request.EntityName);
 
+        const md = this.config.MetadataProvider ?? Metadata.Provider;
+        let computedDeferredFields: string[] | undefined;
+        if (!overrideContext?.DeferredFieldNames) {
+            const targetEntity = md.EntityByName(request.EntityName);
+            if (targetEntity) {
+                const scopeEntities =
+                    this.allowedLowerSet.size > 0
+                        ? md.Entities.filter(e => this.allowedLowerSet.has(e.Name.toLowerCase()))
+                        : md.Entities;
+                const depPlan = PlanPeerEntityOrder(
+                    scopeEntities.map(e => e.ID),
+                    md
+                );
+                computedDeferredFields = depPlan.DeferredNullableFields
+                    .filter(edge => edge.AllowsNull && UUIDsEqual(edge.FromEntityID, targetEntity.ID))
+                    .map(edge => edge.FieldName);
+            }
+        }
+
         const applyCtx: PeerSyncApplyContext = {
             CompanyIntegrationID: this.config.CompanyIntegrationID,
+            DeferredFieldNames: computedDeferredFields,
             PreservePrimaryKeys: this.config.PreservePrimaryKeys ?? true,
             DuplicateThreshold: this.config.DuplicateThreshold ?? 0.92,
             PotentialMatchThreshold: this.config.PotentialMatchThreshold ?? 0.75,
@@ -260,8 +289,10 @@ export class PeerSyncEndpointService {
     public async FlushDeferredForeignKeys(
         requestMeta: { PairingID: string; OriginInstanceID: string; RunID: string },
         contextUser: UserInfo
-    ): Promise<number> {
-        if (this.pendingDeferredFKs.length === 0) return 0;
+    ): Promise<PeerDeferredFKApplyResult> {
+        if (this.pendingDeferredFKs.length === 0) {
+            return { updatedCount: 0, errorCount: 0, errors: [] };
+        }
         const toFlush = [...this.pendingDeferredFKs];
         this.pendingDeferredFKs = [];
 

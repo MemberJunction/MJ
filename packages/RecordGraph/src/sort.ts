@@ -1,5 +1,5 @@
 import { Metadata, type IMetadataProvider, type EntityInfo } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import type { DependencyNode } from './types';
 
 /**
@@ -146,7 +146,7 @@ export function FindTrueCycles(
         if (scc.length > 1) return true;
         if (scc.length === 1) {
             const node = scc[0];
-            return getDependencies(node).some((dep) => UUIDsEqual(dep, node));
+            return new UUIDSet(getDependencies(node)).has(node);
         }
         return false;
     });
@@ -189,11 +189,15 @@ export function PlanEntityDependencyOrder(
         if (entityInfo.ParentID) {
             const parentNorm = NormalizeUUID(entityInfo.ParentID);
             if (canonicalByNorm.has(parentNorm) && parentNorm !== normID) {
+                const childPk = entityInfo.FirstPrimaryKey; // first-pk-ok: IS-A child shares a single-column primary key with its parent entity
+                if (!childPk) {
+                    throw new Error(`IS-A child entity '${entityInfo.Name}' has no primary key defined in metadata.`);
+                }
                 const parentInfo = md.EntityByID(entityInfo.ParentID);
                 edges.push({
                     EntityID: entityID,
                     EntityName: entityInfo.Name,
-                    FieldName: entityInfo.FirstPrimaryKey?.Name ?? 'ID', // first-pk-ok: IS-A child shares a single-column primary key with its parent entity
+                    FieldName: childPk.Name,
                     RelatedEntityID: canonicalByNorm.get(parentNorm)!,
                     RelatedEntityName: parentInfo?.Name ?? String(entityInfo.ParentEntity ?? ''),
                     AllowsNull: false,

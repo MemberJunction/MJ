@@ -24,6 +24,7 @@ import {
     PeerIdentityGate,
     PeerManifest,
     PeerRecordChangeEntry,
+    PeerSyncApplier,
     PeerSyncDoorbell,
     PeerSyncEndpointService,
     PlanPeerEntityOrder,
@@ -1034,6 +1035,413 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
             // Verify both Pull and Push composite watermarks were saved on Peer A
             expect(peerA.savedWatermarks).toHaveLength(2);
             expect(peerA.savedWatermarks.map(w => w.Direction).sort()).toEqual(['Pull', 'Push']);
+        });
+    });
+
+    describe('Review Regression Suite — Source-Mode 3-Way Merge, Doorbell Retry, Pass 2 FK Errors & PK Guards', () => {
+        it('ComputeThreeWayFieldMerge in OutputKeyMode: source emits ourVal on local-only edits, omits remote-only edits, and resolves conflicts accurately', () => {
+            const mappings = [
+                { SourceFieldName: 'remote_email', DestinationFieldName: 'Email' },
+                { SourceFieldName: 'remote_title', DestinationFieldName: 'Title' },
+                { SourceFieldName: 'remote_phone', DestinationFieldName: 'Phone' },
+            ];
+
+            // 1. DestWins (local wins true conflicts):
+            // - Email: only Ours changed ('ada.new@example.com' vs base 'ada@example.com') -> emits ourVal ('ada.new@example.com')
+            // - Title: only Theirs changed ('CTO' vs base 'VP') -> omitted in source mode so outbound push preserves remote edit
+            // - Phone: both changed differently (Ours '111', Theirs '222', Base '000') -> DestWins emits ourVal ('111')
+            const destWinsResult = ComputeThreeWayFieldMerge({
+                Base: { Email: 'ada@example.com', Title: 'VP', Phone: '000' },
+                Ours: { Email: 'ada.new@example.com', Title: 'VP', Phone: '111' },
+                Theirs: { remote_email: 'ada@example.com', remote_title: 'CTO', remote_phone: '222' },
+                FieldMappings: mappings,
+                ConflictResolution: 'DestWins',
+                OutputKeyMode: 'source',
+            });
+
+            expect(destWinsResult.Action).toBe('proceed');
+            expect(destWinsResult.ManualConflict).toBe(false);
+            expect(destWinsResult.ConflictFields).toEqual(['Phone']);
+            expect(destWinsResult.MergedFields).toEqual({
+                remote_email: 'ada.new@example.com',
+                remote_phone: '111',
+            });
+            expect('remote_title' in destWinsResult.MergedFields).toBe(false);
+
+            // 2. SourceWins (remote wins true conflicts): conflicting Phone is omitted so remote keeps '222'
+            const sourceWinsResult = ComputeThreeWayFieldMerge({
+                Base: { Email: 'ada@example.com', Title: 'VP', Phone: '000' },
+                Ours: { Email: 'ada.new@example.com', Title: 'VP', Phone: '111' },
+                Theirs: { remote_email: 'ada@example.com', remote_title: 'CTO', remote_phone: '222' },
+                FieldMappings: mappings,
+                ConflictResolution: 'SourceWins',
+                OutputKeyMode: 'source',
+            });
+
+            expect(sourceWinsResult.Action).toBe('proceed');
+            expect(sourceWinsResult.ConflictFields).toEqual(['Phone']);
+            expect(sourceWinsResult.MergedFields).toEqual({
+                remote_email: 'ada.new@example.com',
+            });
+
+            // 3. Manual policy quarantines true conflicts
+            const manualResult = ComputeThreeWayFieldMerge({
+                Base: { Email: 'ada@example.com', Title: 'VP', Phone: '000' },
+                Ours: { Email: 'ada.new@example.com', Title: 'VP', Phone: '111' },
+                Theirs: { remote_email: 'ada@example.com', remote_title: 'CTO', remote_phone: '222' },
+                FieldMappings: mappings,
+                ConflictResolution: 'Manual',
+                OutputKeyMode: 'source',
+            });
+
+            expect(manualResult.Action).toBe('skip');
+            expect(manualResult.ManualConflict).toBe(true);
+            expect(manualResult.ResolutionSummary).toBe('quarantined');
+        });
+
+        it('PeerSyncDoorbell automatically retries after transport failure once exponential backoff elapses', async () => {
+            vi.useFakeTimers();
+            try {
+                PeerSyncDoorbell.Instance.StopAll();
+                let attempts = 0;
+                const delivered: PeerDoorbellNotification[] = [];
+
+                const flakyTransport = {
+                    GetManifest: vi.fn(),
+                    GetSchemaFingerprint: vi.fn(),
+                    PreviewSchemaPlan: vi.fn(),
+                    FetchChangeBatch: vi.fn(),
+                    ApplyChangeBatch: vi.fn(),
+                    NotifyChangeBatch: vi.fn(async (n: PeerDoorbellNotification) => {
+                        attempts++;
+                        if (attempts === 1) {
+                            throw new Error('transient network timeout');
+                        }
+                        delivered.push(n);
+                        return { Accepted: true, TriggeredRunID: 'run-retry-ok' };
+                    }),
+                };
+
+                const pairingID = ComputePairingID(INSTANCE_A, INSTANCE_B);
+                PeerSyncDoorbell.Instance.RegisterPairing({
+                    PairingID: pairingID,
+                    LocalInstanceID: INSTANCE_A,
+                    Transport: flakyTransport,
+                    WatchedEntityNames: ['Contacts'],
+                    DebounceMs: 100,
+                    InitialBackoffMs: 1000,
+                    MaxBackoffMs: 5000,
+                });
+
+                const evt = new BaseEntityEvent();
+                evt.type = 'save';
+                evt.entityName = 'Contacts';
+                evt.baseEntity = null;
+                PeerSyncDoorbell.Instance.HandleEntityEvent(evt);
+
+                // First debounce fires at 100ms and fails -> schedules backoff retry at +1000ms
+                await vi.advanceTimersByTimeAsync(150);
+                expect(attempts).toBe(1);
+                expect(delivered).toHaveLength(0);
+                expect(
+                    PeerSyncDoorbell.Instance.GetPairingStats(pairingID)?.ConsecutiveFailures
+                ).toBe(1);
+
+                // Advance past the 1000ms backoff with NO new entity events -> automatic retry succeeds!
+                await vi.advanceTimersByTimeAsync(1100);
+                expect(attempts).toBe(2);
+                expect(delivered).toHaveLength(1);
+                expect(delivered[0].ChangedEntityNames).toEqual(['Contacts']);
+                expect(
+                    PeerSyncDoorbell.Instance.GetPairingStats(pairingID)?.ConsecutiveFailures
+                ).toBe(0);
+            } finally {
+                PeerSyncDoorbell.Instance.StopAll();
+                vi.useRealTimers();
+            }
+        });
+
+        it('ApplyDeferredForeignKeys and MemberJunctionConnector.RunPipeline count Pass 2 save, load, and unresolved-FK failures instead of reporting green', async () => {
+            const user = createContextUser();
+            const applier = new PeerSyncApplier();
+
+            const companyEntityInfo = {
+                ID: ENTITY_COMPANIES_ID,
+                Name: 'Companies',
+                PrimaryKeys: [{ Name: 'ID' }],
+                FirstPrimaryKey: { Name: 'ID' },
+                Fields: [
+                    { Name: 'ID', IsPrimaryKey: true, RelatedEntityID: null, AllowsNull: false },
+                    { Name: 'PrimaryContactID', IsPrimaryKey: false, RelatedEntityID: ENTITY_CONTACTS_ID, AllowsNull: true },
+                ],
+                ParentEntityInfo: null,
+            } as unknown as EntityInfo;
+
+            const contactEntityInfo = {
+                ID: ENTITY_CONTACTS_ID,
+                Name: 'Contacts',
+                PrimaryKeys: [{ Name: 'ID' }],
+                FirstPrimaryKey: { Name: 'ID' },
+                Fields: [
+                    { Name: 'ID', IsPrimaryKey: true, RelatedEntityID: null, AllowsNull: false },
+                    { Name: 'CompanyID', IsPrimaryKey: false, RelatedEntityID: ENTITY_COMPANIES_ID, AllowsNull: false },
+                ],
+                ParentEntityInfo: null,
+            } as unknown as EntityInfo;
+
+            const emptyRunView: IRunViewProvider = {
+                RunView: vi.fn(async () => ({
+                    Success: true,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                } as RunViewResult)),
+                RunViews: vi.fn(async () => []),
+            };
+
+            const failingMetadata = {
+                Entities: [companyEntityInfo, contactEntityInfo],
+                EntityByName: (name: string) =>
+                    name.toLowerCase() === 'companies'
+                        ? companyEntityInfo
+                        : name.toLowerCase() === 'contacts'
+                            ? contactEntityInfo
+                            : undefined,
+                GetEntityObject: vi.fn(async () => ({
+                    Fields: [{ Name: 'ID', Value: null }, { Name: 'PrimaryContactID', Value: null }],
+                    LatestResult: { CompleteMessage: 'FK constraint violation' },
+                    SetSyncContext: vi.fn(),
+                    ClearSyncContext: vi.fn(),
+                    InnerLoad: vi.fn(async (key: { KeyValuePairs: Array<{ Value: unknown }> }) =>
+                        key.KeyValuePairs[0]?.Value !== 'missing-local-row'
+                    ),
+                    Save: vi.fn(async () => false),
+                })),
+            } as unknown as IMetadataProvider;
+
+            // Direct unit check on ApplyDeferredForeignKeys:
+            // 1. Save() returns false -> errorCount++
+            // 2. InnerLoad() returns false -> errorCount++
+            // 3. Unresolved FK when PreservePrimaryKeys is false -> errorCount++
+            const pass2Result = await applier.ApplyDeferredForeignKeys(
+                [
+                    {
+                        EntityName: 'Companies',
+                        LocalRecordID: 'comp-1',
+                        FieldName: 'PrimaryContactID',
+                        SourceForeignKeyValue: 'contact-1',
+                        RelatedEntityID: ENTITY_CONTACTS_ID,
+                    },
+                    {
+                        EntityName: 'Companies',
+                        LocalRecordID: 'missing-local-row',
+                        FieldName: 'PrimaryContactID',
+                        SourceForeignKeyValue: 'contact-1',
+                        RelatedEntityID: ENTITY_CONTACTS_ID,
+                    },
+                ],
+                { PairingID: 'pair-1', OriginInstanceID: INSTANCE_B, RunID: 'run-1' },
+                {
+                    CompanyIntegrationID: 'ci-1',
+                    PreservePrimaryKeys: true,
+                    DuplicateThreshold: 0.92,
+                    PotentialMatchThreshold: 0.75,
+                    ContextUser: user,
+                    MetadataProvider: failingMetadata,
+                    RunViewProvider: emptyRunView,
+                }
+            );
+
+            expect(pass2Result.updatedCount).toBe(0);
+            expect(pass2Result.errorCount).toBe(2);
+            expect(pass2Result.errors).toHaveLength(2);
+
+            const unresolvedPass2 = await applier.ApplyDeferredForeignKeys(
+                [
+                    {
+                        EntityName: 'Companies',
+                        LocalRecordID: 'comp-1',
+                        FieldName: 'PrimaryContactID',
+                        SourceForeignKeyValue: 'unmapped-contact-id',
+                        RelatedEntityID: ENTITY_CONTACTS_ID,
+                    },
+                ],
+                { PairingID: 'pair-1', OriginInstanceID: INSTANCE_B, RunID: 'run-1' },
+                {
+                    CompanyIntegrationID: 'ci-1',
+                    PreservePrimaryKeys: false,
+                    DuplicateThreshold: 0.92,
+                    PotentialMatchThreshold: 0.75,
+                    ContextUser: user,
+                    MetadataProvider: failingMetadata,
+                    RunViewProvider: emptyRunView,
+                }
+            );
+            expect(unresolvedPass2.updatedCount).toBe(0);
+            expect(unresolvedPass2.errorCount).toBe(1);
+
+            // Pipeline check: when Pass 2 Save() fails during RunPipeline, SyncResult.Success is false and RecordsErrored > 0
+            let saveCallNumber = 0;
+            const pipelineMetadata = {
+                Entities: [companyEntityInfo, contactEntityInfo],
+                EntityByName: (name: string) =>
+                    name.toLowerCase() === 'companies'
+                        ? companyEntityInfo
+                        : name.toLowerCase() === 'contacts'
+                            ? contactEntityInfo
+                            : undefined,
+                GetEntityObject: vi.fn(async (entityName: string) => {
+                    if (entityName === 'MJ: Company Integration Record Maps' || entityName === 'MJ: Company Integration Sync Watermarks') {
+                        return {
+                            NewRecord: vi.fn(),
+                            InnerLoad: vi.fn().mockResolvedValue(true),
+                            Save: vi.fn().mockResolvedValue(true),
+                        };
+                    }
+                    return {
+                        Fields: [
+                            { Name: 'ID', Value: null },
+                            { Name: 'PrimaryContactID', Value: null },
+                            { Name: 'CompanyID', Value: null },
+                        ],
+                        LatestResult: { CompleteMessage: 'Pass 2 FK save rejected' },
+                        NewRecord: vi.fn(),
+                        SetSyncContext: vi.fn(),
+                        ClearSyncContext: vi.fn(),
+                        InnerLoad: vi.fn().mockResolvedValue(true),
+                        Save: vi.fn(async () => {
+                            saveCallNumber++;
+                            // Pass 1 creates Company (call 1) and Contact (call 2); Pass 2 deferred FK update (call 3) fails!
+                            return saveCallNumber < 3;
+                        }),
+                    };
+                }),
+            } as unknown as IMetadataProvider;
+
+            const planner = new SchemaPlanner();
+            const localFps = planner.ExtractLocalSchemaFingerprints(['Companies', 'Contacts'], pipelineMetadata);
+            const remoteTransport = {
+                GetManifest: vi.fn().mockResolvedValue(buildManifest(INSTANCE_B)),
+                GetSchemaFingerprint: vi.fn().mockResolvedValue(localFps),
+                PreviewSchemaPlan: vi.fn(),
+                FetchChangeBatch: vi.fn(async (req: { EntityName: string }) => ({
+                    PairingID: ComputePairingID(INSTANCE_A, INSTANCE_B),
+                    EntityName: req.EntityName,
+                    Changes: req.EntityName === 'Companies'
+                        ? [{
+                            EntityName: 'Companies',
+                            SourceRecordID: 'comp-1',
+                            Operation: 'Create' as const,
+                            RecordData: { ID: 'comp-1', PrimaryContactID: 'contact-1' },
+                            AncestorData: {},
+                            ChangedFields: ['ID', 'PrimaryContactID'],
+                            LatestChangedAt: '2026-04-20T12:00:00.000Z',
+                            LatestChangeID: 'chg-comp-1',
+                        }]
+                        : [{
+                            EntityName: 'Contacts',
+                            SourceRecordID: 'contact-1',
+                            Operation: 'Create' as const,
+                            RecordData: { ID: 'contact-1', CompanyID: 'comp-1' },
+                            AncestorData: {},
+                            ChangedFields: ['ID', 'CompanyID'],
+                            LatestChangedAt: '2026-04-20T12:00:01.000Z',
+                            LatestChangeID: 'chg-contact-1',
+                        }],
+                    NextCursor: { ChangedAt: '2026-04-20T12:00:01.000Z', ChangeID: 'chg-contact-1' },
+                    HasMore: false,
+                })),
+                ApplyChangeBatch: vi.fn(),
+                NotifyChangeBatch: vi.fn(),
+            };
+
+            const connector = new MemberJunctionConnector({
+                Transport: remoteTransport,
+                LocalInstanceID: INSTANCE_A,
+                LocalInstanceName: 'Peer-A',
+                LocalMJCoreVersion: '5.27.0',
+                LocalDatabaseEngine: 'SQLServer',
+                MetadataProvider: pipelineMetadata,
+                RunViewProvider: emptyRunView,
+            });
+
+            const makeMap = (id: string, entityID: string, name: string): ICompanyIntegrationEntityMap => ({
+                ID: id,
+                CompanyIntegrationID: 'ci-1',
+                ExternalObjectName: name,
+                ExternalObjectLabel: name,
+                EntityID: entityID,
+                SyncDirection: 'Pull',
+                SyncEnabled: true,
+                MatchStrategy: null,
+                ConflictResolution: 'SourceWins',
+                Priority: 1,
+                DeleteBehavior: 'DoNothing',
+                Status: 'Active',
+                Configuration: null,
+                Entity: name,
+                Get: () => null,
+            });
+
+            const pipelineResult = await connector.RunPipeline({
+                CompanyIntegration: {
+                    ID: 'ci-1',
+                    Configuration: JSON.stringify({ PeerInstanceID: INSTANCE_B, PreservePrimaryKeys: true }),
+                    ExternalSystemID: '',
+                } as unknown as MJCompanyIntegrationEntity,
+                Run: { ID: 'run-pass2-fail' } as unknown as MJCompanyIntegrationRunEntity,
+                EntityMaps: [
+                    makeMap('em-comp', ENTITY_COMPANIES_ID, 'Companies'),
+                    makeMap('em-cont', ENTITY_CONTACTS_ID, 'Contacts'),
+                ],
+                FieldMapsByEntityMapID: new Map(),
+                FullSync: false,
+                ContextUser: user,
+            });
+
+            expect(pipelineResult.Success).toBe(false);
+            expect(pipelineResult.RecordsErrored).toBe(1);
+            expect(pipelineResult.ErrorMessage).toContain('Pass 2 deferred FK save failed');
+        });
+
+        it('fails loudly when a target entity has no FirstPrimaryKey instead of falling back to ID', async () => {
+            const user = createContextUser();
+            const applier = new PeerSyncApplier();
+            const keylessEntity = {
+                ID: ENTITY_CONTACTS_ID,
+                Name: 'KeylessEntity',
+                PrimaryKeys: [],
+                FirstPrimaryKey: null,
+                Fields: [],
+            } as unknown as EntityInfo;
+
+            const md = {
+                Entities: [keylessEntity],
+                EntityByName: () => keylessEntity,
+            } as unknown as IMetadataProvider;
+
+            await expect(
+                applier.ApplyBatch(
+                    {
+                        PairingID: 'pair-1',
+                        SenderInstanceID: INSTANCE_B,
+                        RunID: 'run-1',
+                        EntityName: 'KeylessEntity',
+                        Changes: [],
+                        PreservePrimaryKeys: true,
+                    },
+                    {
+                        CompanyIntegrationID: 'ci-1',
+                        PreservePrimaryKeys: true,
+                        DuplicateThreshold: 0.92,
+                        PotentialMatchThreshold: 0.75,
+                        ContextUser: user,
+                        MetadataProvider: md,
+                    }
+                )
+            ).rejects.toThrow(/has no primary key defined in metadata/);
         });
     });
 });

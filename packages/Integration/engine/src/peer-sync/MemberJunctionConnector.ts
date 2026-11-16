@@ -11,7 +11,7 @@ import type {
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
 } from '@memberjunction/core-entities';
-import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseIntegrationConnector,
     type ConnectionTestResult,
@@ -217,9 +217,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         entityName: string
     ): DefaultFieldMapping[] {
         const md = this.deps.MetadataProvider ?? Metadata.Provider;
-        const entityInfo = md.Entities.find(
-            e => e.Name.toLowerCase() === entityName.toLowerCase()
-        );
+        const entityInfo = md.EntityByName(entityName);
         if (!entityInfo) return [];
 
         return entityInfo.Fields.filter(
@@ -360,6 +358,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         // Phase 3: Dependency-Ordered Pull (Pass 1 + Pass 2 Deferred FKs)
         const allPullDeferredFKs: Array<{
             entityMap: ICompanyIntegrationEntityMap;
+            mapResult: EntityMapSyncResult;
             updates: PeerDeferredFKUpdate[];
         }> = [];
 
@@ -415,6 +414,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
                 if (pullOutcome.deferredFKs.length > 0) {
                     allPullDeferredFKs.push({
                         entityMap,
+                        mapResult,
                         updates: pullOutcome.deferredFKs,
                     });
                 }
@@ -454,8 +454,9 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         }
 
         // Pass 2 of Two-Pass Nullable FK Cycle Breaking on Inbound Pull
+        const deferredErrorMessages: string[] = [];
         for (const item of allPullDeferredFKs) {
-            await this.applier.ApplyDeferredForeignKeys(
+            const deferredResult = await this.applier.ApplyDeferredForeignKeys(
                 item.updates,
                 {
                     PairingID: pairingID,
@@ -473,10 +474,17 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
                     RunViewProvider: this.deps.RunViewProvider,
                 }
             );
+            if (deferredResult.errorCount > 0) {
+                item.mapResult.RecordsErrored += deferredResult.errorCount;
+                item.mapResult.Success = false;
+                totalErrored += deferredResult.errorCount;
+                deferredErrorMessages.push(...deferredResult.errors);
+            }
         }
 
         return {
             Success: totalErrored === 0,
+            ErrorMessage: deferredErrorMessages.length > 0 ? deferredErrorMessages.join('; ') : undefined,
             RunID: context.Run.ID,
             RecordsProcessed: totalProcessed,
             RecordsCreated: totalCreated,
@@ -829,7 +837,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         md: IMetadataProvider
     ): Promise<void> {
         const rv = new RunView(this.deps.RunViewProvider ?? null);
-        const escapedRemote = remoteRecordID.replace(/'/g, "''");
+        const escapedRemote = EscapeSQLString(remoteRecordID);
         const existing = await rv.RunView<{ ID: string; EntityRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
             ExtraFilter:

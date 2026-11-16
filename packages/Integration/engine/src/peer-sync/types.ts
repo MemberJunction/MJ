@@ -315,6 +315,15 @@ export interface PeerApplyBatchResponse {
 }
 
 /**
+ * Result of Pass 2 deferred nullable foreign-key application (`ApplyDeferredForeignKeys`).
+ */
+export interface PeerDeferredFKApplyResult {
+    updatedCount: number;
+    errorCount: number;
+    errors: string[];
+}
+
+/**
  * Payload sent by `PeerSyncDoorbell` via `PeerSync.NotifyChangeBatch`.
  */
 export interface PeerDoorbellNotification {

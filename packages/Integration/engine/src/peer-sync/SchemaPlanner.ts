@@ -39,9 +39,7 @@ export class SchemaPlanner {
         const results: PeerEntitySchemaFingerprint[] = [];
 
         for (const requestedName of entityNames) {
-            const entityInfo = md.Entities.find(
-                e => e.Name.toLowerCase() === requestedName.trim().toLowerCase()
-            );
+            const entityInfo = md.EntityByName(requestedName);
             if (!entityInfo) {
                 continue;
             }

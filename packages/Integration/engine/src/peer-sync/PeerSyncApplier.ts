@@ -9,7 +9,7 @@ import {
     UserInfo,
 } from '@memberjunction/core';
 import type { MJCompanyIntegrationRecordMapEntity } from '@memberjunction/core-entities';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import type { ICompanyIntegrationEntityMap, ICompanyIntegrationFieldMap } from '../entity-types.js';
 import { ComputeThreeWayFieldMerge } from '../ThreeWayMerge.js';
 import type { ThreeWayFieldMapping } from '../ThreeWayMerge.js';
@@ -22,6 +22,7 @@ import type {
     PeerApplyBatchRequest,
     PeerApplyBatchResponse,
     PeerApplyRecordResult,
+    PeerDeferredFKApplyResult,
     PeerDeferredFKUpdate,
 } from './types.js';
 
@@ -78,14 +79,16 @@ export class PeerSyncApplier {
         DeferredFKUpdates: PeerDeferredFKUpdate[];
     }> {
         const md = context.MetadataProvider ?? Metadata.Provider;
-        const entityInfo = md.Entities.find(
-            e => e.Name.toLowerCase() === request.EntityName.toLowerCase()
-        );
+        const entityInfo = md.EntityByName(request.EntityName);
         if (!entityInfo) {
             throw new Error(`Entity '${request.EntityName}' not found in local MemberJunction metadata.`);
         }
 
-        const pkFieldName = entityInfo.FirstPrimaryKey?.Name ?? 'ID'; // first-pk-ok: Peer Sync target entities use single-column UUID primary keys
+        const firstPk = entityInfo.FirstPrimaryKey; // first-pk-ok: Peer Sync target entities use single-column UUID primary keys
+        if (!firstPk) {
+            throw new Error(`Entity '${entityInfo.Name}' has no primary key defined in metadata.`);
+        }
+        const pkFieldName = firstPk.Name;
         const selfRefFields = entityInfo.Fields
             .filter(f => f.RelatedEntityID && UUIDsEqual(f.RelatedEntityID, entityInfo.ID))
             .map(f => f.Name);
@@ -293,11 +296,15 @@ export class PeerSyncApplier {
             RunID: string;
         },
         context: PeerSyncApplyContext
-    ): Promise<number> {
-        if (deferredUpdates.length === 0) return 0;
+    ): Promise<PeerDeferredFKApplyResult> {
+        if (deferredUpdates.length === 0) {
+            return { updatedCount: 0, errorCount: 0, errors: [] };
+        }
 
         const md = context.MetadataProvider ?? Metadata.Provider;
         let updatedCount = 0;
+        let errorCount = 0;
+        const errors: string[] = [];
 
         // Group lookups by RelatedEntityID
         const mapByRelatedEntity = new Map<string, Map<string, string>>();
@@ -315,23 +322,42 @@ export class PeerSyncApplier {
         }
 
         for (const item of deferredUpdates) {
-            const entityInfo = md.Entities.find(
-                e => e.Name.toLowerCase() === item.EntityName.toLowerCase()
-            );
-            if (!entityInfo) continue;
+            const entityInfo = md.EntityByName(item.EntityName);
+            if (!entityInfo) {
+                errorCount++;
+                errors.push(`Pass 2 deferred FK failed: entity '${item.EntityName}' not found in metadata.`);
+                continue;
+            }
+
+            const firstPk = entityInfo.FirstPrimaryKey; // first-pk-ok: Peer Sync target entities use single-column UUID primary keys
+            if (!firstPk) {
+                throw new Error(`Entity '${entityInfo.Name}' has no primary key defined in metadata.`);
+            }
 
             const lookup = mapByRelatedEntity.get(NormalizeUUID(item.RelatedEntityID));
             const translatedFK =
                 lookup?.get(NormalizeUUID(item.SourceForeignKeyValue)) ??
                 (context.PreservePrimaryKeys ? item.SourceForeignKeyValue : null);
 
-            if (!translatedFK) continue;
+            if (!translatedFK) {
+                errorCount++;
+                errors.push(
+                    `Pass 2 deferred FK unresolved for ${entityInfo.Name} (${item.LocalRecordID}).${item.FieldName}: ` +
+                    `no record map entry found for source key '${item.SourceForeignKeyValue}'.`
+                );
+                continue;
+            }
 
             const entity = await md.GetEntityObject<BaseEntity>(entityInfo.Name, context.ContextUser);
-            const pkFieldName = entityInfo.FirstPrimaryKey?.Name ?? 'ID'; // first-pk-ok: Peer Sync target entities use single-column UUID primary keys
-            const key = new CompositeKey([{ FieldName: pkFieldName, Value: item.LocalRecordID }]);
+            const key = new CompositeKey([{ FieldName: firstPk.Name, Value: item.LocalRecordID }]);
             const loaded = await entity.InnerLoad(key);
-            if (!loaded) continue;
+            if (!loaded) {
+                errorCount++;
+                errors.push(
+                    `Pass 2 deferred FK failed: could not load ${entityInfo.Name} (${item.LocalRecordID}).`
+                );
+                continue;
+            }
 
             this.setEntityFieldValue(entity, item.FieldName, translatedFK);
             entity.SetSyncContext({
@@ -346,13 +372,25 @@ export class PeerSyncApplier {
                 const saved = await entity.Save();
                 if (saved) {
                     updatedCount++;
+                } else {
+                    errorCount++;
+                    const detail = entity.LatestResult?.CompleteMessage ?? 'Save() returned false';
+                    errors.push(
+                        `Pass 2 deferred FK save failed for ${entityInfo.Name} (${item.LocalRecordID}).${item.FieldName}: ${detail}`
+                    );
                 }
+            } catch (err) {
+                errorCount++;
+                const msg = err instanceof Error ? err.message : String(err);
+                errors.push(
+                    `Pass 2 deferred FK save threw for ${entityInfo.Name} (${item.LocalRecordID}).${item.FieldName}: ${msg}`
+                );
             } finally {
                 entity.ClearSyncContext();
             }
         }
 
-        return updatedCount;
+        return { updatedCount, errorCount, errors };
     }
 
     private async applyDelete(
@@ -723,11 +761,11 @@ export class PeerSyncApplier {
         md: IMetadataProvider,
         runViewProvider?: IRunViewProvider
     ): Promise<Map<string, Map<string, string>>> {
+        const knownEntityIDs = new UUIDSet(md.Entities.map(e => e.ID));
         const relatedEntityIDs = new Set<string>();
         for (const f of entityInfo.Fields) {
             if (f.RelatedEntityID && !UUIDsEqual(f.RelatedEntityID, entityInfo.ID)) {
-                const exists = md.Entities.some(e => UUIDsEqual(e.ID, f.RelatedEntityID!));
-                if (exists) {
+                if (knownEntityIDs.has(f.RelatedEntityID)) {
                     relatedEntityIDs.add(f.RelatedEntityID);
                 }
             }
@@ -756,7 +794,7 @@ export class PeerSyncApplier {
         runViewProvider?: IRunViewProvider
     ): Promise<void> {
         const rv = new RunView(runViewProvider ?? null);
-        const escapedExternal = externalRecordID.replace(/'/g, "''");
+        const escapedExternal = EscapeSQLString(externalRecordID);
         const existing = await rv.RunView<{ ID: string; EntityRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
             ExtraFilter:

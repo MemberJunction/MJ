@@ -1,5 +1,5 @@
 import { IMetadataProvider, IRunViewProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { NormalizeUUID } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import type { ICompanyIntegrationEntityMap, ICompanyIntegrationFieldMap } from '../entity-types.js';
 import { MatchEngine, ParseMatchStrategy } from '../MatchEngine.js';
 import type { MappedRecord } from '../types.js';
@@ -172,8 +172,11 @@ export class PeerIdentityGate {
         if (!sourceID) return null;
 
         const rv = new RunView(options.RunViewProvider ?? null);
-        const pkField = options.PrimaryKeyFieldName || 'ID';
-        const escapedID = sourceID.replace(/'/g, "''");
+        const pkField = options.PrimaryKeyFieldName;
+        if (!pkField) {
+            throw new Error(`Entity '${options.EntityName}' has no PrimaryKeyFieldName provided for identity resolution.`);
+        }
+        const escapedID = EscapeSQLString(sourceID);
 
         const result = await rv.RunView<Record<string, string | number | boolean | null>>({
             EntityName: options.EntityName,

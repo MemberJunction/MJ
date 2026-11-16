@@ -1,12 +1,12 @@
 # MJ Peer Sync — a first-class MJ ↔ MJ connector
 
 ## Status
-- **Status**: Implemented — Phase 0 prerequisites and Phase 1–4 `MemberJunctionConnector` pipeline built and unit-tested
+- **Status**: Reviewed — design decisions recorded (implementation in PR #6502)
 - **Created**: 2026-10-23
-- **Updated**: 2026-11-09
-- **Author**: Amith Nagarajan + Claude
+- **Updated**: 2026-11-16
+- **Author**: Amith Nagarajan + Claude (updated by Madhav Subramaniyam per review)
 - **Branch**: `mj-peer-sync-spec`
-- **Grounded against**: MJ `next` (`origin/next`) plus the BizApps sibling repos. Every `file:line` below is a pointer into the codebase.
+- **Grounded against**: MJ `next` at `f3b54c9c7` plus the BizApps sibling repos. Every `file:line` below is a pointer into that commit, from a code survey on 2026-10-22. Line numbers will drift.
 
 ## Summary
 
@@ -66,7 +66,7 @@ What we want:
 This exercises everything at once:
 - FK closure: an enrollment needs its person.
 - Identity: the same human was created independently on both sides.
-- Aggregates: in bizapps-common a person's email lives in a child Contact Methods row (`/home/user/bizapps-common/packages/ActivitySync/src/identity.ts:96`), not on Person.
+- Aggregates: in `bizapps-common` a person's email lives in a child Contact Methods row (`bizapps-common`: `packages/ActivitySync/src/identity.ts:96`), not on Person.
 - User references that differ per deployment.
 - Two-way conflicts.
 
@@ -99,12 +99,12 @@ This exercises everything at once:
 | Gap | Evidence |
 |---|---|
 | The engine does no FK translation; values are copied straight across | `packages/Integration/engine/src/FieldMappingEngine.ts:81-87` |
-| Dependency ordering is entity-level only, over the IntegrationObject graph. A cycle collapses everything into one layer with a warning | `IntegrationEngine.ts:2005-2049` |
+| Dependency ordering is entity-level only, over the IntegrationObject graph. A cycle collapses the unresolved remainder into one layer with a warning (layers already placed keep their order) | `IntegrationEngine.ts:2005-2049` |
 | No ordering exists at the record level, and nothing does a general two-phase insert for cycles | Survey of RecordGraph, RecordCloning, MetadataSync; only MetadataSync's opt-in `?allowDefer` defers a field |
 | Matching is exact equality, and with several matches the first row wins silently. The `MatchStrategy` column is never read | `packages/Integration/engine/src/MatchEngine.ts:460,549-553,660`; `entity-types.ts:41` |
 | No batch "check these values for duplicates" API. New records aren't vectorized on save, so records arriving in the same run can't match each other | `duplicateRecordDetector.ts:416-530`; `guides/DUPLICATE_DETECTION_GUIDE.md:81-93` |
 | Echo avoidance relies on one hard-coded System user ID | `IntegrationEngine.ts:3642` |
-| No cursor column on Record Changes and no index on `ChangedAt`; `ChangedAt` is stamped before commit | `migrations/v5/B202607091514__v5.46.x__Baseline.sql:5081-5102`; proc at `migrations/v6/V202609302340__v6.2.x__RecordChange_ChangeContext_And_Clone_Source.sql:121` |
+| No cursor column on Record Changes and no `(EntityID, ChangedAt)` range index (`IX_RecordChange_EntityID_RecordID_ChangedAt` puts `RecordID` second, so it cannot serve an entity-wide `ChangedAt` seek); `ChangedAt` is stamped before commit | `migrations/v5/B202607091514__v5.46.x__Baseline.sql:5081-5102`; `migrations/v6/V202610221305__v6.2.x__Composite_Performance_Indexes.sql`; proc at `migrations/v6/V202609302340__v6.2.x__RecordChange_ChangeContext_And_Clone_Source.sql:121` |
 | No outbound webhooks. The cache-invalidation ring buffer is in memory, per process | `packages/MJServer/src/broadcast/BaseCacheInvalidationBroadcastProvider.ts:162-180` |
 | No server-to-server client for a *user* API key. `GraphQLDataProvider` is a singleton, and its setup replaces the server's provider | `packages/GraphQLDataProvider/src/graphQLSystemUserClient.ts:23-38` (system key only); `graphQLDataProvider.ts:333-354`; `GraphQLDataProvider/src/config.ts:8-12` |
 
@@ -122,7 +122,7 @@ Section 19 lists defects found along the way that this connector depends on fixi
   - entity-level layering only;
   - record-by-record writes with no transactional batches;
   - no duplicate stage;
-  - outbound sync currently finds no changes at all (Section 19, item 1).
+  - incremental outbound push currently finds no changes at all (Section 19, item 1; full-sync push via `loadAllMJRecords` works).
 - Kept as a possible throwaway spike.
 
 **B. Database replication or CDC** (SQL Server CDC or transactional replication, PostgreSQL logical replication).
@@ -176,15 +176,22 @@ flowchart LR
 - **Put the hub where the reviewers work.** For LXP ↔ AIDP that is AIDP.
 - **The endpoint keeps a pairing record too:** a `MJ: Company Integrations` row with `role: "Endpoint"`. It binds the hub's API-key user to the hub's deployment ID, so provenance can't be forged (Section 13).
 
-### 5.2 Packages
+### 5.2 Packaging decision (6.x: Core MJ vs. Open App)
+In 6.x, `@memberjunction/integration-connectors` was emptied down to External Data Source base classes and all 36 third-party vendor connectors moved to `MemberJunction/Integrations` as independent Open Apps (`UPGRADE-v6.0.md:77`; `packages/Integration/docs/connector-development.md:16-26`), while `@memberjunction/ai-vector-dupe` is already in `MJServer`, `MJCoreEntitiesServer`, `SQLServerDataProvider`, and `ServerBootstrap`. That leaves an explicit 6.x choice between shipping Peer Sync as an Open App in `MemberJunction/Integrations` (with core primitives sequenced first) or shipping it in **Core MJ**.
+
+**Decision: Core MJ inside `@memberjunction/integration-engine` (`packages/Integration/engine/src/peer-sync/`), retiring the held read-only `Platform/MJtoMJ` stub in `MemberJunction/Integrations#495`.**
+- **Why Peer Sync is an intentional exception to the vendor Open App precedent:**
+  1. Every MJ deployment already speaks MJ metadata, `MJ: Record Changes`, and Remote Operations — there is no external vendor SDK or third-party API release cadence to decouple from.
+  2. The protocol, `RecordChange` provenance (`Source = 'Sync'`, `IRecordChangeSyncContext`), the `RunPipeline` seam, and the generic lift-outs (`ThreeWayMerge`, Tarjan SCC + deferrable FK cycle breaking in `@memberjunction/record-graph`, `VectorizeRecords` / `FindCandidatesForValues`) evolve in lockstep on the MJ release train without cross-repo version skew between hub and endpoint deployments.
+  3. Keeping the pipeline modular under `packages/Integration/engine/src/peer-sync/` (with pluggable `IPeerSyncDuplicateCandidateFinder` and `IPeerSyncVectorIndexer` interfaces so `@memberjunction/integration-engine` itself takes no hard dependency on `@memberjunction/ai-vector-dupe`) preserves a clean boundary if we ever extract an Open App wrapper later.
+
 | Package | Contents |
 |---|---|
-| `@memberjunction/peer-sync-engine` (`packages/PeerSync/engine`) | `PeerSyncPipeline`, `SchemaPlanner`, `ChangeSetPlanner`, `ReferenceResolver`, `IdentityGate`, `ThreeWayMerge` (lifted from `computePushCombine`), `PeerSyncApplier`, `PeerSyncClient`, and the `MemberJunctionConnector` class |
-| `@memberjunction/peer-sync-server` (`packages/PeerSync/server`) | Server subclasses for the `PeerSync.*` Remote Operations; they are thin shells over the engine |
-| Core changes | Record Change provenance and index, record-map columns, the held-records entity, API scopes, the seam on the Integration connector (Sections 16 and 17) |
+| `@memberjunction/integration-engine` (`packages/Integration/engine/src/peer-sync/` + `ThreeWayMerge.ts`) | `MemberJunctionConnector` (`@RegisterClass(BaseIntegrationConnector, 'MemberJunctionConnector')`), `SchemaPlanner`, `ChangeSetPlanner`, `PeerIdentityGate`, `PeerSyncApplier`, `PeerSyncEndpointService`, `PeerSyncDoorbell`, `ThreeWayMerge`, and the `BaseIntegrationConnector.RunPipeline` seam |
+| `@memberjunction/record-graph` (`packages/RecordGraph/src/sort.ts`) | Pure Tarjan SCC (`FindStronglyConnectedComponents`) and `PlanEntityDependencyOrder` (IS-A parent ordering, self-references, nullable FK cycle deferral) |
+| `@memberjunction/ai-vector-sync` & `@memberjunction/ai-vector-dupe` | Per-record `EntityVectorSyncer.VectorizeRecords` and batch `DuplicateRecordDetector.FindCandidatesForValues` |
+| Core & data providers (`MJCore`, `MJCoreEntities`, `GenericDatabaseProvider`, `SQLServerDataProvider`, `PostgreSQLDataProvider`) | `BaseEntity.SetSyncContext`, `IRecordChangeSyncContext`, `Source = 'Sync'` + `IntegrationID` wiring, record-map and held-record schema, API scopes |
 | Angular (later phase) | Compatibility report, hold queue, cross-deployment duplicate banner |
-
-The connector lives in its own package rather than in `@memberjunction/integration-connectors`. That keeps the vector and duplicate-detection dependencies out of the generic connectors package.
 
 ### 5.3 One run, end to end
 1. **Claim.** The engine claims the run and lease as it does today, loads the entity maps, and hands off to `MemberJunctionConnector.RunPipeline` (Section 17).
@@ -208,15 +215,17 @@ The connector lives in its own package rather than in `@memberjunction/integrati
 |---|---|---|
 | `PeerSync.Describe` | `sync:describe` | Returns:<br/>• deployment ID, protocol version, MJ version, installed Open Apps and their versions<br/>• per requested entity: ID, name, fields (type, length, nullability, PK, `RelatedEntityID`, value list), IS-A parent, `TrackRecordChanges`, `AllowRecordMerge`, unique constraints, Record Duplicate Entity Document<br/>• schema fingerprint<br/>• the peer's current time, used to seed cursors |
 | `PeerSync.FetchChanges` | `sync:read` | Coalesced changes for a set of entities since a cursor, with the next cursor |
-| `PeerSync.FetchRecords` | `sync:read` | Current rows by key. Used to close dependencies, release held records and load aggregates |
+| `PeerSync.FetchRecords` *(not yet implemented — follow-up phase)* | `sync:read` | Current rows by key. Used to close dependencies, release held records and load aggregates |
 | `PeerSync.ApplyBatch` | `sync:apply` | Applies an ordered batch on that deployment, running the identity and duplicate gate, reference resolution and conflict check there. `Mode: 'DryRun'` returns the outcomes without writing |
-| `PeerSync.CheckDuplicates` | `sync:check-duplicates` | Returns duplicate candidates for a set of unsaved values: the identity rules plus the vector stage. Used by the gate and by forms at entry time (Section 10.6) |
+| `PeerSync.CheckDuplicates` *(not yet implemented — Phase 4 UI fan-out)* | `sync:check-duplicates` | Returns duplicate candidates for a set of unsaved values: the identity rules plus the vector stage. Used by the gate and by forms at entry time (Section 10.6) |
 
 Operation metadata ships as `metadata/remote-operations` JSON, following `WorkQueue.*` (`metadata/remote-operations/.work-queue-operations.json`). CodeGen emits the typed bases, and the server package registers subclasses with `@RegisterClass(BaseRemotableOperation, 'PeerSync.ApplyBatch')`.
 
 ### 6.1 Shapes (sketch)
 
 ```ts
+// Note: bigint and high-precision decimal/numeric columns are serialized as strings
+// on the wire so IEEE-754 numbers never truncate precision.
 type FieldValue = string | number | boolean | null;
 type FieldValues = Record<string, FieldValue>;
 
@@ -225,7 +234,7 @@ interface PeerChange {
     Entity: string;                 // entity name on the source
     Key: string;                    // CompositeKey.ToURLSegment() of the source row
     Kind: 'Upsert' | 'Delete' | 'Merge';
-    Row?: FieldValues;              // base-table fields only, read through RunView as the sync user (FLS applied)
+    Row?: FieldValues;              // writable fields of the entity + its IS-A parent chain (excluding view-only columns), read via RunView as the sync user (FLS applied)
     SourceVersion: string;          // the source row's __mj_UpdatedAt (ISO)
     ChangeIDs: string[];            // Record Change IDs coalesced into this entry
     Origin: { DeploymentID: string; UserEmail?: string };
@@ -353,22 +362,25 @@ Users differ per deployment. First login creates a new row (`packages/MJServer/s
 - **The current row is read separately,** with one batched `RunViews` per entity as the sync user. Permissions and field-level security therefore apply exactly as they would for any user.
 
 ### 8.2 Cursor
-`ChangedAt` is stamped when the change row is inserted inside the save, not when the transaction commits:
-- SQL Server: `GETUTCDATE()` in the proc (`V202609302340…:121`).
-- PostgreSQL: the column default `NOW()`.
+`ChangedAt` is stamped when the change row is inserted inside the save, not when the transaction commits — and the two supported databases differ sharply here:
+- **SQL Server:** `GETUTCDATE()` in `spCreateRecordChange_Internal` (`V202609302340…:121`), evaluated per statement.
+- **PostgreSQL:** the column default `NOW()` (`migrations-pg/v6/V202609302340__v6.2.x__RecordChange_ChangeContext_And_Clone_Source.pg.sql:64`), which is `transaction_timestamp()` — the `BEGIN` time of the enclosing transaction, identical across every row written in that transaction.
 
-So a slow transaction can commit a change stamped *earlier* than one the feed has already read. A plain high-water mark would skip it. The cursor therefore works like this:
-- It is `HighWater` plus `SeenChangeIDs`. Each fetch re-reads from `HighWater − SafetyLag` and skips change IDs already seen.
-- `SafetyLag` defaults to 120 s and must be longer than the longest save transaction. The report warns when observed transactions approach it.
-- Applying is idempotent (content-hash compare), so re-reading inside the window is cheap and safe.
-- An exact cursor is a later option: on SQL Server, `rowversion` plus `MIN_ACTIVE_ROWVERSION()`; on PostgreSQL, a transaction-snapshot equivalent. It isn't needed for correctness.
+So a multi-save transaction (including Peer Sync's own `RunInEntityTransaction` apply units or a caller transaction group) can commit rows whose `ChangedAt` predates `HighWater` by the full duration of the transaction. A plain high-water mark would skip them. The cursor therefore works like this:
+- It combines a deterministic composite `(ChangedAt, ID)` watermark with `HighWater` plus `SeenChangeIDs`. Each fetch re-reads from `HighWater − SafetyLag` and skips change IDs already seen, while tie-breaking identical `ChangedAt` values (such as multi-row PostgreSQL transactions) strictly by `(ChangedAt, ID)`.
+- **Transaction-duration bound:** `SafetyLag` defaults to 120 s and must exceed the **longest write transaction** on the source (not just a single `Save()`). Apply-unit `batchSize` (Section 9.3) is coupled to `SafetyLag`: units are sized and time-boxed so each unit's wall-clock duration stays below `SafetyLag / 3` (e.g., ≤ 40 s at the 120 s default). Because `RecordChange` itself stores no commit timestamp, transaction-duration warnings in diagnostics are driven from **observed apply-unit wall-clock durations** recorded by the applier.
+- **Bounding `SeenChangeIDs`:** Applying is idempotent (content-hash compare), so re-reading inside the window is cheap and safe. To prevent a permanently-failing record from pinning `HighWater` and growing `SeenChangeIDs` unboundedly, any item that exceeds `MaxRetryAttempts` (default 5) converts into a durable `Held` row (`Reason: 'ValidationFailed'` or `'Conflict'`), allowing `HighWater` to advance.
+- **Retention & `SkipRecordChanges` gaps:** `Describe` reports the peer's oldest retained `RecordChange` timestamp (or configured retention horizon). If a pairing's cursor predates retention after extended downtime, incremental fetch is refused and the pairing falls back to an idempotent snapshot pass (Section 8.8). Similarly, tracked entities mutated via `SkipRecordChanges`, direct SQL, or row-filter visibility transitions on a related entity (e.g., a membership change bringing an existing Person into scope) rely on periodic Section 8.5 partitioned hash reconciliation to converge.
+- An exact cursor is a later option: on SQL Server, `rowversion` plus `MIN_ACTIVE_ROWVERSION()`; on PostgreSQL, `pg_current_xact_id()` / `pg_snapshot_xmin(pg_current_snapshot())`.
 
 ### 8.3 Coalescing
-Per record, the latest change wins. Within one window:
+Echo filtering (`Source = 'Sync'` / origin check) runs **per `RecordChange` entry before coalescing** so an inbound sync write never masks an earlier human edit in the same window. Across the remaining non-echo entries for a record, changes are sorted by `(ChangedAt, ID)` and folded as follows:
 
 | Sequence | Becomes |
 |---|---|
-| Create, then delete | Nothing, if the pairing never knew the record |
+| Create, then update(s) | Upsert (`Create` semantics with latest row values) |
+| Create, then delete | Nothing (elided), if the pairing never knew the record |
+| Update(s) | Upsert with union of changed fields and `AncestorData` reconstructed from the earliest `oldValue` per field |
 | Update, then delete | Delete |
 | Delete, then re-create with the same key | Upsert |
 
@@ -382,19 +394,20 @@ Per record, the latest change wins. Within one window:
 - The compatibility report labels these entities "deletes are eventually consistent".
 
 ### 8.6 Index
-Add `IX_RecordChange_EntityID_ChangedAt` on (`EntityID`, `ChangedAt`) INCLUDE (`RecordID`, `Type`, `Source`). None exists today (Section 3.2). Without it every fetch scans the largest table in the database.
+Add `IX_RecordChange_EntityID_ChangedAt` on (`EntityID`, `ChangedAt`) INCLUDE (`RecordID`, `Type`, `Source`). Although `IX_RecordChange_EntityID_RecordID_ChangedAt` exists (`V202610221305`), `RecordID` is its second key column so SQL Server/PostgreSQL cannot use it for an `(EntityID, ChangedAt)` range seek across an entity; without the new index every fetch scans the largest table in the database.
 
 ### 8.7 Provenance and echo suppression
-- **Stamping.** Every write the applier makes calls `BaseEntity.SetSyncContext(...)`, a new method modelled on `SetCloneContext`. The provider then stamps `Source = 'Sync'` and a `ChangeContext` of `Kind: 'Sync'`, carrying:
-  - `OriginDeploymentID` (where the change was first made)
+- **Stamping.** Every write the applier makes calls `BaseEntity.SetSyncContext(...)`, a new method modelled on `SetCloneContext`. The provider then stamps `Source = 'Sync'`, sets `IntegrationID`, and writes a `ChangeContext` of `Kind: 'Sync'`, carrying:
+  - `OriginDeploymentID` / `OriginInstanceID` (where the change was first made)
   - `PairingID`
   - `RunID`
-  - `OriginChangeIDs`
+  - `UpstreamChangeID` / `OriginChangeIDs`
+  - `HopCount`
   - `OriginUserEmail`
-- **Not settable by clients.** Like the clone context, it can't be set over GraphQL.
-- **Echo suppression.** `FetchChanges` drops a record when its latest change came from a sync write whose origin is the requester. If any change after that came from a person on this side, the record is sent. The 3-way merge resolves what's left.
+- **Not settable by clients.** Like the clone context, it is stripped from client transport payloads and can't be set over GraphQL.
+- **Echo suppression.** Echo filtering runs **per `RecordChange` entry before coalescing** (`Source <> 'Sync'` or `OriginDeploymentID !== requester`), and the applier also compares the current row against `LastSyncedHash`. Consequently, if a person edits `Phone` at $t_1$ (`Source = 'Internal'`) and an inbound sync write updates `Title` at $t_2$ (`Source = 'Sync'`) inside the same fetch window, the $t_1$ human edit is preserved through coalescing rather than masked by the $t_2$ sync row.
 - **This replaces the hard-coded System-user filter** (`IntegrationEngine.ts:3642`) for this connector.
-- **It works for three or more deployments,** because it is keyed on origin, not on "who called".
+- **Three or more deployments (hub-and-spoke).** By default, an endpoint pins `OriginDeploymentID` to the authenticated peer's pairing record so an untrusted peer cannot spoof third-party origins (Section 13), and multi-hop loop termination falls back to `LastSyncedHash` content convergence. When hub-and-spoke relay is explicitly enabled (`allowRelay: true` on a designated hub pairing), the endpoint records both the authenticated relay peer and the upstream `OriginDeploymentID` + incremented `HopCount` (capped at `MaxHops`, default 3).
 - **The audit trail stays intact.** Sync writes are never `SkipRecordChanges`. The feed depends on them, and so does history.
 
 ### 8.8 Initial load (snapshot mode)
@@ -493,7 +506,9 @@ Every item that would be **created** on the destination (identity `Resolve`) pas
   | `DestWins` | Destination values are kept |
   | `Review` | The update is held for a person to decide |
 
-- **The base snapshot is seeded** from the merged result, so the next two-way run has a common ancestor.
+- **Base snapshot & back-propagation on link:**
+  - On **two-way** maps under `FillBlanks`, linking queues an outbound update of the merged result back to the source (and until that outbound write succeeds, seeds `LastSyncedSnapshot` from the **source's own pre-link values**). Otherwise, if `LastSyncedSnapshot` recorded a destination-only field (e.g., `Phone`) that the source never received, the next unrelated edit on the source would look to 3-way merge as if the source had cleared `Phone`.
+  - On **one-way** inbound maps, `LastSyncedSnapshot` records the source's mapped values.
 
 ### 10.3 Concurrent creation on both sides
 Suppose Jane is created in LXP and in AIDP between two runs:
@@ -520,8 +535,7 @@ Some natural keys live in child records. In bizapps-common, a person's email is 
 ### 10.6 Entry time, across deployments
 "Live" also means at the moment a person types. The form's existing entry-time check calls `CheckDuplicateEntry` (`packages/Angular/Generic/base-forms/src/lib/base-form-component.ts:814-872`; `packages/MJServer/src/resolvers/DuplicateEntryCheckResolver.ts:99`). Extend it:
 - **Fan out to peers in parallel.** The check also calls `PeerSync.CheckDuplicates` on each paired deployment that syncs this entity, within the same 1.5 s client budget.
-- **Merge the results into the banner,** for example: *"Possible match in AIDP: Jane Doe, 92%."*
-- **Offer "Link".** It writes the identity map entry right away, so the next sync updates the existing record instead of creating a second one.
+- **Bound cross-deployment disclosure.** Because the peer call authenticates as the pairing's sync user rather than the interactive form user, returning raw peer record fields/names to every form user would let low-privilege users probe peer PII. By default the banner receives only **coarse presence + count + top score band** (*"Possible match exists in AIDP (92%)"*); full candidate names and the immediate **Link** action require an explicit cross-deployment duplicate-review role/permission on the local user.
 
 This is how duplicates stop being created in the first place, rather than being cleaned up afterwards.
 
@@ -531,7 +545,7 @@ This is how duplicates stop being created in the first place, rather than being 
   - **Identity map hygiene:** re-point the loser's map entries to the survivor.
   - **Dependents that only exist on the destination:** where the destination allows it, run `MergeRecords` there too. Otherwise those dependents are held as `DeleteBlocked` instead of the delete failing.
 
-  bizapps-common People and Organizations are hard-delete and don't allow merges (`/home/user/bizapps-common/metadata/entities/.entities.json:6-11`), so they use the hold path.
+  `bizapps-common` People and Organizations are hard-delete and don't allow merges (`bizapps-common`: `metadata/entities/.entities.json:6-11`), so they use the hold path.
 
 ---
 
@@ -553,7 +567,7 @@ This is how duplicates stop being created in the first place, rather than being 
 
 The applier runs in-process on the hub for inbound items and inside `PeerSync.ApplyBatch` on the peer for outbound items. It is the same code in both places.
 
-- **Writes go only through `BaseEntity.Save()` and `Delete()`,** as the pairing's sync user, with `SetSyncContext` stamped on every entity.
+- **Writes go only through `BaseEntity.Save()` and `Delete()`,** as the pairing's configured sync user on **both** deployments (even when the hub run is triggered by the scheduled job driver under the System user, the hub resolves the pairing's dedicated `localSyncUserID` from `UserCache` before calling `RunView` or `BaseEntity`, so RLS, entity permissions and FLS apply symmetrically inbound and outbound), with `SetSyncContext` stamped on every entity.
 - **Creates keep the preserved key** (`NewRecord`, then set the key, then `Save`).
 - **IS-A:** if the parent row already exists on the destination, call `AttachToParent(parentKey)` before saving. Otherwise a plain save writes the parent chain.
 - **Unchanged items are skipped** without saving, by content-hash compare. No save means no Record Change and no feed echo.
@@ -581,11 +595,11 @@ The applier runs in-process on the hub for inbound items and inside `PeerSync.Ap
 
 - **Baseline schedule:** every 1–5 minutes through the existing integration-sync scheduled job driver. A fetch with the new index is cheap.
 - **Doorbell:**
-  - The hub keeps a WebSocket subscription to the peer's `cacheInvalidation` feed, filtered to synced entities and authenticated with the sync user's key (`x-mj-user-api-key` in `connectionParams`).
-  - The hub also listens to its own `BaseEntity` events.
-  - Both are debounced (2 s by default) and call `EnqueueSync`. A second `RunSync` for the same pairing joins the run in flight (`IntegrationEngine.ts:1276-1279`).
+  - The hub can keep a WebSocket subscription to the peer's `cacheInvalidation` feed authenticated with the sync user's key (`x-mj-user-api-key` in `connectionParams`) or receive lightweight `NotifyChangeBatch` doorbell hints (`PeerSyncDoorbell`). Because `cacheInvalidation` accepts only `sinceSequence` (`CacheInvalidationResolver.ts:149`), entity filtering is done client-side on the hub, and events are shaped by role RLS rather than `APIKeyRowFilters` — meaning an out-of-row-filter doorbell event simply triggers a cheap no-op cursor fetch.
+  - Both deployments also listen to local `BaseEntity` events via `MJGlobal` (ignoring writes carrying `SyncContext` so inbound writes never ring the doorbell back).
+  - Events are debounced (2 s by default, with exponential backoff retry on transport failure) and trigger an immediate in-process `RunSync` (which coalesces onto any run already in flight via `IntegrationEngine.ts:1276-1279`) or `EnqueueSync` when `integrationSyncWorker.enabled` is turned on in `mj.config.cjs` (note: `integrationSyncWorker.enabled` defaults to `false` and polls queued runs every 15 s at `config.ts:179-184`, so sub-5-second latency requires either direct `RunSync` dispatch or enabling the worker with a shorter poll interval).
 - **The doorbell is only a hint.** The ring buffer behind it is in memory, per process, and resets on restart, so correctness always comes from the cursor. If the socket can't be held open, polling takes over at an adaptive interval.
-- **Expected latency** is a few seconds end to end for small changes.
+- **Expected latency** is a few seconds end to end for small changes when doorbell dispatch is active.
 
 ---
 
@@ -639,18 +653,19 @@ Field maps stay optional. The default is 1:1 over the field intersection, exclud
 
 ---
 
-## 16. Data model changes
+## 16. Data model and provider changes
 
-All are additive, in line with the publish-then-no-breaking-changes policy. They are T-SQL migrations in `migrations/v6/` with CodeGen output appended. Metadata JSON (scopes, operations, the Integration row) ships in the release's `Metadata_Sync`.
+All schema changes are additive, in line with the publish-then-no-breaking-changes policy. SQL migrations in `migrations/v6/` (and `migrations-pg/v6/`) ship with CodeGen output appended, core proc updates are mirrored in `SQL Scripts/MJ_BASE_BEFORE_SQL.sql`, and metadata JSON (scopes, operations, the Integration row) ships via `Metadata_Sync`.
 
-1. **`RecordChange`:**
-   - add `'Sync'` to the `Source` CHECK constraint;
-   - let `spCreateRecordChange_Internal` take `@IntegrationID`. The column exists but is never written (`V202609302340…:76-129`);
-   - add the index from Section 8.6;
-   - add `'Sync'` to `IRecordChangeContext.Kind`, plus an `IRecordChangeSyncContext`.
+1. **`RecordChange` (SQL + TypeScript providers):**
+   - add `'Sync'` to `CHK_RecordChange_Source`;
+   - let `spCreateRecordChange_Internal` take `@IntegrationID` (`V202609302340…:76-129`), updating **both** the migration and `SQL Scripts/MJ_BASE_BEFORE_SQL.sql:704` (and the PostgreSQL equivalent);
+   - update `BaseEntity.SetSyncContext`, `GenericDatabaseProvider`, `SQLServerDataProvider.renderRecordChangeEXEC` (`SQLServerDataProvider.ts:1800-1818`, which previously handled only `Restore` and `Clone`), and `PostgreSQLDataProvider` to thread `Source = 'Sync'`, `ChangeContext`, and `IntegrationID`;
+   - add `IX_RecordChange_EntityID_ChangedAt` from Section 8.6;
+   - add `'Sync'` to `IRecordChangeContext.Kind`, plus `IRecordChangeSyncContext`.
 2. **`CompanyIntegrationRecordMap`:**
    - add `LastSyncedSnapshot` (NVARCHAR(MAX), JSON), `LastSyncedHash`, `LastSyncedAt`, `LastSyncedDirection`, `MatchMethod` (`PreservedKey` | `IdentityRule` | `Vector` | `Reasoning` | `Manual`) and `MatchScore`;
-   - add indexes on (`CompanyIntegrationID`, `EntityID`, `EntityRecordID`) and (`CompanyIntegrationID`, `EntityID`, `ExternalSystemRecordID`).
+   - add the missing reverse-lookup index on (`CompanyIntegrationID`, `EntityID`, `EntityRecordID`). Note: `IDX_CompanyIntegrationRecordMap_Identity` and `IDX_CompanyIntegrationRecordMap_Identity_Covering` on (`CompanyIntegrationID`, `EntityID`, `ExternalSystemRecordID`) already exist from the v5 baseline and must not be duplicated.
 3. **New `CompanyIntegrationHeldRecord`** (`MJ: Company Integration Held Records`). Columns:
    - `CompanyIntegrationID`, `CompanyIntegrationRunID`, `EntityID`, `Direction`, `SourceRecordID`
    - `Reason` (the `HoldReason` values)
@@ -692,11 +707,14 @@ All are additive, in line with the publish-then-no-breaking-changes policy. They
   - conflicts;
   - LLM reasoning calls and cost.
 - **Compatibility report** per pairing. It is regenerated when either side's schema fingerprint changes and is the place to approve reference policies, match rules and field exclusions.
+- **Hold queue ownership & escalation:**
+  - Every pairing designates an operational owner (e.g., AIDP data-steward team for LXP ↔ AIDP).
+  - Because holds do not block the cursor, an unattended queue would otherwise let runs report `Success` while held records stop propagating. Once any open hold exceeds `MaxHoldAgeHours` (default 24 h), pairing health escalates from `Healthy` to `Degraded` and fires owner notifications rather than staying silently green.
 - **Alerts:**
   - lag beyond a threshold;
-  - holds older than N days;
+  - holds older than N hours/days (escalating pairing health);
   - a fingerprint mismatch that paused an entity map;
-  - handshake refusals.
+  - handshake refusals or observed apply-unit durations approaching `SafetyLag / 3`.
 - **Every auto-link is auditable.** Its run detail records the rule or score, and the record map keeps `MatchMethod` and `MatchScore`.
 - **Undo for links.** Unlinking a record map entry is supported. It turns the pair back into two independent records and holds any changes that were in flight.
 
@@ -715,9 +733,9 @@ The first three were checked directly against the code. The rest come from the c
 4. **`MatchEngine` returns the first row when several match** (`MaxRows: 1`, `MatchEngine.ts:460,660`), with no ambiguity signal.
 5. **`MJ: Company Integration Entity Maps.MatchStrategy` is never read** (it appears only in `entity-types.ts:41`).
 6. **`RecordChange.IntegrationID` is never written.** The proc has no parameter for it.
-7. **The cursor and the record-map lookup have no supporting indexes** (Sections 8.6 and 16). This isn't a bug, but it is a prerequisite for doing this at scale.
+7. **Two critical lookup indexes are missing** (Sections 8.6 and 16.2): `IX_RecordChange_EntityID_ChangedAt` (`IX_RecordChange_EntityID_RecordID_ChangedAt` has `RecordID` second) and the reverse record-map index on (`CompanyIntegrationID`, `EntityID`, `EntityRecordID`) (while the `ExternalSystemRecordID` direction is already covered by `IDX_CompanyIntegrationRecordMap_Identity_Covering`).
 
-Items 1–3 need fixing before the generic Bidirectional mode can be trusted. Fix them in Phase 0 regardless of this connector.
+Items 1–2 are active defects in shipped Push/Bidirectional sync (`loadChangedMJRecords` also had zero unit test coverage, which is how `'Record Changes'` shipped) and should land immediately with regression tests rather than waiting on later phases; item 3 is superseded for Peer Sync by `Source = 'Sync'` provenance.
 
 ---
 
@@ -727,13 +745,13 @@ Rough estimates for one experienced MJ engineer. Treat them as sizing, not commi
 
 | Phase | Scope | Estimate |
 |---|---|---|
-| **0. Prerequisites** | Section 19 fixes 1–3; Record Change `Sync` source, context and index; the `RunPipeline` seam; lift-outs with unit tests | ~1–1.5 weeks |
-| **1. One-way, dependency-safe** | `Describe`, `FetchChanges`, `FetchRecords`, `ApplyBatch`; `PeerSyncClient`; deployment identity and handshake; compatibility report data; static plan (SCCs, deferrable edges); change-set plan (references, closure, record DAG, two-phase, deletes); preserved keys and the identity map; users by email; provenance and echo suppression; holds for missing dependencies and validation; snapshot load; dry run | ~3–4 weeks |
-| **2. Two-way** | Outbound via `ApplyBatch`; base snapshots; `ThreeWayMerge`; field ownership; delete versus update; hold-resolution actions (generic forms plus a Resolve action) | ~2–3 weeks |
-| **3. Live duplicate gate** | Identity rules (`MatchStrategy`), including rules through child records; `FindCandidatesForValues` in the duplicate-detection package; in-run index; per-record vectorize after create; gray-zone reasoning; child reconciliation on link; many-to-one guard; `Merge` changes; review UI built on `mj-record-merge-panel`; bulk resolve | ~3 weeks |
-| **4. Seconds and entry time** | Doorbell subscription and debounce; `CheckDuplicates` fan-out from forms with a Link action; pairing dashboard and alerts | ~2–3 weeks |
+| **0. Prerequisites** | Section 19 fixes 1–5 with regression tests; `RecordChange` `Sync` source, `IRecordChangeSyncContext`, provider wiring and `IX_RecordChange_EntityID_ChangedAt` index; record-map reverse index; the `RunPipeline` seam; `ThreeWayMerge` and `@memberjunction/record-graph` Tarjan SCC lift-outs with unit tests | ~1–1.5 weeks |
+| **1. One-way, dependency-safe + Stage 1 deterministic identity** | `Describe` (`GetManifest`/`GetSchemaFingerprint`), `FetchChanges` (`FetchChangeBatch`), `ApplyBatch` (`ApplyChangeBatch`); transport client; deployment identity and handshake; compatibility report data; static plan (SCCs, deferrable edges); change-set plan (references, record DAG, two-phase nullable FK deferral, deletes); preserved keys, identity map, **and Stage 1 deterministic natural-key matching (`KeyFields` / `MatchStrategy` rules)** so initial snapshot loads of pre-existing People/Organizations link rather than duplicate; users by email; provenance and echo suppression; held-records schema and holds for missing dependencies, ambiguous matches and validation; snapshot load; dry run | ~3–4 weeks |
+| **2. Two-way** | Outbound via `ApplyBatch`; record-map `LastSyncedSnapshot` / `LastSyncedHash` columns and link back-propagation; `ThreeWayMerge`; field ownership; delete versus update; hold-resolution actions (generic forms plus a Resolve action) | ~2–3 weeks |
+| **3. Fuzzy & AI duplicate gate** | Child-aggregate rules; `FindCandidatesForValues` in `@memberjunction/ai-vector-dupe`; in-run vector index; per-record `VectorizeRecords` in `@memberjunction/ai-vector-sync`; gray-zone LLM reasoning; `FetchRecords` closure & child reconciliation on link; many-to-one guard; `Merge` changes; review UI built on `mj-record-merge-panel`; bulk resolve | ~3 weeks |
+| **4. Seconds and entry time** | Doorbell (`PeerSyncDoorbell` / subscription, debounce and backoff retry); `CheckDuplicates` fan-out from forms (with coarse-disclosure default + Link action for authorized reviewers); pairing dashboard, hold-age health escalation and alerts | ~2–3 weeks |
 
-**Total:** roughly 11–14 weeks. Phases 0–2 deliver LXP ↔ AIDP for people, organizations and learning records with dependency safety. Phase 3 is what makes it *great*.
+**Total:** roughly 11–14 weeks. Moving Stage 1 deterministic natural-key rules into Phase 1 ensures Phases 0–2 safely deliver LXP ↔ AIDP for People, Organizations and learning records without duplicating pre-existing people under different UUIDs; Phase 3 adds fuzzy vector + LLM matching for messy records.
 
 ---
 
@@ -791,7 +809,7 @@ Rough estimates for one experienced MJ engineer. Treat them as sizing, not commi
 
 ---
 
-## Appendix B — Implementation Map
+## Appendix B — Implementation Map (PR #6502)
 
 | Component | Package / File | Description |
 |---|---|---|
@@ -803,9 +821,8 @@ Rough estimates for one experienced MJ engineer. Treat them as sizing, not commi
 | `ThreeWayMerge` & `RunPipeline` seam | `packages/Integration/engine/src/ThreeWayMerge.ts`, `packages/Integration/engine/src/BaseIntegrationConnector.ts`, `packages/Integration/engine/src/IntegrationEngine.ts` | Shared field-level 3-way merge (`'source'` & `'destination'` key modes), Section 19 fixes 1–5, and `BaseIntegrationConnector.RunPipeline` |
 | `SchemaPlanner` & `ComputePairingID` | `packages/Integration/engine/src/peer-sync/SchemaPlanner.ts` | Deterministic SHA-256 schema fingerprinting, symmetric pairing ID, and `SchemaDriftPolicy` reconciliation |
 | `ChangeSetPlanner` | `packages/Integration/engine/src/peer-sync/ChangeSetPlanner.ts` | Composite `(ChangedAt, ID)` watermarks, `CoalesceRecordChanges` (`Create+Update`, `Create+Delete` elision, `Update+Update` earliest `AncestorData`), Tarjan SCC planner, and self-reference record ordering |
-| `PeerIdentityGate` | `packages/Integration/engine/src/peer-sync/IdentityGate.ts` | 5-step hybrid identity cascade (`RecordMap` $\rightarrow$ `PrimaryKey` $\rightarrow$ `KeyFields` $\rightarrow$ `DuplicateDetection` $\rightarrow$ `NewRecord`) |
+| `PeerIdentityGate` | `packages/Integration/engine/src/peer-sync/IdentityGate.ts` | 5-step hybrid identity cascade (`RecordMap` → `PrimaryKey` → `KeyFields` → `DuplicateDetection` → `NewRecord`) |
 | `PeerSyncApplier` | `packages/Integration/engine/src/peer-sync/PeerSyncApplier.ts` | Inbound batch applier with FK translation, two-pass nullable FK deferral, 3-way merge, `SetSyncContext`, and post-batch vector indexing |
 | `PeerSyncEndpointService` & Transports | `packages/Integration/engine/src/peer-sync/PeerSyncEndpointService.ts` | Server-side handler for `GetManifest`, `GetSchemaFingerprint`, `PreviewSchemaPlan`, `FetchChangeBatch`, `ApplyChangeBatch`, and `NotifyChangeBatch` with `AllowedEntityNames` enforcement |
 | `PeerSyncDoorbell` | `packages/Integration/engine/src/peer-sync/PeerSyncDoorbell.ts` | `BaseSingleton` event listener over `MJGlobal` (`BaseEntityEvent`) with `SyncContext` loop suppression, debounce coalescing, and exponential backoff |
 | `MemberJunctionConnector` | `packages/Integration/engine/src/peer-sync/MemberJunctionConnector.ts` | `@RegisterClass(BaseIntegrationConnector, 'MemberJunctionConnector')` implementing `RunPipeline` |
-

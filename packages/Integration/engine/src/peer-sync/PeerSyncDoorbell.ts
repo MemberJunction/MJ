@@ -241,6 +241,7 @@ export class PeerSyncDoorbell extends BaseSingleton<PeerSyncDoorbell> {
                 initialBackoff * Math.pow(2, state.consecutiveFailures - 1)
             );
             state.backoffUntilMs = Date.now() + backoffMs;
+            this.scheduleFlush(state);
             return false;
         }
     }

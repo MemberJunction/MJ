@@ -1,5 +1,5 @@
 import { EntityInfo, IMetadataProvider, Metadata } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDSet } from '@memberjunction/global';
 import type {
     CoalescedRecordChange,
     PeerChangeCursor,
@@ -72,7 +72,7 @@ export function BuildCompositeWatermarkWhereClause(
     entityID: string,
     cursor: PeerChangeCursor | null
 ): string {
-    const escapedEntityID = entityID.replace(/'/g, "''");
+    const escapedEntityID = EscapeSQLString(entityID);
     const baseFilter =
         `EntityID='${escapedEntityID}' ` +
         `AND (Source IS NULL OR Source <> 'Sync') ` +
@@ -82,12 +82,12 @@ export function BuildCompositeWatermarkWhereClause(
         return baseFilter;
     }
 
-    const escapedChangedAt = cursor.ChangedAt.replace(/'/g, "''");
+    const escapedChangedAt = EscapeSQLString(cursor.ChangedAt);
     if (!cursor.ChangeID) {
         return `${baseFilter} AND ChangedAt > '${escapedChangedAt}'`;
     }
 
-    const escapedChangeID = cursor.ChangeID.replace(/'/g, "''");
+    const escapedChangeID = EscapeSQLString(cursor.ChangeID);
     return (
         `${baseFilter} AND (` +
         `ChangedAt > '${escapedChangedAt}' OR ` +
@@ -261,9 +261,11 @@ export function PlanPeerEntityOrder(
     provider?: IMetadataProvider
 ): PeerEntityDependencyPlan {
     const md = provider ?? Metadata.Provider;
+    const seenIDs = new UUIDSet();
     const uniqueIDs: string[] = [];
     for (const id of entityIDs) {
-        if (!uniqueIDs.some(existing => UUIDsEqual(existing, id))) {
+        if (!seenIDs.has(id)) {
+            seenIDs.add(id);
             uniqueIDs.push(id);
         }
     }
@@ -277,12 +279,13 @@ export function PlanPeerEntityOrder(
         };
     }
 
+    const entitiesByID = IndexByUUID(md.Entities);
     const normToCanonical = new Map<string, string>();
     const entityByNorm = new Map<string, EntityInfo>();
     for (const id of uniqueIDs) {
         const norm = NormalizeUUID(id);
         normToCanonical.set(norm, id);
-        const info = md.Entities.find(e => UUIDsEqual(e.ID, id));
+        const info = entitiesByID.get(id);
         if (info) {
             entityByNorm.set(norm, info);
         }
@@ -320,10 +323,14 @@ export function PlanPeerEntityOrder(
         if (entity.ParentEntityInfo) {
             const normParent = NormalizeUUID(entity.ParentEntityInfo.ID);
             if (normToCanonical.has(normParent) && normParent !== normId) {
+                const childPk = entity.FirstPrimaryKey; // first-pk-ok: IS-A child shares a single-column primary key with its parent entity
+                if (!childPk) {
+                    throw new Error(`IS-A child entity '${entity.Name}' has no primary key defined in metadata.`);
+                }
                 allEdges.push({
                     FromEntityID: canonicalFrom,
                     ToEntityID: normToCanonical.get(normParent)!,
-                    FieldName: entity.FirstPrimaryKey?.Name ?? 'ID', // first-pk-ok: IS-A child shares a single-column primary key with its parent entity
+                    FieldName: childPk.Name,
                     AllowsNull: false,
                     IsISAParent: true,
                 });
