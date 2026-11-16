@@ -33787,7 +33787,7 @@ export class MJArtifactGuestShareLinkEntity extends BaseEntity<MJArtifactGuestSh
     * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
     */
-    get Artifact(): string {
+    get Artifact(): string | null {
         return this.Get('Artifact');
     }
 
@@ -33805,7 +33805,7 @@ export class MJArtifactGuestShareLinkEntity extends BaseEntity<MJArtifactGuestSh
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
     */
-    get CreatedByUser(): string {
+    get CreatedByUser(): string | null {
         return this.Get('CreatedByUser');
     }
 }

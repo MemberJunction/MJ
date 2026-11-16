@@ -849,15 +849,15 @@ SELECT
     MJUser_CreatedByUserID.[Name] AS [CreatedByUser]
 FROM
     [${flyway:defaultSchema}].[ArtifactGuestShareLink] AS a
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Artifact] AS MJArtifact_ArtifactID
   ON
     [a].[ArtifactID] = MJArtifact_ArtifactID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[ArtifactVersion] AS MJArtifactVersion_ArtifactVersionID
   ON
     [a].[ArtifactVersionID] = MJArtifactVersion_ArtifactVersionID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[User] AS MJUser_CreatedByUserID
   ON
     [a].[CreatedByUserID] = MJUser_CreatedByUserID.[ID]
@@ -1111,7 +1111,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactGuestShareLink] TO [
             510,
             0,
             0,
-            0,
+            1,
             NULL,
             0,
             0,
@@ -1235,7 +1235,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactGuestShareLink] TO [
             200,
             0,
             0,
-            0,
+            1,
             NULL,
             0,
             0,

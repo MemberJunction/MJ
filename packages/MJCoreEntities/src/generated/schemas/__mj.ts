@@ -10747,7 +10747,7 @@ export const MJArtifactGuestShareLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Artifact: z.string().describe(`
+    Artifact: z.string().nullable().describe(`
         * * Field Name: Artifact
         * * Display Name: Artifact
         * * SQL Data Type: nvarchar(255)`),
@@ -10755,7 +10755,7 @@ export const MJArtifactGuestShareLinkSchema = z.object({
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
         * * SQL Data Type: nvarchar(255)`),
-    CreatedByUser: z.string().describe(`
+    CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
         * * SQL Data Type: nvarchar(100)`),
