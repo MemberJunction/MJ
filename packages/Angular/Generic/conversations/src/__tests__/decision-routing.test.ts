@@ -143,9 +143,16 @@ describe('decision routing', () => {
             expect(ShouldRunRoutingDecision(gate({ Message: form }))).toBe(false);
         });
 
-        it('does not ask under MentionOnly, or before any agent has answered', () => {
-            expect(ShouldRunRoutingDecision(gate({ ReplyMode: 'MentionOnly' }))).toBe(false);
+        it('asks under MentionOnly once an agent has answered, and does not ask before any agent has answered', () => {
+            expect(ShouldRunRoutingDecision(gate({ ReplyMode: 'MentionOnly', ContinuityAgentId: RESEARCH.ID }))).toBe(true);
+            expect(ShouldRunRoutingDecision(gate({ ReplyMode: 'MentionOnly', ContinuityAgentId: null }))).toBe(false);
             expect(ShouldRunRoutingDecision(gate({ ContinuityAgentId: null }))).toBe(false);
+        });
+
+        it('does not ask for a message that tags a person or replies to a specific parent message', () => {
+            expect(ShouldRunRoutingDecision(gate({ MentionedUserIds: ['user-2'] }))).toBe(false);
+            expect(ShouldRunRoutingDecision(gate({ ReplyParentAgentId: RESEARCH.ID }))).toBe(false);
+            expect(ShouldRunRoutingDecision(gate({ ReplyParentIsHuman: true }))).toBe(false);
         });
     });
 
@@ -252,6 +259,21 @@ describe('decision routing', () => {
             expect(outcome.PromptRunID).toBeNull();
         });
 
+        it('returns NoAgent when the answer takes longer than the timeout in a multi-person chat', async () => {
+            vi.useFakeTimers();
+            const late = { ...leaves(WRITER.ID), PromptRunID: PROMPT_RUN };
+            const run = runner(() => new Promise(resolve => setTimeout(() => resolve(late), DECISION_ROUTING_TIMEOUT_MS + 50)));
+
+            const pending = RunRoutingDecision(input({ AllowNoAgentOption: true }), run);
+            await vi.advanceTimersByTimeAsync(DECISION_ROUTING_TIMEOUT_MS + 1);
+            const outcome = await pending;
+            await vi.advanceTimersByTimeAsync(100);
+
+            expect(outcome.Verdict).toBe('NoAgent');
+            expect(outcome.Reason).toContain(`${DECISION_ROUTING_TIMEOUT_MS} ms`);
+            expect(outcome.PromptRunID).toBeNull();
+        });
+
         it('carries the decision\'s prompt run, answered or failed, so a turn can be traced to it', async () => {
             const answeredRun = await RunRoutingDecision(input(), runner({ ...leaves(WRITER.ID), PromptRunID: PROMPT_RUN }));
             const failedRun = await RunRoutingDecision(input(), runner({ Success: false, ErrorMessage: 'unreadable answer', Answers: {}, PromptRunID: PROMPT_RUN }));
@@ -315,6 +337,13 @@ describe('decision routing', () => {
             expect(ApplyRoutingDecision(original, null)).toBe(original);
             expect(ResolveAgentTurn(ApplyRoutingDecision(original, null), ALWAYS, isKnown))
                 .toEqual({ AgentId: RESEARCH.ID, Route: 'Continuity' });
+        });
+
+        it('NoAgent clears continuity and marks the message as addressed to a human, so no turn starts', () => {
+            const applied = ApplyRoutingDecision(candidates(), outcome({ Verdict: 'NoAgent' }));
+            expect(applied.DecisionAddressedToHuman).toBe(true);
+            expect(ResolveAgentTurn(applied, ALWAYS, isKnown)).toBeNull();
+            expect(ResolveAgentTurn(applied, { ReplyMode: 'MentionOnly', AllowedAgentIDs: null }, isKnown)).toBeNull();
         });
     });
 });

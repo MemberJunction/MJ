@@ -1,0 +1,53 @@
+[
+  {
+    "fields": {
+      "Name": "Chat",
+      "Code": "CHAT",
+      "Description": "Standard interactive chat conversation between a user and one or more AI agents."
+    },
+    "primaryKey": {
+      "ID": "7F81FF57-C5A8-464D-B3B4-35A4FCF10717"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Skip",
+      "Code": "SKIP",
+      "Description": "Ask Skip analytical or Component Studio conversation."
+    },
+    "primaryKey": {
+      "ID": "FDAE66B9-CF87-48EA-8A12-8E521740A66A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Routine",
+      "Code": "ROUTINE",
+      "Description": "Background conversation owned by a scheduled or event-driven User Routine execution."
+    },
+    "primaryKey": {
+      "ID": "18D12ABA-BE8C-4087-B440-835B6D077DD7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Meeting Room",
+      "Code": "MEETING_ROOM",
+      "Description": "Realtime multi-participant voice or video meeting room transcript conversation."
+    },
+    "primaryKey": {
+      "ID": "2E9EF85D-D18A-4B8E-B6AB-F65C7F91A926"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comment",
+      "Code": "COMMENT",
+      "Description": "Anchored comment or suggestion thread attached to an entity record, field, section, or artifact.",
+      "ExtensionEntity": "MJ: Comments"
+    },
+    "primaryKey": {
+      "ID": "17E6A105-AE51-43A2-9D56-290BC8D1D6BB"
+    }
+  }
+]

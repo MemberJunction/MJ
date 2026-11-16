@@ -77,6 +77,9 @@ export class ScheduledJobsService {
             if (this.config.defaultLockTimeout != null) {
                 this.engine.LeaseTimeoutMs = this.config.defaultLockTimeout;
             }
+            if (this.config.routineIndexRefreshMinutes != null) {
+                this.engine.WorkGateRefreshMs = this.config.routineIndexRefreshMinutes * 60_000;
+            }
 
             await this.engine.StartPolling(this.systemUser);
             this.isRunning = true;

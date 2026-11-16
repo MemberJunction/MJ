@@ -277,6 +277,9 @@ class FakeLedger implements IRealtimeRecordingLedger {
         this.row.RecordingGaps = JSON.stringify(gaps);
         return true;
     }
+    public async StampFile(): Promise<{ RecordingStatus: string | null }> {
+        throw new Error('not used by assembly');
+    }
     public async LoadShards(): Promise<LedgerShard[]> {
         this.FullLoads++;
         if (this.LoadError) throw this.LoadError;

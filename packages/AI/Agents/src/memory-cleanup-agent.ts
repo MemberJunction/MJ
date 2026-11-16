@@ -302,6 +302,7 @@ export class MemoryCleanupAgent extends BaseAgent {
      */
     private getNoteRetentionDays(agent: MJAIAgentEntityExtended): number {
         // Check if agent has NoteRetentionDays property using GetAll() for plain object access
+        // fls-guard: reads one agent setting on the server; nothing is returned
         const agentData = agent.GetAll();
         const retention = agentData['NoteRetentionDays'];
         if (typeof retention === 'number' && retention > 0) {
@@ -314,6 +315,7 @@ export class MemoryCleanupAgent extends BaseAgent {
      * Get example retention days for an agent (uses agent config or default)
      */
     private getExampleRetentionDays(agent: MJAIAgentEntityExtended): number {
+        // fls-guard: reads one agent setting on the server; nothing is returned
         const agentData = agent.GetAll();
         const retention = agentData['ExampleRetentionDays'];
         if (typeof retention === 'number' && retention > 0) {
@@ -326,6 +328,7 @@ export class MemoryCleanupAgent extends BaseAgent {
      * Check if auto-archive is enabled for an agent
      */
     private getAutoArchiveEnabled(agent: MJAIAgentEntityExtended): boolean {
+        // fls-guard: reads one agent setting on the server; nothing is returned
         const agentData = agent.GetAll();
         const enabled = agentData['AutoArchiveEnabled'];
         // Default to true if not explicitly set to false

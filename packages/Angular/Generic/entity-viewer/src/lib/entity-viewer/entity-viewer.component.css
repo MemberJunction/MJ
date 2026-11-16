@@ -17,6 +17,53 @@
   flex-shrink: 0;
 }
 
+/* View properties (read-only chips) */
+.view-properties-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-4);
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-subtle);
+  flex-shrink: 0;
+}
+
+.view-property-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  padding: 3px 10px;
+  border-radius: var(--mj-radius-full);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  font-size: var(--mj-text-xs);
+}
+
+.view-property-name {
+  color: var(--mj-text-muted);
+}
+
+.view-property-value {
+  color: var(--mj-text-primary);
+  font-weight: 600;
+}
+
+.view-property-chip.server-set {
+  background: color-mix(in srgb, var(--mj-status-info) 8%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-status-info) 25%, var(--mj-border-default));
+}
+
+.view-property-chip.server-set .view-property-value {
+  color: var(--mj-text-secondary);
+  font-weight: 500;
+}
+
+.view-properties-error {
+  color: var(--mj-status-error-text);
+  font-size: var(--mj-text-xs);
+}
+
 /* Filter */
 .filter-container {
   flex: 1;
@@ -180,11 +227,16 @@
   text-align: center;
 }
 
-/* Host for dynamically-mounted plug-in view renderers (Cluster, third-party) */
+/* Host for dynamically-mounted plug-in view renderers (Grid, Cards, Timeline, Map, Calendar).
+   Intentionally NO z-index or isolation here so fixed-position modals/drawers inside
+   mj-entity-data-grid (Recycle Bin, Export, Merge, List Management) escape into the
+   document stacking context above Data Explorer's .content-header (z-index: 2) and
+   .shell-header (z-index: 500). Map/Leaflet isolation lives on mj-map-view-renderer. */
 .dynamic-view-host {
   height: 100%;
   width: 100%;
   overflow: auto;
+  position: relative;
 }
 
 /* Content */

@@ -1,4 +1,4 @@
-import { EntityPermissionType, FieldValueCollection, EntitySaveOptions, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
+import { AssertClientInputWritableForUser, EntityPermissionType, FieldValueCollection, EntitySaveOptions, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
 import {
@@ -47,6 +47,7 @@ import {
 import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { GetReadOnlyProvider } from '../util.js';
+import { ProjectEntityObjectForCaller, ProjectableEntityObject } from '../generic/fieldSecurityTransport.js';
 import { MediaAccessKeyManager } from '../rest/MediaAccessKeys.js';
 import { UploadTokenManager } from '../rest/UploadTokenManager.js';
 import { DeriveSidecarPath, ParsePeaksSidecar } from './peaksSidecar.js';
@@ -666,6 +667,8 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
     const providerEntity = await provider.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+    // Field-level security: refuse a key the caller may not read, or that names no field, before anything else
+    AssertClientInputWritableForUser(fileEntity.EntityInfo, { ...input }, user);
 
     // The upload URL signs an overwrite of `Name` (and the row will point at `ProviderKey`): Write on the account the
     // provider resolves to, and the tracked-file rule on both keys, as for every other route that writes an object.
@@ -693,7 +696,7 @@ export class FileResolver extends FileResolverBase {
     if (!saved) {
       console.error('[CreateFile] File save failed:', fileEntity.LatestResult?.CompleteMessage);
     }
-    const File = mapper.MapFields({ ...fileEntity.GetAll() });
+    const File = this.fileResponse(fileEntity, user, provider);
 
     return { File, UploadUrl, NameExists };
   }
@@ -760,8 +763,7 @@ export class FileResolver extends FileResolverBase {
       });
 
       const loaded = await fileEntity.Load(uploadResult.FileID);
-      const mapper = new FieldMapper();
-      const File = loaded ? (mapper.MapFields({ ...fileEntity.GetAll() }) as unknown as MJFile_) : undefined;
+      const File = loaded ? (this.fileResponse(fileEntity, user, provider) as unknown as MJFile_) : undefined;
 
       return {
         Success: true,
@@ -776,6 +778,14 @@ export class FileResolver extends FileResolverBase {
         ErrorMessage: message,
       };
     }
+  }
+
+  /**
+   * The file record for a response: its field values as the caller may read them, in GraphQL field
+   * names. The record was just saved or reloaded, and a save re-reads the whole row.
+   */
+  private fileResponse(fileEntity: ProjectableEntityObject, user: UserInfo, provider: IMetadataProvider): Record<string, unknown> {
+    return new FieldMapper().MapFields({ ...ProjectEntityObjectForCaller(fileEntity, user, provider) });
   }
 
   /**

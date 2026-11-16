@@ -9,6 +9,7 @@ export * from './lib/module';
 export * from './lib/recent-access.service';
 export * from './lib/recent-resource-type';
 export * from './lib/theme.service';
+export * from './lib/brand-overlay-prepaint';
 
 // DOM helpers
 export * from './lib/dom-utils';
@@ -22,3 +23,7 @@ export * from './lib/loading/loading.component';
 // Rich-text rendering (safe HTML/SVG sanitization)
 export * from './lib/rich-text/rich-text-sanitize';
 export * from './lib/rich-text/safe-rich-html.pipe';
+
+// Angular GraphQL Provider
+export * from './lib/angular-graphql-data-provider';
+

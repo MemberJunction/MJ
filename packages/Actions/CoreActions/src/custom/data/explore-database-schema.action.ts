@@ -239,7 +239,20 @@ export class ExploreDatabaseSchemaAction extends BaseAction {
             CascadeDeletes: entity.CascadeDeletes,
             DeleteType: entity.DeleteType,
             UserViewMaxRows: entity.UserViewMaxRows,
-            ScopeDefault: entity.ScopeDefault
+            ScopeDefault: entity.ScopeDefault,
+            AlternateBaseViews: (entity.AlternateBaseViews ?? [])
+                .filter(abv => (abv.IsUsable ?? abv.Status !== 'Disabled') && !(abv.IsDeprecated ?? abv.Status === 'Deprecated'))
+                .map(abv => ({
+                    ID: abv.ID,
+                    Name: abv.Name,
+                    DisplayName: abv.EffectiveDisplayName,
+                    ViewName: abv.ViewName,
+                    SchemaName: abv.EffectiveSchemaName,
+                    Description: abv.Description || '',
+                    ParentID: abv.ParentID,
+                    CachePolicy: abv.CachePolicy,
+                    Status: abv.Status
+                }))
         };
 
         // Include fields if requested
@@ -436,6 +449,21 @@ export class ExploreDatabaseSchemaAction extends BaseAction {
                 if (entity.APISettings.AllowUserSearchAPI) apiFlags.push('Search');
                 if (apiFlags.length > 0) {
                     lines.push(`**API Support:** ${apiFlags.join(', ')}`);
+                }
+
+                // Alternate Base Views
+                if (Array.isArray(entity.AlternateBaseViews) && entity.AlternateBaseViews.length > 0) {
+                    lines.push(`\n#### Alternate Base Views (${entity.AlternateBaseViews.length})`);
+                    for (const abv of entity.AlternateBaseViews as Array<{
+                        Name: string;
+                        DisplayName: string;
+                        SchemaName: string;
+                        ViewName: string;
+                        Description: string;
+                    }>) {
+                        const descSuffix = abv.Description ? ` — ${abv.Description}` : '';
+                        lines.push(`  - **${abv.DisplayName}** (${abv.Name}) → [${abv.SchemaName}].[${abv.ViewName}]${descSuffix}`);
+                    }
                 }
 
                 // Fields

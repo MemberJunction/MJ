@@ -1326,6 +1326,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     EntityName: 'MJ: Duplicate Runs',
                     ExtraFilter: `ID='${EscapeSQLString(pipelineRunID)}'`,
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'entity_object'
                 });
                 if (!this.IsDetecting) return;

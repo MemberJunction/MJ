@@ -1,3 +1,5 @@
+import { DetachString } from './DetachString.js';
+
 /**
  * Name of the per-record custom-overflow column. Written on every integration table
  * alongside the other `__mj_integration_*` columns when present. Holds a JSON object of
@@ -130,9 +132,26 @@ export function FoldCustomKeyStats(
                 ? value
                 : typeof value === 'object' ? JSON.stringify(value) : String(value);
             if (serialized.length > entry.maxLength) entry.maxLength = serialized.length;
-            if (entry.samples.length < CUSTOM_KEY_SAMPLE_CAP) entry.samples.push(value);
+            if (entry.samples.length < CUSTOM_KEY_SAMPLE_CAP) entry.samples.push(detachSample(value, serialized));
         }
     }
+}
+
+/**
+ * A copy of a sample that shares no memory with the response text it was parsed from. A string is
+ * copied with {@link DetachString}, and a plain object or array is parsed back from its JSON, which
+ * is new text. Any other value is kept as is, so column-type inference sees the same type.
+ */
+function detachSample(value: unknown, serialized: string): unknown {
+    if (typeof value === 'string') return DetachString(value);
+    if (Array.isArray(value) || isPlainObject(value)) return JSON.parse(serialized);
+    return value;
+}
+
+function isPlainObject(value: unknown): boolean {
+    if (typeof value !== 'object' || value === null) return false;
+    const proto = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null;
 }
 
 /** @deprecated Use {@link FoldCustomKeyStats}. */

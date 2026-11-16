@@ -397,8 +397,11 @@ export interface AgentInput {
     ActionNames?: string[];
     DriverClass?: string;
     TypeConfiguration?: Record<string, unknown>;
+    AgentTypePromptParams?: Record<string, unknown>;
     MaxIterationsPerRun?: number;
     DefaultPromptEffortLevel?: number;
+    /** The agent's `FinalPayloadValidation` example template, which a completion's payload must match. */
+    FinalPayloadValidation?: Record<string, unknown>;
 }
 
 /** A Loop agent with one prompt and, optionally, Actions. */
@@ -417,7 +420,12 @@ export async function CreateLoopAgent(ctx: IntegrationCheckContext, fx: NativeLo
     agent.MaxIterationsPerRun = input.MaxIterationsPerRun ?? 8;
     if (input.DriverClass) agent.DriverClass = input.DriverClass;
     if (input.TypeConfiguration) agent.TypeConfiguration = JSON.stringify(input.TypeConfiguration);
+    if (input.AgentTypePromptParams) agent.AgentTypePromptParams = JSON.stringify(input.AgentTypePromptParams);
     if (input.DefaultPromptEffortLevel !== undefined) agent.DefaultPromptEffortLevel = input.DefaultPromptEffortLevel;
+    if (input.FinalPayloadValidation) {
+        agent.FinalPayloadValidation = JSON.stringify(input.FinalPayloadValidation);
+        agent.FinalPayloadValidationMode = 'Retry';
+    }
     await saveOrThrow(agent, input.Name);
     fx.CreatedRecords.push({ Entity: 'MJ: AI Agents', ID: agent.ID });
     fx.AgentIds.push(agent.ID);

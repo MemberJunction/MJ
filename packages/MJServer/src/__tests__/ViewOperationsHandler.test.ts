@@ -107,14 +107,19 @@ describe('ViewOperationsHandler.runView', () => {
     });
 
     describe('parameter sanitization', () => {
-        it('defaults ResultType to "simple" when unset and preserves an explicit one', async () => {
+        it('defaults ResultType to "simple" when unset, forces "simple" over "entity_object", and keeps "count_only"', async () => {
             const defaulted: RunViewParams = { EntityName: 'Customers' };
             await ViewOperationsHandler.runView(defaulted, makeUser());
             expect((mockRunViewFn.mock.calls[0][0] as RunViewParams).ResultType).toBe('simple');
 
+            // Entity objects cannot cross the wire: serializing one sends its internal state, not its fields.
             const explicit: RunViewParams = { EntityName: 'Customers', ResultType: 'entity_object' };
             await ViewOperationsHandler.runView(explicit, makeUser());
-            expect((mockRunViewFn.mock.calls[1][0] as RunViewParams).ResultType).toBe('entity_object');
+            expect((mockRunViewFn.mock.calls[1][0] as RunViewParams).ResultType).toBe('simple');
+
+            const countOnly: RunViewParams = { EntityName: 'Customers', ResultType: 'count_only' };
+            await ViewOperationsHandler.runView(countOnly, makeUser());
+            expect((mockRunViewFn.mock.calls[2][0] as RunViewParams).ResultType).toBe('count_only');
         });
 
         it('splits comma-separated Fields strings and coerces numeric strings for MaxRows/StartRow', async () => {
@@ -262,16 +267,13 @@ describe('ViewOperationsHandler.getEntityViews', () => {
         expect(outcome.error).toBe('timeout talking to DB');
     });
 
-    it('KNOWN GAP: the entity name is interpolated into ExtraFilter without escaping', async () => {
-        // Reachable only for names registered in metadata, so a hostile value requires a
-        // hostile entity name — but an entity legitimately named with an apostrophe
-        // (e.g. "O'Brien Records") already produces a broken/injectable filter today.
+    it('escapes single quotes in the entity name when building ExtraFilter', async () => {
         registerEntity("O'Brien Records", true);
         mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
 
         await ViewOperationsHandler.getEntityViews("O'Brien Records", makeUser());
 
         const executed = mockRunViewFn.mock.calls[0][0] as RunViewParams;
-        expect(executed.ExtraFilter).toBe(`Entity = 'O'Brien Records'`); // quote NOT doubled
+        expect(executed.ExtraFilter).toBe(`Entity = 'O''Brien Records'`);
     });
 });

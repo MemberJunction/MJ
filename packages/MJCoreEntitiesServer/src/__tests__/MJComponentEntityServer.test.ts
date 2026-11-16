@@ -117,6 +117,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 vi.mock('../custom/util.js', () => ({ EmbedTextLocalHelper: vi.fn() }));
+// The approval rules have their own tests (approvalStamp.test.ts); here they approve nothing.
+vi.mock('../custom/approvalStamp.js', () => ({ ApplyApprovalRulesAsync: vi.fn(async () => false), ApprovalRefusalResult: vi.fn() }));
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();

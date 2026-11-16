@@ -299,7 +299,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
     });
 
     describe('Save — update', () => {
-        it('builds an Update mutation and includes ONLY the primary key and dirty writable fields in input and delta selection set', async () => {
+        it('builds an Update mutation with a delta input and a selection set of every loaded non-binary field', async () => {
             const entity = loadedCustomer();
             entity.Set('Name', 'New Name');
             GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMCustomer', { ID: 'CUST-0001', Name: 'New Name' }));
@@ -309,13 +309,12 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             const doc = GraphQLWire.LastRequest.document;
             expect(doc).toContain('mutation UpdateCRMCustomer ($input: UpdateCRMCustomerInput!)');
             expect(doc).toContain('UpdateCRMCustomer(input: $input)');
-            // Delta response selection set requests ONLY PK, dirty fields, and datestamps
-            for (const expected of ['ID', 'Name', '_mj__CreatedAt', '_mj__UpdatedAt']) {
+            // The selection set requests PK, datestamps, the dirty field and every other loaded
+            // non-binary field; only the binary Photo column stays out.
+            for (const expected of ['ID', 'Name', '_mj__CreatedAt', '_mj__UpdatedAt', 'First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt']) {
                 expect(doc).toContain(expected);
             }
-            for (const omitted of ['First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt', 'Photo']) {
-                expect(doc).not.toContain(omitted);
-            }
+            expect(doc).not.toContain('Photo');
 
             const input = lastInputRecord();
             expect(input['ID']).toBe('CUST-0001');
@@ -328,6 +327,35 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(input).not.toHaveProperty('First_Name');
             expect(Object.keys(input).sort()).toEqual(['ID', 'Name', 'OldValues___']);
             expect(entity.LatestResult.Type).toBe('update');
+        });
+
+        it('requests clean loaded writable fields in the Update selection set so a concurrent change to an untouched field reaches the entity', async () => {
+            // Session B changed Tier to 'Platinum' after this entity was loaded. The server preserves
+            // B's Tier on the non-overlapping save and returns the merged row; the client must ask
+            // for Tier back or it keeps showing the stale 'Gold'.
+            const entity = loadedCustomer();
+            entity.Set('Name', 'New Name');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMCustomer', {
+                    ID: 'CUST-0001',
+                    Name: 'New Name',
+                    Tier: 'Platinum',
+                    _mj__CreatedAt: CREATED_AT.toISOString(),
+                    _mj__UpdatedAt: new Date('2026-03-01T00:00:00Z').toISOString(),
+                })
+            );
+
+            const savedValues = (await provider.Save(entity, user, new EntitySaveOptions())) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            for (const loadedField of ['First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt']) {
+                expect(doc, `${loadedField} is loaded and readable, so the response must carry it`).toContain(loadedField);
+            }
+            // Binary columns stay out of the delta response: they are heavy and never merged concurrently.
+            expect(doc).not.toContain('Photo');
+            // The INPUT stays delta-only: only the primary key and the dirty field travel to the server.
+            expect(Object.keys(lastInputRecord()).sort()).toEqual(['ID', 'Name', 'OldValues___']);
+            expect(savedValues['Tier']).toBe('Platinum');
         });
 
         it('sends delta-only OldValues___ (PK + dirty writable fields) on a single-field update', async () => {
@@ -375,7 +403,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(keys).not.toContain('_mj__UpdatedAt');
         });
 
-        it('20-field entity update: modifying 1 field sends ONLY PK + that 1 field in vars.input, OldValues___, and selection set', async () => {
+        it('20-field entity update: modifying 1 field sends ONLY PK + that 1 field in vars.input and OldValues___, while the selection set still requests the loaded fields', async () => {
             const entityId = 'A1B2C3D4-0000-4000-8000-000000000020';
             const twentyFields = [
                 {
@@ -492,15 +520,16 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
                 { Key: 'Description', Value: 'Initial description' },
             ]);
 
-            // Selection set requests PK (ID), dirty field (Description), virtual/read-only field (OwnerName), and datestamp (_mj__UpdatedAt),
-            // while omitting all 16 untouched writable fields (Field3..Field18)
+            // Selection set requests PK (ID), dirty field (Description), virtual/read-only field (OwnerName),
+            // datestamp (_mj__UpdatedAt) and the 16 untouched loaded fields (Field3..Field18), so a
+            // concurrent change to any of them comes back with the saved row.
             const doc = GraphQLWire.LastRequest.document;
             expect(doc).toContain('ID');
             expect(doc).toContain('Description');
             expect(doc).toContain('OwnerName');
             expect(doc).toContain('_mj__UpdatedAt');
             for (let i = 3; i <= 18; i++) {
-                expect(doc).not.toContain(`Field${i}`);
+                expect(doc).toContain(`Field${i}`);
             }
 
             // And Save() merges the delta response onto wideEntity.GetAll() so all 17 clean loaded fields remain present
@@ -630,9 +659,9 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(doc).toContain('FirstName');
             expect(doc).toContain('DisplayName');
             expect(doc).toContain('_mj__UpdatedAt');
-            // Untouched writable fields LastName and Notes are omitted from selection set and input
-            expect(doc).not.toContain('LastName');
-            expect(doc).not.toContain('Notes');
+            // Untouched writable fields LastName and Notes are requested back but never sent as input
+            expect(doc).toContain('LastName');
+            expect(doc).toContain('Notes');
 
             const input = lastInputRecord();
             expect(Object.keys(input).sort()).toEqual(['FirstName', 'ID', 'OldValues___']);
@@ -641,6 +670,159 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(savedValues['DisplayName']).toBe('Quinton Broadcast');
             expect(savedValues['LastName']).toBe('Broadcast');
             expect(savedValues['Notes']).toBe('Large untouched notes payload');
+        });
+
+        it('includes server-derived fields (WhereClause, SmartFilterWhereClause, SmartFilterExplanation) in UpdateMJUserView selection set when SmartFilterPrompt is modified', async () => {
+            const entityId = 'A1B2C3D4-0000-4000-8000-000000000099';
+            const userViewEntityInfo = new EntityInfo({
+                ID: entityId,
+                Name: 'MJ: User Views',
+                BaseTable: 'UserView',
+                BaseView: 'vwUserViews',
+                SchemaName: '__mj',
+                Status: 'Active',
+                EntityFields: [
+                    {
+                        ID: `EF-${entityId}-1`,
+                        EntityID: entityId,
+                        Name: 'ID',
+                        Type: 'uniqueidentifier',
+                        IsPrimaryKey: true,
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 1,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-2`,
+                        EntityID: entityId,
+                        Name: 'Name',
+                        Type: 'nvarchar',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 2,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-3`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterEnabled',
+                        Type: 'bit',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 3,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-4`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterPrompt',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 4,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-5`,
+                        EntityID: entityId,
+                        Name: 'WhereClause',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 5,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-6`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterWhereClause',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 6,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-7`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterExplanation',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 7,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-8`,
+                        EntityID: entityId,
+                        Name: '__mj_UpdatedAt',
+                        Type: 'datetimeoffset',
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 8,
+                        Status: 'Active',
+                    },
+                ],
+            });
+            provider.RegisterTestEntity(userViewEntityInfo);
+
+            const view = new TestCustomerEntity(userViewEntityInfo, provider);
+            view.LoadFromData({
+                ID: 'A014C770-33C8-42DC-9E6A-E420E4ABE067',
+                Name: 'AI Agents — Active Agents',
+                SmartFilterEnabled: true,
+                SmartFilterPrompt: '',
+                WhereClause: '',
+                SmartFilterWhereClause: null,
+                SmartFilterExplanation: null,
+                __mj_UpdatedAt: UPDATED_AT,
+            });
+
+            // User enters a Smart Filter prompt on the client; WhereClause is generated server-side during MJUserViewEntityServer.Save()
+            view.Set('SmartFilterPrompt', 'Starts with A, eh?');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateMJUserView', {
+                    ID: 'A014C770-33C8-42DC-9E6A-E420E4ABE067',
+                    SmartFilterPrompt: 'Starts with A, eh?',
+                    WhereClause: "Name LIKE 'A%'",
+                    SmartFilterWhereClause: "Name LIKE 'A%'",
+                    SmartFilterExplanation: "Filtering for AI agents whose names begin with the letter 'A'.",
+                    _mj__UpdatedAt: UPDATED_AT.toISOString(),
+                })
+            );
+
+            const savedValues = (await provider.Save(view, user, new EntitySaveOptions())) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            expect(doc).toContain('SmartFilterPrompt');
+            expect(doc).toContain('WhereClause');
+            expect(doc).toContain('SmartFilterWhereClause');
+            expect(doc).toContain('SmartFilterExplanation');
+            // The clean loaded Name is requested back too, but never sent as input.
+            expect(doc).toContain('\n                    Name\n');
+
+            const input = lastInputRecord();
+            expect(Object.keys(input).sort()).toEqual(['ID', 'OldValues___', 'SmartFilterPrompt']);
+            expect(savedValues['WhereClause']).toBe("Name LIKE 'A%'");
+            expect(savedValues['SmartFilterWhereClause']).toBe("Name LIKE 'A%'");
+            expect(savedValues['SmartFilterExplanation']).toBe("Filtering for AI agents whose names begin with the letter 'A'.");
         });
 
         it('includes virtual fields in the Update selection set when a foreign key field is dirty', async () => {
@@ -747,8 +929,8 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(doc).toContain('CategoryID');
             expect(doc).toContain('Category');
             expect(doc).toContain('_mj__UpdatedAt');
-            // Clean scalar field Name is still omitted from the selection set
-            expect(doc).not.toContain('\n                    Name\n');
+            // The clean scalar field Name is requested back so a concurrent change to it is not lost
+            expect(doc).toContain('\n                    Name\n');
 
             // Merged return values have refreshed Category AND preserved clean Name
             expect(savedValues['CategoryID']).toBe('CAT-NEW');
@@ -791,6 +973,11 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
 
             const saved = await entity.Save();
             expect(saved).toBe(true);
+            // NotLoaded fields are never requested back; loaded ones are.
+            const doc = GraphQLWire.LastRequest.document;
+            expect(doc).not.toContain('Photo');
+            expect(doc).not.toContain('Age');
+            expect(doc).toContain('Tier');
             expect(entity.Get('Name')).toBe('Updated Name');
             expect(entity.Get('Tier')).toBe('Gold');
             expect(entity.Get('First Name')).toBe('Ada');
@@ -1003,6 +1190,45 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             });
             expect(item.Vars).toEqual({ input: expect.objectContaining({ Name: 'Queued Co' }) });
         });
+
+        it('carries an update\'s OldValues on the queued TransactionItem so the group can send them', async () => {
+            class InspectableTransactionGroup extends GraphQLTransactionGroup {
+                public get Pending(): TransactionItem[] {
+                    return this.PendingTransactions;
+                }
+            }
+            const group = new InspectableTransactionGroup(provider);
+            const entity = loadedCustomer();
+            entity.TransactionGroup = group;
+            entity.Set('Name', 'New Name');
+
+            expect(await provider.Save(entity, user, new EntitySaveOptions())).toBe(true);
+
+            expect(GraphQLWire.Requests).toHaveLength(0);
+            expect(group.Pending[0].OperationType).toBe('Update');
+            expect(group.Pending[0].ExtraData.oldValues).toEqual([
+                { Key: 'ID', Value: 'CUST-0001' },
+                { Key: 'Name', Value: 'Old Name' },
+            ]);
+        });
+
+        it('carries no OldValues on a queued update when SkipOldValuesCheck is true', async () => {
+            class InspectableTransactionGroup extends GraphQLTransactionGroup {
+                public get Pending(): TransactionItem[] {
+                    return this.PendingTransactions;
+                }
+            }
+            const group = new InspectableTransactionGroup(provider);
+            const entity = loadedCustomer();
+            entity.TransactionGroup = group;
+            entity.Set('Name', 'New Name');
+            const options = new EntitySaveOptions();
+            options.SkipOldValuesCheck = true;
+
+            await provider.Save(entity, user, options);
+
+            expect(group.Pending[0].ExtraData.oldValues).toBeUndefined();
+        });
     });
 
     describe('Delete', () => {
@@ -1060,6 +1286,17 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(deleted).toBe(false);
             expect(entity.LatestResult.Success).toBe(false);
             expect(entity.LatestResult.Message).toContain('Primary key value mismatch');
+        });
+
+        it('accepts a UUID primary key the server echoes in another casing', async () => {
+            const entity = new TestCustomerEntity(BuildCustomerEntityInfo(), provider);
+            entity.LoadFromData({ ID: '8e56c3f7-b401-4684-b778-661756e947d8', Name: 'Lower-cased key', 'First Name': null, Tier: 'Gold', IsActive: true, Age: 42, SignedUpAt: new Date(SIGNED_UP_AT_MS), Photo: null, __mj_CreatedAt: CREATED_AT, __mj_UpdatedAt: UPDATED_AT });
+            GraphQLWire.EnqueueResponse({ DeleteCRMCustomer: { ID: '8E56C3F7-B401-4684-B778-661756E947D8' } });
+
+            const deleted = await provider.Delete(entity, new EntityDeleteOptions(), user);
+
+            expect(deleted).toBe(true);
+            expect(entity.LatestResult.Success).toBe(true);
         });
 
         it('fails when the response lacks the mutation key', async () => {

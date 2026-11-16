@@ -65,6 +65,15 @@ export default class TestSuite extends Command {
         'Each export is registered on the engine before the suite runs — used by non-MJ ' +
         'adopters to plug app-specific oracle types without modifying TestingFramework.',
     }),
+    shard: Flags.string({
+      description:
+        'Deterministic shard specification (<index>/<total>, 1-based, e.g. --shard=1/3) for ' +
+        'partitioning suite execution across isolated parallel worker processes using duration-aware LPT balancing.',
+    }),
+    transport: Flags.string({
+      description: 'Filter suite tests by transport layer (server, client, or all).',
+      options: ['server', 'client', 'all'],
+    }),
   };
 
   async run(): Promise<void> {
@@ -93,6 +102,8 @@ export default class TestSuite extends Command {
         rubric: flags.rubric,
         oraclesModule: flags['oracles-module'],
         checksModule: flags['checks-module'],
+        shard: flags.shard,
+        transport: flags.transport as 'server' | 'client' | 'all' | undefined,
       });
 
     } catch (error) {

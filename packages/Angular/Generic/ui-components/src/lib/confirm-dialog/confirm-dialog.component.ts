@@ -100,10 +100,13 @@ const DEFAULT_ICONS: Record<MJConfirmDialogType, string> = {
           }
           {{ ConfirmText }}
         </button>
+        <!-- A danger confirm opens on Cancel (WAI-ARIA alertdialog: focus the least destructive
+             action), so an Enter pressed as it opens does not delete or discard. -->
         <button
           mjButton
           variant="secondary"
           [disabled]="Processing"
+          [attr.data-autofocus]="Type === 'danger' ? '' : null"
           (click)="onCancel()">
           {{ CancelText }}
         </button>

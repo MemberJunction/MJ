@@ -59,7 +59,6 @@ import type {
     NativeRoomVideoOptions,
     NativeRoomVideoSourceEnd,
 } from '@memberjunction/ai-bridge-livekit';
-import { AgentAvatarAudioOnlyAttributes } from '@memberjunction/ai';
 import { AvatarPublisher, type AvatarPublisherOptions, type AvatarVoiceQueue } from './avatar-publisher';
 import { RtcNodeAvatarOutlet } from './avatar-room-outlet';
 import { FfmpegLocator, type FfmpegProbeResult } from './ffmpeg-locator';
@@ -254,8 +253,6 @@ export interface RtcLocalParticipant {
     publishTrack(track: RtcLocalAudioTrack | RtcLocalVideoTrack, options?: RtcTrackPublishOptions): Promise<RtcLocalTrackPublication>;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
     /** Takes a published track down. VERIFY: `unpublishTrack(trackSid, stopOnUnpublish?)`. */
     unpublishTrack?(trackSid: string, stopOnUnpublish?: boolean): Promise<void>;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
-    /** Sets the bot's own attributes (its token must allow `canUpdateOwnMetadata`). VERIFY: `setAttributes(record)`. */
-    setAttributes?(attributes: Record<string, string>): Promise<void>;  // case-violation-ok-legacy-back-compat: mirrors @livekit/rtc-node's own member name
     /** Publishes a reliable data message. VERIFY: `(payload: Uint8Array, options)`. */
     publishData(payload: Uint8Array, options?: unknownRecord): Promise<void>;
 }
@@ -617,7 +614,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         this.room = room;
         this.audioSource = source;
         this.audioTrack = track; // retain — see field doc: losing this to GC orphans the source (InvalidState)
-        await this.applyInitialAvatarStatus(room);
+        this.applyInitialAvatarStatus();
 
         return { localIdentity: room.localParticipant.identity, roomName: room.name ?? '' };
     }
@@ -865,19 +862,16 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
     /**
      * A client joining with its avatar already taken down (a media worker rejoining with the original token, whose
-     * attribute still says `on`) re-applies the audio-only attribute and publishes no avatar.
+     * attribute still says `on`) publishes no avatar and reports the take-down again, so the server re-applies the
+     * audio-only attribute. The bot's token cannot change its own attributes.
      */
-    private async applyInitialAvatarStatus(room: RtcRoom): Promise<void> {
+    private applyInitialAvatarStatus(): void {
         const status = this.initialAvatarStatus;
         if (status?.state !== 'audio-only' || !status.reason) {
             return;
         }
         this.avatarTakenDown = true;
-        try {
-            await room.localParticipant.setAttributes?.(AgentAvatarAudioOnlyAttributes(status.reason));
-        } catch (err) {
-            LogError(`[LiveKitRtcNodeRoomClient] re-applying the avatar attribute after a rejoin failed: ${err instanceof Error ? err.message : String(err)}`);
-        }
+        this.avatarStatusHandler?.(status);
     }
 
     /** What the audio source still holds (ms), by its own estimate. */

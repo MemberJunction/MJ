@@ -18,6 +18,7 @@ export function createMockFileSystem() {
     GetFreeDiskSpace: vi.fn<(dirPath: string) => Promise<number>>().mockResolvedValue(10_000_000_000),
     CanWrite: vi.fn<(dirPath: string) => Promise<boolean>>().mockResolvedValue(true),
     CreateTempDir: vi.fn<(prefix?: string) => Promise<string>>().mockResolvedValue('/tmp/mj-install-test'),
+    CopyDirectory: vi.fn<(sourceDir: string, targetDir: string) => Promise<void>>().mockResolvedValue(undefined),
     RemoveDir: vi.fn<(dirPath: string) => Promise<void>>().mockResolvedValue(undefined),
     RemoveFile: vi.fn<(filePath: string) => Promise<void>>().mockResolvedValue(undefined),
     ReadJSON: vi.fn<(filePath: string) => Promise<unknown>>().mockResolvedValue({}),

@@ -277,6 +277,8 @@ export interface ITaskForEachConfiguration {
     maxConcurrency?: number;
     /** Run this action once per iteration. */
     action?: ITaskLoopActionBody;
+    /** Run an ordered sequence of actions once per iteration. */
+    steps?: ITaskLoopBodyActionStep[];
     /** Run this sub-agent once per iteration. */
     subAgent?: ITaskLoopSubAgentBody;
     /** A prompt run once per loop iteration. */
@@ -302,6 +304,8 @@ export interface ITaskWhileConfiguration {
     delayBetweenIterationsMs?: number;
     /** Run this action once per iteration. */
     action?: ITaskLoopActionBody;
+    /** Run an ordered sequence of actions once per iteration. */
+    steps?: ITaskLoopBodyActionStep[];
     /** Run this sub-agent once per iteration. */
     subAgent?: ITaskLoopSubAgentBody;
     /** A prompt run once per loop iteration. */
@@ -331,6 +335,20 @@ export interface ITaskLoopActionBody {
     /** Parameters passed to the action. */
     params: Record<string, unknown>;
     /** JSON mapping from the action's outputs back into the payload. */
+    outputMapping?: string;
+}
+
+/** One action step inside a multi-step loop body (`steps[]`). */
+export interface ITaskLoopBodyActionStep {
+    /** Optional handle used by later steps in the same pass via `steps.<id>.<OutputField>`. */
+    id?: string;
+    /** Action name. */
+    name: string;
+    /** Parameters passed to the action. */
+    params: Record<string, unknown>;
+    /** Optional boolean expression deciding whether this step runs on the current pass. */
+    condition?: string;
+    /** Optional JSON mapping from this step's outputs into the running payload. */
     outputMapping?: string;
 }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { BaseEngine, BaseEnginePropertyConfig } from '../generic/baseEngine';
 import { UserInfo } from '../generic/securityInfo';
 import { CacheChangedEvent } from '../generic/localCacheManager';
@@ -6,7 +6,7 @@ import { CacheChangedEvent } from '../generic/localCacheManager';
 /**
  * A peer's `removed` event carries no rows, so the engine reloads the config. Events for one
  * property that arrive while a reload is running share one follow-up reload instead of each
- * starting their own.
+ * starting their own, and that follow-up waits `ExternalChangeFollowUpDelayMs` first.
  */
 
 /** Test engine whose reloads finish only when the test releases them. */
@@ -55,7 +55,13 @@ async function settle(): Promise<void> {
     }
 }
 
+const SHIPPED_FOLLOW_UP_DELAY_MS = BaseEngine.ExternalChangeFollowUpDelayMs;
+
 describe('BaseEngine.OnExternalCacheChange reload coalescing', () => {
+    // These checks are about which reloads run, not when: no wait before the follow-up.
+    beforeEach(() => { BaseEngine.ExternalChangeFollowUpDelayMs = 0; });
+    afterEach(() => { BaseEngine.ExternalChangeFollowUpDelayMs = SHIPPED_FOLLOW_UP_DELAY_MS; });
+
     it('runs one follow-up reload for any number of events that arrive during a reload', async () => {
         const engine = TestEngine.Instance;
         const config = makeConfig('_items');
@@ -124,5 +130,90 @@ describe('BaseEngine.OnExternalCacheChange reload coalescing', () => {
         expect(engine.loadsStarted - started).toBe(2);
         engine.ReleaseOne();
         await second;
+    });
+});
+
+describe('BaseEngine.OnExternalCacheChange follow-up delay', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        BaseEngine.ExternalChangeFollowUpDelayMs = 1000;
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+        BaseEngine.ExternalChangeFollowUpDelayMs = SHIPPED_FOLLOW_UP_DELAY_MS;
+    });
+
+    // Each check uses its own property: the spacing is kept per property, from the last reload.
+    it('waits the delay after a reload before the follow-up reload starts', async () => {
+        const engine = TestEngine.Instance;
+        const config = makeConfig('_delayFollowUp');
+        const started = engine.loadsStarted;
+
+        const first = engine.OnExternalCacheChangeForTest(config, REMOVED);
+        await settle();
+        const during = engine.OnExternalCacheChangeForTest(config, REMOVED);
+        await settle();
+        engine.ReleaseOne();
+        await settle();
+        expect(engine.loadsStarted - started).toBe(1);
+
+        await vi.advanceTimersByTimeAsync(999);
+        expect(engine.loadsStarted - started).toBe(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(engine.loadsStarted - started).toBe(2);
+
+        engine.ReleaseOne();
+        await Promise.all([first, during]);
+    });
+
+    it('folds events that arrive during the delay into the same follow-up reload', async () => {
+        const engine = TestEngine.Instance;
+        const config = makeConfig('_delayFold');
+        const started = engine.loadsStarted;
+
+        const first = engine.OnExternalCacheChangeForTest(config, REMOVED);
+        await settle();
+        const during = engine.OnExternalCacheChangeForTest(config, REMOVED);
+        await settle();
+        engine.ReleaseOne();
+        await settle();
+        const inDelay = Array.from({ length: 10 }, () => engine.OnExternalCacheChangeForTest(config, REMOVED));
+        await vi.advanceTimersByTimeAsync(1000);
+        engine.ReleaseOne();
+        await Promise.all([first, during, ...inDelay]);
+        expect(engine.loadsStarted - started).toBe(2);
+    });
+
+    it('starts the first reload for a change at once', async () => {
+        const engine = TestEngine.Instance;
+        const started = engine.loadsStarted;
+
+        const only = engine.OnExternalCacheChangeForTest(makeConfig('_delayFirst'), REMOVED);
+        await settle();
+        expect(engine.loadsStarted - started).toBe(1);
+        engine.ReleaseOne();
+        await only;
+    });
+
+    it('makes a change that arrives soon after a reload ended wait out the rest of the delay', async () => {
+        const engine = TestEngine.Instance;
+        const config = makeConfig('_delaySoonAfter');
+        const started = engine.loadsStarted;
+
+        const first = engine.OnExternalCacheChangeForTest(config, REMOVED);
+        await settle();
+        engine.ReleaseOne();
+        await first;
+        await vi.advanceTimersByTimeAsync(400);
+
+        const soon = engine.OnExternalCacheChangeForTest(config, REMOVED);
+        await settle();
+        expect(engine.loadsStarted - started).toBe(1);
+        await vi.advanceTimersByTimeAsync(599);
+        expect(engine.loadsStarted - started).toBe(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(engine.loadsStarted - started).toBe(2);
+        engine.ReleaseOne();
+        await soon;
     });
 });

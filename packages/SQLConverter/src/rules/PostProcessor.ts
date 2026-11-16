@@ -7,7 +7,13 @@
  */
 
 import { createHash } from 'node:crypto';
-import { TransformCodeOnly } from './ExpressionHelpers.js';
+import {
+  FindMatchingParen,
+  TransformCodeOnly,
+  UnquoteBuiltinFunctionCalls,
+  ConvertObjectIdCalls,
+  ConvertLikeCharacterClasses,
+} from './ExpressionHelpers.js';
 
 /**
  * Final cleanup pass on the complete converted SQL output.
@@ -309,10 +315,7 @@ export function PostProcess(sql: string): string {
   );
 
   // Remove SQL Server IF EXISTS(...) BEGIN ... END blocks (pre-flight checks)
-  sql = sql.replace(
-    /IF\s+EXISTS\s*\([\s\S]*?\)\s*\n\s*BEGIN[\s\S]*?\bEND\s*;?/gi,
-    '-- SKIPPED: SQL Server IF EXISTS check'
-  );
+  sql = removeIfExistsPreflightBlocks(sql);
 
   // Fix GRANT statements missing semicolons (only at end of line, no semicolons already)
   sql = sql.replace(/^(GRANT\s+[^\n;]+[^\s;])$/gm, '$1;');
@@ -362,6 +365,13 @@ export function PostProcess(sql: string): string {
   // Catches cases where ALTER TABLE is embedded in a CREATE_TABLE batch
   sql = fixMultiColumnAdd(sql);
 
+  // Safety net for T-SQL built-ins a rule's PascalCase quoting turned into quoted identifiers
+  // ("UPPER"(x), "LTRIM"(x), "LEN"(x)), OBJECT_ID() existence probes, and LIKE character
+  // classes PostgreSQL LIKE cannot express (issue #5364 items 1 and 2).
+  sql = UnquoteBuiltinFunctionCalls(sql);
+  sql = ConvertObjectIdCalls(sql);
+  sql = ConvertLikeCharacterClasses(sql);
+
   // Fix RAISERROR that was quoted as "RAISERROR" by PascalCase quoting
   sql = sql.replace(/"RAISERROR"\s*\(/gi, 'RAISERROR(');
   // Then convert RAISERROR → RAISE EXCEPTION
@@ -379,6 +389,31 @@ export function PostProcess(sql: string): string {
 /** @deprecated Use {@link PostProcess}. */
 export function postProcess(sql: string): string {
   return PostProcess(sql);
+}
+
+/**
+ * Replaces each T-SQL `IF EXISTS (…)` + `BEGIN … END` block with a marker comment.
+ *
+ * The condition is read to its own closing paren before `BEGIN` is looked for. A lazy regex
+ * cannot do that: from a PL/pgSQL `IF EXISTS (…) THEN`, which every converted metadata save
+ * contains, it ran on to the next `)` + `BEGIN` however far away and deleted everything
+ * between (issue #6337).
+ */
+function removeIfExistsPreflightBlocks(sql: string): string {
+  const ifExists = /\bIF\s+EXISTS\s*\(/gi;
+  const beginEnd = /\s*\n\s*BEGIN[\s\S]*?\bEND\s*;?/iy;
+  let output = '';
+  let copiedTo = 0;
+  for (let match = ifExists.exec(sql); match; match = ifExists.exec(sql)) {
+    const conditionEnd = FindMatchingParen(sql, ifExists.lastIndex - 1);
+    if (conditionEnd < 0) continue;
+    beginEnd.lastIndex = conditionEnd + 1;
+    if (!beginEnd.test(sql)) continue;
+    output += `${sql.slice(copiedTo, match.index)}-- SKIPPED: SQL Server IF EXISTS check`;
+    copiedTo = beginEnd.lastIndex;
+    ifExists.lastIndex = copiedTo;
+  }
+  return output + sql.slice(copiedTo);
 }
 
 /**

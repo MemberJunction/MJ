@@ -1,0 +1,31 @@
+{
+  "id": "R3",
+  "namespace": "0fe2833f-5ef8-4765-869b-40439de37761",
+  "seed": 2205,
+  "description": "Planted Poisson event registrations (count target).",
+  "kind": "count",
+  "nEntities": 12000,
+  "features": {
+    "PastEventsZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "Member": {
+      "dist": "bernoulli",
+      "p": 0.6
+    },
+    "DistanceZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    }
+  },
+  "betas": {
+    "PastEventsZ": 0.4,
+    "Member": 0.5,
+    "DistanceZ": -0.3
+  },
+  "intercept": 0.5,
+  "sizingNote": "12,000 rows (Ruling Q9: >= 10,000). Mean count about 2.6; Poisson GLM SEs are 0.006 to 0.013 per coefficient, so the count objective's advantage over squared error is measured on well-determined effects."
+}

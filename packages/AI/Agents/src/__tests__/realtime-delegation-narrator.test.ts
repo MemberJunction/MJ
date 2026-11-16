@@ -138,4 +138,17 @@ describe('DelegationNarrator', () => {
         expect(result.Success).toBe(true);
         expect(notes).toHaveLength(1);
     });
+
+    it('marks progress context notes as Ephemeral so they never evict durable reconnect memory', async () => {
+        const sendContextNote = vi.fn();
+        const { session } = makeSession({ SendContextNote: sendContextNote });
+        const n = new DelegationNarrator({ GetSession: () => session });
+        await n.Track(async () => {
+            n.HandleProgress(progress('Fetching entity metadata'));
+        });
+        expect(sendContextNote).toHaveBeenCalledWith(
+            '[delegated-agent progress] Fetching entity metadata',
+            { Ephemeral: true },
+        );
+    });
 });

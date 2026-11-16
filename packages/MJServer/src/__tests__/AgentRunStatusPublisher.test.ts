@@ -29,6 +29,7 @@ vi.mock('@memberjunction/graphql-dataprovider', () => ({
 import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { ConversationStreaming, type IConversationsRuntimeContext } from '@memberjunction/conversations-runtime';
 import { AgentRunStatusPublisher } from '../resolvers/AgentRunStatusPublisher.js';
+import { StatusUpdatesFilter, type PushStatusNotificationPayload } from '../generic/PushStatusResolver.js';
 import type { UserPayload } from '../types.js';
 
 const run = {
@@ -56,6 +57,31 @@ function envelopes(publish: ReturnType<typeof vi.fn>): Array<Record<string, unkn
 }
 
 describe('AgentRunStatusPublisher', () => {
+    it('stamps the reply row on every message when it has one, so a reconnecting client can find its row', () => {
+        const publish = vi.fn().mockResolvedValue(undefined);
+        const pubSub = { publish } as unknown as PubSubEngine;
+        const userPayload = { sessionId: 'session-1', userRecord: { ID: 'user-1' } } as UserPayload;
+        const made = new AgentRunStatusPublisher(pubSub, userPayload, 'session-1', 'reply-7');
+        const runWithoutDetail = { ...run, ConversationDetailID: undefined, GetAll: () => ({ ID: 'run-1' }) };
+
+        made.OnProgress({ step: 'prompt_execution', message: 'Writing', metadata: { agentRun: runWithoutDetail } });
+        made.OnStreaming({ content: 'Hel', isComplete: false, stepType: 'prompt', kind: 'final-response' });
+        made.PublishFinal({ success: true, agentRun: runWithoutDetail } as unknown as ExecuteAgentResult);
+
+        const details = envelopes(publish).map((row) => (row.data as { conversationDetailId?: string }).conversationDetailId);
+        expect(details).toEqual(['reply-7', 'reply-7', 'reply-7', 'reply-7']);
+    });
+
+    it('leaves progress and streaming messages without a reply row when it has none, as before', () => {
+        const { publish, made } = publisher();
+
+        made.OnProgress({ step: 'prompt_execution', message: 'Writing', metadata: { agentRun: run } });
+        made.OnStreaming({ content: 'Hel', isComplete: false, stepType: 'prompt', kind: 'final-response' });
+
+        const sent = envelopes(publish).map((row) => row.data as Record<string, unknown>);
+        expect(sent.every((data) => !('conversationDetailId' in data))).toBe(true);
+    });
+
     it('publishes the resolver sequence: a significant step, streamed text, the partial result, then the completion', () => {
         const { publish, made } = publisher();
 
@@ -171,5 +197,28 @@ describe('AgentRunStatusPublisher', () => {
         expect(onReply.mock.calls[0][0].message).toBe('Looking');
         expect(completions).toEqual([{ conversationDetailId: 'detail-1', agentRunId: 'run-1', success: true, errorMessage: undefined }]);
         expect(streaming.GetRecentCompletion('detail-1')?.agentRunId).toBe('run-1');
+    });
+});
+
+describe('AgentRunStatusPublisher — a widget guest elevated to the system user (#4931)', () => {
+    const GUEST = { ID: 'anonymous-user', IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-a', MagicLinkScope: { ResourceID: 'sid-a' } };
+    const SYSTEM = { ID: 'system-user' };
+
+    it("stamps the guest (ElevatedFrom), not the elevated user, so the guest's own socket receives the run's events", () => {
+        const publish = vi.fn().mockResolvedValue(undefined);
+        const elevated = { sessionId: 'session-1', userRecord: SYSTEM, isSystemUser: true, ElevatedFrom: GUEST } as unknown as UserPayload;
+        const made = new AgentRunStatusPublisher({ publish } as unknown as PubSubEngine, elevated, 'session-1');
+
+        made.PublishFinal({ success: true, agentRun: run, payload: { text: 'Hello' } } as ExecuteAgentResult, 'detail-1', '{"text":"Hello"}');
+        made.PublishFailure('detail-1', 'boom');
+
+        const owners = publish.mock.calls.map((call) => (call[1] as { ownerUserId: string }).ownerUserId);
+        expect(owners.length).toBeGreaterThan(0);
+        // An anonymous visitor's owner key carries its scope identity, so another visitor cannot receive these events.
+        expect(owners.every((owner) => owner === 'anonymous-user|sid-a')).toBe(true);
+        const guestConnection = { userPayload: { sessionId: 'session-1', userRecord: GUEST } as unknown as UserPayload };
+        for (const call of publish.mock.calls) {
+            expect(StatusUpdatesFilter({ payload: call[1] as PushStatusNotificationPayload, args: { sessionId: 'session-1' }, context: guestConnection })).toBe(true);
+        }
     });
 });

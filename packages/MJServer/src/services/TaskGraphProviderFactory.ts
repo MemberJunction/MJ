@@ -33,6 +33,11 @@ import { mj_core_schema } from '../config.js';
 export class TaskGraphProviderFactory implements ProviderFactory {
     constructor(private readonly pool: sql.ConnectionPool) {}
 
+    /**
+     * A fresh provider. It carries no user and no tenant: the dispatcher runs each node as a per-task
+     * clone of its user stamped with the caller's tenant context, so nothing here touches a `UserInfo`
+     * (a shared one stamped here would be pinned to one tenant for the life of the process).
+     */
     public async CreateProvider(): Promise<IMetadataProvider> {
         // `loadIfNeeded = false` (the trailing false) reuses already-loaded metadata rather than
         // re-reading it per provider — the difference between "cheap enough to do per task" and

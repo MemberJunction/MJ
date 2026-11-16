@@ -16,6 +16,12 @@ export interface BalancedFragmentOptions {
      * only for text an administrator wrote, such as a custom view WhereClause.
      */
     AllowComments?: boolean;
+    /**
+     * Positional parameter placeholders (such as `$1`, `$2`) bound into the fragment by the
+     * caller itself. When set, those exact `$N` operator+number pairs are accepted on PostgreSQL
+     * while dollar-quoted strings and any other `$` outside a name remain refused.
+     */
+    AllowedParameterPlaceholders?: ReadonlySet<string>;
 }
 
 /** Appended to the fragment before lexing; it lexes as its own token only if nothing is left open. */
@@ -63,7 +69,7 @@ export function IsBalancedSQLFragment(
     const reason = findComment(body, options)
         ?? findParenthesisProblem(body)
         ?? findStatementSeparator(body)
-        ?? findPostgreSQLAmbiguity(body, dialect);
+        ?? findPostgreSQLAmbiguity(body, dialect, options);
     return reason ? refuse(reason) : BALANCED;
 }
 
@@ -117,10 +123,10 @@ function findStatementSeparator(tokens: SQLLexToken[]): string | null {
 }
 
 /** The PostgreSQL refusals listed on {@link IsBalancedSQLFragment}. */
-function findPostgreSQLAmbiguity(tokens: SQLLexToken[], dialect: SQLParserDialect): string | null {
+function findPostgreSQLAmbiguity(tokens: SQLLexToken[], dialect: SQLParserDialect, options?: BalancedFragmentOptions): string | null {
     if (!dialect.SupportsEscapeStringLiterals && !dialect.SupportsDollarQuotedStrings) return null;
     return findNonASCIIOutsideQuotes(tokens)
-        ?? findDollarSign(tokens)
+        ?? findDollarSign(tokens, options)
         ?? findEscapeStringContinuation(tokens)
         ?? findAmbiguousString(tokens);
 }
@@ -136,9 +142,30 @@ function findNonASCIIOutsideQuotes(tokens: SQLLexToken[]): string | null {
         : null;
 }
 
-function findDollarSign(tokens: SQLLexToken[]): string | null {
-    const dollar = tokens.some(t => (t.Kind === 'string' && t.Text.startsWith('$')) || (t.Kind === 'operator' && t.Text === '$'));
-    return dollar ? 'it has a dollar-quoted string or a "$" outside a name' : null;
+function findDollarSign(tokens: SQLLexToken[], options?: BalancedFragmentOptions): string | null {
+    const allowed = options?.AllowedParameterPlaceholders;
+    for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.Kind === 'string' && t.Text.startsWith('$')) {
+            return 'it has a dollar-quoted string or a "$" outside a name';
+        }
+        if (t.Kind === 'operator' && t.Text === '$') {
+            const next = tokens[i + 1];
+            const after = tokens[i + 2];
+            if (
+                allowed
+                && next?.Kind === 'number'
+                && next.Start === t.End
+                && /^[1-9][0-9]*$/.test(next.Text)
+                && allowed.has(`$${next.Text}`)
+                && !(after?.Kind === 'operator' && after.Text === '$' && after.Start === next.End)
+            ) {
+                continue;
+            }
+            return 'it has a dollar-quoted string or a "$" outside a name';
+        }
+    }
+    return null;
 }
 
 function findEscapeStringContinuation(tokens: SQLLexToken[]): string | null {

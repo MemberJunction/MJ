@@ -42,6 +42,7 @@ export default class AppRemove extends Command {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AppRemove);
     const spinner = ora();
+    let failed = false;
 
     if (!flags.yes) {
       // Destructive: this drops a schema. A headless run must say --yes explicitly
@@ -86,12 +87,17 @@ export default class AppRemove extends Command {
         }
       } else {
         spinner.fail(chalk.red(`Remove failed: ${result.ErrorMessage}`));
-        this.exit(1);
+        failed = true;
       }
     } catch (error) {
       spinner.fail('Remove failed');
       const message = error instanceof Error ? error.message : String(error);
       this.error(message);
+    }
+    // Outside the try on purpose: oclif's exit() works by throwing, and the catch above would
+    // swallow it — printing a second failure line and exiting 2 with "EEXIT: 1".
+    if (failed) {
+      this.exit(1);
     }
   }
 }

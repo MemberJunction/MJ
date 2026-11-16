@@ -19,15 +19,19 @@ import {
   type RealtimeChannelContext,
   type RealtimeChannelFocusEvent,
   type RealtimeConnectionState,
+  type RealtimeDelegationNarration,
   type RealtimeDelegationProgress,
   type RealtimeMicrophoneState,
 } from '@memberjunction/realtime-runtime';
-import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers, ExpectNoAxeViolations, capture } from '@memberjunction/ng-test-utils';
+import { By } from '@angular/platform-browser';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import type { MediaDevice, MediaPlacement, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { SharePanelRegistry } from '@memberjunction/ng-realtime-media';
 import { WhiteboardState } from '@memberjunction/ng-whiteboard';
 import { RealtimeSessionOverlayComponent } from './realtime-session-overlay.component';
+import { RealtimeComposerComponent } from './realtime-composer.component';
+import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeAvatarChannel } from './avatar/realtime-avatar-channel';
 import { RealtimeCameraChannel } from './capture/realtime-capture-channel';
@@ -98,6 +102,8 @@ function fakeSession() {
   const active$ = new BehaviorSubject(false);
   /** The progress of the agent's runs, as the runtime reports it: a run's first report gives the call an Activity tab. */
   const progress$ = new Subject<RealtimeDelegationProgress>();
+  /** The spoken progress notes of the agent's runs, as the runtime emits them (latest only). */
+  const narration$ = new Subject<RealtimeDelegationNarration>();
   /** The capture calls the overlay made, in order. */
   const calls: string[] = [];
   /** The element each screen share asked to show alone (`null` for a whole screen, window or tab). */
@@ -114,7 +120,7 @@ function fakeSession() {
     Captions$: captions$.asObservable(),
     DelegationProgress$: progress$.asObservable(),
     DelegationResult$: EMPTY,
-    DelegationNarration$: EMPTY,
+    DelegationNarration$: narration$.asObservable(),
     ThoughtNarration$: EMPTY,
     ConnectionState$: state$.asObservable(),
     ModelName$: new BehaviorSubject<string | null>(null).asObservable(),
@@ -172,7 +178,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, active$, progress$, calls, sharedPanels };
+  return { service, channels$, focus$, activity$, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, active$, progress$, calls, sharedPanels, narration$ };
 }
 
 /**
@@ -1445,6 +1451,19 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(savedLayouts.at(-1)).toBe('[{"SurfaceKey":"Avatar","Placement":"pip"}]');
     });
 
+    it('keeps the conversation and the typing box when the video arrives after the box was opened with captions on (#6120)', async () => {
+      const { f, sendVideo } = await renderWithAvatar('orb');
+      f.componentInstance.SetCaptions(true);
+      await settle();
+      expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+      f.componentInstance.OnComposerOpenChanged(true);
+      await settle();
+      await sendVideo();
+      expect(f.componentInstance.PresenterOnStage).toBe(true);
+      expect(f.componentInstance.ComposerOpen).toBe(true);
+      expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+    });
+
     describe('captions over the video', () => {
       const caption = (f: Awaited<ReturnType<typeof renderWithAvatar>>['f']) => query(f, '.hero__caption')?.textContent?.replace(/\s+/g, ' ').trim();
 
@@ -1773,6 +1792,312 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       await settle();
       expect(alertOf(f)).not.toBeNull();
       await ExpectNoAxeViolations(f);
+    });
+  });
+
+  describe('host switches (#6101)', () => {
+    /** A live call fronting Sage, in the given chrome, with the given host inputs bound. */
+    const renderCall = async (chrome: 'orb' | 'console' = 'console', inputs: Record<string, unknown> = {}) => {
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
+        ],
+        inputs: { Chrome: chrome, AgentName: 'Sage', ...inputs },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      await settle();
+      return { f, ...session };
+    };
+    type Fixture = Awaited<ReturnType<typeof renderCall>>['f'];
+    const TYPE_BUTTON = '[aria-label="Open the typed-input composer"]';
+    const keydown = (f: Fixture, key: string): void => {
+      f.componentInstance.OnDocumentKeydown(new KeyboardEvent('keydown', { key, bubbles: true }));
+      f.detectChanges();
+    };
+
+    it('AllowTyping=false removes the Type buttons, ignores the hotkey and refuses a programmatic open', async () => {
+      const { f } = await renderCall('console', { AllowTyping: false });
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(0);
+      keydown(f, 'h');
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+      expect(query(f, '.dock__input')).toBeNull();
+      f.componentInstance.OnComposerOpenChanged(true);
+      f.detectChanges();
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+    });
+
+    it('AllowTextReveal=false also removes typing, the hero reveal button and the captions control', async () => {
+      const { f } = await renderCall('console', { AllowTextReveal: false });
+      expect(query(f, '.hero')).not.toBeNull();
+      expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+      expect(query(f, '.hero__reveal')).toBeNull();
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(0);
+      expect(queryAll(f, '[aria-label="Captions"]')).toHaveLength(0);
+      keydown(f, 'h');
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+    });
+
+    it('ShowSurfacePanel=false removes the Details control from the call strip (#6120)', async () => {
+      const { f } = await renderCall('console', { ShowSurfacePanel: false });
+      expect(query(f, 'mj-realtime-composer')).not.toBeNull();
+      expect(queryAll(f, '[title="Peek at the session panels"]')).toHaveLength(0);
+    });
+
+    it('the lean dock drops its "more" menu when typing, the surface panel, camera and share are all off (#6120)', async () => {
+      const { f } = await renderCall('orb', { AllowTyping: false, ShowSurfacePanel: false });
+      expect(query(f, 'mj-realtime-composer')).not.toBeNull();
+      expect(query(f, '.lean-more')).toBeNull();
+    });
+
+    it('an open dock closes when the host turns typing off, and the draft survives', async () => {
+      const { f } = await renderCall('console');
+      f.componentInstance.OnComposerOpenChanged(true);
+      f.detectChanges();
+      await settle();
+      const composer = f.debugElement.query(By.directive(RealtimeComposerComponent)).componentInstance as RealtimeComposerComponent;
+      const input = query(f, '.dock__input') as HTMLTextAreaElement;
+      input.value = 'keep me';
+      input.dispatchEvent(new Event('input'));
+      f.detectChanges();
+      expect(composer.Draft).toBe('keep me');
+      f.componentInstance.AllowTyping = false;
+      f.detectChanges();
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+      expect(query(f, '.dock__input')).toBeNull();
+      expect(composer.Draft).toBe('keep me');
+    });
+
+    it('the UiConfig bag gates typing', async () => {
+      const { f } = await renderCall('console', { UiConfig: { allowTyping: false } });
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(0);
+    });
+
+    it('a dedicated AllowTyping=true wins over a UiConfig bag false', async () => {
+      const { f } = await renderCall('console', { UiConfig: { allowTyping: false }, AllowTyping: true });
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(1);
+    });
+
+    it('ShowEnd=false removes End from the composer', async () => {
+      const { f } = await renderCall('console', { ShowEnd: false });
+      expect(queryAll(f, '[aria-label="End call"]')).toHaveLength(0);
+    });
+
+    it('ShowDevLinks=false removes the gear toggle and passes no dev mode to the banner and thread even after DevMode is on', async () => {
+      const { f } = await renderCall('console', { ShowDevLinks: false });
+      f.componentInstance.OnDevModeToggled(true);
+      f.detectChanges();
+      const banner = f.debugElement.query(By.directive(RealtimeAgentBannerComponent)).componentInstance as RealtimeAgentBannerComponent;
+      expect(banner.DevMode).toBe(false);
+      expect(banner.AllowDevLinks).toBe(false);
+      click(f, 'mj-realtime-agent-banner .bar-actions .iconb[aria-expanded]');
+      await settle();
+      expect(query(f, '.gear-pop')).not.toBeNull();
+      expect(query(f, '.gp-link')).toBeNull();
+      expect(query(f, '.dev-link')).toBeNull();
+    });
+
+    it('RevealText and SetCaptions(true) are refused when text is disallowed: nothing emitted, hero stays', async () => {
+      const { f } = await renderCall('console', { AllowTextReveal: false });
+      const revealed = capture(f.componentInstance.TextRevealed);
+      f.componentInstance.ShowCaptions = false;
+      f.componentInstance.RevealText();
+      f.componentInstance.SetCaptions(true);
+      f.detectChanges();
+      expect(revealed).toHaveLength(0);
+      expect(f.componentInstance.ShowCaptions).toBe(false);
+      expect(query(f, '.hero')).not.toBeNull();
+    });
+
+    it('a captions preference saved as on cannot leak text under AllowTextReveal=false', async () => {
+      vi.mocked(UserInfoEngine.Instance.GetSetting).mockImplementation((key: string) =>
+        key === 'mj.realtimeVoice.captions.v1' ? 'true'
+          : key === 'mj.realtime.placement.v1' ? savedLayout
+          : key === 'mj.realtime.pip.v1' ? savedPips
+          : undefined
+      );
+      const { f } = await renderCall('console', { AllowTextReveal: false });
+      expect(f.componentInstance.ShowCaptions).toBe(true);
+      expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+      expect(query(f, '.hero__caption')).toBeNull();
+      expect(f.componentInstance.ShowAvatarCaptions).toBe(false);
+      // The gate must hold even while the agent's video presents in the hero (captions would run over it).
+      vi.spyOn(f.componentInstance, 'PresenterOnStage', 'get').mockReturnValue(true);
+      expect(f.componentInstance.ShowHero).toBe(true);
+      expect(f.componentInstance.ShowAvatarCaptions).toBe(false);
+    });
+
+    it('the focus pill hides End when the host disallows it, and keeps its exit as "Back to the call" when text is disallowed', async () => {
+      const { f, board, focus$ } = await renderWithBoard(undefined, new TestWhiteboardChannel(), 'console');
+      f.componentInstance.ShowEnd = false;
+      f.componentInstance.AllowTextReveal = false;
+      focus$.next({ Channel: board, Focused: true });
+      await settle();
+      expect(query(f, '.board-focus-pill')).not.toBeNull();
+      expect(query(f, '.board-focus-pill__btn--end')).toBeNull();
+      expect(query(f, '[aria-label="Show the conversation thread"]')).toBeNull();
+      // The exit is the only way off a focused surface, so a pure-voice user keeps it, relabelled.
+      const exit = query(f, '[aria-label="Leave focus mode and return to the call"]') as HTMLButtonElement;
+      expect(exit).not.toBeNull();
+      expect(exit.title).toBe('Back to the call');
+      exit.click();
+      await settle();
+      expect(board.FocusExits).toBe(1);
+    });
+
+    describe('the narration note under the banner', () => {
+      /** A live call at the thread's disclosure level, with a spoken progress note and no working card. */
+      const renderNarrating = async (inputs: Record<string, unknown> = {}) => {
+        const call = await renderCall('console', inputs);
+        call.f.componentInstance.Disclosure.Raise('text');
+        call.narration$.next({ Text: 'Looking that up now' });
+        call.f.detectChanges();
+        await settle();
+        return call;
+      };
+
+      it('shows by default', async () => {
+        const { f } = await renderNarrating();
+        expect(query(f, '.banner-live-note')?.textContent).toContain('Looking that up now');
+      });
+
+      it('is absent under AllowTextReveal=false', async () => {
+        const { f } = await renderNarrating({ AllowTextReveal: false });
+        expect(f.componentInstance.State.Narration).toBe('Looking that up now');
+        expect(query(f, '.banner-live-note')).toBeNull();
+      });
+    });
+
+    describe('the note line follows the thread (Caliber follow-up)', () => {
+      /** A live call in the given chrome with captions as given and a spoken progress note with no working card. */
+      const renderNoting = async (chrome: 'orb' | 'console', captionsOn: boolean) => {
+        const call = await renderCall(chrome);
+        call.f.componentInstance.SetCaptions(captionsOn);
+        call.narration$.next({ Text: 'Looking that up now' });
+        call.f.detectChanges();
+        await settle();
+        return call;
+      };
+
+      it('the note line hides when the participant turns captions off (auto chrome)', async () => {
+        const { f } = await renderNoting('orb', true);
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(query(f, '.banner-live-note')?.textContent).toContain('Looking that up now');
+        f.componentInstance.SetCaptions(false);
+        f.detectChanges();
+        await settle();
+        expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+        expect(f.componentInstance.State.Narration).toBe('Looking that up now');
+        expect(query(f, '.banner-live-note')).toBeNull();
+      });
+
+      it('the note line stays in a console, where the thread stays', async () => {
+        const { f } = await renderNoting('console', false);
+        expect(f.componentInstance.ShowCaptions).toBe(false);
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(query(f, '.banner-live-note')?.textContent).toContain('Looking that up now');
+      });
+    });
+
+    describe('the typing box is open only while the conversation is readable (Caliber follow-up)', () => {
+      /** A live call in the orb chrome with captions off, so the thread is hidden behind the hero. */
+      const renderHidden = async (inputs: Record<string, unknown> = {}) => {
+        const call = await renderCall('orb', inputs);
+        call.f.componentInstance.SetCaptions(false);
+        call.f.detectChanges();
+        await settle();
+        expect(query(call.f, 'mj-realtime-session-thread')).toBeNull();
+        return call;
+      };
+      const composerOf = (f: Fixture): RealtimeComposerComponent =>
+        f.debugElement.query(By.directive(RealtimeComposerComponent)).componentInstance as RealtimeComposerComponent;
+
+      it('opening the typing box with captions off reveals the conversation first', async () => {
+        const { f } = await renderHidden();
+        const revealed = capture(f.componentInstance.TextRevealed);
+        f.componentInstance.OnComposerOpenChanged(true);
+        f.detectChanges();
+        await settle();
+        expect(f.componentInstance.ComposerOpen).toBe(true);
+        expect(f.componentInstance.ShowCaptions).toBe(true);
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(revealed).toHaveLength(1);
+      });
+
+      it('the hotkey with captions off opens the box, reveals the conversation and keeps the typed letter', async () => {
+        const { f } = await renderHidden();
+        keydown(f, 'h');
+        await settle();
+        f.detectChanges();
+        expect(f.componentInstance.ComposerOpen).toBe(true);
+        expect(f.componentInstance.ShowCaptions).toBe(true);
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(composerOf(f).Draft).toBe('h');
+        expect((query(f, '.dock__input') as HTMLTextAreaElement).value).toBe('h');
+      });
+
+      it('turning captions off closes the typing box and keeps the draft', async () => {
+        const { f } = await renderCall('orb');
+        f.componentInstance.SetCaptions(true);
+        f.componentInstance.OnComposerOpenChanged(true);
+        f.detectChanges();
+        await settle();
+        const composer = composerOf(f);
+        const input = query(f, '.dock__input') as HTMLTextAreaElement;
+        input.value = 'keep me';
+        input.dispatchEvent(new Event('input'));
+        f.detectChanges();
+        expect(composer.Draft).toBe('keep me');
+        f.componentInstance.SetCaptions(false);
+        f.detectChanges();
+        await settle();
+        expect(f.componentInstance.ComposerOpen).toBe(false);
+        expect(query(f, '.dock__input')).toBeNull();
+        f.componentInstance.OnComposerOpenChanged(true);
+        f.detectChanges();
+        await settle();
+        expect(composerOf(f)).toBe(composer);
+        expect(composer.Draft).toBe('keep me');
+        expect((query(f, '.dock__input') as HTMLTextAreaElement).value).toBe('keep me');
+      });
+
+      it('with typing disallowed, opening is still refused and nothing is revealed', async () => {
+        const { f } = await renderHidden({ AllowTyping: false });
+        const revealed = capture(f.componentInstance.TextRevealed);
+        f.componentInstance.OnComposerOpenChanged(true);
+        f.detectChanges();
+        await settle();
+        expect(f.componentInstance.ComposerOpen).toBe(false);
+        expect(f.componentInstance.ShowCaptions).toBe(false);
+        expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+        expect(revealed).toHaveLength(0);
+      });
+
+      it('in a console, opening the typing box with captions off turns captions on', async () => {
+        // A console keeps the thread with captions off, but the thread hides every caption turn — the conversation
+        // is shown yet unreadable, so the box must still reveal it. The thread scrolls to new turns; jsdom has no scrollIntoView.
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
+        try {
+          const { f, captions$ } = await renderCall('console');
+          f.componentInstance.SetCaptions(false);
+          captions$.next([{ Role: 'Assistant', Text: 'Hello there.' }]);
+          f.detectChanges();
+          await settle();
+          expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+          expect(f.componentInstance.ShowCaptions).toBe(false);
+          expect(queryAll(f, 'mj-realtime-session-thread .turn')).toHaveLength(0);
+          f.componentInstance.OnComposerOpenChanged(true);
+          f.detectChanges();
+          await settle();
+          expect(f.componentInstance.ComposerOpen).toBe(true);
+          expect(f.componentInstance.ShowCaptions).toBe(true);
+          expect(queryAll(f, 'mj-realtime-session-thread .turn')).toHaveLength(1);
+        } finally {
+          Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+        }
+      });
     });
   });
 });

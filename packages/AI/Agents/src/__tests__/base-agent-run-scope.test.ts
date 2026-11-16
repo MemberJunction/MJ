@@ -18,7 +18,7 @@ import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import type {
     AgentAction, AgentSubAgentRequest, BaseAgentNextStep, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
-import { RESERVED_AGENT_RUN_DATA_KEYS } from '@memberjunction/ai-core-plus';
+import { AgentUserPolicyEngine, RESERVED_AGENT_RUN_DATA_KEYS } from '@memberjunction/ai-core-plus';
 import type { ActionRunScope, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -95,6 +95,10 @@ describe('BaseAgent — the run scope on every action dispatch (RunActionParams.
 
     beforeEach(() => {
         h.dispatched.length = 0;
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({
+            status: 'none',
+            policy: null,
+        });
         agent = new BaseAgent();
     });
 
@@ -108,6 +112,21 @@ describe('BaseAgent — the run scope on every action dispatch (RunActionParams.
     it('an unscoped run still stamps a RunScope — nulls, which an action reads as "inside a run with no tenant"', async () => {
         await dispatch(paramsWith());
         expect(lastScope()).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null });
+    });
+
+    it("stamps the search scopes the host assigned: trimmed, de-duplicated, in the host's order, a copy per dispatch", async () => {
+        const HOST_SCOPE = 'cccccccc-1111-4222-8333-444444444444';
+        const params = paramsWith({ PrimaryScopeRecordID: TENANT, SearchScopeIDs: [` ${HOST_SCOPE} `, HOST_SCOPE.toUpperCase(), ''] });
+        await dispatch(params);
+        expect(lastScope()).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: null, SearchScopeIDs: [HOST_SCOPE] });
+        lastScope()!.SearchScopeIDs!.push('tampered');
+        await dispatch(params);
+        expect(lastScope()!.SearchScopeIDs).toEqual([HOST_SCOPE]);
+    });
+
+    it('never reads host search scopes from data, even trusted: only server code setting the parameter assigns them', async () => {
+        await dispatch(paramsWith({ data: { SearchScopeIDs: ['cccccccc-1111-4222-8333-444444444444'] }, TrustReservedRunData: true }));
+        expect(lastScope()).not.toHaveProperty('SearchScopeIDs');
     });
 
     it('reads the scope from data when a trusted host passed it there (TrustReservedRunData, as the run row does)', async () => {
@@ -165,6 +184,18 @@ describe('BaseAgent — the run scope on every action dispatch (RunActionParams.
         expect(Object.keys(context)).not.toContain('RunScope');
         expect(JSON.stringify(context)).not.toContain(TENANT);
     });
+
+    it('fails closed before dispatching when ResolvePolicyForAgentAndUser returns status === "error"', async () => {
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+            status: 'error',
+            policy: null,
+            errorMessage: 'Policy database unreachable',
+        });
+        const res = await dispatch(paramsWith({ PrimaryScopeRecordID: TENANT }));
+        expect(res.Success).toBe(false);
+        expect(res.ResultCode).toBe('POLICY_DENIED');
+        expect(h.dispatched).toHaveLength(0);
+    });
 });
 
 /** The private members the scope tests below reach (the keyhole pattern of the other BaseAgent suites). */
@@ -203,6 +234,15 @@ describe('BaseAgent — task graphs in a tenant-scoped run', () => {
     it('resolves the scope from the params outside a run, the way the run row does', async () => {
         const next = await internals.executeTasksStep(paramsWith({ PrimaryScopeRecordID: TENANT }), graph);
         expect(next.errorMessage).toMatch(/tenant-scoped run/);
+    });
+
+    it('refuses a graph in a run whose host assigned its search scopes (a graph node would search without them)', async () => {
+        internals._runScope = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null, SearchScopeIDs: [TENANT] };
+        const next = await internals.executeTasksStep(paramsWith(), graph);
+        expect(next.errorMessage).toMatch(/not available in a run with host-assigned search scopes/);
+        expect(createStep).not.toHaveBeenCalled();
+        internals._runScope = undefined;
+        expect((await internals.executeTasksStep(paramsWith({ SearchScopeIDs: [TENANT] }), graph)).errorMessage).toMatch(/host-assigned search scopes/);
     });
 
     it('lets an unscoped run submit (control: it reaches the submitter, absent in this host)', async () => {
@@ -263,6 +303,12 @@ describe('BaseAgent.ExecuteSubAgent — template parameters cannot set the child
         await caller().CallSubAgent(paramsWith({ data: { PrimaryScopeRecordID: TENANT }, TrustReservedRunData: true }), request({ topic: 'refunds' }));
         expect(h.childRuns[0].TrustReservedRunData).toBe(true);
         expect(childData()).toEqual({ PrimaryScopeRecordID: TENANT, topic: 'refunds' });
+    });
+
+    it("hands the child the host's search scopes, so a sub-agent searches only what the host assigned", async () => {
+        const hostScopes = ['cccccccc-1111-4222-8333-444444444444'];
+        await caller().CallSubAgent(paramsWith({ PrimaryScopeRecordID: TENANT, SearchScopeIDs: hostScopes }), request({ topic: 'refunds' }));
+        expect(h.childRuns[0].SearchScopeIDs).toEqual(hostScopes);
     });
 
     it('does not mark the child trusted when the parent was not', async () => {

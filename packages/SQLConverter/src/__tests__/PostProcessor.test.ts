@@ -633,6 +633,46 @@ describe('postProcess', () => {
   //  INSERT VALUES had `this.GranteeType` rewritten to `this."GranteeType"`,
   //  producing invalid TS that broke the build on a fresh PostgreSQL DB)
   // ============================================================
+  describe('T-SQL IF EXISTS pre-flight blocks (#6337)', () => {
+    it('removes an IF EXISTS (…) BEGIN … END block, reading the condition to its own closing paren', () => {
+      const input = [
+        "IF EXISTS (SELECT 1 FROM sys.objects WHERE (name = 'a)b'))",
+        'BEGIN',
+        '  PRINT 1',
+        'END;',
+        'SELECT 1 AS kept;',
+      ].join('\n');
+      const result = PostProcess(input);
+      expect(result).toContain('-- SKIPPED: SQL Server IF EXISTS check');
+      expect(result).toContain('SELECT 1 AS kept;');
+      expect(result).not.toContain('PRINT');
+    });
+
+    it('never runs from a PL/pgSQL IF EXISTS … THEN to a later BEGIN', () => {
+      const input = [
+        'DO $mj$',
+        'BEGIN',
+        '  IF EXISTS (',
+        "    SELECT 1 FROM pg_proc p WHERE p.proname = 'spUpdateWidget'",
+        '  ) THEN',
+        '    PERFORM __mj."spUpdateWidget"(p_ID := p_ID_1);',
+        '  END IF;',
+        'END $mj$;',
+        '',
+        'SELECT 1 AS between_them;',
+        '',
+        'IF NOT EXISTS (SELECT 1 FROM t)',
+        'BEGIN',
+        '  SELECT 2;',
+        'END;',
+      ].join('\n');
+      const result = PostProcess(input);
+      expect(result).toContain('PERFORM __mj."spUpdateWidget"(p_ID := p_ID_1);');
+      expect(result).toContain('SELECT 1 AS between_them;');
+      expect(result).not.toContain('SKIPPED');
+    });
+  });
+
   describe('schema.PascalCase quoting skips string literals', () => {
     it('still quotes a real schema.Table reference in code', () => {
       expect(PostProcess('SELECT * FROM __mj.OpenApp')).toContain('__mj."OpenApp"');

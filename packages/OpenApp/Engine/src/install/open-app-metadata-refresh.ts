@@ -17,6 +17,7 @@
  */
 
 import { GetDialect, type DatabasePlatform } from '@memberjunction/sql-dialect';
+import { IsAzureSqlHost } from './migration-runner.js';
 
 export interface RefreshDatabaseConfig {
     Host: string;
@@ -243,7 +244,7 @@ async function openRefreshConnection(platform: DatabasePlatform, database: Refre
     const mssql = (mssqlMod as { ConnectionPool?: typeof mssqlMod.ConnectionPool }).ConnectionPool
         ? mssqlMod
         : (mssqlMod as unknown as { default: typeof mssqlMod }).default;
-    const isAzureSql = database.Host.includes('.database.windows.net');
+    const isAzureSql = IsAzureSqlHost(database.Host);
     const pool = await new mssql.ConnectionPool({
         server: database.Host,
         port: database.Port ?? 1433,

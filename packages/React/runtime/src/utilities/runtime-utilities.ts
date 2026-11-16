@@ -169,7 +169,8 @@ export class RuntimeUtilities {
           // Use the AI client from GraphQLDataProvider to generate embeddings
           const result = await graphQLProvider.AI.EmbedText({
             textToEmbed: params.textToEmbed,
-            modelSize: params.modelSize
+            modelSize: params.modelSize,
+            inputType: params.inputType
           });
           
           if (result.error) {
@@ -270,7 +271,7 @@ export class RuntimeUtilities {
   private mapMLModel(m: MJMLModelEntity): SimpleMLModelInfo {
     return {
       id: m.ID,
-      pipeline: m.Pipeline,
+      pipeline: m.Pipeline ?? '',
       version: m.Version,
       targetVariable: m.TargetVariable,
       problemType: m.ProblemType,

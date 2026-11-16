@@ -13,6 +13,7 @@
 
 import { UserInfo } from '@memberjunction/core';
 import { MJCredentialEntity } from '@memberjunction/core-entities';
+import type { AICredentialScope } from '@memberjunction/ai';
 
 import {
     RunComputerUseParams,
@@ -126,6 +127,14 @@ export class MJRunComputerUseParams extends RunComputerUseParams {
      * runs (e.g. `temperature: 0`). Judge generation is unaffected.
      */
     public ControllerGeneration?: { temperature?: number; effortLevel?: number };
+
+    /**
+     * Which credentials this run's controller, judge and heal prompts may spend — the calling agent
+     * run's `CredentialScope`, forwarded onto each prompt's `AIPromptParams.CredentialScope`. Under
+     * `'RuntimeOnly'` only {@link APIKeyResolver}'s answers count, so a vendor the run has no key for
+     * is not a candidate. Absent means `'Any'`.
+     */
+    public CredentialScope?: AICredentialScope;
 }
 
 // ─── MJ Domain Auth Binding ──────────────────────────────────

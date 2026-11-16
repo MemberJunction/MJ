@@ -583,15 +583,15 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       // media handling, and streaming. The coordinator only layers the per-task timeout on top;
       // cancellation is handled inside executeModel via the task's cancellation token.
       //
-      // TIMEOUT: a caller-supplied `AIPromptParams.timeoutMS` (or a runner-level
-      // DefaultPromptTimeoutMS) is the authoritative bound for a model call — the inherited
+      // TIMEOUT: a caller-supplied `AIPromptParams.timeoutMS`, else the prompt's `TimeoutMS`, else a
+      // runner-level DefaultPromptTimeoutMS, is the authoritative bound for a model call — the inherited
       // executeModel enforces it on the composed abort signal. The coordinator's `taskTimeoutMS` is
       // only a DEFAULT backstop for callers that request no timeout, so when a timeout IS requested
       // we use that value here too. Otherwise a caller asking for 120s would still be truncated at
       // the coordinator's 30s default — exactly the kind of divergence between the two paths we're
       // eliminating.
       const perTaskParams = this.buildPerTaskParams(params, task);
-      const effectiveTimeoutMS = this.getEffectiveTimeoutMS(perTaskParams) ?? timeoutMS;
+      const effectiveTimeoutMS = this.getEffectiveTimeoutMS(task.prompt, perTaskParams) ?? timeoutMS;
       let taskTimer: ReturnType<typeof setTimeout> | undefined;
       const modelResult = (await Promise.race([
         this.executeModel(

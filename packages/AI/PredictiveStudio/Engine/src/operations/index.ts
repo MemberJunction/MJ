@@ -23,6 +23,7 @@
  */
 
 export * from './delegation';
+export * from './refusals';
 export * from './train-model.operation';
 export * from './score-record-set.operation';
 export * from './run-feature-pipeline.operation';

@@ -803,6 +803,8 @@ describe('push masks values that come from @env:', () => {
     beforeEach(() => {
       vi.stubEnv(OTHER_VAR, OTHER_SECRET);
       syncEngine.ResolvedEnvVariables.add(OTHER_VAR);
+      // A delete reads the row through the push transaction, not the preload cache (#4935)
+      vi.spyOn(syncEngine, 'LoadEntityFromDatabase').mockResolvedValue(mockEntityInstance as unknown as BaseEntity);
     });
 
     it('hides the record name when the file Name is an @env: reference', async () => {
@@ -974,13 +976,13 @@ describe('push registers env-sourced fields with the SQL log redactor', () => {
   it('deletes by an @env: key and prints no value', async () => {
     vi.stubEnv(LONG_ID_VAR, LONG_ID);
     mockEntityInstance = new MockBaseEntity({ ID: LONG_ID, Name: 'Old Name' });
-    const load = vi.spyOn(syncEngine, 'loadEntity').mockResolvedValue(mockEntityInstance as unknown as BaseEntity);
+    const load = vi.spyOn(syncEngine, 'LoadEntityFromDatabase').mockResolvedValue(mockEntityInstance as unknown as BaseEntity);
     const remove = vi.spyOn(mockEntityInstance, 'Delete');
     const record: RecordData = { primaryKey: { ID: `@env:${LONG_ID_VAR}` }, fields: {}, deleteRecord: { delete: true } };
 
     const result = await service['processDeleteRecord'](flatten(record), '', { verbose: true }, callbacks);
 
-    expect(load).toHaveBeenCalledWith('TestEntity', { ID: LONG_ID });
+    expect(load).toHaveBeenCalledWith('TestEntity', { ID: LONG_ID }, expect.anything());
     expect(result.status).toBe('deleted');
     expect(remove).toHaveBeenCalled();
     expect(output).toContain(`   Primary Key: ID: <from @env:${LONG_ID_VAR}>`);
@@ -990,7 +992,7 @@ describe('push registers env-sourced fields with the SQL log redactor', () => {
 
   it('registers an @env: delete key for the names-only SQL log warning', async () => {
     mockEntityInstance = new MockBaseEntity({ ID: LONG_ID, Name: 'Old Name' });
-    vi.spyOn(syncEngine, 'loadEntity').mockResolvedValue(mockEntityInstance as unknown as BaseEntity);
+    vi.spyOn(syncEngine, 'LoadEntityFromDatabase').mockResolvedValue(mockEntityInstance as unknown as BaseEntity);
     const registerKey = vi.spyOn(redactor, 'RegisterPrimaryKey');
     const record: RecordData = { primaryKey: { ID: `@env:${LONG_ID_VAR}` }, fields: {}, deleteRecord: { delete: true } };
 
@@ -1001,7 +1003,7 @@ describe('push registers env-sourced fields with the SQL log redactor', () => {
 
   it('removes a deleted record from the metadata cache by the resolved @env: key', async () => {
     mockEntityInstance = new MockBaseEntity({ ID: LONG_ID, Name: 'Old Name' });
-    vi.spyOn(syncEngine, 'loadEntity').mockResolvedValue(mockEntityInstance as unknown as BaseEntity);
+    vi.spyOn(syncEngine, 'LoadEntityFromDatabase').mockResolvedValue(mockEntityInstance as unknown as BaseEntity);
     const removeFromCache = vi.spyOn(service['syncMetadataEngine'], 'removeEntityFromCache').mockImplementation(() => undefined);
     const record: RecordData = { primaryKey: { ID: `@env:${LONG_ID_VAR}` }, fields: {}, deleteRecord: { delete: true } };
 
@@ -1013,7 +1015,7 @@ describe('push registers env-sourced fields with the SQL log redactor', () => {
 
   it('names the @env: key variable, and no value, when the record to delete is not found', async () => {
     vi.stubEnv(LONG_ID_VAR, LONG_ID);
-    vi.spyOn(syncEngine, 'loadEntity').mockResolvedValue(null);
+    vi.spyOn(syncEngine, 'LoadEntityFromDatabase').mockResolvedValue(null);
     const record: RecordData = { primaryKey: { ID: `@env:${LONG_ID_VAR}` }, fields: {}, deleteRecord: { delete: true } };
 
     await service['processDeleteRecord'](flatten(record), '', {}, callbacks);
@@ -1025,7 +1027,7 @@ describe('push registers env-sourced fields with the SQL log redactor', () => {
   it('masks an env value in the delete key print and the changes recap', async () => {
     syncEngine.ResolvedEnvVariables.add(LONG_ID_VAR);
     mockEntityInstance = new MockBaseEntity({ ID: LONG_ID, Name: 'Old Name' });
-    vi.spyOn(syncEngine, 'loadEntity').mockResolvedValue(mockEntityInstance as unknown as BaseEntity);
+    vi.spyOn(syncEngine, 'LoadEntityFromDatabase').mockResolvedValue(mockEntityInstance as unknown as BaseEntity);
     const record: RecordData = { primaryKey: { ID: LONG_ID }, fields: {}, deleteRecord: { delete: true } };
 
     await service['processDeleteRecord'](flatten(record), '', { verbose: true }, callbacks);

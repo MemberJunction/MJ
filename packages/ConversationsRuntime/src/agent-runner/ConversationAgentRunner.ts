@@ -36,6 +36,7 @@ import {
     coerceFailedExecuteAgentResult,
 } from '@memberjunction/ai-core-plus';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import type { AgentReplyAcknowledgement } from '@memberjunction/graphql-dataprovider';
 
 import { IConversationsRuntimeContext } from '../context/IConversationsRuntimeContext';
 import { DefaultAgentResolver } from '../default-agent/DefaultAgentResolver';
@@ -48,14 +49,16 @@ import { DefaultAgentResolver } from '../default-agent/DefaultAgentResolver';
 export interface ProcessMessageInput {
     /** The conversation this message belongs to. */
     conversationId: string;
-    /** The just-sent user message (used for `latestMessageId` plumbing). */
+    /**
+     * The just-sent user message. The turn answers it: the server loads the history around it and creates the agent's
+     * reply row for it (only the server writes agent replies).
+     */
     message: MJConversationDetailEntity;
     /**
-     * The `MJ: Conversation Details` row that tracks this agent run on the
-     * server. Required for the optimized `RunAIAgentFromConversationDetail` path,
-     * which loads conversation history server-side.
+     * Called once the server accepts the run, before any progress, with the reply row it created. Its ID keys the
+     * run's progress and completion; its creation time starts the reply's timer.
      */
-    conversationDetailId: string;
+    onReplyAccepted?: (reply: AgentReplyAcknowledgement) => void;
     /**
      * Application context to inject into the agent's system prompt. Used by
      * embedders (Form Builder cockpit, Component Studio AI Assistant, future LXP)
@@ -101,6 +104,11 @@ export interface ProcessMessageInput {
      * messages.
      */
     AgentHistoryFrom?: Date | null;
+    /**
+     * The fork the reply and history run on, when the turn forks from `message` (such as Regenerate).
+     * Null or omitted uses `message.BranchID`.
+     */
+    ReplyBranchID?: string | null;
 }
 
 /**
@@ -219,7 +227,8 @@ export class ConversationAgentRunner {
             });
 
             const agentParams: RunAgentFromConversationDetailParams = {
-                ConversationDetailId: input.conversationDetailId,
+                UserMessageId: input.message.ID,
+                OnAccepted: input.onReplyAccepted,
                 AgentId: agent.ID,
                 MaxHistoryMessages: 20,
                 Data: {
@@ -243,6 +252,7 @@ export class ConversationAgentRunner {
                 ...(input.planMode ? { PlanMode: true } : {}),
                 ...(input.requestedSkillIDs?.length ? { RequestedSkillIDs: input.requestedSkillIDs } : {}),
                 ...(input.AgentHistoryFrom ? { AgentHistoryFrom: input.AgentHistoryFrom } : {}),
+                ...(input.ReplyBranchID ? { ReplyBranchId: input.ReplyBranchID } : {}),
                 CreateArtifacts: true,
                 CreateNotification: true,
                 OnProgress: input.onProgress

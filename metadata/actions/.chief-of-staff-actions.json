@@ -8,7 +8,10 @@
       "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-clock-rotate-left"
+      "IconClass": "fa-solid fa-clock-rotate-left",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -19,15 +22,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional UUID of the AI Agent — leave blank when scheduling Chief of Staff (defaults automatically to 'Chief of Staff')",
+            "Description": "Optional UUID of the AI Agent — leave blank to default automatically to the calling agent (or 'Chief of Staff' outside an agent run)",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:46.995Z",
-            "checksum": "41f52280dfc3f2701aca527c6518d247efee0783629c7e869442e89ee276707f"
+            "lastModified": "2026-11-10T23:41:28.614Z",
+            "checksum": "94fb79f441dee20a4d68fe6f98fe1e48d141f3e006b8b41ad052818f82663969"
           }
         },
         {
@@ -37,16 +40,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the AI Agent to wake (defaults to 'Chief of Staff' if omitted)",
-            "IsRequired": false,
-            "DefaultValue": "Chief of Staff"
+            "Description": "Optional name of the AI Agent to wake — omit to default automatically to the calling agent",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:47.005Z",
-            "checksum": "396458329ddaa8b7569dda2013938fa10ab536e0b9465c1125518493edf55e4d"
+            "lastModified": "2026-11-10T23:41:28.625Z",
+            "checksum": "bbbf4185d0fba59a02da36f2ee9bfd5d86912759d3b76bdfbad2ec086aaa4226"
           }
         },
         {
@@ -75,15 +77,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ISO-8601 timestamp for when the agent should wake next",
+            "Description": "ISO-8601 time of a OneShot or Adaptive wake. Same as WakeAtISO.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:47.026Z",
-            "checksum": "675cfaf9752e565e1dd5e2cb85ff902ebb52a4dc77c8966e58e8850cabba9fc4"
+            "lastModified": "2026-11-01T22:53:26.249Z",
+            "checksum": "137761ba3b8979f092254e386a1a198d4472adebf24d9ad30ace747274dc473c"
           }
         },
         {
@@ -93,16 +95,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Minutes from now to schedule the next wake when NextWakeAt is omitted (default: 60)",
-            "IsRequired": false,
-            "DefaultValue": "60"
+            "Description": "Minutes from now for a OneShot or Adaptive wake when no time is given. Same as WakeInMinutes.",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:47.036Z",
-            "checksum": "41dd7a75a90caf3f2a17fa944ce8a60af0130ef5f80f69621d331412c4fb03ef"
+            "lastModified": "2026-11-01T22:53:26.259Z",
+            "checksum": "f0db9d1387fb941efeeb81368e59840c124652330d15f94526547725fd2dcf3d"
           }
         },
         {
@@ -230,6 +231,115 @@
             "lastModified": "2026-10-20T23:18:47.108Z",
             "checksum": "c88da0673b4c395f70847563008fd990d08f207bcca092cabe2a11b3cc81dfeb"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WorkstreamKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Names the workstream this wake belongs to (for example 'daily-briefing' or 'reminder-call-mom'). One routine per agent, user and key: scheduling the same key again updates that routine. Default 'default'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9FE16909-5870-4EE3-8921-F985FE364717"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:26.276Z",
+            "checksum": "ee326577eec19d33992fccfa17ef34f72a601578acb51ae9c98a2c111d5ea272"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Timezone",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "IANA time zone the CronExpression runs in (for example 'America/Chicago'). Pass the user's time zone for a Recurring wake so '0 9 * * 1-5' means 9:00 AM where the user is. Default 'UTC'.",
+            "IsRequired": false,
+            "DefaultValue": "UTC"
+          },
+          "primaryKey": {
+            "ID": "FF79AC6D-8457-4A3A-AD37-523D08B38DDF"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:26.291Z",
+            "checksum": "d00f2311a98ef990ab2c7a466f45e6e11ede447828e071dda28e7559d9ef679f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WakeAtISO",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 time of a OneShot or Adaptive wake. Same as NextWakeAt.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8170C89D-A68B-46EC-B0A3-89D1DBE7B717"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:26.305Z",
+            "checksum": "4f79105e931d80806097e3a7ceef614b045bf8fb3b19a23f6314612997692d2d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WakeInMinutes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minutes from now for a OneShot or Adaptive wake when no time is given. Same as DelayMinutes.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EF909886-4213-4EC3-AC46-8D76DF0C6B80"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:26.321Z",
+            "checksum": "8fc4a7b3e8ea94a0873916d56d1b5670b4076bd4790de3d2a447c7d89075492b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WatchedEntities",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON array of entities the wake gate watches for changes, for example [{ \"entityName\": \"MJ: AI Agent Requests\", \"extraFilter\": \"Status = 'Requested'\", \"includeRecordChanges\": true }].",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CCE6483B-4FB7-4E0C-B7B8-008BC363A8D0"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.638Z",
+            "checksum": "d809c9975c553367aa84a446658b850c74dacbd5431388c873f004c239cf50cb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WakeGate",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON object with the wake gate: skipIfUnchanged, tier1Expression (e.g. \"totalChangedCount > 0\"), and tier2Decision ({ \"question\": \"...\" }).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0DB63D82-4B48-44E6-9F13-0825C3B078D4"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.648Z",
+            "checksum": "09621e3c84b1d2e958a087984aca84e67272e6f218f2b0afed6db66e62c79ea2"
+          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -269,8 +379,8 @@
       "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:18:46.903Z",
-      "checksum": "3d46b542c2ea9c8a6f1dadec8ec6c812e5c2b097e4c7f493ab58590f61a8abec"
+      "lastModified": "2026-11-10T23:41:28.424Z",
+      "checksum": "b1aaeed1e6ca895d368739aa525c63bb649d83f1fd71211cb5acf5acf9861a39"
     }
   },
   {
@@ -282,7 +392,10 @@
       "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-user-shield"
+      "IconClass": "fa-solid fa-user-shield",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -293,15 +406,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional UUID of the AI Agent — leave blank when configuring Chief of Staff (defaults automatically to 'Chief of Staff')",
+            "Description": "Optional UUID of the AI Agent — leave blank to default automatically to the calling agent (or 'Chief of Staff' outside an agent run)",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:47.132Z",
-            "checksum": "8dfc9381c242c2fd9c5fdd7a8f2ca4e740979cf6b6a73665d3cb07200297ac5a"
+            "lastModified": "2026-11-10T23:41:28.658Z",
+            "checksum": "94fb79f441dee20a4d68fe6f98fe1e48d141f3e006b8b41ad052818f82663969"
           }
         },
         {
@@ -311,16 +424,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the AI Agent (defaults to 'Chief of Staff')",
-            "IsRequired": false,
-            "DefaultValue": "Chief of Staff"
+            "Description": "Optional name of the AI Agent — omit to default automatically to the calling agent",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:47.143Z",
-            "checksum": "d5b2bf5b4a3bd03e4747ff2ed0cbfe40eff73db18676d70a6de315ea610dd1b3"
+            "lastModified": "2026-11-10T23:41:28.666Z",
+            "checksum": "09659abe09a4ac2a51f727e5a835b425495afb6d139615ed4ba68416c4c1a685"
           }
         },
         {
@@ -508,20 +620,23 @@
       "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:18:46.916Z",
-      "checksum": "2fe27acc8b2de4bd8d64038914bc9a63e8a391222c7badcef1e70cd0b656b3db"
+      "lastModified": "2026-11-10T23:41:28.435Z",
+      "checksum": "a83e5fc123c213a502f1df208c4500a4159be2d73254e2d436f4017dd87e4db3"
     }
   },
   {
     "fields": {
-      "Name": "Chief of Staff Inter-Agent Request",
+      "Name": "Send Inter-Agent Request",
       "Description": "Sends a structured coordination request from one user's Chief of Staff to another user's Chief of Staff while respecting sender CoordinationMode and recipient data boundaries.",
-      "DriverClass": "Chief of Staff Inter-Agent Request",
+      "DriverClass": "Send Inter-Agent Request",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-handshake"
+      "IconClass": "fa-solid fa-handshake",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -604,15 +719,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional related entity name (e.g., 'MJ: Tasks' or 'MJ: Issues')",
+            "Description": "Optional related entity name (e.g., 'MJ: AI Agent Requests' or 'MJ: User Routines')",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:47.302Z",
-            "checksum": "7f687f8615f661a299e9399f79647e07dcccf1e5b500ce08fe88bd5989ce10f7"
+            "lastModified": "2026-11-01T22:53:26.361Z",
+            "checksum": "db7d3c455ddedadd18792942b7d3d4a0d1996799257efbc18e96d2c46d3d10ae"
           }
         },
         {
@@ -640,15 +755,51 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ID of the recipient's Chief of Staff conversation",
+            "Description": "ID of the recipient's target agent conversation",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E07"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:47.322Z",
-            "checksum": "8fccf24dbbf8d6cf0d9447a195f55075df05d5d655e70d2a03628d9ad905def2"
+            "lastModified": "2026-11-10T23:41:28.680Z",
+            "checksum": "fee3f0828818ec0d070502a1e7bc196d27ad85bc3a43d7363ae12bcc6233d7a1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the recipient's target AI Agent (defaults to 'Chief of Staff' if omitted); also returned on output.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "44E530A0-210F-4E43-882B-C001DD6A26C9"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.750Z",
+            "checksum": "413d77026ef6cfb12f4d85fbff518190104806e1350809318dd1d6df8ac4bc83"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional name of the recipient's target AI Agent (e.g., 'Software Factory' or 'Chief of Staff').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6DB1357C-7BE7-4FBD-A5BA-35692225BC4C"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.773Z",
+            "checksum": "25c1366fc47519633853e777ec4a663be8e5aa0e988080b7c56631787863fef7"
           }
         }
       ],
@@ -689,15 +840,15 @@
       "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:18:46.928Z",
-      "checksum": "070c1706965ff2b95fa4f3ed247a718091a2db67bcbeec1ac52b111deed1aa53"
+      "lastModified": "2026-11-10T23:41:28.448Z",
+      "checksum": "0e153935a3a832c2cbd1ae231126bd982176e1d4ab653d06476d5db26225d1de"
     }
   },
   {
     "fields": {
-      "Name": "Prepare Chief of Staff Outbound Call",
+      "Name": "Prepare Outbound Call Brief",
       "Description": "Validates the user's PhoneChannelMode policy and generates a structured outbound telephony brief with mandatory AI disclosure greeting, tight objective, fallback plan, and prohibited commitments.",
-      "DriverClass": "Prepare Chief of Staff Outbound Call",
+      "DriverClass": "Prepare Outbound Call Brief",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "CodeApprovalStatus": "Approved",
@@ -867,8 +1018,8 @@
       "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:18:46.939Z",
-      "checksum": "0aaa746765e5e23b2e7cabe11864479fcebbe0d727ec3145f6df20814e4eb254"
+      "lastModified": "2026-10-27T15:09:40.640Z",
+      "checksum": "e9e1b1b9117ec3e1d37a5d3b89cf995a3724492eda551ae0ac9b8003959ae647"
     }
   },
   {
@@ -1195,7 +1346,10 @@
       "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-calendar-plus"
+      "IconClass": "fa-solid fa-calendar-plus",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1400,13 +1554,17 @@
       "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:18:46.972Z",
-      "checksum": "557b1f810e419a464c56f83a767f1f9e2af9424d3a6b0e35930b3c980be59fab"
+      "lastModified": "2026-11-10T23:41:28.463Z",
+      "checksum": "467fe401b02bc9a75af773a7c6a81c48ef677516fd4bdf86e48472401fd4bd1c"
     }
   },
   {
     "fields": {
       "Name": "Manage My Email Inbox and Drafts",
+      "Config": {
+        "outputTrustLevel": "Untrusted",
+        "disallowWhenTainted": true
+      },
       "Description": "Lists messages, searches threads, reads single messages, creates email drafts, or replies/forwards in the calling user's personal mailbox or dedicated agent utility mailbox. Hard-pinned to ContextUser.Email or the user's AIBridgeAgentIdentity and gated by EmailChannelMode.",
       "DriverClass": "__ManageMyEmailInbox",
       "Type": "Custom",
@@ -1424,7 +1582,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Operation: 'ListMessages', 'SearchMessages', 'GetSingleMessage', 'CreateDraft', 'Reply', or 'Forward'",
+            "Description": "Operation: 'ListMessages', 'SearchMessages', 'GetSingleMessage', 'CreateDraft', 'Send' (a new outbound email), 'Reply', or 'Forward'. Sending operations under SendAsAgent/SendAsUser with RequireApprovalForExternalComms return APPROVAL_REQUIRED first; call again with ConfirmedApprovalRequestID once the request is approved.",
             "IsRequired": true,
             "DefaultValue": "ListMessages"
           },
@@ -1432,8 +1590,8 @@
             "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:47.682Z",
-            "checksum": "2fcc703eeb47bc055926d3775a6d275fbdfb3cbe6a403243e60e0e4a602a904b"
+            "lastModified": "2026-11-01T22:53:26.375Z",
+            "checksum": "1439c88a747295151f60ab376ac6d48eb9659eadce1edd9736a0a34db8217c0a"
           }
         },
         {
@@ -1561,6 +1719,42 @@
             "lastModified": "2026-10-20T23:18:47.758Z",
             "checksum": "54b76aefa901b2d69d905cf887aaab5e53a3c41e2bb8ca99483c647e8b561924"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedApprovalRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the approved MJ: AI Agent Requests row for this exact send. Pass it when acting on an approval; the action then delivers instead of queueing another approval.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8C2765D7-80F7-4D6C-A74C-AAADB385A9BE"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:26.393Z",
+            "checksum": "8d67465f74ae824e32e095b2d2a80b1266058c24b33301e61626a5c49eb7d795"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ApprovalRequestID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the approval request queued when the result is APPROVAL_REQUIRED",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5A35539C-9CC3-4C54-BE40-A1BCD60620DA"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:26.409Z",
+            "checksum": "d7bdcd1669e74c460ab6e680a89162947458fa56444529fb0829142f51e338c4"
+          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -1593,6 +1787,51 @@
             "lastModified": "2026-10-20T23:18:47.771Z",
             "checksum": "cc73a66eadb25a08a098fa200aedcfce4ec3f67afe0e042a728ef721e562d015"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "APPROVAL_REQUIRED",
+            "IsSuccess": true,
+            "Description": "An approval request was queued for the user; nothing was sent. Call again with ConfirmedApprovalRequestID after approval."
+          },
+          "primaryKey": {
+            "ID": "C70D5FCC-AA24-44CA-BD86-7C9A496036AB"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:26.419Z",
+            "checksum": "d50eeea5332e8f9fa874d7de79a0db986651a261a3ddb04a518d60121582f74e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_EMAIL_PROVIDER",
+            "IsSuccess": false,
+            "Description": "No active communication provider can act for this mailbox; the email cannot be delivered"
+          },
+          "primaryKey": {
+            "ID": "F533C36E-A634-4417-99BC-DEBFC80D1035"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:26.429Z",
+            "checksum": "c1e441c75955b744817535a6bcb32b9b0aacc7202037de9e759f30e5cee3cc6b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_OPERATION",
+            "IsSuccess": false,
+            "Description": "The Operation parameter is not one this action supports; nothing was read, drafted or sent"
+          },
+          "primaryKey": {
+            "ID": "8CD94F21-DDB1-4F62-86FD-1B266519C082"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:26.438Z",
+            "checksum": "76192b72b53d257b755fc5bc653faef5f90e97a8e442545976df02bd9195a3fa"
+          }
         }
       ]
     },
@@ -1600,8 +1839,222 @@
       "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:18:46.984Z",
-      "checksum": "7a2fc4094cce76c55e0690e2a615d3f277c1742ef21bdd2072a6c5dbaaabfad4"
+      "lastModified": "2026-11-10T23:41:28.476Z",
+      "checksum": "4fac5ab9110a3de0f4ae971e9e8db9bffe10d135d162e0ff397810f63bc8f717"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trigger Agent Wake",
+      "Description": "Triggers an immediate event-driven AgentWake routine in MJ: User Routines for a specific target user, agent, and workstream. Designed for declarative lifecycle hooks (e.g., TaskType.OnCreateActionID / OnStatusChangeActionID) and webhook handlers.",
+      "DriverClass": "Trigger Agent Wake",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-bolt"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetUserID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MJ User whose agent should wake (defaults to ContextUser.ID when omitted).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BC699947-200D-4723-A739-761E445AD164"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.814Z",
+            "checksum": "7e595ba261f481d7204b71aa50d4769024b6d322dffedba9e77a00c8886bad57"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the target AI Agent to wake.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3FF6EDAA-AA26-4AC8-9B74-6107B909719B"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.838Z",
+            "checksum": "ddf50041f64ecc635510bee2b13b7c1d23469706231a44501286a81dee6a07d2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional name of the target AI Agent to wake (e.g., 'Software Factory' or 'Chief of Staff').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1C939F18-2DEB-4073-9442-A11565E535D8"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.860Z",
+            "checksum": "6191634be1df45628c8b9642cdf018988b91215e3e001e1f25f83beac9435bef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WorkstreamKey",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Stable workstream key used to coalesce queued events onto a single wake routine (e.g., 'task:<TaskID>').",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "61867ED8-A260-4285-B717-FF6F3860A5A6"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.883Z",
+            "checksum": "60049a4ade10da7dce8733fe7303219b14000958206d36d92b383e9e086bc201"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WakeReason",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Human-readable reason explaining why the agent is being woken.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F667C406-0226-4E26-A244-D1857577C6F4"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.907Z",
+            "checksum": "fdb9074bd2290ffc2c3856347a4886b9a6f6cb75e6b66b61a92fd20147058d45"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResumeState",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Optional JSON object delivered to the agent in resumeState (and appended to resumeState.pendingEvents while unclaimed).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4C66626C-F8D0-4C2C-8F73-38C6772AEAAB"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.930Z",
+            "checksum": "5afeab61b8988575b4b2128349002837cbf3abe69fd4776a4bbe1556b88f1295"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoutineID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created or updated MJ: User Routines row.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8698F97-686B-49FD-B461-F3A96364A692"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.954Z",
+            "checksum": "85a7df57866a7d8d85a44ea19b8ae0c931813b0c6148e973bf66db5168ee124e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NextRunAt",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 timestamp when the wake routine will run.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6DB73C27-9DA4-454E-85AC-A8FD4231BE7A"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:28.976Z",
+            "checksum": "ba37c66dc393cb637e48d547fe8bd73e979ef0e521ca6aca7fce61f37af8e44b"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Immediate agent wake routine scheduled"
+          },
+          "primaryKey": {
+            "ID": "89207A9E-A2D8-4F1E-A1B3-192FF4A633F6"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.036Z",
+            "checksum": "ed5ccdf679c1a90662bd3a91b62d1601d340d89a3f1337df98f92ec49b9ae784"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "POLICY_DENIED",
+            "IsSuccess": false,
+            "Description": "Target user policy is Paused or Disabled; wake suppressed"
+          },
+          "primaryKey": {
+            "ID": "50D7D373-98E8-417D-A9A2-DF33D1BCDA3F"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.051Z",
+            "checksum": "f8ee787e49c2cb7eb581fff4dd50f5fec61fab4da332b7f13dff776aa6483b6a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AGENT_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Target AI Agent could not be found"
+          },
+          "primaryKey": {
+            "ID": "CAEFEE5F-EBD1-4D21-B868-963B41B70523"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:29.067Z",
+            "checksum": "8f98bcbd442233badbf090f0ab7175f01520236bd536280f10c42ebf95a8e101"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F410C27B-66C8-49B0-9A45-AC51F8A5CD2F"
+    },
+    "sync": {
+      "lastModified": "2026-11-10T23:41:28.579Z",
+      "checksum": "7b7067c568db2bc2be3486903fead5e1648a8e48b9a0ec72f5ae5eea106ffc1f"
     }
   }
 ]

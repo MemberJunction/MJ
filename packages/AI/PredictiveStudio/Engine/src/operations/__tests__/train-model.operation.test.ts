@@ -1,21 +1,43 @@
 import { describe, it, expect } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRemotableOperation } from '@memberjunction/core';
-import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type {
+  PredictiveStudioTrainModelInput, RetiredTrainModelInputs,
+} from '@memberjunction/core-entities';
 
 import { PredictiveStudioTrainModelServerOperation } from '../train-model.operation';
+import { TrainModelMapping } from '../train-model.mapping';
 import { TrainingEngine } from '../../training/training-engine';
+import { TrainingRefusedError } from '../../training/training-refusal';
+import type { IEvaluationProtocolStore } from '../../training/evaluation-protocol-store';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../training/types';
 import { CapturingContext } from './helpers';
+import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
+import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
+import { FakeEvaluationProtocolStore, TrainingHarness, type FakeMLModel, type FakeMLRun } from '../../__tests__/fakes/training-fakes';
 
 /**
  * Unit tests for the Train ML Model Remote Operation. NO live DB / sidecar — the
- * TrainingEngine is mocked via the operation's overridable `engine()` seam. These
- * prove the op stays thin: input→engine-input mapping, correctly-mapped delegation
- * to `TrainingEngine.trainModel`, result→typed-output mapping (incl. the leakage
- * flag read from the run notes), LongRunning progress forwarding, and that the
+ * TrainingEngine is mocked via the operation's overridable `engine()` seam and the
+ * protocol rows are served by a fake store. These prove the op stays thin: retired
+ * inputs refused by name before training, input→engine-input mapping, the output read
+ * from the run's stored decision, LongRunning progress forwarding, and that the
  * subclass registers under the right OperationKey.
  */
+
+const PROTOCOL = ProtocolRowFixture.Spec();
+const RUN_ID = '00000000-0000-0000-0000-0000000000a1';
+
+/** A typed engine result over the shared fake rows, the run bound to the fixture snapshot and protocol. */
+function resultOf(run: Partial<FakeMLRun>, model: Partial<FakeMLModel> | null): Promise<TrainModelResult> {
+  return TrainingHarness.ResultOf({ TrainingSnapshotID: 'snap-1', EvaluationProtocolID: ProtocolRowFixture.ID, ...run }, model);
+}
+
+/** A shipped-member run: model v5 (Draft) with stored scores, the gate keeping the simple baseline `glm`. */
+function shippedRun(notes: string | null): Promise<TrainModelResult> {
+  return resultOf({ Notes: notes, ValidationResults: TrainerResultFixtures.ValidationResultsFor(TrainerResultFixtures.CannedCompleted(RUN_ID, PROTOCOL)) }, { Version: 5, Status: 'Draft', HoldoutMetrics: JSON.stringify({ 'log-loss': 0.455 }) });
+}
 
 class MockTrainingEngine extends TrainingEngine {
   public LastInput: TrainModelInput | null = null;
@@ -31,25 +53,28 @@ class MockTrainingEngine extends TrainingEngine {
 }
 
 class TestableTrainOp extends PredictiveStudioTrainModelServerOperation {
+  public readonly Protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row({ Version: 2 })]);
   constructor(private readonly mock: TrainingEngine) {
     super();
   }
   protected override engine(): TrainingEngine {
     return this.mock;
   }
+  protected override protocolStore(_provider: IMetadataProvider, _user: UserInfo): IEvaluationProtocolStore {
+    return this.Protocols;
+  }
+  /** Exposes the protected input mapping to the tests. */
+  public MapInput(input: PredictiveStudioTrainModelInput): TrainModelInput {
+    return this.toEngineInput(input);
+  }
 }
 
-function fakeModel(over: Partial<MJMLModelEntity> = {}): MJMLModelEntity {
-  return {
-    ID: 'model-1',
-    Version: 5,
-    HoldoutMetrics: JSON.stringify({ auc: 0.81 }),
-    Status: 'Draft',
-    ...over,
-  } as unknown as MJMLModelEntity;
-}
-function fakeRun(notes: string | null): MJMLTrainingRunEntity {
-  return { ID: 'run-1', Notes: notes } as unknown as MJMLTrainingRunEntity;
+/** A call that still sends retired inputs, typed the way an outside caller (or a probe) sends them. */
+type RetiredCall = PredictiveStudioTrainModelInput & RetiredTrainModelInputs;
+
+async function runOp(input: RetiredCall, engine: TrainingEngine): Promise<{ result: Awaited<ReturnType<TestableTrainOp['ExecuteServer']>>; ctx: CapturingContext }> {
+  const ctx = new CapturingContext();
+  return { result: await new TestableTrainOp(engine).ExecuteServer(input, ctx), ctx };
 }
 
 describe('PredictiveStudioTrainModelServerOperation — registration', () => {
@@ -69,65 +94,104 @@ describe('PredictiveStudioTrainModelServerOperation — registration', () => {
   });
 });
 
-describe('PredictiveStudioTrainModelServerOperation — happy path', () => {
-  it('maps input→engine, returns mapped output, and forwards progress', async () => {
-    const engine = new MockTrainingEngine({
-      model: fakeModel(),
-      run: fakeRun('Training completed. No single-feature dominance detected.'),
-    });
+describe('PredictiveStudioTrainModelServerOperation — a run that shipped a member', () => {
+  it('maps input→engine, returns the stored decision with the model, snapshot and protocol, and forwards progress', async () => {
+    const engine = new MockTrainingEngine(await shippedRun('Training completed. No single-feature dominance detected.'));
     const op = new TestableTrainOp(engine);
     const ctx = new CapturingContext();
 
-    const result = await op.ExecuteServer(
-      { pipelineId: 'pipe-99', maxRows: 500, sidecarVersion: 'sc-1' },
-      ctx,
-    );
+    const result = await op.ExecuteServer({ pipelineId: 'pipe-99', sidecarVersion: 'sc-1' }, ctx);
 
     expect(engine.CallCount).toBe(1);
-    expect(engine.LastInput).toEqual({ pipelineId: 'pipe-99', maxRows: 500, sidecarVersion: 'sc-1' });
-
+    expect(engine.LastInput).toEqual({ pipelineId: 'pipe-99', sidecarVersion: 'sc-1' });
     expect(result.Success).toBe(true);
-    expect(result.Output).toEqual({
-      modelId: 'model-1',
-      trainingRunId: 'run-1',
-      version: 5,
-      holdoutMetrics: JSON.stringify({ auc: 0.81 }),
-      leakageFlagged: false,
-      status: 'Draft',
+    expect(result.Output).toMatchObject({
+      modelId: 'model-1', trainingRunId: 'run-1', version: 5, status: 'Draft', leakageFlagged: false,
+      holdoutMetrics: JSON.stringify({ 'log-loss': 0.455 }),
+      trainingSnapshotId: 'snap-1', evaluationProtocolId: ProtocolRowFixture.ID, evaluationProtocolVersion: 2,
+      gateOutcome: 'keep-simple-baseline', gateBranch: 'b:keep-simple-baseline', shipped: 'glm',
     });
-    // LongRunning: at least a start + finish progress event was emitted.
+    expect(result.Output?.gateReason).toEqual(expect.any(String));
+    expect(op.Protocols.Reads).toBe(1);
     expect(ctx.Progress.length).toBeGreaterThanOrEqual(2);
     expect(ctx.Progress[0].OperationKey).toBe('PredictiveStudio.TrainModel');
+    expect(ctx.Progress[ctx.Progress.length - 1].Message).toBe('Trained model model-1 (v5).');
+  });
+});
+
+describe('PredictiveStudioTrainModelServerOperation — a run that shipped no model', () => {
+  it('succeeds with NoSignal, no model id or version, and the stored gate reason', async () => {
+    const run = await resultOf({ Notes: 'Trainer completed.', ValidationResults: TrainerResultFixtures.NoSignalValidationResults() }, null);
+    const { result, ctx } = await runOp({ pipelineId: 'pipe-99' }, new MockTrainingEngine(run));
+    expect(result.Success).toBe(true);
+    expect(result.Output).toEqual({
+      trainingRunId: 'run-1', status: 'NoSignal', leakageFlagged: false,
+      trainingSnapshotId: 'snap-1', evaluationProtocolId: ProtocolRowFixture.ID, evaluationProtocolVersion: 2,
+      gateOutcome: 'no-signal', gateBranch: 'c:no-signal', gateReason: TrainerResultFixtures.NoSignalReason,
+    });
+    expect(ctx.Progress[ctx.Progress.length - 1].Message).toBe(`Training run run-1 completed and shipped no model: ${TrainerResultFixtures.NoSignalReason}`);
   });
 
-  it('parses ISO labelEventDates into Date objects for the engine', async () => {
-    const engine = new MockTrainingEngine({ model: fakeModel(), run: fakeRun(null) });
-    await new TestableTrainOp(engine).ExecuteServer(
-      { pipelineId: 'p1', labelEventDates: { 'rec-1': '2026-01-15T00:00:00.000Z' } },
-      new CapturingContext(),
-    );
-    const dates = engine.LastInput?.labelEventDates;
-    expect(dates?.['rec-1']).toBeInstanceOf(Date);
-    expect(dates?.['rec-1'].toISOString()).toBe('2026-01-15T00:00:00.000Z');
+  it('fails closed (EXECUTION_ERROR) when the run stored results that cannot be read', async () => {
+    const run = await resultOf({ Notes: 'Trainer completed.', ValidationResults: '{"not":"an envelope"}' }, null);
+    const { result, ctx } = await runOp({ pipelineId: 'p1' }, new MockTrainingEngine(run));
+    expect([result.Success, result.ResultCode]).toEqual([false, 'EXECUTION_ERROR']);
+    expect(result.ErrorMessage).toContain('training run run-1 stored results that cannot be read');
+    // The output is mapped before the finishing line, so a failed mapping never reports "completed" first.
+    expect(ctx.Progress.map((p) => p.Message)).toEqual(['Training model from pipeline p1…']);
+  });
+});
+
+describe('PredictiveStudioTrainModelServerOperation — retired inputs are refused by name, before training', () => {
+  const sentence = (names: readonly string[]): string => TrainModelMapping.RetiredInputsMessage('TrainModel', names);
+
+  it('refuses a point-in-time asOf input as AS_OF_NO_EFFECT without calling the engine', async () => {
+    const engine = new MockTrainingEngine(await shippedRun(null));
+    const { result, ctx } = await runOp({ pipelineId: 'p1', asOf: { Mode: 'offset', OffsetDays: 30 } }, engine);
+    expect([result.Success, result.ResultCode, engine.CallCount, ctx.Progress.length]).toEqual([false, 'AS_OF_NO_EFFECT', 0, 0]);
+    expect(result.ErrorMessage).toBe(`Refused (input-not-accepted): asOf — ${sentence(['asOf'])}`);
+  });
+
+  it("refuses asOf { Mode: 'none' } too: a retired key is refused by presence, whatever it asks for", async () => {
+    const engine = new MockTrainingEngine(await shippedRun(null));
+    const { result } = await runOp({ pipelineId: 'p1', asOf: { Mode: 'none' } }, engine);
+    expect([result.Success, result.ResultCode, engine.CallCount]).toEqual([false, 'AS_OF_NO_EFFECT', 0]);
+  });
+
+  it('refuses maxRows, labelEventDates and primaryKeyField by name, naming every retired key sent', async () => {
+    const engine = new MockTrainingEngine(await shippedRun(null));
+    const { result } = await runOp({ pipelineId: 'p1', maxRows: 1000, labelEventDates: { 'rec-1': '2026-01-15' }, primaryKeyField: 'MembershipID' }, engine);
+    expect([result.Success, result.ResultCode, engine.CallCount]).toEqual([false, 'EXECUTION_ERROR', 0]);
+    expect(result.ErrorMessage).toBe(`Refused (input-not-accepted): labelEventDates — ${sentence(['labelEventDates', 'maxRows', 'primaryKeyField'])}`);
+  });
+
+  it('refuses a retired key sent with no value (an in-process caller that spreads an undefined option)', async () => {
+    const engine = new MockTrainingEngine(await shippedRun(null));
+    const { result } = await runOp({ pipelineId: 'p1', maxRows: undefined }, engine);
+    expect([result.Success, engine.CallCount]).toEqual([false, 0]);
+    expect(result.ErrorMessage).toContain(sentence(['maxRows']));
+  });
+
+  it('maps only the pipeline, the session iteration and the sidecar version onto the engine input', async () => {
+    const op = new TestableTrainOp(new MockTrainingEngine(await shippedRun(null)));
+    expect(op.MapInput({ pipelineId: 'p', experimentSessionIterationId: 'it-1', sidecarVersion: 's' })).toEqual({ pipelineId: 'p', experimentSessionIterationId: 'it-1', sidecarVersion: 's' });
+    expect(op.MapInput({ pipelineId: 'p' })).toEqual({ pipelineId: 'p' });
   });
 });
 
 describe('PredictiveStudioTrainModelServerOperation — leakage flag', () => {
   it('surfaces leakageFlagged=true when run notes carry a LEAKAGE WARNING', async () => {
-    const engine = new MockTrainingEngine({
-      model: fakeModel(),
-      run: fakeRun('LEAKAGE WARNING: one field ("cancelled_flag") dominates'),
-    });
-    const result = await new TestableTrainOp(engine).ExecuteServer({ pipelineId: 'p1' }, new CapturingContext());
+    const engine = new MockTrainingEngine(await shippedRun('LEAKAGE WARNING: one field ("cancelled_flag") dominates'));
+    const { result } = await runOp({ pipelineId: 'p1' }, engine);
     expect(result.Success).toBe(true);
-    expect((result.Output as { leakageFlagged: boolean }).leakageFlagged).toBe(true);
+    expect(result.Output?.leakageFlagged).toBe(true);
   });
 });
 
 describe('PredictiveStudioTrainModelServerOperation — errors', () => {
   it('returns a wrapped failure when pipelineId is missing', async () => {
-    const engine = new MockTrainingEngine({ model: fakeModel(), run: fakeRun(null) });
-    const result = await new TestableTrainOp(engine).ExecuteServer({ pipelineId: '' }, new CapturingContext());
+    const engine = new MockTrainingEngine(await shippedRun(null));
+    const { result } = await runOp({ pipelineId: '' }, engine);
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('EXECUTION_ERROR');
     expect(engine.CallCount).toBe(0);
@@ -139,11 +203,19 @@ describe('PredictiveStudioTrainModelServerOperation — errors', () => {
         throw new Error('sidecar unreachable');
       }
     }
-    const result = await new TestableTrainOp(new ThrowingEngine()).ExecuteServer(
-      { pipelineId: 'p1' },
-      new CapturingContext(),
-    );
+    const { result } = await runOp({ pipelineId: 'p1' }, new ThrowingEngine());
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toContain('sidecar unreachable');
+  });
+
+  it('returns a pipeline without an Evaluation Protocol as PROTOCOL_REQUIRED, not EXECUTION_ERROR', async () => {
+    class RefusingEngine extends TrainingEngine {
+      public override async trainModel(): Promise<TrainModelResult> {
+        throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: 'p1' } });
+      }
+    }
+    const { result } = await runOp({ pipelineId: 'p1' }, new RefusingEngine());
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('PROTOCOL_REQUIRED');
   });
 });

@@ -23,6 +23,7 @@ import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component
 import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { SectionPickerItem, IsPhoneViewport, WatchPhoneViewport } from '@memberjunction/ng-ui-components';
 
 /**
  * Task statuses that mean the step is finished with. Anything else means the workflow is still
@@ -63,6 +64,53 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
 
   // UI state
   ActiveTab = 'timeline';
+
+  /** Phone-width viewport, decided once at init. Visualization and Analytics are desktop views. */
+  IsPhone = false;
+
+  /** The timeline's detail pane sits beside the list on desktop and under it on a phone. */
+  get TimelineSplitDirection(): 'horizontal' | 'vertical' {
+    return this.IsPhone ? 'vertical' : 'horizontal';
+  }
+
+  /** The views that work at phone width, as `mj-section-picker` items. */
+  get SectionPickerItems(): SectionPickerItem[] {
+    return [
+      { Key: 'timeline', Title: 'Timeline', Icon: 'fas fa-stream' },
+      { Key: 'details', Title: 'Details', Icon: 'fas fa-info-circle' },
+    ];
+  }
+
+  /** A pick from the phone section sheet; only the phone views are accepted. */
+  OnSectionPicked(key: string): void {
+    if (this.SectionPickerItems.some((i) => i.Key === key)) this.ChangeTab(key);
+  }
+
+  /**
+   * Phone defaults, applied at init and whenever the breakpoint is crossed: a run on Visualization or Analytics opens
+   * on the timeline instead, since those are desktop views (pan, zoom, charts).
+   */
+  ApplyPhoneDefaults(isPhone: boolean): void {
+    this.IsPhone = isPhone;
+    if (isPhone && !this.SectionPickerItems.some((i) => i.Key === this.ActiveTab)) this.ActiveTab = 'timeline';
+  }
+
+  /** Stops following the breakpoint; set at init, called from ngOnDestroy. */
+  private stopPhoneWatch: () => void = () => undefined;
+
+  /**
+   * Re-reads the breakpoint and re-applies the phone defaults, so rotating a tablet or resizing
+   * below 768px on Visualization or Analytics lands on the timeline the picker names.
+   */
+  SyncPhoneViewport(): void {
+    this.ApplyPhoneDefaults(IsPhoneViewport());
+    this.cdr.markForCheck();
+  }
+
+  /** Copies this run's URL so it can be opened on a desktop. */
+  CopyPageLink(): Promise<void> {
+    return this.CopyToClipboard(window.location.href);
+  }
 
   /** @deprecated Use {@link ActiveTab}. */
   get activeTab() {
@@ -335,6 +383,8 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   
   async ngOnInit() {
     await super.ngOnInit();
+    this.ApplyPhoneDefaults(IsPhoneViewport());
+    this.stopPhoneWatch = WatchPhoneViewport(() => this.SyncPhoneViewport());
     
     if (this.record && this.record.ID) {
       await Promise.all([
@@ -360,6 +410,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
 
   ngOnDestroy() {
     super.ngOnDestroy();
+    this.stopPhoneWatch();
     this.destroy$.next();
     this.destroy$.complete();
     this.clearWorkflowPoll();

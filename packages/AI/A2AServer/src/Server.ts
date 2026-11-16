@@ -7,12 +7,15 @@ import express, { Request, Response, NextFunction } from 'express';
 import sql from 'mssql';
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, a2aServerSettings } from './config.js';
-import { EntityOperations, OperationResult } from './EntityOperations.js';
-import { AgentOperations } from './AgentOperations.js';
+import type { OperationResult } from './EntityOperations.js';
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { randomUUID } from "crypto";
 import { ShutdownRegistry } from "@memberjunction/global";
-import { TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
+import { CreateA2ATaskStore, DurableEntityA2ATaskStore, RESUBSCRIBE_STALE_AFTER_MS, TERMINAL_STATUSES, Task, TaskStatus, Message, Artifact } from "./TaskStore.js";
+import { AgentCard, AgentCardAgentCapability, AgentCardEntityCapability, BuildAgentCard, ResolveAgentCardIdentity } from "./AgentCard.js";
+import { CreateTaskOperations } from "./TaskOperations.js";
+import { HandleTaskSend, TASK_NOT_FOUND_MESSAGE, type TaskSendOutcome, type TaskSendRequest } from "./TaskSend.js";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -37,43 +40,9 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
     poolConfig.options!.instanceName = dbInstanceName;
 }
 
-// A2A Server Classes and Types — `TaskStatus`, `Task`, `Message`, `Part`, `Artifact`
-// are imported from `./TaskStore.js` (extracted for testability).
-
-interface AgentCard {
-    name: string;
-    description: string;
-    version: string;
-    endpoints: {
-        tasks: string;
-        agentCard: string;
-    };
-    authentication?: {
-        type: string;
-        scheme: string;
-    };
-    capabilities: {
-        streaming: boolean;
-        asynchronous: boolean;
-        multimedia: boolean;
-        entities: {
-            name: string;
-            schema: string;
-            operations: string[];
-        }[];
-        agents?: {
-            name: string;
-            operations: string[];
-        }[];
-    };
-}
-
-// In-memory storage for tasks. Bounded by the periodic sweep started below;
-// in production you'd swap in a database-backed store. See `./TaskStore.ts`
-// for the implementation; the module-level `tasks` reference is kept for
-// drop-in compatibility with the rest of this file (which uses `tasks.set`
-// / `tasks.get` directly).
-const taskStore = new TaskStore();
+// In-process by default; `a2aServerSettings.taskStoreMode: 'entity'` opts into the durable `MJ: Tasks` store,
+// which needs every A2A caller to hold Create and Update on `MJ: Tasks` (see CreateA2ATaskStore).
+const taskStore = CreateA2ATaskStore(a2aServerSettings?.taskStoreMode);
 taskStore.Start();
 ShutdownRegistry.Instance.Register(taskStore);
 const tasks = taskStore;
@@ -121,7 +90,7 @@ async function authorizeOperation(
     scopePath: string,
     resource: string
 ): Promise<{ allowed: boolean; error?: string }> {
-    const systemUser = UserCache.Instance.Users[0];
+    const systemUser = UserCache.Instance.GetSystemUser();
     if (!systemUser) {
         return { allowed: false, error: 'System user not available for authorization' };
     }
@@ -172,7 +141,7 @@ async function authenticateRequest(req: Request, res: Response, next: NextFuncti
 
     try {
         // Get system user for validation context
-        const systemUser = UserCache.Instance.Users[0];
+        const systemUser = UserCache.Instance.GetSystemUser();
         if (!systemUser) {
             LogError('A2A Server: No system user available for API key validation');
             res.status(500).json({
@@ -239,6 +208,11 @@ interface RequestWithUser extends Request {
     apiKeyHash?: string;
 }
 
+/** The authenticated caller's user ID, or an empty string, which owns no task, when there is none. */
+function callerId(req: Request): string {
+    return (req as RequestWithUser).authenticatedUser?.ID ?? '';
+}
+
 /** Process ID this server identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
 export const A2A_SERVER_PROCESS_ID = 'a2a';
 
@@ -286,25 +260,43 @@ export async function initializeA2AServer() {
 function setupRoutes() {
     // Agent Card endpoint (public - for discovery)
     app.get('/a2a/agent-card', async (req, res) => {
-        const agentCard = await generateAgentCard();
-        res.json(agentCard);
+        try {
+            const agentCard = await generateAgentCard();
+            res.json(agentCard);
+        } catch (error) {
+            LogError('A2A Server: Agent card generation failed', undefined, error);
+            res.status(503).json({ error: { code: 503, message: 'Agent card unavailable' } });
+        }
     });
 
     // Apply authentication middleware to all /a2a/tasks routes
     app.use('/a2a/tasks', authenticateRequest);
 
     // Send a message to a task
-    app.post('/a2a/tasks/send', (req: Request, res: Response) => {
-        const reqWithUser = req as RequestWithUser;
-        const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
-            ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
-            : undefined;
-        const result = handleTaskSend(req.body, reqWithUser.authenticatedUser, authContext);
-        res.json(result);
+    app.post('/a2a/tasks/send', async (req: Request, res: Response) => {
+        try {
+            const reqWithUser = req as RequestWithUser;
+            const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
+                ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
+                : undefined;
+            const result = await handleTaskSend(req.body, reqWithUser.authenticatedUser, authContext);
+            if ('ErrorCode' in result) {
+                res.status(result.ErrorCode).json({
+                    error: { code: result.ErrorCode, message: result.ErrorMessage }
+                });
+                return;
+            }
+            res.json(result);
+        } catch (err: unknown) {
+            LogError('A2A Server: Task send failed', undefined, err);
+            res.status(500).json({
+                error: { code: 500, message: 'Internal server error while processing task request' }
+            });
+        }
     });
 
     // Send a message to a task with streaming response
-    app.post('/a2a/tasks/sendSubscribe', (req: Request, res: Response) => {
+    app.post('/a2a/tasks/sendSubscribe', async (req: Request, res: Response) => {
         if (!a2aServerSettings?.streamingEnabled) {
             res.status(400).json({
                 error: {
@@ -320,23 +312,31 @@ function setupRoutes() {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        const reqWithUser = req as RequestWithUser;
-        const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
-            ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
-            : undefined;
-        handleTaskSendSubscribe(req.body, res, reqWithUser.authenticatedUser, authContext);
+        try {
+            const reqWithUser = req as RequestWithUser;
+            const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
+                ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
+                : undefined;
+            await handleTaskSendSubscribe(req.body, res, reqWithUser.authenticatedUser, authContext);
+        } catch (err: unknown) {
+            LogError('A2A Server: Task sendSubscribe failed', undefined, err);
+            res.write(`data: ${JSON.stringify({ error: { code: 500, message: 'Internal server error while processing streaming task request' } })}\n\n`);
+            res.end();
+        }
     });
 
     // Get a task's status
-    app.get('/a2a/tasks/:taskId', (req: Request, res: Response) => {
+    app.get('/a2a/tasks/:taskId', async (req: Request, res: Response) => {
         const taskId = req.params.taskId as string;
-        const task = tasks.get(taskId);
+        const reqWithUser = req as RequestWithUser;
+        const task = (await tasks.LoadTaskForUser(taskId, reqWithUser.authenticatedUser, resolveProviderForRequest()))
+            ?? tasks.GetForUser(taskId, callerId(req));
 
         if (!task) {
             res.status(404).json({
                 error: {
                     code: 404,
-                    message: `Task with ID ${taskId} not found`
+                    message: TASK_NOT_FOUND_MESSAGE
                 }
             });
             return;
@@ -346,22 +346,33 @@ function setupRoutes() {
     });
 
     // Cancel a task
-    app.post('/a2a/tasks/:taskId/cancel', (req: Request, res: Response) => {
+    app.post('/a2a/tasks/:taskId/cancel', async (req: Request, res: Response) => {
         const taskId = req.params.taskId as string;
-        const task = tasks.get(taskId);
+        const reqWithUser = req as RequestWithUser;
+        const task = (await tasks.LoadTaskForUser(taskId, reqWithUser.authenticatedUser, resolveProviderForRequest()))
+            ?? tasks.GetForUser(taskId, callerId(req));
 
         if (!task) {
             res.status(404).json({
                 error: {
                     code: 404,
-                    message: `Task with ID ${taskId} not found`
+                    message: TASK_NOT_FOUND_MESSAGE
                 }
             });
             return;
         }
 
-        // Cancel a task and propagate cancellation to any in-flight agent execution
-        tasks.CancelTask(taskId);
+        // Cancel a task and propagate cancellation to any in-flight agent execution and durable MJ: Tasks row
+        const cancelled = await tasks.CancelTaskForUser(
+            taskId,
+            reqWithUser.authenticatedUser,
+            'Task cancelled via A2A',
+            resolveProviderForRequest()
+        );
+        if (!cancelled) {
+            res.status(500).json({ error: { code: 500, message: 'The cancellation could not be saved' } });
+            return;
+        }
 
         res.json({ success: true });
     });
@@ -391,8 +402,25 @@ export function ClearAgentCardCache(): void {
     cachedAgentCardAgentCount = -1;
 }
 
+let warnedMinimalAgentCard = false;
+
+/** Logs, once per process, that the agent card is minimal because no service identity is configured. */
+function warnMinimalAgentCardOnce(): void {
+    if (warnedMinimalAgentCard) return;
+    warnedMinimalAgentCard = true;
+    console.warn('A2A Server: a2aServerSettings.userEmail is not set, so the public agent card lists no entities or agents. Set it to a service user to advertise what that user may see.');
+}
+
 async function generateAgentCard(): Promise<AgentCard> {
-    const contextUser = UserCache.Instance.Users[0];
+    const identity = ResolveAgentCardIdentity(a2aServerSettings, UserCache.Instance.Users);
+    if (identity.Kind === 'unresolved') {
+        throw new Error('No service user is available to build the agent card; check a2aServerSettings.userEmail.');
+    }
+    if (identity.Kind === 'anonymous') {
+        warnMinimalAgentCardOnce();
+        return BuildAgentCard(a2aServerSettings);
+    }
+    const contextUser = identity.User;
     const md = resolveProviderForRequest();
     const aiEngine = AIEngine.Instance;
     await aiEngine.Config(false, contextUser);
@@ -405,37 +433,18 @@ async function generateAgentCard(): Promise<AgentCard> {
         return cachedAgentCard;
     }
 
-    const entityCapabilities = getEntityCapabilities(md.Entities, contextUser);
-    const agentCapabilities = await getAgentCapabilities(contextUser);
-
-    cachedAgentCard = {
-        name: a2aServerSettings?.agentName || "MemberJunction",
-        description: a2aServerSettings?.agentDescription || "MemberJunction A2A Agent",
-        version: "1.0.0",
-        endpoints: {
-            tasks: `/a2a/tasks`,
-            agentCard: `/a2a/agent-card`
-        },
-        authentication: {
-            type: "apiKey",
-            scheme: "X-API-Key"
-        },
-        capabilities: {
-            streaming: !!a2aServerSettings?.streamingEnabled,
-            asynchronous: false,
-            multimedia: false,
-            entities: entityCapabilities,
-            agents: agentCapabilities
-        }
-    };
+    cachedAgentCard = BuildAgentCard(a2aServerSettings, {
+        entities: getEntityCapabilities(md.Entities, contextUser),
+        agents: await getAgentCapabilities(contextUser)
+    });
     cachedAgentCardEntityCount = md.Entities.length;
     cachedAgentCardAgentCount = aiEngine.Agents.length;
 
     return cachedAgentCard;
 }
 
-function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo) {
-    const capabilities = [];
+function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo): AgentCardEntityCapability[] {
+    const capabilities: AgentCardEntityCapability[] = [];
     const entityCapabilitiesConfig = a2aServerSettings?.entityCapabilities || [];
 
     for (const config of entityCapabilitiesConfig) {
@@ -462,8 +471,8 @@ function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo)
     return capabilities;
 }
 
-async function getAgentCapabilities(contextUser: UserInfo) {
-    const capabilities = [];
+async function getAgentCapabilities(contextUser: UserInfo): Promise<AgentCardAgentCapability[]> {
+    const capabilities: AgentCardAgentCapability[] = [];
     const agentCapabilitiesConfig = a2aServerSettings?.agentCapabilities || [];
 
     // Ensure AIEngine is configured
@@ -575,93 +584,50 @@ function getMatchingEntitiesForConfig(allEntities: EntityInfo[], config: any) {
     });
 }
 
-function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
-    const { taskId, message } = requestBody as { taskId?: string; message?: { parts?: Part[] } };
-
-    if (!taskId) {
-        // Create a new task
-        const newTaskId = generateId();
-        const task: Task = {
-            id: newTaskId,
-            status: 'pending',
-            messages: [],
-            artifacts: [],
-            created: new Date(),
-            updated: new Date()
-        };
-
-        if (message) {
-            const newMessage: Message = {
-                id: generateId(),
-                taskId: newTaskId,
-                role: 'user',
-                parts: message.parts || [],
-                created: new Date()
-            };
-            task.messages.push(newMessage);
-        }
-
-        tasks.set(newTaskId, task);
-
-        // Process the task asynchronously with the authenticated user
-        processTask(task, authenticatedUser, authContext);
-
-        return {
-            taskId: newTaskId,
-            status: task.status
-        };
-    } else {
-        // Update an existing task
-        const task = tasks.get(taskId);
-
-        if (!task) {
-            throw {
-                error: {
-                    code: 404,
-                    message: `Task with ID ${taskId} not found`
-                }
-            };
-        }
-
-        if (task.status === 'completed' || task.status === 'cancelled' || task.status === 'failed') {
-            throw {
-                error: {
-                    code: 400,
-                    message: `Cannot update a task with status: ${task.status}`
-                }
-            };
-        }
-
-        if (message) {
-            const newMessage: Message = {
-                id: generateId(),
-                taskId,
-                role: 'user',
-                parts: message.parts || [],
-                created: new Date()
-            };
-            task.messages.push(newMessage);
-            task.updated = new Date();
-        }
-
-        // Process the updated task with the authenticated user
-        processTask(task, authenticatedUser, authContext);
-
-        return {
-            taskId: task.id,
-            status: task.status
-        };
-    }
+async function handleTaskSend(
+    requestBody: Record<string, unknown>,
+    authenticatedUser?: UserInfo,
+    authContext?: AuthorizationContext
+): Promise<TaskSendOutcome> {
+    return HandleTaskSend(requestBody as TaskSendRequest, authenticatedUser, {
+        Store: tasks,
+        Provider: resolveProviderForRequest(),
+        StartProcessing: (task) => void processTask(task, authenticatedUser, authContext),
+        NewID: generateId,
+    });
 }
 
-function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
-    const result = handleTaskSend(requestBody, authenticatedUser, authContext);
-    const task = tasks.get(result.taskId);
+async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
+    const isResubscribe = typeof requestBody.taskId === 'string' && !requestBody.message;
+    let task: Task | undefined;
 
-    if (!task) {
-        res.write(`data: ${JSON.stringify({ error: { code: 404, message: "Task not found" } })}\n\n`);
-        res.end();
-        return;
+    if (isResubscribe) {
+        const taskId = requestBody.taskId as string;
+        task = authenticatedUser
+            ? ((await tasks.LoadTaskForUser(taskId, authenticatedUser, resolveProviderForRequest())) ?? tasks.GetForUser(taskId, authenticatedUser.ID))
+            : undefined;
+        if (!task) {
+            res.write(`data: ${JSON.stringify({ error: { code: 404, message: TASK_NOT_FOUND_MESSAGE } })}\n\n`);
+            res.end();
+            return;
+        }
+    } else {
+        const result = await handleTaskSend(requestBody, authenticatedUser, authContext);
+        if ('ErrorCode' in result) {
+            res.write(`data: ${JSON.stringify({ error: { code: result.ErrorCode, message: result.ErrorMessage } })}\n\n`);
+            res.end();
+            return;
+        }
+        task = authenticatedUser
+            ? (tasks.GetForUser(result.taskId, authenticatedUser.ID)
+                ?? (await tasks.LoadTaskForUser(result.taskId, authenticatedUser, resolveProviderForRequest())))
+            : undefined;
+
+        if (!task) {
+            res.write(`data: ${JSON.stringify({ error: { code: 404, message: TASK_NOT_FOUND_MESSAGE } })}\n\n`);
+            res.end();
+            return;
+        }
     }
 
     // Send initial task state
@@ -681,14 +647,21 @@ function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Resp
         return;
     }
 
-    // Subscribe to event-driven task updates (zero polling timers)
-    const unsubscribe = tasks.Subscribe(task.id, (updatedTask) => {
-        res.write(`data: ${JSON.stringify({
-            taskId: updatedTask.id,
-            status: updatedTask.status
-        })}\n\n`);
+    // Subscribe to task updates (event-driven locally; cross-replica status polling in durable mode)
+    let lastStatus: TaskStatus = task.status;
+    const provider = resolveProviderForRequest();
+    const pollInterval = a2aServerSettings?.statusPollIntervalMs ?? 5000;
 
-        if (updatedTask.status === 'completed' || updatedTask.status === 'cancelled' || updatedTask.status === 'failed') {
+    const onUpdate = (updatedTask: Task) => {
+        if (updatedTask.status !== lastStatus || TERMINAL_STATUSES.has(updatedTask.status)) {
+            lastStatus = updatedTask.status;
+            res.write(`data: ${JSON.stringify({
+                taskId: updatedTask.id,
+                status: updatedTask.status
+            })}\n\n`);
+        }
+
+        if (TERMINAL_STATUSES.has(updatedTask.status)) {
             unsubscribe();
 
             if (updatedTask.artifacts.length > 0) {
@@ -700,7 +673,26 @@ function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Resp
 
             res.end();
         }
-    });
+    };
+
+    // A task that stops changing (its replica died) ends the stream with that status instead of polling forever.
+    const subscribedTaskId = task.id;
+    const onStale = () => {
+        res.write(`data: ${JSON.stringify({
+            taskId: subscribedTaskId,
+            status: lastStatus,
+            error: {
+                code: 408,
+                message: `The task has not changed for ${RESUBSCRIBE_STALE_AFTER_MS / 60_000} minutes, so this stream has ended. ` +
+                    'It may still finish: check it with tasks/get or resubscribe.'
+            }
+        })}\n\n`);
+        res.end();
+    };
+
+    const unsubscribe = tasks instanceof DurableEntityA2ATaskStore && authenticatedUser
+        ? tasks.SubscribeWithPolling(task.id, authenticatedUser, provider, onUpdate, pollInterval, onStale)
+        : tasks.Subscribe(task.id, onUpdate);
 
     // Handle client disconnect
     res.on('close', () => {
@@ -711,10 +703,19 @@ function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Resp
 // Process a task using MemberJunction APIs
 async function processTask(task: Task, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     const abortController = tasks.RegisterAbortController(task.id);
+    let stopCancellationWatcher: (() => void) | undefined;
+    if (tasks instanceof DurableEntityA2ATaskStore && authenticatedUser) {
+        stopCancellationWatcher = tasks.WatchCancellation(
+            task.id,
+            authenticatedUser,
+            resolveProviderForRequest(),
+            a2aServerSettings?.statusPollIntervalMs ?? 5000
+        );
+    }
     try {
         task.status = 'in_progress';
         task.updated = new Date();
-        tasks.Notify(task);
+        await tasks.NotifyTask(task, authenticatedUser, resolveProviderForRequest());
 
         // Get the last user message
         const lastMessage = task.messages.filter(m => m.role === 'user').pop();
@@ -723,18 +724,11 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             throw new Error("No user message found");
         }
 
-        // Use authenticated user or fall back to first cached user (for backwards compatibility)
-        const contextUser = authenticatedUser || UserCache.Instance.Users[0];
-        if (!contextUser) {
-            throw new Error("No user context available for processing task");
-        }
-
-        // Initialize operations handlers with the authenticated user and the request's
-        // metadata provider so every downstream entity operation routes through the right
-        // connection (see resolveProviderForRequest for the multi-tenant migration plan).
+        // Work on behalf of the caller runs as the caller: never as a fallback user. The handlers
+        // bind to the request's metadata provider so every downstream entity operation routes
+        // through the right connection (see resolveProviderForRequest for the multi-tenant plan).
         const provider = resolveProviderForRequest();
-        const entityOps = new EntityOperations(provider);
-        const agentOps = new AgentOperations(contextUser, provider);
+        const { EntityOps: entityOps, AgentOps: agentOps } = CreateTaskOperations(authenticatedUser, UserCache.Instance.Users, provider);
 
         // Extract text content and parse operation
         const textParts = lastMessage.parts.filter(p => p.type === 'text');
@@ -895,7 +889,7 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             task.status = 'cancelled';
         }
         task.updated = new Date();
-        tasks.Notify(task);
+        await tasks.NotifyTask(task, authenticatedUser, provider);
 
     } catch (error) {
         console.error("Error processing task:", error);
@@ -942,11 +936,13 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             task.status = 'cancelled';
         }
         task.updated = new Date();
-        tasks.Notify(task);
+        await tasks.NotifyTask(task, authenticatedUser, resolveProviderForRequest());
+    } finally {
+        stopCancellationWatcher?.();
     }
 }
 
-// Utility function to generate a random ID
-function generateId() {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+// Utility function to generate a UUID v4 identifier compatible with MJ: Tasks PK
+function generateId(): string {
+    return randomUUID();
 }

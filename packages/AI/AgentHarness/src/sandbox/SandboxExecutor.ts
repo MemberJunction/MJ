@@ -26,6 +26,8 @@ export interface HarnessProcessSpec {
  * A running process inside a sandbox, wherever that sandbox physically is.
  */
 export interface HarnessProcess {
+    /** Piped standard input of the process, when backed by a stream that supports writes/closing. */
+    Stdin?: NodeJS.WritableStream;
     /** stdout as complete lines, already framed. Ends when the process closes its stream. */
     Stdout: AsyncIterable<string>;
     /** stderr as complete lines. Consumers typically buffer this for error reporting. */
@@ -45,4 +47,12 @@ export interface HarnessProcess {
  */
 export interface SandboxExecutor {
     Run(spec: HarnessProcessSpec): HarnessProcess;
+}
+
+/**
+ * Extended process-executor contract supporting explicit `Spawn` semantics (for example,
+ * fail-closed cloud executors that forbid host process creation when `sandbox.provider === 'cloud'`).
+ */
+export interface ISandboxProcessExecutor extends SandboxExecutor {
+    Spawn(spec: HarnessProcessSpec): HarnessProcess;
 }

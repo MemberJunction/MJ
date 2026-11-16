@@ -6,8 +6,10 @@
  * `transcriptContinuation.ts`): both the server-side driver and the browser realtime client need
  * it, and their unit tests mock `@memberjunction/ai` wholesale. Keeping this free of imports lets
  * those tests pull in the REAL implementation instead of restating the parsing rule in a stub —
- * which is precisely the failure mode that let this bug ship in the first place.
+ * which is precisely the failure mode that let this bug ship in the first place. Type-only imports
+ * are fine: they are erased at compile time.
  */
+import type { RealtimeUsageModalityDetail } from './baseRealtime';
 
 /**
  * The raw usage payload carried by an OpenAI-protocol `response.done` frame. Per-response DELTAS
@@ -72,4 +74,64 @@ export function ResolveResponseDoneUsage(event: RealtimeResponseDoneFrame): Real
         return event.response?.usage;
     }
     return usageHasTokenCounts(event.usage) ? event.usage : undefined;
+}
+
+/**
+ * Wire shape of a per-modality usage block on an OpenAI-protocol usage payload
+ * (`input_token_details` / `output_token_details`). Every field is optional: providers report
+ * different subsets, and xAI and OpenAI Live may omit the blocks entirely.
+ */
+export interface RealtimeWireUsageModalityDetail {
+    text_tokens?: number;
+    audio_tokens?: number;
+    image_tokens?: number;
+    cached_tokens?: number;
+    /** The cached tokens by modality; `audio_tokens` here is a subset of the block's `audio_tokens`. */
+    cached_tokens_details?: {
+        text_tokens?: number;
+        audio_tokens?: number;
+        image_tokens?: number;
+    };
+}
+
+/**
+ * The per-modality token counts of one OpenAI-protocol usage block, in the Core
+ * {@link RealtimeUsageModalityDetail} shape (`TextTokens`, `AudioTokens`, `ImageTokens`, `CachedTokens`, and
+ * `CachedAudioTokens` from `cached_tokens_details.audio_tokens`). `AudioTokens` keeps the provider's figure, cached
+ * audio included, so `AudioTokens` less `CachedAudioTokens` is the uncached audio pricing charges at the audio rate.
+ * Only fields the provider sent as finite numbers of at least 0 are kept. `undefined` when the block
+ * is absent, not an object, or holds none of those fields (a totals-only payload).
+ *
+ * Shared by the server-side OpenAI drivers and the browser OpenAI-protocol clients, so both sides
+ * record the same split.
+ *
+ * @param detail The `input_token_details` or `output_token_details` value from the wire.
+ */
+export function MapRealtimeUsageModalityDetail(detail: unknown): RealtimeUsageModalityDetail | undefined {
+    if (detail === null || typeof detail !== 'object' || Array.isArray(detail)) {
+        return undefined;
+    }
+    const wire = detail as Record<keyof RealtimeWireUsageModalityDetail, unknown>;
+    const mapped: RealtimeUsageModalityDetail = {};
+    const text = wireCount(wire.text_tokens);
+    const audio = wireCount(wire.audio_tokens);
+    const image = wireCount(wire.image_tokens);
+    const cached = wireCount(wire.cached_tokens);
+    if (text !== undefined) mapped.TextTokens = text;
+    if (audio !== undefined) mapped.AudioTokens = audio;
+    if (image !== undefined) mapped.ImageTokens = image;
+    if (cached !== undefined) mapped.CachedTokens = cached;
+    const cachedAudio = wireCount(cachedDetail(wire.cached_tokens_details)?.audio_tokens);
+    if (cachedAudio !== undefined) mapped.CachedAudioTokens = cachedAudio;
+    return Object.keys(mapped).length > 0 ? mapped : undefined;
+}
+
+/** The `cached_tokens_details` block when it is an object, its fields still unchecked. */
+function cachedDetail(value: unknown): Record<string, unknown> | undefined {
+    return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+/** A wire token count when it is a finite number of at least 0. */
+function wireCount(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
 }

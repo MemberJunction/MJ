@@ -12,7 +12,7 @@
  *   4. Entities with only primary-key fields return null — callers display
  *      the record ID alone.
  */
-import { EntityFieldInfo, EntityInfo } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, SqlTypeBaseName } from '@memberjunction/core';
 
 /** The display-field choice for an entity's records in list UIs. */
 export interface RecordDisplayFieldInfo {
@@ -48,7 +48,7 @@ export function GetRecordDisplayField(entityInfo: EntityInfo): RecordDisplayFiel
 /** True when the field's SQL type supports a LIKE-based contains search. */
 export function IsTextSearchableField(field: EntityFieldInfo | null): boolean {
     if (!field) return false;
-    const normalized = (field.Type || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+    const normalized = SqlTypeBaseName(field.Type || '');
     return TEXT_SEARCHABLE_TYPES.has(normalized);
 }
 

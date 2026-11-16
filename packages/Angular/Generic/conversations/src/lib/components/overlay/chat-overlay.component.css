@@ -447,6 +447,86 @@
     background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
 }
 
+.chat-overlay-record-convo-select {
+    max-width: 140px;
+    padding: 0.1rem 0.35rem;
+    border-radius: 6px;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    font-size: 0.68rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.chat-overlay-artifact-ai-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.45rem 0.75rem;
+    background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface));
+    border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 24%, var(--mj-border-default));
+    font-size: 0.75rem;
+}
+
+.chat-overlay-artifact-ai-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.chat-overlay-artifact-ai-dismiss {
+    border: none;
+    background: transparent;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    padding: 0.15rem 0.25rem;
+    border-radius: 4px;
+}
+
+.chat-overlay-artifact-ai-dismiss:hover {
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-hover);
+}
+
+.chat-overlay-artifact-ai-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.chat-overlay-artifact-ai-suggest-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--mj-text-secondary);
+    font-size: 0.72rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.chat-overlay-artifact-ai-apply-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--mj-brand-primary);
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.chat-overlay-artifact-ai-apply-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 /* --- Panel Body --- */
 
 .chat-overlay-body {

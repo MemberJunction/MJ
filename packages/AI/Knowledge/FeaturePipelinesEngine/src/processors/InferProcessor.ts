@@ -15,10 +15,19 @@
  */
 
 import { createHash } from 'node:crypto';
-import { type IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView } from '@memberjunction/core';
+import { type EntityInfo, GetIndexRestrictedFieldNames, type IMetadataProvider, LogError, LogStatus, Metadata, OmitDeniedFieldKeys, RunQuery, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, ResolveMappingRef, ResolveValueMapping, SafeJSONParse } from '@memberjunction/global';
-import { KnowledgeHubMetadataEngine, type MJFeatureValueCacheEntity, type MJFeaturePipelineTypeEntity, type MJRecordProcessEntity } from '@memberjunction/core-entities';
+import {
+    KnowledgeHubMetadataEngine,
+    type MJFeatureValueCacheEntity,
+    type MJFeatureValueEntity,
+    type MJFeaturePipelineTypeEntity,
+    type MJRecordProcessEntity,
+    type MJRecordProcessEntity_IRecordProcessChallengerConfig,
+} from '@memberjunction/core-entities';
+import { ChatMessageRole } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     IRecordProcessor,
@@ -232,6 +241,60 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     /** Each record's Feature Value writes waiting for its write-back, in order, by record ID (deferred mode only). */
     private pendingFeatureValues = new Map<string, FeatureValueWriteParams[]>();
 
+    /** Champion prompt data captured during compute hooks, keyed by record ID, for mirror invocation by the shadow challenger. */
+    private championPromptDataByRecord = new Map<string, Record<string, unknown>>();
+
+    /** Champion user message captured during compute hooks, keyed by record ID, for mirror invocation by the shadow challenger. */
+    private championUserMessageByRecord = new Map<string, string | null>();
+
+    private _challengerConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig | null = null;
+
+    /**
+     * Optional WS-4.4 shadow challenger configuration read from `RecordProcess.ChallengerConfigurationObject`.
+     * Only `'Infer'` challenger configurations are accepted on `InferProcessor`; a mismatched `WorkType` is logged
+     * once at configuration time and ignored.
+     */
+    public get ChallengerConfig(): MJRecordProcessEntity_IRecordProcessChallengerConfig | null {
+        return this._challengerConfig;
+    }
+
+    public set ChallengerConfig(value: MJRecordProcessEntity_IRecordProcessChallengerConfig | null) {
+        if (value && value.WorkType !== 'Infer') {
+            LogError(
+                `InferProcessor: skipping ChallengerConfigurationObject with mismatched WorkType '${String(value.WorkType)}' (expected 'Infer').`,
+            );
+            this._challengerConfig = null;
+            return;
+        }
+        this._challengerConfig = value;
+    }
+
+    /** Injectable RNG (`[0, 1)`) for deterministic shadow sampling in tests. */
+    public ChallengerRng: () => number = () => Math.random();
+
+    /** Maximum number of concurrent in-flight shadow challenger tasks per processor. */
+    public MaxInFlightShadow = 64;
+
+    private readonly inFlightShadowTasks = new Set<Promise<void>>();
+    private droppedShadowCount = 0;
+
+    /** Number of currently active background shadow challenger tasks. */
+    public get InFlightShadowCount(): number {
+        return this.inFlightShadowTasks.size;
+    }
+
+    /** Number of sampled shadow challenger tasks dropped because `InFlightShadowCount >= MaxInFlightShadow`. */
+    public get DroppedShadowCount(): number {
+        return this.droppedShadowCount;
+    }
+
+    /** Wait for all currently in-flight background shadow challenger tasks to settle. */
+    public async FlushShadowInFlight(): Promise<void> {
+        while (this.inFlightShadowTasks.size > 0) {
+            await Promise.allSettled(Array.from(this.inFlightShadowTasks));
+        }
+    }
+
     /**
      * @param promptID - The `MJ: AI Prompts` ID to run for each record.
      * @param inputMapping - Mapping shaping the data passed to the prompt; undefined for the default (`{ record }`).
@@ -263,15 +326,28 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         // unparseable mapping JSON (SafeJSONParse answers null) falls back to the default mapping, as an absent one does
         const inputMapping = (rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : null) || undefined;
         const spec = InferProcessor.parseSpec(rp, provider);
+        let processor: InferProcessor;
         if (spec?.ProcessorExtensionKey) {
             const custom = MJGlobal.Instance.ClassFactory.CreateInstance<InferProcessor>(InferProcessor, spec.ProcessorExtensionKey, rp.PromptID, inputMapping, spec, rp.OutputMapping || null);
             if (custom && custom.constructor !== InferProcessor) {
-                return custom;
+                processor = custom;
             } else {
                 throw new Error(`Record Process '${rp.Name}': ProcessorExtensionKey '${spec.ProcessorExtensionKey}' not found in ClassFactory`);
             }
+        } else {
+            processor = new InferProcessor(rp.PromptID, inputMapping, spec, rp.OutputMapping || null);
         }
-        return new InferProcessor(rp.PromptID, inputMapping, spec, rp.OutputMapping || null);
+
+        try {
+            if (rp.ChallengerConfigurationObject) {
+                processor.ChallengerConfig = rp.ChallengerConfigurationObject;
+            }
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`InferProcessor.CreateFromRecordProcess: invalid ChallengerConfiguration on RecordProcess '${rp.ID}': ${msg}`);
+            processor.ChallengerConfig = null;
+        }
+        return processor;
     }
 
     /** Parses and validates the DataFeatureSpec in an Infer pipeline row's `Configuration`; undefined when it has none. */
@@ -501,7 +577,27 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         return this.ResolveConstraints(context);
     }
 
+    /**
+     * Computes and records one record. The champion inputs its compute captured for a challenger
+     * ({@link dispatchChallengerIfConfigured}) are dropped when it ends, however it ends: the challenger has taken them by
+     * then, or never will (the record failed before its Feature Value write). A run that calls this per record, as
+     * `RecordSetProcessor` does, never starts a batch ({@link ResetBatchState}), so they would otherwise stay in memory.
+     */
     public async ProcessRecord(
+        record: RecordRef,
+        context: RecordProcessorContext,
+        options?: { skipLookup?: boolean; keyInfo?: CacheKeyResult }
+    ): Promise<FeaturePipelineRecordResult> {
+        try {
+            return await this.processOneRecord(record, context, options);
+        } finally {
+            this.championPromptDataByRecord.delete(record.RecordID);
+            this.championUserMessageByRecord.delete(record.RecordID);
+        }
+    }
+
+    /** {@link ProcessRecord}'s work: the Dedup Cache lookup, then the driver's compute and the record's finalization. */
+    private async processOneRecord(
         record: RecordRef,
         context: RecordProcessorContext,
         options?: { skipLookup?: boolean; keyInfo?: CacheKeyResult }
@@ -889,12 +985,17 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         };
     }
 
-    /** Starts a batch: drops the previous batch's per-record state ({@link PreviousFeatureValues}, {@link FeatureValueKeyOf}). */
+    /**
+     * Starts a batch: drops the previous batch's per-record state ({@link PreviousFeatureValues}, {@link FeatureValueKeyOf}),
+     * including champion inputs captured for a challenger but never used (a record that failed, was not sampled, or wrote nothing).
+     */
     protected ResetBatchState(): void {
         this.previousFeatureValues.clear();
         this.featureValuePreviews.clear();
         this.featureValueKeys.clear();
         this.pendingFeatureValues.clear();
+        this.championPromptDataByRecord.clear();
+        this.championUserMessageByRecord.clear();
     }
 
     /**
@@ -1401,11 +1502,285 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             const warnings = this.dryRunRefusal ? [...(result.Warnings || []), `A real run would be refused: ${this.dryRunRefusal}`] : result.Warnings;
             return { ...pinned, DryRun: true, ...(warnings ? { Warnings: warnings } : {}) };
         }
+        if (!featureValues.OmitValues && this.WritesHistory) {
+            this.dispatchChallengerIfConfigured(featureValues);
+        }
         if (this.deferFeatureValues) {
             return pinned; // the write-back sets Outcome once it wrote them
         }
         const unchanged = outcome !== null && outcome.Upserted === 0 && outcome.Unchanged > 0;
         return { ...pinned, Outcome: unchanged ? 'Unchanged' : 'Upserted' };
+    }
+
+    /**
+     * Determine whether a live `'Infer'` champion invocation should be mirrored to its shadow challenger prompt.
+     */
+    public ShouldSampleChallenger(
+        config: MJRecordProcessEntity_IRecordProcessChallengerConfig | null | undefined = this.ChallengerConfig,
+    ): boolean {
+        if (!config || !InferProcessor.challengerCanSample(config)) {
+            return false;
+        }
+        if (config.SampleRate >= 1) {
+            return true;
+        }
+        return this.ChallengerRng() < config.SampleRate;
+    }
+
+    /** Whether a challenger configuration can sample at all: enabled, `'Infer'`, a positive SampleRate and a prompt. */
+    private static challengerCanSample(config: MJRecordProcessEntity_IRecordProcessChallengerConfig): boolean {
+        return config.Enabled === true && config.WorkType === 'Infer'
+            && typeof config.SampleRate === 'number' && Number.isFinite(config.SampleRate) && config.SampleRate > 0
+            && typeof config.ChallengerPromptID === 'string' && config.ChallengerPromptID.trim().length > 0;
+    }
+
+    /** Whether the compute hooks keep each record's champion prompt inputs: only while a challenger can sample them. */
+    private get capturesChampionInputs(): boolean {
+        return !!this.ChallengerConfig && InferProcessor.challengerCanSample(this.ChallengerConfig);
+    }
+
+    /**
+     * Overridable seam for executing the challenger `AIPromptParams` so tests and subclasses can observe
+     * or customize challenger prompt execution.
+     */
+    protected async ExecuteChallengerPrompt(
+        params: AIPromptParams,
+        signal: AbortSignal,
+    ): Promise<AIPromptRunResult<unknown>> {
+        params.cancellationToken = params.cancellationToken ?? signal;
+        return new AIPromptRunner().ExecutePrompt(params);
+    }
+
+    private dispatchChallengerIfConfigured(featureValues: FeatureValueWriteParams): void {
+        const recordId = featureValues.Record.RecordID;
+        const capturedPromptData = recordId ? this.championPromptDataByRecord.get(recordId) : undefined;
+        const capturedUserMessage = recordId ? this.championUserMessageByRecord.get(recordId) : undefined;
+        if (recordId) {
+            this.championPromptDataByRecord.delete(recordId);
+            this.championUserMessageByRecord.delete(recordId);
+        }
+
+        const config = this.ChallengerConfig;
+        if (!config || !this.ShouldSampleChallenger(config)) {
+            return;
+        }
+        if (this.inFlightShadowTasks.size >= this.MaxInFlightShadow) {
+            this.droppedShadowCount++;
+            return;
+        }
+
+        const frozenRecord: RecordRef = {
+            ...featureValues.Record,
+            Record: Object.freeze({ ...this.recordToPlain(featureValues.Record) }),
+        };
+        const contextSnapshot: RecordProcessorContext = { ...featureValues.Context };
+
+        const task: Promise<void> = new Promise<void>((resolve) => {
+            setImmediate(resolve);
+        })
+            .then(() =>
+                this.executeChallengerShadow(
+                    frozenRecord,
+                    contextSnapshot,
+                    config,
+                    capturedPromptData,
+                    capturedUserMessage,
+                ),
+            )
+            .catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                LogError(`InferProcessor: unhandled shadow challenger error for record '${frozenRecord.RecordID}': ${msg}`);
+            })
+            .finally(() => {
+                this.inFlightShadowTasks.delete(task);
+            });
+
+        this.inFlightShadowTasks.add(task);
+    }
+
+    private async executeChallengerShadow(
+        record: RecordRef,
+        context: RecordProcessorContext,
+        config: MJRecordProcessEntity_IRecordProcessChallengerConfig,
+        capturedPromptData?: Record<string, unknown>,
+        capturedUserMessage?: string | null,
+    ): Promise<void> {
+        const challengerPromptID = config.ChallengerPromptID?.trim();
+        if (!challengerPromptID) {
+            return;
+        }
+
+        const maxLatencyMs =
+            typeof config.MaxLatencyMs === 'number' && Number.isFinite(config.MaxLatencyMs) && config.MaxLatencyMs > 0
+                ? config.MaxLatencyMs
+                : 5000;
+
+        let rawAnswer: unknown;
+        let aiPromptRunID: string | null = null;
+        let aiModelID: string | null = null;
+        let timedOut = false;
+        let errorMessage: string | undefined;
+
+        const abortController = new AbortController();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => {
+                const timeoutErr = new Error(`SHADOW_TIMEOUT: Challenger prompt exceeded MaxLatencyMs (${maxLatencyMs}ms)`);
+                abortController.abort(timeoutErr);
+                reject(timeoutErr);
+            }, maxLatencyMs);
+        });
+
+        let runPromise: Promise<unknown> | undefined;
+        try {
+            runPromise = (async () => {
+                await AIEngine.Instance.Config(false, context.ContextUser);
+                const challengerPrompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, challengerPromptID));
+                if (!challengerPrompt) {
+                    throw new Error(`Challenger AI Prompt '${challengerPromptID}' not found`);
+                }
+                const models = (AIEngine.Instance.PromptModels ?? []).filter((pm) =>
+                    UUIDsEqual(pm.PromptID, challengerPrompt.ID),
+                );
+                aiModelID = FeaturePipelinePin.SelectPrimaryModel(models)?.ModelID ?? null;
+
+                const params = new AIPromptParams();
+                params.prompt = challengerPrompt as MJAIPromptEntityExtended;
+                params.data = capturedPromptData ?? (await this.buildPromptData(record, context));
+                const userMessage =
+                    capturedUserMessage !== undefined ? capturedUserMessage : await this.BuildUserMessage(record);
+                if (userMessage !== null) {
+                    params.templateMessageRole = 'system';
+                    params.conversationMessages = [{ role: ChatMessageRole.user, content: userMessage }];
+                }
+                params.contextUser = context.ContextUser;
+                params.templateAutoescape = false;
+                params.cancellationToken = abortController.signal;
+
+                const promptResult = await this.ExecuteChallengerPrompt(params, abortController.signal);
+                aiPromptRunID = promptResult.promptRun?.ID ?? null;
+                if (!promptResult.success) {
+                    throw new Error(promptResult.errorMessage ?? 'Challenger AI prompt execution failed');
+                }
+                let parsed = await this.afterPromptExecute(promptResult, record, context);
+                if (typeof parsed === 'string') {
+                    try {
+                        parsed = JSON.parse(parsed);
+                    } catch {
+                        // keep raw string
+                    }
+                }
+                return parsed;
+            })();
+
+            rawAnswer = await Promise.race([runPromise, timeoutPromise]);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.startsWith('SHADOW_TIMEOUT:')) {
+                timedOut = true;
+            }
+            errorMessage = msg;
+            LogError(`InferProcessor: challenger prompt '${challengerPromptID}' failed for record '${record.RecordID}': ${msg}`);
+        } finally {
+            if (timer !== undefined) {
+                clearTimeout(timer);
+            }
+        }
+
+        await this.persistChallengerFeatureValues({
+            record,
+            context,
+            challengerPromptID,
+            aiModelID,
+            aiPromptRunID,
+            rawAnswer,
+            timedOut,
+            errorMessage,
+        });
+
+        if (runPromise) {
+            await runPromise.catch(() => {});
+        }
+    }
+
+    private async persistChallengerFeatureValues(options: {
+        record: RecordRef;
+        context: RecordProcessorContext;
+        challengerPromptID: string;
+        aiModelID: string | null;
+        aiPromptRunID: string | null;
+        rawAnswer: unknown;
+        timedOut: boolean;
+        errorMessage?: string;
+    }): Promise<void> {
+        const { record, context, challengerPromptID, aiModelID, aiPromptRunID, rawAnswer, timedOut, errorMessage } = options;
+        const activeProvider = context.Provider ?? Metadata.Provider; // global-provider-ok: fallback when caller does not supply a per-request provider
+        const entityID = context.EntityID || record.EntityID;
+        if (!activeProvider || !entityID) {
+            return;
+        }
+
+        const outputs =
+            this.spec?.Outputs && this.spec.Outputs.length > 0
+                ? this.spec.Outputs
+                : [{ Name: 'Prediction', Ref: '$' } as DataFeatureOutput];
+
+        const annotations = errorMessage ? { Reasoning: null, OutputConfidence: undefined } : this.RecordedAnnotations(rawAnswer);
+        const now = new Date();
+
+        for (const output of outputs) {
+            try {
+                const fv = await activeProvider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', context.ContextUser);
+                fv.NewRecord();
+                fv.RecordProcessID = context.RecordProcessID ?? null;
+                fv.ProcessRunID = context.ProcessRunID ?? null;
+                fv.EntityID = entityID;
+                fv.RecordID = record.RecordID;
+                fv.FeatureName = output.Name;
+                fv.Role = 'Challenger';
+                fv.Source = 'Pipeline';
+                // ValueKeyHash is intentionally NULL on Challenger rows so they never collide with
+                // the Champion row on UQ_FeatureValue_ValueKey (RecordProcessID, ValueKeyHash).
+                fv.ValueKeyHash = null;
+                fv.PromptID = challengerPromptID;
+                fv.AIModelID = aiModelID;
+                fv.AIPromptRunID = aiPromptRunID;
+                fv.ComputedAt = now;
+
+                if (errorMessage) {
+                    fv.ValueNumeric = null;
+                    fv.ValueText = null;
+                    fv.ValueBoolean = null;
+                    fv.ValueDate = null;
+                    fv.ValueJSON = null;
+                    fv.Confidence = null;
+                    // One prefix: a timeout's message already starts with SHADOW_TIMEOUT:
+                    const prefix = timedOut ? 'SHADOW_TIMEOUT:' : 'SHADOW_ERROR:';
+                    fv.Reasoning = errorMessage.startsWith(prefix) ? errorMessage : `${prefix} ${errorMessage}`;
+                } else {
+                    const resolved = ResolveMappingRef(output.Ref, { $: rawAnswer });
+                    const constraintType = OutputTargets.HasWriteTarget(output) ? undefined : output.Constraint?.Type;
+                    const typed = FeatureValueCacheService.ToTypedValue(resolved !== undefined ? resolved : null, constraintType);
+                    fv.ValueNumeric = typed.ValueNumeric;
+                    fv.ValueText = typed.ValueText;
+                    fv.ValueBoolean = typed.ValueBoolean;
+                    fv.ValueDate = typed.ValueDate;
+                    fv.ValueJSON = typed.ValueJSON;
+                    fv.Confidence = annotations.OutputConfidence?.[output.Name] ?? null;
+                    fv.Reasoning = annotations.Reasoning ?? null;
+                }
+
+                const saved = await fv.Save();
+                if (!saved) {
+                    LogError(
+                        `InferProcessor: failed to save Challenger FeatureValue '${output.Name}' for record '${record.RecordID}': ${fv.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    );
+                }
+            } catch (saveErr: unknown) {
+                const msg = saveErr instanceof Error ? saveErr.message : String(saveErr);
+                LogError(`InferProcessor: error persisting Challenger FeatureValue '${output.Name}' for record '${record.RecordID}': ${msg}`);
+            }
+        }
     }
 
     /** The run-result pin of a Feature Value pin: this processor's pipeline version plus the pin's three key hashes. */
@@ -1738,11 +2113,23 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     /** The driver's callbacks into this processor's overridable steps, so extensions keep working. */
     private buildComputeHooks(): FeaturePipelineComputeHooks {
         return {
-            BuildPromptData: (record, ctx) => this.buildPromptData(record, ctx),
+            BuildPromptData: async (record, ctx) => {
+                const data = await this.buildPromptData(record, ctx);
+                if (record.RecordID && this.capturesChampionInputs) {
+                    this.championPromptDataByRecord.set(record.RecordID, data);
+                }
+                return data;
+            },
             BeforeBuildContext: (record, ctx) => this.beforeBuildContext(record, ctx),
             BeforePromptExecute: (params, record, ctx) => this.beforePromptExecute(params, record, ctx),
             AfterPromptExecute: (result, record, ctx) => this.afterPromptExecute(result, record, ctx),
-            BuildUserMessage: (record) => this.BuildUserMessage(record),
+            BuildUserMessage: async (record) => {
+                const msg = await this.BuildUserMessage(record);
+                if (record.RecordID && this.capturesChampionInputs) {
+                    this.championUserMessageByRecord.set(record.RecordID, msg);
+                }
+                return msg;
+            },
         };
     }
 
@@ -2054,7 +2441,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         const mappingToUse = this.inputMapping ?? this.spec?.Context?.InputMapping;
 
         if (!mappingToUse) {
-            promptData = { record: recordData };
+            promptData = { record: this.contextFieldsListed ? recordData : this.withoutIndexRestrictedFields(recordData, record, ctx) };
         } else {
             const mapped = ResolveValueMapping(mappingToUse, { record: recordData });
             promptData = mapped && typeof mapped === 'object' ? (mapped as Record<string, unknown>) : { record: recordData };
@@ -2071,7 +2458,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     const parser = this.CreateContextDocumentParser(ctx.Provider);
                     const templateText = await parser.resolveDocumentTemplateText(doc, ctx.ContextUser);
                     if (templateText && templateText.trim().length > 0) {
-                        const rendered = await parser.Parse(templateText, record.EntityID, recordData, ctx.ContextUser);
+                        const documentRecord = this.contextDocumentRecord(recordData, record, ctx);
+                        const rendered = await parser.Parse(templateText, record.EntityID, documentRecord, ctx.ContextUser);
                         promptData.context = rendered;
                         promptData.RenderedContext = rendered;
                         promptData.document = rendered;
@@ -2138,6 +2526,51 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             values[field] = key === undefined || data[key] === undefined ? null : data[key];
         }
         return JSON.stringify(values);
+    }
+
+    /**
+     * The default mapping's record data without the fields field-level security restricts for any
+     * role ({@link GetIndexRestrictedFieldNames}). A record process runs as a system identity and
+     * writes what the model answers into fields other users read, so the model must not see by
+     * default what any of those users may not. A field named in `Context.Fields` or an input
+     * mapping is an explicit choice and is not filtered.
+     */
+    private withoutIndexRestrictedFields(recordData: Record<string, unknown>, record: RecordRef, ctx?: RecordProcessorContext): Record<string, unknown> {
+        const restricted = GetIndexRestrictedFieldNames(this.recordEntityInfo(record, ctx));
+        if (restricted.size === 0) {
+            return recordData;
+        }
+        return Object.fromEntries(Object.entries(recordData).filter(([key]) => !restricted.has(key.trim().toLowerCase())));
+    }
+
+    /** Whether the spec's `Context.Fields` names the record fields the prompt sees. */
+    private get contextFieldsListed(): boolean {
+        return (this.spec?.Context?.Fields?.length ?? 0) > 0;
+    }
+
+    /**
+     * The record values the `Context.EntityDocumentID` document renders from. The default mapping's
+     * rule applies ({@link withoutIndexRestrictedFields}, unless `Context.Fields` names the fields),
+     * and the fields the run user may not read are dropped as well, so the rendered context never
+     * holds a value the prompt's `record` leaves out.
+     */
+    private contextDocumentRecord(recordData: Record<string, unknown>, record: RecordRef, ctx: RecordProcessorContext): Record<string, unknown> {
+        const values = this.contextFieldsListed ? recordData : this.withoutIndexRestrictedFields(recordData, record, ctx);
+        const entity = this.recordEntityInfo(record, ctx);
+        if (!entity?.FieldLevelSecurityApplies || !ctx.ContextUser) {
+            return values;
+        }
+        return OmitDeniedFieldKeys(values, entity.GetDeniedReadFields(ctx.ContextUser));
+    }
+
+    /** The record's entity: from a loaded BaseEntity, else from the run's (or the global) metadata provider. */
+    private recordEntityInfo(record: RecordRef, ctx?: RecordProcessorContext): EntityInfo | null {
+        const loaded = record.Record as { EntityInfo?: EntityInfo } | undefined;
+        if (loaded?.EntityInfo) {
+            return loaded.EntityInfo;
+        }
+        const provider = ctx?.Provider ?? Metadata.Provider;
+        return record.EntityID ? provider?.EntityByID(record.EntityID) ?? null : null;
     }
 
     /** Extracts a plain field map from the record (BaseEntity → GetAll(), plain object → as-is). */
@@ -2215,6 +2648,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     ExtraFilter: `[${pk}] IN (${ids})`,
                     ResultType: 'simple',
                     MaxRows: chunk.length,
+                    SkipTotalRowCount: true,
                     BypassCache: true,
                 }, context.ContextUser);
 

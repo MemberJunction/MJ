@@ -22,14 +22,14 @@ describe('shouldForceBuild', () => {
   });
 
   it('does NOT re-force once the prediction is already built (prevents an infinite loop)', () => {
-    const built = { Approved: true, BuildResult: { success: true, published: true, heldReason: null, errorMessage: null } };
+    const built = { Approved: true, BuildResult: { success: true, published: true, readyToPublish: false, heldReason: null, errorMessage: null } };
     expect(ShouldForceBuild(built, 'build it')).toBe(false);
   });
 
   describe('after a FAILED build', () => {
     const failed = {
       Approved: true,
-      BuildResult: { success: false, published: false, heldReason: null, errorMessage: 'train blew up' },
+      BuildResult: { success: false, published: false, readyToPublish: false, heldReason: null, errorMessage: 'train blew up' },
       BuildAttemptUserMessageCount: 3,
     };
 
@@ -46,7 +46,7 @@ describe('shouldForceBuild', () => {
     });
 
     it('stays conservative (LLM routing) when no attempt stamp exists', () => {
-      const noStamp = { Approved: true, BuildResult: { success: false, published: false, heldReason: null, errorMessage: 'x' } };
+      const noStamp = { Approved: true, BuildResult: { success: false, published: false, readyToPublish: false, heldReason: null, errorMessage: 'x' } };
       expect(ShouldForceBuild(noStamp, 'build it', 5)).toBe(false);
     });
 

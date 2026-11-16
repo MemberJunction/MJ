@@ -1,9 +1,14 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, TransactionGroupBase, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
+import { AssertClientInputWritableForUser, BaseEntityResult, CompositeKey, EntityInfo, EntitySaveOptions, IMetadataProvider, KeyValuePair, LogError, Metadata, RecordChangeMetadataSource, ServerOperationScopeManager, TransactionVariable, TransactionGroupBase, BaseEntity, UserInfo } from '@memberjunction/core';
 import { SafeJSONParse, ValuesEqual } from '@memberjunction/global';
+import { FieldMapper } from '@memberjunction/graphql-dataprovider';
+import { GraphQLError } from 'graphql';
+import { FindEntityFieldByCodeNameOrName } from '@memberjunction/generic-database-provider';
+import { KeyValuePairInput } from '../generic/KeyValuePairInput.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
 
 export enum TransactionVariableType {
     Define = "Define",
@@ -52,6 +57,15 @@ export class TransactionItemInputType {
 
     @Field(() => TransactionOperationType)
     OperationType: TransactionOperationType;
+
+    /**
+     * For an Update, the values the client loaded for the fields it changed (plus the primary
+     * key), in the same form as a single-record update's `OldValues___`. When present, the server
+     * rejects the update if another writer changed any of those fields since the client loaded
+     * them.
+     */
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues?: KeyValuePairInput[] | null;
 }
   
 @InputType() 
@@ -113,6 +127,7 @@ export class TransactionResolver extends ResolverBase {
     @Arg('group', () => TransactionInputType ) group: TransactionInputType,
     @Ctx() context: AppContext
     ) {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         // SECURITY (bug-register B1 / catalog SEC1): route every transaction item through the same
         // API-key scope gate the singular CRUD resolvers use, BEFORE any entity work happens.
         // Without this pre-pass, a restricted API key (e.g. view:run-only) could Create/Update/
@@ -148,16 +163,18 @@ export class TransactionResolver extends ResolverBase {
             // BEFORE any Save()/Delete() runs below: a 'Use' variable sets its field at Submit(), after
             // every server-side write check has passed, so an entity whose check depends on a field's
             // final value must be able to see that a variable will set it.
+            const user: UserInfo = context.userPayload.userRecord;
             for (const item of group.Items) {
-                entityObjects.push(await md.GetEntityObject(item.EntityName, context.userPayload.userRecord));
+                entityObjects.push(await md.GetEntityObject(item.EntityName, user));
             }
+            this.AssertNetworkInputWritable(group, entityObjects, user);
             this.AddNetworkVariables(group, entityObjects, tg);
 
             for (const [index, item] of group.Items.entries()) {
                 const entity = entityObjects[index];
 
                 // get the values from the payload
-                const itemValues = SafeJSONParse(item.EntityObjectJSON);
+                const itemValues = SafeJSONParse<Record<string, unknown>>(item.EntityObjectJSON) ?? {};
                 // build a primary key for the item
                 const pkey = new CompositeKey(entity.PrimaryKeys.map(pk => {
                     const kv = new KeyValuePair();
@@ -171,15 +188,21 @@ export class TransactionResolver extends ResolverBase {
                         if (item.OperationType === "Update") {
                             await entity.InnerLoad(pkey);
                             if (typeof entity.GetDataObject === 'function') {
+                                // fls-guard: pre-update snapshot; projected before the delta is built
                                 preUpdateValues.set(index, await entity.GetDataObject());
                             } else if (typeof entity.GetAll === 'function') {
+                                // fls-guard: pre-update snapshot; projected before the delta is built
                                 preUpdateValues.set(index, { ...(entity.GetAll() as Record<string, unknown>) });
                             }
                         }
                         objectValues.push(itemValues);
-                        entity.SetMany(itemValues, true);
+                        const saveOptions = await this.ApplyItemValues(item, entity, itemValues, user);
+                        if (!saveOptions) {
+                            refusals.push(describeRefusedItem(index, item, entity));
+                            break;
+                        }
                         entity.TransactionGroup = tg;
-                        if (!await entity.Save()) {
+                        if (!await entity.Save(saveOptions)) {
                             refusals.push(describeRefusedItem(index, item, entity));
                         }
                         break;
@@ -197,6 +220,7 @@ export class TransactionResolver extends ResolverBase {
                         // Awaiting costs nothing here — DataObjectParams defaults
                         // includeRelatedEntityData to false, which guards the method's only awaited
                         // work, so with no params this is GetAll() plus a filter loop.
+                        // fls-guard: projected in PrepareReturnValue
                         objectValues.push(await entity.GetDataObject());
                         entity.TransactionGroup = tg;
                         if (!await entity.Delete()) {
@@ -221,22 +245,156 @@ export class TransactionResolver extends ResolverBase {
                     `TransactionResolver::ExecuteTransactionGroup --- ${refusals.length} of ${group.Items.length} ` +
                     `item(s) were refused, so the group was not submitted:\n${refusals.join('\n')}`
                 );
-                return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues);
+                return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues, md, user);
             }
 
             // after all that, we are ready to roll, so let's run the TG
             if (await tg.Submit()) {
                 // success!
-                return await this.PrepareReturnValue(true, entityObjects, objectValues, group, preUpdateValues);
+                return await this.PrepareReturnValue(true, entityObjects, objectValues, group, preUpdateValues, md, user);
             }
             else {
+                await this.LogConcurrencyConflicts(entityObjects, user);
                 // failure, send back the results
-                return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues);
+                return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues, md, user);
             }
         } 
         catch (err) {
             LogError(err);
             throw new Error('TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + err);
+        }
+        });
+    }
+
+    /**
+     * Applies one Create or Update item's values to its entity and returns the options to save it
+     * with.
+     *
+     * An Update that carries `OldValues` is handled like a single-record update: the client's old
+     * values are compared with the row just loaded, and the save runs with `ConcurrencyCheck:
+     * 'enforce'` and the client's baseline, so the provider repeats the comparison under a row lock
+     * when the group submits. A conflict found here is recorded on the entity's result and
+     * `null` is returned, so the caller refuses the item without submitting the group.
+     */
+    protected async ApplyItemValues(
+        item: TransactionItemInputType,
+        entity: BaseEntity,
+        itemValues: Record<string, unknown>,
+        user: UserInfo,
+    ): Promise<EntitySaveOptions | null> {
+        const saveOptions = new EntitySaveOptions();
+        if (item.OperationType !== TransactionOperationType.Update || !item.OldValues?.length) {
+            entity.SetMany(itemValues, true);
+            return saveOptions;
+        }
+        const oldValues = this.MapOldValues(item.OldValues);
+        const fieldValues = this.OnlyEntityFieldValues(entity.EntityInfo, itemValues);
+        try {
+            const baseline = await this.TestAndSetClientOldValuesToDBValues({ OldValues___: oldValues }, fieldValues, entity, user);
+            saveOptions.ConcurrencyCheck = 'enforce';
+            if (Object.keys(baseline).length > 0) {
+                saveOptions.ConcurrencyBaseline = baseline;
+            }
+            return saveOptions;
+        } catch (err) {
+            if (!this.RecordConcurrencyConflict(entity, err)) {
+                throw err;
+            }
+            return null;
+        }
+    }
+
+    /**
+     * An item's `OldValues` with each key mapped back from its GraphQL form to the field's name.
+     */
+    protected MapOldValues(oldValues: KeyValuePairInput[]): Array<{ Key: string; Value: string | null }> {
+        const mapper = new FieldMapper();
+        return oldValues.map((kv) => ({ Key: mapper.ReverseMapFieldName(kv.Key), Value: kv.Value ?? null }));
+    }
+
+    /**
+     * The entries of a client payload that name a field of the entity. The group path has always
+     * ignored any other key, which a single-record update's typed input cannot carry.
+     */
+    protected OnlyEntityFieldValues(entityInfo: EntityInfo, values: Record<string, unknown>): Record<string, unknown> {
+        const fieldValues: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(values)) {
+            if (FindEntityFieldByCodeNameOrName(entityInfo, key)) {
+                fieldValues[key] = value;
+            }
+        }
+        return fieldValues;
+    }
+
+    /**
+     * When `err` is the concurrency-conflict error a single-record update returns, records it on
+     * the entity as a failed update result carrying the conflicting fields, and returns `true`.
+     * Any other error is left for the caller.
+     */
+    protected RecordConcurrencyConflict(entity: BaseEntity, err: unknown): boolean {
+        if (!(err instanceof GraphQLError) || err.extensions?.code !== 'CONCURRENT_MODIFICATION_CONFLICT') {
+            return false;
+        }
+        const fields = err.extensions.conflictingFields;
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'update';
+        result.Message = err.message;
+        result.ConcurrencyConflict = {
+            ConflictingFields: Array.isArray(fields) ? fields.filter((f): f is string => typeof f === 'string') : [],
+        };
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        entity.RegisterResultHistoryEntry(result);
+        return true;
+    }
+
+    /**
+     * Writes the same `SAVE_INCONSISTENCY` error log a single-record update writes, for each item
+     * the provider rejected at submit because its row changed after the group loaded it.
+     */
+    protected async LogConcurrencyConflicts(entityObjects: BaseEntity[], user: UserInfo): Promise<void> {
+        for (const entity of entityObjects) {
+            const conflict = entity.LatestResult?.ConcurrencyConflict;
+            if (conflict) {
+                await this.persistSaveInconsistencyErrorLog(entity, user, {
+                    Message: entity.LatestResult?.CompleteMessage ?? 'Concurrent modification conflict detected inside the transaction group.',
+                    ConflictingFields: conflict.ConflictingFields,
+                });
+            }
+        }
+    }
+
+    /**
+     * Field-level security gate on everything the client sent, run before any item is applied.
+     *
+     * Each create or update payload must name only fields the caller may read, and so must an update's
+     * `OldValues` (they are compared with the stored row) and every transaction variable: a `Define` on a denied field would copy its value into another item's readable
+     * field at `Submit()`, and a `Use` would write it. A key that names no field is refused with
+     * the same message as a denied one (see `AssertClientInputWritableForUser`). Callers denied
+     * nothing on an entity are not affected. A delete payload is not gated: only its primary key
+     * is read, and the record is loaded from the database.
+     */
+    protected AssertNetworkInputWritable(group: TransactionInputType, entityObjects: BaseEntity[], user: UserInfo): void {
+        for (const [index, item] of group.Items.entries()) {
+            if (item.OperationType === TransactionOperationType.Delete) {
+                continue;
+            }
+            const values = SafeJSONParse<Record<string, unknown>>(item.EntityObjectJSON);
+            AssertClientInputWritableForUser(entityObjects[index]?.EntityInfo, values, user);
+            if (item.OldValues?.length) {
+                const oldValueKeys: Record<string, unknown> = {};
+                for (const kv of this.MapOldValues(item.OldValues)) {
+                    oldValueKeys[kv.Key] = null;
+                }
+                AssertClientInputWritableForUser(entityObjects[index]?.EntityInfo, oldValueKeys, user);
+            }
+        }
+        for (const networkVar of group.Variables ?? []) {
+            const target = entityObjects[networkVar.ItemIndex];
+            if (target && networkVar.FieldName) {
+                AssertClientInputWritableForUser(target.EntityInfo, { [networkVar.FieldName]: null }, user);
+            }
         }
     }
 
@@ -261,13 +419,18 @@ export class TransactionResolver extends ResolverBase {
         entityObjects: BaseEntity[],
         objectValues: unknown[],
         group: TransactionInputType,
-        preUpdateValues?: Map<number, Record<string, unknown>>
+        preUpdateValues?: Map<number, Record<string, unknown>>,
+        provider?: RecordChangeMetadataSource,
+        user?: UserInfo
     ): Promise<TransactionOutputType> {
         const jsonResults = [];
         for (let i = 0; i < group.Items.length; i++) {
             const item = group.Items[i];
+            const project = (values: Record<string, unknown>) =>
+                ProjectValuesForCaller(entityObjects[i]?.EntityInfo, values, user, provider);
             if (item.OperationType === 'Delete') {
-                jsonResults.push(JSON.stringify(objectValues[i]));
+                const deleted = objectValues[i];
+                jsonResults.push(JSON.stringify(deleted && typeof deleted === 'object' ? project(deleted as Record<string, unknown>) : deleted));
             }
             else if (item.OperationType === 'Update') {
                 jsonResults.push(
@@ -276,13 +439,15 @@ export class TransactionResolver extends ResolverBase {
                         objectValues[i],
                         preUpdateValues?.get(i),
                         group,
-                        i
+                        i,
+                        project
                     )
                 );
             }
             else {
-                // create, return what is in the database
-                jsonResults.push(await entityObjects[i].GetDataObjectJSON());
+                // create, return what is in the database, as the caller may read it
+                // fls-guard: projected by project()
+                jsonResults.push(JSON.stringify(project(await entityObjects[i].GetDataObject())));
             }
         }
 
@@ -303,20 +468,32 @@ export class TransactionResolver extends ResolverBase {
      * - Any field whose post-save value differs from its pre-update DB snapshot (`preSaveValues`),
      *   capturing virtual fields, triggers, or server-side `BeforeSave()` mutations automatically
      *   while omitting unchanged columns.
+     *
+     * Both rows are projected for the caller BEFORE they are compared. Comparing a full-width
+     * post-save row against a snapshot taken from a narrowed load would count every denied value
+     * as changed, and the delta would then deliver exactly the values the caller may not read.
      */
     private async serializeUpdateReturnValue(
         entity: BaseEntity,
         sentValues: unknown,
         preSaveValues: Record<string, unknown> | undefined,
         group: TransactionInputType,
-        itemIndex: number
+        itemIndex: number,
+        project: (values: Record<string, unknown>) => Record<string, unknown>
     ): Promise<string> {
-        const fullDataObj: Record<string, unknown> | null = typeof entity.GetDataObject === 'function'
+        const rawDataObj: Record<string, unknown> | null = typeof entity.GetDataObject === 'function'
+            // fls-guard: projected by project() below
             ? (await entity.GetDataObject() as Record<string, unknown>)
+            // fls-guard: projected by project() below
             : SafeJSONParse<Record<string, unknown>>(await entity.GetDataObjectJSON());
-        if (!fullDataObj || typeof fullDataObj !== 'object' || !sentValues || typeof sentValues !== 'object') {
-            return await entity.GetDataObjectJSON();
+        if (!rawDataObj || typeof rawDataObj !== 'object') {
+            return JSON.stringify(rawDataObj);
         }
+        const fullDataObj = project(rawDataObj);
+        if (!sentValues || typeof sentValues !== 'object') {
+            return JSON.stringify(fullDataObj);
+        }
+        preSaveValues = preSaveValues ? project(preSaveValues) : preSaveValues;
 
         const sentRecord = sentValues as Record<string, unknown>;
         const includeKeys = new Set<string>([

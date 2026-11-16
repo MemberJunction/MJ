@@ -1,0 +1,113 @@
+{
+    "taskComplete": true,
+    "message": "Storyboard beats, state machine, and narration script completed.",
+    "payloadChangeRequest": {
+        "newElements": {
+            "Beats": [
+                {
+                    "Key": "beat-1",
+                    "Label": "Hook",
+                    "StartSeconds": 0,
+                    "EndSeconds": 5,
+                    "EntryState": "HERO_INTRO",
+                    "ExitState": "HOOK_SETTLED",
+                    "Purpose": "Hook the audience with the headline Q3 momentum statement",
+                    "OnScreenText": [
+                        "Q3 Revenue Momentum",
+                        "Enterprise Platform Growth"
+                    ],
+                    "DataRefs": [],
+                    "AssetRefs": [],
+                    "NarrationKey": "nar-1",
+                    "LayoutNotes": {
+                        "16:9": "Two-column hero header with primary card on right and title on left."
+                    }
+                },
+                {
+                    "Key": "beat-2",
+                    "Label": "Proof",
+                    "StartSeconds": 5,
+                    "EndSeconds": 13,
+                    "EntryState": "HOOK_SETTLED",
+                    "ExitState": "PROOF_SETTLED",
+                    "Purpose": "Highlight enterprise expansion and execution discipline",
+                    "OnScreenText": [
+                        "Enterprise Expansion",
+                        "Sustained Customer Adoption"
+                    ],
+                    "DataRefs": [],
+                    "AssetRefs": [],
+                    "NarrationKey": "nar-2",
+                    "LayoutNotes": {
+                        "16:9": "Centered summary card with supporting callout on right."
+                    }
+                },
+                {
+                    "Key": "beat-3",
+                    "Label": "Close",
+                    "StartSeconds": 13,
+                    "EndSeconds": 18,
+                    "EntryState": "PROOF_SETTLED",
+                    "ExitState": "SUMMARY_POSTER",
+                    "Purpose": "Closing executive summary poster frame with provenance footer",
+                    "OnScreenText": [
+                        "Q3 Executive Summary",
+                        "Verified Platform Takeaway"
+                    ],
+                    "DataRefs": [],
+                    "AssetRefs": [],
+                    "NarrationKey": "nar-3",
+                    "LayoutNotes": {
+                        "16:9": "Two side-by-side summary cards above bottom-right provenance footer."
+                    }
+                }
+            ],
+            "StateList": [
+                "HERO_INTRO",
+                "HOOK_SETTLED",
+                "PROOF_SETTLED",
+                "SUMMARY_POSTER"
+            ],
+            "Audio": {
+                "Narration": {
+                    "VoiceID": "brand-voice-default",
+                    "Provider": "ElevenLabs",
+                    "Script": [
+                        {
+                            "Key": "nar-1",
+                            "BeatKey": "beat-1",
+                            "Text": "In Q3, platform momentum accelerated across our enterprise footprint."
+                        },
+                        {
+                            "Key": "nar-2",
+                            "BeatKey": "beat-2",
+                            "Text": "Consistent customer adoption drove strong operational execution."
+                        },
+                        {
+                            "Key": "nar-3",
+                            "BeatKey": "beat-3",
+                            "Text": "Disciplined execution continues to compound platform value."
+                        }
+                    ]
+                },
+                "Cues": [
+                    {
+                        "Key": "cue-1",
+                        "TimestampSeconds": 0,
+                        "Kind": "MusicSwell",
+                        "BeatKey": "beat-1",
+                        "Notes": "Gentle opening swell under headline reveal"
+                    },
+                    {
+                        "Key": "cue-2",
+                        "TimestampSeconds": 5,
+                        "Kind": "MusicDuck",
+                        "BeatKey": "beat-2",
+                        "Notes": "Duck music under proof narration"
+                    }
+                ],
+                "Captions": "Sidecar"
+            }
+        }
+    }
+}

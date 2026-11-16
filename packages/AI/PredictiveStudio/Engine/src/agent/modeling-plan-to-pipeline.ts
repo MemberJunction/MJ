@@ -8,11 +8,14 @@
  * builder commits to metadata is type-safe and never hallucinated — the same guarantee Database
  * Designer and Agent Manager give for schema/agent metadata.
  *
- * Pure + framework-free (no entity/provider deps) → fully unit-testable with zero setup.
+ * Pure + framework-free (no entity/provider deps) → fully unit-testable with zero setup. It also refuses, before the
+ * builder writes any row, the plan settings training would refuse (an as-of mode training ignores, an unknown
+ * majority-baseline rule) — so a refused plan never leaves an orphan Draft pipeline behind.
  */
 
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
+  EvaluationLineage,
   type ModelingPlanSpec,
   type SourceBinding,
   type FeatureStepGraph,
@@ -23,6 +26,8 @@ import {
   type ProblemType,
   type FeatureStepWarning,
 } from '@memberjunction/predictive-studio-core';
+
+import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
 
 /** The resolved, ready-to-persist configuration for one `MJ: ML Training Pipelines` row. */
 export interface PipelineConfig {
@@ -60,76 +65,79 @@ function chooseExperiment(spec: ModelingPlanSpec): ModelingPlanSpec['ProposedExp
   return [...experiments].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))[0];
 }
 
+/** One candidate feature of a modeling plan. */
+type CandidateFeature = ModelingPlanSpec['CandidateFeatures'][number];
+
+/** The selected features sorted by how they become steps: raw columns, persisted values per Feature Pipeline, and the dropped ones. */
+interface ClassifiedFeatures {
+  readonly RawColumns: string[];
+  readonly PersistedFeaturesByPipeline: Map<string, string[]>;
+  readonly Warnings: FeatureStepWarning[];
+}
+
 /** Build the FeatureStep DAG from the selected candidate features (select raw cols; one-hot categoricals) and collect structured warnings for unmapped features. */
 function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { steps: FeatureStepGraph; warnings: FeatureStepWarning[] } {
   const all = spec.CandidateFeatures ?? [];
   // Honor the chosen experiment's FeatureSet when present; otherwise use every candidate feature.
   const selected = featureSet.length > 0 ? all.filter((f) => featureSet.includes(f.Name)) : all;
+  const classified = classifyFeatures(spec, selected);
+  return { steps: emitFeatureSteps(selected, classified), warnings: classified.Warnings };
+}
 
-  const warnings: FeatureStepWarning[] = [];
-  const rawColumns: string[] = [];
-  const llmPipelineMap = new Map<string, string[]>();
-
+/** Sorts each selected feature into a raw column, a persisted value of its Feature Pipeline, or a dropped feature with a warning. */
+function classifyFeatures(spec: ModelingPlanSpec, selected: readonly CandidateFeature[]): ClassifiedFeatures {
+  const out: ClassifiedFeatures = { RawColumns: [], PersistedFeaturesByPipeline: new Map<string, string[]>(), Warnings: [] };
   for (const f of selected) {
     switch (f.Kind) {
       case 'numeric':
       case 'categorical':
-        rawColumns.push(f.Name);
+        out.RawColumns.push(f.Name);
         break;
-      case 'llm-derived': {
-        const pipelineSource = spec.CandidateSources?.find(
-          (s) => s.Ref === f.SourceRef && s.Kind === 'FeaturePipeline'
-        );
+      case 'llm-derived':
+      case 'decision-derived': {
+        const pipelineSource = spec.CandidateSources?.find((s) => s.Ref === f.SourceRef && s.Kind === 'FeaturePipeline');
         if (pipelineSource) {
-          const list = llmPipelineMap.get(pipelineSource.Ref) ?? [];
+          const list = out.PersistedFeaturesByPipeline.get(pipelineSource.Ref) || [];
           list.push(f.Name);
-          llmPipelineMap.set(pipelineSource.Ref, list);
+          out.PersistedFeaturesByPipeline.set(pipelineSource.Ref, list);
         } else {
-          warnings.push({
-            FeatureName: f.Name,
-            Kind: f.Kind,
-            Reason: `Candidate feature "${f.Name}" (llm-derived) was dropped from training pipeline steps. LLM-derived features require an upstream Feature Pipeline to persist values before training.`,
-          });
+          out.Warnings.push(droppedFeature(f, `Candidate feature "${f.Name}" (${f.Kind}) was dropped from training pipeline steps. Persisted-value features (llm-derived, decision-derived) require an upstream Feature Pipeline to persist values before training.`));
         }
         break;
       }
       case 'embedding':
-        warnings.push({
-          FeatureName: f.Name,
-          Kind: f.Kind,
-          Reason: `Candidate feature "${f.Name}" (embedding) was dropped from training pipeline steps. Embedding features require a dedicated vector embedding step.`,
-        });
+        out.Warnings.push(droppedFeature(f, `Candidate feature "${f.Name}" (embedding) was dropped from training pipeline steps. Embedding features require a dedicated vector embedding step.`));
         break;
       default: {
         const _exhaustive: never = f.Kind;
         void _exhaustive;
-        warnings.push({
-          FeatureName: f.Name,
-          Kind: f.Kind,
-          Reason: `Candidate feature "${f.Name}" with kind "${String(f.Kind)}" cannot be automatically mapped to a pipeline step.`,
-        });
+        out.Warnings.push(droppedFeature(f, `Candidate feature "${f.Name}" with kind "${String(f.Kind)}" cannot be automatically mapped to a pipeline step.`));
         break;
       }
     }
   }
+  return out;
+}
 
+/** The warning for a feature that has no pipeline step. */
+function droppedFeature(f: CandidateFeature, reason: string): FeatureStepWarning {
+  return { FeatureName: f.Name, Kind: f.Kind, Reason: reason };
+}
+
+/** The steps: one select of the raw columns, one llm-derived step per Feature Pipeline, one one-hot per categorical feature. */
+function emitFeatureSteps(selected: readonly CandidateFeature[], classified: ClassifiedFeatures): FeatureStepGraph {
   const steps: FeatureStep[] = [];
-  if (rawColumns.length > 0) {
-    steps.push({ Id: 'select-raw', Kind: 'select', Columns: rawColumns });
+  if (classified.RawColumns.length > 0) {
+    steps.push({ Id: 'select-raw', Kind: 'select', Columns: classified.RawColumns });
   }
-  for (const [pipelineRef, cols] of llmPipelineMap.entries()) {
-    steps.push({
-      Id: `llm-derived-${pipelineRef}`,
-      Kind: 'llm-derived',
-      FeaturePipelineRef: pipelineRef,
-      Columns: cols,
-    });
+  for (const [pipelineRef, cols] of classified.PersistedFeaturesByPipeline.entries()) {
+    steps.push({ Id: `llm-derived-${pipelineRef}`, Kind: 'llm-derived', FeaturePipelineRef: pipelineRef, Columns: cols });
   }
   // One-hot each categorical feature so the sidecar fits the vocabulary once and applies it everywhere.
   for (const f of selected.filter((f) => f.Kind === 'categorical')) {
     steps.push({ Id: `onehot-${f.Name}`, Kind: 'onehot', Column: f.Name });
   }
-  return { steps: { Steps: steps }, warnings };
+  return { Steps: steps };
 }
 
 /** Source bindings from the plan's candidate sources (drop the agent's `Why` rationale). */
@@ -143,15 +151,35 @@ function buildLeakageGuard(spec: ModelingPlanSpec): LeakageGuard {
   return { DenyFields: denyFields, SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT };
 }
 
-/** Validation strategy straight from the plan (LockedHoldoutFraction is always carried). */
+/**
+ * Validation strategy straight from the plan, with the evaluation settings `TimeIndexColumn` and `MajorityBaselineRule`.
+ * A plan's `LockedHoldoutFraction` is not carried: the pipeline's bound Evaluation Protocol decides its holdout, so a
+ * fraction on the pipeline would only contradict it. An unknown `MajorityBaselineRule` is refused here with
+ * `InvalidMajorityBaselineRuleError`, the same refusal training raises.
+ */
 function buildValidation(spec: ModelingPlanSpec): ValidationStrategy {
   const v = spec.ValidationStrategy;
-  return {
+  const validation: ValidationStrategy = {
     Strategy: v?.Strategy ?? 'holdout',
     TestSize: v?.TestSize,
     K: v?.K,
-    LockedHoldoutFraction: v?.LockedHoldoutFraction ?? 0.2,
   };
+  if (v?.TimeIndexColumn) {
+    validation.TimeIndexColumn = v.TimeIndexColumn;
+  }
+  if (v?.MajorityBaselineRule) {
+    validation.MajorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(v.MajorityBaselineRule);
+  }
+  return validation;
+}
+
+/** The plan's as-of strategy; a mode training would ignore is refused before any pipeline row exists. */
+function buildAsOf(spec: ModelingPlanSpec): AsOfStrategy {
+  const asOf = spec.TargetDefinition.AsOfStrategy;
+  if (AsOfSettingHasNoEffectError.WouldBeIgnored(asOf)) {
+    throw new AsOfSettingHasNoEffectError('modeling-plan', asOf.Mode, null);
+  }
+  return asOf || { Mode: 'none' };
 }
 
 /** Derive a concise pipeline name from the plan's goal or custom name (trim + cap length). */
@@ -166,7 +194,8 @@ function deriveName(goal: string, customName?: string): string {
 /**
  * Deterministically translate an approved {@link ModelingPlanSpec} into the concrete pipeline
  * configuration the builder will persist. Throws on a spec that can't yield a trainable pipeline
- * (no target entity, no target variable, or no proposed algorithm) — the builder surfaces these as a
+ * (no target entity, no target variable, or no proposed algorithm) or that training would refuse
+ * ({@link AsOfSettingHasNoEffectError}, `InvalidMajorityBaselineRuleError`) — the builder surfaces these as a
  * clean failure rather than creating a broken pipeline.
  *
  * @param spec the approved modeling plan the agent accumulated.
@@ -196,6 +225,8 @@ export function ModelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentI
       ? `${baseName} (${experiment.AlgorithmName})`
       : baseName;
 
+  const asOf = buildAsOf(spec);
+  const validation = buildValidation(spec);
   const { steps: featureSteps, warnings } = buildFeatureSteps(spec, experiment.FeatureSet ?? []);
 
   return {
@@ -208,13 +239,8 @@ export function ModelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentI
     sourceBindings: buildSourceBindings(spec),
     featureSteps,
     warnings,
-    asOf: target.AsOfStrategy ?? { Mode: 'none' },
+    asOf,
     leakageGuard: buildLeakageGuard(spec),
-    validation: buildValidation(spec),
+    validation,
   };
-}
-
-/** @deprecated Use {@link ModelingPlanToPipelineConfig}. */
-export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentIndex?: number): PipelineConfig {
-  return ModelingPlanToPipelineConfig(spec, experimentIndex);
 }

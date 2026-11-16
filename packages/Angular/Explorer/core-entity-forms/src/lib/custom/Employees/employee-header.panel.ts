@@ -79,6 +79,12 @@ const SETTING_KEY = 'mj.form.employees.headerCollapsed';
         }
         .mj-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
         .mj-hero-identity { display: flex; align-items: center; gap: 14px; }
+        /* Let the identity column shrink so a long title (an email, say) wraps instead of pushing
+           the toggle past the edge and making the panel column scroll sideways on a phone. */
+        .mj-hero-top, .mj-hero-identity, .mj-hero-identity > div { min-width: 0; }
+        .mj-hero-identity { flex: 1 1 auto; }
+        .mj-hero-title { overflow-wrap: anywhere; }
+        .mj-hero-subline, .mj-hero-metrics-row { flex-wrap: wrap; }
         .mj-hero-avatar {
             width: 44px; height: 44px; border-radius: 10px;
             display: flex; align-items: center; justify-content: center;

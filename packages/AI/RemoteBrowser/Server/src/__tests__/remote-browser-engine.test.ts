@@ -779,3 +779,35 @@ describe('RemoteBrowserEngine — dead-handle recovery (#3598)', () => {
         await engine().EndSessionForAgentSession('sess-stopped');
     });
 });
+
+describe('RemoteBrowserEngine — conversation browser teardown and private-network policy', () => {
+    it('an end that arrives while the browser is still launching ends it once it is up', async () => {
+        stubBase([makeProvider()]);
+        const starting = engine().StartSessionForAgentSession('agent-sess-starting');
+        const ended = await engine().EndSessionForAgentSession('agent-sess-starting');
+        await starting;
+        expect(ended).toBe(true);
+        expect(engine().GetSessionForAgentSession('agent-sess-starting')).toBeUndefined();
+        expect(engine().ActiveSessions.length).toBe(0);
+    });
+
+    it('applies a private-network policy to the live browser and to any it starts, and refuses a backend that cannot', async () => {
+        stubBase([makeProvider()]);
+        await engine().RestrictPrivateNetworkForAgentSession('conv-no-support', []);
+        await expect(engine().StartSessionForAgentSession('conv-no-support')).rejects.toThrow('cannot keep a browser off the private network');
+        expect(engine().ActiveSessions.length).toBe(0);
+
+        const restrict = vi.fn(async (_hosts: string[]) => undefined);
+        Object.defineProperty(FakeSession.prototype, 'RestrictPrivateNetwork', { value: restrict, configurable: true });
+        try {
+            await engine().RestrictPrivateNetworkForAgentSession('conv-restricted', ['localhost:4200']);
+            await engine().StartSessionForAgentSession('conv-restricted');
+            expect(restrict).toHaveBeenLastCalledWith(['localhost:4200']);
+            await engine().RestrictPrivateNetworkForAgentSession('conv-restricted', []);
+            expect(restrict).toHaveBeenLastCalledWith([]);
+            await engine().EndSessionForAgentSession('conv-restricted');
+        } finally {
+            Reflect.deleteProperty(FakeSession.prototype, 'RestrictPrivateNetwork');
+        }
+    });
+});

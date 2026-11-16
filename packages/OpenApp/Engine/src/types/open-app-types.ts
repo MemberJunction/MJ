@@ -349,4 +349,6 @@ export interface ResolvedDependency {
     AlreadyInstalled: boolean;
     /** Currently installed version (if installed) */
     InstalledVersion?: string;
+    /** Version resolved from the declared range for a not-yet-installed dependency; undefined = no constraint (default branch) */
+    ResolvedVersion?: string;
 }

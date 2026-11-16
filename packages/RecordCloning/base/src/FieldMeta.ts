@@ -12,12 +12,14 @@ import type { CloneConfigEntityMeta } from './CloneConfigValidator';
 
 /** Field metadata for every field of `entity`, in the shape `MapFieldsForClone` and `CloneConfigValidator` expect. */
 export function FieldMetaFromEntity(entity: EntityInfo): FieldMappingFieldMeta[] {
+    const uniqueKeyFields = new Set((entity.UniqueKeySets ?? []).flatMap((k) => k.FieldNamesArray.map((n) => n.toLowerCase())));
     return entity.Fields.map((f) => ({
         Name: f.Name,
         IsPrimaryKey: f.IsPrimaryKey,
         IsIdentity: f.AutoIncrement === true,
         IsNameField: entity.NameField?.Name.toLowerCase() === f.Name.toLowerCase() || f.Name.toLowerCase() === 'name',
         IsUnique: f.IsUnique,
+        IsInUniqueKey: uniqueKeyFields.has(f.Name.toLowerCase()),
         RelatedEntityID: f.RelatedEntityID,
         RelatedEntity: f.RelatedEntity,
         RelatedEntityJoinField: f.RelatedEntityFieldName,

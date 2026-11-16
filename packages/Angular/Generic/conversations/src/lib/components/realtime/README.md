@@ -15,7 +15,7 @@ A self-contained, embeddable live‑voice agent surface. It renders a calm ambie
 |---|---|
 | `'auto'` *(default)* | Start as an **orb**. Graduate to a **console** only when the container is ≥ `[ConsoleBreakpointPx]` **and** the user has revealed text (or we're reviewing a recording). **Wider alone is not enough — no text intent ⇒ stay an orb.** |
 | `'orb'` | Always the ambient orb. |
-| `'console'` | Always the structured console. |
+| `'console'` | Always the structured console chrome. With `[AllowTextReveal]="false"` the console shows the orb hero instead of the thread. |
 
 This is exactly the behaviour the design review landed on: *Calm Orb for the overlay; flip to Command Console past a certain size — but keep the orb if the user hasn't asked to see text.*
 
@@ -30,8 +30,9 @@ All inputs are optional and default to the historical behaviour, so existing cal
 | `[Chrome]` | `'orb'\|'console'\|'auto'` | `'auto'` | Which chrome (see above). |
 | `[ConsoleBreakpointPx]` | `number` | `560` | Width at/above which `auto` may become a console. |
 | `[Compact]` | `boolean` | `false` | Force dense spacing/type (else inferred from width). |
-| `[AutoHideControls]` | `boolean` | `true` | Fade non‑essential controls when idle (orb only). |
-| `[AllowTextReveal]` | `boolean` | `true` | Can the user open the transcript? `false` ⇒ pure voice, never consoles. |
+| `[AutoHideControls]` | `boolean` | `true` | Deprecated no‑op (the fade was never implemented). |
+| `[AllowTextReveal]` | `boolean` | `true` | Can the user open the transcript? `false` ⇒ pure voice: `'auto'` never graduates to a console, and a forced `'console'` shows the orb hero. Review still shows the thread. |
+| `[AllowTyping]` | `boolean` | `true` | Typing into the session (strip and lean‑sheet Type, hotkey, programmatic open). `false` when `AllowTextReveal` is `false`. The typing box is open only while the conversation is readable (thread shown and captions on): opening it otherwise first reveals the conversation (captions on, `TextRevealed` emitted), and turning captions off closes it (the draft is kept). The narration line under the banner shows only while the thread does. |
 | `[ShowCaptionsControl]` | `boolean` | `true` | Captions toggle. |
 | `[ShowDensityPicker]` | `boolean` | `true` | Density picker (in the gear). |
 | `[ShowMinimize]` | `boolean` | `true` | Minimize (collapse call, keep it live). |
@@ -39,7 +40,7 @@ All inputs are optional and default to the historical behaviour, so existing cal
 | `[ShowSurfacePanel]` | `boolean` | `true` | Right surface panel (whiteboard/browser/channels). Console + earned only. |
 | `[ShowChannels]` | `boolean` | `true` | Channel strip. |
 | `[ShowActivityRail]` | `boolean` | `true` | Activity rail/tab (delegations, artifacts). |
-| `[ShowDevLinks]` | `boolean` | `true` | Developer links/panels (still gated by per‑session dev mode). |
+| `[ShowDevLinks]` | `boolean` | `true` | Developer links and the gear's dev toggle (still gated by per‑session dev mode). |
 | `[AllowResize]` | `boolean` | `true` | Drag‑to‑resize the surface panel. |
 | `[UiConfig]` | `RealtimeUiInputs` | — | Programmatic override bag; merged under the individual inputs. |
 | `[Hidden]` | `boolean` | `false` | Minimized (kept alive, CSS‑hidden). |
@@ -91,7 +92,7 @@ this.voice.EndSession();             // tear down
 | `SetChrome(mode)` | Override `[Chrome]` at runtime. |
 | `RevealText()` | Reveal the transcript (raises disclosure, emits `TextRevealed`). |
 | `SetMuted(b)` / `ToggleMute()` | Mic mute. |
-| `SetCaptions(b)` / `ToggleCaptions()` | Captions on/off. |
+| `SetCaptions(b)` / `ToggleCaptions()` | Captions on/off. Under `[AllowTextReveal]="false"` turning captions on is refused, but turning a saved "on" preference off still changes and saves the user's caption preference. |
 | `SetDensity(d)` | Set UX density. |
 | `OpenSurfacePanel(channelId?)` / `CollapseSurfacePanel()` | Show/hide the surface panel. |
 | `Minimize()` | Collapse without ending. |
@@ -111,8 +112,7 @@ this.voice.EndSession();             // tear down
   [ShowActivityRail]="false"
   [ShowChannels]="false"
   [ShowDevLinks]="false"
-  [ShowDensityPicker]="false"
-  [AutoHideControls]="true">
+  [ShowDensityPicker]="false">
 </mj-realtime-overlay>
 ```
 
@@ -134,6 +134,11 @@ this.voice.EndSession();             // tear down
 ```html
 <mj-realtime-overlay [Chrome]="'orb'" [AllowTextReveal]="false"
   [ShowMinimize]="false" [ShowDensityPicker]="false"></mj-realtime-overlay>
+```
+
+**Assessment — transcript shown, typing off (bizapps-caliber):**
+```html
+<mj-realtime-overlay [AllowTyping]="false"></mj-realtime-overlay>
 ```
 
 **Unexpected use — host owns the End button + reacts to every control:**

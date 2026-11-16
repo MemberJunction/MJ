@@ -1,0 +1,28 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.vp-format-glyph {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1-5);
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.vp-format-glyph__box {
+  display: inline-block;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.vp-format-glyph__label {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}

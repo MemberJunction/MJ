@@ -1,5 +1,245 @@
 # @memberjunction/ai-xai
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 70b5e38: Price a realtime run's audio tokens at their own rates. `Realtime.Pricing.AudioInput` / `AudioOutput` (per 1M tokens) in the model configuration price each direction's audio tokens on an `Audio` cost line, taken out of the default line; without an audio price the default line keeps today's figure and is marked `Blended`. The OpenAI-protocol and OpenAI Live browser clients now report the per-modality token split, through a shared `MapRealtimeUsageModalityDetail` in `@memberjunction/ai`. Cached input is priced at the cost row's cache-read rate: the record keeps `CachedAudioTokens` (OpenAI's `cached_tokens_details.audio_tokens`), the audio input line prices only the uncached audio, and an audio line never prices more tokens than left the default line.
+- 755b210: Realtime long-call reconnect fixes from the final review of #6462.
+  - Security: a relay session (Vertex, HuggingFace) now persists only routing fields on its `MJ: AI Agent Sessions` row, so its owner, including a `Widget Guest`, can no longer read the system prompt, tools or initial context the relay keeps from the browser. A relay refresh that reaches an MJAPI instance without the in-memory snapshot is refused with a clear error instead of minting from the persisted copy. A direct session's persisted copy drops the duplicate provider config.
+  - A credential refresh re-authorizes the agent the session was minted for, from server-written state, not from the editable `Config.targetAgentID`.
+  - A failed planned move that goes back to the old connection now mints at most one credential per reconnect cycle, so a provider outage during the soft window no longer exhausts the per-session mint limit.
+  - A loss of the old connection while the call waits on it, or while an attempt is in flight, goes to the running reconnect at once: input is held from that moment, Gemini no longer ends the call, and OpenAI-protocol drivers no longer go back to a dead transport.
+  - The wait on the old connection follows a goAway, a shrinking connection limit and early timers; a host state handler that throws while the call goes back no longer wedges the cycle.
+  - A credential that a refresh replaced after the attempt connected still gets its move before it expires (Gemini).
+  - OpenAI Live reports `listening` again after a move; HuggingFace keeps the call when its old socket closes during a move; Gemini holds a reply owed to speech held during a failed attempt.
+  - Server sessions (OpenAI family, OpenAI Live, ElevenLabs, AssemblyAI, Inworld) hold a tool result sent during a reconnect and deliver it once on the new connection. The server OpenAI session keeps user turns in order and no longer merges two utterances, keeps frames that arrive with `session.created` on a reconnect, and no longer leaves an unhandled rejection when it discards a connecting socket.
+  - Overlapping `CloseSession` calls are shared on the normalized session ID, and the runtime skips its page-close beacon only after its own close succeeded.
+
+- 28cec7d: Generic long-call reconnects, token refresh, and conversation continuity across all realtime voice/video providers (#6460):
+  - **4-Layer ModelConfiguration & Timing Cascade (`@memberjunction/ai`, `@memberjunction/ai-engine-base`, `@memberjunction/ai-agents`):** Add `ConnectionMaxSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, and `TrustNativeResumption` to `RealtimeConfigurationSettings` (`IAIConfiguration.ts` and `modelConfiguration.ts`), propagate them through `REALTIME_SHARED_CONFIG_KEYS`, `ScrubRealtimeSharedConfigKeys`, `ExtractRealtimeTimingConfig`, `ResolveRealtimeTiming`, and `GetModelCatalogSessionSettings`, and seed realtime models (`Gemini 3.8 Live`, `Gemini 3.8 Live Extended Thinking`, `Gemini 3.1 Flash Live`, `Grok Voice` family, `GPT Realtime` family, `GPT-Live 1`, `ElevenLabs Agents`, `Eleven Realtime`) in `.ai-models.json`.
+  - **Shared Conversation Memory & Reconnect Controller (`@memberjunction/ai`):** Promote `RealtimeConversationMemory`, `RenderRealtimeMemorySeed`, `RenderRealtimeMemorySeedAsContextNote`, `RenderLateToolResultNote`, `ResumePreamble`, and the unified I/O-free `RealtimeReconnectController` into `@memberjunction/ai` so every server and browser realtime driver shares bounded FIFO turn/tool memory (`MaxSeedChars = 24,000`), soft/hard connection-duration timers, credential refresh scheduling, per-attempt abort signals, native-to-seed fallback, and rapid-reconnect circuit-breaking (`reconnect-loop-breaker`).
+  - **Server-Side Orchestration, Protected Session Snapshot & Relay Continuity (`@memberjunction/ai`, `@memberjunction/core-entities-server`, `@memberjunction/ai-agents`, `@memberjunction/server`):** Add `CallDurationSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, `TrustsNativeResumption`, proactive timer orchestration, and `ReconnectSession` on `BaseRealtimeModel` / `BaseRealtimeSession`; persist `realtimeMintSnapshot` on `MJ: AI Agent Sessions.Config_` behind `RunWithTrustedSessionConfigWrites` (`PROTECTED_SESSION_CONFIG_KEYS`); add `RealtimeProxyRegistry.Instance.ExtendRelaySession` and timer rescheduling in `RealtimeRelayTunnel` so relayed calls survive past the 30-minute relay lease; seed `RealtimeSessionRunner`'s re-opened session from `RealtimeConversationMemory` (`InitialContext`); clear Gemini's uncompressed-video connection limit when the last bridged video source ends (`@memberjunction/ai-bridge-server`); add rate-limited `RefreshRealtimeClientSessionToken` in `RealtimeClientSessionResolver`.
+  - **Browser Runtime, Client Drivers & Continuous Recording (`@memberjunction/ai-realtime-client`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`):** Add `ApplySessionConfigTiming`, proactive timer arming on `'listening'`, `ScheduleCredentialRefresh`, and `Reconnect(context)` across `BaseRealtimeClient` and all client/server drivers (`Gemini`, `Vertex`, `OpenAI`, `OpenAI Live`, `xAI`, `ElevenLabs`, `Eleven`, `AssemblyAI`, `Inworld`, `HuggingFace`); wire `SetTokenRefreshCallback` in `RealtimeSessionRuntime`; update `RealtimeAudioRecorder.AttachRemoteStream` so WebRTC reconnects rebind replacement remote audio streams into a single continuous recording file without gaps.
+
+- b9fda3f: Preserve conversation continuity across long-call realtime reconnects and xAI transport drops.
+  - Separate replaceable ambient state snapshots (`StateKey`, bounded by `MaxStateChars = 4,000`) and wire-only operational status notes (`Ephemeral: true`) from durable spoken turns and tool calls in `RealtimeConversationMemory`, and pin opening user/assistant turns (`MaxPinnedHeadChars = 2,400`) when middle conversation entries must be evicted on ultra-long calls.
+  - Coalesce and delta-diff live `AppContext$` updates in `ClientContextChannel` via `DiffAppContextSnapshot` (sending compact deltas on the wire while storing only the single latest full screen snapshot under `StateKey: 'app-context'`), and tag interactive channel state snapshots (`BaseRealtimeChannelClient`), video-source transitions (`VideoSourceArbiter`), media-kit summaries (`MediaChannelServer`), and delegation/drop narration (`RealtimeDelegationNarrator`, `RealtimeSessionRunner`) with replaceable `StateKey` or `Ephemeral: true`.
+  - Default xAI Grok Voice client, server, and model metadata (`Grok Voice`, `Grok Voice Think Fast 2.0`, `Grok Voice 3.0`) to `TrustNativeResumption: false` so every xAI reconnect replays full `RealtimeConversationMemory` instead of relying on lossy `?conversation_id=` resumption; make native-resumption lineage breaks sticky across the session in `RealtimeSessionResumption` and preserve native resumption handles across local offline outages (`IsNetworkOnline`).
+  - Propagate `RealtimeContextNoteOptions` across all client and server realtime drivers, fixing AssemblyAI mid-reconnect context loss and multi-reconnect `system_prompt` duplication.
+
+### Patch Changes
+
+- Updated dependencies [03bb8b6]
+- Updated dependencies [31cc053]
+- Updated dependencies [0693b9b]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/ai-openai@6.3.0-edge.0
+
+## 6.2.0
+
+### Minor Changes
+
+- 8b90b41: One `NormalizeTurnDetectionSettings` in `@memberjunction/ai` now validates turn-detection blocks for the cascade and every driver, so `Coverage` survives every config layer. Each realtime driver declares `SupportedTurnSettings` in its `DriverFacts` (mirrored on session `Capabilities`): the normalized fields it maps, each `exact` or `approximate`. Gemini (and Vertex Gemini Enterprise) map `SilenceDurationMs`, `Eagerness` (low/high → end-of-speech sensitivity; auto leaves Google's default) and `Threshold` onto `automaticActivityDetection`; `Threshold` is approximate (below 0.5 → high start sensitivity, 0.5 and above → low), and in meeting mode (`disabled: true`) none of them is sent, because Gemini Live refuses those fields next to `disabled` (close 1007). xAI maps `Eagerness` onto end-of-turn silence (1200/700/400 ms) unless any layer sets `SilenceDurationMs`; a request that sets any turn field without a `Mode` is now sent as `serverVad` with those values instead of xAI's default block, and xAI now waits for `session.created` before sending its start config (sent earlier, it was dropped on the still-connecting socket). On OpenAI and Eleven Realtime, `Eagerness` applies only with `Mode: 'semanticVad'`. ElevenLabs Agents still maps only `Eagerness`, and `ELEVENLABS_SUPPORTED_TURN_SETTINGS` is unchanged. The `AIConfiguration` JSON type's turn-detection field docs state these rules.
+- 04fec10: Grok Build 0.1 no longer fails when a prompt or agent sets an effort level. Metadata only, no code change.
+
+  xAI rejects `reasoning_effort` for this model with a 400 (`Model grok-build-0.1 does not support parameter reasoningEffort.`), but its x.ai rows were flagged `SupportsEffortLevel`, so `AIPromptRunner` sent the effort level and every such run failed. Both x.ai rows (model developer and inference provider) are now `SupportsEffortLevel: false`; the runner drops the effort level for the model and logs that it is ignored, and the call succeeds. Verified live against xAI: Grok 4.5, 4.6 and 4.7 accept `reasoning_effort` and keep the flag. The OpenRouter row is unchanged: OpenRouter's handling of the parameter for this model was not verified.
+
+### Patch Changes
+
+- f34cbef: A raw `audio` override in the realtime Config bag now merges into the built audio block (transcription, turn detection and the meeting-mode floor are kept) on the mint, `session.update` and `Reconfigure` paths, instead of replacing it. Merge happens within a turn-detection type; a different type replaces the built block. An explicit `null` in the bag is sent as `null` (for example `turn_detection: null` turns VAD off, in meeting mode too, since without VAD nothing auto-responds), and a meeting-mode profile that builds no turn detection gets none invented. A bag `turn_detection` leaf on the default OpenAI config (no turn detection built) now gets OpenAI's default `type: 'server_vad'`; without a type OpenAI rejected the session. `Reconfigure` always sends `turn_detection`: `null` when the bag turned VAD off, otherwise with `create_response` set from its `DisableAutoResponse`.
+- 6b0de38: Every realtime driver now declares static `DriverFacts` (such as `ProviderMaxSessionSeconds`), readable before a session exists. A minted `ClientRealtimeSessionConfig` carries `MaxSessionSeconds`, the effective session cap: the smaller of the driver's provider cap and the host's cap, positive integers only. `PrepareClientSession` passes it through unchanged. The MJAPI relay uses the same cap rule (one shared implementation), so a fractional or invalid cap counts as unset. ElevenLabs Agents sends its native max duration only when the host set a cap, and reports `MaxSessionSeconds` only then (without a host cap the agent keeps its own setting, 600 s on a new agent, which the driver does not know); Eleven Realtime reports the same clamped value it puts on the wire. Gemini client-direct sessions now reach their 30-minute cap: Gemini ends a Live connection after about 10 minutes and counts the browser's resume as a new session, so the minted token now opens one connection per 10 minutes of the session cap plus 3 for resumes, until the cap plus 60 s (at most 6 connections and 30 minutes); it was single-use with a 10-minute window, so the first resume was refused and the call ended at about 10 minutes. A shorter host cap gives a shorter-lived token, so the browser's credential never outlasts the session's deadline.
+- Updated dependencies [0d81c53]
+- Updated dependencies [54f6563]
+- Updated dependencies [1419ba7]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [293c316]
+- Updated dependencies [b518dfa]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [709de1a]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [15a4333]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [8f370b3]
+- Updated dependencies [81aea34]
+- Updated dependencies [e1dd673]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [c261eb8]
+- Updated dependencies [59e32e0]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [4283a82]
+- Updated dependencies [914e6ff]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [d665a6e]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [2274f42]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [1d43161]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [95e5dd9]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [0b406e8]
+- Updated dependencies [1141164]
+- Updated dependencies [230cdad]
+- Updated dependencies [f34cbef]
+- Updated dependencies [ecc5658]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [575bfae]
+- Updated dependencies [c018cb9]
+- Updated dependencies [80905a1]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [2cd8411]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [22c9074]
+- Updated dependencies [6b0de38]
+- Updated dependencies [aee2d53]
+- Updated dependencies [279b93e]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [5e21f50]
+- Updated dependencies [72dd65c]
+- Updated dependencies [25f7b82]
+- Updated dependencies [8b90b41]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [4d647e6]
+- Updated dependencies [bea2386]
+- Updated dependencies [17a4137]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [c4645bc]
+- Updated dependencies [72e082b]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [e962151]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai@6.2.0
+  - @memberjunction/ai-openai@6.2.0
+  - @memberjunction/global@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- Updated dependencies [59e32e0]
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/ai@6.2.0-edge.8
+  - @memberjunction/ai-openai@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- 8b90b41: One `NormalizeTurnDetectionSettings` in `@memberjunction/ai` now validates turn-detection blocks for the cascade and every driver, so `Coverage` survives every config layer. Each realtime driver declares `SupportedTurnSettings` in its `DriverFacts` (mirrored on session `Capabilities`): the normalized fields it maps, each `exact` or `approximate`. Gemini (and Vertex Gemini Enterprise) map `SilenceDurationMs`, `Eagerness` (low/high → end-of-speech sensitivity; auto leaves Google's default) and `Threshold` onto `automaticActivityDetection`; `Threshold` is approximate (below 0.5 → high start sensitivity, 0.5 and above → low), and in meeting mode (`disabled: true`) none of them is sent, because Gemini Live refuses those fields next to `disabled` (close 1007). xAI maps `Eagerness` onto end-of-turn silence (1200/700/400 ms) unless any layer sets `SilenceDurationMs`; a request that sets any turn field without a `Mode` is now sent as `serverVad` with those values instead of xAI's default block, and xAI now waits for `session.created` before sending its start config (sent earlier, it was dropped on the still-connecting socket). On OpenAI and Eleven Realtime, `Eagerness` applies only with `Mode: 'semanticVad'`. ElevenLabs Agents still maps only `Eagerness`, and `ELEVENLABS_SUPPORTED_TURN_SETTINGS` is unchanged. The `AIConfiguration` JSON type's turn-detection field docs state these rules.
+
+### Patch Changes
+
+- f34cbef: A raw `audio` override in the realtime Config bag now merges into the built audio block (transcription, turn detection and the meeting-mode floor are kept) on the mint, `session.update` and `Reconfigure` paths, instead of replacing it. Merge happens within a turn-detection type; a different type replaces the built block. An explicit `null` in the bag is sent as `null` (for example `turn_detection: null` turns VAD off, in meeting mode too, since without VAD nothing auto-responds), and a meeting-mode profile that builds no turn detection gets none invented. A bag `turn_detection` leaf on the default OpenAI config (no turn detection built) now gets OpenAI's default `type: 'server_vad'`; without a type OpenAI rejected the session. `Reconfigure` always sends `turn_detection`: `null` when the bag turned VAD off, otherwise with `create_response` set from its `DisableAutoResponse`.
+- 6b0de38: Every realtime driver now declares static `DriverFacts` (such as `ProviderMaxSessionSeconds`), readable before a session exists. A minted `ClientRealtimeSessionConfig` carries `MaxSessionSeconds`, the effective session cap: the smaller of the driver's provider cap and the host's cap, positive integers only. `PrepareClientSession` passes it through unchanged. The MJAPI relay uses the same cap rule (one shared implementation), so a fractional or invalid cap counts as unset. ElevenLabs Agents sends its native max duration only when the host set a cap, and reports `MaxSessionSeconds` only then (without a host cap the agent keeps its own setting, 600 s on a new agent, which the driver does not know); Eleven Realtime reports the same clamped value it puts on the wire. Gemini client-direct sessions now reach their 30-minute cap: Gemini ends a Live connection after about 10 minutes and counts the browser's resume as a new session, so the minted token now opens one connection per 10 minutes of the session cap plus 3 for resumes, until the cap plus 60 s (at most 6 connections and 30 minutes); it was single-use with a 10-minute window, so the first resume was refused and the call ended at about 10 minutes. A shorter host cap gives a shorter-lived token, so the browser's credential never outlasts the session's deadline.
+- Updated dependencies [54f6563]
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [4283a82]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [0b406e8]
+- Updated dependencies [f34cbef]
+- Updated dependencies [c018cb9]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-openai@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [709de1a]
+- Updated dependencies [914e6ff]
+- Updated dependencies [1141164]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ai-openai@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Minor Changes

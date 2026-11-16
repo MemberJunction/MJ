@@ -209,6 +209,7 @@ vi.mock('@memberjunction/communication-types', () => {
 // ============================================================================
 import { CommunicationEngine } from '../Engine';
 import { ProcessedMessageServer } from '../BaseProvider';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 describe('CommunicationEngine', () => {
     let engine: CommunicationEngine;
@@ -353,6 +354,17 @@ describe('CommunicationEngine', () => {
 
             expect(results).toHaveLength(2);
             expect(sendSpy).toHaveBeenCalledTimes(2);
+        });
+
+        it('forwards the acting user to every per-recipient send', async () => {
+            vi.spyOn((engine as unknown as { base: object }).base as never, 'StartRun' as never).mockResolvedValue({ ID: 'run-1' } as never);
+            vi.spyOn((engine as unknown as { base: object }).base as never, 'EndRun' as never).mockResolvedValue(true as never);
+            const sendSpy = vi.spyOn(engine, 'SendSingleMessage').mockResolvedValue({ Success: true, Error: '', Message: {} as never });
+            const actingUser = { ID: 'acting-user' };
+
+            await engine.SendMessages('P', 'T', {} as never, [{ To: 'a@test.com', ContextData: null }] as never, true, undefined, actingUser as never);
+
+            expect(sendSpy.mock.calls[0][6]).toBe(actingUser);
         });
 
         it('should throw when StartRun fails', async () => {
@@ -599,6 +611,22 @@ describe('ProcessedMessageServer', () => {
         expect(processed.ProcessedBody).toBe('Plain body');
         expect(processed.ProcessedHTMLBody).toBe('<b>HTML body</b>');
         expect(processed.ProcessedSubject).toBe('Test Subject');
+    });
+
+    it('renders every template as the user it is processed for', async () => {
+        const content = { ID: 'c1', TemplateText: 'Hi' };
+        const template = { GetHighestPriorityContent: () => content };
+        const message = { Body: null, HTMLBody: 'x', Subject: null, BodyTemplate: template, HTMLBodyTemplate: null, SubjectTemplate: template };
+        const actingUser = { ID: 'acting-user' };
+
+        const result = await new ProcessedMessageServer(message as never).Process(false, actingUser as never);
+
+        expect(result.Success).toBe(true);
+        const render = vi.mocked(TemplateEngineServer.Instance.RenderTemplate);
+        expect(render).toHaveBeenCalled();
+        for (const call of render.mock.calls) {
+            expect(call[5]).toEqual({ ContextUser: actingUser });
+        }
     });
 
     it('should set empty HTML body when no HTMLBody and no template', async () => {

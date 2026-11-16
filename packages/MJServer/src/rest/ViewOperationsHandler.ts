@@ -1,8 +1,10 @@
 import { 
-    BaseEntity, LogError, Metadata, RunView, RunViewParams, 
+    BaseEntity, EntityInfo, LogError, Metadata, RunView, RunViewParams, 
     RunViewResult, UserInfo, type IRunViewProvider 
 } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { ClientClauseScreen } from '@memberjunction/generic-database-provider';
+import { ProjectRowsForCaller } from '../generic/fieldSecurityTransport.js';
 
 /**
  * View Operations Implementation for REST endpoints
@@ -40,7 +42,7 @@ export class ViewOperationsHandler {
             // Execute the view
             const result = await runView.RunView(params, user);
             
-            return { success: true, result };
+            return { success: true, result: this.projectResult(result, entity, user, md) };
         } catch (error) {
             LogError(error);
             return { success: false, error: (error as Error)?.message || 'Unknown error' };
@@ -60,6 +62,7 @@ export class ViewOperationsHandler {
             // Validate and sanitize each set of parameters against the provider that runs the views
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const runView = new RunView();
+            const entities: EntityInfo[] = [];
             for (const params of paramsArray) {
                 // Validate entity exists
                 const entity = md.Entities.find(e => e.Name === params.EntityName);
@@ -81,12 +84,14 @@ export class ViewOperationsHandler {
                 
                 // Sanitize parameters
                 this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
+                entities.push(entity);
             }
             
             // Execute the views
             const results = await runView.RunViews(paramsArray, user);
             
-            return { success: true, results };
+            const projected = results?.map((r, i) => this.projectResult(r, entities[i], user, md));
+            return { success: true, results: projected?.some((r, i) => r !== results[i]) ? projected : results };
         } catch (error) {
             LogError(error);
             return { success: false, error: (error as Error)?.message || 'Unknown error' };
@@ -120,7 +125,7 @@ export class ViewOperationsHandler {
             this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
             
             // Execute the view
-            return await runView.RunView(params, user);
+            return this.projectResult(await runView.RunView(params, user), entity, user, md);
         } catch (error) {
             LogError(error);
             throw error;
@@ -159,7 +164,7 @@ export class ViewOperationsHandler {
             // Run a view to get the available views
             const params: RunViewParams = {
                 EntityName: 'MJ: User Views',
-                ExtraFilter: `Entity = '${entityName}'`
+                ExtraFilter: `Entity = '${EscapeSQLString(entity.Name)}'`
             };
             
             const runView = new RunView();
@@ -193,6 +198,19 @@ export class ViewOperationsHandler {
         return this.GetEntityViews(entityName, user);
     }
     
+    /**
+     * The result with its rows reduced to what `user` may READ. The provider already narrows the
+     * rows it reads for a restricted caller; this is the backstop for any that arrive wider. The
+     * same result object comes back when no row needed changing.
+     */
+    private static projectResult(result: RunViewResult, entity: EntityInfo, user: UserInfo, md: Metadata): RunViewResult {
+        if (!result?.Results?.length) {
+            return result;
+        }
+        const rows = ProjectRowsForCaller(entity, result.Results as Record<string, unknown>[], user, md);
+        return rows === result.Results ? result : { ...result, Results: rows };
+    }
+
     /**
      * Sanitize and validate RunViewParams. Client filter and sort text passes the same clause
      * screen as the GraphQL RunView resolvers, parsed in the dialect of `provider`, the provider
@@ -231,8 +249,9 @@ export class ViewOperationsHandler {
             params.StartRow = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed as number)) : undefined;
         }
         
-        // Default ResultType if not provided
-        if (!params.ResultType) {
+        // Plain rows only on the wire. An entity object serializes its internal state rather than
+        // its projected field values, so a caller may not ask for one; a count carries no row.
+        if (params.ResultType !== 'count_only') {
             params.ResultType = 'simple';
         }
 

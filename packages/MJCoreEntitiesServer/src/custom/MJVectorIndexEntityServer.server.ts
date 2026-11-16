@@ -28,6 +28,12 @@ type VectorIndexProvisionState =
     | 'timed-out'
     /** The driver owns no index objects; this row is the whole definition (see {@link VectorDBBase.ManagesIndexes}). */
     | 'not-applicable'
+    /**
+     * The row was created with `ExternalID` already set: it names an index that exists on the provider
+     * (an app's shipped index, or one created outside MJ). Nothing was created, and deleting the row
+     * leaves the provider index alone, because MJ never owned it.
+     */
+    | 'adopted'
     /** No driver instance could be built in this process, so nothing was attempted. */
     | 'unprovisioned';
 
@@ -158,6 +164,7 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
                 break;
             case 'unprovisioned':
             case 'not-applicable':
+            case 'adopted':
                 LogStatus(`Vector index "${this.Name}": provisionState "${outcome.state}" (${outcome.reason ?? 'no detail'})`);
                 break;
         }
@@ -170,6 +177,17 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
      * Throws only when the driver throws or the call times out; the caller classifies both.
      */
     private async provisionIndexInProvider(): Promise<ProvisionResult> {
+        // A row created with ExternalID already set addresses an index that exists on the provider
+        // (an Open App's shipped index, or one made outside MJ). Creating one from Name instead would
+        // leave an empty index behind and point the row at it, away from the vectors it names.
+        const adoptedIndex = this.ExternalID?.trim();
+        if (adoptedIndex) {
+            return {
+                state: 'adopted',
+                reason: `ExternalID "${adoptedIndex}" names an existing provider index; nothing was created`,
+            };
+        }
+
         const vectorDB = await this.getVectorDBInstance();
         if (!vectorDB) {
             // getVectorDBInstance() has already logged the specific reason.
@@ -223,6 +241,12 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
      * Delete the index from the vector database provider.
      */
     private async deleteIndexFromProvider(): Promise<void> {
+        if (this.readProvisionState() === 'adopted') {
+            // MJ never created this index, and other rows or apps may still use it.
+            LogStatus(`Vector index "${this.Name}" adopted an existing provider index; leaving it in place`);
+            return;
+        }
+
         const vectorDB = await this.getVectorDBInstance();
         if (!vectorDB) {
             LogError(`Cannot delete index: no VectorDB instance for database ${this.VectorDatabaseID}`);
@@ -495,6 +519,23 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
         } catch (error) {
             LogError(`Could not record provisioning state "${outcome.state}" on vector index "${this.Name}"`, undefined, error);
         }
+    }
+
+    /** The `provisionState` recorded on `ProviderConfig`, or undefined when there is none or it cannot be read. */
+    private readProvisionState(): string | undefined {
+        if (!this.ProviderConfig) {
+            return undefined;
+        }
+        try {
+            const parsed: unknown = JSON.parse(this.ProviderConfig);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const state = (parsed as Record<string, unknown>)['provisionState'];
+                return typeof state === 'string' ? state : undefined;
+            }
+        } catch {
+            // An unreadable ProviderConfig carries no provisioning state.
+        }
+        return undefined;
     }
 
     /**

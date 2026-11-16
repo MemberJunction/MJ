@@ -82,16 +82,19 @@ export type SystemUserFieldAccessViolation = {
  * @param entity the entity the field belongs to
  * @param field the field whose rules are changing
  * @param projectedRules every rule that would bind to this field after the change
+ * @param systemUser the account to check, for callers that read its role set from the database;
+ *   defaults to the user cache's system user
  */
 export function SystemUserFieldAccessLossReason(
     entity: EntityInfo | null | undefined,
     field: EntityFieldInfo | null | undefined,
-    projectedRules: readonly FieldPermissionRuleForRole[]
+    projectedRules: readonly FieldPermissionRuleForRole[],
+    systemUser?: UserInfo | null
 ): string | null {
     if (!entity || !field) {
         return null;
     }
-    const systemUser = resolveSystemUser();
+    systemUser = systemUser ?? resolveSystemUser();
     if (!systemUser) {
         return null;
     }
@@ -125,6 +128,13 @@ export type SystemUserFieldAccessSweepOptions = {
      * up, and field rules decide nothing.
      */
     WithoutRoleID?: string;
+    /**
+     * The rules to judge each field by, keyed by lower-case `EntityFieldID`, in place of the rules
+     * on loaded metadata. For callers that read the rules from the database because loaded
+     * metadata may lag a write made a moment ago. A field absent from the map has no rule for any
+     * role the system user holds, so only rules bound to those roles need to be in it.
+     */
+    RulesByFieldID?: ReadonlyMap<string, readonly FieldPermissionRuleForRole[]>;
 };
 
 /**
@@ -133,6 +143,12 @@ export type SystemUserFieldAccessSweepOptions = {
  * The backstop for state the save-time guard never saw: direct SQL, a migration, or a save made
  * while the user cache was cold. Walks loaded metadata only — no queries — and skips entities with
  * field security switched off, which is nearly all of them.
+ *
+ * With `WithoutRoleID` (the role-removal guard) an entity with field security switched off is
+ * judged too, on the fields that carry rules: those rules are dormant, not gone, and apply again
+ * the moment field security is re-enabled, so skipping them would let "disable, remove the role,
+ * re-enable" strip the system user's access with no refusal anywhere. Such a field is reported
+ * only when the removal itself costs the access, never for a shortfall that already existed.
  *
  * @param provider the provider whose metadata to walk
  * @param systemUser the account to check; defaults to the user cache's system user
@@ -151,20 +167,51 @@ export function FindSystemUserFieldAccessViolations(
 
     const violations: SystemUserFieldAccessViolation[] = [];
     for (const entity of provider.Entities ?? []) {
-        if (!entity.EnableFieldLevelSecurity) {
-            continue; // dormant rules cannot restrict anything
+        const dormant = !entity.EnableFieldLevelSecurity;
+        if (dormant && !options.WithoutRoleID) {
+            continue; // dormant rules restrict nothing until field security is re-enabled
         }
         for (const field of entity.Fields) {
-            if (field.IsUnrestrictableField || field.IsOnUnrestrictableEntity) {
-                continue;
-            }
-            const lost = lostVerb(entity, field, field.FieldPermissions, user);
+            const lost = fieldViolation(entity, field, rulesForField(field, options), user, dormant ? resolved : null);
             if (lost) {
                 violations.push({ EntityName: entity.Name, FieldName: field.Name, Verb: lost });
             }
         }
     }
     return violations;
+}
+
+/** The rules to judge a field by: the caller's stored rules when supplied, else loaded metadata. */
+function rulesForField(field: EntityFieldInfo, options: SystemUserFieldAccessSweepOptions): readonly FieldPermissionRuleForRole[] {
+    if (!options.RulesByFieldID) {
+        return field.FieldPermissions;
+    }
+    return options.RulesByFieldID.get(String(field.ID ?? '').trim().toLowerCase()) ?? [];
+}
+
+/**
+ * The verb `user` lacks on one field, or null. For a dormant field (`before` is the user as it is
+ * now, before the change being judged) only a field with rules counts, and only when `before`
+ * still has that verb, so the change is what costs it.
+ */
+function fieldViolation(
+    entity: EntityInfo,
+    field: EntityFieldInfo,
+    rules: readonly FieldPermissionRuleForRole[],
+    user: UserInfo,
+    before: UserInfo | null
+): SystemUserFieldAccessViolation['Verb'] | null {
+    if (field.IsUnrestrictableField || field.IsOnUnrestrictableEntity) {
+        return null;
+    }
+    if (before && rules.length === 0) {
+        return null; // no dormant rule: re-enabling seeds this field afresh
+    }
+    const lost = lostVerb(entity, field, rules, user);
+    if (!lost || (before && lostVerb(entity, field, rules, before))) {
+        return null;
+    }
+    return lost;
 }
 
 /**

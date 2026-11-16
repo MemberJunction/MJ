@@ -556,6 +556,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             ExtraFilter: `EntityID = '${entityId}' AND RecordID = '${recordId}'`,
             OrderBy: 'ChangedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID'],
             ResultType: 'simple'
         });

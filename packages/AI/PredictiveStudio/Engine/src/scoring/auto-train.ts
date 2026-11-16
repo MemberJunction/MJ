@@ -18,8 +18,9 @@
  *      bytes load on this server (so concurrent or repeated runs don't retrain), or
  *   2. **trains** the pipeline through the real {@link TrainingEngine} path and
  *      **publishes** the result through the promotion gate (Draft → Validated →
- *      Published — a leakage-flagged model is refused and stays Draft, exactly as a
- *      human-driven promotion would be);
+ *      Published — a leakage-flagged or calibration-held model, or one whose artifact
+ *      `/predict` does not serve, is refused and stays Draft, exactly as a human-driven
+ *      promotion would be);
  *   3. **repoints** the Record Process's `Configuration.modelId` and every scoring
  *      binding on that process (or on the superseded model) at the new model, and
  *      creates the declared binding when none exists yet;
@@ -31,25 +32,31 @@
 
 import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 
-import { TrainModelViaEngine } from '../operations/delegation';
+import { TrainingDelegation } from '../operations/delegation';
 import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
 import type { IModelPromotionGate, PromoteModelOutcome } from '../actions/promote-model.action';
 import { MetadataEntityFactory } from '../training/seams';
-import { LocalArtifactLoader } from './artifact-loader';
+import { TrainingEngine } from '../training/training-engine';
+import { StorageProviderArtifactLoader } from './storage-provider-artifact-loader';
 import { UpsertScoringBinding } from './scoring-binding';
-import { ModelHasTrainedArtifact } from './model-readiness';
+import { ModelHasTrainedArtifact, ModelReadiness } from './model-readiness';
 import type { AutoTrainRequest, IArtifactLoader, IModelAutoTrainer } from './types';
 
-/** Canonical UUID shape — the only id shape interpolated into a filter here. */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isUuid(value: string | null | undefined): value is string {
-  return typeof value === 'string' && UUID_RE.test(value.trim());
-}
-
-/** Signature of the train step (production: {@link TrainModelViaEngine}); injectable for tests. */
+/** Signature of the train step (production: {@link TrainingDelegation.TrainModelViaEngine}); injectable for tests. */
 export type AutoTrainTrainFn = (pipelineId: string, provider: IMetadataProvider, user: UserInfo) => Promise<MJMLModelEntity>;
+
+/**
+ * The pipeline's training run completed without a model: its gate decision shipped no artifact (`no-signal`, or the
+ * unit's existing rule kept), so there is nothing to publish or score. The message carries the run's stored reason.
+ */
+export class AutoTrainShippedNoModelError extends Error {
+  constructor(public readonly PipelineID: string, public readonly TrainingRunID: string, public readonly Reason: string) {
+    super(`Auto-train: training pipeline ${PipelineID} (run ${TrainingRunID}) shipped no model, so there is nothing to score with: ${Reason}`);
+    this.name = 'AutoTrainShippedNoModelError';
+  }
+}
 
 /** Optional seams for {@link PipelineAutoTrainer} (all default to production implementations). */
 export interface PipelineAutoTrainerOptions {
@@ -70,14 +77,25 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
   private readonly artifactLoader: IArtifactLoader;
 
   constructor(options: PipelineAutoTrainerOptions = {}) {
-    this.train = options.train ?? (async (pipelineId, provider, user) => (await TrainModelViaEngine({ pipelineId }, provider, user)).model);
+    this.train = options.train || PipelineAutoTrainer.TrainThroughEngine;
     this.gate = options.gate ?? new ProductionModelPromotionGate();
-    this.artifactLoader = options.artifactLoader ?? new LocalArtifactLoader();
+    this.artifactLoader = options.artifactLoader ?? new StorageProviderArtifactLoader();
+  }
+
+  /**
+   * The production train step: train the pipeline through the training engine and return its model.
+   *
+   * @throws AutoTrainShippedNoModelError when the run's gate decision shipped no model, carrying its stored reason
+   */
+  public static async TrainThroughEngine(pipelineId: string, provider: IMetadataProvider, user: UserInfo): Promise<MJMLModelEntity> {
+    const result = await TrainingDelegation.TrainModelViaEngine({ pipelineId }, provider, user);
+    if (result.model === null) throw new AutoTrainShippedNoModelError(pipelineId, result.run.ID, TrainingEngine.NoModelReason(result));
+    return result.model;
   }
 
   /** @inheritdoc */
   public async EnsureTrainedModel(request: AutoTrainRequest, contextUser: UserInfo, provider: IMetadataProvider): Promise<string> {
-    if (!isUuid(request.pipelineId)) {
+    if (!IsValidUUID(request.pipelineId)) {
       throw new Error(`Auto-train: '${request.pipelineId}' is not a valid ML Training Pipeline id.`);
     }
     const reused = await this.findReusableModel(request.pipelineId, contextUser, provider);
@@ -93,14 +111,17 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
 
   // ----- reuse --------------------------------------------------------------
 
-  /** The newest Published model of the pipeline whose artifact loads on this server, if any. */
+  /**
+   * The newest Published model of the pipeline whose artifact `/predict` serves and loads on this server, if any (a
+   * forecast's series forecaster published before the gate refused one is skipped).
+   */
   protected async findReusableModel(pipelineId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null> {
-    const result = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; ArtifactFileID: string | null }>(
+    const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLModelEntity, 'ID' | 'ArtifactFileID' | 'Lineage'>>(
       {
         EntityName: 'MJ: ML Models',
         ExtraFilter: `PipelineID='${pipelineId}' AND Status='Published' AND ArtifactFileID IS NOT NULL`,
         OrderBy: 'Version DESC',
-        Fields: ['ID', 'ArtifactFileID'],
+        Fields: ['ID', 'ArtifactFileID', 'Lineage'],
         ResultType: 'simple',
         MaxRows: 5,
       },
@@ -110,7 +131,8 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
       return null;
     }
     for (const row of result.Results) {
-      if (ModelHasTrainedArtifact(row) && row.ArtifactFileID && (await this.artifactLoader.load(row.ArtifactFileID, contextUser))) {
+      const servable = ModelHasTrainedArtifact(row) && ModelReadiness.IsServedByPredict(row);
+      if (servable && row.ArtifactFileID && (await this.artifactLoader.load(row.ArtifactFileID, contextUser, provider))) {
         return row.ID;
       }
     }
@@ -134,23 +156,9 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     return model.ID;
   }
 
-  /** Plain description of a non-promoted outcome. */
+  /** Plain description of a non-promoted outcome ({@link ProductionModelPromotionGate.DescribeRefusal}). */
   protected describeRefusal(outcome: PromoteModelOutcome): string {
-    switch (outcome.kind) {
-      case 'refused-leakage':
-      case 'signoff-reason-required':
-        return `possible target leakage on "${outcome.topFeature ?? 'a feature'}" needs human sign-off`;
-      case 'invalid-transition':
-        return `invalid transition from ${outcome.currentStatus}`;
-      case 'needs-training':
-        return outcome.message;
-      case 'not-found':
-        return 'model not found';
-      case 'save-failed':
-        return outcome.message;
-      case 'promoted':
-        return 'promoted';
-    }
+    return ProductionModelPromotionGate.DescribeRefusal(outcome);
   }
 
   // ----- repoint ------------------------------------------------------------
@@ -163,9 +171,10 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
   protected async repoint(request: AutoTrainRequest, modelId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
     const factory = new MetadataEntityFactory(provider);
     let rp: MJRecordProcessEntity | null = null;
-    if (isUuid(request.recordProcessId)) {
+    const recordProcessId = request.recordProcessId;
+    if (recordProcessId !== null && IsValidUUID(recordProcessId)) {
       rp = await factory.getEntityObject<MJRecordProcessEntity>('MJ: Record Processes', contextUser);
-      if (await rp.Load(request.recordProcessId)) {
+      if (await rp.Load(recordProcessId)) {
         const config = this.parseConfig(rp.Configuration);
         config.modelId = modelId;
         rp.Configuration = JSON.stringify(config);
@@ -179,7 +188,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
 
     const bindings = await this.loadBindings(request, rp?.ID ?? null, contextUser, provider);
     for (const binding of bindings) {
-      if (binding.MLModelID === modelId) {
+      if (UUIDsEqual(binding.MLModelID, modelId)) {
         continue;
       }
       binding.MLModelID = modelId;
@@ -211,8 +220,8 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     provider: IMetadataProvider,
   ): Promise<MJMLModelScoringBindingEntity[]> {
     const clauses: string[] = [];
-    if (isUuid(recordProcessId)) clauses.push(`RecordProcessID='${recordProcessId}'`);
-    if (isUuid(request.currentModelId)) clauses.push(`MLModelID='${request.currentModelId}'`);
+    if (IsValidUUID(recordProcessId)) clauses.push(`RecordProcessID='${recordProcessId}'`);
+    if (IsValidUUID(request.currentModelId)) clauses.push(`MLModelID='${request.currentModelId}'`);
     if (clauses.length === 0) {
       return [];
     }
@@ -225,7 +234,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
 
   /** Archive the superseded model when it was Published (best-effort — never fails the run). */
   protected async archiveSuperseded(oldModelId: string | null, newModelId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
-    if (!isUuid(oldModelId) || oldModelId.toLowerCase() === newModelId.toLowerCase()) {
+    if (oldModelId === null || !IsValidUUID(oldModelId) || UUIDsEqual(oldModelId, newModelId)) {
       return;
     }
     try {

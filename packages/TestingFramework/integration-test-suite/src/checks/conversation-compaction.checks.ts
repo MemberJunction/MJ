@@ -31,6 +31,7 @@ import {
     MJConversationEntity,
     MJConversationBranchEntity,
     MJConversationDetailEntity,
+    MJConversationDetailEntityExtended,
     MJAIAgentSessionEntity,
     MJArtifactEntity,
     MJArtifactVersionEntity,
@@ -72,7 +73,8 @@ async function CreateConversationFixture(
 
     const details: MJConversationDetailEntity[] = [];
     for (const message of messages) {
-        const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+        const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', ctx.User);
+        detail.MarkServerAuthoredReply(); // an 'AI' row stands in for an agent reply, which only the server writes
         detail.ConversationID = conversation.ID;
         detail.Role = message.role;
         detail.Message = message.text;
@@ -202,7 +204,8 @@ async function CreateBranchedConversationFixture(
     Assert(await branch.Save(), `branch fixture save: ${branch.LatestResult?.CompleteMessage}`);
     fixture.WindowRoots.push(branch);   // after its details, before its conversation
 
-    const branchRow = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+    const branchRow = await ctx.Provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', ctx.User);
+    branchRow.MarkServerAuthoredReply(); // an 'AI' row stands in for an agent reply, which only the server writes
     branchRow.ConversationID = conversationId;
     branchRow.Role = 'AI';
     branchRow.Message = `${label}-3`;
@@ -416,7 +419,10 @@ async function SaveDetailFixture(
     role: 'User' | 'AI',
     text: string
 ): Promise<MJConversationDetailEntity> {
-    const row = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+    const row = await ctx.Provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', ctx.User);
+    if (role === 'AI') {
+        row.MarkServerAuthoredReply(); // stands in for an agent reply, which only the server writes
+    }
     row.ConversationID = conversationId;
     row.BranchID = branchId;
     row.Role = role;
@@ -832,9 +838,10 @@ export const ConversationCompactionChecks: NamedCheck[] = [
             const entry = fixture.Conversations[fixture.Conversations.length - 1];
 
             for (let i = 2; i <= 10; i++) {
-                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntityExtended>(
                     'MJ: Conversation Details', ctx.User
                 );
+                detail.MarkServerAuthoredReply(); // stands in for an agent reply, which only the server writes
                 detail.ConversationID = conversationId;
                 detail.Role = 'AI';
                 detail.Message = `w${i}`;

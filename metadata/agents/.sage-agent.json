@@ -25,13 +25,14 @@
         "includeVariableRefsDocs": false,
         "includeScratchpadDocs": true,
         "includeMessageExpansionDocs": false,
-        "enableTaskGraphs": true
+        "enableTaskGraphs": true,
+        "enableHandoff": true
       },
       "RerankerConfiguration": {
         "enabled": true,
-        "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v3.5",
+        "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v5.0-fast",
         "retrievalMultiplier": 3,
-        "minRelevanceThreshold": 0.5,
+        "minRelevanceThreshold": 0.02,
         "fallbackOnError": true
       },
       "TypeConfiguration": {
@@ -42,7 +43,7 @@
           },
           "directActions": {
             "enabled": true,
-            "timeoutMs": 8000,
+            "timeoutMs": 30000,
             "actionNames": [
               "Get Record",
               "Scoped Search",
@@ -53,7 +54,11 @@
               "Web Page Content",
               "URL Metadata Extractor",
               "Web Search",
-              "Preview Document"
+              "Preview Document",
+              "Create Governed Artifact",
+              "Inspect Governed Artifact",
+              "Mutate Governed Artifact",
+              "List Workspace Artifacts"
             ]
           }
         }
@@ -502,6 +507,90 @@
           "deleteRecord": {
             "delete": true,
             "deletedAt": "2026-09-22T18:53:11.631Z"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Render Architecture Diagram",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E924A91D-4C8B-4E15-9A3E-71D82C9B4011"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:20.759Z",
+            "checksum": "7b4f27bb809afa8549520d0548bc15ea3e3093e002de368ca7bd8d9b53940d7e"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Architecture Diagram Reference",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B418C72E-5D9A-4F26-8B4F-82E93DAC5122"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:20.773Z",
+            "checksum": "74ab806d6f221bda9360443ca3a310f4fd2c30ebcfe84a8f9f5b86967b98f0d4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D2AC0C24-0EEA-4355-AD3F-972870682DBF"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:20.478Z",
+            "checksum": "ec935fc6573efac0226117962fd8dd9ddf4f44733cf1dd077a3f07a1500b9c34"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Inspect Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B91508F2-4456-4178-B1D8-C33A302FF167"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:20.493Z",
+            "checksum": "aa7cb156da674a9ff36278666b5faf9c8d175c5c81d86f1609e993d6cc3d0bff"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Mutate Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "92CFA9CA-E688-48DD-BDCE-5F6C17FE31B0"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:20.509Z",
+            "checksum": "655b7653331c0a44aabc9282bf8b5fef41b9b209201b886702a691e885ef3511"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List Workspace Artifacts",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "38FF5C60-CE87-4F63-88B9-91255BE3490F"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T14:43:20.523Z",
+            "checksum": "cf5f1824bdcb573d9d4c437cf0a0345c0f94a23ced571c3791cba3780dad8c11"
           }
         }
       ],
@@ -989,8 +1078,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-10-18T13:09:46.268Z",
-      "checksum": "cbe4237db70e69afbd5c52b260d8773f8cf73b9148bc70fcfa55d525671b74d5"
+      "lastModified": "2026-11-15T14:43:20.460Z",
+      "checksum": "889c0f0e8fce7096d20ba06712793ed16a86fb491a6fc05c610c8355dc97ed4c"
     }
   }
 ]

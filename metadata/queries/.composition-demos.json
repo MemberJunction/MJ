@@ -5,20 +5,96 @@
       "CategoryID": "@lookup:MJ: Query Categories.Name=Demos",
       "Description": "Returns all active users with basic profile info. Designed as a reusable building block for composed queries.",
       "SQL": "@file:SQL/demos/active-users.sql",
-      "TechnicalDescription": "Simple base query selecting active users from vwUsers. Marked as Reusable so other queries can reference it via {{query:\"Demos/Active Users\"}} composition syntax.",
+      "TechnicalDescription": "Simple base query selecting active users from vwUsers. Marked as Reusable so other queries can reference it via {{query:\"MJ/Demos/Active Users\"}} composition syntax.",
       "Status": "Approved",
       "QualityRank": 8,
       "ExecutionCostRank": 1,
       "Reusable": true,
       "UsesTemplate": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/demos/active-users.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "7BA9B3F0-4DD9-464F-8F36-9B3DA9372FA3"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.526Z",
+            "checksum": "e8789bfdbf5f1b72f96c0cd27e4e9fa72d370238e1cc25c90e89dcd9e1950d4c"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Fields": [
+        {
+          "fields": {
+            "Name": "ID",
+            "Description": "Unique identifier for the user",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "40579BCF-7402-42FC-94E6-8BEE7D5A1B67"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Name",
+            "Description": "Full name of the user",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "EF6E8F82-0D8D-49CF-9A94-3B6F9B88C204"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Email",
+            "Description": "Email address of the user",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DFF47672-B23E-4138-AF24-1DA13D82A114"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Type",
+            "Description": "Type or role of the user",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AA268469-2B4C-4587-9DD6-A3BA9E3F10B0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CreatedAt",
+            "Description": "Timestamp when the user record was created",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CBE5ED0B-EB72-4905-9FC6-45BAD4BCE1E1"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "D972EBBA-AEB3-46F2-9ED1-B8986173039C"
     },
     "sync": {
-      "lastModified": "2026-04-29T05:22:33.637Z",
-      "checksum": "1cf8f4a7da64fd6b99218699ffa82496826080e5868cbb689774e2effdddb1d7"
+      "lastModified": "2026-10-28T22:14:01.688Z",
+      "checksum": "2616e54689f5d68659385befad295f8f930410082a53d06d1859cedbc9b2661c"
     }
   },
   {
@@ -52,12 +128,81 @@
         }
       ]
     },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "lookbackDays",
+            "Type": "number",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "7",
+            "Description": "Number of days to look back for record changes",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E50491F6-7329-4B32-A5A2-9F0C7E190DE8"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "EntityName",
+            "Description": "Name of the entity that had record changes",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7B31A4B2-84F8-47D8-BDD9-AC09C2DD97DA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ChangeCount",
+            "Description": "Total number of changes for the entity",
+            "IsSummary": true,
+            "ComputationDescription": "COUNT(*) aggregate counting all record changes per entity",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CB2D5E69-CBCA-4B21-88FC-F2EFED09D485"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatestChange",
+            "Description": "Most recent change timestamp for the entity",
+            "IsSummary": true,
+            "ComputationDescription": "MAX(rc.CreatedAt) - latest change timestamp per entity",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "54B7BE79-764E-4F33-A477-551C01A98743"
+          }
+        },
+        {
+          "fields": {
+            "Name": "EarliestChange",
+            "Description": "Earliest change timestamp for the entity",
+            "IsSummary": true,
+            "ComputationDescription": "MIN(rc.CreatedAt) - earliest change timestamp per entity",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D30E0433-1F9B-4679-8D9C-6A5B213711EE"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "C3F7F066-789A-42A2-ACFD-2C113B5D2E30"
     },
     "sync": {
-      "lastModified": "2026-04-29T05:22:32.137Z",
-      "checksum": "8e94e609f019b218c8f56514a5ba49dfca3d44a7858c737a22d26ffa14c9d29a"
+      "lastModified": "2026-10-28T22:14:01.711Z",
+      "checksum": "d7438cb60d204500857836e9a965e66a7e4799ce116c322669aa6f50f8403bd6"
     }
   },
   {
@@ -66,20 +211,97 @@
       "CategoryID": "@lookup:MJ: Query Categories.Name=Demos",
       "Description": "Composed query that joins Active Users with Recent Entity Changes to show each user's recent activity level. Demonstrates the {{query:\"...\"}} composition syntax.",
       "SQL": "@file:SQL/demos/user-activity-summary.sql",
-      "TechnicalDescription": "This query demonstrates MJ query composition by referencing two reusable queries:\n1. {{query:\"Demos/Active Users\"}} - provides the user base\n2. {{query:\"Demos/Recent Entity Changes(lookbackDays='30')\"}} - provides change metrics with a static 30-day lookback\n\nAt execution time, the composition engine resolves these references into CTEs before the SQL is sent to the database.",
+      "TechnicalDescription": "This query demonstrates MJ query composition by referencing two reusable queries:\n1. {{query:\"MJ/Demos/Active Users\"}} - provides the user base\n2. {{query:\"MJ/Demos/Recent Entity Changes(lookbackDays='30')\"}} - provides change metrics with a static 30-day lookback\n\nAt execution time, the composition engine resolves these references into CTEs before the SQL is sent to the database.",
       "Status": "Approved",
       "QualityRank": 7,
       "ExecutionCostRank": 3,
       "Reusable": false,
-      "UsesTemplate": false
+      "UsesTemplate": true
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/demos/user-activity-summary.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "6F698DC3-BD0A-43BA-A933-10E5ED9B6799"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.527Z",
+            "checksum": "a41ec6f294ede81a94edc0e6f9ee95e89ad443b9b745fe6c39bbc5df376a2f39"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Fields": [
+        {
+          "fields": {
+            "Name": "UserName",
+            "Description": "Name of the user",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7DB1DAB5-EF78-48C8-938A-4179B6056E7C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Email",
+            "Description": "Email address of the user",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6BAD7846-70B1-4CF1-A900-E4235A195FC6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserType",
+            "Description": "Type classification of the user",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B14727C9-7A96-4BA8-8A09-6DBD8C71522A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RecentChanges",
+            "Description": "Number of recent changes made by the user",
+            "IsSummary": false,
+            "ComputationDescription": "COALESCE(rc.ChangeCount, 0) - returns 0 if no changes found",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CAED9AE0-0FCE-4894-8DFC-8651F329CCC7"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatestChange",
+            "Description": "Date/time of the most recent change",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "157580A0-E006-41C4-9A14-D5EE9F40A7FF"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "C2162354-AB2F-4244-8659-C5A4E213E9FA"
     },
     "sync": {
-      "lastModified": "2026-04-29T05:22:32.132Z",
-      "checksum": "65c01072fed9b2e4b2a1d171f033ab0700887cf404eb07064e3b7e04e049f94a"
+      "lastModified": "2026-10-28T22:14:01.726Z",
+      "checksum": "6d95a8d2a3add6c8552b3b7ff18fd48717a94591670ec0e8571864a1fa0230df"
     }
   }
 ]

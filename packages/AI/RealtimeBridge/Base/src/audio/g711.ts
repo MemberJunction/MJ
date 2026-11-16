@@ -16,6 +16,8 @@
  * @see {@link ITelephonyCallSdk} — `sendAudioFrame(pcm: ArrayBuffer)` / `onAudioFrame` speak PCM16.
  */
 
+import { IS_LITTLE_ENDIAN } from '@memberjunction/global';
+
 /** The μ-law bias added before encoding (G.711: `0x84` = 132), removed on decode. */
 const MU_LAW_BIAS = 0x84;
 
@@ -59,17 +61,14 @@ function encodeSample(sample: number): number {
 
 /**
  * Computes the G.711 segment/exponent (0..7) for a biased magnitude — the position of the highest set
- * bit at or above bit 7. Uses the standard exponent lookup over the magnitude's top byte.
+ * bit at or above bit 7. Uses `Math.clz32` to locate the highest bit in O(1).
  *
  * @param biasedMagnitude The clamped sample magnitude after the {@link MU_LAW_BIAS} has been added.
  * @returns The μ-law exponent (segment number), `0..7`.
  */
 function muLawExponent(biasedMagnitude: number): number {
-    let exponent = 7;
-    for (let mask = 0x4000; (biasedMagnitude & mask) === 0 && exponent > 0; mask >>= 1) {
-        exponent--;
-    }
-    return exponent;
+    const exp = 24 - Math.clz32(biasedMagnitude);
+    return exp > 0 ? exp : 0;
 }
 
 /**
@@ -93,6 +92,15 @@ function decodeSample(muLawByte: number): number {
     return sign !== 0 ? -magnitude : magnitude;
 }
 
+/** Precomputed 256-entry lookup table mapping each 8-bit μ-law code (`0..255`) to its signed 16-bit PCM sample. */
+const MU_LAW_DECODE_TABLE: Int16Array = (() => {
+    const table = new Int16Array(256);
+    for (let i = 0; i < 256; i++) {
+        table[i] = decodeSample(i);
+    }
+    return table;
+})();
+
 /**
  * Decodes a buffer of G.711 μ-law bytes to linear PCM16 samples.
  *
@@ -102,7 +110,7 @@ function decodeSample(muLawByte: number): number {
 export function MuLawToPcm16(mulaw: Uint8Array): Int16Array {
     const out = new Int16Array(mulaw.length);
     for (let i = 0; i < mulaw.length; i++) {
-        out[i] = decodeSample(mulaw[i]);
+        out[i] = MU_LAW_DECODE_TABLE[mulaw[i]];
     }
     return out;
 }
@@ -140,8 +148,9 @@ export function pcm16ToMuLaw(pcm: Int16Array): Uint8Array {
  */
 export function MuLawToPcm16Buffer(mulaw: ArrayBuffer): ArrayBuffer {
     const samples = MuLawToPcm16(new Uint8Array(mulaw));
-    // Int16Array view over a fresh buffer is little-endian on every platform JS targets in practice;
-    // build it explicitly via DataView so the byte order is correct regardless of host endianness.
+    if (IS_LITTLE_ENDIAN) {
+        return samples.buffer as ArrayBuffer;
+    }
     return pcm16ToLittleEndianBuffer(samples);
 }
 
@@ -159,11 +168,10 @@ export function muLawToPcm16Buffer(mulaw: ArrayBuffer): ArrayBuffer {
  * @returns An `ArrayBuffer` of μ-law bytes (one byte per sample).
  */
 export function Pcm16ToMuLawBuffer(pcm: ArrayBuffer): ArrayBuffer {
-    const samples = littleEndianBufferToPcm16(pcm);
-    const mulaw = Pcm16ToMuLaw(samples);
-    const buffer = new ArrayBuffer(mulaw.length);
-    new Uint8Array(buffer).set(mulaw);
-    return buffer;
+    const samples = IS_LITTLE_ENDIAN
+        ? new Int16Array(pcm, 0, Math.floor(pcm.byteLength / 2))
+        : littleEndianBufferToPcm16(pcm);
+    return Pcm16ToMuLaw(samples).buffer as ArrayBuffer;
 }
 
 /** @deprecated Use {@link Pcm16ToMuLawBuffer}. */

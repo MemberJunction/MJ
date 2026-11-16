@@ -75,6 +75,8 @@ export interface DataExplorerDeepLink {
   viewMode?: DataExplorerViewMode;
   /** Saved view ID to load (uses view's filters/sort/grid state) */
   viewId?: string;
+  /** Optional semantic name of an alternate base view (`?abv=<Name>`) */
+  abv?: string;
   /** Map render mode (point/choropleth/heatmap) — only relevant when viewMode is 'map' */
   mapMode?: string;
 }

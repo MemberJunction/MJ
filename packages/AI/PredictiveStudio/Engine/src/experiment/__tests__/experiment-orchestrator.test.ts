@@ -1,10 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { UserInfo, BaseEntity } from '@memberjunction/core';
-import type { ModelingPlanSpec, LeaderboardEntry } from '@memberjunction/predictive-studio-core';
+import type { ModelingPlanSpec, LeaderboardEntry, TrainerCompleted, TrainerRequest } from '@memberjunction/predictive-studio-core';
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { ExperimentOrchestrator } from '../experiment-orchestrator';
-import { ExtractNormalizedScore } from '../seams';
+import { TrainingEngineExperimentTrainer } from '../seams';
+import { ExperimentScores } from '../scores';
+import { ExperimentBudget, TrainingAttemptFailedError } from '../budget';
 import { RankLeaderboard, SelectPrunedIterationIds } from '../leaderboard';
 import { RunBounded } from '../concurrency';
 import { PlanOrderWaveStrategist, SortByPriority } from '../wave-strategist';
@@ -17,7 +19,14 @@ import type {
   ProposedExperiment,
   TrainExperimentInput,
   TrainExperimentResult,
+  ExperimentLeaderboardEntry,
 } from '../types';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import { FakeEvaluationProtocolStore, FakeTrainer as FakeProtocolTrainer, TrainingHarness } from '../../__tests__/fakes/training-fakes';
+import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
+import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
+import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
+import { TrainingRefusedError } from '../../training/training-refusal';
 
 /**
  * Unit tests for the ExperimentOrchestrator. NO live DB, NO live sidecar, NO
@@ -149,6 +158,7 @@ class FakeModel extends FakeEntity {
 class FakeRun extends FakeEntity {
   public ExperimentSessionIterationID: string | null = null;
   public ComputeCost: number | null = null;
+  public ComputeSeconds: number | null = null;
   constructor() {
     super(nextId('run'));
   }
@@ -162,11 +172,15 @@ class FakeRun extends FakeEntity {
 class FakeTrainer implements IExperimentTrainer {
   public readonly Calls: TrainExperimentInput[] = [];
   constructor(
-    private readonly scoreByLabel: Record<string, number>,
+    private readonly scoreByLabel: Record<string, number | null>,
     private readonly clock?: FakeClock,
     private readonly perTrainMs = 0,
     private readonly computeCostPerTrain = 1,
     private readonly failLabels: Set<string> = new Set(),
+    /** Compute seconds each completed train spends (the protocol's budget unit); `computeCostPerTrain` is USD. */
+    private readonly computeSecondsPerTrain = 0,
+    /** The holdout metric a label's score was read from; absent, the plan's success metric. */
+    private readonly metricByLabel: Record<string, string> = {},
   ) {}
 
   async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
@@ -181,12 +195,16 @@ class FakeTrainer implements IExperimentTrainer {
     const run = new FakeRun();
     run.ExperimentSessionIterationID = input.iterationId; // link the leaf to the iteration
     run.ComputeCost = this.computeCostPerTrain;
-    const score = this.scoreByLabel[input.experiment.Label] ?? 0;
+    run.ComputeSeconds = this.computeSecondsPerTrain;
+    const label = input.experiment.Label;
+    const score = label in this.scoreByLabel ? this.scoreByLabel[label] : 0;
     return {
       model: model as unknown as MJMLModelEntity,
       run: run as unknown as MJMLTrainingRunEntity,
       Score: score,
+      ScoreMetric: score === null ? null : this.metricByLabel[label] || input.plan.TargetDefinition.SuccessMetric,
       ComputeCost: this.computeCostPerTrain,
+      ComputeSeconds: this.computeSecondsPerTrain,
       TokensUsed: 0,
     };
   }
@@ -228,7 +246,7 @@ class SaveFailingPruneFactory extends FakeFactory {
   // Label is assigned by the orchestrator after creation; we gate the failure on it
   // inside StatusSaveFailingIteration only for the failLabels set.
   public shouldFail(label: string | null): boolean {
-    return label != null && this.failLabels.has(label);
+    return (label !== null && label !== undefined) && this.failLabels.has(label);
   }
 }
 
@@ -246,7 +264,7 @@ class SaveFailingFailFactory extends FakeFactory {
     return super.getEntityObject<T>(entityName, u);
   }
   public shouldFail(label: string | null): boolean {
-    return label != null && this.failLabels.has(label);
+    return (label !== null && label !== undefined) && this.failLabels.has(label);
   }
 }
 
@@ -277,6 +295,32 @@ function plan(experiments: ProposedExperiment[], budget: ModelingPlanSpec['Propo
 
 function deps(factory: FakeFactory, trainer: IExperimentTrainer, clock: FakeClock, strategist?: IWaveStrategist): ExperimentDeps {
   return { entityFactory: factory, trainer, clock, waveStrategist: strategist };
+}
+
+/**
+ * A trainer that runs concurrently with its siblings (it yields before finishing) and spends the seconds it is handed,
+ * or a fixed number of seconds; it records the timeouts, the total spent and the most attempts in flight at once.
+ */
+class TimeoutSpendingTrainer implements IExperimentTrainer {
+  public readonly Timeouts: Array<number | null> = [];
+  public SpentSeconds = 0;
+  public MaxConcurrent = 0;
+  private inFlight = 0;
+  constructor(private readonly fixedSeconds: number | null = null) {}
+
+  async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
+    this.Timeouts.push(input.timeoutSeconds);
+    this.inFlight++;
+    this.MaxConcurrent = Math.max(this.MaxConcurrent, this.inFlight);
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    this.inFlight--;
+    // `??`, not `||`: a fixed or requested 0 seconds is a real duration and must not fall through.
+    const seconds = this.fixedSeconds ?? input.timeoutSeconds ?? 0;
+    this.SpentSeconds += seconds;
+    const run = new FakeRun();
+    run.ComputeSeconds = seconds;
+    return { model: new FakeModel() as unknown as MJMLModelEntity, run: run as unknown as MJMLTrainingRunEntity, Score: 0.5, ScoreMetric: 'AUC', ComputeCost: 0, ComputeSeconds: seconds, TokensUsed: 0 };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -361,6 +405,27 @@ describe('ExperimentOrchestrator.runSession', () => {
     expect(result.leaderboard.map((e) => e.Metric)).toEqual([0.9, 0.8]);
     // Pruned iterations record a rationale.
     expect(byLabel.get('C')!.Rationale).toContain('Pruned');
+  });
+
+  it("writes a pruned iteration's rationale on each score's own metric scale, labelled with the metric, never a negated loss", async () => {
+    const factory = new FakeFactory();
+    // RMSE is lower-is-better: the leaderboard holds the negated losses -10 (A) and -20 (B); B is pruned by top-1.
+    const trainer = new FakeTrainer({ A: -10, B: -20 });
+    const rmsePlan: ModelingPlanSpec = { ...plan([experiment('A', 1), experiment('B', 2)]), TargetDefinition: { EntityName: 'Members', TargetVariable: 'Y', ProblemType: 'regression', SuccessMetric: 'rmse' } };
+    await new ExperimentOrchestrator().runSession(rmsePlan, deps(factory, trainer, new FakeClock()), { concurrency: 2, keepTopK: 1 });
+    const pruned = factory.Iterations.find((it) => it.Label === 'B')!;
+    expect(pruned.Status).toBe('Pruned');
+    expect(pruned.Rationale).toContain('Pruned: dominated branch, scored rmse 20.000 (top-ranked so far: rmse 10.000).');
+    expect(pruned.Rationale).not.toMatch(/-10|-20|best/);
+  });
+
+  it("writes a pruned iteration's scores to three decimals, as the other surfaces do, not as raw floats", async () => {
+    const factory = new FakeFactory();
+    const trainer = new FakeTrainer({ A: -0.1, B: -(0.1 + 0.2) });
+    const rmsePlan: ModelingPlanSpec = { ...plan([experiment('A', 1), experiment('B', 2)]), TargetDefinition: { EntityName: 'Members', TargetVariable: 'Y', ProblemType: 'regression', SuccessMetric: 'rmse' } };
+    await new ExperimentOrchestrator().runSession(rmsePlan, deps(factory, trainer, new FakeClock()), { concurrency: 2, keepTopK: 1 });
+    const pruned = factory.Iterations.find((it) => it.Label === 'B')!;
+    expect(pruned.Rationale).toContain('Pruned: dominated branch, scored rmse 0.300 (top-ranked so far: rmse 0.100).');
   });
 
   it('prunes via a relative threshold (below 80% of the best)', async () => {
@@ -488,6 +553,54 @@ describe('ExperimentOrchestrator.runSession', () => {
     expect(result.stopReason).toBe('completed');
   });
 
+  it('ranks an entry scored on the success metric above one scored on a model\'s primary score, and names each entry\'s metric', async () => {
+    // R2 is the success metric. B is a kept baseline whose holdout stored its primary rmse only: its score -0.1 is a
+    // negated rmse, not an R2, so it must not outrank A's R2 of -0.5 by number.
+    const factory = new FakeFactory();
+    const trainer = new FakeTrainer({ A: -0.5, B: -0.1 }, undefined, 0, 1, new Set(), 0, { B: 'rmse' });
+    const r2Plan: ModelingPlanSpec = { ...plan([experiment('A', 1), experiment('B', 2)]), TargetDefinition: { EntityName: 'Members', TargetVariable: 'Y', ProblemType: 'regression', SuccessMetric: 'R2' } };
+    const result = await new ExperimentOrchestrator().runSession(r2Plan, deps(factory, trainer, new FakeClock()), { concurrency: 1 });
+    const byLabel = new Map(factory.Iterations.map((it) => [it.Label, it]));
+    expect(result.leaderboard.map((e) => [e.IterationID, e.Metric, e.ScoreMetric, e.OnSuccessMetric])).toEqual([
+      [byLabel.get('A')!.ID, -0.5, 'R2', true],
+      [byLabel.get('B')!.ID, -0.1, 'rmse', false],
+    ]);
+    expect(result.bestModel).not.toBeNull();
+    const snapshot: ExperimentLeaderboardEntry[] = JSON.parse(result.session.Leaderboard!);
+    expect(snapshot.map((e) => e.ScoreMetric)).toEqual(['R2', 'rmse']);
+    // The iteration row says which metric its Score is.
+    expect(byLabel.get('B')!.Rationale).toContain('Scored on rmse');
+    expect(byLabel.get('A')!.Rationale).not.toContain('Scored on');
+  });
+
+  it('fails an iteration whose trainer returned a score without the metric it was read from, keeping it off the leaderboard', async () => {
+    const factory = new FakeFactory();
+    const scoreless: IExperimentTrainer = {
+      train: async (input) => ({ ...(await new FakeTrainer({ A: 0.7 }).train(input)), ScoreMetric: null }),
+    };
+    const result = await new ExperimentOrchestrator().runSession(plan([experiment('A', 1)]), deps(factory, scoreless, new FakeClock()), { concurrency: 1 });
+    const a = factory.Iterations.find((it) => it.Label === 'A')!;
+    expect(a.Status).toBe('Failed');
+    expect(a.Rationale).toContain('without the holdout metric');
+    expect(result.leaderboard).toEqual([]);
+  });
+
+  it('completes an iteration whose holdout did not measure the success metric with a null Score, off the leaderboard but counted against the budget', async () => {
+    const factory = new FakeFactory();
+    const trainer = new FakeTrainer({ A: null, B: 0.8, C: 0.7 });
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)], { MaxRuns: 2 }),
+      deps(factory, trainer, new FakeClock()),
+      { concurrency: 1 },
+    );
+    const byLabel = new Map(factory.Iterations.map((it) => [it.Label, it]));
+    expect([byLabel.get('A')!.Status, byLabel.get('A')!.Score]).toEqual(['Completed', null]);
+    expect(result.leaderboard.map((e) => e.Metric)).toEqual([0.8]);
+    // A and B are the two runs MaxRuns allows: the unmeasured A counted, so C never ran.
+    expect(trainer.Calls.map((c) => c.experiment.Label)).toEqual(['A', 'B']);
+    expect(result.stopReason).toBe('budget-maxRuns');
+  });
+
   // H2 — once a budget bound trips mid-wave, NO further iteration is dispatched.
   it('stops dispatching the moment a MaxRuns bound trips within a wave (no overrun under concurrency)', async () => {
     const factory = new FakeFactory();
@@ -548,6 +661,7 @@ describe('ExperimentOrchestrator.runSession', () => {
   });
 
   it('keeps the pruned entry when its Pruned save returns false (no silent loss)', async () => {
+    const errors = ConsoleCapture.Errors();
     const factory = new SaveFailingPruneFactory(new Set(['B']));
     const clock = new FakeClock();
     const trainer = new FakeTrainer({ A: 0.9, B: 0.1 });
@@ -562,10 +676,13 @@ describe('ExperimentOrchestrator.runSession', () => {
     const b = factory.Iterations.find((it) => it.Label === 'B')!;
     // B's prune-status Save failed → B STAYS on the leaderboard (not dropped).
     expect(result.leaderboard.map((e) => e.IterationID)).toContain(b.ID);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("ExperimentOrchestrator: failed to persist Pruned status for iteration")]);
+    expect(ConsoleCapture.Lines(errors)[0]).toContain('forced Pruned save failure');
   });
 
   // M9 — failIteration checks the Save boolean and logs on failure (no throw).
   it('records a failed iteration even when its Failed-status save returns false', async () => {
+    const errors = ConsoleCapture.Errors();
     const factory = new SaveFailingFailFactory(new Set(['A']));
     const clock = new FakeClock();
     const trainer = new FakeTrainer({ A: 0.9, B: 0.8 }, undefined, 0, 1, new Set(['A']));
@@ -582,6 +699,233 @@ describe('ExperimentOrchestrator.runSession', () => {
     expect(result.stopReason).toBe('completed');
     expect(result.leaderboard.length).toBe(1); // only B scored
     expect(result.leaderboard[0].Metric).toBe(0.8);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("ExperimentOrchestrator: failed to record iteration failure for")]);
+    expect(ConsoleCapture.Lines(errors)[0]).toContain('forced Failed save failure');
+  });
+
+  it('counts failed attempts toward MaxRuns (never 4 attempts under a cap of 3)', async () => {
+    const factory = new FakeFactory();
+    const trainer = new FakeTrainer({}, undefined, 0, 1, new Set(['A', 'B', 'C', 'D']));
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3), experiment('D', 4)], { MaxRuns: 3 }),
+      deps(factory, trainer, new FakeClock()),
+      { concurrency: 1 },
+    );
+    expect(trainer.Calls.length).toBe(3);
+    // No compute bound: every attempt is handed no timeout.
+    expect(trainer.Calls.map((c) => c.timeoutSeconds)).toEqual([null, null, null]);
+    expect(factory.Iterations.map((it) => it.Status)).toEqual(['Failed', 'Failed', 'Failed']);
+    expect(result.stopReason).toBe('budget-maxRuns');
+    expect(result.session.Status).toBe('Paused');
+  });
+
+  it('hard-stops on the protocol compute-seconds budget and hands each attempt the seconds that remain', async () => {
+    const factory = new FakeFactory();
+    // 4 compute seconds and 1 USD per train: the seconds bound reads seconds only.
+    const trainer = new FakeTrainer({ A: 0.9, B: 0.8, C: 0.7, D: 0.6, E: 0.5 }, undefined, 0, 1, new Set(), 4);
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3), experiment('D', 4), experiment('E', 5)]),
+      deps(factory, trainer, new FakeClock()),
+      { concurrency: 1, protocolBudgets: { maxComputeSeconds: 10, maxTokens: 0, maxCandidates: 50, hardStop: true } },
+    );
+    expect(trainer.Calls.map((c) => c.timeoutSeconds)).toEqual([10, 6, 2]);
+    expect(result.stopReason).toBe('budget-maxComputeCost');
+    expect(result.session.Status).toBe('Paused');
+    // The session row records the bound it ran under: the protocol's seconds and candidate caps.
+    expect(JSON.parse(result.session.Budget!)).toEqual({ MaxRuns: 50, MaxComputeSeconds: 10 });
+  });
+
+  it('charges a failed attempt the compute seconds its trainer reported', async () => {
+    class SpendingFailTrainer implements IExperimentTrainer {
+      public readonly Calls: TrainExperimentInput[] = [];
+      async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
+        this.Calls.push(input);
+        throw new TrainingAttemptFailedError('sidecar timeout', 6, 0);
+      }
+    }
+    const trainer = new SpendingFailTrainer();
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)]),
+      deps(new FakeFactory(), trainer, new FakeClock()),
+      { concurrency: 1, protocolBudgets: { maxComputeSeconds: 10, maxTokens: 0, maxCandidates: 50, hardStop: true } },
+    );
+    expect(trainer.Calls.map((c) => c.timeoutSeconds)).toEqual([10, 4]);
+    expect(result.stopReason).toBe('budget-maxComputeCost');
+  });
+
+  it('tightens the plan budget by the protocol budgets and keeps the USD bound apart from the seconds bound', async () => {
+    const factory = new FakeFactory();
+    // 100 USD and 1 second per train: a 1,000 USD plan bound and a 3-candidate protocol stop on candidates, not money.
+    const trainer = new FakeTrainer({ A: 0.9, B: 0.8, C: 0.7, D: 0.6, E: 0.5 }, undefined, 0, 100, new Set(), 1);
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3), experiment('D', 4), experiment('E', 5)], { MaxRuns: 10, MaxComputeCost: 1000 }),
+      deps(factory, trainer, new FakeClock()),
+      { concurrency: 1, protocolBudgets: { maxComputeSeconds: 600, maxTokens: 0, maxCandidates: 3, hardStop: true } },
+    );
+    expect(trainer.Calls.map((c) => c.timeoutSeconds)).toEqual([600, 599, 598]);
+    expect(result.stopReason).toBe('budget-maxRuns');
+    expect(JSON.parse(result.session.Budget!)).toEqual({ MaxRuns: 3, MaxComputeCost: 1000, MaxComputeSeconds: 600 });
+  });
+
+  it('stops when the seconds spent equal the bound exactly', async () => {
+    const trainer = new FakeTrainer({ A: 0.9, B: 0.8, C: 0.7 }, undefined, 0, 0, new Set(), 5);
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)]),
+      deps(new FakeFactory(), trainer, new FakeClock()),
+      { concurrency: 1, protocolBudgets: { maxComputeSeconds: 10, maxTokens: 0, maxCandidates: 50, hardStop: true } },
+    );
+    expect(trainer.Calls.map((c) => c.timeoutSeconds)).toEqual([10, 5]);
+    expect(result.stopReason).toBe('budget-maxComputeCost');
+  });
+
+  it('never hands attempts in flight more seconds than the bound (concurrency 3, each attempt spends its whole timeout)', async () => {
+    const factory = new FakeFactory();
+    const trainer = new TimeoutSpendingTrainer();
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)]),
+      deps(factory, trainer, new FakeClock()),
+      { concurrency: 3, protocolBudgets: { maxComputeSeconds: 10, maxTokens: 0, maxCandidates: 50, hardStop: true } },
+    );
+    // The first attempt reserves every second of the bound; the other two find it spent once it settles and never start.
+    expect(trainer.Timeouts).toEqual([10]);
+    expect(trainer.SpentSeconds).toBe(10);
+    expect(trainer.MaxConcurrent).toBe(1);
+    expect(factory.Iterations.map((it) => it.Status)).toEqual(['Completed', 'Pending', 'Pending']);
+    expect(result.stopReason).toBe('budget-maxComputeCost');
+  });
+
+  it('starts a waiting attempt with the seconds a settled attempt left unspent (concurrency 3)', async () => {
+    const trainer = new TimeoutSpendingTrainer(4);
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)]),
+      deps(new FakeFactory(), trainer, new FakeClock()),
+      { concurrency: 3, protocolBudgets: { maxComputeSeconds: 10, maxTokens: 0, maxCandidates: 50, hardStop: true } },
+    );
+    // Spent never exceeds the bound by more than the last attempt's own spend (4 s): 12 <= 10 + 4.
+    expect(trainer.Timeouts).toEqual([10, 6, 2]);
+    expect(trainer.SpentSeconds).toBe(12);
+    expect(result.stopReason).toBe('budget-maxComputeCost');
+  });
+
+  it("charges a failed attempt's USD against MaxComputeCost", async () => {
+    class UsdFailTrainer implements IExperimentTrainer {
+      public readonly Calls: TrainExperimentInput[] = [];
+      async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
+        this.Calls.push(input);
+        throw new TrainingAttemptFailedError('lineage gap', 0, 3);
+      }
+    }
+    const factory = new FakeFactory();
+    const trainer = new UsdFailTrainer();
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)], { MaxComputeCost: 5 }),
+      deps(factory, trainer, new FakeClock()),
+      { concurrency: 1 },
+    );
+    expect(trainer.Calls.length).toBe(2);
+    expect(factory.Iterations.slice(0, 2).map((it) => [it.Status, it.ComputeCost])).toEqual([['Failed', 3], ['Failed', 3]]);
+    expect(result.stopReason).toBe('budget-maxComputeCost');
+  });
+});
+
+describe('ExperimentBudget', () => {
+  const budgets = { maxComputeSeconds: 10, maxTokens: 0, maxCandidates: 2, hardStop: true } as const;
+
+  it('reads the bound protocol budgets and refuses a pipeline with no protocol or a missing protocol row', async () => {
+    const row = ProtocolRowFixture.Row({ Budgets: JSON.stringify(budgets) });
+    const store = new FakeEvaluationProtocolStore([row]);
+    expect(await ExperimentBudget.ProtocolBudgetsFor({ ID: 'pipe', EvaluationProtocolID: ProtocolRowFixture.ID }, store)).toEqual(ProtocolRowFixture.Spec({ Budgets: JSON.stringify(budgets) }).budgets);
+    await expect(ExperimentBudget.ProtocolBudgetsFor({ ID: 'pipe', EvaluationProtocolID: null }, store))
+      .rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: 'pipe' } } });
+    await expect(ExperimentBudget.ProtocolBudgetsFor({ ID: 'pipe', EvaluationProtocolID: 'missing' }, store))
+      .rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: 'pipe' } } });
+  });
+
+  it('leaves a plan budget unchanged without protocol budgets and reports no remaining seconds without a seconds bound', () => {
+    expect(ExperimentBudget.EffectiveBudget({ MaxRuns: 5, MaxComputeCost: 3 }, null)).toEqual({ MaxRuns: 5, MaxComputeCost: 3 });
+    expect(ExperimentBudget.EffectiveBudget({ MaxRuns: 1 }, budgets)).toEqual({ MaxRuns: 1, MaxComputeSeconds: 10 });
+    expect(ExperimentBudget.RemainingComputeSeconds({ MaxComputeCost: 3 }, 2)).toBeNull();
+    expect(ExperimentBudget.RemainingComputeSeconds({ MaxComputeSeconds: 10 }, 12)).toBe(0);
+  });
+});
+
+describe('TrainingEngineExperimentTrainer', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /** A unit pipeline bound to the fixture protocol (600 compute seconds) over the unit-years world, with the trainer answering `answer`. */
+  function unitTrainer(answer: ConstructorParameters<typeof FakeProtocolTrainer>[0], pipelineProtocolID: string | null = ProtocolRowFixture.ID): { trainer: TrainingEngineExperimentTrainer; protocolTrainer: FakeProtocolTrainer; runs: ReturnType<typeof TrainingHarness.ForUnit>['runs'] } {
+    const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const protocolTrainer = new FakeProtocolTrainer(answer);
+    harness.deps.trainer = protocolTrainer;
+    harness.pipeline.EvaluationProtocolID = pipelineProtocolID;
+    const resolver = { resolvePipelineId: async (): Promise<string> => harness.pipeline.ID };
+    return { trainer: new TrainingEngineExperimentTrainer(harness.deps, resolver, harness.engine), protocolTrainer, runs: harness.runs };
+  }
+
+  function input(timeoutSeconds: number | null): TrainExperimentInput {
+    return { experiment: experiment('A', 1), plan: plan([experiment('A', 1)]), iterationId: 'iter-1', sessionId: 'sess-1', timeoutSeconds };
+  }
+
+  function canned(r: TrainerRequest): TrainerCompleted {
+    return TrainerResultFixtures.CannedCompleted(r.trainingRunId, ProtocolRowFixture.Spec(), r.snapshot.featureSchemaHash);
+  }
+
+  it("hands the trainer the seconds the session has left and charges a stopped trainer the seconds and USD its run recorded", async () => {
+    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0.01');
+    const { trainer, protocolTrainer, runs } = unitTrainer((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId));
+    const attempt = trainer.train(input(90));
+    await expect(attempt).rejects.toBeInstanceOf(TrainingAttemptFailedError);
+    await expect(attempt).rejects.toMatchObject({ ComputeSeconds: 3.25, ComputeCost: 0.0325, message: expect.stringContaining('Refused (trainer-failed)'), cause: expect.any(TrainingRefusedError) });
+    expect(protocolTrainer.Requests.map((r) => r.timeoutSeconds)).toEqual([90]);
+    expect([runs[0].ComputeSeconds, runs[0].ComputeCost]).toEqual([3.25, 0.0325]);
+  });
+
+  it('charges a run refused after the trainer answered (lineage-incomplete, selection-invalid) the compute it recorded', async () => {
+    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0.01');
+    const lineageGap = unitTrainer((r) => { const c = canned(r); return { ...c, codeVersion: { ...c.codeVersion, threads: 0 } }; });
+    await expect(lineageGap.trainer.train(input(null))).rejects.toMatchObject({
+      name: 'TrainingAttemptFailedError', ComputeSeconds: 12.5, ComputeCost: 0.125, message: expect.stringContaining('lineage-incomplete'),
+    });
+    const pruned = unitTrainer((r) => {
+      const c = canned(r);
+      return { ...c, innerScores: [...c.innerScores, { candidate: 'rf', inner: TrainerResultFixtures.Mwi('log-loss', 0.5, 0.48, 0.52, 3668), folds: 5, optimistic: true }] };
+    });
+    await expect(pruned.trainer.train(input(null))).rejects.toMatchObject({
+      name: 'TrainingAttemptFailedError', ComputeSeconds: 12.5, ComputeCost: 0.125, message: expect.stringContaining('selection-invalid'),
+    });
+  });
+
+  it('passes a refusal from before any run row existed through unchanged (protocol-required)', async () => {
+    const { trainer, protocolTrainer, runs } = unitTrainer((r) => canned(r), null);
+    const attempt = trainer.train(input(90));
+    await expect(attempt).rejects.toBeInstanceOf(TrainingRefusedError);
+    await expect(attempt).rejects.not.toBeInstanceOf(TrainingAttemptFailedError);
+    await expect(attempt).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'protocol-required' } } });
+    expect([runs.length, protocolTrainer.Requests.length]).toEqual([0, 0]);
+  });
+
+  it('completes an iteration whose run shipped no model with no score and no model, and charges its compute', async () => {
+    const { trainer } = unitTrainer((r) => TrainerResultFixtures.CannedNoSignal(r.trainingRunId, ProtocolRowFixture.Spec(), r.snapshot.featureSchemaHash));
+    const result = await trainer.train(input(null));
+    expect([result.model, result.Score, result.run.Status, result.ComputeSeconds]).toEqual([null, null, 'Completed', 12.5]);
+  });
+
+  it('scores a kept simple baseline on the primary proper score its model row stores, naming that metric, since its holdout has no AUC', async () => {
+    const { trainer } = unitTrainer((r) => canned(r));
+    const result = await trainer.train(input(null));
+    const stored: Record<string, number> = JSON.parse(result.model?.HoldoutMetrics || '{}');
+    expect(Object.keys(stored)).toEqual(['log-loss']);
+    expect([result.ScoreMetric, result.Score]).toEqual(['log-loss', -stored['log-loss']]);
+  });
+
+  it("leaves the protocol's timeout when the session has no seconds bound, and reports the run's compute seconds", async () => {
+    const { trainer, protocolTrainer } = unitTrainer((r) => canned(r));
+    const result = await trainer.train(input(null));
+    expect(protocolTrainer.Requests.map((r) => r.timeoutSeconds)).toEqual([600]);
+    expect(result.ComputeSeconds).toBe(result.run.ComputeSeconds);
+    expect(result.ComputeSeconds).toBeGreaterThan(0);
   });
 });
 
@@ -590,11 +934,8 @@ describe('ExperimentOrchestrator.runSession', () => {
 // ---------------------------------------------------------------------------
 
 describe('leaderboard helpers', () => {
-  const entries: LeaderboardEntry[] = [
-    { IterationID: 'i1', Metric: 0.5 },
-    { IterationID: 'i2', Metric: 0.9 },
-    { IterationID: 'i3', Metric: 0.7 },
-  ];
+  const entry = (IterationID: string, Metric: number, ScoreMetric = 'auc', OnSuccessMetric = true): ExperimentLeaderboardEntry => ({ IterationID, Metric, ScoreMetric, OnSuccessMetric });
+  const entries: ExperimentLeaderboardEntry[] = [entry('i1', 0.5), entry('i2', 0.9), entry('i3', 0.7)];
 
   it('rankLeaderboard orders best-first deterministically', () => {
     expect(RankLeaderboard(entries).map((e) => e.IterationID)).toEqual(['i2', 'i3', 'i1']);
@@ -612,7 +953,23 @@ describe('leaderboard helpers', () => {
   });
 
   it('never prunes a single-entry leaderboard', () => {
-    expect(SelectPrunedIterationIds([{ IterationID: 'x', Metric: 0.1 }], { keepTopK: 0 }).size).toBe(0);
+    expect(SelectPrunedIterationIds([entry('x', 0.1)], { keepTopK: 0 }).size).toBe(0);
+  });
+
+  it('ranks every entry on the success metric above every entry on a fallback metric, whatever their numbers', () => {
+    const mixed = [entry('f1', -0.1, 'rmse', false), entry('s1', -0.5, 'r2'), entry('s2', -0.2, 'r2'), entry('f2', -0.3, 'rmse', false)];
+    expect(RankLeaderboard(mixed).map((e) => e.IterationID)).toEqual(['s2', 's1', 'f1', 'f2']);
+  });
+
+  it('applies the relative threshold to a negated loss as a bound on how much worse the loss may be', () => {
+    // Best loss 0.4: at 0.8 a loss up to 0.4 / 0.8 = 0.5 is kept; 0.45 stays, 0.9 is pruned.
+    const losses = [entry('l1', -0.4, 'rmse'), entry('l2', -0.45, 'rmse'), entry('l3', -0.9, 'rmse')];
+    expect([...SelectPrunedIterationIds(losses, { relativePruneThreshold: 0.8 })]).toEqual(['l3']);
+  });
+
+  it('compares a number under the relative threshold only with numbers of the same metric', () => {
+    const mixed = [entry('s1', 0.9), entry('s2', 0.5), entry('f1', -0.48, 'log-loss', false)];
+    expect([...SelectPrunedIterationIds(mixed, { relativePruneThreshold: 0.8 })]).toEqual(['s2']);
   });
 });
 
@@ -673,20 +1030,38 @@ describe('runBounded', () => {
   });
 });
 
-describe('extractNormalizedScore', () => {
-  it('prefers holdout metrics and passes ranking metrics through', () => {
-    expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.81 }), JSON.stringify({ auc: 0.95 }), 'AUC', 'classification')).toBe(0.81);
+describe('ExperimentScores.ExtractNormalizedScore', () => {
+  it('reads the holdout metrics and passes a higher-is-better metric through, naming the metric as the model stored it', () => {
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ 'log-loss': 0.4, auc: 0.81 }), 'AUC')).toEqual({ Score: 0.81, Metric: 'auc' });
   });
 
-  it('falls back to training metrics when holdout is absent', () => {
-    expect(ExtractNormalizedScore(null, JSON.stringify({ f1: 0.7 }), 'F1', 'classification')).toBe(0.7);
+  it('scores a model whose holdout did not measure the success metric on its primary proper score, oriented so higher is better', () => {
+    // A kept simple baseline stores its primary proper score alone.
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ 'log-loss': 0.48 }), 'AUC')).toEqual({ Score: -0.48, Metric: 'log-loss' });
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ rmse: 12, r2: 0.2 }), 'mase')).toEqual({ Score: -12, Metric: 'rmse' });
   });
 
-  it('negates error metrics so higher Score is always better', () => {
-    expect(ExtractNormalizedScore(JSON.stringify({ rmse: 2.5 }), null, 'RMSE', 'regression')).toBe(-2.5);
+  it('has no fallback when the holdout holds no proper score, or more than one so the primary cannot be told', () => {
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ auc: 0.8, accuracy: 0.7 }), 'F1')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ rmse: 2, mae: 1 }), 'R2')).toBeNull();
   });
 
-  it('returns 0 when the metric is missing', () => {
-    expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.8 }), null, 'F1', 'classification')).toBe(0);
+  it('never falls back to the training metrics: no holdout metric is no score', () => {
+    expect(ExperimentScores.ExtractNormalizedScore(null, 'F1')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore('', 'F1')).toBeNull();
+  });
+
+  it('negates a lower-is-better metric and scores a closer-to-one metric by its distance from one, so higher is always better', () => {
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ rmse: 2.5 }), 'RMSE')).toEqual({ Score: -2.5, Metric: 'rmse' });
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ 'calibration-slope': 0.8 }), 'calibration-slope')?.Score).toBeCloseTo(-0.2, 12);
+  });
+
+  it('returns null, never 0, when the metric is missing, not a number, or of no known direction', () => {
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ auc: 0.8 }), 'F1')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ f1: '0.7' }), 'F1')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ lift: 1.4 }), 'lift')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore('not json', 'AUC')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore('[0.8]', 'AUC')).toBeNull();
   });
 });
+

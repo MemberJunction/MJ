@@ -59,6 +59,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 import { AIPromptExtension, AIPromptConfig } from '../extensions/AIPrompt.extension';
+import { RunAsTemplateRenderUser } from '../TemplateRenderUser';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJGlobal } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
@@ -358,6 +359,49 @@ describe('AIPromptExtension', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             expect(callback).toHaveBeenCalledWith(null, 'ok');
+        });
+    });
+
+    describe('never leaves the render waiting', () => {
+        const gptModel = { Name: 'gpt-4', APIName: 'gpt-4', DriverClass: 'OpenAILLM', APINameOrName: 'gpt-4' };
+
+        beforeEach(() => {
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).length = 0;
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).push(gptModel);
+        });
+
+        it('fails the render when the AI engine cannot be configured', async () => {
+            (AIEngine.Instance.Config as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('metadata load needs a user'));
+            const callback = vi.fn();
+
+            extension.run({}, { AIModel: 'gpt-4' }, () => 'Prompt', callback);
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            expect(callback).toHaveBeenCalledTimes(1);
+            expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
+            expect((callback.mock.calls[0][0] as Error).message).toContain('metadata load needs a user');
+        });
+
+        it('fails at once, without touching the AI engine, inside a render that has no user', async () => {
+            const callback = vi.fn();
+
+            RunAsTemplateRenderUser(undefined, () => extension.run({}, { AIModel: 'gpt-4' }, () => 'Prompt', callback));
+
+            expect(callback).toHaveBeenCalledTimes(1);
+            expect((callback.mock.calls[0][0] as Error).message).toMatch(/no user/i);
+            expect(AIEngine.Instance.Config).not.toHaveBeenCalled();
+        });
+
+        it('fails the render when the model call does not succeed', async () => {
+            const mockLLM = { ChatCompletion: vi.fn().mockResolvedValue({ success: false, errorMessage: 'rate limited' }) };
+            (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(mockLLM);
+            const callback = vi.fn();
+
+            extension.run({}, { AIModel: 'gpt-4' }, () => 'Prompt', callback);
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            expect(callback).toHaveBeenCalledTimes(1);
+            expect((callback.mock.calls[0][0] as Error).message).toContain('rate limited');
         });
     });
 

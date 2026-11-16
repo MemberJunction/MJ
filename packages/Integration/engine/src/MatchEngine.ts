@@ -3,6 +3,7 @@ import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from '
 import type { MappedRecord, ConflictResolution } from './types.js';
 import { SerializeKeyValue } from './KeySerialization.js';
 import { QuoteTextLiteral } from './prefetchFilter.js';
+import { TrimTrailingChars } from '@memberjunction/global';
 
 /**
  * The field/value pairs a record is matched on — parallel arrays, so the same criteria can be
@@ -52,7 +53,7 @@ function normalizeExternalID(id: string): string {
     // ASCII 0x20; a trailing tab or newline is significant to it. Folding those too would make
     // the batch index equate `abc\t` with `abc`, which the database does not — a fold the
     // per-record query would never confirm, and a wrong mapping is worse than a missed one.
-    return id.replace(/ +$/, '').toLowerCase();
+    return TrimTrailingChars(id, ' ').toLowerCase();
 }
 
 /**
@@ -459,6 +460,9 @@ export class MatchEngine {
             Fields: pkFields.map(f => f.Name),
             MaxRows: 1,
             ResultType: 'simple',
+            // Per-record lookup that only reads Results — a hit fills the 1-row page, which would
+            // otherwise trigger the provider's fallback COUNT as a second round trip per record.
+            SkipTotalRowCount: true,
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return null;
@@ -717,6 +721,9 @@ export class MatchEngine {
             // committed state — a cached null (from a lookup made before this record's map existed)
             // would make a re-sync of a changed record wrongly CREATE → duplicate-key on the dest.
             BypassCache: true,
+            // Per-record lookup that only reads Results — a hit fills the 1-row page, which would
+            // otherwise trigger the provider's fallback COUNT as a second round trip per record.
+            SkipTotalRowCount: true,
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return null;

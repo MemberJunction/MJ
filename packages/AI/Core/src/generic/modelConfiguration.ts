@@ -37,10 +37,10 @@
  * a real column when it needs a foreign key or becomes a first-class platform concept.
  */
 
-import { IsPlainObject } from '@memberjunction/global';
+import { IsPlainObject, SafeDeepMerge } from '@memberjunction/global';
 
-import { JSONObject, JSONValue } from './baseRealtime';
 import type { RealtimeTrackDescriptor } from './realtimeTracks';
+import type { EmbeddingInputType } from './embed.types';
 
 /**
  * MJ-normalized turn-detection mode vocabulary — provider-neutral by design so a shared model
@@ -66,9 +66,18 @@ export type RealtimeTurnDetectionMode = 'default' | 'serverVad' | 'semanticVad' 
 export interface RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored by profiles without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored by drivers without a
+     * mapping. OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an
+     * end-of-turn silence ladder (off when any layer sets `SilenceDurationMs`). Gemini: end-of-speech sensitivity.
+     * ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored by profiles without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored by profiles without a mapping. A profile whose provider has
+     * coarser controls maps it as an approximate value: Gemini Live has two start-of-speech buckets, so below 0.5 is START_SENSITIVITY_HIGH
+     * and 0.5 or more is START_SENSITIVITY_LOW.
+     */
     Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored by profiles without a mapping. */
     SilenceDurationMs?: number;
@@ -169,10 +178,11 @@ export interface RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface RealtimePricingSettings {
     /**
@@ -186,6 +196,22 @@ export interface RealtimePricingSettings {
      * per-minute price would also count the idle avatar between answers.
      */
     AvatarVideoOutput?: RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: RealtimeUnitPrice | null;
 }
 
 /** The `Realtime` section — knobs the realtime drivers consume. */
@@ -246,6 +272,44 @@ export interface RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /**
@@ -354,6 +418,16 @@ export interface LLMConfigurationSettings {
     SupportsForcedToolChoice?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI). Per-iteration framework state must then be appended, never
@@ -421,6 +495,21 @@ export interface PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * The per-modality bag common to every AI configuration column. Sections are optional and
  * per-modality so one row can configure everything the thing it describes does.
  */
@@ -437,6 +526,8 @@ export interface AIConfigurationSections {
     Decision?: DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -516,14 +607,14 @@ function parseConfigurationBag<T>(json: string | null | undefined, caller: strin
 
 /**
  * Resolves the EFFECTIVE model configuration by deep-merging the catalog layers, base first —
- * type default < model < vendor default < model-vendor. Merge semantics are identical to the realtime config
- * cascade (`DeepMergeConfigs` in `@memberjunction/ai-agents` — duplicated here because package
- * layering runs the other way):
+ * type default < model < vendor default < model-vendor, via `SafeDeepMerge` in `@memberjunction/global`
+ * (the same merge the realtime config cascade, `DeepMergeConfigs` in `@memberjunction/ai-agents`, uses):
  *
  * - plain object vs plain object → recursive per-key merge (a vendor row overriding ONE
  *   `Realtime.TurnDetection` knob does not wipe the model's other sections);
  * - anything else (arrays, strings, numbers, booleans, `null`) → the later value REPLACES;
- * - `null`/`undefined` LAYERS are skipped entirely; inputs are never mutated.
+ * - `null`/`undefined` LAYERS are skipped entirely; inputs are never mutated;
+ * - `__proto__`, `constructor` and `prototype` keys are skipped at every depth.
  *
  * @param layers The catalog layers, base first (type, model, vendor).
  * @returns The merged configuration, or `null` when every layer is absent/empty.
@@ -531,36 +622,8 @@ function parseConfigurationBag<T>(json: string | null | undefined, caller: strin
 export function ResolveEffectiveModelConfiguration(
     ...layers: Array<AIModelConfiguration | null | undefined>
 ): AIModelConfiguration | null {
-    const result: JSONObject = {};
-    for (const layer of layers) {
-        if (!IsPlainObject(layer)) {
-            continue;
-        }
-        mergeInto(result, layer as unknown as JSONObject);
-    }
+    const result = SafeDeepMerge(...layers);
     return Object.keys(result).length > 0 ? (result as AIModelConfiguration) : null;
-}
-
-/** Recursive worker for {@link ResolveEffectiveModelConfiguration} — merges `source` into `target`. */
-function mergeInto(target: JSONObject, source: JSONObject): void {
-    for (const key of Object.keys(source)) {
-        const incoming = source[key];
-        if (incoming === undefined) {
-            continue;
-        }
-        const existing = target[key];
-        if (IsPlainObject(existing) && IsPlainObject(incoming)) {
-            mergeInto(existing, incoming);
-        } else if (IsPlainObject(incoming)) {
-            const copy: JSONObject = {};
-            mergeInto(copy, incoming);
-            target[key] = copy;
-        } else if (Array.isArray(incoming)) {
-            target[key] = incoming.slice() as JSONValue[];
-        } else {
-            target[key] = incoming;
-        }
-    }
 }
 
 /**
@@ -581,6 +644,22 @@ export function IsZeroDataRetention(config: AIModelConfiguration | null | undefi
  */
 export function IsPrefixPromptCache(config: AIModelConfiguration | null | undefined): boolean {
     return config?.LLM?.PrefixPromptCache === true;
+}
+
+/**
+ * Prepends the model's configured embedding prefix for `inputType` (omitted means `'document'`).
+ * Returns the text unchanged when the effective configuration declares no prefix for that role.
+ * Read the configuration through {@link ResolveEffectiveModelConfiguration} (or
+ * `AIEngineBase.GetEffectiveModelConfiguration`) so the most specific layer's prefix wins.
+ */
+export function ApplyEmbeddingInputPrefix(
+    text: string,
+    inputType: EmbeddingInputType | undefined,
+    config: AIModelConfiguration | null | undefined
+): string {
+    const section = config?.Embedding;
+    const prefix = inputType === 'query' ? section?.QueryPrefix : section?.DocumentPrefix;
+    return prefix ? prefix + text : text;
 }
 
 /**

@@ -2,16 +2,14 @@ import { ChangeDetectorRef, Component, Input, OnInit, ViewEncapsulation, inject 
 import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { UUIDsEqual } from '@memberjunction/global';
-import { Metadata, RunView, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { LogError, Metadata, RunView, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
   MJArtifactEntity,
   MJArtifactVersionEntity,
   MJExperimentSessionEntity,
-  PredictiveStudioControlExperimentSessionOperation,
-  PredictiveStudioExperimentSessionAction,
 } from '@memberjunction/core-entities';
-import { type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { ExperimentSessions, type GateOutcome, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSIterationCard, PSLeaderboardEntry } from '../predictive-studio.types';
@@ -19,9 +17,13 @@ import {
   PSKanbanColumns,
   DeriveLeaderboard,
   GroupIterationsToKanban,
+  ParseSessionLeaderboard,
+  SessionSuccessMetric,
+  type PSRankedScore,
+  type PSStoredGate,
+  ReadStoredGate,
+  GateCrowns,
 } from '../predictive-studio.view-models';
-import { PSConfirmModalComponent } from './ps-confirm-modal.component';
-import { PSRunExperimentModalComponent } from './ps-run-experiment-modal.component';
 
 /** A budget gauge derived from the session's budget JSON + actual iteration spend. */
 interface BudgetGaugeVM {
@@ -35,23 +37,23 @@ interface BudgetGaugeVM {
 
 /**
  * Experiments panel: a kanban of iteration cards in Running / Completed / Pruned columns, a leaderboard
- * strip ranked by score, and budget gauges — all live against `MJ: Experiment Sessions` + their
+ * strip in the session's stored ranking, and budget gauges — all live against `MJ: Experiment Sessions` + their
  * `MJ: Experiment Session Iterations`:
  *
  * - The **active session** is the first Running session, else the most-recently-created one.
- * - The **kanban** + **leaderboard** are derived from that session's iterations (grouped by status,
- *   ranked by score) via the pure {@link groupIterationsToKanban} / {@link deriveLeaderboard} helpers.
+ * - The **kanban** + **leaderboard** are derived from that session's iterations (grouped by status) and its stored
+ *   leaderboard (each score on its own metric, success-metric entries before fallback ones) via the pure
+ *   {@link GroupIterationsToKanban} / {@link DeriveLeaderboard} helpers.
  * - **Budget gauges** combine the session's budget JSON caps with actual iteration spend (compute
  *   cost, iteration count).
- * - **Pause / Cancel** call the {@link PredictiveStudioControlExperimentSessionOperation} Remote Op
- *   behind a confirmation; on success the engine refreshes.
+ * - Sessions are switched off: the panel shows earlier sessions and offers no start or control action.
  *
  * Empty state when there are no sessions. 100% entity-agnostic.
  */
 @Component({
   standalone: true,
   selector: 'ps-experiments',
-  imports: [CommonModule, MJButtonDirective, PSConfirmModalComponent, PSRunExperimentModalComponent, ArtifactsModule],
+  imports: [CommonModule, MJButtonDirective, ArtifactsModule],
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.css', './ps-experiments.component.css'],
   template: `
@@ -60,12 +62,7 @@ interface BudgetGaugeVM {
         <div class="ps-empty" data-testid="ps-experiments-empty">
           <span class="ps-empty-ico"><i class="fa-solid fa-flask"></i></span>
           <h3>No experiment sessions yet</h3>
-          <p>Launch an experiment to watch the Model Dev Agent search algorithms and feature sets in waves, or configure a manual multi-algorithm tournament.</p>
-          <div style="margin-top: 12px; display: flex; gap: 8px;">
-            <button mjButton variant="primary" size="sm" data-testid="ps-experiments-new-btn-empty" (click)="openNewExperimentModal()">
-              <i class="fa-solid fa-flask"></i> New Experiment
-            </button>
-          </div>
+          @if (!SessionsEnabled) { <p data-testid="ps-experiments-disabled-reason">{{ SessionsDisabledReason }}</p> }
         </div>
       } @else {
         <!-- session header strip -->
@@ -90,19 +87,13 @@ interface BudgetGaugeVM {
           <button mjButton variant="secondary" size="sm" data-testid="ps-experiments-view-artifact" [disabled]="artifactLoading" (click)="viewResultsArtifact()">
             <i class="fa-solid fa-flask-vial"></i> {{ artifactLoading ? 'Loading…' : 'View Results Artifact' }}
           </button>
-          <button mjButton variant="primary" size="sm" data-testid="ps-experiments-new-btn" (click)="openNewExperimentModal()">
-            <i class="fa-solid fa-plus"></i> New Experiment
-          </button>
-          @if (canPause) {
-            <button mjButton variant="secondary" size="sm" data-testid="ps-experiments-pause" (click)="requestControl('pause')"><i class="fa-solid fa-pause"></i> Pause</button>
-          }
-          @if (canResume) {
-            <button mjButton variant="secondary" size="sm" data-testid="ps-experiments-resume" (click)="requestControl('resume')"><i class="fa-solid fa-play"></i> Resume</button>
-          }
-          @if (canCancel) {
-            <button mjButton variant="danger" size="sm" data-testid="ps-experiments-cancel" (click)="requestControl('cancel')"><i class="fa-solid fa-stop"></i> Cancel</button>
-          }
         </div>
+        @if (!SessionsEnabled) {
+          <div class="ps-callout warn" data-testid="ps-experiments-unavailable">
+            <i class="fa-solid fa-circle-info"></i>
+            <div data-testid="ps-experiments-unavailable-reason">{{ SessionsDisabledReason }}</div>
+          </div>
+        }
 
         <!-- Leaderboard strip -->
         <div class="ps-card" data-testid="ps-experiments-leaderboard">
@@ -119,7 +110,10 @@ interface BudgetGaugeVM {
                 <span class="ps-rank" [class.gold]="lp.best">{{ lp.rank }}</span>
                 <span class="algo-ic" [style.background]="lp.algorithmColor"><i [class]="lp.algorithmIcon"></i></span>
                 <div><div class="nm">{{ lp.algorithm }}</div><div class="fs ps-muted ps-small">{{ lp.features }}</div></div>
-                <span class="auc" [class.win]="lp.best">{{ lp.auc | number: '1.3-3' }}</span>
+                <span class="auc" [class.win]="lp.best" data-testid="ps-experiments-lp-score"
+                  [title]="lp.OnSuccessMetric ? '' : 'Scored on ' + lp.ScoreMetric + ': its holdout gave no score on the success metric, so it ranks after every entry that has one.'">
+                  {{ lp.Score | number: '1.3-3' }} <span class="lp-metric">{{ lp.ScoreMetric }}</span>
+                </span>
               </div>
             }
           </div>
@@ -177,44 +171,30 @@ interface BudgetGaugeVM {
         </div>
 
         <ng-template #iterCard let-c="c">
-          <div class="icard" [class.best]="c.status === 'Best'" [class.running]="c.status === 'Running'" [class.pruned]="c.status === 'Pruned'">
+          <div class="icard" [class.best]="c.Status === 'Best'" [class.running]="c.Status === 'Running'" [class.pruned]="c.Status === 'Pruned'">
             <div class="ic-top">
-              <span class="algo-ic" [style.background]="c.algorithmColor"><i [class]="c.algorithmIcon"></i></span>
-              <div><div class="nm">{{ c.algorithm }}</div><div class="it ps-muted ps-small">{{ c.iteration }}</div></div>
+              <span class="algo-ic" [style.background]="c.AlgorithmColor"><i [class]="c.AlgorithmIcon"></i></span>
+              <div><div class="nm">{{ c.Algorithm }}</div><div class="it ps-muted ps-small">{{ c.Iteration }}</div></div>
               <span class="ps-spacer"></span>
-              <span class="ps-badge" [class]="statusBadgeClass(c.status)">{{ statusLabel(c.status) }}</span>
+              <span class="ps-badge" [class]="statusBadgeClass(c.Status)">{{ statusLabel(c.Status) }}</span>
             </div>
             <div class="feat-chips">
-              @for (f of c.features; track f) { <span class="ps-tag">{{ f }}</span> }
+              @for (f of c.Features; track f) { <span class="ps-tag">{{ f }}</span> }
             </div>
-            @if (c.status === 'Running') {
+            @if (c.Status === 'Running') {
               <div class="ic-prog">
                 <div class="ps-bar run"><span [style.width.%]="c.Progress"></span></div>
                 <div class="meta"><span class="ps-muted ps-small">{{ c.ProgressDetail }}</span></div>
               </div>
             } @else {
               <div class="ic-score">
-                <span class="v" [class.green]="c.status === 'Best'">{{ c.score | number: '1.3-3' }}</span>
-                <span class="lbl ps-muted ps-small">score · {{ c.ScoreDelta }}</span>
+                <span class="v" [class.green]="c.Status === 'Best'">{{ c.score | number: '1.3-3' }}</span>
+                <span class="lbl ps-muted ps-small">{{ c.ScoreMetric || 'not ranked yet' }} · {{ c.ScoreDelta }}</span>
               </div>
             }
-            <div class="rationale"><i class="fa-solid fa-robot"></i><span class="ps-small">{{ c.rationale }}</span></div>
+            <div class="rationale"><i class="fa-solid fa-robot"></i><span class="ps-small">{{ c.Rationale }}</span></div>
           </div>
         </ng-template>
-      }
-
-      @if (pendingAction) {
-        <ps-confirm-modal
-          [title]="pendingTitle"
-          [icon]="pendingIcon"
-          [confirmIcon]="pendingIcon"
-          [confirmLabel]="pendingConfirmLabel"
-          [variant]="pendingAction === 'cancel' ? 'danger' : 'warn'"
-          [busy]="busy"
-          (confirmed)="confirmControl()"
-          (cancelled)="cancelControl()">
-          <div [innerHTML]="pendingMessage"></div>
-        </ps-confirm-modal>
       }
 
       @if (showArtifactModal && activeArtifactId) {
@@ -232,22 +212,15 @@ interface BudgetGaugeVM {
           </div>
         </div>
       }
-
-      @if (showNewExperimentModal) {
-        <ps-run-experiment-modal
-          [engine]="engine"
-          [provider]="provider"
-          [currentUser]="currentUser"
-          (started)="onExperimentStarted($event)"
-          (closed)="closeNewExperimentModal()">
-        </ps-run-experiment-modal>
-      }
     </div>
   `,
 })
 export class PSExperimentsComponent implements OnInit {
+  /** Whether experiment sessions can run, and why not when they cannot: one source shared with the server refusal. */
+  public readonly SessionsEnabled = ExperimentSessions.Enabled;
+  public readonly SessionsDisabledReason = ExperimentSessions.DisabledReason;
   @Input() engine!: PredictiveStudioEngine;
-  /** Provider to route the control Remote Op + engine refresh through (multi-provider correctness). */
+  /** Provider the panel reads and writes through (multi-provider correctness); the global provider when unset. */
   @Input() provider: IMetadataProvider | null = null;
   /** Acting user for the engine refresh after a mutation. */
   @Input() CurrentUser: UserInfo | null = null;
@@ -297,39 +270,6 @@ export class PSExperimentsComponent implements OnInit {
     this.Budget = value;
   }
 
-  /** Pending control action awaiting confirmation (null when no modal is open). */
-  public PendingAction: PredictiveStudioExperimentSessionAction | null = null;
-
-  /** @deprecated Use {@link PendingAction}. */
-  public get pendingAction(): PredictiveStudioExperimentSessionAction | null {
-    return this.PendingAction;
-  }
-  /** @deprecated Use {@link PendingAction}. */
-  public set pendingAction(value: PredictiveStudioExperimentSessionAction | null) {
-    this.PendingAction = value;
-  }
-  /** Remote Op in flight. */
-  public Busy = false;
-
-  /** @deprecated Use {@link Busy}. */
-  public get busy() {
-    return this.Busy;
-  }
-  /** @deprecated Use {@link Busy}. */
-  public set busy(value) {
-    this.Busy = value;
-  }
-
-  public ShowNewExperimentModal = false;
-
-  /** @deprecated Use {@link ShowNewExperimentModal}. */
-  public get showNewExperimentModal() {
-    return this.ShowNewExperimentModal;
-  }
-  /** @deprecated Use {@link ShowNewExperimentModal}. */
-  public set showNewExperimentModal(value) {
-    this.ShowNewExperimentModal = value;
-  }
   public ShowArtifactModal = false;
 
   /** @deprecated Use {@link ShowArtifactModal}. */
@@ -381,37 +321,6 @@ export class PSExperimentsComponent implements OnInit {
     return this.SelectSession(id);
   }
 
-  public OpenNewExperimentModal(): void {
-    this.ShowNewExperimentModal = true;
-  }
-
-  /** @deprecated Use {@link OpenNewExperimentModal}. */
-  public openNewExperimentModal(): void {
-    return this.OpenNewExperimentModal();
-  }
-
-  public CloseNewExperimentModal(): void {
-    this.ShowNewExperimentModal = false;
-  }
-
-  /** @deprecated Use {@link CloseNewExperimentModal}. */
-  public closeNewExperimentModal(): void {
-    return this.CloseNewExperimentModal();
-  }
-
-  public async OnExperimentStarted(newSessionId: string): Promise<void> {
-    this.CloseNewExperimentModal();
-    await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
-    this.sessionId = newSessionId;
-    this.rebuild();
-    this.cdr.detectChanges();
-  }
-
-  /** @deprecated Use {@link OnExperimentStarted}. */
-  public async onExperimentStarted(newSessionId: string): Promise<void> {
-    return this.OnExperimentStarted(newSessionId);
-  }
-
   public CloseArtifactModal(): void {
     this.ShowArtifactModal = false;
     this.ActiveArtifactId = null;
@@ -429,11 +338,15 @@ export class PSExperimentsComponent implements OnInit {
     this.ArtifactLoading = true;
     try {
       const p = this.provider ?? Metadata.Provider;
-      const rv = new RunView();
-      const res = await rv.RunView<MJArtifactEntity>({
+      // The artifact this button generated earlier carries this exact comment; matched exactly, not by substring.
+      const sessionComment = `Auto-generated for Experiment Session ${s.ID}`;
+      const res = await RunView.FromMetadataProvider(p).RunView<Pick<MJArtifactEntity, 'ID'>>({
         EntityName: 'MJ: Artifacts',
-        ExtraFilter: `Name LIKE '${s.Name}%' OR Comments LIKE '%${s.ID}%'`,
-        ResultType: 'entity_object',
+        ExtraFilter: `Comments = '${EscapeSQLString(sessionComment)}'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        SkipTotalRowCount: true,
+        ResultType: 'simple',
       }, this.currentUser ?? undefined);
 
       if (res.Success && res.Results && res.Results.length > 0) {
@@ -444,9 +357,10 @@ export class PSExperimentsComponent implements OnInit {
 
       const art = await p.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser ?? undefined);
       art.Name = `${s.Name} — Results`;
-      art.Description = `Modeling results, leaderboard, and winning model metrics for ${s.Name}.`;
+      // Gate-independent: whether a model shipped is the stored gate's decision, which the version content carries.
+      art.Description = `Modeling results and leaderboard for ${s.Name}.`;
       art.TypeID = 'D41AB707-58F1-4413-8725-9DF31C95F4C5';
-      art.Comments = `Auto-generated for Experiment Session ${s.ID}`;
+      art.Comments = sessionComment;
       const saved = await art.Save();
       if (!saved) {
         this.notifications.CreateSimpleNotification('Could not generate artifact record.', 'error', 5000);
@@ -460,33 +374,45 @@ export class PSExperimentsComponent implements OnInit {
 
       const planSpec = this.parsePlanSpec(s.PlanSpec);
       const winningRow = this.leaderboard[0];
-      const winningIteration = winningRow
-        ? this.engine.IterationsForSession(s.ID).find((it) => this.engine.AlgorithmForIteration(it.ID) === winningRow.algorithm && it.Score === winningRow.auc)
-        : undefined;
+      const winningIteration = winningRow ? this.engine.IterationsForSession(s.ID).find((it) => UUIDsEqual(it.ID, winningRow.IterationID)) : undefined;
       const winningRun = winningIteration ? this.engine.TrainingRuns.find((r) => UUIDsEqual(r.ExperimentSessionIterationID, winningIteration.ID)) : undefined;
       const winningModelId = winningRun?.ResultingModelID ?? undefined;
+      const gate = ReadStoredGate(winningRun?.ValidationResults ?? null);
+      const outcome = gate?.Outcome ?? null;
 
       const payload = {
         Name: s.Name,
         Goal: s.Goal || planSpec?.Goal || 'Predictive modeling experiment',
         TargetMetric: planSpec?.TargetDefinition?.SuccessMetric || 'Score',
-        Summary: `Experiment session completed with ${this.leaderboard.length} iterations. Winning algorithm: ${winningRow?.algorithm ?? 'None'}.`,
+        Summary: `Experiment session completed with ${this.leaderboard.length} iterations. ${this.gateSummary(gate, winningRow?.algorithm)}`,
+        GateOutcome: outcome,
+        GateReason: gate?.Reason ?? null,
         Leaderboard: this.leaderboard.map((lb) => ({
           rank: lb.rank,
           algorithm: lb.algorithm,
           algorithmName: lb.algorithm,
           featureSet: lb.features,
-          score: lb.auc,
-          isWinner: lb.best,
+          score: lb.Score,
+          metricName: lb.ScoreMetric,
+          isWinner: lb.best === true && GateCrowns(gate),
         })),
-        BestModelID: winningModelId,
-        BestModel: winningModelId && winningRow ? { ID: winningModelId, Name: winningRow.algorithm } : undefined,
+        BestModelID: outcome === 'model' || outcome === 'keep-simple-baseline' ? winningModelId : undefined,
+        BestModel: winningModelId && winningRow ? this.bestModelFor(outcome, winningModelId, winningRow.algorithm) : undefined,
         Markdown: `## Experiment Session: ${s.Name}\n\n**Status:** ${s.Status}\n**Goal:** ${s.Goal || 'N/A'}\n\n### Leaderboard\n\nRanked by metric:\n` +
-          this.leaderboard.map(l => `- **#${l.rank} ${l.algorithm}**: Score ${l.auc.toFixed(3)} (${l.features})`).join('\n'),
+          this.leaderboard.map(l => `- **#${l.rank} ${l.algorithm}**: ${l.ScoreMetric} ${l.Score.toFixed(3)} (${l.features})`).join('\n'),
       };
 
       ver.Content = JSON.stringify(payload);
-      await ver.Save();
+      if (!(await ver.Save())) {
+        const message = ver.LatestResult?.CompleteMessage ?? 'unknown error';
+        LogError(`PSExperimentsComponent.ViewResultsArtifact: artifact version save failed: ${message}`);
+        // Remove the empty artifact, so the next click generates it again instead of finding an artifact with no content.
+        if (!(await art.Delete())) {
+          LogError(`PSExperimentsComponent.ViewResultsArtifact: could not remove the empty artifact ${art.ID}: ${art.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        this.notifications.CreateSimpleNotification(`Could not save the results artifact: ${message}`, 'error', 5000);
+        return;
+      }
 
       this.ActiveArtifactId = art.ID;
       this.ShowArtifactModal = true;
@@ -501,6 +427,37 @@ export class PSExperimentsComponent implements OnInit {
   /** @deprecated Use {@link ViewResultsArtifact}. */
   public async viewResultsArtifact(): Promise<void> {
     return this.ViewResultsArtifact();
+  }
+
+  /** The artifact summary's outcome sentence: a winner is named only when the stored gate shipped the model. */
+  private gateSummary(gate: PSStoredGate | null, algorithm: string | undefined): string {
+    if (gate === null) return 'Not evaluated under an Evaluation Protocol.';
+    const outcome: GateOutcome = gate.Outcome;
+    switch (outcome) {
+      case 'model': return `Winning algorithm: ${algorithm ?? 'None'}.`;
+      case 'keep-simple-baseline': return `The gate kept a simple baseline: ${gate.Reason.replace(/\.$/, '')}.`;
+      case 'no-signal': return `No model shipped: ${gate.Reason.replace(/\.$/, '')}.`;
+      default: return this.unreachableOutcome(outcome);
+    }
+  }
+
+  /** Compile-time exhaustiveness guard for the gate outcomes: a new outcome fails to compile here. */
+  private unreachableOutcome(outcome: never): never {
+    throw new Error(`Unhandled gate outcome: ${String(outcome)}`);
+  }
+
+  /** The artifact's model record: named by its algorithm only when the gate shipped the model; a kept baseline is not the finalist. */
+  private bestModelFor(outcome: GateOutcome | null, id: string, algorithm: string): { ID: string; Name: string } | undefined {
+    if (outcome === 'model') return { ID: id, Name: algorithm };
+    if (outcome === 'keep-simple-baseline') return { ID: id, Name: 'Kept simple baseline' };
+    return undefined;
+  }
+
+  /** The active session's stored leaderboard, each entry on its metric; an entry with none named is on the plan's success metric. */
+  private storedRanking(): PSRankedScore[] {
+    const session = this.Session;
+    if (!session) return [];
+    return ParseSessionLeaderboard(session.Leaderboard, SessionSuccessMetric(session.PlanSpec));
   }
 
   private parsePlanSpec(raw: string | null): ModelingPlanSpec | null {
@@ -556,8 +513,9 @@ export class PSExperimentsComponent implements OnInit {
       return;
     }
     const rows = this.engine.IterationRowsForSession(this.sessionId);
-    this.Kanban = GroupIterationsToKanban(rows);
-    this.Leaderboard = DeriveLeaderboard(rows);
+    const ranked = this.storedRanking();
+    this.Kanban = GroupIterationsToKanban(rows, ranked);
+    this.Leaderboard = DeriveLeaderboard(rows, ranked);
     this.Budget = this.buildBudget(rows);
   }
 
@@ -656,7 +614,7 @@ export class PSExperimentsComponent implements OnInit {
 
   public StatusLabel(status: PSIterationCard['Status']): string {
     switch (status) {
-      case 'Best': return 'Best';
+      case 'Best': return 'Top scorer';
       case 'AwaitingApproval': return 'Awaiting approval';
       default: return status;
     }
@@ -666,174 +624,4 @@ export class PSExperimentsComponent implements OnInit {
   public statusLabel(status: PSIterationCard['Status']): string {
     return this.StatusLabel(status);
   }
-
-  // ---- control availability ----
-
-  public get CanPause(): boolean {
-    return this.Session?.Status === 'Running';
-  }
-
-  /** @deprecated Use {@link CanPause}. */
-  public get canPause(): boolean {
-    return this.CanPause;
-  }
-  public get CanResume(): boolean {
-    return this.Session?.Status === 'Paused';
-  }
-
-  /** @deprecated Use {@link CanResume}. */
-  public get canResume(): boolean {
-    return this.CanResume;
-  }
-  public get CanCancel(): boolean {
-    const s = this.Session?.Status;
-    return s === 'Running' || s === 'Paused' || s === 'AwaitingApproval';
-  }
-
-  /** @deprecated Use {@link CanCancel}. */
-  public get canCancel(): boolean {
-    return this.CanCancel;
-  }
-
-  // ---- control flow (Remote Op) ----
-
-  public RequestControl(action: PredictiveStudioExperimentSessionAction): void {
-    if (!this.Session) return;
-    this.PendingAction = action;
-  }
-
-  /** @deprecated Use {@link RequestControl}. */
-  public requestControl(action: PredictiveStudioExperimentSessionAction): void {
-    return this.RequestControl(action);
-  }
-
-  public CancelControl(): void {
-    if (this.Busy) return;
-    this.PendingAction = null;
-  }
-
-  /** @deprecated Use {@link CancelControl}. */
-  public cancelControl(): void {
-    return this.CancelControl();
-  }
-
-  public get PendingTitle(): string {
-    switch (this.PendingAction) {
-      case 'pause': return 'Pause experiment';
-      case 'resume': return 'Resume experiment';
-      case 'cancel': return 'Cancel experiment';
-      default: return '';
-    }
-  }
-
-  /** @deprecated Use {@link PendingTitle}. */
-  public get pendingTitle(): string {
-    return this.PendingTitle;
-  }
-  public get PendingIcon(): string {
-    switch (this.PendingAction) {
-      case 'pause': return 'fa-solid fa-pause';
-      case 'resume': return 'fa-solid fa-play';
-      case 'cancel': return 'fa-solid fa-stop';
-      default: return 'fa-solid fa-check';
-    }
-  }
-
-  /** @deprecated Use {@link PendingIcon}. */
-  public get pendingIcon(): string {
-    return this.PendingIcon;
-  }
-  public get PendingConfirmLabel(): string {
-    switch (this.PendingAction) {
-      case 'pause': return 'Pause';
-      case 'resume': return 'Resume';
-      case 'cancel': return 'Cancel run';
-      default: return 'Confirm';
-    }
-  }
-
-  /** @deprecated Use {@link PendingConfirmLabel}. */
-  public get pendingConfirmLabel(): string {
-    return this.PendingConfirmLabel;
-  }
-  public get PendingMessage(): string {
-    const name = escapeHtml(this.Session?.Name ?? 'this session');
-    switch (this.PendingAction) {
-      case 'pause':
-        return `Pause <strong>${name}</strong>? The orchestrator stops at the next wave checkpoint; in-flight iterations finish. You can resume later.`;
-      case 'resume':
-        return `Resume <strong>${name}</strong>? The orchestrator continues searching from where it paused.`;
-      case 'cancel':
-        return `Cancel <strong>${name}</strong>? This stops the search at the next checkpoint. Completed iterations and the leaderboard are kept, but the session cannot be resumed.`;
-      default:
-        return '';
-    }
-  }
-
-  /** @deprecated Use {@link PendingMessage}. */
-  public get pendingMessage(): string {
-    return this.PendingMessage;
-  }
-
-  /** Run the control Remote Op, then refresh the engine + close on success. */
-  public async ConfirmControl(): Promise<void> {
-    if (!this.PendingAction || !this.Session || this.Busy) return;
-    this.Busy = true;
-    const action = this.PendingAction;
-    const sessionId = this.Session.ID;
-    const name = this.Session.Name;
-    try {
-      const op = new PredictiveStudioControlExperimentSessionOperation();
-      const result = await op.Execute(
-        { sessionId, action },
-        { provider: this.provider ?? undefined, user: this.CurrentUser ?? undefined },
-      );
-      if (result.Success) {
-        this.notifications.CreateSimpleNotification(
-          `${name} → ${result.Output?.status ?? action}`,
-          'success',
-          3500,
-        );
-        await this.refreshAfterMutation();
-        this.PendingAction = null;
-      } else {
-        this.notifications.CreateSimpleNotification(
-          result.ErrorMessage || `Could not ${action} ${name}.`,
-          'error',
-          5000,
-        );
-      }
-    } catch (e) {
-      this.notifications.CreateSimpleNotification(
-        `${action} failed: ${e instanceof Error ? e.message : String(e)}`,
-        'error',
-        5000,
-      );
-    } finally {
-      this.Busy = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  /** @deprecated Use {@link ConfirmControl}. */
-  public async confirmControl(): Promise<void> {
-    return this.ConfirmControl();
-  }
-
-  /** Force-refresh the engine's cached sessions/iterations, then rebuild. */
-  private async refreshAfterMutation(): Promise<void> {
-    await this.engine.Config(true, this.CurrentUser ?? undefined, this.provider ?? undefined);
-    this.selectActiveSession();
-    this.rebuild();
-    this.cdr.detectChanges();
-  }
-}
-
-/** Minimal HTML-escape for interpolating session names into the modal's innerHTML message. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

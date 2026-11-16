@@ -46,6 +46,7 @@ export interface FakeSubscribePayload {
     query: string;
     variables?: Record<string, unknown>;
     operationName?: string;
+    extensions?: Record<string, unknown>;
 }
 
 /**

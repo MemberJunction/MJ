@@ -14,7 +14,7 @@
  * pinned without an LLM call or a prompt-run fixture.
  *
  * ANTI-VACUITY: cost data is optional per deployment, so every data-dependent check counts its
- * subject rows and SKIPS-AS-PASS LOUDLY when there are none — while the always-runnable legs
+ * subject rows and records a SKIP when there are none — while the always-runnable legs
  * (driver-class resolution, pure math, stranger-id → null) assert unconditionally. The parity
  * check (AC4) reimplements `GetActiveModelCost`'s selection independently so it is a genuine
  * cross-check, not a restatement.
@@ -29,7 +29,7 @@ import {
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType
 } from '@memberjunction/ai-engine-base';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -50,7 +50,7 @@ const KNOWN_DRIVER_DIVISORS: Readonly<Record<string, number>> = {
     PerImage: 1
 };
 
-/** Loud, uniform skip-as-pass note. */
+/** Loud note for a partly-skipped check that still passes on the legs it did assert (AC4, AC12). */
 function skipNote(checkId: string, reason: string): void {
     console.warn(`  ⚠ ai-cost.${checkId} SKIPPED — ${reason}`);
 }
@@ -262,8 +262,7 @@ export const AiCostChecks: NamedCheck[] = [
             const engine = await configuredAIEngine(ctx);
             const costs = engine.ModelCosts;
             if (costs.length === 0) {
-                skipNote('AC3', 'no MJ: AI Model Costs rows in this deployment — cost coherence is unexercised');
-                return;
+                SkipCheck('no MJ: AI Model Costs rows in this deployment — cost coherence is unexercised');
             }
             const problems: string[] = [];
             for (const cost of costs) {
@@ -355,8 +354,7 @@ export const AiCostChecks: NamedCheck[] = [
             const engine = await configuredAIEngine(ctx);
             const costs = engine.ModelCosts;
             if (costs.length === 0) {
-                skipNote('AC5', 'no cost rows — orphan/coverage audit is unexercised');
-                return;
+                SkipCheck('no cost rows — orphan/coverage audit is unexercised');
             }
             const pairings = new Set(engine.ModelVendors.map(mv => `${mv.ModelID.toLowerCase()}|${mv.VendorID.toLowerCase()}`));
             const now = Date.now();
@@ -427,8 +425,7 @@ export const AiCostChecks: NamedCheck[] = [
             Assert(result.Success, `prompt-run cost query failed: ${result.ErrorMessage}`);
             const rows = result.Results;
             if (rows.length === 0) {
-                skipNote('AC6', 'no costed MJ: AI Prompt Runs rows exist — historical cost fidelity is unexercised');
-                return;
+                SkipCheck('no costed MJ: AI Prompt Runs rows exist — historical cost fidelity is unexercised');
             }
             const problems: string[] = [];
             let missingCurrency = 0;
@@ -581,8 +578,7 @@ export const AiCostChecks: NamedCheck[] = [
             Assert(probe.Success, `prompt-run completed probe failed: ${probe.ErrorMessage}`);
             const totalCompleted = aggregateValue(probe.AggregateResults, 'TotalCompleted');
             if (totalCompleted === 0) {
-                skipNote('AC8', 'no completed MJ: AI Prompt Runs rows exist — precision and basis invariants are unexercised');
-                return;
+                SkipCheck('no completed MJ: AI Prompt Runs rows exist — precision and basis invariants are unexercised');
             }
 
             // (b) Report unpriced ratio as coverage (log line, no assert — coverage is reported, not gated, in PR1).
@@ -683,8 +679,7 @@ export const AiCostChecks: NamedCheck[] = [
             const hourlyRuns = hourlyRows.reduce((sum: number, r: Record<string, unknown>) => sum + Number(r.Runs ?? 0), 0);
 
             if (baseCount === 0 && hourlyRuns === 0) {
-                skipNote('AC11', 'no completed prompt runs in test window — fact view / hourly parity is unexercised');
-                return;
+                SkipCheck('no completed prompt runs in test window — fact view / hourly parity is unexercised');
             }
 
             AssertEqual(hourlyRuns, baseCount, `AIUsageHourly Runs (${hourlyRuns}) must equal the completed non-parent prompt runs in the window (${baseCount})`);

@@ -1,0 +1,567 @@
+[
+  {
+    "fields": {
+      "Name": "PDF",
+      "FileExtension": ".pdf",
+      "ByteSignature": "{\"Magic\":[37,80,68,70],\"Unambiguous\":true}",
+      "IsText": false,
+      "ExtractorKey": "Pdf"
+    },
+    "primaryKey": {
+      "ID": "AE0E6E7A-3D5F-EF11-991A-00224822CE23"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.819Z",
+      "checksum": "5fed1ffd7f827a3b55f74750a448677622189d15c93c5e42c4ae1eb6f0c2d656"
+    }
+  },
+  {
+    "fields": {
+      "Name": "HTML",
+      "FileExtension": ".html",
+      "ByteSignature": "{\"TextPrefix\":[\"<!doctype html\",\"<html\"]}",
+      "IsText": true,
+      "ExtractorKey": "Html"
+    },
+    "primaryKey": {
+      "ID": "4F157898-9560-EF11-991A-00224822CE23"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.821Z",
+      "checksum": "945865e4ef0cb4cd1a4682e9781ad0a5895c4ccc26cde5ef5822d5dff15ebb52"
+    }
+  },
+  {
+    "fields": {
+      "Name": "XML",
+      "FileExtension": ".xml",
+      "ByteSignature": "{\"TextPrefix\":[\"<?xml\"]}",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "50157898-9560-EF11-991A-00224822CE23"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.823Z",
+      "checksum": "a87d5eddbd887fc69bd7d2a2d0a39007685dd3bd5208f278fd2a8208a6bf5df5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Other"
+    },
+    "primaryKey": {
+      "ID": "31622104-D887-EF11-8473-6045BDF05BB3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DOCX",
+      "FileExtension": ".docx",
+      "IsText": false,
+      "ExtractorKey": "Word"
+    },
+    "primaryKey": {
+      "ID": "F12D885B-2267-EF11-991A-6045BDFE5B84"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.825Z",
+      "checksum": "11cc367b4165993865236781c5422858c798e4d078511281e93d88943efd2348"
+    }
+  },
+  {
+    "fields": {
+      "Name": "PNG",
+      "FileExtension": ".png",
+      "ByteSignature": "{\"Magic\":[137,80,78,71,13,10,26,10],\"Unambiguous\":true}",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "F09641EF-3F29-4030-B0C6-E7FF6300D04F"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.854Z",
+      "checksum": "0a81f5cc1f439201b72f568c74639f070388a2b066dba7082705bf2bacfda49d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "RTF",
+      "FileExtension": ".rtf",
+      "ByteSignature": "{\"Magic\":[123,92,114,116,102],\"Unambiguous\":true}",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "31CF03AF-E073-4473-99B7-00330B389A0D"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.858Z",
+      "checksum": "1a3906761a22fea73e39ce7e9ef9d78c0f9e89868a0af227618afe56273ef633"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GIF",
+      "FileExtension": ".gif",
+      "ByteSignature": "{\"Magic\":[71,73,70,56],\"Unambiguous\":true}",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "FA1C57C4-94B3-475D-B59C-BDB19F842193"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.862Z",
+      "checksum": "bcbf0ce90dafee93a37baccd4cb888d7947d3d48989f660a638d7f2ac4d9bcb2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "WEBP",
+      "FileExtension": ".webp",
+      "ByteSignature": "{\"Magic\":[87,69,66,80],\"Offset\":8,\"Unambiguous\":true}",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "EF98C94F-A30E-4B63-8EC4-BE02902BF3AC"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.866Z",
+      "checksum": "8cd80f7667e9d44f67cf1a48780110a9aab285cf46dd0b844d69317bc4469adb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MP4",
+      "FileExtension": ".mp4",
+      "ByteSignature": "{\"Magic\":[102,116,121,112],\"Offset\":4,\"Unambiguous\":false}",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "38A22A9D-87F8-44E5-9C31-78A7B3FAB051"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.871Z",
+      "checksum": "8e171ec39918a59231624bbfcdf7066491c7b79fe71e4a57559e3a382c8d7b4b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OGG",
+      "FileExtension": ".ogg",
+      "ByteSignature": "{\"Magic\":[79,103,103,83],\"Unambiguous\":true}",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "0ABA3FC3-1D7E-46E1-886A-6AD471C72BC9"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.875Z",
+      "checksum": "d4709cfd9c98a5f74a834156798f18d4ef14c49e4a0b0b9a24b1d39017bf8a92"
+    }
+  },
+  {
+    "fields": {
+      "Name": "FLAC",
+      "FileExtension": ".flac",
+      "ByteSignature": "{\"Magic\":[102,76,97,67],\"Unambiguous\":true}",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "DF31850D-A934-423E-A7F5-E3D723EA3A01"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.879Z",
+      "checksum": "a834726cf6fc27771b088aac8d56bda7118142ca87c54c8d8fec175d1e7e07a1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ZIP",
+      "FileExtension": ".zip",
+      "ByteSignature": "{\"Magic\":[80,75,3,4],\"Unambiguous\":false}",
+      "IsText": false,
+      "ExtractorKey": "Archive"
+    },
+    "primaryKey": {
+      "ID": "07B05403-3830-40E7-996C-498E08D5526E"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.883Z",
+      "checksum": "59a04df9a628e0856276ef63c37a57c72d0e3c8fef21d16666f4e40bc797e926"
+    }
+  },
+  {
+    "fields": {
+      "Name": "JPG",
+      "FileExtension": ".jpg",
+      "ByteSignature": "{\"Magic\":[255,216,255],\"Unambiguous\":true}",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "2592FFE1-29BA-4AA4-8EB7-AA5031BBF15C"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.887Z",
+      "checksum": "4e38ab84a7e870853c8ae0e92304a604474c72d35211816b7d52e2ddee0b316d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "BMP",
+      "FileExtension": ".bmp",
+      "ByteSignature": "{\"Magic\":[66,77],\"Unambiguous\":true}",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "F8576C11-835E-4CDF-B779-166DD1BE12BF"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.892Z",
+      "checksum": "e143ff3e76f1dfe9d2a7a0e7cd72c53c7a0c4b0c4e2b6f8f5bb7e6e6031b26a1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GZ",
+      "FileExtension": ".gz",
+      "ByteSignature": "{\"Magic\":[31,139],\"Unambiguous\":true}",
+      "IsText": false,
+      "ExtractorKey": "Archive"
+    },
+    "primaryKey": {
+      "ID": "B1071E59-AC24-456D-A564-05253819EA45"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.896Z",
+      "checksum": "6c463f7511cf66e7b07b782c8a15e262917d1d0147d46ef3448fc300ddbc80a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "JSON",
+      "FileExtension": ".json",
+      "ByteSignature": "{\"TextPrefix\":[\"{\",\"[\"]}",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "8058B335-65B3-4C30-A695-40A3B00DD91D"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.900Z",
+      "checksum": "ad0abdc401df5ca6ad07e9abf26cdecee14aae02f9553b3e419abbc038ca0979"
+    }
+  },
+  {
+    "fields": {
+      "Name": "PS",
+      "FileExtension": ".ps",
+      "ByteSignature": "{\"TextPrefix\":[\"%!ps\"]}",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "28531D28-56D5-4741-AE39-918C45ABB8DD"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.904Z",
+      "checksum": "8c18805c12062c4459c281d18dc82aed921d2af23b1bc50e657a9bd71367a9b0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TXT",
+      "FileExtension": ".txt",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "5A7A02A5-977A-49EC-AC33-40FED84C2C0A"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.908Z",
+      "checksum": "0f636aafd3c950507513dcce298b328171912fce6cb61a9c8cc6b02fed07dd3b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TEXT",
+      "FileExtension": ".text",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "6DF45EBC-6C4C-468F-934E-54B148263C51"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.912Z",
+      "checksum": "2fa60470f1c767bd984e75062a87f26a98a9e9adf51215686f50b30e47161a4c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MD",
+      "FileExtension": ".md",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "F28B2E65-B0AC-4825-B558-05256A1DADF0"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.916Z",
+      "checksum": "d2fe789d599a7dd2f0c6d681522c496b0deb6ec2f03a98c93d7680ad649d2383"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MARKDOWN",
+      "FileExtension": ".markdown",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "872B71D3-B7D5-469E-BD70-A78314C076EC"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.920Z",
+      "checksum": "b733cadf8b51466f6333a74749dd356437d6b7daf94c9e56b99dcc066844b435"
+    }
+  },
+  {
+    "fields": {
+      "Name": "CSV",
+      "FileExtension": ".csv",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "46EE1C1F-A32E-4493-9CF1-F8532B0F8B04"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.924Z",
+      "checksum": "3685b384337eef3e54f9052204ec793ca97cedbb923f3f948dde89d3fdafbb56"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TSV",
+      "FileExtension": ".tsv",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "A8ED7940-E661-4957-B1F0-D3E5B57D0B53"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.928Z",
+      "checksum": "d79a06877ecd8e83eaa5e926b6633c1d9623a022a74d63983804c7340ecc863d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "HTM",
+      "FileExtension": ".htm",
+      "IsText": true,
+      "ExtractorKey": "Html"
+    },
+    "primaryKey": {
+      "ID": "987904CE-040D-456F-96ED-EC21E9AC9C4B"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.932Z",
+      "checksum": "9857909462d49a22f62dc6809ddcb12dffadfcd7372e1501188577be8e957501"
+    }
+  },
+  {
+    "fields": {
+      "Name": "XHTML",
+      "FileExtension": ".xhtml",
+      "IsText": true,
+      "ExtractorKey": "Html"
+    },
+    "primaryKey": {
+      "ID": "FF1C1A37-8843-4DD1-9850-3ED1376F77F0"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.938Z",
+      "checksum": "07f9ca467c71124775469d04faacdb37e676492255b69e7eee66b833a73eae81"
+    }
+  },
+  {
+    "fields": {
+      "Name": "YAML",
+      "FileExtension": ".yaml",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "6F8A8841-C662-4C4C-A185-5123F76D1A94"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.942Z",
+      "checksum": "f1c645a4a8032743fc5491cf7d17e186b41aa49c3adb615419ceba2612eec1ce"
+    }
+  },
+  {
+    "fields": {
+      "Name": "YML",
+      "FileExtension": ".yml",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "BFD99FF9-ACAA-4567-A121-EB0DA270A1D2"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.946Z",
+      "checksum": "d0eb174cb9ce032ccdad709cadfbfb5127bb0ae11d96bb35b40991b200149218"
+    }
+  },
+  {
+    "fields": {
+      "Name": "JPEG",
+      "FileExtension": ".jpeg",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "C35F070E-14FE-4D0E-AD96-A6D726FCE4CF"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.949Z",
+      "checksum": "e82a7dc326283869075868e1d0961d5f46554e1f24edf63ddc6e84bac73819f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TIFF",
+      "FileExtension": ".tiff",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "8CA8EFA9-FE88-42E8-95C3-2B735EB8DF89"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.954Z",
+      "checksum": "4e9cdb077a6420a75251c6ceb4ed3354b6bc2e8833eb780353ce9e198f144d91"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SVG",
+      "FileExtension": ".svg",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "CA54A982-B39D-4CFF-AC2E-E1DED69B164A"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.958Z",
+      "checksum": "01f1a7dd25f2603fa1facf0f7a45cb639bc01e03c1d1992c03dfa02d4d00c7d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MP3",
+      "FileExtension": ".mp3",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "2067D9EE-6B25-44C9-AF80-E77A99BE045C"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.962Z",
+      "checksum": "350d3cd7922fce866f4e8b58c599b21122292544f7b138d1087e25226bda1f91"
+    }
+  },
+  {
+    "fields": {
+      "Name": "WAV",
+      "FileExtension": ".wav",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "018E0E5A-3E59-4005-BF57-43BEDE539B1B"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.966Z",
+      "checksum": "9faae3b84a7c7c4ea9dacff78ebc1dfd8bb5276e36cc74ae5c45bc4418e285b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MOV",
+      "FileExtension": ".mov",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "A3D93547-0E16-441A-A609-1356F7F6172D"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.970Z",
+      "checksum": "544cf0ab9aa66c302be9ca8ebcbe0f56a3e2a392e09d0c131f309e3a26562ca3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AVI",
+      "FileExtension": ".avi",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "BFEB0BC6-3469-43D4-9A20-C67A079FEC3E"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.974Z",
+      "checksum": "d05b4fd62924ab2467bf76f0417941ff4ba0b5c5a529a850fcc2f94a6bc99c85"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MKV",
+      "FileExtension": ".mkv",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "E125D739-A22B-430B-ADC5-F5D70FA97A72"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.978Z",
+      "checksum": "d465b41c67513c9b5d9c847b4dc768033aaefecfa20846a19381e3ff5016e3d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "WEBM",
+      "FileExtension": ".webm",
+      "IsText": false
+    },
+    "primaryKey": {
+      "ID": "E6CF007C-A11B-4AE5-9915-08E02321C446"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.983Z",
+      "checksum": "4796c4359b090daa3cae3c7af5840bd255569477f267033969b9d8f9409d7c08"
+    }
+  },
+  {
+    "fields": {
+      "Name": "XLSX",
+      "FileExtension": ".xlsx",
+      "IsText": false,
+      "ExtractorKey": "Spreadsheet"
+    },
+    "primaryKey": {
+      "ID": "197951B3-D430-4F45-82DC-96D1027B1703"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.987Z",
+      "checksum": "26f57ef4c6aee180b987aeebe07018e744438873d107147f997ff2adf2a8ac6b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "XLSM",
+      "FileExtension": ".xlsm",
+      "IsText": false,
+      "ExtractorKey": "Spreadsheet"
+    },
+    "primaryKey": {
+      "ID": "DD15E909-BDC0-459F-93C7-EBAE71AAC020"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:09.991Z",
+      "checksum": "fa71555805f06bd4673f699cc6c564434330d4616b71cc15ccbe968d909d360a"
+    }
+  }
+]

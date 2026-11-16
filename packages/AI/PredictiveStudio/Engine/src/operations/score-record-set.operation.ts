@@ -9,7 +9,7 @@
  * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter —
  * it carries no scoring logic. The scope resolution + `MLModelInferenceProcessor`
  * batch path live in {@link ProductionScoreRecordSetRunner}, shared with the Score
- * action via {@link scoreRecordSetViaRunner}.
+ * action via {@link ScoreRecordSetViaRunner}.
  *
  * Marked `LongRunning` (a large scope can take a while): it emits coarse start/finish
  * progress. The runner does not expose a per-record progress hook today, so progress
@@ -17,7 +17,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RemoteOpResult, UserInfo } from '@memberjunction/core';
 import { BaseRemotableOperation, type RemoteOpServerContext } from '@memberjunction/core';
 import {
   PredictiveStudioScoreRecordSetOperation,
@@ -32,6 +32,7 @@ import type {
 } from '../actions/score-record-set.action';
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { ScoreRecordSetViaRunner, BuildScoreRecordSetRunner } from './delegation';
+import { PredictiveStudioRefusals } from './refusals';
 
 /**
  * Server implementation of `PredictiveStudio.ScoreRecordSet`. Extends the
@@ -41,6 +42,18 @@ import { ScoreRecordSetViaRunner, BuildScoreRecordSetRunner } from './delegation
  */
 @RegisterClass(BaseRemotableOperation, 'PredictiveStudio.ScoreRecordSet')
 export class PredictiveStudioScoreRecordSetServerOperation extends PredictiveStudioScoreRecordSetOperation {
+  /** Returns refusals as typed `ResultCode`s (see `PredictiveStudioRefusals`). */
+  public override async ExecuteServer(
+    input: PredictiveStudioScoreRecordSetInput,
+    context: RemoteOpServerContext,
+  ): Promise<RemoteOpResult<PredictiveStudioScoreRecordSetOutput>> {
+    return PredictiveStudioRefusals.ExecuteServer(
+      () => this.Authorize(input, context.user),
+      () => this.InternalExecute(input, context.provider, context.user, context),
+      this.OperationKey,
+    );
+  }
+
   /** @inheritdoc */
   protected async InternalExecute(
     input: PredictiveStudioScoreRecordSetInput,
@@ -68,6 +81,7 @@ export class PredictiveStudioScoreRecordSetServerOperation extends PredictiveStu
         modelId: input.modelId,
         scope: scope as ScoringScope,
         writeBack: input.writeBack as WriteBackDirective | undefined,
+        dryRun: input.dryRun === true,
         contextUser: user,
         provider,
       },

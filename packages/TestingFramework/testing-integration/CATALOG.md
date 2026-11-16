@@ -70,6 +70,8 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | ai-embeddings | 5 | det | **client** |
 | agent-loop-standin | 6 | det | server |
 | agent-decisions-switch | 9 | det | server |
+| agent-execution-primitives | 6 | det (+mut) | server |
+| agent-execution-primitives-live | 4 | live | server |
 | binary-fields | 6 | det (+mut) | **client** |
 | cloudflare-clef | 6 | det | server |
 | systemone-kev | 10 | det | server |

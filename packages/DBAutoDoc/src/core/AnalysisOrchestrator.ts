@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 import { DatabaseConnection, Introspector, DataSampler } from '../database/Database.js';
 import { AutoDocConnectionConfig } from '../types/driver.js';
 import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
+import { PrepareIndexesForRun } from '../utils/index-hints.js';
 import { TopologicalSorter } from '../database/TopologicalSorter.js';
 import { StateManager } from '../state/StateManager.js';
 import { IterationTracker } from '../state/IterationTracker.js';
@@ -553,10 +554,7 @@ export class AnalysisOrchestrator {
     driver: BaseAutoDocDriver,
     stateManager: StateManager
   ): Promise<void> {
-    if (this.config.analysis.useExistingIndexes === false) {
-      return;
-    }
-    const schemas = state.schemas.filter((s) => s.tables.some((t) => t.indexes === undefined));
+    const schemas = PrepareIndexesForRun(state.schemas, this.config.analysis.useExistingIndexes);
     if (schemas.length === 0) {
       return;
     }

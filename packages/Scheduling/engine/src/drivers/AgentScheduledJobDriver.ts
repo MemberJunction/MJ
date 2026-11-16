@@ -3,7 +3,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
 import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -24,8 +24,14 @@ import {
  *   StartingPayload?: any,
  *   InitialMessage?: string,
  *   ConfigurationID?: string,
+ *   CompanyID?: string,
  *   OverrideModelID?: string
  * }
+ *
+ * All four optional ID fields (`ConfigurationID`, `CompanyID`, `ConversationID`,
+ * `OverrideModelID`) are validated as UUIDs by `ValidateConfiguration` and
+ * forwarded to `AgentRunner.RunAgent` (`configurationId`, `companyId`,
+ * `conversationId`, and `override: { modelId }`).
  *
  * Execution result details (stored in ScheduledJobRun.Details):
  * {
@@ -87,6 +93,10 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
             conversationMessages: conversationMessages,
             payload: config.StartingPayload,
             contextUser: executionUser,
+            ...(config.ConfigurationID !== undefined ? { configurationId: config.ConfigurationID } : {}),
+            ...(config.CompanyID !== undefined ? { companyId: config.CompanyID } : {}),
+            ...(config.ConversationID !== undefined ? { conversationId: config.ConversationID } : {}),
+            ...(config.OverrideModelID !== undefined ? { override: { modelId: config.OverrideModelID } } : {}),
             // Heartbeat the lease on every agent step (prompt / action / sub-agent /
             // decision) so a healthy long-running agent keeps its concurrency slot
             // (GH #2749). Fire-and-forget is safe — context.heartbeat never throws
@@ -128,6 +138,24 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
                     config.AgentID,
                     ValidationErrorType.Failure
                 ));
+            }
+
+            // Validate optional UUID fields
+            const optionalUuidFields: Array<keyof Pick<
+                AgentJobConfiguration,
+                'ConfigurationID' | 'CompanyID' | 'ConversationID' | 'OverrideModelID'
+            >> = ['ConfigurationID', 'CompanyID', 'ConversationID', 'OverrideModelID'];
+
+            for (const field of optionalUuidFields) {
+                const value = config[field];
+                if (value !== undefined && (typeof value !== 'string' || !IsValidUUID(value))) {
+                    result.Errors.push(new ValidationErrorInfo(
+                        `Configuration.${field}`,
+                        `${field} must be a valid UUID when provided (received "${String(value)}")`,
+                        value,
+                        ValidationErrorType.Failure
+                    ));
+                }
             }
 
             // Validate StartingPayload is valid JSON if provided
@@ -216,26 +244,31 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         if (!ownerUserID) {
             return fallbackContextUser;
         }
-        if (fallbackContextUser?.ID && fallbackContextUser.ID.trim().toLowerCase() === ownerUserID.toLowerCase()) {
+        if (fallbackContextUser?.ID && UUIDsEqual(fallbackContextUser.ID, ownerUserID)) {
+            if (fallbackContextUser.IsActive === false) {
+                throw new Error(
+                    `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} is inactive.`
+                );
+            }
             return fallbackContextUser;
         }
         const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
-        if (userCache && typeof userCache.FindUser === 'function') {
-            const ownerUser = await userCache.FindUser({ ID: ownerUserID });
-            if (ownerUser) {
-                if (ownerUser.IsActive === false) {
-                    throw new Error(
-                        `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} is inactive.`
-                    );
-                }
-                return ownerUser;
-            }
-            if (Array.isArray(userCache.Users) && userCache.Users.length > 0) {
-                throw new Error(
-                    `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} not found in UserCache.`
-                );
-            }
+        if (!userCache || typeof userCache.FindUser !== 'function') {
+            throw new Error(
+                `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": UserCache is unavailable to resolve owner user ${ownerUserID}.`
+            );
         }
-        return fallbackContextUser;
+        const ownerUser = await userCache.FindUser({ ID: ownerUserID });
+        if (!ownerUser) {
+            throw new Error(
+                `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} not found in UserCache.`
+            );
+        }
+        if (ownerUser.IsActive === false) {
+            throw new Error(
+                `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} is inactive.`
+            );
+        }
+        return ownerUser;
     }
 }

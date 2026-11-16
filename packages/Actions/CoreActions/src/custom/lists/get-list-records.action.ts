@@ -138,6 +138,7 @@ export class GetListRecordsAction extends BaseAction {
               const recordMap = new Map<string, Record<string, unknown>>();
 
               for (const rec of recordsResult.Results) {
+                // fls-guard: entity_object rows loaded as params.ContextUser; width follows its user
                 const data = rec.GetAll ? rec.GetAll() : rec;
                 // Compact CompositeKey segment — exactly how ListDetail.RecordID is written.
                 recordMap.set(CompositeKey.FromEntityRecord(entityInfo, data).ToCompactURLSegment(), data);

@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IsValidSQLIdentifier, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -10,6 +10,7 @@ import {
     PhasedExecutionResult,
     DataSourceResult,
     ExcludedBaseViewFieldNames,
+    OrderAlternateBaseViewsTopologically,
 } from '../../codeGenDatabaseProvider';
 import { configInfo, MjCoreSchema } from '../../../Config/config';
 import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
@@ -19,6 +20,7 @@ import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
     UserCache,
+    GetServerPrincipal,
 } from '@memberjunction/generic-database-provider';
 import {
     POSTGRESQL_PROCEDURE_PARAM_LIMIT,
@@ -92,10 +94,9 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         const conn = new PostgreSQLCodeGenConnection(pool);
 
         await UserCache.Instance.Refresh(provider);
-        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-        const currentUser = userMatch ?? UserCache.Users[0];
+        const currentUser = GetServerPrincipal();
         if (!currentUser) {
-            throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
+            throw new Error('No active system user or Owner found in PostgreSQL; CodeGen needs one to run as.');
         }
 
         // Run MJ startup with the same 'task' entry-point default as the SQL Server path
@@ -1146,9 +1147,44 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
     }
 
     protected formatIndexStatement(entity: EntityInfo, f: EntityFieldInfo, indexName: string): string {
-        return (
+        return this.guardedCreateIndex(
+            entity,
+            [f],
             `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
-            `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${pgDialect.QuoteIdentifier(f.Name)});`
+            `            ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${pgDialect.QuoteIdentifier(f.Name)});`
+        );
+    }
+
+    /**
+     * Wraps a generated `CREATE INDEX IF NOT EXISTS` in a `DO` block that skips it when another
+     * non-partial index on the table already has `fields` as its leading key columns, in order
+     * (#6466). `IF NOT EXISTS` still covers the generated name itself.
+     */
+    protected guardedCreateIndex(entity: EntityInfo, fields: EntityFieldInfo[], createStatement: string): string {
+        const literal = (value: string) => `'${value.replace(/'/g, "''")}'`;
+        const leading = fields
+            .map((f, i) =>
+                `              AND ix.indkey[${i}] = (SELECT a.attnum FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attname = ${literal(f.Name)})`)
+            .join('\n');
+        return (
+            `-- Skipped when another non-partial index already leads with ${fields.length === 1 ? 'the column' : 'these columns'}.\n` +
+            `DO $$\n` +
+            `BEGIN\n` +
+            `    IF NOT EXISTS (\n` +
+            `        SELECT 1\n` +
+            `        FROM pg_index ix\n` +
+            `        INNER JOIN pg_class t ON t.oid = ix.indrelid\n` +
+            `        INNER JOIN pg_namespace n ON n.oid = t.relnamespace\n` +
+            `        WHERE n.nspname = ${literal(entity.SchemaName)}\n` +
+            `          AND t.relname = ${literal(entity.BaseTable)}\n` +
+            `          AND ix.indpred IS NULL\n` +
+            `          AND ix.indnkeyatts >= ${fields.length}\n` +
+            `${leading}\n` +
+            `    ) THEN\n` +
+            `        ${createStatement}\n` +
+            `    END IF;\n` +
+            `END\n` +
+            `$$;`
         );
     }
 
@@ -1172,8 +1208,12 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
             `-- Index for the soft primary key (${fields.map(f => f.Name).join(', ')}) in table ${entity.BaseTable}.\n` +
             `-- The key is metadata-only — no PRIMARY KEY constraint — so without this the per-record\n` +
             `-- existence check on the create path scans the whole table.\n` +
-            `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
-            `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${cols});`
+            this.guardedCreateIndex(
+                entity,
+                fields,
+                `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
+                `            ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${cols});`
+            )
         );
     }
 
@@ -1344,12 +1384,17 @@ CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     )
     SELECT
         a.${pgDialect.QuoteIdentifier(primaryKey)} AS "RootID",
-        (SELECT MAX(depth) FROM cte_ancestors)::INTEGER AS "Depth",
-        (SELECT path FROM cte_ancestors ORDER BY depth DESC LIMIT 1)::TEXT AS "Path",
-        (NOT EXISTS (SELECT 1 FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id))::BOOLEAN AS "IsLeaf",
-        (SELECT COUNT(1)::INTEGER FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id) AS "ChildCount"
+        a.depth::INTEGER AS "Depth",
+        a.path::TEXT AS "Path",
+        (ch.child_count = 0)::BOOLEAN AS "IsLeaf",
+        ch.child_count AS "ChildCount"
     FROM
         cte_ancestors a
+    CROSS JOIN LATERAL (
+        SELECT COUNT(1)::INTEGER AS child_count
+        FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id
+    ) ch
     WHERE
         a.${pgDialect.QuoteIdentifier(fieldName)} IS NULL OR p_parent_id IS NULL
     ORDER BY
@@ -1614,13 +1659,35 @@ $$ LANGUAGE sql STABLE;
     // ─── PERMISSIONS ─────────────────────────────────────────────────────
 
     /** @inheritdoc */
-    generateViewPermissions(entity: EntityInfo): string {
-        const viewName = this.getBaseViewName(entity);
+    override GenerateViewPermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
         const roles = this.collectPermissionRoles(entity.Permissions);
         if (roles.length === 0) return '';
         return roles.map((role: string) =>
-            `GRANT SELECT ON ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} TO ${pgDialect.QuoteIdentifier(role)};`
+            `GRANT SELECT ON ${pgDialect.QuoteSchema(targetSchemaName, targetViewName)} TO ${pgDialect.QuoteIdentifier(role)};`
         ).join('\n');
+    }
+
+    /** @inheritdoc */
+    override GenerateDisabledViewRevokePermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
+        const roles = this.collectPermissionRoles(entity.Permissions);
+        if (roles.length === 0) return '';
+        return roles.map((role: string) =>
+            `REVOKE SELECT ON ${pgDialect.QuoteSchema(targetSchemaName, targetViewName)} FROM ${pgDialect.QuoteIdentifier(role)};`
+        ).join('\n');
+    }
+
+    /** @inheritdoc */
+    generateViewPermissions(entity: EntityInfo): string {
+        const viewName = this.getBaseViewName(entity);
+        return this.GenerateViewPermissionsForTarget(entity, entity.SchemaName, viewName);
     }
 
     /**
@@ -2135,16 +2202,51 @@ ORDER BY ordinal_position`;
         if (!entity.HasLayeredBaseView) {
             return '';
         }
+        return this.GenerateAlternateBaseViewRebindSQL(
+            entity,
+            entity.SchemaName,
+            entity.BaseView,
+            entity.GeneratedViewName,
+        );
+    }
+
+    /** @inheritdoc */
+    override GenerateAlternateBaseViewRebindSQL(
+        _entity: EntityInfo,
+        altViewSchema: string,
+        altViewName: string,
+        innerViewName: string,
+    ): string {
         let core = '__mj';
         try {
             core = (MjCoreSchema() || '__mj').replace(/"/g, '""');
         } catch {
             core = '__mj';
         }
-        const schema = entity.SchemaName.replace(/'/g, "''");
-        const outer = entity.BaseView.replace(/'/g, "''");
-        const inner = entity.GeneratedViewName.replace(/'/g, "''");
+        const schema = altViewSchema.replace(/'/g, "''");
+        const outer = altViewName.replace(/'/g, "''");
+        const inner = innerViewName.replace(/'/g, "''");
         return `SELECT "${core}"."spRebindLayeredOuterView"('${schema}', '${outer}', '${inner}');`;
+    }
+
+    /** @inheritdoc */
+    override getViewDependenciesSQL(schema: string, viewName: string): string {
+        const escapedSchema = EscapeSQLString(schema);
+        const escapedView = EscapeSQLString(viewName);
+        return `SELECT DISTINCT
+    ns.nspname AS "ReferencedSchema",
+    cl.relname AS "ReferencedObject",
+    cl.relkind AS "ReferencedType"
+FROM pg_depend d
+JOIN pg_rewrite r ON r.oid = d.objid
+JOIN pg_class v ON v.oid = r.ev_class
+JOIN pg_namespace vns ON vns.oid = v.relnamespace
+JOIN pg_class cl ON cl.oid = d.refobjid
+JOIN pg_namespace ns ON ns.oid = cl.relnamespace
+WHERE vns.nspname = '${escapedSchema}'
+  AND v.relname = '${escapedView}'
+  AND cl.oid <> v.oid
+  AND cl.relkind IN ('r', 'v', 'm', 'f', 'p')`;
     }
 
     /**
@@ -2160,21 +2262,86 @@ ORDER BY ordinal_position`;
         if (!entity.HasLayeredBaseView) {
             return;
         }
-        const schemaLit = entity.SchemaName.replace(/'/g, "''").replace(/"/g, '""');
-        const outerLit = entity.BaseView.replace(/'/g, "''").replace(/"/g, '""');
-        const innerLit = entity.GeneratedViewName.replace(/'/g, "''").replace(/"/g, '""');
+        await this.rebindOuterViewAgainstInnerIfPresent(
+            client,
+            entity.SchemaName,
+            entity.BaseView,
+            entity.SchemaName,
+            entity.GeneratedViewName,
+            willRegenerate,
+        );
+    }
+
+    /**
+     * Rebinds each registered alternate base view on `entity` in topological
+     * `ParentID` order so `SELECT *` / `alias.*` re-expands after the entity's
+     * `BaseView` (or parent alternate view) is regenerated. Wrapped per-view in
+     * `try/catch` so a single broken alternate view logs a warning without
+     * failing the owning entity's view phase.
+     */
+    private async rebindAlternateBaseViewsIfPresent(
+        client: PGQueryable,
+        entity: EntityInfo,
+        willRegenerate?: Set<string>,
+    ): Promise<void> {
+        const orderedAltViews = OrderAlternateBaseViewsTopologically(entity.AlternateBaseViews ?? []);
+        if (orderedAltViews.length === 0) {
+            return;
+        }
+        const defaultInnerName = this.getBaseViewName(entity);
+        for (const altView of orderedAltViews) {
+            if (!IsValidSQLIdentifier(altView.EffectiveSchemaName) || !IsValidSQLIdentifier(altView.ViewName)) {
+                logError(
+                    `[AlternateBaseView] Skipping rebind for alternate view '${altView.Name}' on '${entity.Name}': invalid SQL identifier '${altView.EffectiveSchemaName}.${altView.ViewName}'.`
+                );
+                continue;
+            }
+            const parentView = altView.ParentView;
+            const innerSchema = parentView ? parentView.EffectiveSchemaName : entity.SchemaName;
+            const innerName = parentView ? parentView.ViewName : defaultInnerName;
+            try {
+                await this.rebindOuterViewAgainstInnerIfPresent(
+                    client,
+                    altView.EffectiveSchemaName,
+                    altView.ViewName,
+                    innerSchema,
+                    innerName,
+                    willRegenerate,
+                );
+            } catch (e) {
+                LogWarning(
+                    `   ⚠️  [AlternateBaseView] Failed to rebind alternate view '${altView.Name}' (${altView.EffectiveSchemaName}.${altView.ViewName}) on '${entity.Name}': ${
+                        e instanceof Error ? e.message : String(e)
+                    }`,
+                );
+            }
+        }
+    }
+
+    private async rebindOuterViewAgainstInnerIfPresent(
+        client: PGQueryable,
+        outerSchema: string,
+        outerViewName: string,
+        innerSchema: string,
+        innerViewName: string,
+        willRegenerate?: Set<string>,
+    ): Promise<void> {
+        const outerSchemaLit = outerSchema.replace(/'/g, "''").replace(/"/g, '""');
+        const outerLit = outerViewName.replace(/'/g, "''").replace(/"/g, '""');
+        const innerSchemaLit = innerSchema.replace(/'/g, "''").replace(/"/g, '""');
+        const innerLit = innerViewName.replace(/'/g, "''").replace(/"/g, '""');
         const existsResult = await client.query(
-            `SELECT to_regclass('"${schemaLit}"."${outerLit}"') IS NOT NULL AS present`,
+            `SELECT to_regclass('"${outerSchemaLit}"."${outerLit}"') IS NOT NULL AS present`,
         );
         if (!existsResult.rows?.[0]?.['present']) {
             return;
         }
 
-        const defResult = await client.query(this.getViewDefinitionSQL(entity.SchemaName, entity.BaseView));
+        const defResult = await client.query(this.getViewDefinitionSQL(outerSchema, outerViewName));
         const viewDefinition = String(defResult.rows?.[0]?.['ViewDefinition'] ?? defResult.rows?.[0]?.['viewdefinition'] ?? '');
         if (!viewDefinition) {
             throw new LayeredOuterRestarError(
-                `Could not read pg_get_viewdef for layered outer view ${entity.SchemaName}.${entity.BaseView}`,
+                `Could not read pg_get_viewdef for layered outer view ${outerSchema}.${outerViewName}`,
             );
         }
 
@@ -2183,7 +2350,7 @@ ORDER BY ordinal_position`;
              FROM pg_attribute a
              JOIN pg_class c ON c.oid = a.attrelid
              JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = '${schemaLit}'
+             WHERE n.nspname = '${innerSchemaLit}'
                AND c.relname = '${innerLit}'
                AND a.attnum > 0
                AND NOT a.attisdropped
@@ -2192,14 +2359,14 @@ ORDER BY ordinal_position`;
         const innerColumns = (colResult.rows ?? []).map((r) => String(r['Name'] ?? r['name'] ?? ''));
         const restarred = restarLayeredOuterView({
             viewDefinition,
-            innerViewName: entity.GeneratedViewName,
+            innerViewName,
             innerColumns,
         });
-        const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(entity.SchemaName, entity.BaseView, restarred);
+        const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(outerSchema, outerViewName, restarred);
         await ExecuteWithFallback({
             Client: client,
-            schema: entity.SchemaName,
-            ViewName: entity.BaseView,
+            schema: outerSchema,
+            ViewName: outerViewName,
             CreateOrReplaceSQL: createSQL,
             WillRegenerate: willRegenerate,
         });
@@ -2454,6 +2621,7 @@ WHERE p.prokind IN ('f', 'p')
                 BaseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
             });
             await this.rebindLayeredOuterIfPresent(client, entity, willRegenerate);
+            await this.rebindAlternateBaseViewsIfPresent(client, entity, willRegenerate);
         } finally {
             client.release();
         }
@@ -2484,6 +2652,7 @@ WHERE p.prokind IN ('f', 'p')
         ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
+        OnDependentViewUnrestored?: (schema: string, viewName: string) => void;
     }): Promise<PhasedExecutionResult> {
         // [Large Schema Series] pooled client (was `new pg.Client()` per entity —
         // the per-entity handshake that dominated manageSQLScriptsAndExecution).
@@ -2516,8 +2685,10 @@ WHERE p.prokind IN ('f', 'p')
                         CreateOrReplaceSQL: opts.viewSQL,
                         WillRegenerate: opts.willRegenerate,
                         BaseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
+                        OnDependentViewUnrestored: opts.OnDependentViewUnrestored,
                     });
                     await this.rebindLayeredOuterIfPresent(client, opts.entity, opts.willRegenerate);
+                    await this.rebindAlternateBaseViewsIfPresent(client, opts.entity, opts.willRegenerate);
                 } catch (e) {
                     return {
                         success: false,
@@ -2757,10 +2928,13 @@ WHERE p.prokind IN ('f', 'p')
             };
         }
 
-        // Composite keys or non-auto, non-UUID PKs
-        const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
-        ).join(' AND ');
+        // Composite keys or non-auto, non-UUID PKs. #3526: a key column that allows NULL is matched
+        // NULL-safely (IS NOT DISTINCT FROM would not use a btree index).
+        const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) => {
+            const col = pgDialect.QuoteIdentifier(k.Name);
+            const param = pgDialect.ParameterRef(k.CodeName);
+            return k.AllowsNull ? `(${col} = ${param} OR (${col} IS NULL AND ${param} IS NULL))` : `${col} = ${param}`;
+        }).join(' AND ');
 
         // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
         // filters them all out. Prepend them to finalColumns/finalValues so the INSERT is valid.
@@ -3031,17 +3205,42 @@ WHERE p.prokind IN ('f', 'p')
             ? `AND e."SchemaName" NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `
-WITH fk_cache AS (
-   SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema"
+WITH fk_all AS (
+   SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema",
+          COUNT(*) OVER (PARTITION BY "FK_NAME", "schema_name", "table") AS "ComponentCount"
    FROM ${qs(schema, 'vwForeignKeys')}
 ),
+-- "KeyColumnCount": a column of a composite primary key is not unique on its own (#4536)
 pk_cache AS (
-   SELECT "TableName", "ColumnName", "SchemaName"
+   SELECT "TableName", "ColumnName", "SchemaName",
+          COUNT(*) OVER (PARTITION BY "SchemaName", "TableName") AS "KeyColumnCount"
    FROM ${qs(schema, 'vwTablePrimaryKeys')}
 ),
+-- Only columns that are, alone, the key of a non-partial unique index or constraint (#4536).
+-- Composite unique keys are recorded as key sets in EntityUniqueKey, not on their columns.
 uk_cache AS (
-   SELECT "TableName", "ColumnName", "SchemaName"
+   SELECT DISTINCT "TableName", "ColumnName", "SchemaName"
    FROM ${qs(schema, 'vwTableUniqueKeys')}
+   WHERE "KeyColumnCount" = 1
+     AND NOT "IsFiltered"
+),
+-- A column of a multi-column foreign key is a usable single-column reference only when the column
+-- it references is unique on its own. Joined alone, any other component matches many referenced
+-- rows and the base view's label join multiplies rows, so it gets no related entity.
+fk_cache AS (
+   SELECT fk.*
+   FROM fk_all fk
+   WHERE fk."ComponentCount" = 1
+      OR EXISTS (
+            SELECT 1 FROM pk_cache pk
+            WHERE pk."SchemaName" = fk."referenced_schema" AND pk."TableName" = fk."referenced_table"
+              AND pk."ColumnName" = fk."referenced_column" AND pk."KeyColumnCount" = 1
+         )
+      OR EXISTS (
+            SELECT 1 FROM uk_cache uk
+            WHERE uk."SchemaName" = fk."referenced_schema" AND uk."TableName" = fk."referenced_table"
+              AND uk."ColumnName" = fk."referenced_column"
+         )
 ),
 max_sequences AS (
    SELECT
@@ -3079,7 +3278,7 @@ numbered_rows AS (
       CASE WHEN sf."FieldName" = 'Name' THEN TRUE ELSE FALSE END AS "IsNameField",
       CASE WHEN pk."ColumnName" IS NOT NULL THEN TRUE ELSE FALSE END AS "IsPrimaryKey",
       CASE
-            WHEN pk."ColumnName" IS NOT NULL THEN TRUE
+            WHEN pk."ColumnName" IS NOT NULL AND pk."KeyColumnCount" = 1 THEN TRUE
             WHEN uk."ColumnName" IS NOT NULL THEN TRUE
             ELSE FALSE
       END AS "IsUnique",

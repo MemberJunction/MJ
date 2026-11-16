@@ -51,8 +51,25 @@ export class ArtifactIconService {
     private static readonly NON_FREE_ICON_FALLBACKS: Readonly<Record<string, string>> = {
         'fa-brackets-curly': 'fa-solid fa-file-code',
         'fa-chart-mixed': 'fa-solid fa-chart-line',
+        'fa-file-spreadsheet': 'fa-solid fa-file-excel',
         'fa-ts': 'fa-solid fa-file-code',
     };
+
+    private static readonly FA_STYLE_PREFIXES = new Set<string>([
+        'fa-solid',
+        'fas',
+        'fa-regular',
+        'far',
+        'fa-brands',
+        'fab',
+        'fa-light',
+        'fal',
+        'fa-thin',
+        'fat',
+        'fa-duotone',
+        'fad',
+        'fa-sharp',
+    ]);
 
     /**
      * Attempts to retrieve icon from artifact type metadata.
@@ -61,7 +78,7 @@ export class ArtifactIconService {
         try {
             // MJConversationArtifactEntity has ArtifactType field, MJArtifactEntity has Type field
             const typeName = 'ArtifactType' in artifact ? artifact.ArtifactType : artifact.Type;
-            const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(typeName);
+            const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(typeName ?? '');
             if (artifactType?.Icon) {
                 return this.NormalizeMetadataIcon(artifactType.Icon);
             }
@@ -76,13 +93,19 @@ export class ArtifactIconService {
      * so artifacts always display a visible glyph even before metadata is re-synced to the DB.
      */
     public NormalizeMetadataIcon(icon: string): string {
-        const trimmed = icon.trim();
+        let resolved = icon.trim();
         for (const [nonFreeToken, replacement] of Object.entries(ArtifactIconService.NON_FREE_ICON_FALLBACKS)) {
-            if (trimmed === nonFreeToken || trimmed.split(/\s+/).includes(nonFreeToken)) {
-                return replacement;
+            if (resolved === nonFreeToken || resolved.split(/\s+/).includes(nonFreeToken)) {
+                resolved = replacement;
+                break;
             }
         }
-        return trimmed;
+        const tokens = resolved.split(/\s+/).filter(Boolean);
+        const hasStylePrefix = tokens.some((t) => ArtifactIconService.FA_STYLE_PREFIXES.has(t));
+        if (tokens.length > 0 && !hasStylePrefix && tokens.some((t) => t.startsWith('fa-'))) {
+            return `fa-solid ${resolved}`;
+        }
+        return resolved;
     }
 
     /**

@@ -25,9 +25,9 @@ export class TextExtractor {
 
         let text = html;
 
-        // Remove script and style elements entirely
-        text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-        text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+        // Remove script and style elements entirely (end tags may carry spaces or attributes)
+        text = TextExtractor.removeElements(text, /<script\b/gi, /<\/script\b/gi);
+        text = TextExtractor.removeElements(text, /<style\b/gi, /<\/style\b/gi);
 
         // Replace block-level elements with newlines
         text = text.replace(/<\/(p|div|h[1-6]|li|tr|br|blockquote|pre)>/gi, '\n');
@@ -82,6 +82,33 @@ export class TextExtractor {
 
         // All other text types
         return TextExtractor.ExtractFromPlainText(content);
+    }
+
+    /**
+     * Removes each element from its opening tag through the `>` of its closing tag, in one forward
+     * walk over the string. A regex such as `<script\b[^>]*>[\s\S]*?<\/script[^>]*>` backtracks
+     * polynomially on crafted input; this stays linear. An element with no closing tag is left
+     * for the tag stripper, so its text remains but no tag does.
+     * @param open global, case-insensitive pattern for the start of the opening tag
+     * @param close global, case-insensitive pattern for the start of the closing tag
+     */
+    private static removeElements(text: string, open: RegExp, close: RegExp): string {
+        const kept: string[] = [];
+        let pos = 0;
+        for (;;) {
+            open.lastIndex = pos;
+            const opening = open.exec(text);
+            if (!opening) break;
+            close.lastIndex = opening.index + opening[0].length;
+            const closing = close.exec(text);
+            if (!closing) break;
+            const end = text.indexOf('>', closing.index + closing[0].length);
+            if (end === -1) break;
+            kept.push(text.slice(pos, opening.index));
+            pos = end + 1;
+        }
+        kept.push(text.slice(pos));
+        return kept.join('');
     }
 
     /**

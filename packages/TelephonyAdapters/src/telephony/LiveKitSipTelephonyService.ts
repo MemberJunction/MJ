@@ -30,6 +30,7 @@ import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
 import {
     LiveKitAgentRoomCoordinator,
     LiveKitSipService,
+    RoomAudioPlayer,
     RoomAuthorizationService,
     RoomHandoffEngine,
     type DialIntoRoomRequest,
@@ -181,6 +182,7 @@ export class LiveKitSipTelephonyService {
      */
     public async HandleWebhookEvent(event: LiveKitRoomWebhookEvent, contextUser: UserInfo, provider: IMetadataProvider): Promise<LiveKitSipInboundResult> {
         if (event.Event === 'room_finished') {
+            void RoomAudioPlayer.Instance.StopAllInRoom(event.RoomName);
             this.handledRooms.delete(roomKey(event.RoomName));
             const handler = this.inboundHandler ?? GetLiveKitSipInboundHandler();
             if (handler?.HandleRoomFinished) {
@@ -193,6 +195,24 @@ export class LiveKitSipTelephonyService {
                 }
             }
             return { accepted: false, reason: 'room finished' };
+        }
+        if (event.Event === 'participant_left' && event.IsSipParticipant && event.RoomName.startsWith(this.roomPrefix)) {
+            try {
+                const remaining = await this.sip.ListParticipants(event.RoomName);
+                if (!remaining.some((p) => p.IsSip)) {
+                    void RoomAudioPlayer.Instance.StopAllInRoom(event.RoomName);
+                    this.handledRooms.delete(roomKey(event.RoomName));
+                    const handler = this.inboundHandler ?? GetLiveKitSipInboundHandler();
+                    if (handler?.HandleRoomFinished) {
+                        await handler.HandleRoomFinished(event.RoomName, contextUser, provider);
+                    }
+                }
+            } catch (leftErr) {
+                LogError(
+                    `[Telephony][LiveKitSip] participant_left cleanup failed for room ${event.RoomName}: ${leftErr instanceof Error ? leftErr.message : String(leftErr)}`
+                );
+            }
+            return { accepted: false, reason: 'sip participant left' };
         }
         if (event.Event !== 'participant_joined' || !event.IsSipParticipant || !event.RoomName.startsWith(this.roomPrefix)) {
             return { accepted: false, reason: 'not an inbound call' };

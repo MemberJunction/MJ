@@ -359,5 +359,39 @@ describe('RealtimeRecordingController', () => {
             c.AppendOutbound(pcm16(...block));
             expect(c.GetPeaks()).toHaveLength(600);
         });
+
+        it('derives EncodeWav() and GetPeaks() from the same mixed signal and reflects new frames and Reset()', () => {
+            const c = new RealtimeRecordingController({ Now: clock.Now, OutputSampleRate: 24000, InputSampleRate: 24000 });
+            clock.Value = 0;
+            c.Start();
+            c.AppendOutbound(pcm16(1000, -1000, 2000, -2000));
+            c.AppendInbound(pcm16(500, -500, 1000, -1000));
+
+            const wav = c.EncodeWav();
+            expect(wav).not.toBeNull();
+            const wavSamples = readWavSamples(wav!.Buffer);
+            expect(Array.from(wavSamples)).toEqual([1500, -1500, 3000, -3000]);
+
+            const peaks = c.GetPeaks(2);
+            expect(peaks).toHaveLength(2);
+            const bucket0Max = Math.max(Math.abs(wavSamples[0]), Math.abs(wavSamples[1]));
+            const bucket1Max = Math.max(Math.abs(wavSamples[2]), Math.abs(wavSamples[3]));
+            const overallMax = Math.max(bucket0Max, bucket1Max);
+            expect(peaks[0]).toBeCloseTo(bucket0Max / overallMax, 5);
+            expect(peaks[1]).toBeCloseTo(bucket1Max / overallMax, 5);
+
+            // Appending a louder frame updates both EncodeWav() and GetPeaks()
+            c.AppendOutbound(pcm16(6000, -6000, 6000, -6000));
+            const updatedSamples = readWavSamples(c.EncodeWav()!.Buffer);
+            expect(updatedSamples[0]).toBe(7500);
+            const updatedPeaks = c.GetPeaks(2);
+            expect(updatedPeaks[0]).toBeCloseTo(7500 / 9000, 5);
+            expect(updatedPeaks[1]).toBeCloseTo(1, 5);
+
+            // Reset clears captured state for both callers
+            c.Reset();
+            expect(c.EncodeWav()).toBeNull();
+            expect(c.GetPeaks()).toEqual([]);
+        });
     });
 });

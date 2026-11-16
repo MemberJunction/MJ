@@ -116,6 +116,8 @@ export interface HttpRequestConfig {
     Timeout?: number;
     /** When true, run the URL through the SSRF guard (and re-check every redirect hop). Default: false. */
     ValidateUrl?: boolean;
+    /** With `ValidateUrl`, drop the request headers when a redirect leaves the original origin. Default: false. */
+    StripHeadersOnCrossOriginRedirect?: boolean;
     /**
      * Maximum redirect hops to follow. Default: 5.
      *
@@ -471,6 +473,7 @@ export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promi
                 body,
                 signal: controller.signal,
                 MaxRedirects: maxRedirects,
+                StripHeadersOnCrossOriginRedirect: config.StripHeadersOnCrossOriginRedirect,
             });
         } else {
             response = await fetch(url, {
@@ -960,3 +963,4 @@ export class HttpClient {
         return await this.Request<T>({ ...config, Url: url, Method: "HEAD", ResponseType: "none" });
     }
 }
+

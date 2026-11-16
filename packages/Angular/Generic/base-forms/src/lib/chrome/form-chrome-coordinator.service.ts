@@ -29,7 +29,10 @@ export class FormChromeCoordinator {
     public Apply(spec: FormChromeSpec): void {
         this.Spec = StabilizeFirstClassGroupOrder(this.Spec, spec);
         if (spec.Layout === 'left-nav') {
-            const stillValid = spec.Groups.some((g) => g.Key === this.ActiveGroupKey);
+            // A More child is a valid active key too: it is never a group of its own.
+            const active = this.ActiveGroupKey;
+            const stillValid = active !== null
+                && (spec.Groups.some((g) => g.Key === active) || this.isMoreChild(active));
             if (!stillValid) {
                 this.ActiveGroupKey = spec.Groups[0]?.Key ?? null;
             }

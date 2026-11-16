@@ -47,10 +47,15 @@
               <!-- Label -->
               <label class="field-label" [for]="'param-' + field.info.Name">
                 {{ field.info.Name }}
-                @if (field.info.IsRequired) {
+                @if (field.info.IsRequired && !IsLocked(field)) {
                   <span class="required-indicator">*</span>
                 }
                 <span class="field-type">({{ field.info.Type }})</span>
+                @if (IsLocked(field)) {
+                  <span class="field-locked" [title]="LockLabel(field)">
+                    <i class="fa-solid fa-lock" aria-hidden="true"></i> {{ LockLabel(field) }}
+                  </span>
+                }
               </label>
               <!-- Description -->
               @if (field.info.Description) {
@@ -65,6 +70,7 @@
                   [id]="'param-' + field.info.Name"
                   [value]="GetStringValue(field.value)"
                   [placeholder]="GetPlaceholder(field.info)"
+                  [disabled]="IsLocked(field)"
                   (input)="OnInputChange(field, $event)">
               }
               <!-- Number input -->
@@ -74,6 +80,7 @@
                   [id]="'param-' + field.info.Name"
                   [value]="GetNumberValue(field.value)"
                   [placeholder]="GetPlaceholder(field.info)"
+                  [disabled]="IsLocked(field)"
                   (input)="OnNumberInputChange(field, $event)">
               }
               <!-- Date input -->
@@ -82,6 +89,7 @@
                   class="form-input"
                   [id]="'param-' + field.info.Name"
                   [value]="GetDateValue(field.value)"
+                  [disabled]="IsLocked(field)"
                   (input)="OnDateInputChange(field, $event)">
               }
               <!-- Boolean input -->
@@ -90,6 +98,7 @@
                   <input type="checkbox"
                     [id]="'param-' + field.info.Name"
                     [checked]="GetBooleanValue(field.value)"
+                    [disabled]="IsLocked(field)"
                     (change)="OnCheckboxChange(field, $event)">
                   <label [for]="'param-' + field.info.Name" class="checkbox-label">
                     {{ GetBooleanValue(field.value) ? 'Yes' : 'No' }}
@@ -103,6 +112,7 @@
                   [id]="'param-' + field.info.Name"
                   [value]="GetArrayDisplayValue(field.value)"
                   [placeholder]="GetPlaceholder(field.info) || 'Enter values separated by commas'"
+                  [disabled]="IsLocked(field)"
                   (input)="OnArrayInputChange(field, $event)">
                 <span class="field-hint">Enter multiple values separated by commas</span>
               }

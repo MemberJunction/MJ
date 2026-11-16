@@ -9,6 +9,7 @@ import { RunLLMToolCallingConformanceSuite, ScriptedToolCall } from '@memberjunc
 import { GeminiLLM, GEMINI_LEADING_USER_TURN_TEXT } from '../index';
 import { describe, it, expect } from 'vitest';
 import { ChatParams, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL } from '@memberjunction/ai';
+import { WithoutCacheAnchor } from './cache-anchor-test-helpers';
 
 /** The one scripted response the seam will return for the next call. */
 let nextResponse: Record<string, unknown> = {};
@@ -26,8 +27,6 @@ const seamClient = {
 RunLLMToolCallingConformanceSuite({
     ProviderName: 'Gemini',
     SupportsTools: true,
-    // Gemini passes its own uppercase vocabulary straight through on non-tool turns.
-    OrdinaryFinishReason: 'STOP',
     CreateLLM: () => {
         const llm = new GeminiLLM('conformance-test-key');
         (llm as unknown as { _gemini: typeof seamClient })._gemini = seamClient;
@@ -127,7 +126,7 @@ describe('GeminiLLM — a conversation may not open with a model turn', () => {
         expect((captured.send?.message ?? []).some((p) => 'functionResponse' in p)).toBe(true);
     });
 
-    it('leaves a conversation that already opens with a user turn exactly as it was', async () => {
+    it('leaves a conversation that already opens with a user turn as it was, after the cache anchor', async () => {
         const { client, captured } = capturingSeam();
         const llm = new GeminiLLM('conformance-test-key');
         (llm as unknown as { _gemini: typeof client })._gemini = client;
@@ -136,12 +135,12 @@ describe('GeminiLLM — a conversation may not open with a model turn', () => {
         params.messages = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'Describe the active members.' }, callTurn, resultTurn];
         params.tools = [{ name: 'get_entity_details', inputSchema: { type: 'object', properties: {} } }];
         await llm.ChatCompletion(params);
-        const history = captured.create?.history ?? [];
+        const history = WithoutCacheAnchor(captured.create?.history ?? []);
         expect(history.map((h) => h.role)).toEqual(['user', 'model']);
         expect(history[0].parts).toEqual([{ text: 'Describe the active members.' }]);
     });
 
-    it('does not add a turn to a first request that has only a system prompt (the message sent is the empty user turn it always was)', async () => {
+    it('sends the leading user turn for a first request that has only a system prompt (Vertex AI rejects an empty message)', async () => {
         const { client, captured } = capturingSeam();
         const llm = new GeminiLLM('conformance-test-key');
         (llm as unknown as { _gemini: typeof client })._gemini = client;
@@ -150,7 +149,7 @@ describe('GeminiLLM — a conversation may not open with a model turn', () => {
         params.messages = [{ role: 'system', content: 'Everything is in here.' }];
         await llm.ChatCompletion(params);
         expect(captured.create?.history ?? []).toEqual([]);
-        expect(captured.send?.message).toEqual([{ text: '' }]);
+        expect(captured.send?.message).toEqual([{ text: GEMINI_LEADING_USER_TURN_TEXT }]);
     });
 });
 

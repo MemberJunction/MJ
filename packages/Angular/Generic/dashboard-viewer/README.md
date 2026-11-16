@@ -1,10 +1,10 @@
 # @memberjunction/ng-dashboard-viewer
 
-A pluggable Angular dashboard viewer for rendering and editing MemberJunction dashboards with configurable panels, multiple part types (Web URLs, Entity Views, Queries, Artifacts), and a dynamic plugin architecture.
+A pluggable Angular dashboard viewer for rendering and editing MemberJunction dashboards with configurable panels, multiple part types (Web URLs, Entity Views, Queries, Artifacts, Components), and a dynamic plugin architecture.
 
 ## Overview
 
-The `@memberjunction/ng-dashboard-viewer` package provides a complete dashboard rendering and editing system. Dashboards consist of panels containing parts, where each part type has a corresponding runtime renderer and configuration panel -- both loaded dynamically via MemberJunction's `ClassFactory` plugin system. The package includes a dashboard browser for navigating available dashboards, breadcrumb navigation, and built-in support for Web URL, Entity View, Query, and Artifact part types.
+The `@memberjunction/ng-dashboard-viewer` package provides a complete dashboard rendering and editing system. Dashboards consist of panels containing parts, where each part type has a corresponding runtime renderer and configuration panel -- both loaded dynamically via MemberJunction's `ClassFactory` plugin system. The package includes a dashboard browser for navigating available dashboards, breadcrumb navigation, and built-in support for Web URL, Entity View, Query, Artifact, and Component part types.
 
 ```mermaid
 graph TD
@@ -26,6 +26,8 @@ graph TD
     (@RegisterClass)"]
     C --> C4["ArtifactConfigPanel
     (@RegisterClass)"]
+    C --> C5["ComponentConfigPanel
+    (@RegisterClass)"]
 
     D --> D1["WebURLPartComponent
     (@RegisterClass)"]
@@ -34,6 +36,8 @@ graph TD
     D --> D3["QueryPartComponent
     (@RegisterClass)"]
     D --> D4["ArtifactPartComponent
+    (@RegisterClass)"]
+    D --> D5["ComponentPartComponent
     (@RegisterClass)"]
 
     E --> E0[DashboardPartDialogComponent]
@@ -263,6 +267,7 @@ export class CustomChartPartComponent extends BaseDashboardPart {
 | View | `ViewConfigPanelComponent` | `ViewPartComponent` | MJ Entity View grid/cards |
 | Query | `QueryConfigPanelComponent` | `QueryPartComponent` | MJ Query results display |
 | Artifact | `ArtifactConfigPanelComponent` | `ArtifactPartComponent` | Conversation artifact viewer |
+| Component | `ComponentConfigPanelComponent` | `ComponentPartComponent` | Interactive React component (`MJ: Components`) |
 
 ## Component Reference
 
@@ -276,6 +281,15 @@ The viewer reads the dashboard's saved layout (`UIConfigDetails`) when it gets t
 - `ReloadFromSaved(dashboard?)` shows the saved layout again (of the given copy, if any) and drops unsaved layout changes. An edit-mode change made right after the call applies to the new layout. A hidden viewer builds the layout when its container gets a size.
 - `UseSavedCopy(dashboard)` takes another copy of the shown dashboard whose saved layout is the one shown (for example after `DashboardEngine` reloaded its dashboards), without rebuilding the layout. Later saves write that copy. It returns false for a copy of another dashboard or with another saved layout.
 
+Properties, input mappings, and event wires:
+
+- A dashboard configuration (`DashboardConfig` in `UIConfigDetails`) can declare typed dashboard-level `Properties` (`DashboardProperty[]`, with optional `Default` values or context-token defaults), and the host can pass runtime values through the viewer's `[Properties]` input (`Record<string, unknown>`). The viewer resolves effective property values (runtime value, then default) and exposes a read-only chip bar displaying active properties or refusal messages.
+- Each panel's config (`PanelConfig`) can define `inputMappings` (`Record<string, DashboardInputMapping>`, either `{ kind: 'property', property: '<Name>' }` or `{ kind: 'literal', value }`). The viewer resolves these against the effective dashboard properties and passes the resulting map to the part's `MappedInputs` input:
+  - `ViewPartComponent` forwards `MappedInputs` as `[Properties]` to `<mj-entity-viewer>`.
+  - `QueryPartComponent` merges `MappedInputs` into `[MappedParameters]` on `<mj-query-viewer>`, hiding parameter controls that are bound by dashboard properties or wires.
+  - `ComponentPartComponent` passes `MappedInputs` as props to the hosted React component.
+- A dashboard configuration can also declare `Wires` (`DashboardEventWire[]`: `sourcePanelId`, `event`, `targetPanelId`, `targetInput`, optional `payloadPath`). Each `BaseDashboardPart` has a `PartEvent` output (`DashboardPartEvent`: `{ Name, Payload }`); when a source part emits `PartEvent` (for example `recordSelected` from a View part, `rowClicked` from a Query part, or a custom event from a Component part), the viewer extracts `payloadPath` (if specified) and updates `targetInput` in the target panel's `MappedInputs` (and supports cycles up to a bounded hop limit).
+
 Editing:
 
 - `IsEditing` puts the dashboard in edit mode. `CanEdit` (default `false`) tells the viewer that the user may edit the dashboard: an empty dashboard then offers Add part in view mode too, and the host decides how to enter edit mode.
@@ -288,7 +302,7 @@ Editing:
 | `configure-part-requested` | Edit part | `panelId` |
 | `remove-part-requested` | Remove | `panelId`, `payload.panelTitle`, `payload.partTypeName` (the `MJ: Dashboard Part Types` name, or null) |
 
-- `RemovePartConfirmOptions(panelTitle, partTypeName)` gives the texts of the Remove part confirm, for `MJConfirmService.ConfirmDelete`: for example `Remove "Revenue" from this dashboard?`, and for the four built-in part types a detail line that says the view, query, artifact or page itself is not deleted.
+- `RemovePartConfirmOptions(panelTitle, partTypeName)` gives the texts of the Remove part confirm, for `MJConfirmService.ConfirmDelete`: for example `Remove "Revenue" from this dashboard?`, and for the five built-in part types a detail line that says the view, query, artifact, component or page itself is not deleted.
 
 ### GoldenLayoutWrapperService
 

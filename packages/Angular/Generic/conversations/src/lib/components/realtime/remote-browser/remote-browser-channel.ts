@@ -24,16 +24,20 @@ const EXECUTE_REMOTE_BROWSER_ACTION_MUTATION = `
   mutation ExecuteRemoteBrowserAction(
     $agentSessionID: String!, $kind: String!, $url: String, $selector: String,
     $x: Float, $y: Float, $text: String, $key: String,
-    $deltaX: Float, $deltaY: Float, $ms: Float
+    $deltaX: Float, $deltaY: Float, $ms: Float,
+    $ref: String, $valuesJson: String
   ) {
     ExecuteRemoteBrowserAction(
       agentSessionID: $agentSessionID, kind: $kind, url: $url, selector: $selector,
       x: $x, y: $y, text: $text, key: $key,
-      deltaX: $deltaX, deltaY: $deltaY, ms: $ms
+      deltaX: $deltaX, deltaY: $deltaY, ms: $ms,
+      ref: $ref, valuesJson: $valuesJson
     ) {
       Success
       CurrentUrl
       Detail
+      ObservationJson
+      FilledJson
     }
   }
 `;
@@ -44,6 +48,8 @@ interface ExecuteRemoteBrowserActionResult {
     Success: boolean;
     CurrentUrl: string | null;
     Detail: string | null;
+    ObservationJson?: string | null;
+    FilledJson?: string | null;
   } | null;
 }
 
@@ -261,6 +267,10 @@ interface RemoteBrowserToolResult {
   currentUrl?: string;
   /** Human-readable detail (e.g. extracted page text for `browser_GetPageText`, or an error). */
   detail?: string;
+  /** Structured DOM observation when `browser_Inspect` succeeds. */
+  observation?: JSONValue;
+  /** Per-field fill verification results when `browser_Fill` succeeds. */
+  filled?: JSONValue;
   /** Error description when `success` is false. */
   error?: string;
 }
@@ -425,6 +435,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       // Reading the page is what exposure limits: its text is the page's state, and what the vision model makes of the
       // screenshot (or where it finds an element) is derived from its pixels. A goal's result reports what the browser found.
       Verbs: BuildToolBackedVerbs(this.GetToolDefinitions(), this.ToolNamePrefix, 'agent', {
+        [REMOTE_BROWSER_TOOL_NAMES.Inspect]: 'state',
         [REMOTE_BROWSER_TOOL_NAMES.GetPageText]: 'state',
         [REMOTE_BROWSER_TOOL_NAMES.DescribePage]: 'pixels',
         [REMOTE_BROWSER_TOOL_NAMES.LocateElement]: 'pixels',
@@ -950,7 +961,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       // PERCEPTION: tell the agent where the page is now (background — no spoken reply), and refresh
       // the live-view bar, which in streaming mode has no poll feeding it.
       this.notePageChange(result.CurrentUrl, 'agent');
-      return this.ok(result.CurrentUrl, result.Detail);
+      return this.ok(result.CurrentUrl, result.Detail, result.ObservationJson, result.FilledJson);
     });
   }
 
@@ -968,6 +979,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       deltaX: action.DeltaX ?? null,
       deltaY: action.DeltaY ?? null,
       ms: action.Ms ?? null,
+      ...(action.Ref !== undefined ? { ref: action.Ref } : {}),
+      ...(action.ValuesJson !== undefined ? { valuesJson: action.ValuesJson } : {}),
     };
   }
 
@@ -1117,13 +1130,32 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   }
 
   /** Builds a successful tool-result JSON string for the model. */
-  private ok(currentUrl: string | null, detail: string | null): string {
+  private ok(
+    currentUrl: string | null,
+    detail: string | null,
+    observationJson?: string | null,
+    filledJson?: string | null,
+  ): string {
     const result: RemoteBrowserToolResult = { success: true };
     if (currentUrl) {
       result.currentUrl = currentUrl;
     }
     if (detail) {
       result.detail = detail;
+    }
+    if (observationJson) {
+      try {
+        result.observation = JSON.parse(observationJson) as JSONValue;
+      } catch {
+        // Ignore malformed observation JSON
+      }
+    }
+    if (filledJson) {
+      try {
+        result.filled = JSON.parse(filledJson) as JSONValue;
+      } catch {
+        // Ignore malformed filled JSON
+      }
     }
     return JSON.stringify(result);
   }

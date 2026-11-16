@@ -1,7 +1,8 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { RunView, RunViewParams } from "@memberjunction/core";
+import { Metadata, RunView, RunViewParams } from "@memberjunction/core";
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * Generic action for retrieving multiple records from any entity with filtering and sorting capabilities.
@@ -65,6 +66,7 @@ export class GetRecordsAction extends BaseAction {
 
             const filter = this.getStringParam(params, "Filter");
             const orderBy = this.getStringParam(params, "OrderBy");
+            const alternateBaseView = this.getStringParam(params, "AlternateBaseView");
             const maxRows = this.getNumericParam(params, "MaxRows", 100);
             const includeCount = this.getBooleanParam(params, "IncludeCount", true);
 
@@ -77,6 +79,41 @@ export class GetRecordsAction extends BaseAction {
                 };
             }
 
+            const md = params.Provider ?? Metadata.Provider;
+            const entityInfo = md?.EntityByName ? md.EntityByName(entityName) : undefined;
+            const callingAgentId = AgentDataPolicyGuard.GetCallingAgentID(params);
+            let policyState: Awaited<ReturnType<typeof AgentDataPolicyGuard.EvaluateRecordOperation>> = {
+                Allowed: { Active: false },
+            };
+            if (callingAgentId) {
+                if (!entityInfo) {
+                    return {
+                        Success: false,
+                        ResultCode: "ENTITY_NOT_FOUND",
+                        Message: `Entity "${entityName}" not found in metadata; refusing agent read.`
+                    };
+                }
+                policyState = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                    params,
+                    entityInfo,
+                    operation: 'Read',
+                });
+                if ('Blocked' in policyState) {
+                    return policyState.Blocked;
+                }
+                const clauseError = AgentDataPolicyGuard.ScreenGetRecordsClauses({
+                    params,
+                    entityInfo,
+                    evalState: policyState.Allowed,
+                    filter,
+                    orderBy,
+                    alternateBaseView,
+                });
+                if (clauseError) {
+                    return clauseError;
+                }
+            }
+
             // Use RunView to execute the query.
             //
             // Typed as RunViewParams rather than `any` on purpose: the filter used to be assigned to
@@ -84,16 +121,22 @@ export class GetRecordsAction extends BaseAction {
             // filter was dropped and EVERY caller asking for a filtered set quietly received the
             // whole entity instead — capped only by MaxRows. The field is `ExtraFilter`, and the
             // type now says so.
-            const rv = new RunView();
+            const rv = params.Provider ? RunView.FromMetadataProvider(params.Provider) : new RunView();
             const runViewParams: RunViewParams = {
                 EntityName: entityName,
                 MaxRows: maxRows,
                 ResultType: 'simple'
             };
 
-            // Add filter if provided
-            if (filter) {
-                runViewParams.ExtraFilter = filter;
+            const effectiveFilter = policyState.Allowed.Active
+                ? AgentDataPolicyGuard.CombineExtraFilters(
+                      filter,
+                      policyState.Allowed.EffectiveWhereClause,
+                      params.Provider
+                  )
+                : filter;
+            if (effectiveFilter) {
+                runViewParams.ExtraFilter = effectiveFilter;
             }
 
             // Add ordering if provided
@@ -101,7 +144,12 @@ export class GetRecordsAction extends BaseAction {
                 runViewParams.OrderBy = orderBy;
             }
 
-            const result = await rv.RunView(runViewParams, params.ContextUser);
+            // Add alternate base view if provided
+            if (alternateBaseView) {
+                runViewParams.AlternateBaseView = alternateBaseView;
+            }
+
+            const result = await rv.RunView<Record<string, unknown>>(runViewParams, params.ContextUser);
 
             if (!result.Success) {
                 return {
@@ -111,8 +159,21 @@ export class GetRecordsAction extends BaseAction {
                 };
             }
 
-            const records = result.Results || [];
-            const totalCount = result.TotalRowCount || records.length;
+            const rawRecords = result.Results || [];
+            const records = AgentDataPolicyGuard.FilterAndMaskRows({
+                rows: rawRecords,
+                evalState: policyState.Allowed,
+                entityInfo,
+                contextUser: params.ContextUser,
+                provider: params.Provider,
+            });
+            const wasConditionFiltered =
+                policyState.Allowed.Active &&
+                policyState.Allowed.HasRecordConditionRules &&
+                records.length !== rawRecords.length;
+            const totalCount = wasConditionFiltered
+                ? records.length
+                : (result.TotalRowCount || records.length);
 
             // Build success message
             let message = `Successfully retrieved ${records.length} records`;
@@ -155,7 +216,14 @@ export class GetRecordsAction extends BaseAction {
                         Name: 'OrderBy',
                         Type: 'Output',
                         Value: orderBy
-                    }
+                    },
+                    ...(alternateBaseView
+                        ? [{
+                            Name: 'AlternateBaseView',
+                            Type: 'Output' as const,
+                            Value: alternateBaseView
+                        }]
+                        : [])
                 ]
             };
 
@@ -169,7 +237,7 @@ export class GetRecordsAction extends BaseAction {
         }
     }
 
-    public get Params(): any[] {
+    public get Params(): ActionParam[] {
         return [
             {
                 Name: 'EntityName',
@@ -195,11 +263,16 @@ export class GetRecordsAction extends BaseAction {
                 Name: 'IncludeCount',
                 Type: 'Input',
                 Value: null
+            },
+            {
+                Name: 'AlternateBaseView',
+                Type: 'Input',
+                Value: null
             }
         ];
     }
 
-    public get Returns(): any[] {
+    public get Returns(): ActionParam[] {
         return [
             {
                 Name: 'Records',

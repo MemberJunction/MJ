@@ -43,6 +43,7 @@ export class TemplateRunServerOperation extends TemplateRunOperation {
             ExtraFilter: `TemplateID = '${input.templateID}'`,
             OrderBy: 'Priority ASC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object',
         }, user);
         if (!contentResult.Results?.length) {
@@ -55,6 +56,8 @@ export class TemplateRunServerOperation extends TemplateRunOperation {
             contentResult.Results[0],
             input.data ?? {},
             true /* skip validation for execution */,
+            undefined,
+            { ContextUser: user },
         );
         if (!result.Success) {
             throw new Error(result.Message ?? 'Template render failed');

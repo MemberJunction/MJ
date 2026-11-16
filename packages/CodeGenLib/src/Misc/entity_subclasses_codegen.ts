@@ -14,7 +14,7 @@ import { configInfo, DbPlatform, MjCoreSchema, ResolveEntityImportPackage, type 
 import { SQLLogging } from './sql_logging';
 import { CodeGenConnection, ResolveCodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
 import { CodeGenReporter } from './codegen-reporter';
-import { NormalizeGeneratedValidatorText } from './validator-text';
+import { NormalizeGeneratedValidatorText, RewriteUUIDComparisons, UUIDS_EQUAL_FUNCTION_NAME } from './validator-text';
 import { v4 as uuidv4 } from 'uuid';
 import { WriteFileIfChanged } from './file-write';
 import { EmitStats } from './emit-stats';
@@ -245,6 +245,8 @@ export class EntitySubClassGeneratorBase {
       const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
       const schemasDir = path.join(directory, 'entities');
       MakeDir(schemasDir);
+      const standaloneSchemasDir = path.join(directory, 'schemas');
+      MakeDir(standaloneSchemasDir);
 
       const toEmit = SchemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
         fs.existsSync(path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`)),
@@ -258,9 +260,14 @@ export class EntitySubClassGeneratorBase {
       const assembleStarted = Date.now();
       await MapLimit(toEmit, concurrency, async (schemaName) => {
         const schemaEntities = grouped.get(schemaName) ?? [];
-        const content = await this.AssembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false);
-        const filePath = path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`);
+        const sanitizedSchemaName = SanitizeSchemaFileName(schemaName);
+        const content = await this.AssembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false, sanitizedSchemaName);
+        const filePath = path.join(schemasDir, `${sanitizedSchemaName}.ts`);
         this.emitFile(filePath, content, emit.writeIfChanged);
+
+        const schemaContent = this.AssembleSchemaFile(schemaEntities);
+        const schemaFilePath = path.join(standaloneSchemasDir, `${sanitizedSchemaName}.ts`);
+        this.emitFile(schemaFilePath, schemaContent, emit.writeIfChanged);
       });
       EmitStats.AddAssembleMs(Date.now() - assembleStarted);
 
@@ -269,6 +276,7 @@ export class EntitySubClassGeneratorBase {
       if (pruned.length > 0) {
         logStatus(`   Removed ${pruned.length} orphaned entity schema file(s): ${pruned.join(', ')}`);
       }
+      PruneOrphanedSchemaFiles(standaloneSchemasDir, schemas);
 
       const barrel = BuildSchemaBarrel(
         schemas,
@@ -280,6 +288,12 @@ export class EntitySubClassGeneratorBase {
 `,
       );
       this.emitFile(path.join(directory, 'entity_subclasses.ts'), barrel, emit.writeIfChanged);
+
+      const schemaBarrelPath = path.join(directory, 'schemas.ts');
+      if (schemas.length > 0 || fs.existsSync(schemaBarrelPath)) {
+        const schemaBarrel = BuildSchemaBarrel(schemas, 'schemas', '');
+        this.emitFile(schemaBarrelPath, schemaBarrel, emit.writeIfChanged);
+      }
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -316,8 +330,8 @@ export class EntitySubClassGeneratorBase {
     entities: EntityInfo[],
     skipDBUpdate: boolean,
     includeLoadModule: boolean,
+    splitSchemaFileName?: string,
   ): Promise<string> {
-    const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
     let sContent = '';
     for (const e of entities) {
       sContent += await this.GenerateEntitySubClass(pool, e, false, skipDBUpdate);
@@ -342,7 +356,23 @@ export class EntitySubClassGeneratorBase {
     );
     const peerImportStatements = EntitySubClassGeneratorBase.FormatPeerImportStatements(peerImports).join('');
     const subclassImports = `${baseClassImports}${peerImportStatements}`;
-    return `${this.GenerateEntitySubClassFileHeader(includeLoadModule)} \n ${subclassImports}${zodContent} \n ${sContent}`;
+    const usesUUIDsEqual = EntitySubClassGeneratorBase.CallsUUIDsEqual(sContent);
+
+    if (splitSchemaFileName) {
+      // Split-schema emit puts Zod schemas and `*EntityType` aliases in `../schemas/<schema>.js`
+      // so entity subclass files don't pull `zod` into downstream module graphs unnecessarily.
+      const header = this.GenerateEntitySubClassFileHeader(includeLoadModule, usesUUIDsEqual, false).trimEnd();
+      const entityTypeNames = entitiesWithPK.map((e) => `${e.ClassName}EntityType`);
+      const typeImport =
+        entityTypeNames.length > 0
+          ? `\nimport type {\n  ${entityTypeNames.join(',\n  ')}\n} from '../schemas/${splitSchemaFileName}.js';`
+          : '';
+      const extraImports = subclassImports ? `\n${subclassImports.trimEnd()}` : '';
+      return `${header}\nexport * from '../schemas/${splitSchemaFileName}.js';${typeImport}${extraImports}${sContent}`;
+    }
+
+    const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
+    return `${this.GenerateEntitySubClassFileHeader(includeLoadModule, usesUUIDsEqual)} \n ${subclassImports}${zodContent} \n ${sContent}`;
   }
 
   /** @deprecated Use {@link AssembleEntitySubclassFile}. */
@@ -351,8 +381,19 @@ export class EntitySubClassGeneratorBase {
     entities: EntityInfo[],
     skipDBUpdate: boolean,
     includeLoadModule: boolean,
+    splitSchemaFileName?: string,
   ): Promise<string> {
-    return this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, includeLoadModule);
+    return this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, includeLoadModule, splitSchemaFileName);
+  }
+
+  /**
+   * Builds the standalone Zod schema file content for an entity list (e.g. for a database schema).
+   * Contains only `import { z } from "zod";` and the Zod schema definitions and entity types,
+   * without BaseEntity or class registrations.
+   */
+  public AssembleSchemaFile(entities: EntityInfo[]): string {
+    const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
+    return `import { z } from "zod";\n\n${zodContent}`;
   }
 
   /** Delegates so both generators share one set of defaults; override to change them. */
@@ -365,7 +406,16 @@ export class EntitySubClassGeneratorBase {
     EmitSchemaFile(filePath, content, useWriteIfChanged);
   }
 
-  public GenerateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
+  /**
+   * @param includeLoadModule - Emit the `loadModule` no-op export.
+   * @param usesUUIDsEqual - Import `UUIDsEqual` as well; set when a generated validator in the file calls it.
+   * @param includeZodImport - Import `z` from `zod` (omitted when schemas are emitted to a separate file).
+   */
+  public GenerateEntitySubClassFileHeader(
+    includeLoadModule: boolean = true,
+    usesUUIDsEqual: boolean = false,
+    includeZodImport: boolean = true,
+  ): string {
     const loadModule = includeLoadModule
       ? `
 export const loadModule = () => {
@@ -373,16 +423,19 @@ export const loadModule = () => {
 }
 `
       : '';
+    const zodImport = includeZodImport ? '\nimport { z } from "zod";' : '';
+    const trailing = includeZodImport ? `\n${loadModule}\n    ` : loadModule ? `\n${loadModule}` : '';
     return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
-import { z } from "zod";
-${loadModule}
-    `;
+import { RegisterClass${usesUUIDsEqual ? `, ${UUIDS_EQUAL_FUNCTION_NAME}` : ''} } from "@memberjunction/global";${zodImport}${trailing}`;
   }
 
   /** @deprecated Use {@link GenerateEntitySubClassFileHeader}. */
-  public generateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
-    return this.GenerateEntitySubClassFileHeader(includeLoadModule);
+  public generateEntitySubClassFileHeader(
+    includeLoadModule: boolean = true,
+    usesUUIDsEqual: boolean = false,
+    includeZodImport: boolean = true,
+  ): string {
+    return this.GenerateEntitySubClassFileHeader(includeLoadModule, usesUUIDsEqual, includeZodImport);
   }
 
   /**
@@ -502,7 +555,7 @@ ${loadModule}
           // Sort by Sequence to ensure consistent ordering in comments
           const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           values = sortedValues.map(
-            (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
+            (v) => `\n    *   * ${EntitySubClassGeneratorBase.SanitizeDescription(v.Value)}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
@@ -523,10 +576,9 @@ ${loadModule}
         }
         if (!hasJSONType && EmitsValueListUnion(e)) {
           // construct a typeString that is a union of the possible values
-          const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
           const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
-          typeString = sortedValues.map((v) => `${quotes}${v.Value}${quotes}`).join(' | ');
+          typeString = sortedValues.map((v) => EntitySubClassGeneratorBase.ValueListLiteral(e, v.Value)).join(' | ');
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
             typeString += ' | ' + TypeScriptTypeFromSQLType(e.Type);
@@ -734,7 +786,7 @@ export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${relatedRe
 ${fields}
 }
 `;
-      if (includeFileHeader) sRet = this.GenerateEntitySubClassFileHeader() + sRet;
+      if (includeFileHeader) sRet = this.GenerateEntitySubClassFileHeader(true, EntitySubClassGeneratorBase.CallsUUIDsEqual(sRet)) + sRet;
 
       return sRet;
   }
@@ -1027,13 +1079,40 @@ ${fields}
   }
 
   /**
-   * Escapes a value for safe embedding in a single-quoted TypeScript string literal.
+   * Escapes a value for safe embedding in a single-quoted TypeScript string literal: backslash,
+   * single quote, and the line terminators a string literal cannot hold (CR, LF, U+2028, U+2029).
    *
    * @param value - The raw value.
    * @returns The escaped value.
    */
   protected static EscapeSingleQuotes(value: string): string {
-    return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return String(value ?? '')
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029');
+  }
+
+  /**
+   * Escapes a value for embedding in a template literal (the `describe()` text): backslash, backtick and `${`.
+   *
+   * @param value - The raw value.
+   * @returns The escaped value.
+   */
+  protected static EscapeTemplateLiteralText(value: string): string {
+    return String(value ?? '').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  }
+
+  /** Whether generated class source calls `UUIDsEqual`, so the file header must import it. */
+  protected static CallsUUIDsEqual(source: string): boolean {
+    return source.includes(`${UUIDS_EQUAL_FUNCTION_NAME}(`);
+  }
+
+  /** Quotes a value-list value for the TS union / `z.literal`, escaping it when the field's values are strings. */
+  protected static ValueListLiteral(field: EntityFieldInfo, value: string): string {
+    return field.NeedsQuotes ? `'${EntitySubClassGeneratorBase.EscapeSingleQuotes(value)}'` : value;
   }
 
   /**
@@ -1505,6 +1584,38 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
     return new Map(resolved.map((r) => [r.Key, { Description: r.FunctionDescription, Body: r.FunctionText }]));
   }
 
+  /**
+   * Keeps one validator per CHECK constraint source (#5834). Two stored `GeneratedCode` rows can
+   * carry the same constraint under different function names (an app's pinned row beside the one
+   * CodeGen generated earlier); emitting both would run the same check twice. The key is the field
+   * (or table level) plus the constraint text; the first validator in the given order is kept and
+   * the dropped rows' GeneratedCode IDs are logged so they can be cleaned up.
+   *
+   * @param entityName - Entity name, for the warning.
+   * @param validators - The entity's validators, already in emit order.
+   * @returns The validators with later same-source duplicates removed.
+   */
+  protected static DedupeValidatorsBySource(entityName: string, validators: ValidatorResult[]): ValidatorResult[] {
+    const firstBySource = new Map<string, { Kept: ValidatorResult; Dropped: ValidatorResult[] }>();
+    const result: ValidatorResult[] = [];
+    for (const v of validators) {
+      const key = `${v.fieldName ? v.fieldName.trim().toLowerCase() : ''}\u0000${(v.sourceCheckConstraint ?? '').trim()}`;
+      const existing = firstBySource.get(key);
+      if (existing) {
+        existing.Dropped.push(v);
+      } else {
+        firstBySource.set(key, { Kept: v, Dropped: [] });
+        result.push(v);
+      }
+    }
+    for (const { Kept, Dropped } of firstBySource.values()) {
+      if (Dropped.length === 0) continue;
+      const ids = Dropped.map((v) => v.generatedCodeId || '(unsaved)').join(', ');
+      LogWarning(`${entityName}${Kept.fieldName ? '.' + Kept.fieldName : ' (table level)'}: ${Dropped.length + 1} generated validators share one CHECK constraint; emitting ${Kept.functionName} (GeneratedCode ${Kept.generatedCodeId || '(unsaved)'}) and dropping GeneratedCode ${ids}. Delete the dropped rows to stop this warning.`);
+    }
+    return result;
+  }
+
   public GenerateValidateFunction(entity: EntityInfo): null | { code: string, validators: ValidatorResult[] } {
     // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
     const unsortedValidators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
@@ -1529,7 +1640,7 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
     // previously failed to match (e.g., whitespace differences in CHECK constraint text).
     // Keep the first occurrence of each functionName (which is the earliest by sort order).
     const seenFunctionNames = new Set<string>();
-    const validators = sortedValidators.filter((v) => {
+    const validators = EntitySubClassGeneratorBase.DedupeValidatorsBySource(entity.Name, sortedValidators).filter((v) => {
       if (seenFunctionNames.has(v.functionName)) {
         return false;
       }
@@ -1543,10 +1654,12 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
       return null;
     }
     else {
+      // Property names of the UUID fields, so validator comparisons between them use UUIDsEqual (#3984).
+      const uuidFieldNames = new Set((entity.Fields ?? []).filter((ef) => ef.IsUniqueIdentifier).map((ef) => SafeCodeName(ef)));
       const validationFunctions = validators.map((f) => {
         // output the function text and the function description in a JSDoc block
 
-        const cleansedText = NormalizeGeneratedValidatorText(f.functionText);
+        const cleansedText = RewriteUUIDComparisons(NormalizeGeneratedValidatorText(f.functionText, `${f.functionName} on entity '${entity.Name}'`), uuidFieldNames);
         // next up, format the function text to have proper indentation with 4 spaces preceding the start of each line
         const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
 
@@ -1642,12 +1755,11 @@ ${validationFunctions.length > 0 ? '\n' + validationFunctions : ''}`
           this.collectStructuralJSONSchema(entity, e, jsonSchemaConsts);
         } else if (EmitsValueListUnion(e)) {
           // construct a typeString that is a union of the possible values
-          const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
           const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           // z.union() requires at least 2 members. When there's only one allowed
           // value (single-value CHECK constraint), emit z.literal() directly.
-          const literals = sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`);
+          const literals = sortedValues.map((v) => `z.literal(${EntitySubClassGeneratorBase.ValueListLiteral(e, v.Value)})`);
           typeString = literals.length === 1
             ? literals[0].substring(2) // strip leading 'z.' since caller prepends it
             : `union([${literals.join(', ')}])`;
@@ -1697,7 +1809,7 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
       // Sort by Sequence to ensure consistent ordering in comments
       const sortedValues = SortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
       let values = sortedValues.map(
-        (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
+        (v) => `\n    *   * ${EntitySubClassGeneratorBase.EscapeTemplateLiteralText(v.Value)}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
       ).join('');
       valueList = `\n    * * Value List Type: ${entityField.ValueListType}\n    * * Possible Values ` + values;
     }

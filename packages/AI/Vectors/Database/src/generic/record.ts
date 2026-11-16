@@ -142,6 +142,12 @@ export type UpdateOptions<T extends RecordMetadata = RecordMetadata> = {
      * The metadata you would like to store with this record.
      */
     metadata?: T;
+    /**
+     * Per-record routing set by {@link VectorDBBase.BuildProviderDirectives}, exactly as on
+     * {@link VectorRecord}. An update has to reach the same namespace the record was written to —
+     * Pinecone updates are namespace-scoped, so an unrouted update of a namespaced vector fails.
+     */
+    providerTemporaryDirectives?: Record<string, unknown>;
 };
 
 export type BaseResponse = {

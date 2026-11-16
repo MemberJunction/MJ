@@ -36,6 +36,10 @@ export interface RerankerConfiguration {
      * Results below this threshold are filtered out. When none reaches it, the agent keeps the vector
      * search results instead, as if reranking were off, so the threshold never empties the list.
      *
+     * Recommended for Cohere Rerank 5 (`rerank-v5.0-pro`, `rerank-v5.0-fast`): 0.02-0.05. Rerank 5
+     * emits calibrated scores where irrelevant noise scores <0.015, contextual/indirect preference notes
+     * score 0.02-0.10, topical task notes score 0.35-0.55, and direct Q&A matches score 0.60-0.90.
+     *
      * Recommended for a DecisionReranker: 0.1. Its scores are Likelihood probabilities that are not
      * calibrated, so the order and the top-N cut do the ranking, and the threshold should only drop
      * the candidates the model rules out. 0.1 is a starting point until a calibration is fitted for

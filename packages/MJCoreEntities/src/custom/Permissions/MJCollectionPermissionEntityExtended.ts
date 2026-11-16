@@ -1,7 +1,8 @@
-import { BaseEntity, EntityPermissionType, EntitySaveOptions, IMetadataProvider, RunView } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseEntity, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, IMetadataProvider, RunView } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 import { MJCollectionPermissionEntity } from '../../generated/entity_subclasses';
+import { ArtifactPermissionEngine } from '../ArtifactPermissionDelegate';
 import {
     AssertCallerMayCreateShare,
     BuildActionsSummary,
@@ -52,8 +53,69 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
                 ActionsSummary: this.actionsSummary(),
                 ExtraConfiguration: { PermissionID: this.ID },
             }));
+            await this.notifyCollectionArtifactPermissionsChanged(this.CollectionID, this.UserID);
         }
         return saved;
+    }
+
+    override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        const collectionId = this.CollectionID;
+        const targetUserId = this.UserID;
+        const deleted = await super.Delete(options);
+        if (deleted && collectionId) {
+            await this.notifyCollectionArtifactPermissionsChanged(collectionId, targetUserId);
+        }
+        return deleted;
+    }
+
+    private async notifyCollectionArtifactPermissionsChanged(collectionId: string, targetUserId?: string): Promise<void> {
+        if (!collectionId || !ArtifactPermissionEngine.Instance.HasChangeListeners) {
+            return;
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse as unknown as IMetadataProvider);
+            const colResult = await rv.RunView<{ ArtifactVersionID: string }>(
+                {
+                    EntityName: 'MJ: Collection Artifacts',
+                    ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}'`,
+                    Fields: ['ArtifactVersionID'],
+                    MaxRows: 500,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple',
+                },
+                this.ContextCurrentUser,
+            );
+            const versionIds = Array.from(
+                new Set((colResult.Success ? colResult.Results ?? [] : []).map((r) => r.ArtifactVersionID).filter(Boolean)),
+            );
+            if (versionIds.length === 0) {
+                return;
+            }
+            const inList = versionIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const verResult = await rv.RunView<{ ArtifactID: string }>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ID IN (${inList})`,
+                    Fields: ['ArtifactID'],
+                    MaxRows: 500,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple',
+                },
+                this.ContextCurrentUser,
+            );
+            const artifactIds = Array.from(
+                new Set((verResult.Success ? verResult.Results ?? [] : []).map((v) => v.ArtifactID).filter(Boolean)),
+            );
+            for (const artifactId of artifactIds) {
+                await ArtifactPermissionEngine.Instance.NotifyPermissionsChanged({
+                    ArtifactID: artifactId,
+                    TargetUserID: targetUserId,
+                    ChangedByUserID: this.ContextCurrentUser?.ID,
+                });
+            }
+        } catch {
+            // Best-effort live room notification; never fail the permission save/delete itself.
+        }
     }
 
     private actionsSummary(): string {
@@ -82,6 +144,7 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
                 ExtraFilter: `ID='${this.CollectionID}'`,
                 Fields: ['ID', 'OwnerID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
             {
@@ -89,6 +152,7 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
                 ExtraFilter: `CollectionID='${this.CollectionID}' AND UserID='${user.ID}' AND CanShare=1`,
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
         ], user);

@@ -51,6 +51,7 @@ export * from './Database/providers/postgresql/PostgreSQLCodeGenConnection'
 export * from './Database/dbSchema'
 export * from './Database/manage-metadata'
 export * from './Database/sql_codegen'
+export * from './Database/sqlPassFailures'
 export * from './Database/sql'
 export * from './Database/schema-scope'
 export * from './Database/exclude-tables'
@@ -63,6 +64,7 @@ export * from './Misc/schema-emit'
 export * from './Misc/entity_subclasses_codegen'
 export * from './Misc/action_subclasses_codegen';
 export * from './Misc/remote_operations_codegen';
+export * from './Misc/typed_query_codegen';
 export * from './Misc/graphql_server_codegen'
 
 // Angular exports

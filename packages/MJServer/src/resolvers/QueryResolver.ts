@@ -226,7 +226,8 @@ export class RunQueryResolver extends ResolverBase {
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
         Enrichment: Enrichment,
-        DataSource: DataSource
+        DataSource: DataSource,
+        TimeZone: context.userPayload.TimeZone
       },
       context.userPayload.userRecord);
 
@@ -247,6 +248,7 @@ export class RunQueryResolver extends ResolverBase {
       QueryID: QueryID,
       QueryName: queryName || 'Unknown Query',
       Success: result.Success ?? false,
+      // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
       TotalRowCount: result.TotalRowCount ?? 0,
@@ -288,7 +290,8 @@ export class RunQueryResolver extends ResolverBase {
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
         Enrichment: Enrichment,
-        DataSource: DataSource
+        DataSource: DataSource,
+        TimeZone: context.userPayload.TimeZone
       },
       context.userPayload.userRecord);
       
@@ -296,6 +299,7 @@ export class RunQueryResolver extends ResolverBase {
       QueryID: result.QueryID || '',
       QueryName: QueryName,
       Success: result.Success ?? false,
+      // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
       TotalRowCount: result.TotalRowCount ?? 0,
@@ -337,7 +341,8 @@ export class RunQueryResolver extends ResolverBase {
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
         Enrichment: Enrichment,
-        DataSource: DataSource
+        DataSource: DataSource,
+        TimeZone: context.userPayload.TimeZone
       },
       context.userPayload.userRecord);
 
@@ -358,6 +363,7 @@ export class RunQueryResolver extends ResolverBase {
       QueryID: QueryID,
       QueryName: queryName || 'Unknown Query',
       Success: result.Success ?? false,
+      // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
       TotalRowCount: result.TotalRowCount ?? 0,
@@ -398,7 +404,8 @@ export class RunQueryResolver extends ResolverBase {
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
         Enrichment: Enrichment,
-        DataSource: DataSource
+        DataSource: DataSource,
+        TimeZone: context.userPayload.TimeZone
       },
       context.userPayload.userRecord);
     
@@ -406,6 +413,7 @@ export class RunQueryResolver extends ResolverBase {
       QueryID: result.QueryID || '',
       QueryName: QueryName,
       Success: result.Success ?? false,
+      // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
       TotalRowCount: result.TotalRowCount ?? 0,
@@ -447,7 +455,8 @@ export class RunQueryResolver extends ResolverBase {
       ForceAuditLog: i.ForceAuditLog,
       AuditLogDescription: i.AuditLogDescription,
       Enrichment: i.Enrichment,
-      DataSource: i.DataSource
+      DataSource: i.DataSource,
+      TimeZone: context.userPayload.TimeZone
     }));
 
     // Execute all queries in parallel using the batch method
@@ -460,6 +469,7 @@ export class RunQueryResolver extends ResolverBase {
         QueryID: result.QueryID || inputItem.QueryID || '',
         QueryName: result.QueryName || inputItem.QueryName || 'Unknown Query',
         Success: result.Success ?? false,
+        // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
         Results: JSON.stringify(result.Results ?? null),
         RowCount: result.RowCount ?? 0,
         TotalRowCount: result.TotalRowCount ?? 0,
@@ -498,7 +508,8 @@ export class RunQueryResolver extends ResolverBase {
       ForceAuditLog: i.ForceAuditLog,
       AuditLogDescription: i.AuditLogDescription,
       Enrichment: i.Enrichment,
-      DataSource: i.DataSource
+      DataSource: i.DataSource,
+      TimeZone: context.userPayload.TimeZone
     }));
 
     // Execute all queries in parallel using the batch method
@@ -511,6 +522,7 @@ export class RunQueryResolver extends ResolverBase {
         QueryID: result.QueryID || inputItem.QueryID || '',
         QueryName: result.QueryName || inputItem.QueryName || 'Unknown Query',
         Success: result.Success ?? false,
+        // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
         Results: JSON.stringify(result.Results ?? null),
         RowCount: result.RowCount ?? 0,
         TotalRowCount: result.TotalRowCount ?? 0,
@@ -563,6 +575,7 @@ export class RunQueryResolver extends ResolverBase {
           AuditLogDescription: item.params.AuditLogDescription,
           Enrichment: item.params.Enrichment,
           DataSource: item.params.DataSource,
+          TimeZone: context.userPayload.TimeZone,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -578,6 +591,7 @@ export class RunQueryResolver extends ResolverBase {
         queryIndex: result.queryIndex,
         queryId: result.queryId,
         status: result.status,
+        // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
         Results: result.results ? JSON.stringify(result.results) : undefined,
         maxUpdatedAt: result.maxUpdatedAt,
         rowCount: result.rowCount,

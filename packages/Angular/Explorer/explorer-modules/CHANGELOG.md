@@ -1,5 +1,243 @@
 # @memberjunction/ng-explorer-modules
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 4884a47: Finish the Kendo removal: no Kendo references remain in shipped code, templates, package metadata, or live docs. One stylesheet is deliberately left alone: `explorer-app/src/lib/styles/_common.scss` keeps 12 dead `.k-*` rules because it also defines the legacy `.mj-btn` block, which `check:ui-buttons` grades the moment the file is touched; that block's removal is a separate migration.
+
+  Kendo was already gone from the dependency graph — zero `@progress/kendo*` entries in any `package.json`, zero TypeScript imports. What was left was residue, and some of it was not inert:
+
+  **Dead code and styles removed**
+  - 82 `.k-*` CSS rules across 21 files. Nothing has defined those classes since the removal, so every one of them was a no-op.
+  - `li.k-drawer-item.k-level-0` was still being queried in `MJExplorerAppComponent` and `InitializationService` to auto-select the first nav item when landing on `/`. The Kendo Drawer is long gone, so `querySelector` returned null and the branch did nothing — removing it is a runtime no-op. **If landing on `/` should select the first nav item, that behaviour needs reimplementing against the current shell nav; it has been silently absent since the removal.**
+  - `dialog.service.ts.bak` (dead backup importing `@progress/kendo-angular-dialog`) deleted.
+  - `kendo-ui-license.txt` dropped from `DistributionAssembler`'s Angular ignore list, and its now-meaningless assertion retargeted in the test.
+
+  **Broken templates fixed** — three components still applied Kendo utility classes that no longer resolve:
+  - `add-item.component` — `k-actions k-actions-end` was supplying the footer's flex row, so `.customBtn button { flex: 1 }` had no flex container. `.popup-actions` now provides it.
+  - `delete-item.component` — `k-m-7.5 k-text-center` were Kendo spacing/alignment utilities (30px margin, centered) whose theme CSS left with the removal, so the confirmation copy had been rendering unstyled. Replaced with a real `.confirm-message` class.
+  - `add-item` and `ng-data-context-dialog` each carried a `<div class="k-overlay">` backdrop. `mj-window` deliberately has no backdrop, so these are now unstyled empty divs — **deleted, which means both dialogs currently render with no backdrop.** Restoring one is a UX call, not a cleanup.
+
+  **Filter payload is MJ's own type**
+  `FilterOperator` / `FilterLogic` / `FilterDescriptor` / `CompositeFilterDescriptor` and their guards were already defined in `@memberjunction/core` (`generic/filters/filter.types.ts`) — `ng-filter-builder` carried a byte-equivalent duplicate set and re-exported it. The duplicate is gone; the builder and `ng-entity-viewer` import the shapes from core, and the builder exports only its own UI types.
+
+  **API surface change (`@memberjunction/ng-filter-builder`)**: `FilterOperator`, `FilterLogic`, `FilterDescriptor`, `CompositeFilterDescriptor`, `IsCompositeFilter` and `IsSimpleFilter` are no longer re-exported. Import them from `@memberjunction/core` instead. This aligns with the repo's no-cross-package-re-exports rule.
+
+  **Docs and comments** — 33 package READMEs listed `@progress/kendo-angular-*` packages as live dependencies (they aren't) and drew Kendo components in their mermaid diagrams; `packages/Angular/CLAUDE.md`, four guides, and ~55 source comments referenced Kendo as though it were still present. All rewritten to describe what the code actually uses.
+
+  Historical records are deliberately untouched: `plans/`, CHANGELOGs, and dated retrospectives (`FINAL_REPORT.md`, `PIXEL_PERFECT_COMPLETE.md`, `USER_MENU_PROPOSAL.md`, timeline `PRD.md` version history) still mention Kendo, because they are records of when it was there.
+
+- Updated dependencies [0d484c2]
+- Updated dependencies [6555a44]
+- Updated dependencies [1b282a0]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [4884a47]
+- Updated dependencies [31cc053]
+- Updated dependencies [eb5905c]
+- Updated dependencies [b332459]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+  - @memberjunction/ng-core-entity-forms@6.3.0-edge.0
+  - @memberjunction/ng-explorer-core@6.3.0-edge.0
+  - @memberjunction/ng-container-directives@6.3.0-edge.0
+  - @memberjunction/ng-explorer-settings@6.3.0-edge.0
+  - @memberjunction/ng-shared@6.3.0-edge.0
+  - @memberjunction/ng-link-directives@6.3.0-edge.0
+  - @memberjunction/ng-workspace-initializer@6.3.0-edge.0
+
+## 6.2.0
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [f555162]
+- Updated dependencies [39b35f1]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [5114c10]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [d43d86e]
+- Updated dependencies [b5955fb]
+- Updated dependencies [41274aa]
+- Updated dependencies [95c7682]
+- Updated dependencies [b14c72f]
+- Updated dependencies [8f370b3]
+- Updated dependencies [21f9e15]
+- Updated dependencies [1090caa]
+- Updated dependencies [7384dd6]
+- Updated dependencies [953086f]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [24fce37]
+- Updated dependencies [a3d6182]
+- Updated dependencies [59e32e0]
+- Updated dependencies [d122a41]
+- Updated dependencies [0ff7523]
+- Updated dependencies [a9e96dd]
+- Updated dependencies [555a3f3]
+- Updated dependencies [307da67]
+- Updated dependencies [c7418dc]
+- Updated dependencies [5d83ba4]
+- Updated dependencies [42df19d]
+- Updated dependencies [cc0814d]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9d73096]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b68a687]
+- Updated dependencies [cb205de]
+- Updated dependencies [0c634ba]
+- Updated dependencies [f78fd63]
+- Updated dependencies [223669e]
+- Updated dependencies [1ce4217]
+- Updated dependencies [6aa41c7]
+- Updated dependencies [6fd16d2]
+- Updated dependencies [90eea38]
+- Updated dependencies [5fed75a]
+- Updated dependencies [2cb5498]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [45ba6be]
+- Updated dependencies [fe39606]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [87aa6e0]
+- Updated dependencies [1214eca]
+- Updated dependencies [1403d04]
+- Updated dependencies [dae1d31]
+- Updated dependencies [80905a1]
+- Updated dependencies [20650af]
+- Updated dependencies [7e72c86]
+- Updated dependencies [dbc3462]
+- Updated dependencies [130cc7e]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [a17a228]
+- Updated dependencies [8a26af6]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [ff73341]
+- Updated dependencies [279b93e]
+- Updated dependencies [8420f36]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [6a19f78]
+- Updated dependencies [7d9b179]
+- Updated dependencies [db4e210]
+- Updated dependencies [dc04823]
+- Updated dependencies [68f5c01]
+- Updated dependencies [093e0dd]
+- Updated dependencies [f41442f]
+- Updated dependencies [b1e628e]
+- Updated dependencies [1d29837]
+- Updated dependencies [36cdad5]
+- Updated dependencies [8655198]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [aac148b]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [f2f6f4b]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [382b9aa]
+- Updated dependencies [bfa2621]
+- Updated dependencies [60bd774]
+- Updated dependencies [4b9542c]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [fbad999]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [fb267da]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [af57e8d]
+- Updated dependencies [718b01c]
+- Updated dependencies [da449bb]
+- Updated dependencies [19119a8]
+- Updated dependencies [74c5280]
+- Updated dependencies [57fea6a]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e2fa695]
+- Updated dependencies [e8258a1]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [8766e99]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ng-core-entity-forms@6.2.0
+  - @memberjunction/ng-explorer-core@6.2.0
+  - @memberjunction/ng-shared@6.2.0
+  - @memberjunction/ng-workspace-initializer@6.2.0
+  - @memberjunction/ng-container-directives@6.2.0
+  - @memberjunction/ng-explorer-settings@6.2.0
+  - @memberjunction/ng-link-directives@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- Updated dependencies [9cb815b]
+- Updated dependencies [59e32e0]
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.8
+  - @memberjunction/ng-explorer-core@6.2.0-edge.8
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.8
+  - @memberjunction/ng-link-directives@6.2.0-edge.8
+  - @memberjunction/ng-shared@6.2.0-edge.8
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.8
+  - @memberjunction/ng-container-directives@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [8f370b3]
+- Updated dependencies [953086f]
+- Updated dependencies [555a3f3]
+- Updated dependencies [42df19d]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [da449bb]
+- Updated dependencies [19119a8]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.7
+  - @memberjunction/ng-explorer-core@6.2.0-edge.7
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.7
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.7
+  - @memberjunction/ng-shared@6.2.0-edge.7
+  - @memberjunction/ng-container-directives@6.2.0-edge.7
+  - @memberjunction/ng-link-directives@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [cc36de5]
+- Updated dependencies [d43d86e]
+- Updated dependencies [b5955fb]
+- Updated dependencies [1090caa]
+- Updated dependencies [0ff7523]
+- Updated dependencies [5d83ba4]
+- Updated dependencies [b68a687]
+- Updated dependencies [cb205de]
+- Updated dependencies [dae1d31]
+- Updated dependencies [ff73341]
+- Updated dependencies [7d9b179]
+- Updated dependencies [db4e210]
+- Updated dependencies [68f5c01]
+- Updated dependencies [36cdad5]
+- Updated dependencies [bfa2621]
+- Updated dependencies [718b01c]
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.6
+  - @memberjunction/ng-shared@6.2.0-edge.6
+  - @memberjunction/ng-explorer-core@6.2.0-edge.6
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.6
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.6
+  - @memberjunction/ng-link-directives@6.2.0-edge.6
+  - @memberjunction/ng-container-directives@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

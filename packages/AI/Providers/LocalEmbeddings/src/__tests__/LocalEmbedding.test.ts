@@ -3,15 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
 /* ------------------------------------------------------------------ */
-// Partial: the real @memberjunction/ai (loaded below for its cancellation helpers) needs the rest.
-vi.mock('@memberjunction/global', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@memberjunction/global')>()),
+vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (_target: unknown) => {},
 }));
 
-vi.mock('@memberjunction/ai', async (importOriginal) => {
-  // The real cancellation helpers, so the driver's abort handling runs as it does in production.
-  const actual = await importOriginal<typeof import('@memberjunction/ai')>();
+vi.mock('@memberjunction/ai', () => {
   class MockBaseEmbeddings {
     protected _apiKey: string;
     protected _additionalSettings: Record<string, unknown> = {};
@@ -20,10 +16,9 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
     SetAdditionalSettings(settings: Record<string, unknown>) {
       this._additionalSettings = { ...this._additionalSettings, ...settings };
     }
-    /** Mirrors BaseEmbeddings.ThrowIfRequestAborted. */
-    protected ThrowIfRequestAborted(error: unknown, signal?: AbortSignal | null): void {
-      if (actual.IsRequestAborted(error, signal)) {
-        throw actual.CreateCancellationError({ signal });
+    ThrowIfRequestAborted(error: unknown, token?: { aborted: boolean; reason?: unknown }) {
+      if (token?.aborted) {
+        throw error;
       }
     }
   }
@@ -43,9 +38,39 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
     EmbedTextsResult: class {},
     ModelUsage: MockModelUsage,
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
-    ThrowIfAborted: actual.ThrowIfAborted,
+    ThrowIfAborted: (token?: { aborted: boolean; reason?: unknown }) => {
+      if (token?.aborted) {
+        const err = new Error('Request was aborted');
+        (err as unknown as { errorInfo?: { errorType?: string } }).errorInfo = { errorType: 'Cancelled' };
+        throw err;
+      }
+    },
   };
 });
+
+const host = vi.hoisted(() => ({ available: true, run: vi.fn() }));
+vi.mock('../worker/EmbeddingWorkerHost.js', () => ({
+  EmbeddingWorkerHost: {
+    get Instance() {
+      return { get IsAvailable() { return host.available; }, Run: host.run };
+    },
+  },
+}));
+
+const runtime = vi.hoisted(() => ({
+  embed: vi.fn(),
+  preload: vi.fn(),
+  clear: vi.fn(),
+  apply: vi.fn(),
+  current: vi.fn(() => ({ CacheDir: '/models' })),
+}));
+vi.mock('../models/embeddingRuntime.js', () => ({
+  EmbedTextsWithModel: runtime.embed,
+  PreloadEmbeddingModel: runtime.preload,
+  ClearEmbeddingPipelines: runtime.clear,
+  ApplyEmbeddingSettings: runtime.apply,
+  CurrentEmbeddingSettings: runtime.current,
+}));
 
 import { LocalEmbedding } from '../models/localEmbedding';
 
@@ -57,6 +82,8 @@ describe('LocalEmbedding', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    host.available = true;
+    host.run.mockResolvedValue([]);
     // Clear static caches between tests
     LocalEmbedding.clearSharedCache();
     embedding = new LocalEmbedding();
@@ -75,10 +102,14 @@ describe('LocalEmbedding', () => {
     });
   });
 
-  /* ---- RequiresAPIKey ---- */
-  describe('RequiresAPIKey', () => {
-    it('is false, because the model runs in-process', () => {
+  /* ---- Capabilities ---- */
+  describe('capabilities', () => {
+    it('RequiresAPIKey is false, because the model runs in-process or on a local worker', () => {
       expect(embedding.RequiresAPIKey).toBe(false);
+    });
+
+    it('declares native batching', () => {
+      expect(embedding.SupportsBatchEmbeddings).toBe(true);
     });
   });
 
@@ -95,38 +126,6 @@ describe('LocalEmbedding', () => {
     it('should throw error when model name is missing', async () => {
       await expect(embedding.EmbedTexts({ texts: ['hello'] } as never))
         .rejects.toThrow('Model name is required for LocalEmbedding provider');
-    });
-  });
-
-  /* ---- Cancellation ---- */
-  describe('cancellation', () => {
-    /** The classification a cancellation error carries, read from the error a call rejected with. */
-    async function rejectionTypeOf(operation: Promise<unknown>): Promise<string | undefined> {
-      try {
-        await operation;
-      } catch (error) {
-        return (error as { errorInfo?: { errorType?: string } }).errorInfo?.errorType;
-      }
-      throw new Error('expected the call to reject');
-    }
-
-    // In-process inference cannot be interrupted, so the driver checks the signal before it runs.
-    it('refuses a cancelled EmbedTexts before loading or running the model', async () => {
-      const controller = new AbortController();
-      controller.abort('stop');
-      const type = await rejectionTypeOf(
-        embedding.EmbedTexts({ texts: ['a', 'b'], model: 'Xenova/all-MiniLM-L6-v2', CancellationToken: controller.signal }),
-      );
-      expect(type).toBe('Cancelled');
-    });
-
-    it('refuses a cancelled EmbedText before loading or running the model', async () => {
-      const controller = new AbortController();
-      controller.abort('stop');
-      const type = await rejectionTypeOf(
-        embedding.EmbedText({ text: 'a', model: 'Xenova/all-MiniLM-L6-v2', CancellationToken: controller.signal }),
-      );
-      expect(type).toBe('Cancelled');
     });
   });
 
@@ -156,12 +155,66 @@ describe('LocalEmbedding', () => {
   describe('SetAdditionalSettings', () => {
     it('should store cacheDir setting', () => {
       embedding.SetAdditionalSettings({ cacheDir: '/tmp/models' });
-      // Should not throw – pending settings will be applied when transformers loads
     });
 
     it('should store useQuantized setting', () => {
       embedding.SetAdditionalSettings({ useQuantized: false });
       expect((embedding as unknown as Record<string, unknown>)['_additionalSettings']).toHaveProperty('useQuantized', false);
+    });
+  });
+
+  /* ---- Where inference runs (MJ #5510) ---- */
+  describe('inference thread', () => {
+    it('sends EmbedTexts to the worker thread when it is available, with the current settings', async () => {
+      host.run.mockResolvedValue([new Float32Array([0.5, 0.25]), new Float32Array([1, 0])]);
+      const result = await embedding.EmbedTexts({ model: 'Xenova/gte-small', texts: ['ab', 'cd'] } as never);
+      expect(host.run).toHaveBeenCalledWith({ Kind: 'embed', Model: 'Xenova/gte-small', Texts: ['ab', 'cd'], Settings: { CacheDir: '/models' } });
+      expect(runtime.embed).not.toHaveBeenCalled();
+      expect(result.vectors).toEqual([[0.5, 0.25], [1, 0]]);
+      expect(result.ModelUsage).toEqual(expect.objectContaining({ promptTokens: 2 }));
+    });
+
+    it('sends EmbedText to the worker thread and returns its single vector', async () => {
+      host.run.mockResolvedValue([new Float32Array([0.5])]);
+      const result = await embedding.EmbedText({ model: 'm', text: 'hello' } as never);
+      expect(host.run).toHaveBeenCalledWith(expect.objectContaining({ Kind: 'embed', Texts: ['hello'] }));
+      expect(result.vector).toEqual([0.5]);
+    });
+
+    it('embeds in-process when the worker is unavailable', async () => {
+      host.available = false;
+      runtime.embed.mockResolvedValue([new Float32Array([0.75])]);
+      const result = await embedding.EmbedTexts({ model: 'm', texts: ['x'] } as never);
+      expect(runtime.embed).toHaveBeenCalledWith('m', ['x']);
+      expect(host.run).not.toHaveBeenCalledWith(expect.objectContaining({ Kind: 'embed' }));
+      expect(result.vectors).toEqual([[0.75]]);
+    });
+
+    it('keeps the existing error contract: a worker failure returns no vectors instead of throwing', async () => {
+      host.run.mockRejectedValue(new Error('Embedding worker stopped (exited with code 1)'));
+      const result = await embedding.EmbedTexts({ model: 'm', texts: ['x'] } as never);
+      expect(result.vectors).toEqual([]);
+    });
+
+    it('preloads on the worker thread when it is available', async () => {
+      await embedding.PreloadModel('m');
+      expect(host.run).toHaveBeenCalledWith({ Kind: 'preload', Model: 'm', Settings: { CacheDir: '/models' } });
+      expect(runtime.preload).not.toHaveBeenCalled();
+    });
+
+    it('records cacheDir/localURL for transformers.js', () => {
+      embedding.SetAdditionalSettings({ cacheDir: '/tmp/models', localURL: 'http://models' });
+      expect(runtime.apply).toHaveBeenCalledWith({ CacheDir: '/tmp/models', LocalURL: 'http://models' });
+    });
+
+    it('refuses a cancelled call before embedding', async () => {
+      host.run.mockClear();
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        embedding.EmbedTexts({ model: 'm', texts: ['x'], CancellationToken: controller.signal } as never),
+      ).rejects.toThrow('Request was aborted');
+      expect(host.run).not.toHaveBeenCalledWith(expect.objectContaining({ Kind: 'embed' }));
     });
   });
 });

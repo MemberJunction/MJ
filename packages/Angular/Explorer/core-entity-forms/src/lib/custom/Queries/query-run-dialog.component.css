@@ -59,20 +59,3 @@
     min-width: 30px;
     padding: 4px 6px;
 }
-
-/* Ensure expansion panel content flexes properly */
-::ng-deep .k-expander-content-wrapper {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-}
-
-::ng-deep .k-expander-content {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-}

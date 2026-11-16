@@ -574,6 +574,186 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }
   }
 
+  private hiddenTabIds?: Set<string>;
+  private wiredContainers?: WeakSet<object>;
+
+  private getHiddenTabIds(): Set<string> {
+    if (!this.hiddenTabIds) {
+      this.hiddenTabIds = new Set<string>();
+    }
+    return this.hiddenTabIds;
+  }
+
+  private getWiredContainers(): WeakSet<object> {
+    if (!this.wiredContainers) {
+      this.wiredContainers = new WeakSet<object>();
+    }
+    return this.wiredContainers;
+  }
+
+  /**
+   * Determines whether a tab's pane is currently visible on screen, accounting for:
+   * - Active tab focus
+   * - Side-by-side Golden Layout split panes (`glContainer.isHidden === false`)
+   * - Stacked background tabs (`glContainer.isHidden === true` or `hide` event)
+   * - Dual Main/Records region visibility (`ShowRecordsRegion`)
+   */
+  private isTabCurrentlyVisible(tabId: string, activeTabId: string | null): boolean {
+    if (tabId === activeTabId) {
+      return true;
+    }
+
+    if (this.RecordsStyleActive) {
+      const tab = this.workspaceManager?.GetTab?.(tabId);
+      if (tab && this.isRecordTab(tab) !== Boolean(this.ShowRecordsRegion)) {
+        return false;
+      }
+    }
+
+    if (this.getHiddenTabIds().has(tabId)) {
+      return false;
+    }
+
+    const glContainer = (
+      this.recordsLayoutManager?.GetContainer?.(tabId) ??
+      this.layoutManager?.GetContainer?.(tabId)
+    ) as { isHidden?: boolean } | undefined;
+
+    if (glContainer && typeof glContainer.isHidden === 'boolean') {
+      return !glContainer.isHidden;
+    }
+
+    return false;
+  }
+
+  /**
+   * Deactivates change detection for a hidden or inactive tab view.
+   * Detaches the component's ChangeDetectorRef so background/idle tabs
+   * do not participate in Angular change detection passes.
+   */
+  public DeactivateTabView(tabId: string): void {
+    const ref = this.componentRefs.get(tabId) ||
+      (this.singleResourceCacheIdentity?.tabId === tabId ? this.singleResourceComponentRef : null);
+    if (ref) {
+      try {
+        ref.changeDetectorRef.detach();
+      } catch {
+        // Change detector already detached or destroyed
+      }
+    }
+  }
+
+  /** @deprecated Use {@link DeactivateTabView}. */
+  public deactivateTabView(tabId: string): void {
+    this.DeactivateTabView(tabId);
+  }
+
+  /**
+   * Activates change detection for a visible/active tab view.
+   * Reattaches the component's ChangeDetectorRef and triggers markForCheck()
+   * so updates accumulated while inactive are rendered immediately.
+   */
+  public ActivateTabView(tabId: string): void {
+    const ref = this.componentRefs.get(tabId) ||
+      (this.singleResourceCacheIdentity?.tabId === tabId ? this.singleResourceComponentRef : null);
+    if (ref) {
+      try {
+        ref.changeDetectorRef.reattach();
+        ref.changeDetectorRef.markForCheck();
+      } catch {
+        // Change detector already destroyed
+      }
+    }
+  }
+
+  /** @deprecated Use {@link ActivateTabView}. */
+  public activateTabView(tabId: string): void {
+    this.ActivateTabView(tabId);
+  }
+
+  /**
+   * Synchronizes change detection across all tab components.
+   * Reattaches the active tab AND any visible side-by-side split-pane tabs in the active
+   * region, while detaching hidden/stacked tabs and tabs in the inactive region.
+   */
+  public SyncTabChangeDetection(activeTabId: string | null): void {
+    if (!activeTabId) return;
+
+    if (this.UseSingleResourceMode) {
+      if (this.singleResourceComponentRef) {
+        try {
+          this.singleResourceComponentRef.changeDetectorRef.reattach();
+          this.singleResourceComponentRef.changeDetectorRef.markForCheck();
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
+    this.componentRefs.forEach((ref, tabId) => {
+      try {
+        if (this.isTabCurrentlyVisible(tabId, activeTabId)) {
+          ref.changeDetectorRef.reattach();
+          ref.changeDetectorRef.markForCheck();
+        } else {
+          ref.changeDetectorRef.detach();
+        }
+      } catch {
+        // ignore
+      }
+    });
+  }
+
+  /** @deprecated Use {@link SyncTabChangeDetection}. */
+  public syncTabChangeDetection(activeTabId: string | null): void {
+    this.SyncTabChangeDetection(activeTabId);
+  }
+
+  /**
+   * Wires Golden Layout container show/hide events to activate/deactivate
+   * the component's Angular change detection when tabs are hidden or shown.
+   */
+  private wireContainerVisibilityEvents(tabId: string, container: unknown): void {
+    if (!container || typeof container !== 'object') {
+      return;
+    }
+    const glContainer = container as {
+      isHidden?: boolean;
+      state?: { tabId?: string };
+      on?: (event: string, callback: () => void) => void;
+    };
+    if (glContainer.isHidden === true) {
+      this.getHiddenTabIds().add(tabId);
+    } else if (glContainer.isHidden === false) {
+      this.getHiddenTabIds().delete(tabId);
+    }
+
+    const wired = this.getWiredContainers();
+    if (wired.has(container)) {
+      return;
+    }
+    if (typeof glContainer.on === 'function') {
+      wired.add(container);
+      glContainer.on('hide', () => {
+        const resolvedTabId = glContainer.state?.tabId ?? tabId;
+        this.getHiddenTabIds().add(resolvedTabId);
+        this.DeactivateTabView(resolvedTabId);
+      });
+      glContainer.on('show', () => {
+        const resolvedTabId = glContainer.state?.tabId ?? tabId;
+        this.getHiddenTabIds().delete(resolvedTabId);
+        const tab = this.workspaceManager?.GetTab?.(resolvedTabId);
+        const inHiddenRegion = Boolean(
+          this.RecordsStyleActive && tab && this.isRecordTab(tab) !== Boolean(this.ShowRecordsRegion)
+        );
+        if (!inHiddenRegion) {
+          this.ActivateTabView(resolvedTabId);
+        }
+      });
+    }
+  }
+
   /**
    * Records-region mirror of the main sync path's `needsReload` check (see
    * {@link syncTabsWithConfiguration}). Temp-tab consumption overwrites a
@@ -856,6 +1036,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.layoutManager.ActiveTab.subscribe(tabId => {
         if (tabId) {
           this.workspaceManager.SetActiveTab(tabId);
+          this.SyncTabChangeDetection(tabId);
         }
       }),
       this.layoutManager.TabDoubleClicked.subscribe(tabId => {
@@ -926,6 +1107,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           // the region is the visible surface for this configuration.
           this.syncRecordsRegion(config);
           this.updateRecordSurfaceState(config);
+          this.SyncTabChangeDetection(config.activeTabId);
 
           if (this.UseSingleResourceMode) {
             // In single-resource mode, reload content if the tab content changed
@@ -1039,6 +1221,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.recordsRegionActiveTabId = tabId;
         if (tabId && this.ShowRecordsRegion && !this.recordsCreatingTabs && !this.recordsRebuilding) {
           this.workspaceManager.SetActiveTab(tabId);
+          this.SyncTabChangeDetection(tabId);
         }
       }),
       this.recordsLayoutManager.LayoutChanged.subscribe(() => {
@@ -1505,7 +1688,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
     // Entity name discriminates between "new record" tabs of different entities (all
     // have empty ResourceRecordID otherwise). For non-Records resources this is undefined.
-    const cacheDiscriminator = resourceData.Configuration?.Entity as string | undefined;
+    const cacheDiscriminator = this.resolveCacheDiscriminator(resourceData.Configuration);
 
     // **OPTIMIZATION: Check cache first to reuse existing loaded component**
     const cached = this.cacheManager.getCachedComponent(
@@ -1546,6 +1729,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // Store reference and identity for cleanup/detachment
       this.singleResourceComponentRef = cached.componentRef;
       this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id, discriminator: cacheDiscriminator };
+      this.ActivateTabView(activeTab.id);
 
       // Reconcile the cached component's preserved queryParams with any INCOMING navigation
       // intent already on the tab config (e.g. a Home pin / deep link that targeted a specific
@@ -1673,6 +1857,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Store reference and identity for cleanup/detachment
     this.singleResourceComponentRef = componentRef as ComponentRef<BaseResourceComponent>;
     this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id, discriminator: cacheDiscriminator };
+    this.ActivateTabView(activeTab.id);
   }
 
   /**
@@ -1723,9 +1908,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   private cleanupSingleResourceComponent(): void {
     if (this.singleResourceComponentRef) {
       if (this.singleResourceCacheIdentity) {
-        const { driverClass, recordId, appId, discriminator } = this.singleResourceCacheIdentity;
+        const { driverClass, recordId, appId, tabId, discriminator } = this.singleResourceCacheIdentity;
+        this.DeactivateTabView(tabId);
         // Mark as DETACHED by resource identity — the ONE consistent key used everywhere.
         this.cacheManager.markAsDetached(driverClass, recordId, appId, discriminator);
+      } else {
+        try {
+          this.singleResourceComponentRef.changeDetectorRef.detach();
+        } catch {
+          // ignore
+        }
       }
       this.singleResourceComponentRef = null;
       this.singleResourceCacheIdentity = null;
@@ -1785,14 +1977,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (isNewRecordTransition) {
       // Re-key the cache entry first, so when the workspace config emission triggers
       // signature/needsReload checks below, the cache lookup at the new id succeeds.
-      this.cacheManager.rekeyComponent(driverClass, oldRecordId, newRecordId, appId, oldDiscriminator, undefined);
+      this.cacheManager.rekeyComponent(driverClass, oldRecordId, newRecordId, appId, oldDiscriminator, oldDiscriminator);
 
       // Keep the in-memory single-resource identity in sync so detach uses the correct key.
       if (this.singleResourceCacheIdentity?.tabId === tabId) {
         this.singleResourceCacheIdentity = {
           ...this.singleResourceCacheIdentity,
           recordId: newRecordId,
-          discriminator: undefined
+          discriminator: oldDiscriminator
         };
       }
 
@@ -2011,13 +2203,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // IMPORTANT: Check both resourceRecordId AND configuration.recordId
     // because for nav items, the recordId is stored in configuration, not resourceRecordId
     const effectiveRecordId = tab.resourceRecordId || (tab.configuration?.recordId as string) || '';
+    const effectiveAbv = (tab.configuration?.['AlternateBaseView'] as string) || (tab.configuration?.['alternateBaseView'] as string) || '';
     const parts = [
       tab.applicationId,
       tab.configuration?.resourceType || '',
       tab.configuration?.driverClass || '',
       tab.configuration?.Entity || '',  // Include Entity name for Records resource type
       effectiveRecordId,
-      tab.configuration?.route || ''
+      tab.configuration?.route || '',
+      effectiveAbv
     ];
     return parts.join('|');
   }
@@ -2150,7 +2344,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
       // Discriminate distinct "new record" tabs of different entities (all have empty
       // ResourceRecordID otherwise — would silently collide in the cache).
-      const cacheDiscriminator = resourceData.Configuration?.Entity as string | undefined;
+      const cacheDiscriminator = this.resolveCacheDiscriminator(resourceData.Configuration);
 
       // Check if we have a cached component for this resource
       const cached = this.cacheManager.getCachedComponent(
@@ -2184,6 +2378,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
         // Keep legacy componentRefs map updated
         this.componentRefs.set(tabId, cached.componentRef);
+
+        // Wire GL container show/hide if supported
+        this.wireContainerVisibilityEvents(tabId, glContainer);
+
+        // Set change detection state based on pane visibility (active or visible split pane)
+        if (this.isTabCurrentlyVisible(tabId, this.workspaceManager.GetActiveTabId())) {
+          this.ActivateTabView(tabId);
+        } else {
+          this.DeactivateTabView(tabId);
+        }
 
         // If resource is already loaded, update tab title immediately and signal
         // load-complete so the shell clears any loading overlay.
@@ -2278,6 +2482,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       // Store reference for cleanup (legacy)
       this.componentRefs.set(tabId, componentRef as ComponentRef<BaseResourceComponent>);
+
+      // Wire GL container show/hide if supported
+      this.wireContainerVisibilityEvents(tabId, glContainer);
+
+      // Set change detection state based on pane visibility (active or visible split pane)
+      if (this.isTabCurrentlyVisible(tabId, this.workspaceManager.GetActiveTabId())) {
+        this.ActivateTabView(tabId);
+      } else {
+        this.DeactivateTabView(tabId);
+      }
 
     } catch (e) {
       // A tab whose resource can't resolve (e.g. a persisted tab referencing an
@@ -2672,6 +2886,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   }
 
   private cleanupTabComponent(tabId: string): void {
+    this.getHiddenTabIds().delete(tabId);
+    // Deactivate change detection for this tab view
+    this.DeactivateTabView(tabId);
     // The pane crumb belongs to the pane, not the cached component — always
     // destroyed here; the next attach recreates it in the new pane.
     this.destroyOriginCrumb(tabId);
@@ -2745,6 +2962,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           // reload from being handed back the component it just detached.
           const existingEntity = existingResourceData?.Configuration?.Entity as string | undefined;
           const newEntity = tab.configuration['Entity'] as string | undefined;
+          const existingAbv = ((existingResourceData?.Configuration?.['AlternateBaseView'] ?? existingResourceData?.Configuration?.['alternateBaseView']) as string | undefined) || '';
+          const newAbv = ((tab.configuration['AlternateBaseView'] ?? tab.configuration['alternateBaseView']) as string | undefined) || '';
 
           // The record id comparison accepts the URL-segment form ResourceRecordSaved writes into
           // the component's Data ('ID|<uuid>' for a tab that keeps '<uuid>'). An exact comparison
@@ -2754,6 +2973,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
                              !TabContainerComponent.IsSameRecordId(existingRecordId, newRecordId) ||
                              existingEntity !== newEntity ||
+                             existingAbv !== newAbv ||
                              (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
 
           if (needsReload) {
@@ -3314,5 +3534,26 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
     // Unblock the shell's first-load gate so the loading overlay clears.
     this.emitFirstLoadCompleteOnce();
+  }
+
+  private resolveCacheDiscriminator(configuration?: Record<string, unknown> | null): string | undefined {
+    if (typeof ComponentCacheManager.GetCacheDiscriminator === 'function') {
+      return ComponentCacheManager.GetCacheDiscriminator(configuration);
+    }
+    if (!configuration) {
+      return undefined;
+    }
+    const entity = typeof configuration['Entity'] === 'string' && configuration['Entity'].trim().length > 0
+      ? configuration['Entity'].trim()
+      : '';
+    const rawAbv = configuration['AlternateBaseView'];
+    const abv = typeof rawAbv === 'string' && rawAbv.trim().length > 0 ? rawAbv.trim() : '';
+    if (!entity && !abv) {
+      return undefined;
+    }
+    if (entity && abv) {
+      return `${entity}|abv:${abv}`;
+    }
+    return entity || `abv:${abv}`;
   }
 }

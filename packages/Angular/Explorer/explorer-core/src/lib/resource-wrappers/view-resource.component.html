@@ -79,11 +79,13 @@
             [Entity]="entityInfo"
             [Provider]="Provider"
             [ViewEntity]="viewEntity"
+            [AlternateBaseView]="AlternateBaseView"
             [GridState]="gridState"
             [AutoSaveView]="true"
             (RecordOpened)="onRecordOpened($any($event))"
             (OpenRelatedRecordRequested)="onOpenRelatedRecord($event)"
             (AfterViewTypeChange)="onViewTypeChanged()"
+            (ActiveViewTypeResolved)="OnViewTypeChanged()"
             (DataLoaded)="onDataLoaded()">
         </mj-entity-viewer>
 

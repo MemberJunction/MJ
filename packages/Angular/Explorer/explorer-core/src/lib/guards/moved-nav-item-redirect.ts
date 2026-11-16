@@ -39,3 +39,14 @@ export const DATA_EXPLORER_DASHBOARDS_ROUTE: Route = {
   canMatch: [MovedNavItemGuard('Data Explorer', 'Dashboards')],
   children: [{ path: '', pathMatch: 'full', redirectTo: redirectKeepingQueryParams('/app/dashboards/Library') }],
 };
+
+/**
+ * A link to Chat's legacy `Tasks` nav item opens `Agent Activity` in the Chat app (preserving query
+ * parameters like `?taskId=...` and fragment) when the move applies.
+ */
+export const CHAT_TASKS_ROUTE: Route = {
+  path: 'app/chat/Tasks',
+  pathMatch: 'full',
+  canMatch: [MovedNavItemGuard('Chat', 'Tasks')],
+  children: [{ path: '', pathMatch: 'full', redirectTo: redirectKeepingQueryParams('/app/chat/Agent Activity') }],
+};

@@ -1,6 +1,6 @@
 import { Component, ChangeDetectorRef, NgZone, OnDestroy, OnInit, AfterViewInit, inject } from '@angular/core';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
-import { MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserNotificationEntity, MJUserNotificationTypeEntity, MJUserRoutineEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { CompositeKey, TransactionGroupBase } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -71,11 +71,43 @@ interface AgentRequestResourceConfig {
 }
 
 /**
+ * Configuration written by the User Routine dispatcher for a routine run. `conversationId` is
+ * the routine's own conversation, where the run's reply lives; older notifications lack it.
+ */
+interface UserRoutineResourceConfig {
+  type: 'UserRoutine';
+  routineId: string;
+  runId?: string;
+  conversationId?: string;
+}
+
+/**
  * Result of parsing a notification URL
  */
 interface NotificationUrlInfo {
   urlParts: string[];
   queryString: string;
+}
+
+/**
+ * Type-filter value for notifications with no NotificationTypeID. Not a UUID, so it cannot
+ * collide with a real type ID.
+ */
+export const NO_NOTIFICATION_TYPE_FILTER = '__no-type__';
+
+/**
+ * Whether a notification's type matches the Type dropdown's selection: `null` (All Types)
+ * matches everything, {@link NO_NOTIFICATION_TYPE_FILTER} matches untyped notifications,
+ * and any other value matches that type ID.
+ */
+export function MatchesNotificationTypeFilter(notificationTypeId: string | null | undefined, filter: string | null): boolean {
+  if (filter == null) {
+    return true;
+  }
+  if (filter === NO_NOTIFICATION_TYPE_FILTER) {
+    return !notificationTypeId;
+  }
+  return UUIDsEqual(notificationTypeId, filter);
 }
 
 /** Collapsed-preview cap (characters of plain text). */
@@ -125,6 +157,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     this.NotificationTypes = value;
   }
   public SelectedTypeFilter: string | null = null;
+
+  /** Dropdown value for the "Other (no type)" option. */
+  public readonly NoTypeFilter = NO_NOTIFICATION_TYPE_FILTER;
 
   /** @deprecated Use {@link SelectedTypeFilter}. */
   public get selectedTypeFilter(): string | null {
@@ -267,8 +302,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     }
 
     // Apply type filter if selected
-    if (this.SelectedTypeFilter) {
-      temp = temp.filter(n => UUIDsEqual(n.NotificationTypeID, this.SelectedTypeFilter));
+    if (this.SelectedTypeFilter != null) {
+      const typeFilter = this.SelectedTypeFilter;
+      temp = temp.filter(n => MatchesNotificationTypeFilter(n.NotificationTypeID, typeFilter));
     }
 
     // Apply text filter if it is not empty
@@ -448,6 +484,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       if (typeName === 'meet-room') {
         return true;
       }
+      if (this.parseUserRoutineConfig(notification)) {
+        return true;
+      }
     }
 
     const info = this.NotificationUrl(notification);
@@ -618,13 +657,16 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
-    // Queue all saves - no need to await individual saves since transaction group queues them
+    // Queue all saves. A grouped Save() runs validation and pre-save hooks before it joins the
+    // group, so wait for every one to be queued; submitting earlier sends an empty group that
+    // reports success and persists nothing. A grouped Save() resolves once queued, not once sent.
+    const queued: Promise<boolean>[] = [];
     for (const notification of this.AllNotifications) {
       if (notification.Unread && bRead || !notification.Unread && !bRead) {
-        // Don't await - Save() with transaction group queues the operation immediately
-        this.MarkAsRead(notification, bRead, transGroup);
+        queued.push(this.MarkAsRead(notification, bRead, transGroup));
       }
     }
+    await Promise.all(queued);
 
     // Submit transaction group - this is where the actual network call happens
     if (!await transGroup.Submit())
@@ -651,6 +693,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
         return;
       }
       if (this.navigateToMeetRoom(notification)) {
+        return;
+      }
+      if (this.navigateToUserRoutine(notification)) {
         return;
       }
       if (this.navigateToHandoffConsole(notification)) {
@@ -860,12 +905,71 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     if (config.versionNumber) navConfig['versionNumber'] = config.versionNumber;
     if (config.taskId) navConfig['taskId'] = config.taskId;
 
+    // The Chat tab is usually already open and gets reused; a reused tab reads its configuration
+    // only at init, so the same values go in the query params, which it does react to.
     this.navigationService.OpenNavItemByName(
       'Conversations',
       navConfig,
-      chatApp.ID
+      chatApp.ID,
+      { queryParams: { ...navConfig } }
     );
     return true;
+  }
+
+  /** The routine-run config of a notification, or null when it is not one (or names no routine). */
+  private parseUserRoutineConfig(notification: MJUserNotificationEntity): UserRoutineResourceConfig | null {
+    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
+      return null;
+    }
+    const config = SafeJSONParse<UserRoutineResourceConfig>(notification.ResourceConfiguration);
+    if (!config || config.type?.trim().toLowerCase() !== 'userroutine' || !config.routineId) {
+      return null;
+    }
+    return config;
+  }
+
+  /**
+   * Opens what a routine run produced: its reply, in the routine's own conversation (the
+   * `{ type:'UserRoutine', routineId, runId, conversationId? }` ResourceConfiguration). That
+   * conversation is application-scoped, so the chat sidebar never lists it; the click deep-links
+   * into the Chat app's Conversations item. A notification written before the config carried the
+   * conversation reads it off the routine; a routine with no conversation opens in the Routines
+   * app. Returns false (not handled) when the notification is not a routine run.
+   */
+  private navigateToUserRoutine(notification: MJUserNotificationEntity): boolean {
+    const config = this.parseUserRoutineConfig(notification);
+    if (!config) {
+      return false;
+    }
+    void this.openUserRoutineOutput(config);
+    return true;
+  }
+
+  private async openUserRoutineOutput(config: UserRoutineResourceConfig): Promise<void> {
+    const conversationId = config.conversationId ?? await this.loadRoutineConversationId(config.routineId);
+    const chatApp = conversationId ? this.appManager.GetAppByName('Chat') : null;
+    if (conversationId && chatApp) {
+      // Query params as well as configuration: an already-open Chat tab is reused and reacts
+      // only to a query-param change (its configuration is read once, at init).
+      await this.navigationService.OpenNavItemByName('Conversations', { conversationId }, chatApp.ID, { queryParams: { conversationId } });
+      return;
+    }
+    const routinesApp = this.appManager.GetAppByName('Routines');
+    if (routinesApp) {
+      await this.navigationService.OpenNavItemByName('My Routines', { routine: config.routineId }, routinesApp.ID);
+      return;
+    }
+    MJNotificationService.Instance.CreateSimpleNotification('The Routines app is not installed, so this routine cannot be opened', 'error', 4000);
+  }
+
+  /** The routine's ConversationID, or null when the routine cannot be read or has none. */
+  private async loadRoutineConversationId(routineId: string): Promise<string | null> {
+    const p = this.ProviderToUse;
+    const routine = await p.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', p.CurrentUser);
+    if (!await routine.Load(routineId)) {
+      return null;
+    }
+    return routine.ConversationID ?? null;
   }
 
   public GetNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {

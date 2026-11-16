@@ -6,6 +6,7 @@ import {
   EmbedTextsResult,
   EmbedTextParams,
   EmbedTextResult,
+  EmbeddingDimensionsError,
   ModelUsage,
 } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
@@ -80,6 +81,15 @@ const h = vi.hoisted(() => {
     return map;
   };
 
+  const byPromptID = <T extends { PromptID: string }>(rows: T[]): Map<string, T[]> => {
+    const map = new Map<string, T[]>();
+    for (const row of rows) {
+      const key = norm(row.PromptID);
+      map.set(key, [...(map.get(key) ?? []), row]);
+    }
+    return map;
+  };
+
   const engine = {
     Config: vi.fn().mockResolvedValue(undefined),
     get VendorTypeDefinitions() { return state.vendorTypeDefinitions; },
@@ -98,9 +108,12 @@ const h = vi.hoisted(() => {
     get VendorsByID() { return new Map(state.vendors.map(v => [norm(v.ID), v])); },
     get ModelTypesByID() { return new Map(state.modelTypes.map(t => [norm(t.ID), t])); },
     get ModelVendorsByModelID() { return byModelID(state.modelVendors); },
+    get PromptModelsByPromptID() { return byPromptID(state.promptModels); },
     GetConfigurationChain() { return []; },
     HasCredentialBindings() { return false; },
     GetCredentialBindingsForTarget() { return []; },
+    // The real one prefixes texts from the model's catalog config; AIEngine's own tests cover that.
+    PrepareEmbeddingInput: vi.fn((_model: unknown, texts: string[]) => ({ texts, maxInputTokens: undefined as number | undefined })),
   };
 
   let runSeq = 0;
@@ -424,6 +437,19 @@ describe('AIEmbeddingRunner', () => {
     expect(parsedResult.dimensions).toBe(3);
   });
 
+  it('runs the prompt-model row\'s vendor, not its model\'s top vendor, with failover off', async () => {
+    const mv1b = addSecondVendorToModel1(); // Bedrock (driver 1B, priority 8) below OpenAI (priority 10)
+    h.state.prompts[0].SelectionStrategy = 'Default';
+    setFailoverStrategy('None');
+    h.state.promptModels[0] = MakePromptModel({ ID: 'pm-001', PromptID: PROMPT_ID, ModelID: MODEL_1_ID, VendorID: mv1b.VendorID, Priority: 10 });
+
+    const result = await runner.RunEmbedding({ Texts: ['row vendor'], ContextUser: mockUser, PromptID: PROMPT_ID });
+
+    expect(result.Success).toBe(true);
+    expect(scriptFor(DRIVER_1B).Calls).toHaveLength(1);
+    expect(scriptFor(DRIVER_1).Calls).toHaveLength(0);
+  });
+
   it('ModelID pinning passes through to BuildModelVendorCandidates', async () => {
     const result = await runner.RunEmbedding({
       Texts: ['pinned model test'],
@@ -579,6 +605,27 @@ describe('AIEmbeddingRunner', () => {
     expect(run?.ErrorMessage).toContain('Fatal unrecoverable network crash');
   });
 
+  it('sends the texts AIEngine prepared, with the input type and the catalog token cap', async () => {
+    h.engine.PrepareEmbeddingInput.mockImplementationOnce((_model: unknown, texts: string[]) => ({
+      texts: texts.map(t => `task: search result | query: ${t}`),
+      maxInputTokens: 8192,
+    }));
+    const result = await runner.RunEmbedding({
+      Texts: ['red planet'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      InputType: 'query',
+    });
+
+    expect(result.Success).toBe(true);
+    expect(h.engine.PrepareEmbeddingInput).toHaveBeenCalledWith(expect.objectContaining({ ID: expect.any(String) }), ['red planet'], 'query', expect.anything());
+    expect(scriptFor(DRIVER_1).Calls[0]).toMatchObject({
+      texts: ['task: search result | query: red planet'],
+      inputType: 'query',
+      maxInputTokens: 8192,
+    });
+  });
+
   it('Dimensions are forwarded to the driver', async () => {
     const result = await runner.RunEmbedding({
       Texts: ['dimension test text'],
@@ -590,6 +637,51 @@ describe('AIEmbeddingRunner', () => {
     expect(result.Success).toBe(true);
     expect(scriptFor(DRIVER_1).Calls[0]?.dimensions).toBe(512);
     expect(result.Vectors[0]).toHaveLength(512);
+  });
+
+  it('a driver that degrades to an empty result fails the call instead of answering with no vectors', async () => {
+    // BaseEmbeddings drivers answer a failed request with `vectors: []` (graceful degrade) rather than
+    // throwing; OpenAI does this when a model rejects `dimensions` (#5234). Read as a success, that empty
+    // answer would leave every caller querying with no vector and reporting no matches.
+    const degraded = async (params: EmbedTextsParams): Promise<EmbedTextsResult> =>
+      ({ object: 'list', model: params.model ?? '', ModelUsage: new ModelUsage(0, 0), vectors: [] });
+    for (const key of [DRIVER_1, DRIVER_1B, DRIVER_2, DRIVER_LOCAL]) {
+      scriptFor(key).Answer = degraded;
+    }
+
+    const result = await runner.RunEmbedding({
+      Texts: ['degraded embedding text'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      Dimensions: 1536,
+    });
+
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain('No vectors returned');
+    expect(result.Vectors).toEqual([]);
+  });
+
+  it('a width the model can\'t produce fails at once with the cause, without retrying or failing over', async () => {
+    // A driver whose model table says the model can't produce the requested width refuses before any
+    // API call (#5234). Every vendor of that model would refuse too, so the runner must not try one,
+    // unlike the 503 case above, where a second vendor of the same model answers.
+    addSecondVendorToModel1();
+    scriptFor(DRIVER_1).Answer = (params) =>
+      Promise.reject(new EmbeddingDimensionsError(params.model ?? '', params.dimensions ?? 0, 'only 1536'));
+
+    const result = await runner.RunEmbedding({
+      Texts: ['impossible width text'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      Dimensions: 3072,
+    });
+
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain("can't produce 3072-dimension vectors");
+    expect(result.Vectors).toEqual([]);
+    expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
+    expect(scriptFor(DRIVER_1B).Calls).toHaveLength(0);
+    expect(scriptFor(DRIVER_2).Calls).toHaveLength(0);
   });
 
   describe('keyless drivers', () => {
@@ -651,6 +743,54 @@ describe('AIEmbeddingRunner', () => {
       });
 
       expect(result.Success).toBe(true);
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(PROMPT_ID);
+    });
+
+    /** Adds an active Embedding prompt with no model bindings, as the carrier prompts ship. */
+    const addEmbeddingPrompt = (id: string, name: string, atFront = false): void => {
+      const prompt = { ...h.state.prompts[0], ID: id, Name: name };
+      if (atFront) {
+        h.state.prompts.unshift(prompt);
+      } else {
+        h.state.prompts.push(prompt);
+      }
+    };
+
+    it("prefers 'Content Embedding' when no prompt is named, whatever order the prompts loaded in (#4923)", async () => {
+      const contentID = 'E0000000-0000-0000-0000-0000000000C1';
+      addEmbeddingPrompt('E0000000-0000-0000-0000-0000000000A1', 'Another Embedding', true);
+      addEmbeddingPrompt(contentID, 'Content Embedding');
+
+      await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID });
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(contentID);
+    });
+
+    it('without Content Embedding, falls back to the first active Embedding prompt by name', async () => {
+      const alphaID = 'E0000000-0000-0000-0000-0000000000A1';
+      addEmbeddingPrompt('E0000000-0000-0000-0000-0000000000Z1', 'Zeta Embedding', true);
+      addEmbeddingPrompt(alphaID, 'Alpha Embedding');
+
+      await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID });
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(alphaID);
+    });
+
+    it('books the run under the prompt named by PromptName (#4923)', async () => {
+      const carrierID = 'E0000000-0000-0000-0000-0000000000V1';
+      addEmbeddingPrompt('E0000000-0000-0000-0000-0000000000C1', 'Content Embedding');
+      addEmbeddingPrompt(carrierID, 'Vector Sync Embedding');
+
+      const result = await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID, PromptName: 'Vector Sync Embedding' });
+      expect(result.Success).toBe(true);
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(carrierID);
+      expect(lastRun()?.ModelID).toBe(MODEL_1_ID);
+    });
+
+    it('falls back as if no prompt were named when PromptName is unknown', async () => {
+      await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID, PromptName: 'No Such Prompt' });
       await runner.WaitForPendingPromptRunSaves();
       expect(lastRun()?.PromptID).toBe(PROMPT_ID);
     });

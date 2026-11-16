@@ -1724,8 +1724,27 @@
       "ID": "D08BCD9D-B26F-4C96-87E7-436DE63F18FF"
     },
     "sync": {
-      "lastModified": "2026-08-05T18:34:40.715Z",
-      "checksum": "7e5af2133ee757c726cd9b5ef3fdeb0e1e738630a04d4f61a3a0c0737dfcdfb8"
+      "lastModified": "2026-11-10T23:41:52.413Z",
+      "checksum": "39b34eaeae6d8f3d0eaf3aecefc4d7e0d6bbbb33823a0eb1b028cd9ee57f40ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ExportableData",
+      "Namespace": "Generic/UI/Export",
+      "Title": "Exportable Data",
+      "Type": "Widget",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/generic/exportable-data.spec.json"
+    },
+    "primaryKey": {
+      "ID": "565F40FE-0B97-4BA2-9C8B-5D8A7E59EF3D"
+    },
+    "sync": {
+      "lastModified": "2026-11-10T23:41:52.604Z",
+      "checksum": "78b17dd4b7f398149bc0ffa5bc883cc982d6071b89bebfca2a28c691b07a26f6"
     }
   },
   {
@@ -1743,8 +1762,8 @@
       "ID": "DB1253D8-5B43-4FB1-880D-908EE2E5B37F"
     },
     "sync": {
-      "lastModified": "2026-08-05T18:34:40.840Z",
-      "checksum": "3184c0608f0153030631f147daa28edc67971afc0c48ec8296d3b5a4a5557290"
+      "lastModified": "2026-11-10T23:41:52.700Z",
+      "checksum": "055fd8dd7100485856f3f1ca09160bbdf838231af85b40e9d27d653b35345d1c"
     }
   },
   {
@@ -1800,8 +1819,8 @@
       "ID": "21A95BC1-2CCD-4949-A90F-4262F1DBDB62"
     },
     "sync": {
-      "lastModified": "2026-08-05T18:34:40.667Z",
-      "checksum": "5e815dc2183cb0a68788986ccc9d9505f339da9a75a41b427b039f3daa49da52"
+      "lastModified": "2026-11-10T23:41:52.823Z",
+      "checksum": "9b6233fd8674813f8b3446cfbce780dc7bcb8c51a033ca14578fa4460096f17c"
     }
   },
   {
@@ -1990,8 +2009,8 @@
       "ID": "BE1FED28-72D1-4F2E-8FAB-77747639732B"
     },
     "sync": {
-      "lastModified": "2026-08-05T18:34:40.972Z",
-      "checksum": "a220c703fa8e62563301e99e1358df3ac62da0ac883733ac4ac11f312b436169"
+      "lastModified": "2026-11-10T23:41:53.042Z",
+      "checksum": "e4e498016736ecd707f3ba14db9ed655d10d15ce762b361db366857f1cf3ad4a"
     }
   },
   {

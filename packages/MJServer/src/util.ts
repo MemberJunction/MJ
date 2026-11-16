@@ -6,7 +6,8 @@ import { URL } from 'url';
 import { z } from 'zod';
 import { DataSourceInfo, ProviderInfo } from './types';
 import sql from 'mssql';
-import { DatabaseProviderBase } from '@memberjunction/core';
+import { DatabaseProviderBase, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 
 const gzip = promisify(gzipCallback);
 
@@ -249,8 +250,59 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
           sqlQuery = sqlQuery.replace(/\?/g, () => `@p${paramIndex++}`);
         }
       }
-      const result = await request.query(sqlQuery);
-      return result.recordset || [];
+      const startTime = performance.now();
+      const notifyPoolSqlObservers = (rowCount: number, errorMessage?: string): void => {
+        if (typeof IsDiagnosticCaptureSuppressed === 'function' && IsDiagnosticCaptureSuppressed()) {
+          return;
+        }
+        const observers = GetGlobalObjectStore()?.['___MJ_SQL_OBSERVERS___'] as
+          | Set<{ onSqlExecuted: (obs: Record<string, unknown>) => void }>
+          | undefined;
+        if (!observers || observers.size === 0) {
+          return;
+        }
+        const ctx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
+        const obs: Record<string, unknown> = {
+          ts: Date.now(),
+          sql: sqlQuery,
+          parameterTypes: Array.isArray(parameters)
+            ? parameters.map((v, idx) => ({
+                name: `p${idx}`,
+                sqlType: v === null ? 'null' : typeof v,
+                byteLength: typeof v === 'string' ? v.length : 0,
+              }))
+            : [],
+          durationMs: performance.now() - startTime,
+          rowCount,
+          isMutation: false,
+          description: 'ConnectionPool.query',
+          ...(errorMessage ? { errorMessage } : {}),
+          ...(ctx
+            ? {
+                diagnosticContext: ctx,
+                sessionId: ctx.sessionId ?? ctx.SessionID,
+                traceId: ctx.traceId ?? ctx.TraceID,
+                spanId: ctx.spanId ?? ctx.SpanID,
+              }
+            : {}),
+        };
+        for (const observer of observers) {
+          try {
+            observer.onSqlExecuted(obs);
+          } catch {
+            // Observer errors must never affect SQL execution
+          }
+        }
+      };
+      try {
+        const result = await request.query(sqlQuery);
+        const rows = result.recordset || [];
+        notifyPoolSqlObservers(rows.length);
+        return rows;
+      } catch (err) {
+        notifyPoolSqlObservers(0, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
     };
     return extendedPool;
   }

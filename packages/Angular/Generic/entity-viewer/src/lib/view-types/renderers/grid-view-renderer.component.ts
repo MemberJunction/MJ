@@ -122,6 +122,7 @@ export interface GridViewConfig {
       [Data]="records"
       [ExportDataProvider]="exportDataProvider"
       [Params]="effectiveParams"
+      [SavedViewID]="SavedViewID"
       [FilterText]="filterText ?? ''"
       [GridState]="config.gridState ?? null"
       [Height]="'auto'"
@@ -343,6 +344,16 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   /** Whether the host is currently (re)loading the record set. Accepted per contract; unused here. */
   @Input() isLoading?: boolean;
 
+  /** Active alternate base view semantic name pushed by the host, forwarded into `EffectiveParams`. */
+  @Input() alternateBaseView: string | null = null;
+
+  /**
+   * ID of the persisted `MJ: User Views` record backing the current record set, or `null` for a
+   * dynamic / unsaved view. Forwarded to `[SavedViewID]` on `<mj-entity-data-grid>` so Open in Excel
+   * works when hosted inside `<mj-entity-viewer>` without handing `_viewEntity` persistence to the grid.
+   */
+  @Input() SavedViewID: string | null = null;
+
   // ---- IViewRenderer outputs (generic + navigation channels only) ----
 
   /** Emitted when a row is single-clicked — payload is the raw record object (host builds the key). */
@@ -496,10 +507,15 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    */
   get EffectiveParams(): RunViewParams | null {
     if (this.config.params) {
-      return this.config.params;
+      return this.alternateBaseView && !this.config.params.AlternateBaseView
+        ? { ...this.config.params, AlternateBaseView: this.alternateBaseView }
+        : this.config.params;
     }
     if (this.entity) {
-      return { EntityName: this.entity.Name };
+      return {
+        EntityName: this.entity.Name,
+        ...(this.alternateBaseView ? { AlternateBaseView: this.alternateBaseView } : {}),
+      };
     }
     return null;
   }
@@ -1153,6 +1169,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
         Fields: child.PrimaryKeys.map(f => f.Name),
         ResultType: 'simple' as const,
         MaxRows: 1,
+        SkipTotalRowCount: true,
       })),
     );
     if (results.some(r => !r.Success)) return null;

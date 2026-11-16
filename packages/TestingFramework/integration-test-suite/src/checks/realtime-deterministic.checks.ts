@@ -1,9 +1,9 @@
 /**
- * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD18).
+ * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD20).
  *
  * Domain 10 deterministic legs — NO live sessions, NO sidecar, NO model calls:
  *  - realtime metadata integrity: agent channels (RD1), Realtime model → vendor DriverClass
- *    wiring (RD2), the co-agent pairing junction (RD3) — each skips-as-pass LOUDLY when the
+ *    wiring (RD2), the co-agent pairing junction (RD3) — each skips (SkipCheck) when the
  *    deployment has not seeded that slice,
  *  - agent-session row lifecycle via a tagged fixture (RD4) — also PINS the fact that agent
  *    sessions have NO *EntityServer invariants (a direct Save bypasses SessionManager entirely),
@@ -38,11 +38,16 @@
  *    endpoint allow it); a tagged model
  *    on the same driver and API name whose Video/Output row has IsSupported=false asks for none (`endpoint`); without
  *    that row, its endpoint alone decides and it asks again. Its fixture rows are deleted afterwards.
+ *  - the recording ledger survives a stale session save (RD19, #6010): a session copy loaded before the terminal stamp,
+ *    through an app-owned `MJ: AI Agent Sessions` class that extends the generated entity (so no server subclass runs),
+ *    is saved as the close; the terminal's counts and status are still there afterwards.
+ *  - deleting a conversation a tagged session points at cascades through spUpdateAIAgentSession and clears the
+ *    session's ConversationID (RD20, #6010): the generated delete's cascade must match the update proc's parameters.
  *
  * Every fixture row is tagged '(mj-integration-test — safe to delete)' and deleted in the same
  * check's finally block, so the bundle needs no shared lifecycle.
  */
-import { BaseEntity, Metadata, ProviderType, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { BaseEntity, DatabaseProviderBase, Metadata, ProviderType, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { FilterByUUIDs, MJGlobal, NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseRealtimeModel, type AIAPIKey, type IRealtimeSession, type RealtimeUnitPrice, type RealtimeUsage } from '@memberjunction/ai';
 import { AIEngineBase, ReadCostLines, ReadRealtimeUsageRecord, RoundCost, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
@@ -52,6 +57,7 @@ import {
     RealtimeClientSessionService,
     ReadRealtimeVideoOutputRow,
     RealtimeModelShowsAvatar,
+    SqlRealtimeRecordingLedger,
     type PrepareClientSessionInput,
     type RealtimeSessionParamsPrep,
     type RealtimeVideoConfig,
@@ -72,6 +78,7 @@ import {
     MJAIPersonaEntity,
     MJAIPersonaVendorEntity,
     MJAIPromptRunEntity,
+    MJConversationEntity,
     MJInteractionEntity,
     MJInteractionEventEntity,
     MJMeetingEntity,
@@ -89,7 +96,7 @@ import { HandoffOfferRegistry, LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVE
 import { InteractionLifecycleService } from '@memberjunction/telephony-adapters';
 import { ProductionModelPromotionGate, detectSingleFeatureDominance } from '@memberjunction/predictive-studio';
 import type { PromoteModelRequest } from '@memberjunction/predictive-studio';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, type IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { DeepDeleteRunTrees } from './_it-live-agent-harness';
@@ -924,6 +931,34 @@ async function runBridgedUsageScenario(ctx: IntegrationCheckContext, fixture: Br
     }
 }
 
+/**
+ * What an app that owns its `MJ: AI Agent Sessions` class registers (bizapps-caliber does, #6010): a class that
+ * extends the GENERATED entity, ranked above MJ's server subclass. Every save in such a host skips
+ * `MJAIAgentSessionEntityServer`, so RD19 proves the recording ledger needs no server subclass to survive a stale save.
+ */
+class AppOwnedSessionEntity extends MJAIAgentSessionEntity {}
+
+const SESSION_ENTITY = 'MJ: AI Agent Sessions';
+
+/**
+ * Makes {@link AppOwnedSessionEntity} win the factory for `MJ: AI Agent Sessions` for the length of `body`, then
+ * re-registers the class that won before, above it: the ClassFactory has no unregister, and other checks in this
+ * process must keep getting the server subclass.
+ */
+async function withAppOwnedSessionClass<T>(body: () => Promise<T>): Promise<T> {
+    const factory = MJGlobal.Instance.ClassFactory;
+    const previous = factory.GetRegistration(BaseEntity, SESSION_ENTITY);
+    const appPriority = (previous?.Priority ?? 0) + 1;
+    factory.Register(BaseEntity, AppOwnedSessionEntity, SESSION_ENTITY, appPriority);
+    try {
+        return await body();
+    } finally {
+        if (previous) {
+            factory.Register(BaseEntity, previous.SubClass, SESSION_ENTITY, appPriority + 1);
+        }
+    }
+}
+
 export const RealtimeDeterministicChecks: NamedCheck[] = [
     {
         Id: 'realtime-deterministic.RD1',
@@ -934,9 +969,8 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             );
             Assert(r.Success, `channels load failed: ${r.ErrorMessage}`);
             if (r.Results.length === 0) {
-                console.warn('  ⚠ realtime-deterministic.RD1 SKIPPED — no MJ: AI Agent Channels seeded in this deployment '
+                SkipCheck('no MJ: AI Agent Channels seeded in this deployment '
                     + '(push metadata/ai-agent-channels to exercise this check)');
-                return;
             }
             for (const channel of r.Results) {
                 Assert(channel.Name.trim().length > 0, `channel ${channel.ID} has an empty Name`);
@@ -961,8 +995,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const realtimeTypeID = await firstID('MJ: AI Model Types', ctx.User, `Name='Realtime'`);
             if (!realtimeTypeID) {
-                console.warn("  ⚠ realtime-deterministic.RD2 SKIPPED — no 'Realtime' row in MJ: AI Model Types (realtime stack not seeded)");
-                return;
+                SkipCheck("no 'Realtime' row in MJ: AI Model Types (realtime stack not seeded)");
             }
             const models = await new RunView().RunView<{ ID: string; Name: string }>(
                 {
@@ -974,8 +1007,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             );
             Assert(models.Success, `realtime models load failed: ${models.ErrorMessage}`);
             if (models.Results.length === 0) {
-                console.warn('  ⚠ realtime-deterministic.RD2 SKIPPED — no active Realtime models seeded');
-                return;
+                SkipCheck('no active Realtime models seeded');
             }
             const idList = models.Results.map(m => `'${m.ID}'`).join(',');
             const vendors = await new RunView().RunView<MJAIModelVendorEntity>(
@@ -999,8 +1031,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             );
             Assert(r.Success, `co-agent junction load failed: ${r.ErrorMessage}`);
             if (r.Results.length === 0) {
-                console.warn('  ⚠ realtime-deterministic.RD3 SKIPPED — no MJ: AI Agent Co Agents rows seeded');
-                return;
+                SkipCheck('no MJ: AI Agent Co Agents rows seeded');
             }
             const pairKeys = new Set<string>();
             const defaultsPerCoAgentType = new Map<string, number>();
@@ -1027,8 +1058,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const session = await buildSessionFixture(ctx.User);
             if (!session) {
-                console.warn('  ⚠ realtime-deterministic.RD4 SKIPPED — no MJ: AI Agents row available to anchor a session fixture');
-                return;
+                SkipCheck('no MJ: AI Agents row available to anchor a session fixture');
             }
             try {
                 Assert(await session.Save(), `session fixture save failed: ${session.LatestResult?.CompleteMessage}`);
@@ -1066,13 +1096,11 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const entityName = 'MJ: AI Bridge Providers';
             if (!new Metadata().EntityByName(entityName)) { // global-provider-ok: integration test script — single-provider process by design
-                console.warn(`  ⚠ realtime-deterministic.RD5 SKIPPED — entity '${entityName}' not in metadata (bridge stack not installed)`);
-                return;
+                SkipCheck(`entity '${entityName}' not in metadata (bridge stack not installed)`);
             }
             if (!serverInvariantsActive(ctx.Provider.ProviderType, entityName)) {
-                console.warn('  ⚠ realtime-deterministic.RD5 SKIPPED — the bridge *EntityServer subclass is not registered in this '
+                SkipCheck('the bridge *EntityServer subclass is not registered in this '
                     + 'process and the run is not over the wire, so invariants cannot be observed');
-                return;
             }
 
             // Negative 1: unknown feature flag must be refused (never persisted).
@@ -1112,18 +1140,15 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const entityName = 'MJ: AI Agent Session Bridges';
             if (!new Metadata().EntityByName(entityName)) { // global-provider-ok: integration test script — single-provider process by design
-                console.warn(`  ⚠ realtime-deterministic.RD6 SKIPPED — entity '${entityName}' not in metadata (bridge stack not installed)`);
-                return;
+                SkipCheck(`entity '${entityName}' not in metadata (bridge stack not installed)`);
             }
             if (!serverInvariantsActive(ctx.Provider.ProviderType, entityName)) {
-                console.warn('  ⚠ realtime-deterministic.RD6 SKIPPED — the session-bridge *EntityServer subclass is not registered '
+                SkipCheck('the session-bridge *EntityServer subclass is not registered '
                     + 'in this process and the run is not over the wire');
-                return;
             }
             const session = await buildSessionFixture(ctx.User);
             if (!session) {
-                console.warn('  ⚠ realtime-deterministic.RD6 SKIPPED — no MJ: AI Agents row available to anchor the session fixture');
-                return;
+                SkipCheck('no MJ: AI Agents row available to anchor the session fixture');
             }
             const provider = await buildProviderFixture(ctx.User);
             const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
@@ -1319,8 +1344,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const md = ctx.Provider ?? new Metadata();
             if (!md.EntityByName('MJ: Interactions') || !md.EntityByName('MJ: Interaction Events')) {
-                console.warn('  ⚠ realtime-deterministic.RD10 SKIPPED — MJ: Interactions not in metadata');
-                return;
+                SkipCheck('MJ: Interactions not in metadata');
             }
 
             const lifecycle = InteractionLifecycleService.Instance;
@@ -1441,8 +1465,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const md = ctx.Provider ?? new Metadata();
             if (!md.EntityByName('MJ: Interaction Offers')) {
-                console.warn('  ⚠ realtime-deterministic.RD11 SKIPPED — MJ: Interaction Offers not in metadata');
-                return;
+                SkipCheck('MJ: Interaction Offers not in metadata');
             }
 
             const registry = HandoffOfferRegistry.Instance;
@@ -1583,8 +1606,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const md = ctx.Provider ?? new Metadata();
             if (!md.EntityByName('MJ: Meetings') || !md.EntityByName('MJ: Meeting Participants')) {
-                console.warn('  ⚠ realtime-deterministic.RD12 SKIPPED — MJ: Meetings not in metadata');
-                return;
+                SkipCheck('MJ: Meetings not in metadata');
             }
 
             const authService = RoomAuthorizationService.Instance;
@@ -1692,8 +1714,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const deployment = findAvatarFixtureAnchors(AIEngineBase.Instance);
             if (typeof deployment === 'string') {
-                console.warn(`  ⚠ realtime-deterministic.RD13 SKIPPED — ${deployment}`);
-                return;
+                SkipCheck(deployment);
             }
             const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
             const fixture: AvatarFixture = { Check: 'RD13', Rows: [], AvatarID: `mj-it-avatar-${stamp}`, Voice: `mj-it-voice-${stamp}`, PersonaName: `mj-it-rd13-persona-${stamp} ${TAG}` };
@@ -1721,8 +1742,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const rows = realtimeVendorRows(AIEngineBase.Instance).flatMap(({ Model, Rows }) => Rows.map((row) => ({ Model, Row: row })));
             if (rows.length === 0) {
-                console.warn('  ⚠ realtime-deterministic.RD14 SKIPPED — no Active realtime model has an Active vendor row with a DriverClass');
-                return;
+                SkipCheck('no Active realtime model has an Active vendor row with a DriverClass');
             }
             const checked = rows.filter(({ Row }) => !RD14_NOT_IN_THIS_PROCESS.has(Row.DriverClass!.trim()));
             const unresolved = checked.filter(({ Row }) => !resolvesRealtimeDriver(Row.DriverClass!)).map(({ Model, Row }) => `${Model.Name} → ${Row.DriverClass}`);
@@ -1739,9 +1759,8 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const fixture = findBridgedUsageFixture();
             if (!fixture) {
-                console.warn('  ⚠ realtime-deterministic.RD15 SKIPPED — no Active Realtime co-agent with a system prompt, '
+                SkipCheck('no Active Realtime co-agent with a system prompt, '
                     + 'or no Realtime model-vendor row, in this deployment');
-                return;
             }
             const cleanup: string[] = [];
             try {
@@ -1762,8 +1781,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const anchors = await findAvatarPricingAnchors(AIEngineBase.Instance, ctx.User);
             if (typeof anchors === 'string') {
-                console.warn(`  ⚠ realtime-deterministic.RD16 SKIPPED — ${anchors}`);
-                return;
+                SkipCheck(anchors);
             }
             const service = new RealtimeClientSessionService();
             let runID: string | undefined;
@@ -1792,8 +1810,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const entityName = 'MJ: AI Bridge Providers';
             if (!new Metadata().EntityByName(entityName)) { // global-provider-ok: integration test script — single-provider process by design
-                console.warn(`  ⚠ realtime-deterministic.RD17 SKIPPED — entity '${entityName}' not in metadata (bridge stack not installed)`);
-                return;
+                SkipCheck(`entity '${entityName}' not in metadata (bridge stack not installed)`);
             }
             const result = await new RunView().RunView<MJAIBridgeProviderEntity>(
                 { EntityName: entityName, ExtraFilter: `DriverClass='${LIVEKIT_BRIDGE_DRIVER_CLASS}' AND Status='Active'`, ResultType: 'entity_object' },
@@ -1802,8 +1819,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             Assert(result.Success, `RD17: loading the LiveKit bridge provider failed: ${result.ErrorMessage}`);
             const provider = result.Results?.[0];
             if (!provider) {
-                console.warn(`  ⚠ realtime-deterministic.RD17 SKIPPED — no Active '${LIVEKIT_BRIDGE_DRIVER_CLASS}' provider seeded`);
-                return;
+                SkipCheck(`no Active '${LIVEKIT_BRIDGE_DRIVER_CLASS}' provider seeded`);
             }
             AssertEqual(provider.SupportedFeaturesObject?.VideoOut, true,
                 "RD17: the LiveKit provider must allow VideoOut: an agent's avatar is published on video-out, and the bridge drops it otherwise");
@@ -1821,8 +1837,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const deployment = findModalitiesGateAnchors(AIEngineBase.Instance);
             if (typeof deployment === 'string') {
-                console.warn(`  ⚠ realtime-deterministic.RD18 SKIPPED — ${deployment}`);
-                return;
+                SkipCheck(deployment);
             }
             const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
             const fixture: AvatarFixture = { Check: 'RD18', Rows: [], AvatarID: `mj-it-avatar-${stamp}`, Voice: `mj-it-voice-${stamp}`, PersonaName: `mj-it-rd18-persona-${stamp} ${TAG}` };
@@ -1839,6 +1854,89 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider).catch(() => undefined);
             }
             console.log(`      → ${deployment.Model.Name} on ${deployment.VendorRow.DriverClass} asks for the face; a tagged model there with IsSupported=false asks for none (endpoint), and with no row asks again; fixture removed`);
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD19',
+        Name: 'RD19: a stale session save from an app subclass leaves the recording ledger alone (#6010)',
+        Fn: async (ctx): Promise<void> => {
+            if (!(ctx.Provider instanceof DatabaseProviderBase)) {
+                SkipCheck('the recording ledger needs a server-side database provider');
+            }
+            const provider = ctx.Provider;
+            const session = await buildSessionFixture(ctx.User);
+            if (!session) {
+                SkipCheck('no MJ: AI Agents row available to anchor a session fixture');
+            }
+            try {
+                // 1. A recorded session whose terminal has not landed yet: no expected count, no captured samples.
+                session.RecordingStartedAt = new Date();
+                Assert(await session.Save(), `session fixture save failed: ${session.LatestResult?.CompleteMessage}`);
+
+                await withAppOwnedSessionClass(async () => {
+                    // 2. Load the row the way SessionManager.CloseSession does; the factory hands out the app's class.
+                    const stale = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, ctx.User);
+                    Assert(await stale.Load(session.ID), 'the session fixture loads');
+                    Assert(stale instanceof AppOwnedSessionEntity, 'the app subclass won the factory');
+
+                    // 3. The tail shard lands: the terminal is stamped through the ledger proc, as the shard handler does.
+                    await new SqlRealtimeRecordingLedger(provider, ctx.User).StampTerminal(session.ID, 12, 2_823_296);
+
+                    // 4. The close saves the stale copy.
+                    stale.Status = 'Closed';
+                    stale.ClosedAt = new Date();
+                    stale.CloseReason = 'Explicit';
+                    Assert(await stale.Save(), `close save failed: ${stale.LatestResult?.CompleteMessage}`);
+                });
+
+                // 5. The ledger still holds what the proc wrote, and the close itself was written.
+                const fresh = await loadFresh<MJAIAgentSessionEntity>(SESSION_ENTITY, session.ID, ctx.User);
+                Assert(!!fresh, 'the session fixture did not read back');
+                AssertEqual(fresh!.RecordingExpectedShards, 12, 'expected shards survive the close');
+                // Number(): the SQL Server driver returns a BIGINT column as a string.
+                AssertEqual(Number(fresh!.RecordingCapturedSamples), 2_823_296, 'captured samples survive the close');
+                AssertEqual(fresh!.RecordingStatus, 'Pending', 'recording status survives the close');
+                AssertEqual(fresh!.Status, 'Closed', 'the close itself was written');
+            } finally {
+                if (session.IsSaved) {
+                    await session.Delete().catch(() => undefined);
+                }
+            }
+            console.log('      → a stale close saved through an app-owned session class kept the terminal stamp; fixture removed');
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD20',
+        Name: "RD20: deleting a conversation an agent session points at clears the session's ConversationID (spDeleteConversation's cascade matches spUpdateAIAgentSession's parameters, #6010)",
+        Fn: async (ctx): Promise<void> => {
+            const session = await buildSessionFixture(ctx.User);
+            if (!session) {
+                SkipCheck('no MJ: AI Agents row available to anchor a session fixture');
+            }
+            const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+            conversation.NewRecord();
+            conversation.UserID = ctx.User.ID;
+            conversation.Name = `rd20 ${TAG}`;
+            try {
+                Assert(await conversation.Save(), `conversation fixture save failed: ${conversation.LatestResult?.CompleteMessage}`);
+                session.ConversationID = conversation.ID;
+                Assert(await session.Save(), `session fixture save failed: ${session.LatestResult?.CompleteMessage}`);
+
+                // The generated delete cascades to the session through spUpdateAIAgentSession (ConversationID cleared).
+                Assert(await conversation.Delete(), `conversation delete failed: ${conversation.LatestResult?.CompleteMessage}`);
+
+                const fresh = await loadFresh<MJAIAgentSessionEntity>(SESSION_ENTITY, session.ID, ctx.User);
+                Assert(!!fresh, 'the session fixture did not read back');
+                AssertEqual(fresh!.ConversationID, null, "the session's ConversationID was cleared by the cascade");
+            } finally {
+                if (session.IsSaved) {
+                    await session.Delete().catch(() => undefined);
+                }
+                if (conversation.IsSaved) {
+                    await conversation.Delete().catch(() => undefined);
+                }
+            }
+            console.log('      → the conversation delete cascaded to the session; fixture removed');
         }
     }
 ];

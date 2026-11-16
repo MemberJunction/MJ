@@ -208,7 +208,7 @@ export class PDFToolLibrary extends BaseArtifactToolLibrary {
     return typeof content === 'string' ? Buffer.from(content, 'base64') : content;
   }
 
-  private successResult(data: unknown): ArtifactToolResult {
+  private successResult(data: ArtifactToolResult['data']): ArtifactToolResult {
     return { success: true, data };
   }
 

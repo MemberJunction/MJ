@@ -16,6 +16,7 @@ import { SENTINEL_MARKER } from './build.js';
 import { ReadSentinel } from './clean.js';
 import { DetectCandidates } from './detect.js';
 import { DescribeDirSource } from './dir-flag.js';
+import { DescribePrebundleRecords, PrebundleRecordsOf } from './prebundle.js';
 import { SENTINEL_FILE_NAME, WORKSPACE_FILE_NAMES } from './write.js';
 import type { DirSource, MemberPackageJson, SentinelReadResult, WorkspaceStatus } from './types.js';
 
@@ -188,6 +189,9 @@ export function RenderStatus(status: WorkspaceStatus): string {
   lines.push(checkLine(status.NodeModulesExists, 'node_modules (installed)'));
   lines.push('');
   lines.push(renderSentinelLine(status.Sentinel));
+  for (const line of DescribePrebundleRecords(PrebundleRecordsOf(status.Sentinel))) {
+    lines.push(chalk.dim(`prebundle exclude: added ${line} — clean removes it`));
+  }
   lines.push('');
   lines.push(...renderMemberLines(status));
   lines.push('');

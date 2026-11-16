@@ -243,7 +243,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-envelope",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -393,8 +396,8 @@
       "ID": "DC4C7E64-2D93-43E4-9F02-F5D7E702784A"
     },
     "sync": {
-      "lastModified": "2026-05-24T13:05:29.808Z",
-      "checksum": "f7345380be5c0541ed50c003db64925a26241d0e85fc5bea9e34f4cab8e81d32"
+      "lastModified": "2026-11-10T23:41:27.172Z",
+      "checksum": "293f963171ccdb618ed15bc1c282f2b7b279eca277e63ca16dd17f261b853812"
     }
   },
   {
@@ -1705,6 +1708,9 @@
   {
     "fields": {
       "Name": "Web Search",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Searches the open web through whichever provider the administrator has configured, and returns ranked results with titles, URLs and snippets. This is the provider-neutral entry point: which vendor serves the request (Brave, Tavily, Perplexity, or a fallback when the first choice is rate-limited) is decided by the MJ: Web Search Providers records and their Priority, not by the caller. Use this for any question needing current information from outside this MemberJunction instance. For content MJ holds, use Search instead.",
       "DriverClass": "__WebSearch",
       "Type": "Custom",
@@ -2252,13 +2258,16 @@
       "ID": "82169F64-8566-4AE7-9C87-190A885C98A9"
     },
     "sync": {
-      "lastModified": "2026-09-21T02:45:25.445Z",
-      "checksum": "9ebacaed56c3d8cdf18d5a09980cd137c354154db312681c574c486ea5d7f007"
+      "lastModified": "2026-11-03T23:46:06.541Z",
+      "checksum": "a1a8c5a2cd6fb69de7431c8ae6c296235da9d0dae54e09efdcc34d95edea3d40"
     }
   },
   {
     "fields": {
       "Name": "Web Page Content",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Fetches the content of a specific URL and converts it to text/markdown/JSON. Use when you already have a URL (from Web Search, a user-supplied link, or an API endpoint) and need its content. Handles HTML, PDF, DOCX, XML, CSV, and JSON automatically with format detection.",
       "DriverClass": "__WebPageContent",
       "Type": "Custom",
@@ -2509,8 +2518,8 @@
       "ID": "81F96534-03F5-49E9-81B0-D8902A7645A3"
     },
     "sync": {
-      "lastModified": "2026-05-24T13:05:30.087Z",
-      "checksum": "2257ff669f609d46612f9db6075e9a4c10dd500164778fec197f71a4b37b4647"
+      "lastModified": "2026-11-03T23:46:06.550Z",
+      "checksum": "b9efb97f72d65fbc9cb97a092e4384adae1413670e52567f355821957a25886c"
     }
   },
   {
@@ -2693,6 +2702,9 @@
   {
     "fields": {
       "Name": "URL Metadata Extractor",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Extracts comprehensive metadata from web pages including OpenGraph, Twitter Cards, Schema.org structured data, and standard HTML meta tags",
       "DriverClass": "__URLMetadataExtractor",
       "Type": "Custom",
@@ -2943,8 +2955,8 @@
       "ID": "A2455679-1370-4298-AC9E-0BA48DE2432E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.521Z",
-      "checksum": "60881f65dd76b38f768adf4c7d0eb63b620b79c7e6cf5e9d58f633f52a506568"
+      "lastModified": "2026-11-03T23:46:06.559Z",
+      "checksum": "e8bb713a692a8c237dcfb6a58ca24683a04379afb51788fc06664ec2d82acf13"
     }
   },
   {
@@ -3229,7 +3241,10 @@
       "DriverClass": "CreateRecordAction",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3370,8 +3385,8 @@
       "ID": "2504E288-ADF7-4913-A627-AA14276BAA55"
     },
     "sync": {
-      "lastModified": "2026-05-24T13:05:30.111Z",
-      "checksum": "90d5012220e7c819b3f215c5401d91f671ba28c2feda8bade74da1bf22d9eef9"
+      "lastModified": "2026-11-10T23:41:27.201Z",
+      "checksum": "ebf0c308e175dcac5ba4b1a4e5d9054ea1d95216388552500a21687907bbc276"
     }
   },
   {
@@ -3548,7 +3563,10 @@
       "DriverClass": "UpdateRecordAction",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3752,8 +3770,8 @@
       "ID": "FCAAD325-0D33-4E48-BC25-49C0E3587062"
     },
     "sync": {
-      "lastModified": "2026-05-24T13:05:30.157Z",
-      "checksum": "db2b0a0099980d10020c2cce6a9ad4f5ecea00c7a24e50dba98a8e6997ee4133"
+      "lastModified": "2026-11-10T23:41:27.214Z",
+      "checksum": "1e4a33d49e6b6272a373ddb4c1fd338c74281c84f22520d55b3efae0fd0398e5"
     }
   },
   {
@@ -3763,7 +3781,10 @@
       "DriverClass": "DeleteRecordAction",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3949,8 +3970,8 @@
       "ID": "C03F2547-5154-4627-8E12-FBDEB7580346"
     },
     "sync": {
-      "lastModified": "2026-05-24T13:05:30.259Z",
-      "checksum": "57c42e1a0c790c03309aeea2a6d784dddebcecd7b9e6fee9f8c3bec48e0ea6ac"
+      "lastModified": "2026-11-10T23:41:27.225Z",
+      "checksum": "9b1c971c596ed626642246a768dd39be6484e342fe1e38992eab2898f0e8a7a7"
     }
   },
   {
@@ -3963,7 +3984,10 @@
       "CodeLocked": false,
       "ForceCodeGeneration": false,
       "Status": "Active",
-      "DriverClass": "ApolloEnrichmentContactsAction"
+      "DriverClass": "ApolloEnrichmentContactsAction",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -4443,8 +4467,8 @@
       "ID": "BE9B9B7F-791B-4E97-AC17-7E93B52B237C"
     },
     "sync": {
-      "lastModified": "2026-10-13T19:00:03.272Z",
-      "checksum": "0a63595e1613caee9ab0f630443740d96582c9a172c5d5c3582887dd06d65ffb"
+      "lastModified": "2026-11-10T23:41:27.236Z",
+      "checksum": "72cb4e8ef42ad8022cecf82ab549edbf8d2c52479269dfad9c9e2dfa3c54299a"
     }
   },
   {
@@ -4457,7 +4481,10 @@
       "CodeLocked": false,
       "ForceCodeGeneration": false,
       "Status": "Active",
-      "DriverClass": "ApolloEnrichmentAccountsAction"
+      "DriverClass": "ApolloEnrichmentAccountsAction",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -4697,8 +4724,8 @@
       "ID": "E57641A1-B7C2-4EAB-BB17-8C9631E89095"
     },
     "sync": {
-      "lastModified": "2026-10-13T19:00:03.287Z",
-      "checksum": "52365fb7b52b7dfbce9bb6d1b3f6ba5d1984fdbfddaaf53b880041fc24278a37"
+      "lastModified": "2026-11-10T23:41:27.247Z",
+      "checksum": "905d0e2e8162c2779eb13c593c1c12cdaa4afe9d77f9e6fd3be7aefd9a166f0e"
     }
   }
 ]

@@ -33,17 +33,21 @@
  * would: `await new SomeOperation().Execute(input, { provider, user })` — the call marshals over
  * GraphQL to MJAPI, which dispatches to the registered server operation.
  *
- * THROWAWAY rows it creates (all cleaned up in `finally`, child→parent): a driver-named ML
- * Algorithm (if missing) + an ML Training Pipeline + the trained Model (+ its Training Run) +
- * the Record Process + its Process Run(s). The written-back column VALUES on the scored
- * Membership rows are printed, then NULLed out so the test is repeatable.
+ * THROWAWAY rows it creates, all deleted in `finally` through the harness cleanup
+ * (`lib/ps-rig-lifecycle.ts`), children first, every Delete() checked — a row it cannot delete
+ * fails the rig: the Record Process (found by the model its configuration names) with its Process
+ * Runs, run details and watermarks; the trained Model, its Training Run(s), Training Snapshot and
+ * stored files; the ML Training Pipeline and the version-1 Prediction Unit and Evaluation Protocol
+ * it is bound to (bound through the harness's pipeline migration, every row saved over GraphQL);
+ * and the driver's ML Algorithm when the rig created it. The written-back column VALUES on the
+ * scored Membership rows are printed, then NULLed out so the test is repeatable.
  *
  * AUTH: system API key from MJ_API_KEY (x-mj-api-key) via the shared harness — no secrets here.
  *
  * PREREQUISITES:
  *   - MJAPI up on :4000, built WITH the Predictive Studio server-bootstrap (ops registered AND
- *     `registerMLScoringProcessor` called at startup), the local-disk artifact fallback, and the
- *     write-back runner fix.
+ *     `registerMLScoringProcessor` called at startup) and the write-back runner fix, with `PS_STORAGE_PROVIDER`
+ *     naming a provider configured on it for model files (default "Local File System", rooted at STORAGE_LOCAL_ROOT).
  *   - The Python sidecar reachable by MJAPI (managed child-process default is fine).
  *   - AssociationDemo data loaded (Memberships populated) + MJ: ML Algorithms present.
  *   - The two prediction columns codegen'd onto Memberships: PredictedRenewalClass, RenewalScore.
@@ -51,19 +55,20 @@
  *
  * Gracefully SKIPs (exit 0) when AssociationDemo `Memberships` or `MJ: ML Algorithms` aren't present.
  *
- * USAGE (from the repo root, with MJAPI already up on :4000):
- *   npx tsx packages/MJServer/integration-test-scripts/ps-live-recordprocess-scoring.ts
+ * USAGE (from the repo root, with MJAPI already up on :4000 and its Python sidecar reachable):
+ *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-live-recordprocess-scoring.ts
  */
+import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
+import { ShippedModelID } from './lib/ps-train-output';
+import { PromoteToPublished } from './lib/ps-promote';
+import { BindUnitAndProtocol, DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
 import { Metadata, RunView, UserInfo, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import '@memberjunction/core-entities';
 import {
-  MJMLAlgorithmEntity,
   MJMLTrainingPipelineEntity,
-  MJMLTrainingRunEntity,
   MJRecordProcessEntity,
-  MJProcessRunEntity,
   PredictiveStudioTrainModelOperation,
   RecordProcessRunNowOperation,
   RecordProcessRunNowOutput,
@@ -170,35 +175,6 @@ async function connect(): Promise<{ md: Metadata; route: IMetadataProvider; user
   return { md, route, user };
 }
 
-/**
- * Resolve (or create) an ML Algorithm row whose DISPLAY NAME equals the sidecar driver
- * key. The TrainingEngine sends `pipeline.Algorithm` (the view's denormalized algorithm
- * NAME — NOT the DriverClass) to the sidecar, so we ensure a row whose Name IS the driver
- * key exists. Returns the row id + whether we created it (for cleanup).
- */
-async function ensureDriverNamedAlgorithm(md: Metadata, user: UserInfo): Promise<{ id: string; created: boolean }> {
-  const rv = new RunView();
-  const existing = await rv.RunView<{ ID: string }>(
-    { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${DRIVER_KEY}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
-    user,
-  );
-  if (existing.Success && existing.Results.length > 0) {
-    return { id: existing.Results[0].ID, created: false };
-  }
-  const algo = await md.GetEntityObject<MJMLAlgorithmEntity>('MJ: ML Algorithms', user);
-  algo.NewRecord();
-  algo.Name = DRIVER_KEY; // denormalized into vwMLTrainingPipelines.Algorithm → sent to sidecar
-  algo.Description = TAG;
-  algo.ProblemTypes = 'classification';
-  algo.DriverClass = DRIVER_KEY;
-  algo.SupportsFeatureImportance = true;
-  algo.Status = 'Active';
-  if (!(await algo.Save())) {
-    throw new Error(`Failed to create ML Algorithm: ${algo.LatestResult?.CompleteMessage}`);
-  }
-  return { id: algo.ID, created: true };
-}
-
 /** Resolve an entity's ID by name (throws if not found). */
 function entityId(md: Metadata, name: string): string {
   const e = md.EntityByName(name);
@@ -255,11 +231,8 @@ async function createPipeline(md: Metadata, user: UserInfo, algorithmId: string)
  * named via the `EntityID` FK; the substrate's `ProcessRunMeta.EntityID` (and the Filter source)
  * resolve from it, so the `ScopeFilter` is evaluated against `Memberships`.
  *
- * The `'ML Model'` value is a RUNTIME-registered work type (contributed by
- * `registerMLScoringProcessor`), NOT one of the codegen'd `WorkType` literals
- * (`'Action' | 'Agent' | 'FieldRules' | 'Infer'`). The strongly-typed setter therefore cannot
- * represent it — `.Set('WorkType', 'ML Model')` is the legitimate, documented exception here:
- * a valid runtime value the generated value-list union doesn't (and shouldn't) enumerate.
+ * The `'ML Model'` work type's processor is contributed at MJAPI boot by
+ * `registerMLScoringProcessor`; the value itself is one of the generated `WorkType` literals.
  */
 async function createRecordProcess(
   md: Metadata, user: UserInfo, membershipEntityId: string, modelId: string, scopeFilter: string,
@@ -283,8 +256,7 @@ async function createRecordProcess(
   rp.Description = TAG;
   rp.EntityID = membershipEntityId; // target entity = Memberships (Filter scope resolves against it)
   rp.Status = 'Active';
-  // 'ML Model' is runtime-registered, not in the generated WorkType union — see doc above.
-  rp.Set('WorkType', 'ML Model');
+  rp.WorkType = 'ML Model';
   rp.ScopeType = 'Filter';
   rp.ScopeFilter = scopeFilter; // explicit ID IN (...) over the small resolved row set
   rp.Configuration = JSON.stringify(mlConfiguration);
@@ -368,76 +340,6 @@ async function clearWrittenColumns(md: Metadata, user: UserInfo, rows: Membershi
   console.log(`  cleared prediction columns on ${cleared}/${rows.length} rows`);
 }
 
-/**
- * Best-effort cleanup: delete the Process Run(s) + their details (FK), the Record Process, the
- * model + its training run(s), the pipeline, and (if created) the algorithm — child→parent order.
- */
-async function cleanup(md: Metadata, user: UserInfo, ids: {
-  recordProcessId?: string; pipelineId?: string; modelId?: string;
-  runIds?: string[];
-  algorithmId?: string; algorithmCreated?: boolean;
-}): Promise<void> {
-  banner('CLEANUP');
-  const rv = new RunView();
-  const del = async (entity: string, id: string): Promise<void> => {
-    try {
-      const obj = await md.GetEntityObject<BaseEntity>(entity, user);
-      if (await obj.InnerLoad(CompositeKey.FromID(id))) {
-        const ok = await obj.Delete();
-        console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} ${entity} ${id}${ok ? '' : ` — ${obj.LatestResult?.CompleteMessage}`}`);
-      }
-    } catch (e) {
-      console.log(`  skip ${entity} ${id}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
-  // The RunNow runs (+ their per-record details) FK the Record Process, so they MUST be deleted
-  // child→parent: Process Run Details → Process Runs → Record Process. Gather the run IDs from
-  // BOTH the captured RunNow outputs (the dry-run + apply runIds) AND a sweep by RecordProcessID,
-  // so nothing is missed even if a run id wasn't captured.
-  const runIdSet = new Set<string>((ids.runIds ?? []).filter((id): id is string => !!id));
-  if (ids.recordProcessId) {
-    const runs = await rv.RunView<{ ID: string }>(
-      { EntityName: 'MJ: Process Runs', Fields: ['ID'], ExtraFilter: `RecordProcessID='${ids.recordProcessId}'`, ResultType: 'simple', BypassCache: true }, user,
-    );
-    for (const run of runs.Results ?? []) {
-      runIdSet.add(run.ID);
-    }
-  }
-
-  for (const runId of runIdSet) {
-    // 1) details first (they FK the Process Run)
-    const details = await rv.RunView<MJProcessRunEntity>(
-      { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${runId}'`, ResultType: 'entity_object', BypassCache: true }, user,
-    );
-    for (const d of details.Results ?? []) {
-      const ok = await d.Delete();
-      if (!ok) {
-        console.log(`  FAILED to delete MJ: Process Run Details ${d.ID} — ${d.LatestResult?.CompleteMessage}`);
-      }
-    }
-    // 2) then the Process Run itself
-    await del('MJ: Process Runs', runId);
-  }
-
-  // 3) now the Record Process is FK-free and can be deleted.
-  if (ids.recordProcessId) await del('MJ: Record Processes', ids.recordProcessId);
-
-  // Training runs reference the pipeline (and the model); delete them before the model/pipeline.
-  if (ids.pipelineId) {
-    const trainingRuns = await rv.RunView<MJMLTrainingRunEntity>(
-      { EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${ids.pipelineId}'`, ResultType: 'entity_object', BypassCache: true }, user,
-    );
-    for (const r of trainingRuns.Results ?? []) {
-      const ok = await r.Delete();
-      console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} MJ: ML Training Runs ${r.ID}`);
-    }
-  }
-  if (ids.modelId) await del('MJ: ML Models', ids.modelId);
-  if (ids.pipelineId) await del('MJ: ML Training Pipelines', ids.pipelineId);
-  if (ids.algorithmId && ids.algorithmCreated) await del('MJ: ML Algorithms', ids.algorithmId);
-}
-
 /** Pretty-print a RunNow output line. */
 function describeRun(out: RecordProcessRunNowOutput): string {
   return `status=${out.status} processed=${out.processed} success=${out.success} error=${out.error} skipped=${out.skipped}` +
@@ -448,13 +350,11 @@ async function main(): Promise<void> {
   const t0 = Date.now();
   const { md, route, user } = await connect();
 
-  let recordProcessId: string | undefined;
-  let pipelineId: string | undefined;
-  let modelId: string | undefined;
-  let algorithm: { id: string; created: boolean } | undefined;
-  // RunNow run IDs (dry-run + apply) captured from each output, so cleanup can target their
-  // Process Run Details → Process Runs explicitly (child→parent) before deleting the Record Process.
-  const runIds: string[] = [];
+  // Cleanup deletes what these record: the pipeline and its unit and protocol, and the model with
+  // everything hanging off it (the Record Process whose configuration names it, its Process Runs,
+  // run details and watermarks, the training runs, the snapshot and the stored files).
+  const records = new RunRecords();
+  let algorithm: RigAlgorithm | undefined;
   // Rows we read back — captured so cleanup can NULL out whatever the write-back persisted,
   // even if a later step threw.
   let readbackRows: MembershipReadback[] = [];
@@ -480,14 +380,17 @@ async function main(): Promise<void> {
     if (!hasClassCol || !hasScoreCol) {
       throw new Error(`Prediction columns missing on Memberships — codegen the ${CLASS_COLUMN} / ${SCORE_COLUMN} columns first.`);
     }
-    algorithm = await ensureDriverNamedAlgorithm(md, user);
-    console.log(`  Algorithm row: ${algorithm.id} (Name='${DRIVER_KEY}', ${algorithm.created ? 'created' : 'reused'})`);
+    algorithm = await EnsureDriverAlgorithm(route, user, DRIVER_KEY, TAG);
+    console.log(`  Algorithm row: ${algorithm.ID} (driver '${DRIVER_KEY}', ${algorithm.Created ? 'created' : 'reused'})`);
 
     // ── 2. Create the renewal pipeline ───────────────────────────────────────
-    banner('2. CREATE ML TRAINING PIPELINE');
-    const pipeline = await createPipeline(md, user, algorithm.id);
-    pipelineId = pipeline.ID;
+    banner('2. CREATE ML TRAINING PIPELINE + BIND UNIT AND PROTOCOL');
+    const pipeline = await createPipeline(md, user, algorithm.ID);
+    records.RecordPipeline(pipeline.ID);
     console.log(`  Pipeline ${pipeline.ID}`);
+    // Training refuses a pipeline without a Prediction Unit (UNIT_REQUIRED): bind version 1 of each, saved over GraphQL.
+    await BindUnitAndProtocol(route, user, pipeline, records);
+    console.log(`  Bound Prediction Unit ${pipeline.PredictionUnitID} and Evaluation Protocol ${pipeline.EvaluationProtocolID}`);
     console.log(`  Target: Memberships.Status (classification), Algorithm=${DRIVER_KEY}`);
     console.log(`  Features: select[AutoRenew, MembershipType] + onehot[MembershipType]`);
 
@@ -505,12 +408,16 @@ async function main(): Promise<void> {
       throw new Error(`Training failed: ${trainResult.ErrorMessage}`);
     }
     const out = trainResult.Output;
-    modelId = out.modelId;
-    console.log(`  modelId       = ${out.modelId}`);
+    const shippedModelId = ShippedModelID(out, 'publish and score through a Record Process', check);
+    if (shippedModelId === null) throw new Error(`Training shipped no model to publish and score through a Record Process: ${out.gateOutcome ?? 'no gate decision'}.`);
+    records.RecordModel(shippedModelId);
+    console.log(`  modelId       = ${shippedModelId}`);
     console.log(`  trainingRunId = ${out.trainingRunId}`);
     console.log(`  status        = ${out.status}`);
     console.log(`  leakageFlagged= ${out.leakageFlagged}`);
     console.log(`  holdoutMetrics= ${out.holdoutMetrics ?? '(none)'}`);
+    // Scoring refuses a Draft model (MODEL_NOT_SCORABLE), so promote it to Published first.
+    console.log(`  promoted      → ${await PromoteToPublished(route, user, shippedModelId, TAG)}`);
 
     // ── 4. Resolve a small, deterministic scope + create the SAVED Record Process ──────
     banner('4. RESOLVE SCOPE + CREATE MJ: Record Processes (WorkType=ML Model)');
@@ -519,11 +426,10 @@ async function main(): Promise<void> {
     // Record Process scope, both RunNow overrides, the read-back, and the verify — one row set.
     const scope = await resolveScopeIDs(user);
     console.log(`  Scope: ${scope.ids.length} Membership IDs → ScopeFilter = ID IN (… ${scope.ids.length} ids …)`);
-    const rp = await createRecordProcess(md, user, membership.ID, out.modelId, scope.filter);
-    recordProcessId = rp.ID;
+    const rp = await createRecordProcess(md, user, membership.ID, shippedModelId, scope.filter);
     console.log(`  Record Process ${rp.ID}`);
     console.log(`  WorkType='ML Model' (runtime-registered scorer), ScopeType='Filter' on Memberships`);
-    console.log(`  Configuration: {"modelId":"${out.modelId}","primaryKeyField":"ID"}`);
+    console.log(`  Configuration: {"modelId":"${shippedModelId}","primaryKeyField":"ID"}`);
     console.log(`  OutputMapping: {"fields":{"${CLASS_COLUMN}":"$.class","${SCORE_COLUMN}":"$.score"}}`);
 
     // Pre-clear the prediction columns on the scoped rows so the dry-run "wrote nothing" check is
@@ -547,7 +453,6 @@ async function main(): Promise<void> {
     if (!dryResult.Success || !dryResult.Output) {
       throw new Error(`Dry-run RunNow failed: ${dryResult.ErrorMessage}`);
     }
-    if (dryResult.Output.processRunID) runIds.push(dryResult.Output.processRunID);
     console.log(`  ${describeRun(dryResult.Output)}`);
     // A dry-run must NOT write — so 0 written-back rows is the PASS condition.
     const afterDry = await readBackPredictions(user, scope.filter);
@@ -570,7 +475,6 @@ async function main(): Promise<void> {
       throw new Error(`Apply RunNow failed: ${applyResult.ErrorMessage}`);
     }
     const a = applyResult.Output;
-    if (a.processRunID) runIds.push(a.processRunID);
     console.log(`  ${describeRun(a)}`);
     check(a.status === 'Completed', `RunNow status = Completed (got '${a.status}')`);
     check(a.success > 0, `RunNow scored > 0 records (success=${a.success})`);
@@ -597,10 +501,8 @@ async function main(): Promise<void> {
     } else {
       console.log('  (no read-back rows captured — nothing to clear)');
     }
-    await cleanup(md, user, {
-      recordProcessId, pipelineId, modelId, runIds,
-      algorithmId: algorithm?.id, algorithmCreated: algorithm?.created,
-    });
+    banner('CLEANUP');
+    failures += ReportCleanup(await DeleteRecordedRows(route, user, records, algorithm));
   }
   process.exit(failures > 0 ? 1 : 0);
 }

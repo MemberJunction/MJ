@@ -204,3 +204,78 @@ describe('BaseEntitySaveQueue', () => {
         ]);
     });
 });
+
+describe('BaseEntitySaveQueue.Settled (#6014)', () => {
+    it('lets a caller in another queue wait for a parent INSERT before it inserts a child row', async () => {
+        const order: string[] = [];
+        let releaseParent!: () => void;
+        const parentSaved = new Promise<void>((r) => { releaseParent = r; });
+        const parent = {
+            ID: 'log-1', EntityInfo: { Name: 'MJ: Action Execution Logs' }, LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async () => { await parentSaved; order.push('parent-landed'); return true; }),
+        } as unknown as BaseEntity;
+        const child = {
+            ID: 'detail-1', EntityInfo: { Name: 'MJ: Process Run Details' }, LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async () => { order.push('child-insert'); return true; }),
+        } as unknown as BaseEntity;
+
+        const engineQueue = new BaseEntitySaveQueue();   // ActionEngine._logQueue
+        const trackerQueue = new BaseEntitySaveQueue();  // GenericProcessRunTracker.detailQueue
+        engineQueue.Insert(parent);                      // the fire-and-forget 'started' INSERT
+        const parentLanded = engineQueue.Settled(parent); // the new query under test
+
+        setTimeout(releaseParent, 10);                   // the parent INSERT is still in flight
+        await parentLanded;
+        trackerQueue.Insert(child);
+        await Promise.all([engineQueue.Flush(), trackerQueue.Flush()]);
+
+        expect(order).toEqual(['parent-landed', 'child-insert']);
+    });
+});
+
+describe('BaseEntitySaveQueue.InsertWhen (#6045)', () => {
+    it('does not save before `ready` resolves, and Flush waits for the save', async () => {
+        const entity = fakeEntity();
+        const queue = new BaseEntitySaveQueue();
+        let release!: () => void;
+        const ready = new Promise<void>((r) => { release = r; });
+
+        queue.InsertWhen(entity, ready);
+        await new Promise((r) => setTimeout(r, 10));
+        expect(entity.Save).not.toHaveBeenCalled();
+
+        let flushed = false;
+        const flush = queue.Flush().then(() => { flushed = true; });
+        await new Promise((r) => setTimeout(r, 10));
+        expect(flushed).toBe(false);
+
+        release();
+        await flush;
+        expect(entity.Save).toHaveBeenCalledTimes(1);
+        expect(entity.calls).toEqual([{ ignoreDirtyState: undefined }]); // a normal INSERT, not a forced UPDATE
+    });
+
+    it('lets a child row in one queue wait for its parent row in another, without the caller awaiting', async () => {
+        const order: string[] = [];
+        let releaseParent!: () => void;
+        const parentSaved = new Promise<void>((r) => { releaseParent = r; });
+        const parent = {
+            ID: 'log-1', EntityInfo: { Name: 'MJ: Action Execution Logs' }, LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async () => { await parentSaved; order.push('parent-landed'); return true; }),
+        } as unknown as BaseEntity;
+        const child = {
+            ID: 'detail-1', EntityInfo: { Name: 'MJ: Process Run Details' }, LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async () => { order.push('child-insert'); return true; }),
+        } as unknown as BaseEntity;
+
+        const engineQueue = new BaseEntitySaveQueue();
+        const trackerQueue = new BaseEntitySaveQueue();
+        engineQueue.Insert(parent);
+        trackerQueue.InsertWhen(child, engineQueue.Settled(parent)); // queued at once, no await
+
+        setTimeout(releaseParent, 10);
+        await trackerQueue.Flush();
+
+        expect(order).toEqual(['parent-landed', 'child-insert']);
+    });
+});

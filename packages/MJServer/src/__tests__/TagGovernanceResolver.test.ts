@@ -10,12 +10,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * how errors are surfaced.
  */
 
-const { promoteCalls, rejectCalls, rebuildCalls, healthCalls, behaviorFlags } = vi.hoisted(() => ({
+const { promoteCalls, rejectCalls, rebuildCalls, healthCalls, mergeCalls, recomputeCalls, configCalls, behaviorFlags } = vi.hoisted(() => ({
     promoteCalls: [] as Array<{ id: string; strategy: unknown; user: unknown }>,
     rejectCalls: [] as Array<{ id: string; notes: string | null; user: unknown }>,
     rebuildCalls: [] as Array<{ user: unknown }>,
     healthCalls: [] as Array<{ thresholds: unknown; user: unknown }>,
-    behaviorFlags: { promoteThrows: false, rejectThrows: false, rebuildThrows: false, healthThrows: false },
+    mergeCalls: [] as Array<{ sourceTagIDs: string[]; survivingTagID: string; user: unknown }>,
+    recomputeCalls: [] as Array<{ user: unknown }>,
+    configCalls: [] as Array<{ forceRefresh: boolean; user: unknown }>,
+    behaviorFlags: { promoteThrows: false, rejectThrows: false, rebuildThrows: false, healthThrows: false, mergeThrows: false },
 }));
 
 vi.mock('@memberjunction/tag-engine', () => ({
@@ -30,10 +33,18 @@ vi.mock('@memberjunction/tag-engine', () => ({
                 rejectCalls.push({ id, notes, user });
                 if (behaviorFlags.rejectThrows) throw new Error('reject-fail');
             },
+            MergeTags: async (sourceTagIDs: string[], survivingTagID: string, user: unknown) => {
+                mergeCalls.push({ sourceTagIDs, survivingTagID, user });
+                if (behaviorFlags.mergeThrows) throw new Error('merge-fail');
+                return { ItemsMoved: 4, TaggedItemsMoved: 7 };
+            },
         },
     },
     TagEngine: {
         Instance: {
+            Config: async (forceRefresh: boolean, user: unknown) => {
+                configCalls.push({ forceRefresh, user });
+            },
             RebuildTagEmbeddings: async (user: unknown) => {
                 rebuildCalls.push({ user });
                 if (behaviorFlags.rebuildThrows) throw new Error('rebuild-fail');
@@ -56,6 +67,17 @@ vi.mock('@memberjunction/tag-engine', () => ({
         minEmbeddingSimilarity: 0.85,
         maxUsage: 2,
         maxImplicitChildren: 25,
+    },
+}));
+
+vi.mock('@memberjunction/tag-engine-base', () => ({
+    TagCoOccurrenceEngine: {
+        Instance: {
+            RecomputeCoOccurrence: async (user: unknown) => {
+                recomputeCalls.push({ user });
+                return { PairsUpdated: 12, PairsDeleted: 3 };
+            },
+        },
     },
 }));
 
@@ -98,10 +120,14 @@ describe('TagGovernanceResolver', () => {
         rejectCalls.length = 0;
         rebuildCalls.length = 0;
         healthCalls.length = 0;
+        mergeCalls.length = 0;
+        recomputeCalls.length = 0;
+        configCalls.length = 0;
         behaviorFlags.promoteThrows = false;
         behaviorFlags.rejectThrows = false;
         behaviorFlags.rebuildThrows = false;
         behaviorFlags.healthThrows = false;
+        behaviorFlags.mergeThrows = false;
         resolver = new TagGovernanceResolver();
     });
 
@@ -250,6 +276,38 @@ describe('TagGovernanceResolver', () => {
             expect(r.Success).toBe(false);
             expect(r.MergeCount).toBe(0);
             expect(r.ErrorMessage).toBe('health-fail');
+        });
+    });
+
+    // ---- MergeTags ---------------------------------------------------------
+
+    describe('MergeTags', () => {
+        it('calls TagEngine.Instance.Config first and delegates to TagGovernanceEngine.Instance.MergeTags', async () => {
+            const r = await resolver.MergeTags(['src-1'], 'surviving-1', ctx() as never);
+            expect(r.Success).toBe(true);
+            expect(r.ItemsMoved).toBe(4);
+            expect(r.TaggedItemsMoved).toBe(7);
+            expect(configCalls).toHaveLength(1);
+            expect(mergeCalls[0]).toMatchObject({ sourceTagIDs: ['src-1'], survivingTagID: 'surviving-1' });
+        });
+
+        it('maps engine errors into ErrorMessage', async () => {
+            behaviorFlags.mergeThrows = true;
+            const r = await resolver.MergeTags(['src-1'], 'surviving-1', ctx() as never);
+            expect(r.Success).toBe(false);
+            expect(r.ItemsMoved).toBe(0);
+            expect(r.TaggedItemsMoved).toBe(0);
+            expect(r.ErrorMessage).toBe('merge-fail');
+        });
+    });
+
+    // ---- RecomputeTagCoOccurrence ------------------------------------------
+
+    describe('RecomputeTagCoOccurrence', () => {
+        it('delegates to TagCoOccurrenceEngine.Instance.RecomputeCoOccurrence', async () => {
+            const r = await resolver.RecomputeTagCoOccurrence(ctx() as never);
+            expect(r).toEqual({ PairsUpdated: 12, PairsDeleted: 3 });
+            expect(recomputeCalls).toHaveLength(1);
         });
     });
 });

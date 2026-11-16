@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import type { BaseEntity, EntityInfo } from '@memberjunction/core';
+import type { BaseEntity, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import type { RecordRef, RecordProcessorContext, RecordResult } from '@memberjunction/record-set-processor-base';
 
 import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
 import type { ScoreRecordSetRequest, ScoreRecordSetResult } from '../score-record-set.action';
 import type { MLInferenceResultPayload } from '../../scoring/ml-model-inference-processor';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the Score Record Set runner's WRITE-BACK pass. NO live DB / sidecar.
@@ -105,9 +106,19 @@ function ref(id: string): RecordRef {
   return { EntityID: 'ent-members', RecordID: id };
 }
 function succeeded(score: number, klass?: string): RecordResult {
-  const payload: MLInferenceResultPayload = { modelId: 'm1', target: 'Renewed', problemType: 'classification', score, class: klass };
+  const payload: MLInferenceResultPayload = {
+    modelId: 'm1',
+    target: 'Renewed',
+    problemType: 'classification',
+    score,
+    class: klass,
+    scoredAt: '2026-10-23T00:00:00.000Z',
+    inTraining: false,
+  };
   return { Status: 'Succeeded', ResultPayload: payload };
 }
+/** Test double: write-back resolves targets through `resolveTargetEntity` (overridden above), never the provider. */
+const PROVIDER = { Name: 'writeback-test' } as unknown as IMetadataProvider;
 const MAPPING = { OutputMapping: { fields: { RenewalScore: '$.score', RenewalClass: '$.class' } } };
 
 describe('ProductionScoreRecordSetRunner write-back — Saves mapped fields', () => {
@@ -118,7 +129,7 @@ describe('ProductionScoreRecordSetRunner write-back — Saves mapped fields', ()
 
     const records = [ref('m1')];
     const results = [succeeded(0.83, 'renew')];
-    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING };
+    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING, provider: PROVIDER };
 
     const wb = await runner.applyWriteBackPublic(records, results, request);
 
@@ -139,13 +150,14 @@ describe('ProductionScoreRecordSetRunner write-back — Saves mapped fields', ()
   });
 
   it('reclassifies a record scored→failed when its Save fails', async () => {
+    const errors = ConsoleCapture.Errors();
     const runner = new TestableWriteBackRunner();
     runner.Entities.set('ok', new FakeEntity(['ID', 'RenewalScore', 'RenewalClass'], true));
     runner.Entities.set('bad', new FakeEntity(['ID', 'RenewalScore', 'RenewalClass'], false, 'FK violation'));
 
     const records = [ref('ok'), ref('bad')];
     const results = [succeeded(0.9, 'renew'), succeeded(0.1, 'lapse')];
-    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['ok', 'bad'] }, writeBack: MAPPING };
+    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['ok', 'bad'] }, writeBack: MAPPING, provider: PROVIDER };
 
     const wb = await runner.applyWriteBackPublic(records, results, request);
 
@@ -156,6 +168,7 @@ describe('ProductionScoreRecordSetRunner write-back — Saves mapped fields', ()
     expect(summary.scoredCount).toBe(1); // 'ok'
     expect(summary.failedCount).toBe(1); // 'bad' moved out of scored
     expect(summary.wroteBack).toBe(true);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("Score Record Set: write-back Save failed for record 'bad': FK violation")]);
   });
 });
 
@@ -167,7 +180,7 @@ describe('ProductionScoreRecordSetRunner write-back — dryRun & validation', ()
 
     const records = [ref('m1')];
     const results = [succeeded(0.83, 'renew')];
-    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING, dryRun: true };
+    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING, dryRun: true, provider: PROVIDER };
 
     const wb = await runner.applyWriteBackPublic(records, results, request);
 
@@ -182,13 +195,14 @@ describe('ProductionScoreRecordSetRunner write-back — dryRun & validation', ()
   });
 
   it('rejects an unknown target field name (no Save)', async () => {
+    const errors = ConsoleCapture.Errors();
     const runner = new TestableWriteBackRunner();
     const entity = new FakeEntity(['ID', 'RenewalScore'], true); // RenewalClass missing
     runner.Entities.set('m1', entity);
 
     const records = [ref('m1')];
     const results = [succeeded(0.83, 'renew')];
-    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING };
+    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING, provider: PROVIDER };
 
     const wb = await runner.applyWriteBackPublic(records, results, request);
 
@@ -197,6 +211,7 @@ describe('ProductionScoreRecordSetRunner write-back — dryRun & validation', ()
     expect(wb.wroteBack).toBe(false);
     expect(wb.failedIndexes.has(0)).toBe(true);
     expect(entity.SaveCalled).toBe(0);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("Score Record Set: write-back failed for record 'm1': 'RenewalClass' is not a field on entity 'Members'")]);
   });
 
   it('treats the boolean write-back form as "no mapping to apply here" (no write)', async () => {
@@ -206,7 +221,7 @@ describe('ProductionScoreRecordSetRunner write-back — dryRun & validation', ()
 
     const records = [ref('m1')];
     const results = [succeeded(0.83, 'renew')];
-    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: true };
+    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: true, provider: PROVIDER };
 
     const wb = await runner.applyWriteBackPublic(records, results, request);
 

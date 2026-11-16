@@ -414,6 +414,18 @@ describe('PostgreSQLDialect', () => {
             expect(result).toBe('TEXT');
         });
 
+        it('should map a NVARCHAR / VARCHAR wider than PostgreSQL allows to TEXT', () => {
+            // PostgreSQL caps VARCHAR(n) at 10485760.
+            expect(dialect.TypeMap.MapTypeToString('NVARCHAR', 10485761)).toBe('TEXT');
+            expect(dialect.TypeMap.MapTypeToString('VARCHAR', 10485761)).toBe('TEXT');
+            expect(dialect.TypeMap.MapTypeToString('NVARCHAR', 2147483646)).toBe('TEXT');
+        });
+
+        it('should keep NVARCHAR / VARCHAR at the PostgreSQL ceiling bounded', () => {
+            expect(dialect.TypeMap.MapTypeToString('NVARCHAR', 10485760)).toBe('VARCHAR(10485760)');
+            expect(dialect.TypeMap.MapTypeToString('VARCHAR', 10485760)).toBe('VARCHAR(10485760)');
+        });
+
         it('should map BIT to BOOLEAN', () => {
             const result = dialect.TypeMap.MapTypeToString('BIT');
             expect(result).toBe('BOOLEAN');
@@ -490,6 +502,29 @@ describe('PostgreSQLDialect', () => {
             expect(dialect.TypeMap.MapTypeToString('TIMESTAMPTZ')).toBe('TIMESTAMPTZ');
             expect(dialect.TypeMap.MapTypeToString('BYTEA')).toBe('BYTEA');
             expect(dialect.TypeMap.MapTypeToString('JSONB')).toBe('JSONB');
+        });
+    });
+
+    describe('ResolveAbstractType string widths', () => {
+        const str = (maxLength?: number) => dialect.ResolveAbstractType({ type: 'string', maxLength });
+
+        it('resolves a width past the VARCHAR ceiling to TEXT, as SQL Server falls back to NVARCHAR(MAX)', () => {
+            // PostgreSQL caps VARCHAR(n) at 10485760, and a width past 2^31-1 is not even an integer to the
+            // parser: VARCHAR(2147483946) failed a whole CREATE TABLE ("syntax error at or near 2147483946").
+            expect(str(10485761)).toBe('TEXT');
+            expect(str(2147483946)).toBe('TEXT');
+            expect(str(Number.MAX_SAFE_INTEGER)).toBe('TEXT');
+        });
+
+        it('keeps the ceiling itself, ordinary widths and no width bounded', () => {
+            expect(str(10485760)).toBe('VARCHAR(10485760)');
+            expect(str(555)).toBe('VARCHAR(555)');
+            expect(str(undefined)).toBe('VARCHAR(255)');
+        });
+
+        it('casts to TEXT when asked for a bounded string wider than the ceiling', () => {
+            expect(dialect.CastToBoundedString('x', 10485761)).toBe('CAST(x AS TEXT)');
+            expect(dialect.CastToBoundedString('x', 450)).toBe('CAST(x AS VARCHAR(450))');
         });
     });
 

@@ -4,52 +4,59 @@
 <!-- [![npm version](https://img.shields.io/npm/v/@memberjunction/ai-vector-dupe)](https://www.npmjs.com/package/@memberjunction/ai-vector-dupe) -->
 <!-- [![build](https://img.shields.io/github/actions/workflow/status/MemberJunction/MJ/ci.yml?branch=next)](https://github.com/MemberJunction/MJ/actions) -->
 
-**AI-powered duplicate record detection for MemberJunction entities** -- finds, scores, tracks, and optionally auto-merges duplicate records using vector similarity, hybrid search (RRF), and optional reranking, with an optional **LLM reasoning layer** that judges borderline matches per-candidate before they ever reach a human.
+**AI-powered duplicate record detection for MemberJunction entities** -- finds, scores, tracks, and optionally auto-merges duplicate records using vector similarity and hybrid search (RRF), with an optional **LLM reasoning layer** that judges borderline matches per-candidate before they ever reach a human, and an **entry-time check** that flags likely duplicates while a person is still typing a new record.
 
 > **Two-stage by design.** Vector/hybrid search is the cheap, fast recall stage; the LLM reasoning layer is an *opt-in, threshold-gated* precision stage. Reasoning is **off by default** and, when enabled, only fires for matched sets whose top vector score clears a per-entity `ReasoningThreshold` -- so you pay for the LLM only on the matches that are actually ambiguous. See [LLM Reasoning Layer](#llm-reasoning-layer).
+
+> **The whole feature, end to end.** This README is the package reference. Setting an entity up, running and reviewing detection, the merge engine and every configuration knob are covered in the **[Duplicate Management Guide](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md)**.
 
 ---
 
 ## Architecture
 
 ```
-                         +--------------------------+
-                         |   DuplicateRecordDetector |
-                         |   (extends VectorBase)    |
-                         +-----+----------+---------+
-                               |          |
-              +----------------+          +----------------+
-              |                                            |
-    +---------v----------+                     +-----------v---------+
-    | GetDuplicateRecords|                     |  CheckSingleRecord  |
-    | (list-based batch) |                     |  (single record)    |
-    +--------+-----------+                     +-----------+---------+
-             |                                             |
-             +-------------------+-------------------------+
-                                 |
-                    +------------v------------+
-                    |    Detection Pipeline   |
-                    +-------------------------+
-                    | 1. Validate Entity Doc  |
-                    | 2. Vectorize records    |
-                    | 3. Embed via AI model   |
-                    | 4. Query vector DB      |
-                    |    (hybrid if supported)|
-                    | 5. Filter self-matches  |
-                    | 6. Apply thresholds     |
-                    | 7. LLM reasoning (opt-in,|
-                    |    threshold-gated)     |
-                    | 8. Persist match results|
-                    | 9. Auto-merge (optional)|
-                    +-------------------------+
-                                 |
-              +------------------+------------------+
-              |                  |                   |
-    +---------v------+  +-------v--------+  +-------v--------+
-    | ai-vector-sync |  | ai-vectordb    |  | ai (Embeddings)|
-    | (vectorizer,   |  | (VectorDBBase, |  | (BaseEmbeddings|
-    |  templates)    |  |  hybrid query) |  |  GetAIAPIKey)  |
-    +----------------+  +----------------+  +----------------+
+                              +-----------------------------+
+                              |   DuplicateRecordDetector   |
+                              |     (extends VectorBase)    |
+                              +--+-----------+-----------+--+
+                                 |           |           |
+          +----------------------+           |           +----------------------+
+          |                                  |                                  |
++---------v-----------+       +--------------v-------+       +------------------v---+
+| GetDuplicateRecords |       |  CheckSingleRecord   |       |  CheckRecordValues   |
+| (batch: list, view, |       |  (one saved record,  |       |  (unsaved values,    |
+|  filter, or entity) |       |   nothing persisted) |       |   entry-time, flags) |
++---------+-----------+       +--------------+-------+       +------------------+---+
+          |                                  |                                  |
+          +----------------------------------+----------------------------------+
+                                             |
+                               +-------------v--------------+
+                               |     Detection Pipeline     |
+                               +----------------------------+
+                               | 1. Resolve Entity Document |
+                               | 2. Re-vectorize (opt-in)   |
+                               | 3. Render template + embed |
+                               | 4. Query vector DB         |
+                               |    (hybrid if supported)   |
+                               | 5. Drop self, ghost and    |
+                               |    record-filtered matches |
+                               | 6. Apply potential-match   |
+                               |    threshold, trim to TopK |
+                               | 7. LLM reasoning (opt-in,  |
+                               |    threshold-gated)        |
+                               | 8. Persist match results   |
+                               |    (batch runs only)       |
+                               | 9. Auto-merge (see below)  |
+                               +----------------------------+
+                                             |
+              +------------------------------+-------------------------------+
+              |                              |                               |
+    +---------v------+             +---------v------+             +----------v--------+
+    | ai-vector-sync |             | ai-vectordb    |             | ai-prompts        |
+    | (vectorizer,   |             | (VectorDBBase, |             | (AIEmbeddingRunner|
+    |  templates,    |             |  hybrid query) |             |  AIPromptRunner,  |
+    |  record filter)|             |                |             |  AIDecisionRunner)|
+    +----------------+             +----------------+             +-------------------+
 ```
 
 **Key dependencies:**
@@ -91,9 +98,10 @@ import { PotentialDuplicateRequest } from '@memberjunction/core';
 const detector = new DuplicateRecordDetector();
 
 const request: PotentialDuplicateRequest = {
-    ListID: 'your-list-uuid',
+    ListID: 'your-list-uuid',       // or ViewID, or ExtraFilter, or none of them for the whole entity
     EntityID: 'your-entity-uuid',
     EntityDocumentID: 'your-entity-document-uuid',
+    RecordIDs: [],                  // required by the type; batch runs read the records from the list/view/filter
     Options: {
         TopK: 10,
         OnProgress: (progress) => {
@@ -105,6 +113,9 @@ const request: PotentialDuplicateRequest = {
 const response = await detector.GetDuplicateRecords(request, contextUser);
 
 if (response.Status === 'Success') {
+    // PotentialDuplicateResult is capped at 1,000 entries (ResultsTruncated says so);
+    // the persisted Duplicate Run Detail Match rows are the full record of the run.
+    console.log(`${response.TotalRecordsWithDuplicates} records have potential duplicates`);
     for (const result of response.PotentialDuplicateResult) {
         console.log(`Record: ${result.RecordCompositeKey.ToString()}`);
         for (const dupe of result.Duplicates) {
@@ -155,13 +166,16 @@ Options are passed via the `Options` property on `PotentialDuplicateRequest`, or
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `TopK` | `number` | `5` | Number of nearest neighbors to retrieve per record |
-| `DuplicateRunID` | `string` | -- | Resume an existing duplicate run (batch mode only) |
-| `KeywordSearchWeight` | `number` | `0.3` | Weight for keyword search in hybrid mode (0.0 = vector only, 1.0 = keyword only). Vector weight is `1.0 - KeywordSearchWeight`. |
-| `FusionMethod` | `string` | `'rrf'` | Fusion method for hybrid search. Currently supports `'rrf'` (Reciprocal Rank Fusion). |
-| `PotentialMatchThreshold` | `number` | -- | Override the EntityDocument's PotentialMatchThreshold for this run |
-| `AbsoluteMatchThreshold` | `number` | -- | Override the EntityDocument's AbsoluteMatchThreshold for this run |
-| `OnProgress` | `(progress: DuplicateDetectionProgress) => void` | -- | Callback for real-time progress reporting |
+| `TopK` | `number` | `5` | Number of nearest neighbors to keep per record. With a record filter set, the query asks for `3 x TopK` and trims back after filtering. |
+| `DuplicateRunID` | `string` | -- | Load and continue an existing Duplicate Run (batch mode only). Processing resumes at the run's `LastProcessedOffset`. |
+| `Revectorize` | `boolean` | `false` | Run `EntityVectorSyncer.VectorizeEntity` for the document before detecting. Off by default: detection assumes vectors already exist. |
+| `PotentialMatchThreshold` | `number` | -- | Override the Entity Document's `PotentialMatchThreshold` for this run. |
+| `AbsoluteMatchThreshold` | `number` | -- | Override the Entity Document's `AbsoluteMatchThreshold` for this run (drives auto-merge). |
+| `KeywordSearchWeight` | `number` | `0.3` | Hybrid search only: keyword weight (0.0 = vector only, 1.0 = keyword only). Sent to the provider as `Alpha = 1 - KeywordSearchWeight`. |
+| `FusionMethod` | `'rrf' \| 'weighted'` | `'rrf'` | Hybrid search only: passed through to the vector database's `HybridQuery`. |
+| `OnProgress` | `(progress: DuplicateDetectionProgress) => void` | -- | Callback for real-time progress reporting. |
+| `ReRankingEnabled`, `ReRankingModelID`, `ReRankingTopK` | -- | -- | **Declared on the interface but not implemented** by `DuplicateRecordDetector`; setting them has no effect. See [Reranking](#reranking). |
+| `IncrementalOnly` | `boolean` | -- | **Declared on the interface but not implemented**; every run checks every record in its scope. |
 
 ### Thresholds
 
@@ -172,19 +186,21 @@ Thresholds can be configured at two levels -- on the `EntityDocument` record (de
 | `PotentialMatchThreshold` | Minimum similarity score to report a candidate as a potential duplicate |
 | `AbsoluteMatchThreshold` | Minimum similarity score to trigger automatic record merge |
 
-A server hook normalizes `1.0` thresholds to sensible defaults (`0.70` for potential, `0.95` for absolute) to prevent degenerate behavior when thresholds are left at the maximum.
+When a run is started by saving a `MJ: Duplicate Runs` record (the dashboard path), the server entity (`MJDuplicateRunEntityServer`) treats a threshold `<= 0` or `>= 1.0` as unconfigured and substitutes `0.70` (potential) or `0.95` (absolute), then passes both as per-run overrides. Calling `GetDuplicateRecords` directly applies the document's values as they are.
+
+> **Auto-merge without reasoning.** With `EnableLLMReasoning = false`, any candidate at or above `AbsoluteMatchThreshold` is **merged automatically** at the end of a batch run when the entity has `AllowRecordMerge = true` -- `AutomationLevel` is ignored on that path. Keep `AbsoluteMatchThreshold` high (or `AllowRecordMerge` off) until you trust the scores. See [Auto-merge](#auto-merge).
 
 ---
 
 ## Hybrid Search and Reciprocal Rank Fusion (RRF)
 
-When the configured vector database supports hybrid search (`VectorDBBase.SupportsHybridSearch === true`), the detector automatically combines **vector similarity** and **keyword search** for higher-quality results.
+When the configured vector database supports hybrid search (`VectorDBBase.SupportsHybridSearch === true`), the detector calls `HybridQuery` instead of `QueryIndex`, combining **vector similarity** and **keyword search**. Today only the colocated pgvector provider (`PgVectorColocatedDatabase`) reports hybrid support; the Simple Vector Service, Pinecone, Qdrant, SQL Server and standalone pgvector providers run pure vector queries, so `KeywordSearchWeight` and `FusionMethod` have no effect there.
 
 ### How It Works
 
 1. The record's template text is sent as both a vector embedding and a keyword query.
 2. The vector DB returns results from both retrieval methods.
-3. Results are fused using **Reciprocal Rank Fusion (RRF)**, a rank-based algorithm that is score-scale independent.
+3. The vector DB fuses them with the requested `FusionMethod` (`'rrf'`, **Reciprocal Rank Fusion**, by default -- a rank-based algorithm that is score-scale independent).
 
 ### RRF Formula
 
@@ -196,10 +212,10 @@ Where `rank_i(d)` is the 1-based rank of document `d` in list `i`, and `k` is a 
 
 ### Using ComputeRRF Directly
 
-The `ComputeRRF` utility is exported for use in custom pipelines:
+`ComputeRRF` lives in `@memberjunction/core`; this package still re-exports it for backward compatibility, but new code should import it from core:
 
 ```typescript
-import { ComputeRRF, ScoredCandidate } from '@memberjunction/ai-vector-dupe';
+import { ComputeRRF, ScoredCandidate } from '@memberjunction/core';
 
 const vectorResults: ScoredCandidate[] = [
     { ID: 'rec-1', Score: 0.95 },
@@ -228,14 +244,7 @@ const fused = ComputeRRF([vectorResults, keywordResults], 60);
 
 ## Reranking
 
-When MJ's `BaseReranker` / `RerankerService` is configured, the detector can apply a second-stage reranking pass after initial retrieval. Reranking uses a cross-encoder model to re-score candidates with higher precision than embedding-based similarity alone.
-
-Reranking is especially effective when:
-- Initial retrieval returns many borderline candidates
-- Entity records have complex, multi-field structures
-- You need to maximize precision at the cost of slightly higher latency
-
-See the [Duplicate Detection Guide](docs/DUPLICATE_DETECTION_GUIDE.md#reranking-integration) for configuration details.
+`DuplicateDetectionOptions` declares `ReRankingEnabled`, `ReRankingModelID` and `ReRankingTopK`, but `DuplicateRecordDetector` does **not** apply a reranking pass today: the options are accepted and ignored. Candidates are ordered by the vector (or hybrid) score the vector database returns. For a precision stage on top of vector recall, use the [LLM Reasoning Layer](#llm-reasoning-layer), which judges each candidate individually.
 
 ---
 
@@ -312,6 +321,41 @@ The output also carries a proposed `SurvivorRecordID` and per-field survivor cho
 
 ---
 
+## Entry-Time Check
+
+`CheckRecordValues` checks the values a person is entering for a **new** record and flags existing records that look like the same thing. It saves, merges and blocks nothing. The `CheckDuplicateEntry` GraphQL mutation (in `@memberjunction/server`) and `GraphQLAIClient.CheckDuplicateEntry` (in `@memberjunction/graphql-dataprovider`) expose it to clients, and `@memberjunction/ng-base-forms` calls it from new-record forms.
+
+```typescript
+import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
+
+const detector = new DuplicateRecordDetector(provider);
+const result = await detector.CheckRecordValues('Accounts', { Name: 'Acme Corp', City: 'Boston' }, contextUser);
+if (result.Status === 'Checked') {
+    for (const c of result.Candidates) {
+        console.log(`${c.DisplayName}: vector ${c.VectorScore}, probability ${c.Probability ?? 'unknown'}`);
+    }
+}
+```
+
+- **The switch.** The check runs only for an entity with an **Active** entity document that has `EnableLLMReasoning = true` and `ReasoningMode` of `'Decision'` or `'DecisionThenPrompt'`. Otherwise the result is `NotConfigured`. When several documents qualify, the oldest (earliest `__mj_CreatedAt`, then lowest ID) wins.
+- **Candidates.** The values become an unsaved entity object (each text value cut to `DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH`, 500 characters), rendered by the document's template, embedded and queried with the same TopK and potential-match threshold as `CheckSingleRecord`.
+- **Permission.** The candidates are narrowed to the records the context user can read, with one `RunView` as that user. A context user is required.
+- **Decision.** One typed-decision call (`DecisionReasoningProvider.DecideCandidates`) over the readable candidates, in either mode -- the prompt half of `'DecisionThenPrompt'` is too slow for typing. The decision state carries at most `DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS` (40) differing fields, the entered ones first. A candidate is flagged when the decision bands it `Uncertain` (calibrated probability at or above `DecisionReasoningProvider.UncertainAbove`), or when the decision gave no answer for it.
+- **Failure.** A failed decision, or a decision from a model with no calibration, flags nothing and returns `Failed` with the reason.
+- **Budget.** The whole check is bounded by `options.TimeoutMS` (default `DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS`, 2,000 ms) and `options.CancellationToken`; the decision's model call is aborted with it. A check that runs out of time is `Failed`.
+
+## Auto-Merge
+
+After a batch run (`GetDuplicateRecords`) has processed every record, the detector merges the eligible pairs with `Metadata.MergeRecords`, using the **source record as the survivor** and applying the reasoner's resolved field map when there is one. Nothing is merged when the entity has `AllowRecordMerge = false`; the matches are kept for manual review. `CheckSingleRecord` and `CheckRecordValues` never merge.
+
+| `EnableLLMReasoning` | `AutomationLevel` | A candidate auto-merges when |
+|---|---|---|
+| `false` | *(ignored)* | its vector score is at or above `AbsoluteMatchThreshold` |
+| `true` | `ReviewAll` or `LLMGated` | never |
+| `true` | `AutoMergeAboveAbsolute` | its vector score is at or above `AbsoluteMatchThreshold` **and** the set's recommendation is `Merge` **and** the candidate's own verdict is `Merge` |
+
+Each merge is guarded on its own: a failure is logged and the run continues. A successful merge sets the match row's `MergeStatus = 'Complete'`, `Action = 'Merged'` and `MergedAt`.
+
 ## Progress Reporting
 
 The `OnProgress` callback fires at each phase of the pipeline:
@@ -333,7 +377,8 @@ const request: PotentialDuplicateRequest = {
 
 | Phase | Description |
 |---|---|
-| `Vectorizing` | Records are being vectorized via `EntityVectorSyncer` |
+| `Vectorizing` | Records are being vectorized via `EntityVectorSyncer` (only with `Revectorize: true`) |
+| `Loading` | The ids of the records to check are being loaded |
 | `Embedding` | Template texts are being embedded via the AI model |
 | `Querying` | Vector DB is being queried for each record |
 | `Matching` | Results are being persisted and match records created |
@@ -343,7 +388,7 @@ const request: PotentialDuplicateRequest = {
 
 ```typescript
 interface DuplicateDetectionProgress {
-    Phase: 'Vectorizing' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
+    Phase: 'Vectorizing' | 'Loading' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
     TotalRecords: number;
     ProcessedRecords: number;
     MatchesFound: number;
@@ -360,8 +405,10 @@ interface DuplicateDetectionProgress {
 
 | Method | Signature | Description |
 |---|---|---|
-| `GetDuplicateRecords` | `(params: PotentialDuplicateRequest, contextUser?: UserInfo) => Promise<PotentialDuplicateResponse>` | Run batch duplicate detection for all records in a list |
-| `CheckSingleRecord` | `(EntityDocumentID: string, RecordID: CompositeKey, Options?: DuplicateDetectionOptions, ContextUser?: UserInfo) => Promise<PotentialDuplicateResult>` | Check a single record for duplicates |
+| `constructor` | `(provider?: IMetadataProvider \| null)` | Pass the request-scoped provider on a server so every read and write uses that connection. |
+| `GetDuplicateRecords` | `(params: PotentialDuplicateRequest, contextUser?: UserInfo) => Promise<PotentialDuplicateResponse>` | Batch detection over a list (`ListID`), a saved view (`ViewID`), an `ExtraFilter`, or the whole entity. Persists a Duplicate Run, its details and matches, then auto-merges eligible pairs. |
+| `CheckSingleRecord` | `(EntityDocumentID: string, RecordID: CompositeKey, Options?: DuplicateDetectionOptions, ContextUser?: UserInfo) => Promise<PotentialDuplicateResult>` | Check one saved record. Runs reasoning when the gate opens; persists nothing and never merges. Throws when the document or record is missing. |
+| `CheckRecordValues` | `(entityName: string, values: Record<string, unknown>, contextUser: UserInfo, options?: DuplicateEntryCheckOptions) => Promise<DuplicateEntryCheckResult>` | Entry-time check of unsaved values. Flags only; never throws. See [Entry-Time Check](#entry-time-check). |
 | `ParseVectorMatches` | `(queryResponse: BaseResponse, sourceKey?: CompositeKey) => PotentialDuplicateResult` | Parse raw vector DB response into typed results |
 
 ### ComputeRRF
@@ -419,15 +466,18 @@ The package reads from and writes to these MJ entities:
 |---|---|
 | `MJ: Entity Documents` | Configuration: template, AI model, vector DB, thresholds, **and the reasoning config** (`EnableLLMReasoning`, `ReasoningMode`, `ReasoningThreshold`, `ReasoningPromptID`, `ReasoningAgentID`, `AutomationLevel`) |
 | `MJ: Lists` / `MJ: List Details` | Source records to check for duplicates |
-| `MJ: Duplicate Runs` | Tracks each detection run (status, timing) |
+| `MJ: Duplicate Runs` | Tracks each detection run: status, timing, the Entity Document used, progress (`TotalItemCount`, `ProcessedItemCount`), the resume cursor (`LastProcessedOffset`) and `CancellationRequested` |
 | `MJ: Duplicate Run Details` | Per-record tracking within a run; includes `RecordMetadata` (vector DB metadata snapshot) |
 | `MJ: Duplicate Run Detail Matches` | Individual match results with probability scores; includes `RecordMetadata` and, when reasoning ran, the per-candidate LLM verdict columns (recommendation, confidence, reasoning, and `AIPromptRunID`/`AIAgentRunID`) |
+| `MJ: Record Merge Logs` / `MJ: Record Merge Deletion Logs` | Written by `MergeRecords` for every auto-merge (one log per merge, one deletion log per merged-away record) |
 
 ---
 
 ## Further Reading
 
-- **[Duplicate Detection Guide](docs/DUPLICATE_DETECTION_GUIDE.md)** -- comprehensive developer guide covering end-to-end workflow, threshold tuning, hybrid search deep dive, performance optimization, and troubleshooting
+- **[Duplicate Management Guide](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md)** -- the end-to-end guide: entity setup, vectorization, running and reviewing detection, LLM reasoning, the entry-time check, merging, configuration reference and troubleshooting
+- **[Record Comparison](../../../RecordComparison/README.md)** -- the field-delta engine behind the reasoning input and the merge comparison panel
+- **[Agents](../../Agents/README.md)** -- home of the `'Agent'`-mode reasoning provider
 - **[MemberJunction AI Vectors](../Core/README.md)** -- base vector infrastructure
 - **[AI Vector Sync](../Sync/README.md)** -- entity vectorization and template parsing
 

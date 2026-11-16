@@ -13,13 +13,405 @@
       "UsesTemplate": true,
       "IsMaterialized": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/ai-usage-daily.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "79C777E7-C521-48A8-BB90-C8DD4A6E9FA7"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.442Z",
+            "checksum": "9ce4348a1e82404a272416c9f0640b074eeafb0700206f35a1245fda91e8e5d6"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "start",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Optional start date filter for the AI usage facts. Guarded by truthiness check — empty or falsy values will skip this filter.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "24426B6F-C75E-4995-9278-7EC4189F8D19"
+          }
+        },
+        {
+          "fields": {
+            "Name": "end",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Optional end date filter for the AI usage facts. Guarded by truthiness check — empty or falsy values will skip this filter.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "FBF83FAF-ACEE-4536-96A6-0A608E92AC5D"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "DayBucket",
+            "Description": "The UTC day bucket for the AI usage runs.",
+            "IsSummary": false,
+            "ComputationDescription": "CAST(x.BucketStartUTC AS DATE)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "54140B7E-759A-471A-B42A-44BE37D99D43"
+          }
+        },
+        {
+          "fields": {
+            "Name": "BucketStartUTC",
+            "Description": "The exact start timestamp of the bucket in UTC.",
+            "IsSummary": false,
+            "ComputationDescription": "Truncated RunAt timestamp to the start of the day in UTC",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "806A6961-75BA-407E-9538-89C99EBD049A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "BucketEndUTC",
+            "Description": "The end timestamp of the bucket in UTC (exactly 1 day after BucketStartUTC).",
+            "IsSummary": false,
+            "ComputationDescription": "DATEADD(day, 1, x.BucketStartUTC)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "68DB23F5-B7C9-441E-A801-768CED211030"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentID",
+            "Description": "The unique identifier of the AI Agent.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "EE08D2D7-1112-4DC5-A820-2231E6916374"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentTypeID",
+            "Description": "The Type ID of the AI Agent.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E982F54A-A2F3-4FE6-A136-09FFD82753E5"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PromptID",
+            "Description": "The unique identifier of the Prompt.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A7539FAE-C674-41E3-95D3-F698DA8E34EF"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ModelID",
+            "Description": "The unique identifier of the AI Model used.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B66CF925-55FD-46FD-8FEF-27088BF3B378"
+          }
+        },
+        {
+          "fields": {
+            "Name": "VendorID",
+            "Description": "The unique identifier of the AI Vendor.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "76552B36-35F4-4D2D-88D6-AF17A3CF9ACE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserID",
+            "Description": "The unique identifier of the user who initiated the run.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "628D3F50-9C4F-4C62-AF83-2DD1E1A951A9"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryScopeEntityID",
+            "Description": "The entity scope identifier for the run context.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E5F0F015-AB84-42C2-A934-6E9C15085C13"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryScopeRecordID",
+            "Description": "The record scope identifier for the run context.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "32231051-73D4-4D5A-B917-9B882DAE425A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ConfigurationID",
+            "Description": "The configuration identifier associated with the run.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "267ED02D-419F-4490-B157-F4D4BCB6CAFD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SourceKind",
+            "Description": "The source kind from which the run originated.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9EA25668-A65E-4E01-A80C-A01463FD4C3A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CostCurrency",
+            "Description": "The currency used for pricing cost calculations.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7DA80149-B044-415C-961D-1D9A53BDFA87"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Runs",
+            "Description": "Total count of non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "900BBDC8-0962-487B-A9ED-804B8E6C1D20"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SucceededRuns",
+            "Description": "Total count of successful non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.Success = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1559285C-585A-4111-BEB4-DADDA1D2C7CA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "FailedRuns",
+            "Description": "Total count of failed non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.Success = 0 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DF5EEC73-8506-4656-AEDF-9E7A9AAA1502"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PricedRuns",
+            "Description": "Total count of priced non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsPriced = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "78E9E55F-398C-45C2-AAA4-C02E8C6E7B6B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UnpricedRuns",
+            "Description": "Total count of unpriced non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsPriced = 0 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E2333EC4-B228-4A63-82C4-09758A337A9F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UnmeasuredRuns",
+            "Description": "Total count of unmeasured non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsUnmeasured = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C89DE23C-89B3-4004-B7DC-BD097AC910C5"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParallelParents",
+            "Description": "Total count of parallel parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C90BECD6-5226-48F0-8E0E-8A97DF56151F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensPrompt",
+            "Description": "Sum of prompt tokens for non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensPrompt ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0280902E-D9A7-4122-B4A9-B4495DADCE90"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCompletion",
+            "Description": "Sum of completion tokens for non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensCompletion ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "2F2A79FB-64AB-47B4-91EF-EA8BBF8843CB"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCacheRead",
+            "Description": "Sum of cache read tokens for non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensCacheRead ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0F8D683B-C911-4FD1-891D-931B6E58FE33"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCacheWrite",
+            "Description": "Sum of cache write tokens for non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensCacheWrite ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3EE24367-DFFC-49B6-BAB8-3DEA92F51CED"
+          }
+        },
+        {
+          "fields": {
+            "Name": "OwnCost",
+            "Description": "Sum of own cost for priced non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsPriced = 1 THEN x.OwnCost ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "70CB7274-EE1E-4E56-9778-8E1A9374DCC0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatencyP50",
+            "Description": "Median latency (50th percentile) of execution time for non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "MAX(x.LatencyP50) where LatencyP50 is calculated using PERCENTILE_CONT(0.5)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "61D88F95-115B-4916-8BC5-190C464BD535"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatencyP95",
+            "Description": "95th percentile latency of execution time for non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "MAX(x.LatencyP95) where LatencyP95 is calculated using PERCENTILE_CONT(0.95)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DB543F65-4167-4DB4-B9C9-C50CD6A73DA5"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AvgFirstTokenMS",
+            "Description": "Average time to first token for non-parallel-parent runs.",
+            "IsSummary": true,
+            "ComputationDescription": "AVG(CASE WHEN x.IsParallelParent = 0 THEN x.FirstTokenTime END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "EF263A98-DEA1-4487-BC3A-F4775D6FA1CA"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "360AAF50-A00C-4B27-B66A-37D455238E8D"
     },
     "sync": {
-      "lastModified": "2026-09-29T19:20:38.577Z",
-      "checksum": "9be349d164cd505f94e02033a3baeeb833ac09f6abb0d6ab46ea30b7147ebf7b"
+      "lastModified": "2026-10-28T22:14:01.578Z",
+      "checksum": "0bf976e1fa152d870cbc049018eeadaebedab65434ff83b8f7252d8e91964753"
     }
   }
 ]

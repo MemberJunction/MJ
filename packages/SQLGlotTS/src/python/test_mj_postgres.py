@@ -526,6 +526,16 @@ check("MONEY/SMALLMONEY → DECIMAL(19,4)/DECIMAL(10,4)",
       must_contain=['"Amount" DECIMAL(19, 4)', '"Tip" DECIMAL(10, 4)'],
       must_not_contain=["MONEY"])
 
+# --- TINYINT mapping (issue #5364 item 10) ----------------------------------------
+# The T-SQL reader parses TINYINT as UTINYINT (SS TINYINT is unsigned); the stock Postgres
+# generator emitted `UTINYINT`, which is not a PostgreSQL type.
+check("TINYINT → SMALLINT in CREATE TABLE, ADD COLUMN and CAST",
+      "CREATE TABLE ${flyway:defaultSchema}.Flagged (Flags TINYINT NOT NULL DEFAULT 0);\n"
+      "ALTER TABLE ${flyway:defaultSchema}.Flagged ADD Level TINYINT NULL;\n"
+      "SELECT CAST(1 AS TINYINT);",
+      must_contain=['"Flags" SMALLINT NOT NULL', 'ADD COLUMN "Level" SMALLINT NULL', 'CAST(1 AS SMALLINT)'],
+      must_not_contain=["TINYINT"])
+
 # --- BIT registry survives a poison statement in the same batch -------------------
 check("poison statement doesn't wipe BIT registration for other tables in its batch",
       "SELECT FROM FROM;\n"

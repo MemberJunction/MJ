@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { ChatAgentsOverlayComponent } from './chat-overlay.component';
+import { describe, it, expect, vi } from 'vitest';
+import { EventEmitter } from '@angular/core';
+import { IMetadataProvider } from '@memberjunction/core';
+import { MJConversationEntity } from '@memberjunction/core-entities';
+import { ChatAgentsOverlayComponent, OverlayConversationSwitchedEvent } from './chat-overlay.component';
 
 function createOverlayWithContext(appContext: Record<string, unknown> | null): ChatAgentsOverlayComponent {
     const instance = Object.create(ChatAgentsOverlayComponent.prototype) as ChatAgentsOverlayComponent;
@@ -50,5 +53,49 @@ describe('ChatAgentsOverlayComponent.ActiveRecordContext', () => {
             OutgoingLinksCount: 2,
             IncomingLinksCount: 4
         });
+    });
+
+    it('resolves ActiveRecordEntityId and ActiveLinkedRecordId and keeps record-bound conversations off the global workspace bridge', () => {
+        const setActiveSpy = vi.fn();
+        const overlay = Object.assign(
+            createOverlayWithContext({
+                AdditionalContext: {
+                    Form: {
+                        Entity: 'Contracts',
+                        RecordPrimaryKey: 'ID|C-101'
+                    }
+                }
+            }),
+            {
+                Provider: {
+                    Entities: [{ ID: 'E-CONTRACTS-1', Name: 'Contracts' }]
+                } as unknown as IMetadataProvider,
+                RecordConversations: [] as MJConversationEntity[],
+                ConversationSwitched: new EventEmitter<OverlayConversationSwitchedEvent>(),
+                bridge: {
+                    SetActiveFromOverlay: setActiveSpy
+                }
+            }
+        ) as ChatAgentsOverlayComponent;
+
+        expect(overlay.ActiveRecordEntityId).toBe('E-CONTRACTS-1');
+        expect(overlay.ActiveLinkedRecordId).toBe('C-101');
+
+        const recordConvo = {
+            ID: 'CONV-REC-1',
+            Name: 'Contract Review',
+            LinkedEntityID: 'E-CONTRACTS-1',
+            LinkedRecordID: 'C-101'
+        } as unknown as MJConversationEntity;
+
+        overlay.OnConversationCreated({
+            conversation: recordConvo,
+            pendingMessage: 'Summarize this contract'
+        });
+
+        expect(overlay.ConversationId).toBe('CONV-REC-1');
+        expect(overlay.RecordConversations).toHaveLength(1);
+        // Record-bound chats must NOT be published to the global workspace bridge
+        expect(setActiveSpy).toHaveBeenCalledWith(null);
     });
 });

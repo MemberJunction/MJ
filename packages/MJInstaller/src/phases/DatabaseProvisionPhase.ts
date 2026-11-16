@@ -476,7 +476,7 @@ export class DatabaseProvisionPhase {
     emitter.Emit('log', {
       Type: 'log',
       Level: 'verbose',
-      Message: `${labels.Server} reachable at ${host}:${port} (${connectivity.LatencyMs}ms).`,
+      Message: `${labels.Server} port reachable at ${host}:${port} (${connectivity.LatencyMs}ms); sign-in not checked yet.`,
     });
 
     // Step 3: Is the database already set up?

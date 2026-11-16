@@ -1,0 +1,174 @@
+import { Component, Input } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { EvaluationViews, type EvaluationRunState, type EvaluationView, type IntervalCell, type UncoveredField } from './evaluation-view';
+
+/**
+ * L1 widget: a training run's protocol results — outcome and reason, the rows the run read, kept and excluded (with the
+ * snapshot's uncovered history rows), test-set scores with intervals, baselines on the
+ * same rows, improvement over the flat guess, candidates (the finalist's inner score labelled optimistic when the search chose
+ * among several), calibration
+ * and leakage flags — or, for a run without protocol results, why: never evaluated under a protocol, not finished,
+ * refused at a stage, or unreadable. Renders the state it is given; reads no data.
+ */
+@Component({
+  standalone: true,
+  selector: 'mj-ps-evaluation-results',
+  imports: [CommonModule],
+  styleUrls: ['../ps-widgets.css'],
+  template: `
+    @if (EvaluatedView; as v) {
+      <section class="ps-eval" data-testid="ps-eval">
+        <header [class]="'ps-eval-outcome outcome-' + v.Outcome" data-testid="ps-eval-outcome">
+          <strong>{{ v.OutcomeTitle }}</strong>
+          <span class="ps-eval-headline">{{ v.Headline }}</span>
+          <p class="ps-eval-reason" data-testid="ps-eval-reason">{{ v.Reason }}</p>
+        </header>
+
+        <h4>Rows — data as of {{ v.Rows.DataCutoff }}</h4>
+        <table class="ps-eval-table" data-testid="ps-eval-rows">
+          <tbody>
+            <tr><td>Rows read</td><td>{{ v.Rows.Read }}</td></tr>
+            <tr><td>Resolved (trained and tested on)</td><td>{{ v.Rows.Resolved }}</td></tr>
+            <tr><td>Censored (outcome not yet known)</td><td>{{ v.Rows.Censored }}</td></tr>
+            <tr><td>Label already known at the decision date</td><td>{{ v.Rows.LabelKnown }}</td></tr>
+            <tr><td>Empty label</td><td>{{ v.Rows.EmptyLabel }}</td></tr>
+            <tr><td>Duplicates removed</td><td>{{ v.Rows.Duplicates }}</td></tr>
+          </tbody>
+        </table>
+        <div data-testid="ps-eval-uncovered">
+          @switch (v.Rows.Uncovered.Kind) {
+            @case ('counted') {
+              @if (UncoveredFields(v).length === 0) {
+                <p class="ps-muted">Uncovered history rows excluded: none.</p>
+              } @else {
+                <p class="ps-muted">Uncovered history rows excluded:</p>
+                <ul>
+                  @for (u of UncoveredFields(v); track u.Entity + '.' + u.Field) { <li>{{ u.Entity }}.{{ u.Field }}: {{ u.Rows }}</li> }
+                </ul>
+              }
+            }
+            @case ('no-snapshot') { <p class="ps-muted">Uncovered history rows: this run has no Training Snapshot to count them.</p> }
+            @default { <p class="ps-refusals">Uncovered history rows: the Training Snapshot's stored counts cannot be read.</p> }
+          }
+        </div>
+
+        <h4>Test set — {{ v.Holdout.Rows }} rows, read once</h4>
+        <table class="ps-eval-table" data-testid="ps-eval-scores">
+          <thead><tr><th>Metric</th><th>Value [95% interval]</th></tr></thead>
+          <tbody>
+            <tr><td>{{ v.Holdout.Metric }} (primary)</td><td>{{ Cell(v.Holdout.Cell) }}</td></tr>
+            @for (m of v.Secondary; track m.Metric) { <tr><td>{{ m.Metric }}</td><td>{{ Cell(m.Cell) }}</td></tr> }
+          </tbody>
+        </table>
+
+        <h4>Baselines on the same rows</h4>
+        <table class="ps-eval-table">
+          <thead><tr><th>Baseline</th><th>Role</th><th>{{ v.Holdout.Metric }} [95% interval]</th></tr></thead>
+          <tbody>
+            @for (b of v.Baselines; track b.Name) { <tr data-testid="ps-eval-baseline"><td>{{ b.Name }}</td><td>{{ b.Role }}</td><td>{{ Cell(b.Cell) }}</td></tr> }
+          </tbody>
+        </table>
+
+        <h4>Improvement over the flat guess (higher is better)</h4>
+        <table class="ps-eval-table" data-testid="ps-eval-versus-flat">
+          <tbody>
+            @for (r of v.VersusFlatGuess; track r.Member) { <tr><td>{{ r.Member }}</td><td>{{ Cell(r.Cell) }}</td></tr> }
+          </tbody>
+        </table>
+
+        <h4>Candidates — inner cross-validation on development rows</h4>
+        <table class="ps-eval-table" data-testid="ps-eval-candidates">
+          <tbody>
+            @for (s of v.InnerScores; track s.Candidate) {
+              <tr>
+                <td>{{ s.Candidate }}</td><td>{{ Cell(s.Cell) }}</td>
+                <td>@if (s.IsFinalist) { <span class="ps-eval-optimistic" data-testid="ps-eval-optimistic" [title]="FinalistNote(v)">{{ FinalistTag(v) }}</span> }</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        @if (v.Calibration; as c) {
+          <h4>Calibration</h4>
+          <p data-testid="ps-eval-calibration">{{ c.Method }} · slope {{ c.Slope }} · intercept {{ c.Intercept }}</p>
+          <table class="ps-eval-table">
+            <thead><tr><th>Predicted range</th><th>Mean predicted</th><th>Observed</th><th>Rows</th></tr></thead>
+            <tbody>
+              @for (b of c.Bins; track b.Range) { <tr><td>{{ b.Range }}</td><td>{{ b.Predicted }}</td><td>{{ b.Observed }}</td><td>{{ b.N }}</td></tr> }
+            </tbody>
+          </table>
+        }
+
+        @if (v.OperatingPoint; as op) {
+          <h4>At the review capacity</h4>
+          <p data-testid="ps-eval-operating-point">Precision in the top {{ op.Capacity }}: {{ Cell(op.Precision) }} (base rate {{ op.BaseRate }})</p>
+        }
+
+        <h4>Leakage audit</h4>
+        @if (v.LeakageFlags.length === 0) {
+          <p data-testid="ps-eval-leakage-none">No leakage flags.</p>
+        } @else {
+          <ul class="ps-eval-flags" data-testid="ps-eval-leakage">
+            @for (f of v.LeakageFlags; track f) { <li>{{ f }}</li> }
+          </ul>
+        }
+      </section>
+    } @else if (State; as st) {
+      @switch (st.Kind) {
+        @case ('not-finished') { <p class="ps-eval-empty" data-testid="ps-eval-not-finished">This run has not finished yet ({{ RunStatusText }}).</p> }
+        @case ('refused') { <p class="ps-refusals" data-testid="ps-eval-refused">This run was refused at the {{ RefusedStage }} stage: {{ Detail }}</p> }
+        @case ('unreadable') { <p class="ps-refusals" data-testid="ps-eval-unreadable">This run's stored results cannot be read: {{ Detail }}</p> }
+        @default { <p class="ps-eval-empty" data-testid="ps-eval-empty">This run was not evaluated under an Evaluation Protocol.</p> }
+      }
+    }
+  `,
+})
+export class PSEvaluationResultsComponent {
+  /** The run's results state (`EvaluationViews.DescribeRun`); null renders nothing (no run read yet). */
+  @Input() State: EvaluationRunState | null = null;
+
+  /** The view when the run was evaluated under a protocol; null otherwise. */
+  public get EvaluatedView(): EvaluationView | null {
+    return this.State !== null && this.State.Kind === 'evaluated' ? this.State.View : null;
+  }
+
+  public get RunStatusText(): string {
+    return this.State !== null && this.State.Kind === 'not-finished' ? this.State.RunStatus : '';
+  }
+
+  public get RefusedStage(): string {
+    return this.State !== null && this.State.Kind === 'refused' ? this.State.Stage : '';
+  }
+
+  public get Detail(): string {
+    return this.State !== null && (this.State.Kind === 'refused' || this.State.Kind === 'unreadable') ? this.State.Detail : '';
+  }
+
+  /** The uncovered fields of a counted snapshot; empty otherwise. */
+  public UncoveredFields(v: EvaluationView): readonly UncoveredField[] {
+    return v.Rows.Uncovered.Kind === 'counted' ? v.Rows.Uncovered.Fields : [];
+  }
+
+  /**
+   * The finalist tag's text. "Optimistic" only when the search chose among several candidates: a lone candidate was never
+   * selected, so its inner score carries no selection bias.
+   */
+  public FinalistTag(v: EvaluationView): string {
+    return v.InnerScores.length < 2 ? 'only candidate' : 'finalist · optimistic';
+  }
+
+  /**
+   * The finalist tag's tooltip. "Best of several tries" only when the search had more than one candidate and the gate
+   * shipped the finalist; a lone candidate was never selected, and a finalist the gate did not ship is not the winner.
+   */
+  public FinalistNote(v: EvaluationView): string {
+    if (v.InnerScores.length < 2) return "The only candidate's inner cross-validation score on the development rows.";
+    if (v.Outcome === 'model') return "The winner's inner score was the best of several tries, so it is optimistic.";
+    return `The finalist's inner cross-validation score, chosen among ${v.InnerScores.length} candidates; the gate did not ship it.`;
+  }
+
+  /** A value with its interval, as the tables show it. */
+  public Cell(c: IntervalCell): string {
+    return EvaluationViews.FormatInterval(c);
+  }
+}

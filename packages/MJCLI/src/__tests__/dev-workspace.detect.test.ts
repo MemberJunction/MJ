@@ -120,7 +120,7 @@ describe('DetectCandidates', () => {
     expect(candidates.map((c) => c.Name)).toEqual(['bizapps-real']);
   });
 
-  it('loads member metadata the builders need (root manifest, packages, turbo.json)', () => {
+  it('loads member metadata the builders need (root manifest, packages) and ignores a member turbo.json', () => {
     parent = CreateFixtureParent({
       'bizapps-x': {
         RootPackageJson: { name: 'x', devDependencies: { turbo: '^2.5.0' } },
@@ -133,7 +133,7 @@ describe('DetectCandidates', () => {
     expect(candidate.RootPackageJson.devDependencies).toEqual({ turbo: '^2.5.0' });
     expect(candidate.Packages).toHaveLength(1);
     expect(candidate.Packages[0].RelPath).toBe('packages/Entities');
-    expect(candidate.TurboJson).toBe('{"tasks":{}}');
+    expect(Object.keys(candidate)).not.toContain('TurboJson'); // #4913: no longer copied to the parent
     expect(candidate.Path).toBe(path.join(parent, 'bizapps-x'));
   });
 
@@ -275,7 +275,7 @@ describe('LoadRepo', () => {
     const locked = LoadRepo(parent, 'locked')!;
     const lockfile = locked.Lockfile;
     if (lockfile?.Kind !== 'pnpm') throw new Error(`expected a pnpm lockfile, got ${lockfile?.Kind}`);
-    expect(lockfile.Direct).toEqual([{ Name: 'chalk', Version: '5.6.2' }]);
+    expect(lockfile.Direct).toEqual([{ Name: 'chalk', Version: '5.6.2', Importer: '.' }]);
     expect(LoadRepo(parent, 'bare')!.Lockfile).toBeNull();
   });
 

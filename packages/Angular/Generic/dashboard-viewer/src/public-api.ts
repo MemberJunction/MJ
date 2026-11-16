@@ -30,6 +30,8 @@ export * from './lib/dialogs/part-dialog/dashboard-part-dialog.component';
 export * from './lib/dialogs/dashboard-name-dialog/dashboard-name-dialog.component';
 export * from './lib/dialogs/add-panel-dialog/add-panel-dialog.component';
 export * from './lib/dialogs/edit-part-dialog/edit-part-dialog.component';
+export * from './lib/dialogs/properties-dialog/dashboard-properties-dialog.component';
+export * from './lib/dialogs/property-default-editor/property-default-editor.component';
 export * from './lib/config-dialogs/confirm-dialog.component';
 
 // Base Classes for Extensibility
@@ -41,17 +43,23 @@ export * from './lib/config-panels/weburl-config-panel.component';
 export * from './lib/config-panels/view-config-panel.component';
 export * from './lib/config-panels/query-config-panel.component';
 export * from './lib/config-panels/artifact-config-panel.component';
+export * from './lib/config-panels/component-config-panel.component';
 
 // Runtime Part Components (pluggable renderers loaded via ClassFactory)
 export * from './lib/parts/weburl-part.component';
 export * from './lib/parts/view-part.component';
 export * from './lib/parts/query-part.component';
 export * from './lib/parts/artifact-part.component';
+export * from './lib/parts/component-part.component';
 
 // Types and Models
 export * from './lib/models/dashboard-types';
 export * from './lib/models/dashboard-layout-editor';
 export * from './lib/models/remove-part-confirm';
+export * from './lib/models/dashboard-properties';
+export * from './lib/models/dashboard-config-validator';
+export * from './lib/models/dashboard-part-interfaces';
+export * from './lib/models/part-inputs-editor';
 
 // Services
 export * from './lib/services/golden-layout-wrapper.service';

@@ -1,11 +1,17 @@
-import { Component } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
+import { MarkdownService } from '@memberjunction/ng-markdown';
+import { MountInteractiveDiagram, type DiagramViewerInstance } from '@memberjunction/ai-diagrams/viewer';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 
 /**
- * Viewer component for SVG artifacts
+ * Viewer component for SVG artifacts.
+ *
+ * Every preview goes through `MountInteractiveDiagram`: the SVG is sanitized with DOMPurify's SVG
+ * profile (via `MarkdownService.SanitizeHtml`) and shown in a shadow root, so its own `<style>` stays
+ * inside the preview. When it carries the MJ Diagram SVG Data Contract (`data-mj-diagram="1"`), it gets
+ * the interactive viewer with click-to-inspect node details and upstream/downstream path tracing.
  */
 @Component({
   standalone: false,
@@ -13,26 +19,24 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
   template: `
     <div class="svg-artifact-viewer" [ngClass]="cssClass">
       <div class="svg-toolbar">
-        <button class="btn-icon" [class.active]="viewMode === 'preview'"
-                title="Preview" (click)="viewMode = 'preview'">
-          <i class="fas fa-eye"></i> Preview
+        <button class="btn-icon" [class.active]="ViewMode === 'preview'"
+                title="Preview" (click)="ViewMode = 'preview'">
+          <i class="fa-solid fa-eye"></i> Preview
         </button>
-        <button class="btn-icon" [class.active]="viewMode === 'source'"
-                title="Source" (click)="viewMode = 'source'">
-          <i class="fas fa-code"></i> Source
+        <button class="btn-icon" [class.active]="ViewMode === 'source'"
+                title="Source" (click)="ViewMode = 'source'">
+          <i class="fa-solid fa-code"></i> Source
         </button>
-        <button class="btn-icon" title="Copy SVG" (click)="onCopy()">
-          <i class="fas fa-copy"></i> Copy
+        <button class="btn-icon" title="Copy SVG" (click)="OnCopy()">
+          <i class="fa-solid fa-copy"></i> Copy
         </button>
       </div>
       <div class="svg-content-container">
-        @if (viewMode === 'preview') {
-          <div class="svg-preview">
-            <div class="svg-wrapper" [innerHTML]="safeSvgContent"></div>
-          </div>
+        @if (ViewMode === 'preview') {
+          <div #previewHost class="svg-preview"></div>
         } @else {
           <mj-code-editor
-            [(ngModel)]="svgContent"
+            [(ngModel)]="SvgContent"
             [language]="'xml'"
             [readonly]="readonly"
             style="width: 100%; height: 100%;">
@@ -54,14 +58,15 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
       align-items: center;
       gap: 8px;
       padding: 8px;
-      background: #f5f5f5;
-      border-bottom: 1px solid #ddd;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .btn-icon {
       padding: 6px 12px;
-      background: white;
-      border: 1px solid #ccc;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       cursor: pointer;
       font-size: 12px;
@@ -71,14 +76,14 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
     }
 
     .btn-icon:hover {
-      background: #e9ecef;
-      border-color: #999;
+      background: var(--mj-bg-surface-hover);
+      border-color: var(--mj-border-strong);
     }
 
     .btn-icon.active {
-      background: #007acc;
-      color: white;
-      border-color: #007acc;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
+      border-color: var(--mj-brand-primary);
     }
 
     .svg-content-container {
@@ -87,30 +92,27 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
     }
 
     .svg-preview {
-      padding: 20px;
-      background: white;
-      height: 100%;
-      overflow: auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .svg-wrapper {
-      max-width: 100%;
-      max-height: 100%;
-    }
-
-    .svg-wrapper ::ng-deep svg {
-      max-width: 100%;
-      max-height: 100%;
-      height: auto;
+      padding: 12px;
+      min-height: 100%;
+      box-sizing: border-box;
+      background: var(--mj-bg-surface);
     }
   `]
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'SvgArtifactViewerPlugin')
-export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponent {
+export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
   public SvgContent = '';
+
+  /** Mounts the SVG when the preview host appears and tears the viewer down when it goes (source view, destroy). */
+  @ViewChild('previewHost')
+  private set previewHost(ref: ElementRef<HTMLElement> | undefined) {
+    this.destroyInteractiveViewer();
+    if (ref) {
+      this.viewerInstance = MountInteractiveDiagram(ref.nativeElement, this.SvgContent, (raw) => this.markdownService.SanitizeHtml(raw));
+    }
+  }
+
+  private viewerInstance: DiagramViewerInstance | null = null;
 
   /** @deprecated Use {@link SvgContent}. */
   public get svgContent() {
@@ -119,16 +121,6 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   /** @deprecated Use {@link SvgContent}. */
   public set svgContent(value) {
     this.SvgContent = value;
-  }
-  public SafeSvgContent: SafeHtml = '';
-
-  /** @deprecated Use {@link SafeSvgContent}. */
-  public get safeSvgContent(): SafeHtml {
-    return this.SafeSvgContent;
-  }
-  /** @deprecated Use {@link SafeSvgContent}. */
-  public set safeSvgContent(value: SafeHtml) {
-    this.SafeSvgContent = value;
   }
   public ViewMode: 'preview' | 'source' = 'preview';
 
@@ -148,14 +140,23 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     return true;
   }
 
-  constructor(private sanitizer: DomSanitizer) {
+  constructor(private markdownService: MarkdownService) {
     super();
   }
 
   ngOnInit(): void {
     this.SvgContent = this.getContent();
-    // For SVG, we use sanitize with SecurityContext.HTML (1) to allow safe rendering
-    this.SafeSvgContent = this.sanitizer.sanitize(1, this.SvgContent) || '';
+  }
+
+  ngOnDestroy(): void {
+    this.destroyInteractiveViewer();
+  }
+
+  private destroyInteractiveViewer(): void {
+    if (this.viewerInstance) {
+      this.viewerInstance.Destroy();
+      this.viewerInstance = null;
+    }
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {

@@ -12,7 +12,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { BaseEntity, BaseEntityEvent, CompositeKey, RunView } from '@memberjunction/core';
 import { ResourceData, KnowledgeHubMetadataEngine, MJScheduledJobEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual, NormalizeUUID, MJGlobal, MJEventType } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, NormalizeUUID, uuidv4, MJGlobal, MJEventType } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -662,7 +662,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             Fields: ['ID'],
             ResultType: 'count_only',
         });
-        this.InboxPendingCount = result.Success ? result.TotalRowCount : 0;
+        this.InboxPendingCount = result.Success ? result.TotalRowCount ?? 0 : 0;
     }
 
     /**
@@ -693,7 +693,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             Fields: ['ID'],
             ResultType: 'count_only',
         });
-        this.HealthPendingCount = result.Success ? result.TotalRowCount : 0;
+        this.HealthPendingCount = result.Success ? result.TotalRowCount ?? 0 : 0;
     }
 
     /**
@@ -810,9 +810,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
             // Use TotalRowCount for accurate KPI/badge counts (the Results arrays are
             // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count)
-            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
-            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
-            this.totalRunHistoryCount = runsResult.Success ? runsResult.TotalRowCount : 0;
+            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount ?? 0 : 0;
+            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount ?? 0 : 0;
+            this.totalRunHistoryCount = runsResult.Success ? runsResult.TotalRowCount ?? 0 : 0;
 
             // Load Scheduled Job entities referenced by sources so cron descriptions are available
             await this.loadScheduledJobsForSources();
@@ -1039,7 +1039,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             });
             if (result.Success) {
                 this.contentRunsRaw = result.Results;
-                this.totalRunHistoryCount = result.TotalRowCount;
+                this.totalRunHistoryCount = result.TotalRowCount ?? 0;
             }
         }
     }
@@ -1292,13 +1292,18 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.emitAgentContext();
         this.cdr.detectChanges();
 
+        const requestedRunID = uuidv4();
+        let teardownSubscription = this.subscribeToPipelineProgress(requestedRunID);
+
         try {
             const aiClient = new GraphQLAIClient(provider);
-            const result = await aiClient.RunAutotagPipeline(
-                contentSourceIDs ? { contentSourceIDs } : undefined
-            );
+            const result = await aiClient.RunAutotagPipeline({
+                ...(contentSourceIDs ? { contentSourceIDs } : {}),
+                pipelineRunID: requestedRunID,
+            });
 
             if (!result.Success || !result.PipelineRunID) {
+                teardownSubscription();
                 this.IsRunning = false;
                 this.RunStage = '';
                 this.emitAgentContext();
@@ -1310,14 +1315,18 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             }
 
             this.CurrentPipelineRunID = result.PipelineRunID;
+            if (!UUIDsEqual(result.PipelineRunID, requestedRunID)) {
+                teardownSubscription();
+                teardownSubscription = this.subscribeToPipelineProgress(result.PipelineRunID);
+            }
             this.pipelineActivityID = this.activityService.Start('Classify pipeline', {
                 icon: 'fa-solid fa-bolt',
                 detail: 'Starting…',
                 progress: 0,
             });
-            this.subscribeToPipelineProgress(result.PipelineRunID);
             MJNotificationService.Instance.CreateSimpleNotification('Classification pipeline started…', 'info', 3000);
         } catch (error) {
+            teardownSubscription();
             const msg = error instanceof Error ? error.message : String(error);
             console.error('[Autotagging] Error starting pipeline:', msg);
             this.IsRunning = false;
@@ -1421,7 +1430,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
     }
 
-    private subscribeToPipelineProgress(pipelineRunID: string): void {
+    private subscribeToPipelineProgress(pipelineRunID: string): () => void {
         const provider = this.ProviderToUse as GraphQLDataProvider;
         const subscriptionQuery = `
             subscription PipelineProgress($pipelineRunID: String!) {
@@ -1479,6 +1488,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                             `Pipeline complete — ${lastProcessedItems} ${lastProcessedItems === 1 ? 'item' : 'items'} processed`,
                             'success', 4000
                         );
+                    } else if (this.totalContentItemCount > 0) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Pipeline complete — 0 new or modified items (all ${this.totalContentItemCount} ingested items are up to date).`,
+                            'info', 5000
+                        );
                     } else {
                         MJNotificationService.Instance.CreateSimpleNotification(
                             'Pipeline complete — 0 items processed. This source has no ingested content yet; add/crawl & vectorize content first.',
@@ -1508,13 +1522,16 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
                 const stage = progress['Stage'] as string;
                 const pct = progress['PercentComplete'] as number;
+                const totalItems = Number(progress['TotalItems'] ?? 0);
                 const currentItem = progress['CurrentItem'] as string | undefined;
                 const processedItems = progress['ProcessedItems'] as number | undefined;
                 if (typeof processedItems === 'number') {
                     lastProcessedItems = processedItems;
                 }
 
-                this.RunProgress = Math.min(100, Math.max(0, pct));
+                if (totalItems > 0 || stage === 'vectorize' || stage === 'complete') {
+                    this.RunProgress = Math.min(100, Math.max(0, pct));
+                }
                 this.RunStage = this.formatStageName(stage);
                 this.RunCurrentItem = currentItem ?? '';
                 this.updateStagesForActiveRun(stage);
@@ -1539,6 +1556,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 finishPipeline(false);
             }
         });
+
+        return () => {
+            if (idleTimer) clearTimeout(idleTimer);
+            rxSub.unsubscribe();
+        };
     }
 
     private updateStagesForActiveRun(activeStageCode: string): void {

@@ -16,7 +16,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch, FormatEntityRecordDisplayTitle, ResolveRecordTabDisplayTitle, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch, FormatEntityRecordDisplayTitle, ResolveRecordTabDisplayTitle, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery, FindMovedNavItem, FindMovedNavItemApp, ResolveMovedNavItem } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -36,6 +36,7 @@ import { MJUserEntity, InstanceConfigEngine, InteractiveFormsEngine, UserInfoEng
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
+import { MJDiagnosticsService } from '@memberjunction/ng-diagnostics';
 import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -757,6 +758,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   /** Warms the React runtime (CDN scripts) after login; see InitializeShell(). Field-injected so the constructor signature is unchanged. */
   private reactAdapter = inject(AngularAdapterService);
+  private diagnosticsService = inject(MJDiagnosticsService, { optional: true });
+  public DiagnosticDialogOpen = false;
 
   constructor(
     private appManager: ApplicationManager,
@@ -834,8 +837,23 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.DeveloperModeService = value;
   }
 
+  /** Adds each finished navigation to the diagnostics breadcrumb trail. */
+  private subscribeRouteBreadcrumbs(): void {
+    const diagnostics = this.diagnosticsService;
+    if (!diagnostics) {
+      return;
+    }
+    this.subscriptions.push(
+      this.router.events
+        .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+        .subscribe((event) => diagnostics.RecordRouteBreadcrumb(event.urlAfterRedirects || event.url))
+    );
+  }
+
   async ngOnInit(): Promise<void> {
     try {
+      this.diagnosticsService?.Initialize();
+      this.subscribeRouteBreadcrumbs();
       let loggedIn = false;
       let shellInitialized = false;
       const initShellOnce = async (): Promise<void> => {
@@ -916,6 +934,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (!user) {
       throw new Error('No current user found');
     }
+
+    // Diagnostics capture runs in memory until this status arrives; a status with capture off stops it
+    void this.diagnosticsService?.LoadServerStatus();
 
     // Check the current URL to determine if we're loading from a URL-based navigation
     const currentUrl = this.router.url;
@@ -1045,27 +1066,35 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           }
         }
 
-        // Check if URL specifies an app by parsing the browser URL
+        // Check if URL specifies an app by parsing the browser URL (strip query string and fragment first)
         const currentUrl = this.router.url;
-        const appMatch = currentUrl.match(/\/app\/([^\/]+)/);
+        const currentUrlPath = (currentUrl || '').split('#')[0].split('?')[0];
+        const appMatch = currentUrlPath.match(/\/app\/([^\/?#]+)/);
 
         if (appMatch) {
           const routeAppPath = decodeURIComponent(appMatch[1]);
           // Find the app from the URL by Path (or Name for backwards compatibility)
-          const urlApp = this.appManager.GetAppByPath(routeAppPath);
+          const urlApp = this.appManager.GetAppByPath(routeAppPath) || this.appManager.GetAppByName(routeAppPath);
 
           if (urlApp) {
             // Set the app from URL - takes precedence over workspace restoration
             await this.appManager.SetActiveApp(urlApp.ID);
 
             // If the URL is just /app/:appName (no nav item), create default tab
-            const hasNavItem = currentUrl.match(/\/app\/[^\/]+\/[^\/]+/);
+            const hasNavItem = currentUrlPath.match(/\/app\/[^\/]+\/[^\/]+/);
 
             if (!hasNavItem) {
               const existingTabs = this.workspaceManager.GetAppTabs(urlApp.ID);
               if (existingTabs.length === 0) {
                 const tabRequest = await urlApp.CreateDefaultTab();
                 if (tabRequest) {
+                  const urlParams = this.extractQueryParamsFromUrl(currentUrl);
+                  if (Object.keys(urlParams).length > 0) {
+                    tabRequest.Configuration = {
+                      ...(tabRequest.Configuration || {}),
+                      queryParams: urlParams
+                    };
+                  }
                   this.tabService.OpenTab(tabRequest);
                 }
               }
@@ -1524,14 +1553,33 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (Number.isFinite(activatedAt) && activatedAt > navigatedAt && activatedAt <= Date.now()) {
         return true;
       }
+      // If the URL carries query params that differ from the matching tab's config, sync them
+      // before activating so syncUrlWithWorkspace doesn't overwrite the URL with stale params.
+      // When the URL is a bare app-level URL (/app/:appName) with no query params, preserve the
+      // default tab's saved queryParams state (matching ApplyDeepLinkToRestoredWorkspace).
+      const urlParams = this.extractQueryParamsFromUrl(url);
+      const isBareAppOnlyUrl = /^\/app\/[^\/]+$/.test(url.split('?')[0]) && Object.keys(urlParams).length === 0;
+      const tabParams = (matchingTab.configuration?.['queryParams'] || {}) as Record<string, string>;
+      if (!isBareAppOnlyUrl && !this.queryParamsEqual(urlParams, tabParams) && typeof this.workspaceManager.UpdateTabConfiguration === 'function') {
+        this.urlBasedNavigation = true;
+        try {
+          this.workspaceManager.UpdateTabConfiguration(matchingTab.id, {
+            queryParams: Object.keys(urlParams).length > 0 ? urlParams : undefined
+          });
+          this.navigationService?.NotifyQueryParamsChanged?.(matchingTab.id, urlParams);
+        } finally {
+          this.urlBasedNavigation = false;
+        }
+      }
       // Activate the matching tab
       this.workspaceManager.SetActiveTab(matchingTab.id);
       return true;
     } else if (matchingTab && matchingTab.id === config.activeTabId) {
       // Same tab is already active, but query params may have changed (back/forward within nav item)
       const urlParams = this.extractQueryParamsFromUrl(url);
+      const isBareAppOnlyUrl = /^\/app\/[^\/]+$/.test(url.split('?')[0]) && Object.keys(urlParams).length === 0;
       const tabParams = (matchingTab.configuration?.['queryParams'] || {}) as Record<string, string>;
-      if (!this.queryParamsEqual(urlParams, tabParams)) {
+      if (!isBareAppOnlyUrl && !this.queryParamsEqual(urlParams, tabParams)) {
         // URL is source of truth during back/forward — update tab config to match.
         this.urlBasedNavigation = true;
         try {
@@ -1612,9 +1660,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const queryIndex = cleanUrl.indexOf('?');
     if (queryIndex === -1) return {};
     const params = new URLSearchParams(cleanUrl.substring(queryIndex + 1));
-    const result: Record<string, string> = {};
-    params.forEach((value, key) => { result[key] = value; });
-    return result;
+    return this.urlSearchParamsToRecord(params);
+  }
+
+  private urlSearchParamsToRecord(params: URLSearchParams): Record<string, string> {
+    const safeEntries: Array<[string, string]> = [];
+    params.forEach((value, key) => {
+      if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
+        safeEntries.push([key, value]);
+      }
+    });
+    return Object.fromEntries(safeEntries);
   }
 
   /**
@@ -1667,8 +1723,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         if (!this.isKnownEntity(entityName)) {
           return false;
         }
-        const extraFilter = queryParams.get('ExtraFilter') || undefined;
-        this.navigationService.OpenDynamicView(entityName, extraFilter);
+        const extraFilter = queryParams.get('ExtraFilter') || queryParams.get('extraFilter') || undefined;
+        const alternateBaseView = queryParams.get('AlternateBaseView') || queryParams.get('alternateBaseView') || queryParams.get('abv') || undefined;
+        this.navigationService.OpenDynamicView(entityName, extraFilter, alternateBaseView ? { alternateBaseView } : undefined);
         return true;
       }
 
@@ -1714,25 +1771,39 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
 
         if (app) {
-          // Activate the app and open the nav item
-          await this.appManager.SetActiveApp(app.ID);
+          let targetApp = app;
           const navItems = await app.GetNavItems();
-          const navItem = navItems.find(
+          let navItem = navItems.find(
             item => item.Label?.trim().toLowerCase() === navItemName.trim().toLowerCase()
           );
 
+          if (!navItem) {
+            const resolvedMove = await ResolveMovedNavItem(app.Name, navItemName, this.appManager.GetAllApps());
+            if (resolvedMove) {
+              const movedNavItems = await resolvedMove.App.GetNavItems();
+              const movedCandidate = movedNavItems.find(
+                item => item.Label?.trim().toLowerCase() === resolvedMove.Move.ToNavItem.trim().toLowerCase()
+              );
+              if (movedCandidate) {
+                targetApp = resolvedMove.App;
+                navItem = movedCandidate;
+              }
+            }
+          }
+
           if (navItem) {
+            await this.appManager.SetActiveApp(targetApp.ID);
             // Parse query params to pass as configuration
-            const qpObj: Record<string, string> = {};
-            queryParams.forEach((value, key) => { qpObj[key] = value; });
+            const qpObj = this.urlSearchParamsToRecord(queryParams);
             this.navigationService.OpenNavItem(
-              app.ID,
+              targetApp.ID,
               navItem,
-              app.GetColor(),
+              targetApp.GetColor(),
               Object.keys(qpObj).length > 0 ? { queryParams: qpObj } : undefined
             );
             return true;
           } else {
+            await this.appManager.SetActiveApp(app.ID);
             console.warn('handleMissingTabForUrl: nav item not found:', navItemName, 'in app:', appPath);
           }
         }
@@ -1746,6 +1817,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
 
         if (app) {
+          const qpObj = this.urlSearchParamsToRecord(queryParams);
           const navItems = await app.GetNavItems();
           // Only auto-create tabs for apps with zero nav items
           // Apps with nav items should have had their tabs preserved
@@ -1754,6 +1826,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
             await this.appManager.SetActiveApp(app.ID);
             const defaultTab = await app.CreateDefaultTab();
             if (defaultTab) {
+              if (Object.keys(qpObj).length > 0) {
+                defaultTab.Configuration = {
+                  ...(defaultTab.Configuration || {}),
+                  queryParams: qpObj
+                };
+              }
               this.workspaceManager.OpenTab(defaultTab, app.GetColor());
               return true;
             }
@@ -1762,7 +1840,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
             await this.appManager.SetActiveApp(app.ID);
             const defaultNavItem = navItems.find(item => (item as { isDefault?: boolean }).isDefault) || navItems[0];
             if (defaultNavItem) {
-              this.navigationService.OpenNavItem(app.ID, defaultNavItem, app.GetColor());
+              this.navigationService.OpenNavItem(
+                app.ID,
+                defaultNavItem,
+                app.GetColor(),
+                Object.keys(qpObj).length > 0 ? { queryParams: qpObj } : undefined
+              );
               return true;
             }
           }
@@ -1787,7 +1870,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           return false;
         }
         const extraFilter = queryParams.get('ExtraFilter') || queryParams.get('extraFilter') || undefined;
-        this.navigationService.OpenDynamicView(entityName, extraFilter);
+        const alternateBaseView = queryParams.get('AlternateBaseView') || queryParams.get('alternateBaseView') || queryParams.get('abv') || undefined;
+        this.navigationService.OpenDynamicView(entityName, extraFilter, alternateBaseView ? { alternateBaseView } : undefined);
         return true;
       }
 
@@ -1911,13 +1995,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
         if (!tabAppName || !tabNavItemName) return false;
 
-        // Match by app path/name and nav item name (case-insensitive)
+        // Match by app path/name and nav item name (case-insensitive), including moved nav items
         const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
         if (!app) return false;
 
-        const appMatches = tabAppName.toLowerCase() === app.Name.toLowerCase() ||
-                          UUIDsEqual(tab.applicationId, app.ID);
-        const navMatches = tabNavItemName.toLowerCase() === navItemName.toLowerCase();
+        const moved = FindMovedNavItem(app.Name, navItemName);
+        const movedApp = moved ? FindMovedNavItemApp(moved, this.appManager.GetAllApps()) : undefined;
+
+        const appMatches =
+          tabAppName.toLowerCase() === app.Name.toLowerCase() ||
+          UUIDsEqual(tab.applicationId, app.ID) ||
+          (movedApp !== undefined &&
+            (tabAppName.toLowerCase() === movedApp.Name.toLowerCase() ||
+              UUIDsEqual(tab.applicationId, movedApp.ID)));
+        const navMatches =
+          tabNavItemName.toLowerCase() === navItemName.toLowerCase() ||
+          (moved !== null && tabNavItemName.toLowerCase() === moved.ToNavItem.toLowerCase());
 
         return appMatches && navMatches;
       }) || null;
@@ -1944,6 +2037,19 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const navItems = await app.GetNavItems();
         if (navItems.length === 0) {
           return tabs.find(tab => UUIDsEqual(tab.applicationId, app.ID)) || null;
+        }
+
+        // For apps with nav items, an app-level URL (/app/:appName) resolves to the default nav item's tab
+        const defaultNavItem = navItems.find(item => (item as { isDefault?: boolean }).isDefault) || navItems[0];
+        if (defaultNavItem) {
+          return tabs.find(tab => {
+            const tabConfig = tab.configuration || {};
+            const tabAppName = tabConfig['appName'] as string | undefined;
+            const tabNavItemName = tabConfig['navItemName'] as string | undefined;
+            const appMatches = (tabAppName && tabAppName.toLowerCase() === app.Name.toLowerCase()) ||
+                               UUIDsEqual(tab.applicationId, app.ID);
+            return appMatches && tabNavItemName?.toLowerCase() === defaultNavItem.Label?.toLowerCase();
+          }) || null;
         }
 
         return null;
@@ -1979,7 +2085,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
         const isDynamic = tabConfig['isDynamic'] as boolean | undefined;
 
-        return resourceType === 'user views' && isDynamic && tabEntity?.toLowerCase() === entityName.toLowerCase();
+        return (resourceType === 'user views' || resourceType === 'mj: user views') &&
+               isDynamic &&
+               tabEntity?.toLowerCase() === entityName.toLowerCase();
       }) || null;
     }
 
@@ -1993,7 +2101,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
         const tabViewId = (tabConfig['viewId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
-        return resourceType === 'user views' && tabViewId === viewId;
+        return (resourceType === 'user views' || resourceType === 'mj: user views') && tabViewId === viewId;
       }) || null;
     }
 
@@ -2170,7 +2278,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // If this is an app's default dashboard (no nav items), use app-level URL
     if (isAppDefault && appName) {
       const appPath = getAppPath(appName) || appName;
-      return `/app/${encodeURIComponent(appPath)}`;
+      return appendQP(`/app/${encodeURIComponent(appPath)}`);
     }
 
     // Fallback: If tab belongs to a non-system app but doesn't have appName/navItemName,
@@ -2219,7 +2327,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         if (staticNavItems.length === 0 && (!resourceType || resourceType === 'custom')) {
           // App has zero static nav items AND this is not an orphan resource (no resourceType or custom)
           // Use app-level URL - this handles apps that only have a default dashboard
-          return `/app/${encodeURIComponent(appPath)}`;
+          return appendQP(`/app/${encodeURIComponent(appPath)}`);
         }
         // Fall through to orphan resource URL building below
       }
@@ -2271,15 +2379,21 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           break;
 
         case 'user views':
+        case 'mj: user views':
           // Check if it's a dynamic view
           if (isDynamic || recordId === 'dynamic') {
-            // /app/:appName/view/dynamic/:entityName?ExtraFilter=...
+            // /app/:appName/view/dynamic/:entityName?ExtraFilter=...&abv=...
             if (entityName) {
-              let url = `/app/${encodeURIComponent(appPath)}/view/dynamic/${encodeURIComponent(entityName)}`;
+              const url = `/app/${encodeURIComponent(appPath)}/view/dynamic/${encodeURIComponent(entityName)}`;
+              const extraParams: Record<string, string> = {};
               if (extraFilter) {
-                url += `?ExtraFilter=${encodeURIComponent(extraFilter)}`;
+                extraParams['ExtraFilter'] = extraFilter;
               }
-              return appendQP(url);
+              const abv = (config['AlternateBaseView'] || config['alternateBaseView']) as string | undefined;
+              if (abv) {
+                extraParams['abv'] = abv;
+              }
+              return appendQP(url, extraParams);
             }
           } else if (recordId) {
             // /app/:appName/view/:viewId (saved view)
@@ -3219,11 +3333,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       return;
     }
 
+    if (result.message === 'diagnostic-bundle') {
+      this.UserMenuVisible = false;
+      this.ShowDiagnosticBundleDialog();
+      return;
+    }
+
     if (result.message === 'about') {
       this.UserMenuVisible = false;
       this.aboutDialogService.open(this.viewContainerRef, {
         avatarUrl: this.UserImageURL || null,
-        avatarIconClass: this.UserIconClass || null
+        avatarIconClass: this.UserIconClass || null,
+        onReportProblem: () => this.ShowDiagnosticBundleDialog()
       });
       return;
     }
@@ -3928,6 +4049,28 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       },
       IsPinned: false
     });
+  }
+
+  /**
+   * Open the Diagnostic Bundle ("Report a Problem") dialog.
+   */
+  public ShowDiagnosticBundleDialog(): void {
+    this.diagnosticsService?.Initialize();
+    this.DiagnosticDialogOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Download a pre-reset client diagnostic bundle (.mjdiag) from the stuck-loading screen
+   * before ResetApplication() clears browser caches.
+   */
+  public async DownloadPreResetDiagnostics(): Promise<void> {
+    if (!this.diagnosticsService) return;
+    this.diagnosticsService.Initialize();
+    const bundle = await this.diagnosticsService.BuildClientBundle({
+      note: 'Stuck startup screen (pre-reset diagnostic snapshot)'
+    });
+    this.diagnosticsService.DownloadClientBundle(bundle);
   }
 
   /**

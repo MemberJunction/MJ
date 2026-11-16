@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { CdkDrag, CdkDragDrop, CdkDragPlaceholder, CdkDropList } from '@angular/cdk/drag-drop';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import {
   IsSafeLoginHref, IsSafeLoginImageURL, LOGIN_BLOCK_META, LoginLogoURL,
   type LoginBlock, type LoginBlockType, type LoginRegion, type ThemeLogos,
@@ -29,7 +30,7 @@ export interface MJLoginRegionDrop {
 @Component({
   selector: 'mj-login-region',
   standalone: true,
-  imports: [NgTemplateOutlet, CdkDropList, CdkDrag, CdkDragPlaceholder],
+  imports: [NgTemplateOutlet, CdkDropList, CdkDrag, CdkDragPlaceholder, MJButtonDirective],
   templateUrl: './login-region.component.html',
   styleUrls: ['./login-region.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,

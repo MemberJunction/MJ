@@ -122,7 +122,14 @@ function makeSession(config: Record<string, unknown>, overrides: Partial<FakeEnt
 }
 
 function makeDetail(): FakeEntity {
-    return { ID: 'c3c3c3c3-0000-4000-8000-0000000000d1', Save: vi.fn(async () => true), Load: vi.fn(async () => true), NewRecord: vi.fn() };
+    return {
+        ID: 'c3c3c3c3-0000-4000-8000-0000000000d1',
+        ExternalID: 'c3-shared-resource',
+        Save: vi.fn(async () => true),
+        Load: vi.fn(async () => true),
+        NewRecord: vi.fn(),
+        MarkServerAuthoredReply: vi.fn(),
+    };
 }
 
 /** A provider serving the session plus view rows per entity name; `runView` records every view run. */
@@ -167,9 +174,22 @@ function relayTool(resolver: RealtimeClientSessionResolver, toolName: string, ar
 }
 
 /** A scoped anonymous magic-link caller: the relay runs its work as the system user. */
-const SCOPED_ANONYMOUS = { ID: USER_ID, Email: 'guest@magic-link.local', IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'c3-scope' } };
+const SCOPED_ANONYMOUS = {
+    ID: USER_ID,
+    Email: 'guest@magic-link.local',
+    IsMagicLinkAnonymous: true,
+    AnonymousVisitorID: 'c3-redemption-sid',
+    // The session's conversation is stamped with the caller's resource scope (ResolveSessionScopeIdentity).
+    MagicLinkScope: { ResourceID: 'c3-shared-resource' },
+};
 /** A public web-widget guest: anonymous, but not elevated. */
-const WIDGET_GUEST = { ID: USER_ID, Email: 'guest@widget.local', IsMagicLinkAnonymous: true, WidgetGuestContext: { WidgetID: 'c3c3c3c3-0000-4000-8000-0000000000b1' } };
+const WIDGET_GUEST = {
+    ID: USER_ID,
+    Email: 'guest@widget.local',
+    IsMagicLinkAnonymous: true,
+    AnonymousVisitorID: 'c3-shared-resource',
+    WidgetGuestContext: { WidgetID: 'c3c3c3c3-0000-4000-8000-0000000000b1' },
+};
 /** A resource-scoped magic-link session: a normal role pinned to one shared resource. */
 const RESOURCE_SCOPED = { ID: USER_ID, Email: 'invitee@example.com', MagicLinkScope: { ResourceID: 'c3-shared-resource' } };
 const SYSTEM_USER = { ID: 'c3c3c3c3-0000-4000-8000-0000000000aa', Email: 'system@example.com' } as UserInfo;

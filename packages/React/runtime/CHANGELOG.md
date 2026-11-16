@@ -1,5 +1,698 @@
 # @memberjunction/react-runtime
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 0d484c2: CodeGen base views: display-label joins (related-entity name fields) and the embedded-record geo join are always `LEFT OUTER JOIN`, regardless of the foreign key's nullability, so an unmatched related row yields a NULL label instead of removing the row from the view (#4533). IS-A parent joins stay `INNER`. Ships a migration that regenerates the affected core base views. The display-name fields those joins feed are now typed `string | null` in the generated entity classes, and the call sites that read them handle the null.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.0
+  - @memberjunction/interactive-component-types@6.3.0-edge.0
+
+## 6.2.0
+
+### Minor Changes
+
+- 4c0eaec: Local embeddings move to `@huggingface/transformers` 4.3.1 and can switch models safely; EmbeddingGemma 2 is available as an opt-in model.
+  - `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` names the local model every process embeds with (default: the highest-PowerRank active local model). Agent note, example, tag and query indexes leave out vectors from other models, a save re-embeds such a row, and the new "Re-embed Local Vectors" action moves them all.
+  - Embedding calls take an optional `inputType` (`'query' | 'document'`); Cohere and Bedrock map it natively, and catalog prefixes come from `ModelConfiguration.Embedding`. `LocalEmbedding` batches, honors `dimensions`, truncates to the catalog's `MaxInputTokens`, and sizes ONNX Runtime's thread pool to the CPUs the process may use (in a 2-CPU container, queries were about 10× faster).
+  - A failed embed now returns `null` from `AIEngine.EmbedText` instead of an empty vector.
+
+  **Upgrade notes:**
+  - After upgrading, run `mj ai actions run -n "Re-embed Local Vectors" --param "Force=true"`, then restart the MJ server processes. The new runtime changes all-mpnet-base-v2's vectors (about 0.95 cosine on Linux x64) under the same model ID, and long texts are now truncated at `MaxInputTokens` (256 tokens for all-MiniLM-L6-v2, matching sentence-transformers).
+  - A `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` that names no active local model turns local embedding off, with an error. An inactive model is no longer picked as the default.
+  - TagEngine embeds with the default local model whenever one exists, even if the "Tag Semantic Matching" prompt names a hosted model.
+  - `LocalEmbedding` honors a vector index's `Dimensions`: a value above the model's size now fails instead of being ignored.
+  - The GraphQL `EmbedText` mutation's `modelSize: 'medium'` now means the default local model.
+  - `LocalEmbedding` no longer reads the `useQuantized` / `localURL` settings or `TRANSFORMERS_LOCAL_URL`; it always loads the 8-bit weights.
+
+### Patch Changes
+
+- 9160fd9: Interactive components get their declared libraries **and their child components** on mobile, the same way the Angular react bridge supplies them.
+
+  **The gap.** An agent-authored component declares its libraries in the spec, and the compiler turns
+  each declaration into a binding — `const _ = libraries['_']`. The mobile runtime context carried no
+  libraries at all, so every component that used one (which is most of them) was refused up front with
+  "this component uses external libraries that only run on desktop". A component asking for `lodash`
+  was being sent to the desktop over a dependency that could have been sitting in the bundle.
+
+  **The seam is the one the web already uses.** `RuntimeContext.libraries`, keyed by
+  `globalVariable` — the same field `AngularReactAdapterService` fills from `LibraryLoader`'s CDN
+  loads, merged by the compiler as `{ ...context.libraries }`. Mobile fills it from ordinary npm
+  dependencies, pinned to the exact versions `__mj.ComponentLibrary` declares. Imports are lazy, so a
+  component that declares nothing evaluates nothing.
+
+  **Filling the map is not sufficient, and the reason is a scoping detail.** The compiler emits the
+  `const _ = …` bindings _inside_ `DestructureWrapperUserComponent` but splices the component's source
+  one scope out, so a component body referencing `_` reads a free variable. On the web that resolves
+  because the UMD `<script>` already defined `window._` — the component is reading the global, not the
+  runtime's map. Mobile therefore also publishes each library onto `globalThis` under its declared
+  global name, which is the same act a UMD bundle performs, in the module system Hermes has. Existing
+  globals are never overwritten, mirroring `LibraryLoader`'s own guard.
+
+  **react-runtime: the browser check now tests for a DOM.** `loadRequiredLibraries` gated CDN loading
+  on `typeof window === 'undefined'`. React Native defines `window` but has no `document`, so Hermes
+  went down the script-loading path and threw
+  `Failed to resolve dependencies: Library 'lodash' not found` for every component that declared one.
+  It now tests for `document.createElement`, which is the capability it actually needs; browsers are
+  unaffected, and DOM-less hosts fall through to the runtime context as intended.
+
+  **Thirteen libraries, and honesty about the rest.** Provided: lodash, dayjs, moment, luxon, mathjs,
+  simple-statistics, chroma-js, uuid, axios, marked, d3, topojson-client, xlsx. Declined: everything
+  DOM- or canvas-bound (Chart.js, ApexCharts, AG Grid, Ant Design, Leaflet, Mapbox GL, GSAP,
+  SortableJS, Popper, Emotion, DOMPurify, html2canvas, jsPDF, geo-maps) — shimming those renders
+  nothing and reports no error, which is worse than declining. The fallback card now names the library
+  and why, instead of the blanket "uses external libraries", and a spec is refused only for the
+  libraries it actually cannot get rather than for having any.
+
+  ***
+
+  ## Child components
+
+  **Mobile called `loadComponent`; the Angular bridge calls `loadHierarchy`.** That one-word
+  difference was the whole gap. `loadComponent` compiles a single spec, so a component built out of
+  sub-components — the shape `metadata/components/CLAUDE.md` prescribes for anything non-trivial — had
+  nothing to render its children with, and `AssessSpec` refused any spec declaring `dependencies`
+  rather than producing a component with holes in it.
+
+  Mobile now makes the same call `MJReactComponent.loadComponentWithManager()` makes, with the same
+  options (`defaultNamespace: 'Global'`, `defaultVersion`, `returnType: 'both'`), and passes
+  `result.components` — the flat, unwrapped map of every loaded descendant — as the `components` prop,
+  which is where the compiler's generated child bindings read them from. The `libraries` map is passed
+  as a prop alongside it, as the bridge does, for components that read `libraries.d3` rather than the
+  bare global.
+
+  **Libraries are resolved for the whole tree, not the root.** `loadHierarchy` compiles each component
+  against _its own_ `spec.libraries`, so a parent using lodash whose child uses d3 needs both loaded
+  before any of it compiles. `CollectHierarchyLibraries` walks the tree once up front.
+
+  **`generateComponentHierarchyHash` moved into the runtime.** It derives the registry version key for
+  a spec with no explicit `version`, and it lived as a private method on the Angular component — so a
+  second host had to reimplement it, and two implementations of a registry key is how two surfaces
+  silently compile two copies of the same component. `MJReactComponent` now delegates to the runtime's
+  copy.
+
+  **What mobile still declines, and why it is not "dependencies".** A child whose code the spec does
+  not carry: `location: 'registry'` without inline `code` needs a component-registry fetch this app
+  cannot perform, and a child with no code at all cannot compile. The fallback names the missing part.
+
+  ***
+
+  ## The rest of the prop contract
+
+  `MJReactComponent` hands a component eight things. Mobile was supplying three. The remaining gaps
+  closed here, each by moving the implementation rather than writing a second one:
+
+  **`utilities` — was `{}`.** `RuntimeUtilities` (452 lines, zero `@angular/*` imports) moves from
+  `@memberjunction/ng-react` to `@memberjunction/react-runtime`. It builds `md`, `rv`, `rq`, `ai`,
+  `geoDataEngine` and `ml` over MJ core — the data surface the component contract promises, and not an
+  Angular concept. A native host previously had to reimplement it or pass `{}`, which meant any
+  component with data requirements could not read a row. The `@RegisterClass` registration moves with it
+  unchanged and ng-react now imports the factory instead of owning it.
+
+  **And the override now works where it never did.** `createRuntimeUtilities` consulted
+  `ClassFactory` only when `typeof window === 'undefined'`, returning `new RuntimeUtilities()`
+  directly otherwise — so the `@RegisterClass` registration was inert on every browser and React
+  Native host. The base class still built working utilities, which is exactly why this went
+  unnoticed: nothing broke, a documented extension point simply did nothing. The guard is removed.
+  For an app that registers no subclass this changes nothing — with a null key `CreateInstance`
+  matches the base's own registration and constructs the same class the fallback would have — and for
+  one that does, substitution finally happens. A jsdom test pins it: it fails against the old guard.
+
+  **`styles` — was `undefined`**, which `buildComponentProps` turns into the runtime's frozen default
+  palette, and silently discarded the spec's `styleOverrides` (the mechanism that keeps "make the
+  charts blue" out of generated code as a hardcoded literal). `BuildStylesFromTheme` now accepts a
+  `ThemeTokenReader` as well as an element, so React Native — which holds the same `--mj-*` token
+  values but has no stylesheet to read them from — feeds them through the _identical_ mapping instead
+  of a copy. Mobile then applies `ApplyStyleOverrides` on top, as the bridge does.
+
+  **`savedUserSettings` / `onSaveUserSettings` — were absent**, so every sort order, selected tab and
+  collapsed panel reset on each open while the same component remembered them on the web. Mobile now
+  uses the same four `react-runtime` helpers and the same `UserInfoEngine` (`MJ: User Settings`)
+  storage, which means the same key: settings saved on a desktop open on a phone. A mobile-only key
+  format would have quietly given each user two profiles.
+
+  **`callbacks.OpenEntityRecord` — was `key.GetValueByIndex(0)`.** Components routinely identify a
+  record by something that is _not_ its primary key, because that is what their query returned. The
+  Angular component did the full resolution inline; `resolveEntityRecordKey` now lives in the runtime
+  and does it for both — coercing the three shapes a component may pass, then running a view to
+  translate a non-primary-key field. `NotifyEvent` was missing entirely and is now accepted.
+
+  **`CreateSimpleNotification` — was `console.log`.** It now renders above the component that raised
+  it, dismissed by tap rather than a timer so a failed-save message cannot vanish unread.
+
+  **Error boundary** now matches the bridge's options (`logErrors`, `recovery: 'retry'`).
+
+  ## Manifest scoping
+
+  `@memberjunction/react-runtime` is excluded from all four class-registration manifests
+  (`ng-bootstrap`, `ng-bootstrap-lite`, `server-bootstrap`, `server-bootstrap-lite`). Moving a
+  `@RegisterClass` into it made the package eagerly reachable from every bootstrap's dependency walk,
+  which would have pulled `@babel/standalone` (~3 MB) out of Explorer's lazy ng-react chunk and into
+  its initial bundle, and into the server bundle besides. `RuntimeUtilities` stays where it was
+  behaviourally: registered lazily through `ng-react` via the existing `lazy-feature-config` entry.
+
+  ## Still not at parity
+
+  `utilities` is not wrapped for data capture (the bridge's fallback-snapshot support), and component
+  methods (`print` / `refresh` / `invokeMethod`) are not exposed to the host.
+
+  ***
+
+  ## Registry-backed child components, and Hermes's async limit
+
+  Two things were still stopping real agent-authored components from rendering, both found by
+  running the deployment's actual component registry rather than hand-written samples.
+
+  **Children named instead of inlined.** A spec routinely references `DataGrid`, `OpenRecordButton`,
+  `SingleRecordView` by name with no code — that is what `metadata/components/CLAUDE.md` prescribes
+  for anything non-trivial. `loadHierarchy` fetches those itself, but it _compiles each child as it
+  fetches it_, and a component's library bindings are emitted at the top of its factory — so a
+  registry child's libraries are unknowable until it is too late to load them. `hierarchy-resolver.ts`
+  walks the tree first through the same `ComponentMetadataEngine.FindComponent` the runtime will use,
+  purely to learn the library set; the specs it reads come back from `ComponentManager`'s own fetch
+  cache, so the second read is free. `AssessSpec` no longer refuses children — it cannot judge them
+  synchronously, and refusing them declined the majority of real components over a lookup the app can
+  perform.
+
+  **`async` in runtime-compiled code.** Hermes compiles the app's own modules ahead of time, where
+  async is fully supported. Components take the other path — compiled at runtime, executed through
+  `new Function` — and Hermes's runtime compiler rejects async outright: `async functions are
+unsupported`. A component doing `const rows = await utilities.rv.RunView(…)` therefore failed to
+  compile, with an error naming neither cause nor remedy. Mobile now compiles with
+  `transform-async-to-generator`. Hermes accepts the generators that produces; it is only `async`
+  syntax it refuses.
+
+  `transform-regenerator` was tried and rejected on evidence: it would also remove the generators, but
+  in this Babel version it miscompiles real component code (`Property name expected type of string but
+got undefined`) — measured across the registry, it broke 12 components that otherwise transpile
+  cleanly. The narrower transform is both sufficient and safe. A test asserts it stays out.
+
+  Measured against this deployment's 118 registered components: 73 have a fully resolvable hierarchy
+  and declare only libraries the native runtime can provide. The other 45 declare Chart.js, ApexCharts
+  or ECharts — which the DOM host below now serves.
+
+  ***
+
+  ## Canvas and DOM components: a second renderer rather than a refusal
+
+  Chart.js and ApexCharts are the two most-declared libraries in the component registry, and both draw
+  into an `HTMLCanvasElement`. AG Grid, antd and Leaflet mount DOM nodes. None of that fails natively
+  for want of effort — React Native has no canvas and no DOM. Reimplementing each library's
+  configuration surface against `react-native-svg` would mean being subtly wrong forever against a
+  moving target.
+
+  A WebView is a browser, so a component that needs one gets one. `dom-host/` renders the component in
+  a real document using the **same** react-runtime UMD bundle the Playwright test harness loads, the
+  **same** CDN URLs recorded in `MJ: Component Libraries`, and the same compile path. That is parity by
+  construction rather than parity by imitation.
+
+  `AssessSpec` is no longer a yes/no gate: it returns a `RenderMode`. Components that can run natively
+  still do — faster, native scrolling, the app's typography — and only the ones that genuinely need a
+  browser take the other path. Which renderer is used is not a difference in what a component
+  _receives_: both get the same `utilities`, `styles`, `savedUserSettings` and callbacks.
+
+  **The page holds no credential.** It cannot call `RunView` — it has no provider and no token, and
+  giving it one would put the app's session inside a document that just executed third-party library
+  code. `utilities` and callbacks are proxied over a closed, named-method bridge to the native side,
+  which owns the one authenticated provider. A component can ask for what the signed-in user could
+  already read, and nothing else.
+
+  **The UMD bundle is now minified, and 55% smaller.** It was 11 MB with minification disabled — for
+  a real reason, not indifference: `MJGlobal.ClassFactory` keys every registration on `class.name`,
+  and terser's default mangling renames classes, so distinct classes collapse onto one identifier and
+  their registrations collide. `keep_classnames` / `keep_fnames` remove the cause rather than the
+  symptom; everything else still minifies, taking it to 5.1 MB. That size is now a first-render wait
+  on a phone rather than a number on disk, which is why it was worth fixing properly.
+
+  A test evaluates the built bundle in a `vm` sandbox and asserts both that it initialises and that
+  its class names survived — verified to fail when plain mangling is restored, so re-enabling it
+  cannot pass silently here and break wherever a component is actually rendered.
+
+  The first DOM-hosted render still needs a connection; the WebView caches the bundle afterwards.
+
+  **Routing happens after resolution, not before.** `AssessSpec` is synchronous, so it can only see
+  the spec it is handed — and a dashboard whose parent uses lodash while a registry-backed child draws
+  a Chart.js canvas looks native-renderable right up until the child fails. The component that most
+  needs the DOM host is exactly the one whose canvas library is buried a level down. The hierarchy is
+  therefore resolved first and the renderer chosen against the resolved tree.
+
+  The resolver also returns the tree with every registry child's code **inlined**, because the DOM host
+  page has no provider: a child it still had to fetch would throw inside the WebView. The native
+  renderer gets the same inlined spec, which costs nothing and means both paths reason about one thing.
+
+  ***
+
+  ## A crash no longer costs the reader the data
+
+  By the time most components throw, the fetching has succeeded — the failure is in the drawing.
+  Replacing the whole thing with "this component ran into an error" discards rows the reader came for
+  and could still read perfectly well.
+
+  `utilities` is wrapped so every view and query result is recorded, and a component that fails after
+  loading shows those rows instead of a dead card, under an explanation that does not pretend anything
+  worked. `MJReactComponent` captures for the same reason and calls it a fallback snapshot; the
+  difference here is that it is _shown_, because on a phone there is no second pane to offer it in.
+
+  In the DOM host the capture is nearly free — every data call already funnels through the one bridge
+  handler — and only a page that never mounted is treated as failed, so a component that reports an
+  error after rendering is not replaced by a table it did not ask for.
+
+  Rendering goes through the Data artifact view, so captured rows and query-builder output cannot
+  drift into describing a row differently.
+
+  **Verified on both platforms.** The DOM host, its bridge, the canvas chart, registry-resolved
+  children and the drill-down all behave identically on Android and iOS. `react-native-webview` is a
+  native module, so the app needs a rebuild rather than a Metro reload.
+
+  **Deliberately not built:** the rest of the host-facing method API (`validate`, `isDirty`, `reset`,
+  `scrollTo`, `focus`, `invokeMethod`). Those exist on the web so an Angular container can drive an
+  embedded component; mobile has no such container, and adding the surface with no caller would be
+  speculative. `getCurrentDataState`'s purpose — a fallback when the component cannot show its own
+  data — is served above.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- 36a3f9e: Security hardening across SQL filter construction, expression sandboxing, token verification, fail-closed endpoints, and client URL/selector screening:
+  - **Pure AST transform evaluation (`@memberjunction/global`)**: Replace `new Function` in `FieldTransformEngine` with an Acorn-based AST interpreter (`SafeTransformAstEvaluator`) that blocks prototype climbs, ambient global callback smuggling, and dynamic code generation, while supporting standard string/array transform methods (`split`, `slice`, `join`, `substring`, `replace`, `padStart`, `padEnd`, etc.). Harden `SafeExpressionEvaluator` against higher-order callback smuggling.
+  - **SQL filter & token hardening (`@memberjunction/server`, `@memberjunction/external-change-detection`, `@memberjunction/metadata-sync`)**: Enforce strict UUID shape validation and SQL string escaping on `ExtraFilter` interpolations across resolvers and REST handlers, reject non-primitive/non-literal primary key and lookup filter values in `MetadataSync`, perform non-short-circuiting constant-time access-token lookups in `GetDataResolver` with full token redaction from error messages, derive a domain-separated HS256 media-access signing subkey from `MJ_BASE_ENCRYPTION_KEY`, and default `SetupRESTEndpoints` to disabled (`enabled: false`).
+  - **Fail-closed registry auth (`@memberjunction/component-registry-server`)**: Refuse requests by default in `ComponentRegistryAPIServer.checkAPIKey` until overridden by a subclass, and protect both `/components` and `/feedback` routes when `requireAuth` is enabled.
+  - **Client URL-scheme & DOM selector screening (`@memberjunction/ng-core-entity-forms`, `@memberjunction/ng-conversations`, `@memberjunction/react-runtime`)**: Screen media and subresource URLs to `http:` / `https:` (rejecting `javascript:`, `data:`, `blob:`, and scheme-relative `//` targets) across viewer, open-in-tab, download, session-state rehydration, and dynamic `<script>` / `<link>` loaders, and replace interpolated `document.querySelector` URL lookups with direct attribute comparison.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [1419ba7]
+- Updated dependencies [a709bb6]
+- Updated dependencies [39b35f1]
+- Updated dependencies [d17de94]
+- Updated dependencies [e97d95c]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [d43d86e]
+- Updated dependencies [a3539d2]
+- Updated dependencies [dde482c]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [91cba84]
+- Updated dependencies [b14c72f]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [660ef45]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [1090caa]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [7384dd6]
+- Updated dependencies [6849b00]
+- Updated dependencies [67f6c85]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [4248fb3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [f3c6161]
+- Updated dependencies [c6b4b85]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [59e32e0]
+- Updated dependencies [d122a41]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [0ff7523]
+- Updated dependencies [0ff7523]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [307da67]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ea4080e]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0c634ba]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [08f8966]
+- Updated dependencies [48c9cd2]
+- Updated dependencies [56d7614]
+- Updated dependencies [223669e]
+- Updated dependencies [683f652]
+- Updated dependencies [914e6ff]
+- Updated dependencies [a8be410]
+- Updated dependencies [7316ac3]
+- Updated dependencies [2274f42]
+- Updated dependencies [7e57b48]
+- Updated dependencies [35ed364]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [0fb3649]
+- Updated dependencies [131f3c4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [5df9486]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [dd34a5c]
+- Updated dependencies [5fed75a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [f26084f]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [6779eed]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [44faf83]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [80905a1]
+- Updated dependencies [4c97994]
+- Updated dependencies [397ae9a]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [7e72c86]
+- Updated dependencies [dbc3462]
+- Updated dependencies [a17a228]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [ce758af]
+- Updated dependencies [89a5b59]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [279b93e]
+- Updated dependencies [8420f36]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [8b90b41]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [68f5c01]
+- Updated dependencies [196160a]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [8c120db]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [aac148b]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [8d1a373]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [af57e8d]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [57fea6a]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [2854a2e]
+- Updated dependencies [03c085c]
+- Updated dependencies [28df136]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [dc38250]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0
+  - @memberjunction/global@6.2.0
+  - @memberjunction/core@6.2.0
+  - @memberjunction/graphql-dataprovider@6.2.0
+  - @memberjunction/ai-vectors-memory@6.2.0
+  - @memberjunction/interactive-component-types@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [dd34a5c]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.8
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.8
+  - @memberjunction/interactive-component-types@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- 4c0eaec: Local embeddings move to `@huggingface/transformers` 4.3.1 and can switch models safely; EmbeddingGemma 2 is available as an opt-in model.
+  - `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` names the local model every process embeds with (default: the highest-PowerRank active local model). Agent note, example, tag and query indexes leave out vectors from other models, a save re-embeds such a row, and the new "Re-embed Local Vectors" action moves them all.
+  - Embedding calls take an optional `inputType` (`'query' | 'document'`); Cohere and Bedrock map it natively, and catalog prefixes come from `ModelConfiguration.Embedding`. `LocalEmbedding` batches, honors `dimensions`, truncates to the catalog's `MaxInputTokens`, and sizes ONNX Runtime's thread pool to the CPUs the process may use (in a 2-CPU container, queries were about 10× faster).
+  - A failed embed now returns `null` from `AIEngine.EmbedText` instead of an empty vector.
+
+  **Upgrade notes:**
+  - After upgrading, run `mj ai actions run -n "Re-embed Local Vectors" --param "Force=true"`, then restart the MJ server processes. The new runtime changes all-mpnet-base-v2's vectors (about 0.95 cosine on Linux x64) under the same model ID, and long texts are now truncated at `MaxInputTokens` (256 tokens for all-MiniLM-L6-v2, matching sentence-transformers).
+  - A `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` that names no active local model turns local embedding off, with an error. An inactive model is no longer picked as the default.
+  - TagEngine embeds with the default local model whenever one exists, even if the "Tag Semantic Matching" prompt names a hosted model.
+  - `LocalEmbedding` honors a vector index's `Dimensions`: a value above the model's size now fails instead of being ignored.
+  - The GraphQL `EmbedText` mutation's `modelSize: 'medium'` now means the default local model.
+  - `LocalEmbedding` no longer reads the `useQuantized` / `localURL` settings or `TRANSFORMERS_LOCAL_URL`; it always loads the 8-bit weights.
+
+### Patch Changes
+
+- 36a3f9e: Security hardening across SQL filter construction, expression sandboxing, token verification, fail-closed endpoints, and client URL/selector screening:
+  - **Pure AST transform evaluation (`@memberjunction/global`)**: Replace `new Function` in `FieldTransformEngine` with an Acorn-based AST interpreter (`SafeTransformAstEvaluator`) that blocks prototype climbs, ambient global callback smuggling, and dynamic code generation, while supporting standard string/array transform methods (`split`, `slice`, `join`, `substring`, `replace`, `padStart`, `padEnd`, etc.). Harden `SafeExpressionEvaluator` against higher-order callback smuggling.
+  - **SQL filter & token hardening (`@memberjunction/server`, `@memberjunction/external-change-detection`, `@memberjunction/metadata-sync`)**: Enforce strict UUID shape validation and SQL string escaping on `ExtraFilter` interpolations across resolvers and REST handlers, reject non-primitive/non-literal primary key and lookup filter values in `MetadataSync`, perform non-short-circuiting constant-time access-token lookups in `GetDataResolver` with full token redaction from error messages, derive a domain-separated HS256 media-access signing subkey from `MJ_BASE_ENCRYPTION_KEY`, and default `SetupRESTEndpoints` to disabled (`enabled: false`).
+  - **Fail-closed registry auth (`@memberjunction/component-registry-server`)**: Refuse requests by default in `ComponentRegistryAPIServer.checkAPIKey` until overridden by a subclass, and protect both `/components` and `/feedback` routes when `requireAuth` is enabled.
+  - **Client URL-scheme & DOM selector screening (`@memberjunction/ng-core-entity-forms`, `@memberjunction/ng-conversations`, `@memberjunction/react-runtime`)**: Screen media and subresource URLs to `http:` / `https:` (rejecting `javascript:`, `data:`, `blob:`, and scheme-relative `//` targets) across viewer, open-in-tab, download, session-state rehydration, and dynamic `<script>` / `<link>` loaders, and replace interpolated `document.querySelector` URL lookups with direct attribute comparison.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [08f8966]
+- Updated dependencies [48c9cd2]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.7
+  - @memberjunction/interactive-component-types@6.2.0-edge.7
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.6
+  - @memberjunction/interactive-component-types@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

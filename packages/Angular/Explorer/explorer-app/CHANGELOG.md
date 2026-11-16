@@ -1,5 +1,871 @@
 # @memberjunction/ng-explorer-app
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 4884a47: Finish the Kendo removal: no Kendo references remain in shipped code, templates, package metadata, or live docs. One stylesheet is deliberately left alone: `explorer-app/src/lib/styles/_common.scss` keeps 12 dead `.k-*` rules because it also defines the legacy `.mj-btn` block, which `check:ui-buttons` grades the moment the file is touched; that block's removal is a separate migration.
+
+  Kendo was already gone from the dependency graph — zero `@progress/kendo*` entries in any `package.json`, zero TypeScript imports. What was left was residue, and some of it was not inert:
+
+  **Dead code and styles removed**
+  - 82 `.k-*` CSS rules across 21 files. Nothing has defined those classes since the removal, so every one of them was a no-op.
+  - `li.k-drawer-item.k-level-0` was still being queried in `MJExplorerAppComponent` and `InitializationService` to auto-select the first nav item when landing on `/`. The Kendo Drawer is long gone, so `querySelector` returned null and the branch did nothing — removing it is a runtime no-op. **If landing on `/` should select the first nav item, that behaviour needs reimplementing against the current shell nav; it has been silently absent since the removal.**
+  - `dialog.service.ts.bak` (dead backup importing `@progress/kendo-angular-dialog`) deleted.
+  - `kendo-ui-license.txt` dropped from `DistributionAssembler`'s Angular ignore list, and its now-meaningless assertion retargeted in the test.
+
+  **Broken templates fixed** — three components still applied Kendo utility classes that no longer resolve:
+  - `add-item.component` — `k-actions k-actions-end` was supplying the footer's flex row, so `.customBtn button { flex: 1 }` had no flex container. `.popup-actions` now provides it.
+  - `delete-item.component` — `k-m-7.5 k-text-center` were Kendo spacing/alignment utilities (30px margin, centered) whose theme CSS left with the removal, so the confirmation copy had been rendering unstyled. Replaced with a real `.confirm-message` class.
+  - `add-item` and `ng-data-context-dialog` each carried a `<div class="k-overlay">` backdrop. `mj-window` deliberately has no backdrop, so these are now unstyled empty divs — **deleted, which means both dialogs currently render with no backdrop.** Restoring one is a UX call, not a cleanup.
+
+  **Filter payload is MJ's own type**
+  `FilterOperator` / `FilterLogic` / `FilterDescriptor` / `CompositeFilterDescriptor` and their guards were already defined in `@memberjunction/core` (`generic/filters/filter.types.ts`) — `ng-filter-builder` carried a byte-equivalent duplicate set and re-exported it. The duplicate is gone; the builder and `ng-entity-viewer` import the shapes from core, and the builder exports only its own UI types.
+
+  **API surface change (`@memberjunction/ng-filter-builder`)**: `FilterOperator`, `FilterLogic`, `FilterDescriptor`, `CompositeFilterDescriptor`, `IsCompositeFilter` and `IsSimpleFilter` are no longer re-exported. Import them from `@memberjunction/core` instead. This aligns with the repo's no-cross-package-re-exports rule.
+
+  **Docs and comments** — 33 package READMEs listed `@progress/kendo-angular-*` packages as live dependencies (they aren't) and drew Kendo components in their mermaid diagrams; `packages/Angular/CLAUDE.md`, four guides, and ~55 source comments referenced Kendo as though it were still present. All rewritten to describe what the code actually uses.
+
+  Historical records are deliberately untouched: `plans/`, CHANGELOGs, and dated retrospectives (`FINAL_REPORT.md`, `PIXEL_PERFECT_COMPLETE.md`, `USER_MENU_PROPOSAL.md`, timeline `PRD.md` version history) still mention Kendo, because they are records of when it was there.
+
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [1b282a0]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [eb5905c]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [b68d388]
+- Updated dependencies [8230d04]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+- Updated dependencies [36ddd08]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/ng-conversations@6.3.0-edge.0
+  - @memberjunction/ng-explorer-core@6.3.0-edge.0
+  - @memberjunction/ng-bootstrap@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/ng-feedback@6.3.0-edge.0
+  - @memberjunction/ng-notifications@6.3.0-edge.0
+  - @memberjunction/ng-shared@6.3.0-edge.0
+  - @memberjunction/ai-agent-client@6.3.0-edge.0
+  - @memberjunction/ng-auth-services@6.3.0-edge.0
+  - @memberjunction/ng-base-application@6.3.0-edge.0
+  - @memberjunction/ng-workspace-initializer@6.3.0-edge.0
+  - @memberjunction/ng-base-types@6.3.0-edge.0
+  - @memberjunction/ng-realtime-channels@6.3.0-edge.0
+  - @memberjunction/ng-agent-client@6.3.0-edge.0
+  - @memberjunction/ng-explorer-service-worker@6.3.0-edge.0
+  - @memberjunction/theme-engine@6.3.0-edge.0
+
+## 6.2.0
+
+### Minor Changes
+
+- 9cb815b: Add Anchored Conversations and Record Commenting across the database schema (`AnchorType`, `AnchorKey`, `AnchorMetadata` with `IConversationAnchorMetadata`, `IsResolved`, `ResolvedByUserID`, `ResolvedAt`), `ConversationEngine`, server-side RLS + FLS read enforcement (`AnchoredConversationPostRunViewHook` on `MJ: Conversations` and `MJ: Conversation Details`), two-stage write-time FLS restricted-field classification via `AIPromptRunner` (`Anchored Comment Restricted Field Classifier`) without value-matching refusal oracles or restricted `quotedValue` snapshots, FLS/RLS-aware `@mention` notifications, entity-level commenting configuration (`MJ: Entities.Configuration.Comments.Enabled` and `RequiredPermission` — enabled by default and configurable per entity via `Configuration.Comments.Enabled: false`), record-bound "Ask AI" overlay conversations (`LinkedEntityID` + `LinkedRecordID`), and `@memberjunction/ng-base-forms` (`<mj-record-comments>` with `MJ_CommentsPanel_Width` user preference persistence, field/section/group comment badges, `FormSectionIndicators` rollup, and click-to-navigate anchor scrolling).
+- 1cb1d52: Login Studio: design the Explorer sign-in page on the default theme.
+  - **Schema:** `MJ: Themes` gains `LoginScreen` (published) and `LoginScreenDraft`. `MJThemeEntityExtended`
+    refuses a design the login screen cannot draw safely (`StoredLoginDesignProblems` in
+    `@memberjunction/theme-engine`, the same contract the editor checks).
+  - **App:** Login Studio (`LoginStudioResource`) edits blocks, layout, background and colors, saves a draft
+    and publishes it.
+  - **Public route:** `GET /auth/login-screen` serves the default Active theme's published design, logos and
+    seeds, sanitized (`SanitizePublicLoginScreen`) on the server and again in the browser. Drafts are never
+    served to anonymous visitors; signed-in users who can read themes can read them.
+  - **Login screen:** `<mj-explorer-app>` draws a published design through `<mj-login-region>` and wears the
+    default theme's brand colors before sign-in. A host's `mjLoginSlot` templates still win;
+    `UsePublishedLoginScreen = false` keeps the screen as the host's own inputs and CSS draw it.
+
+- 975948b: Realtime Channels v2, third phase: verb-level exposure policy, an Angular adapter that wraps an existing component as a channel, an opt-in DOM rasterizer, a sample game channel, and the channels guide. Existing channels, tool names and hosts are unchanged.
+
+  `minor` because this branch edits `metadata/` earlier (see the first two phases) and adds two new packages. There is no migration and no new entity column.
+  - **Verb results obey exposure** (`@memberjunction/ai-core-plus`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`). A verb whose result carries what the channel holds declares `ReturnsChannelData: 'state' | 'pixels'` on its descriptor entry. When the channel's effective exposure is below that level the dispatcher, and the native-tool route for a channel mounted at start, refuse the whole call with `exposure_restricted` (policy, not redaction: the verb is refused whole and its result is never filtered); the check comes after `InvokableBy` and before parameter validation, so a malformed call cannot probe a withheld verb. The catalog note and the `exposure_changed` note list the verbs that are unavailable and why. New pure helpers `IsVerbWithheld`, `WithheldVerbs` and `DescribeWithheldVerb`; `BuildToolBackedVerbs` accepts a per-verb flag map. Remote Browser flags `GetPageText` and `AchieveGoal` (`'state'`) and `DescribePage` and `LocateElement` (`'pixels'`); the Interactive Component channel flags `GetDataState`, `Validate`, `IsDirty` and custom methods with a non-void return type (merged verb offers are withheld only when every offer is flagged). This replaces the earlier statement that exposure is not a redaction layer over verb results.
+  - **`AngularComponentChannel<TComponent>`** (new package `@memberjunction/ng-realtime-channels`). Wraps an existing Angular component as a channel surface without rewriting it: a descriptor plus `ReadSurfaceState`, `ApplySurfaceVerb` and `SurfaceEvents`, and optional `OnSurfaceOpen`, `SurfaceCompletion`, `OnSurfaceBound` and `SurfaceElement`. It owns binding and unbinding, change-driven perception (an event emitted while the agent's verb runs is attributed to the agent), verb resolution, validation and serialization, completion, state of record, and pictures. A verb that arrives before the surface exists waits, bounded (5 s), for the real component and otherwise fails with `surface_unavailable`; it neither runs against a hidden instance nor is acknowledged and applied later.
+  - **Opt-in DOM rasterizer** (`@memberjunction/ng-realtime-channels`). `EnableChannelFrameCapture()` registers a bounded `html-to-image` based capturer (3000 nodes, 4 s, one capture at a time, 1024 px longest edge, no web fonts) that fails soft and turns itself off after repeated or unrecoverable failures, logging one reason. Core ships none by default; Explorer opts in (`@memberjunction/ng-explorer-app`), and the Interactive Component channel sources pictures only while the user allows pixels and a video track is up. `InteractiveComponentFrameCapture` is now `ChannelFrameCapture` in the new package, and `html-to-image` moved with it.
+  - **Sample channel** (new package `@memberjunction/ng-realtime-channel-examples`). A tic-tac-toe channel built only through the adapter, not a dependency of anything and loaded only when a host imports it, with tests that play whole games (user win, agent win, draw) against the real component with interleaved user clicks and agent verbs, plus collapse and re-expand, resume, exposure and pictures.
+  - **Guide.** `guides/REALTIME_CHANNELS_GUIDE.md` (indexed in `guides/README.md`): the contract, writing a channel from scratch, wrapping a component, scoping, opening on demand, visual perception, the Interactive Component channel, publishing from an Open App, and testing.
+  - **Per-verb timeout in the adapter** (`@memberjunction/ng-realtime-channels`). `AngularComponentChannel.VerbTimeoutMs` (15 s, overridable) bounds `ApplySurfaceVerb`. On timeout the call fails with `verb_timeout` and a message the agent can act on, the serialized queue is released and the timeout is logged once with the channel and verb. A late result is never delivered, a late failure is logged, and a late success is recorded as a change so the next perception note shows the real state; nothing is rolled back.
+  - **Generic `ClientOnlyChannelServer`** (`@memberjunction/ai-agents`, loaded by `@memberjunction/server`). `MJ: AI Agent Channels.ServerPluginClass` is required, so a channel that runs entirely in the browser sets it to `ClientOnlyChannelServer` instead of writing an empty plugin. It takes its channel name from the registry row, contributes no server tools and does not rewrite saves. `InteractiveComponentChannelServer` and `IdentityVerificationChannelServer` are now thin subclasses of it that keep their existing registry keys and behavior.
+
+- 88b85fc: Realtime Channels v2, first phase: a self-describing channel contract, per-agent/app/host channel scoping, a validated `ContextTool` proxy, and a lifted visual-perception pump. Existing channels, tool names and hosts are unchanged.
+
+  `minor` because the branch edits `metadata/entities/JSONType-interfaces/IAgentSettings.ts` (the new `Realtime.Channels` block); there is no migration, and no new entity column.
+  - **Channel descriptors** (`@memberjunction/ai-core-plus`, `@memberjunction/realtime-runtime`). `RealtimeChannelDescriptor` (nouns, verbs with parameter schemas and `InvokableBy`, events, inputs/output, display policy, default availability, exposure ceiling) and the new `BaseRealtimeChannelClient` members `GetDescriptor`, `GetState`, `ApplyVerb`, `Events$`, `Output$`, `Open`, `Complete`, `InstanceId`. A channel that implements only the original members is synthesized a descriptor, so nothing changes for it. The Whiteboard, Remote Browser, Media and Client Context channels ship authored descriptors; their native tool names are unchanged. Perception notes are structured and debounced (`[channel:<Key>#<instance>] state_changed {…}`, a snapshot first and then deltas).
+  - **Channel scoping.** Code default, then agent (`realtime.channels` in the configuration cascade), then app (`Application.AgentSettings.Realtime.Channels`), then host-declared channels (`StartRealtimeSession(…, { HostChannels })`, which work on connect-only providers with no registry rows). `IsActive = false` on a registry row remains a master kill switch. At mint the browser reports its candidates (`channelCandidatesJson`) and the server returns the resolved policy (`ClientPolicyJson`), narrows the declared tools to match, persists the in-scope channel keys on the session, and drops the excluded channels' server plugins. A client with no server policy resolves the same scope locally, and a client against an older server falls back to the original mint mutation.
+  - **`ContextTool` proxy.** Accepts `target: { channel, instance? }`; a targeted call is validated against the addressed verb's parameter schema and returns a structured, model-recoverable error on failure. `on-demand` channels are opened mid-session with `action: "open"`. A catalog note rendered from the descriptors tells the model which channels exist.
+  - **App client tools.** `Application.AgentSettings.ClientTools` is now read by the realtime path and resolved through `ResolveClientTools`. `RegisterAppClientTools(tools, owner?)` is owner-keyed (new `UnregisterAppClientTools` / `ClearAppClientTools`); Explorer registers its globals and the active surface under separate owners and clears the previous app's surface tools on an app switch (previously they lingered). `FormatClientToolsForPrompt` is removed: it never had a caller.
+  - **Visual perception.** The Whiteboard's change-driven frame pump now lives in the base channel (`EnableVisualPerception`); frames are tagged with the change id of the state they describe. The Whiteboard's behavior is unchanged.
+  - **Session config rewrites no longer drop fields.** `RealtimeClientSessionResolver` rebuilt the persisted session config field by field on the run-id and pending-feedback rewrites, dropping `mediaCollectionID` and `directActions`; it now carries the existing config forward.
+
+- 0e5a4cd: Template users: an account set up to be copied, with its pinned apps, views, settings, dashboards and Skip conversations, so a new user starts with all of it.
+  - **`User.IsTemplate`** (migration). The User form shows it under Account Settings. A copy is never a template itself.
+  - **The `template` preset on `MJ: Users`** copies a template user whole: views, settings, dashboards with their categories and links, conversations with their messages, and the artifacts and versions in them. Dashboard layouts, pinned items and artifact references point at the copies. The planner refuses the preset for any user not flagged `IsTemplate` (`TEMPLATE_SOURCE_REQUIRED`), so one person's private work is never copied to another. Only a template-mode preset may open a Locked edge or copy an entity marked `CloneableFromTemplate` (conversations and their messages); request overrides still cannot.
+  - **First sign-in.** `userHandling.newUserTemplate: { email, preset }` in `mj.config.cjs` makes MJAPI create each new user as a copy of that template. Any problem falls back to a plain user, so sign-in never breaks.
+  - **`mj user clone`** creates a user as a copy of another: `--from`, `--email`, `--first`, `--last`, `--preset` (default `template`), `--inactive`, `--dry-run`.
+  - **Open Apps can ship a template user.** `templateUser: { email, description?, preset?, newUsers?: offer | always | never }` in `mj-app.json`. After install, the installer gets their own copy, from `MJ_INSTALL_USER_EMAIL` / `_FIRST_NAME` / `_LAST_NAME` or prompts. The template can also be set for later sign-ins (`MJ_INSTALL_TEMPLATE_FOR_NEW_USERS`). The step only warns on failure; it never fails the install.
+  - **Explorer** shows a red banner while a template user is signed in, because everything changed there reaches every later copy.
+
+  Fixes found on the way:
+  - **CurrentUser** now returns `IsTemplate`, `FirstLast` and the `Employee*` fields. It returned null for every `UserInfo` field missing from its hand-written list. The list is now `SessionUserFields`, with a test that it covers every field the client requests.
+  - **Artifact version saves inside a transaction.** `MJArtifactVersionEntityServer` read attributes through the global provider. On a server's per-request provider, inside a clone's transaction, each read waited about 30 s on the transaction's own locks. A 23-version copy took 11 minutes instead of seconds. It now reads through the entity's provider.
+  - **Copies keep their rows' order.** The dependency walker reads children oldest first (`__mj_CreatedAt`). A row whose remapped column points only at its own ancestors, such as a copied user's messages naming the new user, now saves within the graph save instead of after it. Copied conversations kept their messages, but showed each answer above its question.
+  - **User copies keep dashboard and view names.** The entities' `(copy)` rename applies only where a name could collide. A user copy owns its rows, so the rename only mislabelled them.
+  - Record cloning: `Child.JoinField` preset keys, case-insensitive key lookup in JSON remap, Golden Layout and top-level-array JSON remap paths, and a descendant's `JsonRemap` merged with the entity's own.
+  - A conversation message can be created during a clone save (`CloneContext`) by a user who doesn't own the conversation yet. Updates and deletes are still checked.
+
+- b0b2cc9: Add Video Studio (`@memberjunction/video-studio-core`, `@memberjunction/video-studio`, `@memberjunction/video-studio-render-worker`), including the Video Studio orchestrator agent and its Pre-Production, Render, Critic, and Repair stages, deterministic G1–G6 quality gates and rubric scoring, optional spoken voiceover narration (`VideoNarrationSpec.Enabled`) with automatic `<audio>` track injection in `BuildRenderBundle`, the isolated HyperFrames render worker and `LocalWorker`, `Remote`, and `Docker` render drivers, the Video Studio application (`Productions`, `Brand Kits`, `Archetypes`) with a built-in `ng-conversations` right-side slide-in copilot pinned to the Video Studio agent, the `Video Production` artifact type and viewer plugin, the `Produce Video` action, and the `VideoStudio.SetupHealth` remote operation and setup health card. Add general `MJ: Brand Kits` (`@memberjunction/ng-brand-kits`) for shared palette, typography, logo, voice, and generation policy management. The Video Studio pages share one right-side slide-in (chat from the first open, the brief above the composer, Iterate on the same conversation), pages can hide the floating chat bubble with `SuppressChatOverlay` in their agent context, and `@memberjunction/ng-brand-kits` adds a brand kit creator with a live preview. Add video generation (`BaseVideoGenerator`, `AIVideoRunner`, the Black Forest Labs FLUX 3 video driver, the `Generate Video` action, and `Per Second` pricing unit support), pre-call generation spend-cap enforcement, and FLUX.2 Pro endpoint, polling, and reported-cost recording fixes. Generated assets are always disclosed in the viewer, inline preview, review notes, and manifest provenance, never stand in for data or `NeverInvent` items, and any integrity criterion failure or synthetic person violation blocks delivery even when repair rounds are exhausted.
+
+  Add the `Consult` sub-agent chat-handling channel (`AIAgent.ChatHandlingOption`, `AIAgent.MaxSubAgentConsultRounds`, `AIAgentRelationship.ChatHandlingOption`), caller-chosen sub-agent configuration presets (`AIAgentRelationship.ConfigurationPresetID`), sub-agent consultation and `resumeRunId` resumption across child, related, parallel, and native sub-agent paths, and root escalation to `MJ: AI Agent Requests` when consult rounds are exhausted. Add peer-to-peer Sage transfers (`Handoff` step type, inline `mj-agent-handoff-card`, conversation ownership chrome, and `FollowHandoffs` messaging-adapter support). `SaveAgentRunMedia` now persists `FileID` on `MJ: AI Agent Run Medias` rows, the artifact viewer registers dedicated Video and Audio plugins, and `AgentScheduledJobDriver` forwards `ConfigurationID` when starting scheduled agent runs.
+
+  Task graphs opted in through agent metadata (`enableTaskGraphs`) now run through `LoopAgentType` with merged prompt parameters and parent hierarchy cycle guards. Explicit `@Sage` mentions or clicking Return to Sage ends specialist agent continuity in every conversation. Follow-up messages to a continued specialist agent resolve that agent's own configuration preset rather than forwarding the conversation manager's preset. Typing a reply in the conversation thread resumes an open sub-agent consult escalated to the user, matching the requests dashboard flow. `ChatHandlingOption = 'Retry'` re-prompts the loop and returns a sub-agent's question to the parent as a result rather than ending the run, capped by the unproductive-retry limit. Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, and Gemini 3.8 Flash now declare Image and File (and Gemini also Audio and Video) input modalities; Computer Use auto-select now picks Claude Opus 5.5 or Claude Fable 5.1 instead of the text-only fallback, which can change that feature's cost, and chat file attachments turn on for agents using these models. Also harden regex parsing in `@memberjunction/ai-form-builder` and `@memberjunction/database-designer-core` against polynomial backtracking (ReDoS).
+
+  The Video Studio render worker requires Node >= 22 and system `ffmpeg` on `PATH`; the `Docker` render driver is recommended for production deployments.
+
+### Patch Changes
+
+- c159e2f: MJAPI can now live under a path prefix without per-route CDN patches (#5674). A new setting, `MJAPI_BASE_PATH` (default `/`), is the prefix MJAPI mounts every route under. `GRAPHQL_ROOT_PATH` stays only where Apollo listens, and `MJAPI_PUBLIC_URL` stays where the world reaches MJAPI.
+  - **`ApiRoute(subpath, { absolute? })`** (new, `@memberjunction/server`): the mount path under `MJAPI_BASE_PATH`, or with `absolute` the public URL (`MJAPI_PUBLIC_URL` + subpath). Also exports `ApiRootPath()`, `ConfiguredPublicUrl()`, `JoinApiRoute()` and `NormalizeApiRootPath()`.
+  - **Core mounts** (`/healthcheck`, `/oauth`, `/esignature`, `/media`, `/realtime/sdp-exchange`, `/magic-link`, `/widget`, `/realtime/verify`, `/health/extensions`, `/auth`) are composed under the base path, as are the magic-link and realtime-verify form actions, `CreateMediaAccessToken`'s URL and `CreateUploadStageToken`'s `Url`.
+  - **Server extensions:** every `RootPath` is relative to the base path. `PrepareServerExtensionConfigs({ apiRootPath })` composes the mount path (new `ComposeServerExtensionMountPath`), and `ServerExtensionInitContext.apiRootPath` carries it. `graphqlRootPath` is no longer a reserved root, and `CoreReservedServerExtensionRoots()` no longer takes it.
+  - **Explorer is told where MJAPI is.** New optional `MJAPI_URI` environment value (`MJEnvironmentConfig`, `WorkspaceEnvironment`, `GraphQLProviderConfigData.MJAPIURL`) and `ResolveMJAPIURL(mjapiUrl)` in `@memberjunction/core`. When set, the auth-provider catalog, the Login Studio sign-in page, the healthcheck poll, the OAuth code exchange and the upload-stage POST use it as given. When unset, each keeps exactly its previous behaviour.
+  - Default config changes nothing: with `MJAPI_BASE_PATH` and `MJAPI_URI` unset, every mount path, emitted URL and Explorer request is unchanged, whatever `GRAPHQL_ROOT_PATH` is. REST stays at the origin-absolute `/api/v1`.
+
+  **Opting in (`MJAPI_BASE_PATH=/api`, e.g. behind MJ Central's CloudFront, which forwards `/api/*` unstripped).** Every route moves under the prefix, and nothing on the MJ side reports a caller still using the old address. In the same change:
+  - Set `MJAPI_PUBLIC_URL` to the prefixed address (`https://host/api`) so links MJAPI hands out carry it, and set Explorer's `MJAPI_URI` to the same. Server and Explorer switch together: either one alone leaves the login-provider catalog and the healthcheck pointing at the wrong place.
+  - Re-register every URL an outside party holds, or keep a temporary edge redirect from the old path: provider webhooks (Open App extensions such as Orders' `/webhooks/payments` and `/webhooks/billcom`, telephony `/telephony/*` and `/meetings/teams`, Slack/Teams messaging, core `/esignature/webhook/:driverKey`), OAuth redirect URIs (`/oauth/callback`), and links already emailed (magic-link invites, realtime-verify links). Carrier URLs MJ registers itself (`BuildCallbackUrl`) follow automatically.
+  - Remove CDN behaviors added per route for the old root paths once nothing calls them.
+  - **Update your own MJExplorer app.** `packages/MJExplorer` is a starter template, not a published package, so this release does not change your copy. Its `src/main.ts` preloads the sign-in data before Angular starts and must pass `MJAPI_URI` through itself. Add `MJAPI_URI` to your `environment.ts` files, then change the two preload calls:
+
+    ```ts
+    AuthProviderCatalog.Preload(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    LoginScreenLoader.Load(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    ```
+
+    If your `environment.ts` is a plain object literal without `MJAPI_URI`, type it as `MJEnvironmentConfig` from `@memberjunction/ng-bootstrap` so the property exists. Everything after bootstrap (healthcheck, OAuth exchange, uploads, the login screen) reads `MJAPI_URI` from the environment you already pass to `MJExplorerAppModule.forRoot()`; no other change is needed. Skipping this step does not break sign-in. The provider list and the Login Studio design just fall back to the compiled defaults.
+
+  Telephony media WebSocket URLs (`/telephony/*/media`) and `/realtime-proxy` do not move.
+
+- b5955fb: The org brand overlay now survives a cold load. `ApplyBrandOverlay()` persisted only the overlay id, and the overlay stylesheet is a session Blob, so after a reload the pre-paint script restored the `data-theme-overlay` attribute with no CSS behind it: the shell's loading screen and the sign-in page rendered MJ's default tokens until workspace bootstrap re-emitted the overlay at the end of its metadata refresh.
+  - `ApplyBrandOverlay()` persists the emitted overlay CSS beside the id (`mj-theme-overlay-css`, JSON `{ id, css }`). A session-only overlay (`persist: false`, the Theme Studio preview) persists neither.
+  - New `ThemeService.RestorePersistedBrandOverlay()` re-injects that CSS as a `<style>` and sets the attribute from localStorage alone, and records the overlay id so `Initialize()` keeps the attribute until bootstrap registers the brand. Bootstrap's real `<link>` replaces the preloaded `<style>`; a CSS entry whose id no longer matches the persisted overlay is dropped as stale; `ClearBrandOverlay()` removes both. localStorage failures are swallowed as before.
+  - `MJExplorerAppComponent` calls the restore in its constructor, before the sign-in page or the shell's loading screen renders.
+  - `ng-workspace-initializer`: when bootstrap's brand query succeeds and finds no active brand, it calls `ClearBrandOverlay()`, so a brand restored from localStorage cannot outlive its retirement; a failed query leaves the cached brand alone. The service tracks a restored overlay as pending until bootstrap confirms or clears it (not inferred from the preload `<style>`'s presence), the preload lookup is an attribute walk so an id with selector metacharacters cannot throw from the constructor, and a re-apply of the same brand skips the CSS write.
+  - `ng-auth-services`: the logout cache clearing now preserves `mj-theme-overlay-css` alongside `mj-theme` and `mj-theme-overlay`, so a sign-out followed by a sign-in still has the CSS to restore. Without it the sign-in cold load had the attribute and no stylesheet behind it.
+
+  Verified live: on a cold reload the loading screen is branded at the first instant it exists (~400 ms, before any real stylesheet link), and the real overlay link takes over once bootstrap completes.
+
+- 95c7682: The chat overlay's top boundary no longer throws NG0100 when the connectivity banner appears
+
+  `MJExplorerAppComponent.ChatOverlayTopBoundaryPx` read the banner height from the
+  `--mj-connectivity-banner-height` custom property with `getComputedStyle`. The banner publishes that
+  height from its `@slideDown.done` listener, which runs inside the animation flush while views are
+  still refreshing. Explorer is zoneless, so that listener only marks the shell view dirty, and a
+  targeted pass never re-reads the shell's binding — but dev-mode check-no-changes does, so every
+  later change-detection pass reported:
+
+      NG0100: ExpressionChangedAfterItHasBeenCheckedError ... Previous value: '60'. Current value: '95'.
+
+  The banner now also exposes its height as a `HeightPx` signal (CSS consumers keep using the
+  property), and the shell reads it through a `viewChild` query of the banner. The write marks the shell
+  view as a stale consumer, so Angular re-refreshes it in the same pass. Dev-mode only — the overlay was
+  positioned correctly either way.
+
+- bb3028a: A Config dashboard's tab has an AI assistant: a resizable side pane that chats, in text or in a Gemini 3.8 Live voice session, with the new **Dashboards Expert** agent, which the Dashboards application pins through its `AgentSettings`.
+  - **Client tools.** The tab gives the agent client tools: `GetDashboardState`, `GetDashboardScreenshot` and `SearchSources` read the dashboard and find views, queries, entities and artifacts; `AddPanel`, `RemovePanel`, `MovePanel`, `ResizePanel` and `UpdatePanelSettings` make in-memory edits, one at a time, that put the tab in edit mode and that Cancel discards; and `RequestSaveDashboard` and `RequestPinToHome` ask the user in a confirm dialog, so a save or a Home pin happens only when the user confirms it. The edit and request tools take the `dashboardId` that `GetDashboardState` returns and refuse a call for a dashboard that is no longer open.
+  - **`DashboardResource`** (`@memberjunction/ng-explorer-core`, the dashboard tab) adds the AI pane's members: the pane state `ChatOpen`, `CopilotExpanded`, `MainSizePct`, `CopilotSizePct`, `CopilotMinPct`, `CopilotMaxPct` and `ShowCloseChatConfirm`; the chat state `ChatAgentId`, `ChatAgentName`, `ChatAgentError`, `ChatConversation`, `ChatConversationId`, `ChatIsNewConversation`, `ChatPendingMessage`, `ChatPendingAttachments`, `ChatAppContext`, `ChatApplicationId` and `ChatEnvironmentId`; the open save or pin confirm, `AgentConfirm`, with `OnAgentConfirm()`; and the methods `ToggleChat()`, `CloseChat()`, `OnCloseChatConfirmed()`, `OnCloseChatCancelled()`, `ToggleCopilotExpanded()`, `OnCopilotSplitDragEnd()`, `OnChatConversationCreated()`, `OnChatRealtimeConversationReady()`, `OnChatPendingMessageConsumed()`, `OnChatNavigationRequest()` and `OnChatOpenEntityRecord()`.
+  - **Layout editor** (`@memberjunction/ng-dashboard-viewer`). The package exports the pure layout editor behind the tab's edit tools (`InsertPanel`, `MovePanel`, `ResizePanel`, `RemovePanelFromLayout`, `SimplifyLayout`, `FindPanelPath`, `DescribePath`, `LayoutEditError`, `PANEL_PLACEMENTS`) and its types `PanelPlacement`, `PanelPosition`, `LayoutPathStep` and `SimplifiedLayoutNode`. `DashboardViewerComponent` adds `ApplyLayout()`, which shows a layout that these functions built, and `GetPanelPath()`, which gives a panel's address in the layout. The viewer's `AddPanel` returns the new panel's ID and honours its position: its optional `location` argument is now a `PanelPosition`, not a `LayoutLocation`, so a caller that passes a `LayoutLocation` must change, and a position that is not valid throws `LayoutEditError`. `UpdatePanelConfig()` now returns a `Promise` that settles when the layout is rebuilt (it rejects when the rebuild fails). A subclass that overrides `AddPanel()` or `addPanel()` must take a `PanelPosition` and return `Promise<string | null>`, and one that overrides `UpdatePanelConfig()` or `updatePanelConfig()` must return `Promise<void>`. Each panel's content element has a `data-panel-id` attribute.
+  - **Screenshots** (`@memberjunction/ng-shared`). The package adds `CaptureElementJpeg`, with the types `ElementCaptureOptions` and `ElementCapture`, the defaults `ELEMENT_CAPTURE_DEFAULTS`, and the helpers `ComputePixelRatio()` and `StripDataUrlPrefix()`.
+  - **Client tool results.** A client tool result now reaches the model in full: the results of one `ClientTools` step go into one message that expires after 3 turns, and the optional Loop prompt parameter `clientToolResultMaxChars` truncates them with a visible note. In `@memberjunction/ai-agents` it is `LoopAgentTypePromptParams.clientToolResultMaxChars`, and `DEFAULT_LOOP_AGENT_PROMPT_PARAMS` sets it to `-1` (no cap); code that builds its own `Required<LoopAgentTypePromptParams>` must add it.
+  - **Images in tool results.** A result can also carry images (`Media`: JPEG, PNG or WebP, at most 4 items of at most 2,000,000 decoded bytes each), which `ParseClientToolMedia` (`@memberjunction/ai-core-plus`) checks in `RespondToClientToolRequest`, a bad item giving a failed tool result; the agent client sends them, and the agent and prompt runner pass them to the model as image blocks that expire after 2 turns, while the step output keeps only their metadata. `@memberjunction/ai-core-plus` adds `ClientToolMediaItem` (`MimeType`, `Base64`, optional `Width` and `Height`), `ClientToolMediaParse` and `CLIENT_TOOL_MEDIA_LIMITS`, and an optional `Media` on `ClientToolResponse` and `ClientToolResultSummary`; `@memberjunction/ai-agent-client` adds an optional `Media` on `ClientToolResult`.
+  - **`RespondToClientToolRequest`** (`@memberjunction/server`) takes a new optional GraphQL argument, `media`: a string that holds the images as a JSON array. In TypeScript, `ClientToolRequestResolver.RespondToClientToolRequest()` has the new parameter before the context, so a direct caller that passes the context by position, or a subclass that overrides the method, must change. The agent client's mutation always names the `media` argument, so it needs a server from this release: an older server rejects every client tool response (`Unknown argument "media"`), and each client tool call then fails when it times out. A `result` that is not valid JSON now also gives a failed tool result, so the agent no longer waits for the request to time out.
+  - **Media in the agent and prompt runner.** `BaseAgent`'s protected `contentToString()` now turns an image, audio, video or file block into a short stub (for example `[image omitted]`), not its base64 text, and its protected `estimateTokens()` counts each such block as 1,600 tokens. The prompt runner keeps the content blocks that a user message already has when it adds file blocks, and it no longer changes the caller's message objects when it replaces media that the model cannot read.
+  - **Voice.** Voice tool results stay text, since the Explorer shell strips `Media` before a realtime session sees them (`WithoutMedia()`, `@memberjunction/ng-explorer-app`). A voice session's delegated run (`invoke-target-agent`) receives the browser session ID and the app context from the session start (`ExecuteRelayedToolInput.BrowserSessionID` and `AppContext`, `@memberjunction/ai-agents`), so the delegated agent can call the page's client tools; a scoped anonymous caller's run, which executes as the system user, gets no app context. The server does not store an app context whose JSON is longer than 256,000 characters, and the delegated runs then get none. A voice session also keeps its direct actions when a delegated run pauses for the user's answer. In `@memberjunction/realtime-runtime`, a surface client tool whose handler returns `Success: false` gives the voice model a failed result, and `RealtimeSessionRuntime.SendVideoFrame` returns whether the frame was sent; a subclass that overrides it must return a `boolean`.
+  - **Agent context.** The sub-agent catalog lists only Active relationship targets. The Explorer shell keeps the page's additional context when it rebuilds the app-context snapshot while the page's tab is attached, clears it when the tab is detached, and restores it when the tab is reattached. The client tools a page registered now follow the same rule: only the detach of that page's own tab clears them, so the detach of another tab no longer takes the open dashboard's tools away from the agent. In `@memberjunction/ng-shared`, `AgentContextUpdate` gains `Lifecycle` (`'Detached'` or `'Reattached'`), which `NavigationService.NotifyResourceDetached()` and `NotifyResourceReattached()` set; the detach of another tab now sends an update with only `Caller` and `Lifecycle`, not an empty `AgentClientTools` list.
+  - **Chat area** (`@memberjunction/ng-conversations`). The chat area's empty-state composer now receives the host's default agent, application and app context, so a voice call can start before the first message, and the dashboard tab adopts the conversation that call created when it ends.
+
+- 555a3f3: Add the Excel add-in's first release: a unified **Export ▾** toolbar menu across entity grids (both `(Default)` entity views and saved views) and query results grids offers **Open in Excel** alongside snapshot export, downloading a connected workbook that holds no rows and fills, in Excel, with what the person who opens it can see. Inside Excel, the MemberJunction task pane supports connecting to any MemberJunction server (via Office Dialog sign-in or external-browser encrypted connection-code handoff), browsing Applications, Entities, Saved Views, and Query Categories/Saved Queries with parameters directly from any workbook, and managing/refreshing all connected worksheets. New packages `@memberjunction/excel-addin` (workbook contract, typed `ExcelAddin.*` Remote Operations, encrypted sign-in handoff, the add-in pane) and `@memberjunction/excel-addin-server` (a Server Extension that serves the add-in and a per-host manifest, plus the operations' server bodies). Excel signs in through Explorer's new `office/connect` page, which Explorer renders on its own like the OAuth callback, and holds a per-user API key scoped to `view:run` and `query:run`. Off until a host configures the `ExcelAddinServerExtension`; see `guides/EXCEL_ADDIN_GUIDE.md`.
+- e225ece: Login screen: a composable Explorer surface — theme it, rearrange it, extend it.
+
+  The sign-in page was the one Explorer surface a deployment could not adapt without forking the
+  component or writing CSS against its internal class names. It is now customized the same three
+  ways the rest of MJ is, each additive and each defaulting to today's rendering:
+  - **Tokens** — a `--mj-login-*` group covers the whole surface: `--mj-login-banner-bg` (the story
+    panel's background; the stock gradient is its default, so a theme can retarget just the
+    `--mj-login-grad-*` stops or replace the value outright), banner text and logo, the
+    editorial split, the panel surface, the picker width, and both card surfaces. Only the gradient
+    stops carry dark-mode values — everything else either references a semantic token that swaps on
+    its own or is theme-constant by design. Documented in THEMING.md.
+  - **Layout** — `LoginLayout`: `'split'` (stock), `'split-reverse'` (mirrored; DOM order unchanged,
+    so the story stays first for a screen reader), `'centered'` (one column: story on a full-bleed
+    banner background, sign-in options in a card on top). A layout moves regions; it never drops one.
+  - **Content** — `LoginHeading`, `LoginShowPoweredBy`, `LoginBannerAlignment`, `LoginBannerTitle`,
+    `LoginBannerSubtitle`, `LoginBannerLogoLabel`, and `LoginCards`: a `MJLoginCard[]` of tiles
+    (icon, title, text, optional sanitized link) each naming its region, so content a deployment
+    wants to add is configuration rather than markup.
+  - **Slots** — the `mjLoginSlot` directive (the shape of `mjChatSlot` in `ng-conversations`) projects
+    templates into `bannerContent` (replaces the brand block), `bannerFooter`, `panelHeader` and
+    `panelFooter`. Replace-vs-augment is stated per slot; a footer slot takes over from that region's
+    cards. `<mj-login-picker>` is deliberately not replaceable — a host surrounds sign-in, not owns it.
+
+  Also fixes a latent clipping bug this made easy to hit: the app shell sets
+  `html, body { overflow: hidden }`, so login content taller than the viewport was unreachable — which
+  already affected a tenant with many identity providers on a short screen. Both columns now scroll
+  their own content and centre with auto margins rather than `justify-content: center`, which would
+  strand the overflow above the scroll origin.
+
+  Review follow-ups: the card's focus ring took `border-radius: inherit`, which resolves to `0` on a
+  pseudo-element (the property is not inherited, and `inherit` takes from the originating anchor
+  rather than the positioned card), so it drew square around a rounded tile; the login screen gains
+  the repo's first `@media (forced-colors: active)` block, since Windows High Contrast substitutes
+  the card fill, border token and hover tint away and this is the one surface a user meets before
+  any other; and landscape phones are handled, where the width-only breakpoints left the sign-in
+  controls off the bottom of the screen.
+
+  The stacked layout's banner is now sized by its height rule rather than by a flex grow ratio. It
+  carried `flex: var(--mj-login-banner-flex, 1.05)`, whose shorthand sets flex-basis to `0%`, so
+  every `height` in the stacked breakpoints was dead — invisible until the sign-in column gained
+  `overflow-y: auto`, which dropped its automatic minimum size to zero and handed the layout to the
+  ratio. So THIS DOES CHANGE the stacked banner for an app that binds nothing: 183px to 92px at
+  844x390 and 277px to 196px at 820x560, in both cases returning the sign-in options to the screen.
+  Portrait is deliberately unchanged at 422px.
+
+  Two tokens are added alongside `--mj-login-panel-text` — `--mj-login-panel-text-secondary` and
+  `--mj-login-panel-text-muted` — so a themed panel carries the picker's whole text ramp instead of
+  only its body colour. Both default to the semantic tokens.
+
+  Apart from the stacked banner above, no behaviour or visual change for an app that binds nothing,
+  projects nothing and themes nothing.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- db4e210: - `@memberjunction/ng-base-forms`:
+  - Extract declarative `[mjRecordLink]` directive (`MjRecordLinkDirective`), `<mj-record-link>` component (`MjRecordLinkComponent`), and body-mounted singleton `MjRecordPreviewPopoverService` so any custom form header, `BaseFormPanel`, or dashboard widget can attach hover-intent record previews, inline Quick Edit with live propagation to virtual display fields, standard/polymorphic FK resolution, and `FormNavigationEvent` navigation. Refactor `<mj-form-field>` and `<mj-record-links>` to share the same DRY infrastructure.
+  - Upgrade `<mj-record-preview-popover>` (`MjRecordPreviewPopoverComponent`) with an Option A header micro-cluster (Copy ID pill, `[✎]` Quick Edit, `[↗]` New Tab), clickable record title (`Record →`), auto-spanning wide fields (`grid-column: 1 / -1`), contextual `Cancel`/`Save` footer only in edit mode, cancellable `BeforeQuickEditSave` / `AfterQuickEditSaved` events, and 3-tier `@RegisterClass(MjRecordPreviewPopoverComponent, ...)` / `ClassFactory` runtime specialization (`ResolveRecordPreviewPopoverType`).
+  - Add one-click Quick Unlink for nullable outgoing foreign keys inside `<mj-record-links>`.
+  - `@memberjunction/ng-ui-components`:
+    - Add general-purpose, zero-domain-knowledge `<mj-burst-cluster-strip>` (`MJBurstClusterStripComponent`) for irregular time-series event streams with generic `[Items]` or raw `[Data]` + `[FieldMap]` binding, configurable grouping & resolution (`Resolution`: `'auto' | 'session' | 'day' | 'week' | 'month' | 'quarter' | 'year'`, `CoalesceStrategy`: `'adaptive-era' | 'merge-closest'`, `SessionGapHours`, `GroupSameCalendarDay`, `MaxClusters`, `EraZoomThreshold`), semantic Click-to-Zoom on multi-year era cards, rich imperative methods, and cancellable `Before*` / `After*` events.
+  - `@memberjunction/ng-record-changes`:
+    - Consume `<mj-burst-cluster-strip>` from `@memberjunction/ng-ui-components` to replace the linear 12-bucket spark-bar chart with a **Burst-Aware Cluster Strip (Time-Gap Compression)** with multi-year adaptive era zoom and click-to-filter session cards.
+    - Add a Cross-Version Diff Comparison workbench (`vA ↔ vB`) to `<mj-record-changes>`, allowing users to compare any two historical snapshots or compare a historical snapshot against the live record state.
+  - `@memberjunction/codegen-lib`: Prevent foreign keys, polymorphic `RecordID` columns (`EntityIDFieldName` set or `*RecordID`/`*RecordPrimaryKey` naming), and columns on tables with an `MJ: Entities` FK from being auto-selected as `IsNameField`.
+  - `@memberjunction/ng-explorer-core` & `@memberjunction/ng-explorer-app`: Fix infinite loading screen hang when navigating to an invalid or unmatched URL by handling `NavigationError` / `NavigationCancel` in `ShellComponent.ngOnInit` and falling back to the active workspace tab or landing app when a deep link fails to resolve.
+- b1e628e: Removes the legacy pre-`mjButton` button system from the Explorer global stylesheet (`_common.scss`): `.mj-btn-primary`, `.mj-btn-secondary`, `.mj-btn-ghost`, `.mj-btn-icon-only`, `.mj-btn-sm`, `.mj-btn-lg`, and the `.mj-btn-icon` child rule, plus two viewport overrides of `.mj-btn`. Buttons use `mjButton` with `variant`/`size` inputs, or the BEM classes `mj-btn mj-btn--<variant> mj-btn--<size>` where a directive cannot be applied. Class-for-class: `mj-btn-primary` → `mj-btn--primary`; `mj-btn-secondary` (transparent, brand border) → `mj-btn--outline`; `mj-btn-ghost` → `mj-btn--flat`; `mj-btn-icon-only` → `mj-btn--icon`; `mj-btn-sm` → `mj-btn--sm`; `mj-btn-lg` → `mj-btn--lg`. Also removes the dead Kendo-era icon-card and skip-icon rule sets (`.mj-icon-card*`, `.mj-card-icon*`, `.mj-card-actions`, `.skip-icon*`, every `.k-*` selector) and tokenizes the stylesheet's remaining hardcoded colors; the modal backdrop now uses `--mj-bg-overlay`. The Files grid's row action buttons now use `mj-btn--flat mj-btn--sm` instead of the undefined `mj-btn-flat mj-btn-sm`. Apps that consume `@memberjunction/ng-explorer-app/dist/styles.scss` and still write any removed class in a template should migrate to `mjButton`. Follow-ups landed in the same change: the parallel single-dash `.mj-btn-*` selectors in `_shared-patterns.scss` and explorer-settings are gone (explorer-settings' unused `_md3-shared.css` is deleted outright); the consumer-less `.mj-modal-overlay` / `.mj-modal` / `.mj-modal-sm..xl` / `.mj-modal-close` / `.mj-modal-confirm*` / `.mj-modal-loading*` rules are removed while `.mj-modal-header/-body/-footer` stay; the Files grid drops its unreachable `.grid-action-btn` / `.action-buttons` component CSS; and the two leftover Kendo drawer `querySelector` calls in the Explorer shell and `MJInitializationService.NavigateToInitialRoute` are removed (a bare `/` initial path is left to the router's default route, which is what already happened).
+- bfa2621: The floating chat overlay now follows the shell's chrome policy. `Shell.ChatOverlay.Enabled` already switched the bubble platform-wide, but a host's `BaseShellChromePolicy` could narrow search, notifications and the app switcher per user and not the overlay, so a host that owns its own AI surface for one audience (a learner portal) had to hide the bubble with route-scoped CSS.
+  - `ShellChromeFlags` gains `chatOverlay`, baselined from `Shell.ChatOverlay.Enabled` and narrow-only like the other booleans: a policy can turn it off, never back on past Instance Config.
+  - `ShellComponent.ChromeFlags` exposes the resolved set. `MJExplorerAppComponent.ShowChatOverlay` reads `chatOverlay` from the shell through a view query, falling back to its own Instance Config read until the shell renders. One policy instance, one `Changed`.
+  - Tests: the narrowing and widen-ceiling cases in the chrome policy spec, the shell getter, and an explorer-app spec for shell-driven vs fallback.
+
+- 19119a8: Replace CSS keyword colours (`white`, `darkblue`) with design tokens: text on brand-primary backgrounds uses `--mj-brand-on-primary`, text on status and muted backgrounds uses `--mj-text-inverse`, and link text uses `--mj-text-link`.
+- Updated dependencies [0d81c53]
+- Updated dependencies [622f166]
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [1419ba7]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [39b35f1]
+- Updated dependencies [e97d95c]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [5114c10]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [e4c355e]
+- Updated dependencies [6dce70c]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [d43d86e]
+- Updated dependencies [b5955fb]
+- Updated dependencies [a3539d2]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [91cba84]
+- Updated dependencies [1ea684f]
+- Updated dependencies [95c7682]
+- Updated dependencies [b14c72f]
+- Updated dependencies [281724a]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [5e4205c]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [1090caa]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [7384dd6]
+- Updated dependencies [75d4e8c]
+- Updated dependencies [6849b00]
+- Updated dependencies [67f6c85]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [9d6f675]
+- Updated dependencies [b4e2ceb]
+- Updated dependencies [9898079]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [0b509c0]
+- Updated dependencies [189b702]
+- Updated dependencies [5037000]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [709f269]
+- Updated dependencies [953086f]
+- Updated dependencies [83486cf]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [24fce37]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [a3d6182]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [f3c6161]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [59e32e0]
+- Updated dependencies [d122a41]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [f7d5ab5]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [555a3f3]
+- Updated dependencies [307da67]
+- Updated dependencies [c7418dc]
+- Updated dependencies [5d83ba4]
+- Updated dependencies [42df19d]
+- Updated dependencies [cc0814d]
+- Updated dependencies [4283a82]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ea4080e]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0c634ba]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [f78fd63]
+- Updated dependencies [56d7614]
+- Updated dependencies [223669e]
+- Updated dependencies [1ce4217]
+- Updated dependencies [6aa41c7]
+- Updated dependencies [683f652]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [914e6ff]
+- Updated dependencies [67f6c85]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [f325baa]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [0fb3649]
+- Updated dependencies [131f3c4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [90eea38]
+- Updated dependencies [5fed75a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [e225ece]
+- Updated dependencies [3b7c949]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [1d43161]
+- Updated dependencies [09c7d57]
+- Updated dependencies [f26084f]
+- Updated dependencies [45ba6be]
+- Updated dependencies [542795b]
+- Updated dependencies [b081ac9]
+- Updated dependencies [c157749]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [7658d68]
+- Updated dependencies [7110019]
+- Updated dependencies [eedb293]
+- Updated dependencies [6779eed]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [fcc3f03]
+- Updated dependencies [1214eca]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [1141164]
+- Updated dependencies [44faf83]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [80905a1]
+- Updated dependencies [4c97994]
+- Updated dependencies [397ae9a]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [7e72c86]
+- Updated dependencies [dbc3462]
+- Updated dependencies [130cc7e]
+- Updated dependencies [a17a228]
+- Updated dependencies [8a26af6]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [ce758af]
+- Updated dependencies [89a5b59]
+- Updated dependencies [2a7a098]
+- Updated dependencies [4fb501e]
+- Updated dependencies [c388714]
+- Updated dependencies [5a5f8d5]
+- Updated dependencies [666d078]
+- Updated dependencies [ae78a45]
+- Updated dependencies [b2f8b5b]
+- Updated dependencies [4cff918]
+- Updated dependencies [9845c00]
+- Updated dependencies [dcfdda4]
+- Updated dependencies [d714f25]
+- Updated dependencies [989b3d0]
+- Updated dependencies [4889ca0]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [891dc77]
+- Updated dependencies [0a952ee]
+- Updated dependencies [ee81865]
+- Updated dependencies [efbe5f5]
+- Updated dependencies [cb1e602]
+- Updated dependencies [a70af2d]
+- Updated dependencies [aee2d53]
+- Updated dependencies [279b93e]
+- Updated dependencies [84fc9d4]
+- Updated dependencies [5984aea]
+- Updated dependencies [038f7dc]
+- Updated dependencies [87babe6]
+- Updated dependencies [54cd610]
+- Updated dependencies [1bed7f7]
+- Updated dependencies [8420f36]
+- Updated dependencies [6328ed3]
+- Updated dependencies [b6b3990]
+- Updated dependencies [3977917]
+- Updated dependencies [20d1f4a]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [d61b425]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [6a19f78]
+- Updated dependencies [e402de5]
+- Updated dependencies [74d9357]
+- Updated dependencies [a5b4a72]
+- Updated dependencies [8b90b41]
+- Updated dependencies [eee025e]
+- Updated dependencies [02bb563]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7d9b179]
+- Updated dependencies [db4e210]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [68f5c01]
+- Updated dependencies [093e0dd]
+- Updated dependencies [f41442f]
+- Updated dependencies [196160a]
+- Updated dependencies [663ff80]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [b1e628e]
+- Updated dependencies [1d29837]
+- Updated dependencies [36cdad5]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [8c120db]
+- Updated dependencies [bea2386]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [aac148b]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [f2f6f4b]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [382b9aa]
+- Updated dependencies [539dfe3]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a3a56a]
+- Updated dependencies [7a08dc1]
+- Updated dependencies [005612e]
+- Updated dependencies [bfa2621]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [f0db019]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [fbad999]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [19119a8]
+- Updated dependencies [57fea6a]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e2fa695]
+- Updated dependencies [e8258a1]
+- Updated dependencies [2854a2e]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [8766e99]
+- Updated dependencies [dc38250]
+- Updated dependencies [f8ddfdc]
+- Updated dependencies [fc3da91]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0
+  - @memberjunction/ai-core-plus@6.2.0
+  - @memberjunction/ng-conversations@6.2.0
+  - @memberjunction/ng-explorer-core@6.2.0
+  - @memberjunction/core@6.2.0
+  - @memberjunction/ng-shared@6.2.0
+  - @memberjunction/ng-auth-services@6.2.0
+  - @memberjunction/ng-bootstrap@6.2.0
+  - @memberjunction/ng-workspace-initializer@6.2.0
+  - @memberjunction/ai-agent-client@6.2.0
+  - @memberjunction/ng-base-application@6.2.0
+  - @memberjunction/theme-engine@6.2.0
+  - @memberjunction/ng-notifications@6.2.0
+  - @memberjunction/ng-explorer-service-worker@6.2.0
+  - @memberjunction/ng-feedback@6.2.0
+  - @memberjunction/ng-realtime-channels@6.2.0
+  - @memberjunction/ng-base-types@6.2.0
+  - @memberjunction/ng-agent-client@6.2.0
+
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- 9cb815b: Add Anchored Conversations and Record Commenting across the database schema (`AnchorType`, `AnchorKey`, `AnchorMetadata` with `IConversationAnchorMetadata`, `IsResolved`, `ResolvedByUserID`, `ResolvedAt`), `ConversationEngine`, server-side RLS + FLS read enforcement (`AnchoredConversationPostRunViewHook` on `MJ: Conversations` and `MJ: Conversation Details`), two-stage write-time FLS restricted-field classification via `AIPromptRunner` (`Anchored Comment Restricted Field Classifier`) without value-matching refusal oracles or restricted `quotedValue` snapshots, FLS/RLS-aware `@mention` notifications, entity-level commenting configuration (`MJ: Entities.Configuration.Comments.Enabled` and `RequiredPermission` — enabled by default and configurable per entity via `Configuration.Comments.Enabled: false`), record-bound "Ask AI" overlay conversations (`LinkedEntityID` + `LinkedRecordID`), and `@memberjunction/ng-base-forms` (`<mj-record-comments>` with `MJ_CommentsPanel_Width` user preference persistence, field/section/group comment badges, `FormSectionIndicators` rollup, and click-to-navigate anchor scrolling).
+
+### Patch Changes
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [0b509c0]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/ng-conversations@6.2.0-edge.8
+  - @memberjunction/ng-auth-services@6.2.0-edge.8
+  - @memberjunction/ng-bootstrap@6.2.0-edge.8
+  - @memberjunction/ng-explorer-core@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/ai-agent-client@6.2.0-edge.8
+  - @memberjunction/ng-base-application@6.2.0-edge.8
+  - @memberjunction/ng-shared@6.2.0-edge.8
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.8
+  - @memberjunction/ng-base-types@6.2.0-edge.8
+  - @memberjunction/ng-feedback@6.2.0-edge.8
+  - @memberjunction/ng-notifications@6.2.0-edge.8
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.8
+  - @memberjunction/ng-agent-client@6.2.0-edge.8
+  - @memberjunction/ng-explorer-service-worker@6.2.0-edge.8
+  - @memberjunction/theme-engine@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- b0b2cc9: Add Video Studio (`@memberjunction/video-studio-core`, `@memberjunction/video-studio`, `@memberjunction/video-studio-render-worker`), including the Video Studio orchestrator agent and its Pre-Production, Render, Critic, and Repair stages, deterministic G1–G6 quality gates and rubric scoring, optional spoken voiceover narration (`VideoNarrationSpec.Enabled`) with automatic `<audio>` track injection in `BuildRenderBundle`, the isolated HyperFrames render worker and `LocalWorker`, `Remote`, and `Docker` render drivers, the Video Studio application (`Productions`, `Brand Kits`, `Archetypes`) with a built-in `ng-conversations` right-side slide-in copilot pinned to the Video Studio agent, the `Video Production` artifact type and viewer plugin, the `Produce Video` action, and the `VideoStudio.SetupHealth` remote operation and setup health card. Add general `MJ: Brand Kits` (`@memberjunction/ng-brand-kits`) for shared palette, typography, logo, voice, and generation policy management. The Video Studio pages share one right-side slide-in (chat from the first open, the brief above the composer, Iterate on the same conversation), pages can hide the floating chat bubble with `SuppressChatOverlay` in their agent context, and `@memberjunction/ng-brand-kits` adds a brand kit creator with a live preview. Add video generation (`BaseVideoGenerator`, `AIVideoRunner`, the Black Forest Labs FLUX 3 video driver, the `Generate Video` action, and `Per Second` pricing unit support), pre-call generation spend-cap enforcement, and FLUX.2 Pro endpoint, polling, and reported-cost recording fixes. Generated assets are always disclosed in the viewer, inline preview, review notes, and manifest provenance, never stand in for data or `NeverInvent` items, and any integrity criterion failure or synthetic person violation blocks delivery even when repair rounds are exhausted.
+
+  Add the `Consult` sub-agent chat-handling channel (`AIAgent.ChatHandlingOption`, `AIAgent.MaxSubAgentConsultRounds`, `AIAgentRelationship.ChatHandlingOption`), caller-chosen sub-agent configuration presets (`AIAgentRelationship.ConfigurationPresetID`), sub-agent consultation and `resumeRunId` resumption across child, related, parallel, and native sub-agent paths, and root escalation to `MJ: AI Agent Requests` when consult rounds are exhausted. Add peer-to-peer Sage transfers (`Handoff` step type, inline `mj-agent-handoff-card`, conversation ownership chrome, and `FollowHandoffs` messaging-adapter support). `SaveAgentRunMedia` now persists `FileID` on `MJ: AI Agent Run Medias` rows, the artifact viewer registers dedicated Video and Audio plugins, and `AgentScheduledJobDriver` forwards `ConfigurationID` when starting scheduled agent runs.
+
+  Task graphs opted in through agent metadata (`enableTaskGraphs`) now run through `LoopAgentType` with merged prompt parameters and parent hierarchy cycle guards. Explicit `@Sage` mentions or clicking Return to Sage ends specialist agent continuity in every conversation. Follow-up messages to a continued specialist agent resolve that agent's own configuration preset rather than forwarding the conversation manager's preset. Typing a reply in the conversation thread resumes an open sub-agent consult escalated to the user, matching the requests dashboard flow. `ChatHandlingOption = 'Retry'` re-prompts the loop and returns a sub-agent's question to the parent as a result rather than ending the run, capped by the unproductive-retry limit. Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, and Gemini 3.8 Flash now declare Image and File (and Gemini also Audio and Video) input modalities; Computer Use auto-select now picks Claude Opus 5.5 or Claude Fable 5.1 instead of the text-only fallback, which can change that feature's cost, and chat file attachments turn on for agents using these models. Also harden regex parsing in `@memberjunction/ai-form-builder` and `@memberjunction/database-designer-core` against polynomial backtracking (ReDoS).
+
+  The Video Studio render worker requires Node >= 22 and system `ffmpeg` on `PATH`; the `Docker` render driver is recommended for production deployments.
+
+### Patch Changes
+
+- 555a3f3: Add the Excel add-in's first release: a unified **Export ▾** toolbar menu across entity grids (both `(Default)` entity views and saved views) and query results grids offers **Open in Excel** alongside snapshot export, downloading a connected workbook that holds no rows and fills, in Excel, with what the person who opens it can see. Inside Excel, the MemberJunction task pane supports connecting to any MemberJunction server (via Office Dialog sign-in or external-browser encrypted connection-code handoff), browsing Applications, Entities, Saved Views, and Query Categories/Saved Queries with parameters directly from any workbook, and managing/refreshing all connected worksheets. New packages `@memberjunction/excel-addin` (workbook contract, typed `ExcelAddin.*` Remote Operations, encrypted sign-in handoff, the add-in pane) and `@memberjunction/excel-addin-server` (a Server Extension that serves the add-in and a per-host manifest, plus the operations' server bodies). Excel signs in through Explorer's new `office/connect` page, which Explorer renders on its own like the OAuth callback, and holds a per-user API key scoped to `view:run` and `query:run`. Off until a host configures the `ExcelAddinServerExtension`; see `guides/EXCEL_ADDIN_GUIDE.md`.
+- 19119a8: Replace CSS keyword colours (`white`, `darkblue`) with design tokens: text on brand-primary backgrounds uses `--mj-brand-on-primary`, text on status and muted backgrounds uses `--mj-text-inverse`, and link text uses `--mj-text-link`.
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [1ea684f]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [9d6f675]
+- Updated dependencies [3bace5a]
+- Updated dependencies [709f269]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [555a3f3]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [b081ac9]
+- Updated dependencies [eedb293]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [efbe5f5]
+- Updated dependencies [5984aea]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [19119a8]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [f8ddfdc]
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/ng-conversations@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/ng-base-application@6.2.0-edge.7
+  - @memberjunction/ng-explorer-core@6.2.0-edge.7
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.7
+  - @memberjunction/ng-auth-services@6.2.0-edge.7
+  - @memberjunction/ng-bootstrap@6.2.0-edge.7
+  - @memberjunction/ai-agent-client@6.2.0-edge.7
+  - @memberjunction/ng-shared@6.2.0-edge.7
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.7
+  - @memberjunction/ng-agent-client@6.2.0-edge.7
+  - @memberjunction/ng-base-types@6.2.0-edge.7
+  - @memberjunction/ng-notifications@6.2.0-edge.7
+  - @memberjunction/ng-feedback@6.2.0-edge.7
+  - @memberjunction/ng-explorer-service-worker@6.2.0-edge.7
+  - @memberjunction/theme-engine@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- b5955fb: The org brand overlay now survives a cold load. `ApplyBrandOverlay()` persisted only the overlay id, and the overlay stylesheet is a session Blob, so after a reload the pre-paint script restored the `data-theme-overlay` attribute with no CSS behind it: the shell's loading screen and the sign-in page rendered MJ's default tokens until workspace bootstrap re-emitted the overlay at the end of its metadata refresh.
+  - `ApplyBrandOverlay()` persists the emitted overlay CSS beside the id (`mj-theme-overlay-css`, JSON `{ id, css }`). A session-only overlay (`persist: false`, the Theme Studio preview) persists neither.
+  - New `ThemeService.RestorePersistedBrandOverlay()` re-injects that CSS as a `<style>` and sets the attribute from localStorage alone, and records the overlay id so `Initialize()` keeps the attribute until bootstrap registers the brand. Bootstrap's real `<link>` replaces the preloaded `<style>`; a CSS entry whose id no longer matches the persisted overlay is dropped as stale; `ClearBrandOverlay()` removes both. localStorage failures are swallowed as before.
+  - `MJExplorerAppComponent` calls the restore in its constructor, before the sign-in page or the shell's loading screen renders.
+  - `ng-workspace-initializer`: when bootstrap's brand query succeeds and finds no active brand, it calls `ClearBrandOverlay()`, so a brand restored from localStorage cannot outlive its retirement; a failed query leaves the cached brand alone. The service tracks a restored overlay as pending until bootstrap confirms or clears it (not inferred from the preload `<style>`'s presence), the preload lookup is an attribute walk so an id with selector metacharacters cannot throw from the constructor, and a re-apply of the same brand skips the CSS write.
+  - `ng-auth-services`: the logout cache clearing now preserves `mj-theme-overlay-css` alongside `mj-theme` and `mj-theme-overlay`, so a sign-out followed by a sign-in still has the CSS to restore. Without it the sign-in cold load had the attribute and no stylesheet behind it.
+
+  Verified live: on a cold reload the loading screen is branded at the first instant it exists (~400 ms, before any real stylesheet link), and the real overlay link takes over once bootstrap completes.
+
+- db4e210: - `@memberjunction/ng-base-forms`:
+  - Extract declarative `[mjRecordLink]` directive (`MjRecordLinkDirective`), `<mj-record-link>` component (`MjRecordLinkComponent`), and body-mounted singleton `MjRecordPreviewPopoverService` so any custom form header, `BaseFormPanel`, or dashboard widget can attach hover-intent record previews, inline Quick Edit with live propagation to virtual display fields, standard/polymorphic FK resolution, and `FormNavigationEvent` navigation. Refactor `<mj-form-field>` and `<mj-record-links>` to share the same DRY infrastructure.
+  - Upgrade `<mj-record-preview-popover>` (`MjRecordPreviewPopoverComponent`) with an Option A header micro-cluster (Copy ID pill, `[✎]` Quick Edit, `[↗]` New Tab), clickable record title (`Record →`), auto-spanning wide fields (`grid-column: 1 / -1`), contextual `Cancel`/`Save` footer only in edit mode, cancellable `BeforeQuickEditSave` / `AfterQuickEditSaved` events, and 3-tier `@RegisterClass(MjRecordPreviewPopoverComponent, ...)` / `ClassFactory` runtime specialization (`ResolveRecordPreviewPopoverType`).
+  - Add one-click Quick Unlink for nullable outgoing foreign keys inside `<mj-record-links>`.
+  - `@memberjunction/ng-ui-components`:
+    - Add general-purpose, zero-domain-knowledge `<mj-burst-cluster-strip>` (`MJBurstClusterStripComponent`) for irregular time-series event streams with generic `[Items]` or raw `[Data]` + `[FieldMap]` binding, configurable grouping & resolution (`Resolution`: `'auto' | 'session' | 'day' | 'week' | 'month' | 'quarter' | 'year'`, `CoalesceStrategy`: `'adaptive-era' | 'merge-closest'`, `SessionGapHours`, `GroupSameCalendarDay`, `MaxClusters`, `EraZoomThreshold`), semantic Click-to-Zoom on multi-year era cards, rich imperative methods, and cancellable `Before*` / `After*` events.
+  - `@memberjunction/ng-record-changes`:
+    - Consume `<mj-burst-cluster-strip>` from `@memberjunction/ng-ui-components` to replace the linear 12-bucket spark-bar chart with a **Burst-Aware Cluster Strip (Time-Gap Compression)** with multi-year adaptive era zoom and click-to-filter session cards.
+    - Add a Cross-Version Diff Comparison workbench (`vA ↔ vB`) to `<mj-record-changes>`, allowing users to compare any two historical snapshots or compare a historical snapshot against the live record state.
+  - `@memberjunction/codegen-lib`: Prevent foreign keys, polymorphic `RecordID` columns (`EntityIDFieldName` set or `*RecordID`/`*RecordPrimaryKey` naming), and columns on tables with an `MJ: Entities` FK from being auto-selected as `IsNameField`.
+  - `@memberjunction/ng-explorer-core` & `@memberjunction/ng-explorer-app`: Fix infinite loading screen hang when navigating to an invalid or unmatched URL by handling `NavigationError` / `NavigationCancel` in `ShellComponent.ngOnInit` and falling back to the active workspace tab or landing app when a deep link fails to resolve.
+- bfa2621: The floating chat overlay now follows the shell's chrome policy. `Shell.ChatOverlay.Enabled` already switched the bubble platform-wide, but a host's `BaseShellChromePolicy` could narrow search, notifications and the app switcher per user and not the overlay, so a host that owns its own AI surface for one audience (a learner portal) had to hide the bubble with route-scoped CSS.
+  - `ShellChromeFlags` gains `chatOverlay`, baselined from `Shell.ChatOverlay.Enabled` and narrow-only like the other booleans: a policy can turn it off, never back on past Instance Config.
+  - `ShellComponent.ChromeFlags` exposes the resolved set. `MJExplorerAppComponent.ShowChatOverlay` reads `chatOverlay` from the shell through a view query, falling back to its own Instance Config read until the shell renders. One policy instance, one `Changed`.
+  - Tests: the narrowing and widen-ceiling cases in the chrome policy spec, the shell getter, and an explorer-app spec for shell-driven vs fallback.
+
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [b5955fb]
+- Updated dependencies [281724a]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [f7d5ab5]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [5d83ba4]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [3b7c949]
+- Updated dependencies [09c7d57]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [cb1e602]
+- Updated dependencies [7d9b179]
+- Updated dependencies [db4e210]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [663ff80]
+- Updated dependencies [36cdad5]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [bfa2621]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/ng-shared@6.2.0-edge.6
+  - @memberjunction/ng-explorer-core@6.2.0-edge.6
+  - @memberjunction/ng-bootstrap@6.2.0-edge.6
+  - @memberjunction/ng-auth-services@6.2.0-edge.6
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.6
+  - @memberjunction/ng-conversations@6.2.0-edge.6
+  - @memberjunction/theme-engine@6.2.0-edge.6
+  - @memberjunction/ng-notifications@6.2.0-edge.6
+  - @memberjunction/ai-agent-client@6.2.0-edge.6
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.6
+  - @memberjunction/ng-base-application@6.2.0-edge.6
+  - @memberjunction/ng-base-types@6.2.0-edge.6
+  - @memberjunction/ng-feedback@6.2.0-edge.6
+  - @memberjunction/ng-agent-client@6.2.0-edge.6
+  - @memberjunction/ng-explorer-service-worker@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Minor Changes

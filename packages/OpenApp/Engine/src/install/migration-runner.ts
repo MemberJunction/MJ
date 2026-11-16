@@ -325,6 +325,11 @@ function IsModuleResolutionFailure(error: unknown): boolean {
  *
  * Exported for unit testing of the baseline semantics (B19).
  */
+/** True when a SQL Server host name is an Azure SQL server (ends with `.database.windows.net`). */
+export function IsAzureSqlHost(host: string): boolean {
+    return host.trim().toLowerCase().endsWith('.database.windows.net');
+}
+
 export function BuildSkywayConfig(
     migrationsDir: string,
     schemaName: string,
@@ -346,7 +351,7 @@ export function BuildSkywayConfig(
     // Azure SQL auto-detection is SQL-Server-specific (host ends with
     // .database.windows.net → encryption required). For PostgreSQL the encrypt/
     // trust flags are honored as provided and never Azure-inferred.
-    const isAzureSql = platform === 'sqlserver' && dbConfig.Host.includes('.database.windows.net');
+    const isAzureSql = platform === 'sqlserver' && IsAzureSqlHost(dbConfig.Host);
     const encrypt = dbConfig.Encrypt ?? isAzureSql;
     const trustCert = dbConfig.TrustServerCertificate ?? !isAzureSql;
 

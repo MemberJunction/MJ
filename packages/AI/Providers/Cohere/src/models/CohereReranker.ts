@@ -3,41 +3,62 @@ import { BaseReranker, RerankParams, RerankResult } from '@memberjunction/ai';
 import { CohereClient } from 'cohere-ai';
 
 /**
- * Cohere implementation of the BaseReranker class.
- * Uses Cohere's Rerank API for semantic document reranking. A request's `CancellationToken` is
- * handed to the SDK as its `abortSignal`, so cancelling it tears the HTTP request down.
+ * A passage span returned by Cohere Rerank 5 Context Focus: `[Start, End)` in Unicode code points
+ * of the document text, its calibrated score, and the text it covers.
+ */
+export interface CohereRelevantSpan {
+    Start: number;
+    End: number;
+    Score: number;
+    Text: string;
+}
+
+/** Context Focus settings (Cohere's `relevant_spans`). Unset fields take Cohere's defaults. */
+export interface CohereRelevantSpansOptions {
+    /** Minimum span score, 0-1. */
+    Threshold?: number;
+    /** Maximum spans returned per document. */
+    MaxSpans?: number;
+}
+
+/** Options `CohereReranker` reads from `RerankParams.options`. */
+export interface CohereRerankOptions {
+    /**
+     * Ask Rerank 5 for Context Focus spans. Each result's spans land on
+     * `document.metadata.RelevantSpans` as `CohereRelevantSpan[]`.
+     */
+    RelevantSpans?: boolean | CohereRelevantSpansOptions;
+}
+
+/** A result item as `/v2/rerank` returns it. `relevant_spans` is not in the SDK's type yet. */
+type CohereRerankResultItem = {
+    index: number;
+    relevanceScore: number;
+    relevant_spans?: Array<{ start: number; end: number; score: number }>;
+};
+
+/**
+ * Cohere implementation of the BaseReranker class, on Cohere's `/v2/rerank`. A request's
+ * `CancellationToken` is handed to the SDK as its `abortSignal`, so cancelling it tears the HTTP
+ * request down. The query is sent as written: Rerank 5 is a calibrated cross-encoder and does not
+ * take instructions that change how relevance is judged.
  *
  * Supported models:
- * - rerank-v3.5: Latest English reranker with best accuracy
- * - rerank-multilingual-v3.0: Supports 100+ languages
+ * - rerank-v5.0-pro: Flagship cross-encoder reranker (~2B params, 32K context, 100+ languages, Context Focus)
+ * - rerank-v5.0-fast: High-throughput cross-encoder reranker (~500M params, 32K context, 100+ languages, Context Focus)
+ * - rerank-v4.0-pro: Previous-generation flagship reranker (32K context, 100+ languages)
+ * - rerank-v4.0-fast: Previous-generation fast reranker (32K context, 100+ languages)
+ * - rerank-v3.5: Legacy English reranker (4K context, deprecated upstream)
+ * - rerank-multilingual-v3.0: Legacy multilingual reranker (4K context)
  *
  * Driver class:
  * Registered as both `CohereReranker` (the name the Cohere reranker models' model-vendor rows carry, and
- * so the one `AIRerankerRunner` and `RerankerService` resolve) and `CohereLLM`.
+ * so the one `AIRerankerRunner`, `RerankerService` and SearchEngine's `CohereReRanker` resolve) and `CohereLLM`.
  *
  * API Key:
  * The legacy environment-variable fallback is named after the model-vendor row's driver class:
  * AI_VENDOR_API_KEY__COHERERERANKER for the shipped Cohere reranker models. A Cohere credential
  * binding takes precedence over it.
- *
- * Usage:
- * ```typescript
- * const reranker = ClassFactory.CreateInstance<BaseReranker>(
- *     BaseReranker,
- *     'CohereReranker',
- *     apiKey,
- *     'rerank-v3.5'
- * );
- *
- * const response = await reranker.Rerank({
- *     query: 'What is the capital of France?',
- *     documents: [
- *         { id: '1', text: 'Paris is the capital of France.' },
- *         { id: '2', text: 'London is in England.' }
- *     ],
- *     topK: 5
- * });
- * ```
  */
 // 'CohereReranker' is the DriverClass on every Cohere reranker model-vendor row; without it the
 // ClassFactory falls back to a bare BaseReranker and every rerank fails. 'CohereLLM' is kept for
@@ -50,77 +71,79 @@ export class CohereReranker extends BaseReranker {
     /**
      * Create a new CohereReranker instance.
      * @param apiKey - Cohere API key
-     * @param modelName - Model to use (default: 'rerank-v3.5')
+     * @param modelName - Model to use (default: 'rerank-v5.0-fast')
      */
     constructor(apiKey: string, modelName?: string) {
-        super(apiKey, modelName || 'rerank-v3.5');
+        super(apiKey, modelName || 'rerank-v5.0-fast');
         // Use inherited protected apiKey getter from BaseModel
         this._client = new CohereClient({ token: this.apiKey });
     }
 
     /**
-     * Rerank documents using Cohere's Rerank API.
-     *
-     * The Cohere API returns results sorted by relevance with scores from 0-1.
-     * We map the response to our RerankResult format, preserving document metadata.
+     * Rerank documents with Cohere's `/v2/rerank`. With `RelevantSpans` set in `params.options`
+     * (see {@link CohereRerankOptions}), each result carries its Context Focus spans on
+     * `document.metadata.RelevantSpans`.
      */
     protected async doRerank(params: RerankParams): Promise<RerankResult[]> {
-        // Build enhanced query with context about what makes memory notes relevant
-        const enhancedQuery = `You are evaluating agent memory notes for relevance to a user message.
-
-Key principles for scoring relevance:
-- User identity notes (name, preferences) are almost ALWAYS relevant, especially for greetings
-- Memory notes provide context that COULD be useful, not just direct matches
-- Preferences should be applied whenever the topic might come up
-- Context notes help maintain continuity across conversations
-
-The user's current message is: "${params.query}"
-
-Find memory notes that would help respond appropriately to this message.`;
-
-        // DEBUG: Log request with ALL documents
-        console.log('CohereReranker REQUEST:', JSON.stringify({
+        const relevantSpans = toWireRelevantSpans((params.options as CohereRerankOptions | undefined)?.RelevantSpans);
+        const request = {
             model: this._modelName,
-            originalQuery: params.query,
-            enhancedQuery: enhancedQuery.substring(0, 200) + '...',
-            documentCount: params.documents.length,
-            topK: params.topK,
-            allDocs: params.documents.map((d, i) => `[${i}] ${d.text.substring(0, 80)}...`)
-        }, null, 2));
-
-        // Call Cohere's rerank endpoint with enhanced query. The caller's signal tears the request
-        // down; BaseReranker.Rerank reports the abort as a cancellation.
-        const response = await this._client.rerank({
-            model: this._modelName,
-            query: enhancedQuery,
+            query: params.query,
             documents: params.documents.map(d => d.text),
             topN: params.topK || params.documents.length,
-            returnDocuments: false // We track documents ourselves to preserve metadata
-        }, { abortSignal: params.CancellationToken });
+            // Cohere truncates each document to this many tokens, 4096 when unset. Spread, not assigned:
+            // the SDK serializes an undefined typed field as null.
+            ...(params.MaxTokensPerDocument ? { maxTokensPerDoc: params.MaxTokensPerDocument } : {}),
+            // Not in the SDK's request type yet; its serializer passes the key through unchanged.
+            ...(relevantSpans ? { relevant_spans: relevantSpans } : {}),
+        };
+        const response = await this._client.v2.rerank(request, { abortSignal: params.CancellationToken });
 
-        // DEBUG: Log response
-        console.log('CohereReranker RESPONSE:', JSON.stringify({
-            resultCount: response.results.length,
-            results: response.results.slice(0, 5).map(r => ({
-                index: r.index,
-                relevanceScore: r.relevanceScore
-            }))
-        }, null, 2));
-
-        // Map Cohere results to our format
-        // Cohere returns results already sorted by relevance
-        const results: RerankResult[] = response.results.map((result, idx) => {
-            const originalDoc = params.documents[result.index];
-            return {
-                id: originalDoc.id,
-                relevanceScore: result.relevanceScore,
-                document: originalDoc,
-                rank: idx
-            };
-        });
-
+        const results: RerankResult[] = [];
+        for (const item of response.results as CohereRerankResultItem[]) {
+            const doc = params.documents[item.index];
+            if (!doc) {
+                continue;
+            }
+            const spans = item.relevant_spans?.length ? extractSpans(item.relevant_spans, doc.text) : undefined;
+            results.push({
+                id: doc.id,
+                relevanceScore: item.relevanceScore,
+                document: spans ? { ...doc, metadata: { ...doc.metadata, RelevantSpans: spans } } : doc,
+                rank: results.length,
+            });
+        }
         return results;
     }
+}
+
+/** The `relevant_spans` request body for a `RelevantSpans` option, or undefined when it is off. */
+function toWireRelevantSpans(
+    option: CohereRerankOptions['RelevantSpans']
+): { mode: 'enabled'; threshold?: number; max_spans?: number } | undefined {
+    if (option === true) {
+        return { mode: 'enabled' };
+    }
+    if (!option || typeof option !== 'object') {
+        return undefined;
+    }
+    const { Threshold, MaxSpans } = option;
+    return {
+        mode: 'enabled',
+        threshold: Number.isFinite(Threshold) ? Math.min(1, Math.max(0, Threshold as number)) : undefined,
+        max_spans: Number.isInteger(MaxSpans) && (MaxSpans as number) > 0 ? MaxSpans : undefined,
+    };
+}
+
+/** Attach each span's text. Cohere's offsets count Unicode code points, not UTF-16 units. */
+function extractSpans(spans: NonNullable<CohereRerankResultItem['relevant_spans']>, text: string): CohereRelevantSpan[] {
+    const codePoints = Array.from(text);
+    return spans.map(s => ({
+        Start: s.start,
+        End: s.end,
+        Score: s.score,
+        Text: codePoints.slice(Math.max(0, s.start), Math.max(0, s.end)).join(''),
+    }));
 }
 
 /**
@@ -135,4 +158,3 @@ export function CreateCohereReranker(apiKey: string, modelName?: string): Cohere
 export function createCohereReranker(apiKey: string, modelName?: string): CohereReranker {
     return CreateCohereReranker(apiKey, modelName);
 }
-

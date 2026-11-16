@@ -94,7 +94,7 @@ describe('LoadRealtimeSessionsDataset — query shape', () => {
 // ── Rollup mapping ──
 
 describe('LoadRealtimeSessionsDataset — CloseReason rollup mapping', () => {
-    it.each(['Explicit', 'Janitor', 'Shutdown', 'Error'] as const)(
+    it.each(['Explicit', 'Janitor', 'Shutdown', 'Error', 'TimeLimit', 'Idle'] as const)(
         'carries CloseReason %s through to the rollup',
         async (reason) => {
             queueDataset([makeSessionRecord({ ID: `s-${reason}`, CloseReason: reason })]);
@@ -103,7 +103,7 @@ describe('LoadRealtimeSessionsDataset — CloseReason rollup mapping', () => {
 
             expect(ds.AllSessions).toHaveLength(1);
             expect(ds.AllSessions[0].CloseReason).toBe(reason);
-            expect(ds.AllSessions[0].IsJanitorClosed).toBe(reason === 'Janitor');
+            expect(ds.AllSessions[0].IsJanitorClosed).toBe(reason === 'Janitor' || reason === 'TimeLimit' || reason === 'Idle');
         },
     );
 
@@ -141,6 +141,23 @@ describe('BuildSessionStatusDisplay', () => {
         expect(d.Icon).toBe('');
     });
 
+    // Rows closed before TimeLimit and Idle existed keep 'Janitor' for every expiry close (see the CloseReason column
+    // description), so the title must not claim every Janitor row was a crash orphan.
+    it('titles a Janitor row with both meanings: an orphan from an earlier boot, or an older idle / time-limit close', () => {
+        const title = BuildSessionStatusDisplay('Closed', 'Janitor').Title;
+        expect(title).toMatch(/orphan/i);
+        expect(title).toMatch(/idle/i);
+        expect(title).toMatch(/time limit/i);
+    });
+
+    // A TimeLimit close is either the janitor's deadline sweep or the browser's own deadline alarm (a claim the server
+    // verified), so its title must not say the janitor closed it.
+    it('titles a TimeLimit row without claiming the janitor closed it', () => {
+        const title = BuildSessionStatusDisplay('Closed', 'TimeLimit').Title;
+        expect(title).toMatch(/time limit/i);
+        expect(title).not.toMatch(/janitor/i);
+    });
+
     it('renders Idle with the pause icon', () => {
         const d = BuildSessionStatusDisplay('Idle', null);
         expect(d.Label).toBe('Idle');
@@ -152,6 +169,8 @@ describe('BuildSessionStatusDisplay', () => {
         ['Janitor', 'Closed · janitor', 'fa-broom'],
         ['Shutdown', 'Closed · shutdown', 'fa-power-off'],
         ['Error', 'Closed · error', 'fa-triangle-exclamation'],
+        ['TimeLimit', 'Closed · time limit', 'fa-hourglass-end'],
+        ['Idle', 'Closed · idle — no activity', 'fa-moon'],
         [null, 'Closed · unknown', 'fa-circle-question'],
     ];
 

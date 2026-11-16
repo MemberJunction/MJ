@@ -142,4 +142,74 @@ describe('SQLServerDataProvider - per-pool view column order cache', () => {
     expect(a2.executeSpy).toHaveBeenCalledTimes(1); // invalidated → rescanned
     expect(b2.executeSpy).not.toHaveBeenCalled(); // untouched pool → shared cache hit
   });
+
+  it('shares one sys.columns scan across pools connecting as the same SQL login to the same database and propagates invalidation', async () => {
+    const rwPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJProd' } };
+    const roPool = { config: { server: 'SQL.MJ.INTERNAL', port: 1433, database: 'mjprod' } };
+    const codegenPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJProd' } };
+    const otherDbPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJTenantB' } };
+
+    // Clean any prior DB-keyed entries for these synthetic hosts
+    SQLServerDataProvider.InvalidateViewColumnOrderCache(rwPool as object as sql.ConnectionPool);
+    SQLServerDataProvider.InvalidateViewColumnOrderCache(otherDbPool as object as sql.ConnectionPool);
+
+    const rw = makeProvider(rwPool, SAMPLE_ROWS);
+    const ro = makeProvider(roPool, SAMPLE_ROWS);
+    const cg = makeProvider(codegenPool, SAMPLE_ROWS);
+    const other = makeProvider(otherDbPool, [{ SchemaName: '__mj', ViewName: 'vwUsers', ColumnName: 'Email' }]);
+
+    await Promise.all([
+      rw.provider.loadViewColumnOrderCache(),
+      ro.provider.loadViewColumnOrderCache(),
+      cg.provider.loadViewColumnOrderCache(),
+    ]);
+    await other.provider.loadViewColumnOrderCache();
+
+    // All 3 pools on MJProd shared ONE sys.columns scan; MJTenantB ran its own isolated scan
+    expect(rw.executeSpy.mock.calls.length + ro.executeSpy.mock.calls.length + cg.executeSpy.mock.calls.length).toBe(1);
+    expect(other.executeSpy).toHaveBeenCalledTimes(1);
+    expect(ro.provider._viewColumnOrderCache.get('__mj.vwusers')).toEqual(['ID', 'Name', 'Email']);
+    expect(other.provider._viewColumnOrderCache.get('__mj.vwusers')).toEqual(['Email']);
+
+    // Invalidating via codegenPool (e.g. RSU DDL refresh) invalidates RW/RO on MJProd without touching MJTenantB
+    SQLServerDataProvider.InvalidateViewColumnOrderCache(codegenPool as object as sql.ConnectionPool);
+
+    const rwAfter = makeProvider(rwPool, SAMPLE_ROWS);
+    const otherAfter = makeProvider(otherDbPool, SAMPLE_ROWS);
+    await rwAfter.provider.loadViewColumnOrderCache();
+    await otherAfter.provider.loadViewColumnOrderCache();
+
+    expect(rwAfter.executeSpy).toHaveBeenCalledTimes(1);
+    expect(otherAfter.executeSpy).not.toHaveBeenCalled();
+  });
+
+  it('never shares a scan across pools with different logins on the same database (sys.columns is permission-filtered)', async () => {
+    // sys.columns lists only objects the login can see. A scan through the read-only or CodeGen
+    // login may lack views the read-write login can see; serving it to the RW pool would send
+    // save-capture for those views back to metadata order — the #3102 misrouting this cache
+    // exists to prevent. Same server+database+login still shares one scan.
+    const rwPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJProd', user: 'MJ_Connect' } };
+    const rwPoolAgain = { config: { server: 'SQL.MJ.INTERNAL', port: 1433, database: 'mjprod', user: 'mj_connect' } };
+    const roPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJProd', user: 'MJ_ReadOnly' } };
+    for (const p of [rwPool, roPool]) {
+      SQLServerDataProvider.InvalidateViewColumnOrderCache(p as object as sql.ConnectionPool);
+    }
+
+    const rw = makeProvider(rwPool, SAMPLE_ROWS);
+    const rwAgain = makeProvider(rwPoolAgain, SAMPLE_ROWS);
+    const ro = makeProvider(roPool, SAMPLE_ROWS.filter(r => r.ViewName !== 'vwRoles')); // RO login cannot see vwRoles
+
+    await Promise.all([rw.provider.loadViewColumnOrderCache(), rwAgain.provider.loadViewColumnOrderCache(), ro.provider.loadViewColumnOrderCache()]);
+
+    expect(rw.executeSpy.mock.calls.length + rwAgain.executeSpy.mock.calls.length).toBe(1); // same login → shared
+    expect(ro.executeSpy).toHaveBeenCalledTimes(1);                                          // different login → own scan
+    expect(rw.provider._viewColumnOrderCache.get('__mj.vwroles')).toEqual(['ID', 'RoleName']);
+    expect(ro.provider._viewColumnOrderCache.has('__mj.vwroles')).toBe(false);
+
+    // Invalidating through the RO pool must not drop the RW pool's scan.
+    SQLServerDataProvider.InvalidateViewColumnOrderCache(roPool as object as sql.ConnectionPool);
+    const rwAfter = makeProvider(rwPool, SAMPLE_ROWS);
+    await rwAfter.provider.loadViewColumnOrderCache();
+    expect(rwAfter.executeSpy).not.toHaveBeenCalled();
+  });
 });

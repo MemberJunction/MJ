@@ -76,7 +76,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     return { ...actual, BaseSingleton: FreshSingleton };
 });
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
+    // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+    // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+    SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
     UserInfo: class {},
     LogError: h.logError,
     LogStatus: vi.fn(),
@@ -374,8 +377,19 @@ describe('TagEngine reads and writes the binary embedding column', () => {
             expect(Array.from(vector)).toEqual([0.5, -0.25]);
         });
 
+        it('keeps a tag embedded by another model out of the index, without calling it malformed', async () => {
+            const tag = await primeWith(makeTag('tag-1', 'Machine Learning', { binary: toBinary([0.5, -0.25, 1]), modelID: 'another-model' }));
+            if (!tag) return;
+
+            engine.AddOrUpdateSingleTagEmbeddingFromPersisted(tag);
+
+            expect(h.addVector).not.toHaveBeenCalled();
+            expect(h.removeVector).toHaveBeenCalledWith('tag-1');
+            expect(h.logError).not.toHaveBeenCalled();
+        });
+
         it('removes the vector and logs when a column has content but nothing is readable', async () => {
-            const tag = await primeWith(makeTag('tag-1', 'Machine Learning', { json: 'not json', binary: Buffer.from([1, 2, 3]).toString('base64') }));
+            const tag = await primeWith(makeTag('tag-1', 'Machine Learning', { json: 'not json', binary: Buffer.from([1, 2, 3]).toString('base64'), modelID: PROMPT_MODEL_ID }));
             if (!tag) return;
 
             engine.AddOrUpdateSingleTagEmbeddingFromPersisted(tag);
@@ -387,7 +401,7 @@ describe('TagEngine reads and writes the binary embedding column', () => {
         });
 
         it('logs when only the binary column has (non-finite) content', async () => {
-            const tag = await primeWith(makeTag('tag-1', 'Machine Learning', { binary: toBinary([Number.NaN, 1]) }));
+            const tag = await primeWith(makeTag('tag-1', 'Machine Learning', { binary: toBinary([Number.NaN, 1]), modelID: PROMPT_MODEL_ID }));
             if (!tag) return;
 
             engine.AddOrUpdateSingleTagEmbeddingFromPersisted(tag);
