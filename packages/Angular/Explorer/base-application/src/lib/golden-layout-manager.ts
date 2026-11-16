@@ -5,6 +5,9 @@ import { VirtualLayout } from 'golden-layout';
 import { WorkspaceConfiguration, LayoutConfig as WorkspaceLayoutConfig, LayoutNode } from './interfaces/workspace-configuration.interface';
 import { SanitizeLayoutNodeForLoad } from './layout-transforms';
 
+/** `MouseEvent.button` value for the middle (wheel) button. */
+const MIDDLE_MOUSE_BUTTON = 1;
+
 // Golden Layout interfaces - defined here to avoid compile-time dependency
 // These match the Golden Layout 2.6.0 API
 interface GLComponentContainer {
@@ -643,6 +646,22 @@ export class GoldenLayoutManager {
   }
 
   /**
+   * Close a tab through its × control, so a middle-click takes exactly the
+   * path the close button does (GL's close handler → TabClosed → the
+   * container's workspace bookkeeping, including the keep-last-tab rule).
+   *
+   * Guards mirror the button's availability: a pinned tab hides its ×, so a
+   * middle-click on it does nothing; and GL only wires the ×'s click handler
+   * for closable items, so dispatching to a non-closable tab's × is inert.
+   */
+  private closeTabViaCloseControl(tabElement: HTMLElement): void {
+    if (tabElement.classList.contains('pinned')) return;
+    const closeEl = tabElement.querySelector('.lm_close_tab');
+    if (!(closeEl instanceof HTMLElement)) return;
+    closeEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  }
+
+  /**
    * Apply visual styles to a tab
    */
   private applyTabStyles(container: GLComponentContainer, state: TabComponentState): void {
@@ -705,6 +724,23 @@ export class GoldenLayoutManager {
         e.preventDefault();
         e.stopPropagation();
         this.tabRightClicked.next({ tabId: state.tabId, x: e.clientX, y: e.clientY });
+      });
+
+      // Middle-click closes the tab. Pressing the middle button would start
+      // the browser's autoscroll, so cancel that default on mousedown (no
+      // stopPropagation — GL's own drag listener still sees the event).
+      tabElement.addEventListener('mousedown', (e: MouseEvent) => {
+        if (e.button === MIDDLE_MOUSE_BUTTON) {
+          e.preventDefault();
+        }
+      });
+      // Browsers fire `auxclick`, not `click`, for the middle button — so GL's
+      // own middle-button branch (inside its tab `click` handler) never runs.
+      tabElement.addEventListener('auxclick', (e: MouseEvent) => {
+        if (e.button !== MIDDLE_MOUSE_BUTTON) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.closeTabViaCloseControl(tabElement);
       });
     }
 
