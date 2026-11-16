@@ -352,16 +352,21 @@ export class ColumnStatsCache {
 
   /**
    * Seed the cache from the statistics the sampling pass left on each column, so discovery does not
-   * query the database again for numbers it already has. Columns without statistics, and columns
-   * already in the cache, are left alone. Returns the number of columns seeded.
+   * query the database again for numbers it already has. Columns without statistics, columns whose
+   * sampling count query failed (all-zero counts on a non-empty table), and columns already in the
+   * cache are left alone so discovery can still query them. Returns the number of columns seeded.
    */
   public SeedFromSchemas(schemas: SchemaDefinition[]): number {
     let seeded = 0;
     for (const schema of schemas) {
       for (const table of schema.tables) {
+        const soleDeclaredPK = table.columns.filter(c => c.isPrimaryKey).length === 1;
         for (const column of table.columns) {
           const s = column.statistics;
           if (!s || !Number.isFinite(s.totalRows) || !Number.isFinite(s.distinctCount) || !Number.isFinite(s.nullCount)) {
+            continue;
+          }
+          if (s.totalRows === 0 && (table.rowCount ?? 0) > 0) {
             continue;
           }
           if (this.hasColumnStats(schema.name, table.name, column.name)) {
@@ -380,7 +385,8 @@ export class ColumnStatsCache {
             MaxValue: s.maxValue ?? s.max,
             AvgLength: s.avgLength,
             ValueDistribution: s.valueDistribution,
-            QueryTimeMs: s.queryTimeMs ?? 0
+            QueryTimeMs: s.queryTimeMs ?? 0,
+            IsPrimaryKey: soleDeclaredPK && column.isPrimaryKey
           }));
           seeded++;
         }

@@ -24,6 +24,8 @@ export interface ColumnStatsInput {
   AvgLength?: number;
   ValueDistribution?: Array<{ value: string | number; frequency: number }>;
   QueryTimeMs?: number;
+  /** True when the database catalog declares this column as the table's sole primary key. */
+  IsPrimaryKey?: boolean;
 }
 
 /** True when the sample holds an empty string, whitespace, or a zero: values a primary key never has. */
@@ -65,14 +67,17 @@ export function DetectDataPattern(sampleValues: Array<string | number | null> | 
 }
 
 /**
- * Build the cached record. Uniqueness is distinct / total over the whole table, and a column is
- * PK-eligible only when it has rows, no nulls, no blanks or zeros in the sample, and is 100% unique.
+ * Build the cached record. Uniqueness is distinct / total over the whole table, and an undeclared
+ * column is PK-eligible only when it has rows, no nulls, no blanks or zeros in the sample, and is
+ * 100% unique. A declared single-column primary key is always PK-eligible because the database
+ * enforces uniqueness and non-nullability even when legitimate key values include 0 or ''.
  * FK eligibility starts true; FKDetector refines it by data type and value checks.
  */
 export function BuildCachedColumnStats(input: ColumnStatsInput): CachedColumnStats {
   const { TotalRows: totalRows, NullCount: nullCount, DistinctCount: distinctCount } = input;
   const nullPercentage = totalRows > 0 ? nullCount / totalRows : 0;
   const uniqueness = totalRows > 0 ? distinctCount / totalRows : 0;
+  const pkEligible = input.IsPrimaryKey === true || (totalRows > 0 && nullCount === 0 && uniqueness === 1.0 && !HasBlankOrZero(input.SampleValues));
 
   return {
     schemaName: input.SchemaName,
@@ -90,7 +95,7 @@ export function BuildCachedColumnStats(input: ColumnStatsInput): CachedColumnSta
     dataPattern: DetectDataPattern(input.SampleValues, input.DataType),
     sampleValues: input.SampleValues,
     valueDistribution: input.ValueDistribution,
-    pkEligible: totalRows > 0 && nullCount === 0 && uniqueness === 1.0 && !HasBlankOrZero(input.SampleValues),
+    pkEligible,
     fkEligible: true,
     computedAt: new Date().toISOString(),
     queryTimeMs: input.QueryTimeMs ?? 0,

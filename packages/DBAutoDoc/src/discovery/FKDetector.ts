@@ -241,8 +241,11 @@ export class FKDetector {
           );
 
           if (idColumn) {
-            // GATE 1: Target column must be PK-eligible (zero nulls, zero blanks, 100% unique)
-            if (!this.isTargetPKEligible(schema.name, matchingTable.name, idColumn.name)) {
+            const isDeclaredSolePK =
+              idColumn.isPrimaryKey && matchingTable.columns.filter(c => c.isPrimaryKey).length === 1;
+            // GATE 1: Target column must be PK-eligible (zero nulls, zero blanks, 100% unique),
+            // unless the database catalog already declares it as the table's sole primary key.
+            if (!isDeclaredSolePK && !this.isTargetPKEligible(schema.name, matchingTable.name, idColumn.name)) {
               console.log(`[FKDetector] GATE1 reject: ${sourceColumn.name} -> ${schema.name}.${matchingTable.name}.${idColumn.name} (target not PK-eligible)`);
               continue;
             }
@@ -309,8 +312,10 @@ export class FKDetector {
           // GATE 3: Skip rowguid target columns
           if (matchingColumn.name.toLowerCase() === 'rowguid') continue;
 
-          // GATE 1: Target column must be PK-eligible
-          if (!this.isTargetPKEligible(schema.name, table.name, matchingColumn.name)) {
+          // GATE 1: Target column must be PK-eligible, unless it is the table's sole declared PK
+          const isDeclaredSolePK =
+            matchingColumn.isPrimaryKey && table.columns.filter(c => c.isPrimaryKey).length === 1;
+          if (!isDeclaredSolePK && !this.isTargetPKEligible(schema.name, table.name, matchingColumn.name)) {
             console.log(`[FKDetector] GATE1 reject: ${sourceColumn.name} -> ${schema.name}.${table.name}.${matchingColumn.name} (target not PK-eligible)`);
             continue;
           }

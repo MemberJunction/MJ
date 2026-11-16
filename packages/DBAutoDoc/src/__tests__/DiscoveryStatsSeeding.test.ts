@@ -27,6 +27,8 @@ interface ColSpec {
   samples?: Array<string | number | null>;
   /** false = the sampling pass did not reach this column */
   sampled?: boolean;
+  /** true = declared primary key in the database catalog */
+  isPK?: boolean;
 }
 
 /** Statistics as DataSampler.AnalyzeTable records them (nullPercentage is 0–100 there). */
@@ -56,15 +58,15 @@ function column(spec: ColSpec): ColumnDefinition {
     name: spec.name,
     dataType: spec.type ?? 'int',
     isNullable: (spec.nulls ?? 0) > 0,
-    isPrimaryKey: false,
+    isPrimaryKey: spec.isPK ?? false,
     isForeignKey: false,
     descriptionIterations: [],
     statistics: spec.sampled === false ? undefined : sampledStats(spec),
   };
 }
 
-function table(name: string, specs: ColSpec[]): TableDefinition {
-  return { name, rowCount: specs[0]?.rows ?? 0, dependsOn: [], dependents: [], columns: specs.map(column), descriptionIterations: [] };
+function table(name: string, specs: ColSpec[], tableRowCount?: number): TableDefinition {
+  return { name, rowCount: tableRowCount ?? specs[0]?.rows ?? 0, dependsOn: [], dependents: [], columns: specs.map(column), descriptionIterations: [] };
 }
 
 function schema(tables: TableDefinition[]): SchemaDefinition {
@@ -120,6 +122,7 @@ describe('BuildCachedColumnStats', () => {
     expect(build({ TotalRows: 0, DistinctCount: 0 })).toMatchObject({ uniqueness: 0, pkEligible: false });
     expect(build({ SampleValues: [0, 1, 2] }).pkEligible).toBe(false);
     expect(build({ SampleValues: ['a', ' ', 'b'] }).pkEligible).toBe(false);
+    expect(build({ SampleValues: [0, 1, 2, 3], IsPrimaryKey: true }).pkEligible).toBe(true);
   });
 
   it('reports the null share as a fraction, whatever unit the source used', () => {
@@ -175,6 +178,38 @@ describe('ColumnStatsCache.SeedFromSchemas', () => {
     );
     expect(cache.SeedFromSchemas([schema([table('Customer', CUSTOMER)])])).toBe(2);
     expect(cache.getColumnStats('dbo', 'Customer', 'CustomerID')?.uniqueness).toBe(0.5);
+  });
+
+  it('skips all-zero column counts on a non-empty table so a failed sampling query gets a retry, while seeding genuinely empty tables', () => {
+    const cache = new ColumnStatsCache();
+    const timedOutCol = table(
+      'Events',
+      [
+        { name: 'EventID', rows: 0, distinct: 0, nulls: 0, samples: [] },
+        { name: 'Kind', type: 'nvarchar', rows: 50, distinct: 4, samples: ['click', 'open'] },
+      ],
+      50,
+    );
+    const emptyTbl = table('Staging', [{ name: 'StagingID', rows: 0, distinct: 0, nulls: 0, samples: [] }], 0);
+
+    expect(cache.SeedFromSchemas([schema([timedOutCol, emptyTbl])])).toBe(2);
+    expect(cache.hasColumnStats('dbo', 'Events', 'EventID')).toBe(false);
+    expect(cache.hasColumnStats('dbo', 'Events', 'Kind')).toBe(true);
+    expect(cache.getColumnStats('dbo', 'Staging', 'StagingID')?.totalRows).toBe(0);
+  });
+
+  it('keeps sole declared primary keys PK-eligible even with 0 in sample, without promoting non-unique composite PK columns', () => {
+    const cache = new ColumnStatsCache();
+    const status = table('Status', [{ name: 'StatusID', rows: 4, distinct: 4, samples: [0, 1, 2, 3], isPK: true }]);
+    const orderLine = table('OrderLine', [
+      { name: 'OrderID', rows: 10, distinct: 4, samples: [1, 2, 3, 4], isPK: true },
+      { name: 'LineNo', rows: 10, distinct: 3, samples: [0, 1, 2], isPK: true },
+    ]);
+
+    cache.SeedFromSchemas([schema([status, orderLine])]);
+    expect(cache.getColumnStats('dbo', 'Status', 'StatusID')?.pkEligible).toBe(true);
+    expect(cache.getColumnStats('dbo', 'OrderLine', 'OrderID')?.pkEligible).toBe(false);
+    expect(cache.getColumnStats('dbo', 'OrderLine', 'LineNo')?.pkEligible).toBe(false);
   });
 });
 
@@ -297,6 +332,23 @@ describe('FKDetector with a seeded cache', () => {
     // the target is reached by more than one route (name match and discovered PK), so dedupe
     expect(new Set(found.map((f) => `${f.sourceColumn} -> ${f.targetTable}.${f.targetColumn}`))).toEqual(new Set(['CustomerID -> Customer.CustomerID']));
     expect(found[0].evidence.cardinalityRatio).toBe(0.4); // 4 distinct customers referenced out of 10
+    expect(queried).toEqual([]);
+  });
+
+  it('does not reject FKs to a lookup table whose declared primary key includes 0 when discoveredPKs is empty', async () => {
+    const order = table('Order', [
+      { name: 'OrderID', rows: 10, distinct: 10, isPK: true },
+      { name: 'StatusID', rows: 10, distinct: 4, samples: [0, 1, 2, 3] },
+    ]);
+    const status = table('Status', [{ name: 'StatusID', rows: 4, distinct: 4, samples: [0, 1, 2, 3], isPK: true }]);
+    const schemas = [schema([order, status])];
+    const cache = new ColumnStatsCache();
+    cache.SeedFromSchemas(schemas);
+
+    const { driver, queried } = fkDriver();
+    const found = await new FKDetector(driver, CONFIG, cache).DetectFKCandidates(schemas, 'dbo', order, [], 1);
+
+    expect(found.map((f) => `${f.sourceColumn} -> ${f.targetTable}.${f.targetColumn}`)).toEqual(['StatusID -> Status.StatusID']);
     expect(queried).toEqual([]);
   });
 });
