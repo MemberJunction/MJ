@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration: V202611151200__v6.3.x__Artifact_Guest_Share_Links_And_WorkingState_Fixes.sql
+-- Migration: V202611161958__v6.3.x__Artifact_Guest_Share_Links_And_WorkingState_Fixes.sql
 -- Purpose:
 --   Create [${flyway:defaultSchema}].[ArtifactGuestShareLink] linking a Magic Link
 --   resource-share invite (`MagicLinkInvite`) to an immutable pinned `ArtifactVersion`
@@ -984,7 +984,8 @@ BEGIN
         [ArtifactID] = ISNULL(@ArtifactID, [ArtifactID]),
         [ArtifactVersionID] = ISNULL(@ArtifactVersionID, [ArtifactVersionID]),
         [CreatedByUserID] = ISNULL(@CreatedByUserID, [CreatedByUserID]),
-        [Label] = CASE WHEN @Label_Clear = 1 THEN NULL ELSE ISNULL(@Label, [Label]) END
+        [Label] = CASE WHEN @Label_Clear = 1 THEN NULL ELSE ISNULL(@Label, [Label]) END,
+        [__mj_UpdatedAt] = GETUTCDATE()
     WHERE
         [ID] = @ID
     -- Check if the update was successful
@@ -1016,15 +1017,18 @@ AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[ArtifactGuestShareLink]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[ArtifactGuestShareLink] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
+    IF NOT UPDATE([__mj_UpdatedAt])
+    BEGIN
+        UPDATE
+            [${flyway:defaultSchema}].[ArtifactGuestShareLink]
+        SET
+            __mj_UpdatedAt = GETUTCDATE()
+        FROM
+            [${flyway:defaultSchema}].[ArtifactGuestShareLink] AS _organicTable
+        INNER JOIN
+            INSERTED AS I ON
+            _organicTable.[ID] = I.[ID];
+    END
 END;
 GO
 /* spUpdate Permissions for MJ: Artifact Guest Share Links */

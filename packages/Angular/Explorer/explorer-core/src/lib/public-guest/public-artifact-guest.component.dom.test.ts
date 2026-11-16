@@ -5,7 +5,7 @@ import { BehaviorSubject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { RenderComponentFixture, Query } from '@memberjunction/ng-test-utils';
 import {
   BuildPreVerifiedFrozenSnapshotsMap,
@@ -312,11 +312,12 @@ describe('PublicArtifactGuestComponent (Magic Link resource-share guest route)',
 
   it('waits on cold load until GraphQLDataProvider.Instance populates ConfigData URL & Token before resolving', async () => {
     const singletonMock = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider & {
-      ConfigData: { URL: string; Token: string };
+      ConfigData: GraphQLProviderConfigData;
       ExecuteGQL: ReturnType<typeof vi.fn>;
     };
+    const initialConfig = new GraphQLProviderConfigData('', '', '', async () => '');
     Object.defineProperty(singletonMock, 'ConfigData', {
-      value: { URL: '', Token: '' },
+      value: initialConfig,
       writable: true,
       configurable: true,
     });
@@ -331,7 +332,12 @@ describe('PublicArtifactGuestComponent (Magic Link resource-share guest route)',
     expect(fixture.componentInstance.IsLoading).toBe(true);
 
     // Simulate WorkspaceInitializer setting ConfigData URL & Bearer token asynchronously
-    singletonMock.ConfigData = { URL: 'https://api.example.org/graphql', Token: 'ml-jwt-cold' };
+    singletonMock.ConfigData = new GraphQLProviderConfigData(
+      'ml-jwt-cold',
+      'https://api.example.org/graphql',
+      '',
+      async () => '',
+    );
     await new Promise((resolve) => setTimeout(resolve, 90));
     await settle(fixture);
 
