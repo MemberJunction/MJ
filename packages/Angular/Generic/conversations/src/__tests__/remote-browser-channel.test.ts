@@ -1454,6 +1454,31 @@ describe('ConversationRemoteBrowserController', () => {
     expect(names).toContain(REMOTE_BROWSER_TOOL_NAMES.Inspect);
   });
 
+  it('registers browser_* tools in standby mode via SetConversation and promotes to Open on first tool execution', async () => {
+    let autoOpened = 0;
+    const c = new ConversationRemoteBrowserController({
+      OnAutoOpenSurface: () => autoOpened++,
+      ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+        calls.push({ Query: query, Variables: variables });
+        return { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://example.com/apply', Detail: 'ok' } } as T;
+      },
+    });
+    c.Initialize(agentClient as unknown as AgentClientService, null);
+
+    c.SetConversation('conv-standby');
+    expect(c.ConversationId).toBeNull();
+    expect(c.OwnsTools).toBe(true);
+    const standbyCtx = c.WithBrowserContext(null)!;
+    expect(standbyCtx['AdditionalContext']).toEqual({ RemoteBrowser: { Open: false, CurrentUrl: null } });
+    expect((standbyCtx['Capabilities'] as { Tools: unknown[] }).Tools).toHaveLength(TEXT_TOOL_COUNT);
+
+    const res = await c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.OpenUrl, { url: 'https://example.com/apply' });
+    expect(res.Success).toBe(true);
+    expect(autoOpened).toBe(1);
+    expect(c.ConversationId).toBe('conv-standby');
+    expect(c.CurrentUrl).toBe('https://example.com/apply');
+  });
+
   it('takes pushed frames for its own conversation only, and notifies once per URL, not per frame', () => {
     let changes = 0;
     const c = controller({ OnStateChange: () => changes++ });

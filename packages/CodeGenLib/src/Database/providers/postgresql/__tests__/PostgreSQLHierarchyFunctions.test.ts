@@ -83,6 +83,11 @@ describe('PostgreSQLCodeGenProvider — Hierarchy Functions suite', () => {
         // Short circuit / recursion
         expect(sql).toContain('WITH RECURSIVE cte_ancestors AS');
         expect(sql).toContain('c.depth < 100');
+        expect(sql).toContain('a.depth::INTEGER AS "Depth"');
+        expect(sql).toContain('a.path::TEXT AS "Path"');
+        expect(sql).toContain('CROSS JOIN LATERAL');
+        expect(sql).not.toContain('SELECT MAX(depth)');
+        expect(sql).not.toContain('NOT EXISTS');
         expect(sql).toContain('LIMIT 1;');
     });
 

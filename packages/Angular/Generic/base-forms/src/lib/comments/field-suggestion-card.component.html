@@ -1,0 +1,105 @@
+@if (Suggestion) {
+    <div
+        class="mj-field-suggestion-card"
+        [class.mj-field-suggestion-card--pending]="IsPending"
+        [class.mj-field-suggestion-card--accepted]="Outcome === 'Accepted'"
+        [class.mj-field-suggestion-card--rejected]="Outcome === 'Rejected'"
+        [class.mj-field-suggestion-card--superseded]="Outcome === 'Superseded'">
+        <div class="mj-field-suggestion-card__meta-row">
+            <div class="mj-field-suggestion-card__provenance">
+                <span class="mj-field-suggestion-card__kind-chip">
+                    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                    <span>Suggested value</span>
+                </span>
+                <span class="mj-field-suggestion-card__source-chip" [title]="'Suggested by ' + SourceLabel">
+                    <i [class]="SourceIcon" aria-hidden="true"></i>
+                    <span>{{ SourceLabel }}</span>
+                    @if (FormattedConfidence) {
+                        <span class="mj-field-suggestion-card__confidence">{{ FormattedConfidence }}</span>
+                    }
+                </span>
+            </div>
+
+            <span
+                class="mj-field-suggestion-card__outcome-pill"
+                [class]="'mj-field-suggestion-card__outcome-pill mj-field-suggestion-card__outcome-pill--' + OutcomeBadgeModifier">
+                {{ OutcomeBadgeLabel }}
+            </span>
+        </div>
+
+        <div class="mj-field-suggestion-card__diff" role="group" aria-label="Proposed field change">
+            <div class="mj-field-suggestion-card__value-box mj-field-suggestion-card__value-box--current">
+                <span class="mj-field-suggestion-card__value-label">Current</span>
+                <code class="mj-field-suggestion-card__value-code">{{ CurrentValueDisplay }}</code>
+            </div>
+
+            <div class="mj-field-suggestion-card__arrow" aria-hidden="true">
+                <i class="fa-solid fa-arrow-right"></i>
+            </div>
+
+            <div
+                class="mj-field-suggestion-card__value-box mj-field-suggestion-card__value-box--ghost"
+                [class.mj-field-suggestion-card__value-box--clearing]="IsClearingSuggestion">
+                <span class="mj-field-suggestion-card__value-label">Proposed</span>
+                <code class="mj-field-suggestion-card__value-code mj-field-suggestion-card__value-code--ghost">
+                    {{ SuggestedValueDisplay }}
+                </code>
+            </div>
+        </div>
+
+        @if (IsPending) {
+            <div class="mj-field-suggestion-card__actions">
+                <button
+                    type="button"
+                    mjButton
+                    variant="primary"
+                    size="sm"
+                    class="mj-field-suggestion-card__btn--accept"
+                    [disabled]="!CanUserActOnSuggestion || ActiveAction !== null"
+                    [title]="ActionDisabledReason || 'Apply suggested value to this field'"
+                    (click)="OnAccept()">
+                    @if (ActiveAction === 'accept') {
+                        <mj-loading [showText]="false" size="small"></mj-loading>
+                        <span>Applying...</span>
+                    } @else {
+                        <i class="fa-solid fa-check" aria-hidden="true"></i>
+                        <span>Accept</span>
+                    }
+                </button>
+
+                <button
+                    type="button"
+                    mjButton
+                    variant="outline"
+                    size="sm"
+                    class="mj-field-suggestion-card__btn--reject"
+                    [disabled]="!CanUserActOnSuggestion || ActiveAction !== null"
+                    [title]="ActionDisabledReason || 'Dismiss this field suggestion'"
+                    (click)="OnReject()">
+                    @if (ActiveAction === 'reject') {
+                        <mj-loading [showText]="false" size="small"></mj-loading>
+                        <span>Rejecting...</span>
+                    } @else {
+                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        <span>Reject</span>
+                    }
+                </button>
+
+                @if (CanUserDiscuss) {
+                    <button
+                        type="button"
+                        mjButton
+                        variant="flat"
+                        size="sm"
+                        class="mj-field-suggestion-card__btn--discuss"
+                        [disabled]="ActiveAction !== null"
+                        title="Reply in this suggestion's conversation thread"
+                        (click)="OnDiscuss()">
+                        <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>
+                        <span>Discuss</span>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+}

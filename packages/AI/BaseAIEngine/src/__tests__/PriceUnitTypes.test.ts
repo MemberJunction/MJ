@@ -401,6 +401,18 @@ describe('LinearPriceUnitType — priced entirely from its own catalog row', () 
         expect(driver.UnitsPerBillingUnit).toBe(1000);
     });
 
+    it('prices 2,500 characters at 2.5x the per-1K rate through the seeded Per 1K Characters row (#4865)', () => {
+        const seed = resolve(__dirname, '../../../../../metadata/ai-model-price-unit-types/.ai-model-price-unit-types.json');
+        const rows: Array<{ fields: { Name: string; DriverClass: string; UsageTypeID: string; UnitsPerBillingUnit: number } }> =
+            JSON.parse(readFileSync(seed, 'utf-8'));
+        const seeded = rows.find((r) => r.fields.Name === 'Per 1K Characters');
+        expect(seeded?.fields).toMatchObject({ DriverClass: 'Linear', UsageTypeID: '@lookup:MJ: AI Usage Types.Name=Characters', UnitsPerBillingUnit: 1000 });
+
+        const driver = new LinearPriceUnitType(row('Characters', seeded!.fields.UnitsPerBillingUnit));
+        const cost = createMockCost(0.3, 0);
+        expect(driver.CalculateNormalizedCost(cost as never, 2500, 0)).toBeCloseTo(0.75, 10);
+    });
+
     it('reproduces a hardcoded driver exactly, given the same row values', () => {
         // If the data-driven path disagreed with the hardcoded one, migrating a unit type from a
         // class to a row would silently re-price every run through it.

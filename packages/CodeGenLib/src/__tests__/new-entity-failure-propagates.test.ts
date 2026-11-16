@@ -52,11 +52,14 @@ class RealCreate extends ManageMetadataBase {
     }
 }
 
-function pool(): { conn: CodeGenConnection; commit: ReturnType<typeof vi.fn>; rollback: ReturnType<typeof vi.fn> } {
-    const commit = vi.fn(async () => undefined);
-    const rollback = vi.fn(async () => undefined);
-    const conn = { beginTransaction: async () => ({ commit, rollback }) } as unknown as CodeGenConnection;
-    return { conn, commit, rollback };
+/**
+ * The batch is not wrapped in a client-side transaction (#6134): one opened on the connection never
+ * covered the writes, which run through the pool. The spy proves none is opened.
+ */
+function pool(): { conn: CodeGenConnection; beginTransaction: ReturnType<typeof vi.fn> } {
+    const beginTransaction = vi.fn(async () => ({ commit: async () => undefined, rollback: async () => undefined }));
+    const conn = { beginTransaction } as unknown as CodeGenConnection;
+    return { conn, beginTransaction };
 }
 
 describe('createNewEntity', () => {
@@ -70,7 +73,7 @@ describe('createNewEntities', () => {
         ManageMetadataBase.newEntityList.length = 0;
     });
 
-    it('commits and returns true when every qualifying table is created', async () => {
+    it('returns true when every qualifying table is created, without opening a transaction', async () => {
         const mm = new Testable();
         mm.tables = [{ SchemaName: 'pheedloop', TableName: 'attendee' }, { SchemaName: 'pheedloop', TableName: 'session' }];
         const p = pool();
@@ -80,13 +83,12 @@ describe('createNewEntities', () => {
         await expect(mm.createNewEntities(p.conn, USER)).resolves.toBe(true);
 
         expect(mm.created).toEqual(['attendee', 'session']);
-        expect(p.commit).toHaveBeenCalledTimes(1);
-        expect(p.rollback).not.toHaveBeenCalled();
+        expect(p.beginTransaction).not.toHaveBeenCalled();
         expect(refresh).toHaveBeenCalledTimes(1);
         refresh.mockRestore();
     });
 
-    it('rolls back, returns false and forgets the batch\'s names when one table fails', async () => {
+    it('returns false and forgets the batch\'s names when one table fails', async () => {
         const mm = new Testable();
         mm.tables = [
             { SchemaName: 'pheedloop', TableName: 'attendee' },
@@ -99,9 +101,9 @@ describe('createNewEntities', () => {
 
         await expect(mm.createNewEntities(p.conn, USER)).resolves.toBe(false);
 
+        // the entity created before the failure stays; a re-run skips it, since it now has an entity
         expect(mm.created).toEqual(['attendee']);
-        expect(p.commit).not.toHaveBeenCalled();
-        expect(p.rollback).toHaveBeenCalledTimes(1);
+        expect(p.beginTransaction).not.toHaveBeenCalled();
         expect(ManageMetadataBase.newEntityList).toEqual(['From An Earlier Run']);
     });
 });

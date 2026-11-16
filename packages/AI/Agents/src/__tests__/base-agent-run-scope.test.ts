@@ -18,7 +18,7 @@ import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import type {
     AgentAction, AgentSubAgentRequest, BaseAgentNextStep, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
-import { RESERVED_AGENT_RUN_DATA_KEYS } from '@memberjunction/ai-core-plus';
+import { AgentUserPolicyEngine, RESERVED_AGENT_RUN_DATA_KEYS } from '@memberjunction/ai-core-plus';
 import type { ActionRunScope, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -95,6 +95,10 @@ describe('BaseAgent — the run scope on every action dispatch (RunActionParams.
 
     beforeEach(() => {
         h.dispatched.length = 0;
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({
+            status: 'none',
+            policy: null,
+        });
         agent = new BaseAgent();
     });
 
@@ -179,6 +183,18 @@ describe('BaseAgent — the run scope on every action dispatch (RunActionParams.
         await dispatch(paramsWith({ PrimaryScopeRecordID: TENANT, context }));
         expect(Object.keys(context)).not.toContain('RunScope');
         expect(JSON.stringify(context)).not.toContain(TENANT);
+    });
+
+    it('fails closed before dispatching when ResolvePolicyForAgentAndUser returns status === "error"', async () => {
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+            status: 'error',
+            policy: null,
+            errorMessage: 'Policy database unreachable',
+        });
+        const res = await dispatch(paramsWith({ PrimaryScopeRecordID: TENANT }));
+        expect(res.Success).toBe(false);
+        expect(res.ResultCode).toBe('POLICY_DENIED');
+        expect(h.dispatched).toHaveLength(0);
     });
 });
 

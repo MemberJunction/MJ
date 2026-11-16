@@ -138,6 +138,34 @@
             "lastModified": "2026-07-07T15:18:39.125Z",
             "checksum": "ba214e4880b2c5272046116869798e9c65b9d2e3c16d9576af8d264ebfe09095"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Skills",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7B4E9F03-2D6C-4C53-9A34-0B2C3D4E5F61"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:45.716Z",
+            "checksum": "cda9942b77df5bf18543cecf844b5b0279354a7fd0ed0d42b888c67f3459f923"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Skill Details",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7B4E9F03-2D6C-4C53-9A34-0B2C3D4E5F62"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:45.755Z",
+            "checksum": "801acfdc471e1c087dddb5113e01e45dfcfdfb2f235306e2cb7bc03db6e3d61b"
+          }
         }
       ],
       "MJ: AI Agent Rubrics": [

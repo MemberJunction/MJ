@@ -169,7 +169,9 @@ export class SkillMarkdownConverter {
                 continue;
             }
 
-            const listItemMatch = rawLine.match(/^\s*-\s+(.*)$/);
+            // Each pattern's whitespace run is followed by a class it cannot match (`\S`), so a line of
+            // spaces or tabs is read in linear time (CodeQL js/polynomial-redos).
+            const listItemMatch = rawLine.match(/^\s*-\s+((?:\S.*)?)$/);
             if (listItemMatch && currentListKey) {
                 if (currentListKey !== 'ignore') {
                     const value = this.unescapeScalar(listItemMatch[1]);
@@ -178,7 +180,7 @@ export class SkillMarkdownConverter {
                 continue;
             }
 
-            const keyValueMatch = rawLine.match(/^([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.*)$/);
+            const keyValueMatch = rawLine.match(/^([A-Za-z][A-Za-z0-9_]*)\s*:\s*((?:\S.*)?)$/);
             if (!keyValueMatch) {
                 throw new Error(`Invalid SKILL.md frontmatter line: "${rawLine}"`);
             }

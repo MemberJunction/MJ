@@ -101,4 +101,15 @@ describe('ExecuteRemoteOperation — scope-limited sessions', () => {
         expect(new OrdinaryOperation().AllowScopeLimitedPrincipals).toBeUndefined();
         expect(new GuestSafeOperation().AllowScopeLimitedPrincipals).toBe(true);
     });
+
+    it('lets a scope-limited session resolve a signed guest share link, while refusing link creation and revocation', async () => {
+        const resolveRes = await execute('Artifact.ResolveGuestShareLink', context(user('anonymous')));
+        expect(resolveRes.resultCode).toBe(PAST_SCOPE_GATE);
+
+        for (const key of ['Artifact.CreateGuestShareLink', 'Artifact.RevokeGuestShareLink']) {
+            const refused = await execute(key, context(user('anonymous')));
+            expect(refused.success).toBe(false);
+            expect(refused.resultCode).toBe('FORBIDDEN');
+        }
+    });
 });

@@ -80,6 +80,10 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
     BaseEmbeddings: MockBaseEmbeddings,
     BaseImageGenerator: MockBaseImageGenerator,
     BaseRealtimeModel: MockBaseRealtimeModel,
+    BaseRealtimeSession: class {},
+    // GeminiDecision (re-exported from ../index) extends these; this suite never calls them.
+    BaseDecision: class {},
+    BaseHostedSystemOneDecision: class {},
     ModelUsage: MockModelUsage,
     ChatResult: class {},
     ChatParams: class {},

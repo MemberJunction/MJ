@@ -206,6 +206,10 @@ export interface DelegatedRunArtifact {
     ArtifactVersionID: string;
     /** The artifact's display name (tab title in the call overlay). */
     Name: string;
+    /** Optional artifact type name (e.g. `'Excel Spreadsheet'`, `'Markdown Document'`, `'Presentation'`). */
+    ArtifactTypeName?: string;
+    /** Optional viewer plugin driver class (e.g. `'SpreadsheetArtifactViewerPlugin'`). */
+    DriverClass?: string;
 }
 
 /**
@@ -256,6 +260,8 @@ export interface ToolExecutionResult {
     Success: boolean;
     /** The textual result to feed back to the model as the tool response. */
     Output: string;
+    /** Optional artifacts created or mutated by this direct tool call so the overlay can open/focus them. */
+    Artifacts?: DelegatedRunArtifact[];
 }
 
 /**
@@ -428,7 +434,7 @@ export class RealtimeToolBroker {
     private async runOtherTool(call: RealtimeToolCall): Promise<ExecutedToolCall> {
         try {
             const result = await this.deps.ExecuteTool(call);
-            return this.serializeResult(result.Success, result.Output);
+            return this.serializeResult(result.Success, result.Output, undefined, undefined, result.Artifacts);
         } catch (error) {
             this.logError(error, `executing tool '${call.ToolName}'`);
             return this.serializeError(error);
@@ -461,7 +467,13 @@ export class RealtimeToolBroker {
             success: boolean;
             output: string;
             runId?: string;
-            artifacts?: { artifactId: string; artifactVersionId: string; name: string }[];
+            artifacts?: {
+                artifactId: string;
+                artifactVersionId: string;
+                name: string;
+                artifactTypeName?: string;
+                driverClass?: string;
+            }[];
         } = { success, output };
         if (runID) {
             payload.runId = runID;
@@ -471,7 +483,9 @@ export class RealtimeToolBroker {
             payload.artifacts = artifacts.map(a => ({
                 artifactId: a.ArtifactID,
                 artifactVersionId: a.ArtifactVersionID,
-                name: a.Name
+                name: a.Name,
+                ...(a.ArtifactTypeName ? { artifactTypeName: a.ArtifactTypeName } : {}),
+                ...(a.DriverClass ? { driverClass: a.DriverClass } : {}),
             }));
         }
         return {

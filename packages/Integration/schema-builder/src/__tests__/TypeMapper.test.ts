@@ -233,6 +233,28 @@ describe('TypeMapper', () => {
             expect(mapper.MapSourceType('STRING', 'sqlserver', field)).toBe('NVARCHAR(255)');
             expect(mapper.MapSourceType('  Integer  ', 'sqlserver', field)).toBe('INT');
         });
+
+        it('should normalize persisted MJ catalog types (bit, datetimeoffset, int, uniqueidentifier) and connector aliases', () => {
+            const field = MakeField();
+            expect(mapper.MapSourceType('bit', 'sqlserver', field)).toBe('BIT');
+            expect(mapper.MapSourceType('bit', 'postgresql', field)).toBe('BOOLEAN');
+            expect(mapper.MapSourceType('datetimeoffset', 'sqlserver', field)).toBe('DATETIMEOFFSET');
+            expect(mapper.MapSourceType('datetimeoffset', 'postgresql', field)).toBe('TIMESTAMPTZ');
+            expect(mapper.MapSourceType('int', 'sqlserver', field)).toBe('INT');
+            expect(mapper.MapSourceType('number', 'sqlserver', field)).toBe('DECIMAL(28,2)');
+            expect(mapper.MapSourceType('currency', 'sqlserver', field)).toBe('DECIMAL(28,2)');
+            expect(mapper.MapSourceType('percent', 'sqlserver', field)).toBe('DECIMAL(28,2)');
+            expect(mapper.MapSourceType('double', 'sqlserver', field)).toBe('FLOAT');
+            expect(mapper.MapSourceType('uniqueidentifier', 'sqlserver', field)).toBe('UNIQUEIDENTIFIER');
+            expect(mapper.MapSourceType('picklist', 'sqlserver', field)).toBe('NVARCHAR(255)');
+        });
+
+        it('should cap Soft FK (IsForeignKey) and Organic Key (IsUniqueKey) string columns at 450 on SQL Server', () => {
+            const fkField = MakeField({ MaxLength: 450, IsForeignKey: true });
+            expect(mapper.MapSourceType('string', 'sqlserver', fkField)).toBe('NVARCHAR(450)');
+            const okField = MakeField({ MaxLength: 450, IsUniqueKey: true });
+            expect(mapper.MapSourceType('string', 'sqlserver', okField)).toBe('NVARCHAR(450)');
+        });
     });
 
     describe('GetMJFieldType', () => {
@@ -240,8 +262,12 @@ describe('TypeMapper', () => {
             expect(mapper.GetMJFieldType('string')).toBe('nvarchar');
         });
 
-        it('should return int for integer', () => {
+        it('should return int for integer and int', () => {
             expect(mapper.GetMJFieldType('integer')).toBe('int');
+            expect(mapper.GetMJFieldType('int')).toBe('int');
+            expect(mapper.GetMJFieldType('bit')).toBe('bit');
+            expect(mapper.GetMJFieldType('datetimeoffset')).toBe('datetimeoffset');
+            expect(mapper.GetMJFieldType('number')).toBe('decimal');
         });
 
         it('should return nvarchar for unknown types', () => {
@@ -256,5 +282,28 @@ describe('TypeMapper', () => {
             expect(mappings.find(m => m.SourceType === 'string')).toBeTruthy();
             expect(mappings.find(m => m.SourceType === 'integer')).toBeTruthy();
         });
+    });
+});
+
+// #3527: the catalog persists MJ field types (int, bit, datetimeoffset); they must map to typed columns,
+// not fall to the text fallback.
+describe('TypeMapper — MJ field-type aliases (#3527)', () => {
+    const mapper = new TypeMapper();
+    const field = MakeField({ Precision: 18, Scale: 4 });
+
+    it.each([
+        ['int', 'INT', 'INTEGER'],
+        ['bit', 'BIT', 'BOOLEAN'],
+        ['datetimeoffset', 'DATETIMEOFFSET', 'TIMESTAMPTZ'],
+        ['uniqueidentifier', 'UNIQUEIDENTIFIER', 'UUID'],
+        ['bigint', 'BIGINT', 'BIGINT'],
+    ])('%s maps to a typed column on both dialects', (type, sqlServer, postgres) => {
+        expect(mapper.MapSourceType(type, 'sqlserver', field)).toBe(sqlServer);
+        expect(mapper.MapSourceType(type, 'postgresql', field)).toBe(postgres);
+    });
+
+    it('decimal and numeric map to a decimal column', () => {
+        expect(mapper.MapSourceType('decimal', 'sqlserver', field)).toMatch(/^DECIMAL/);
+        expect(mapper.MapSourceType('numeric', 'postgresql', field)).toMatch(/^NUMERIC/);
     });
 });

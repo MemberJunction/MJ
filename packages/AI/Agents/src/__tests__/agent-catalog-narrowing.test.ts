@@ -415,6 +415,13 @@ class CatalogHarness {
             }
             throw new Error(`CatalogHarness: unexpected GetEntityObject('${entityName}')`);
         },
+        RunView: async (): Promise<Record<string, unknown>> => ({
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 0,
+        }),
     };
 }
 

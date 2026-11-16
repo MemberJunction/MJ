@@ -1,6 +1,7 @@
 ---
 "@memberjunction/server": patch
 "@memberjunction/core": patch
+"@memberjunction/core-entities": patch
 ---
 
 Execution entry points now refuse scope-limited sessions: anonymous magic-link guests and resource-scoped magic-link sessions. Those sessions are confined by row-level security on entity reads, which does not bound server-side execution.
@@ -24,7 +25,8 @@ Execution entry points now refuse scope-limited sessions: anonymous magic-link g
   - knowledge search (`SearchKnowledge`, `SearchScopes`, `PreviewSearch`, `StreamScopedSearch`);
   - remote browser control;
   - meetings;
+  - document collaboration tickets, live-block execution and freezing, inline artifact edits, delegated child artifacts, anchored `@mention` agent runs, and version restores (`VerifyFrozenBlockSnapshot` and `ResolveArtifact*Permissions` stay open for shared frozen artifacts);
   - component registry search, dependency resolution and feedback. `GetRegistryComponent` stays open, because rendering a shared interactive artifact fetches external-registry component specs through it.
 - **`RunAIAgentFromConversationDetail` serves only public web-widget guests.** The widget instance pins their agent, and it runs under a server principal. Any other scope-limited session is refused before anything loads. Previously, a widget guest whose widget could not be resolved fell back to running the client-supplied agent as the guest; that request is now refused instead.
-- **Remote Operations need an explicit opt-in.** `ExecuteRemoteOperation` refuses scope-limited sessions unless the operation sets the new `BaseRemotableOperation.AllowScopeLimitedPrincipals` (`@memberjunction/core`). An operation that opts in must check the caller's scope in `Authorize`. See the Remote Operations Guide, "Serving magic-link guests".
+- **Remote Operations need an explicit opt-in.** `ExecuteRemoteOperation` refuses scope-limited sessions unless the operation sets the new `BaseRemotableOperation.AllowScopeLimitedPrincipals` (`@memberjunction/core`). `Artifact.ResolveGuestShareLink` (`@memberjunction/core-entities`) opts in because its signed HMAC token pins the single frozen artifact version; an operation that opts in must check the caller's scope or signed token in `Authorize`. See the Remote Operations Guide, "Serving magic-link guests".
 - **No change for anyone else.** Ordinary signed-in users, API-key callers and magic-link sessions that carry a role but no resource scope behave exactly as before.

@@ -1,5 +1,56 @@
 # @memberjunction/integration-schema-builder
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 5d88ccb: A `json` integration source column is created as `TEXT` on PostgreSQL instead of `JSONB` (it stays `NVARCHAR(MAX)` on SQL Server). MJ metadata reads the column as nvarchar, so CodeGen's CRUD functions take and write text, and PostgreSQL rejects text into a `JSONB` column.
+- 6c6f0dc: PostgreSQL string columns wider than `VARCHAR` allows are created as `TEXT`. The integration schema builder treats a declared length at or past nvarchar(max) (1073741823) as unbounded instead of padding it, and the PostgreSQL dialect renders any `VARCHAR` width over 10485760 as `TEXT`, as SQL Server falls back to `NVARCHAR(MAX)` above 4000. A netFORUM source that reports nvarchar(max) as 2147483646 previously produced `VARCHAR(2147483946)`, and the migration failed at its first statement.
+- 66fcfde: Preserve native SQL column types (`INT`, `BIGINT`, `SMALLINT`, `TINYINT`, `DECIMAL(p,s)`, `FLOAT`, `BIT`/`BOOLEAN`, `DATE`, `DATETIMEOFFSET`/`TIMESTAMPTZ`, `TIME`, `UNIQUEIDENTIFIER`/`UUID`) and `Precision`/`Scale` across `IntegrationSchemaSync` and `TypeMapper` instead of falling back to `NVARCHAR`/`NVARCHAR(MAX)`, while warning and skipping cross-family `ALTER COLUMN` conversions (such as `NVARCHAR` to `INT` or `DECIMAL`) on existing columns in `SchemaEvolution.DiffSchema` to prevent conversion failures or precision loss on existing data. Add idempotent non-unique auto-indexing for Soft PKs (`IX_*_PK`), Soft FKs (`IX_*_FK_*`), and Organic Keys (`IX_*_OK_*`) across runtime `CREATE TABLE` and `SchemaEvolution` `ALTER TABLE` with SQL Server key-width capping (`<= 450` chars) and `sys.index_columns` key-tuple deduplication.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [3615622]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [d693139]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/integration-engine@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+  - @memberjunction/schema-engine@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

@@ -13,6 +13,13 @@ import {
     StageRenderBundle,
 } from '../index.js';
 
+/**
+ * Wall-clock ceiling for the "pathological input in linear time" checks. They guard against
+ * quadratic/backtracking scans of 50,000-character inputs (which take seconds), not against a slow
+ * machine: a 200 ms bound failed the v6.3.0-edge.0 publish gate at 211 ms on a shared CI runner.
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 function makeBundleWithEntryContent(
     entryContent: string,
     extraFiles: Array<{ Path: string; Content: string }> = [],
@@ -405,6 +412,6 @@ describe('lint-gate static and HyperFrames lint checks', () => {
         const elapsedMs = performance.now() - start;
 
         expect(issues).toEqual([]);
-        expect(elapsedMs).toBeLessThan(200);
+        expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
     });
 });

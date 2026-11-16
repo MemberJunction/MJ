@@ -150,6 +150,48 @@
                 </div>
             }
 
+            <!-- Inline AI Assistant Context Bar (Docs / Slides / Sheets /ai or Ask AI) -->
+            @if (ActiveArtifactAiRequest; as aiReq) {
+                <div class="chat-overlay-artifact-ai-bar" data-testid="overlay-artifact-ai-bar" role="region" aria-label="Inline AI Assistant context">
+                    <div class="chat-overlay-artifact-ai-top">
+                        <div class="chat-overlay-context-main">
+                            <i class="fa-solid fa-sparkles chat-overlay-context-icon" aria-hidden="true"></i>
+                            <span class="chat-overlay-context-entity">{{ aiReq.ArtifactKind === 'doc' ? 'Doc' : aiReq.ArtifactKind === 'slides' ? 'Slides' : 'Sheet' }}</span>
+                            <span class="chat-overlay-context-sep" aria-hidden="true">·</span>
+                            <span class="chat-overlay-context-record-name" [title]="aiReq.ArtifactTitle">{{ aiReq.ArtifactTitle }}</span>
+                            <span class="chat-overlay-context-chip">{{ aiReq.ContextLabel }}</span>
+                        </div>
+                        <button
+                            type="button"
+                            class="chat-overlay-artifact-ai-dismiss"
+                            title="Clear editor context"
+                            aria-label="Clear editor context"
+                            (click)="DismissArtifactAiContext()">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <div class="chat-overlay-artifact-ai-actions">
+                        <label class="chat-overlay-artifact-ai-suggest-toggle" title="Insert AI proposal as a tracked suggestion when supported by the editor">
+                            <input
+                                type="checkbox"
+                                [checked]="ArtifactAiSuggestingMode"
+                                (change)="OnToggleArtifactAiSuggestingMode($event)"
+                                data-testid="overlay-artifact-ai-suggest-toggle" />
+                            <span>Suggest changes</span>
+                        </label>
+                        <button
+                            type="button"
+                            class="chat-overlay-artifact-ai-apply-btn"
+                            [disabled]="!aiReq.ApplySuggestion || !ArtifactAiLatestProposal.trim()"
+                            (click)="ApplyArtifactAiProposal()"
+                            data-testid="overlay-apply-ai-proposal-btn">
+                            <i class="fa-solid" [class.fa-check]="ArtifactAiProposalApplied" [class.fa-wand-magic-sparkles]="!ArtifactAiProposalApplied"></i>
+                            {{ ArtifactAiProposalApplied ? 'Applied to ' + (aiReq.ArtifactKind === 'doc' ? 'Doc' : aiReq.ArtifactKind === 'slides' ? 'Slide' : 'Sheet') : 'Apply to ' + (aiReq.ArtifactKind === 'doc' ? 'Doc' : aiReq.ArtifactKind === 'slides' ? 'Slide' : 'Sheet') }}
+                        </button>
+                    </div>
+                </div>
+            }
+
             <!-- Chat Content — wraps conversation-chat-area -->
             <div class="chat-overlay-body">
                 <mj-conversation-chat-area
@@ -161,17 +203,20 @@
                     [pendingMessage]="PendingMessage"
                     [pendingAttachments]="PendingAttachments"
                     [pendingMessageConversationId]="PendingMessageConversationId"
+                    [composerDraft]="ArtifactAiComposerDraft"
                     [linkedEntityId]="ActiveRecordEntityId"
                     [linkedRecordId]="ActiveLinkedRecordId"
                     [overlayMode]="true"
                     [showExportButton]="false"
                     [showShareButton]="false"
                     [showArtifactIndicator]="false"
-                    [appContext]="AppContext"
+                    [appContext]="EffectiveAppContext"
                     [emptyStateGreeting]="EmptyStateGreeting"
                     (conversationCreated)="OnConversationCreated($event)"
                     (conversationRenamed)="OnConversationRenamed($event)"
                     (pendingMessageConsumed)="OnPendingMessageConsumed()"
+                    (composerDraftConsumed)="OnArtifactAiComposerDraftConsumed()"
+                    (AgentMessageReceived)="OnAgentMessageReceived($event)"
                     (openEntityRecord)="OnOpenEntityRecord($event)"
                     (navigationRequest)="OnNavigationRequest($event)"
                     (taskClicked)="OnTaskClicked($event)"

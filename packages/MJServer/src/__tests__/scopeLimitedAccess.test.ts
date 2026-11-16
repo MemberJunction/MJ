@@ -267,6 +267,20 @@ const METHOD_GUARDED: Record<string, Record<string, string[]>> = {
     'ComponentRegistryResolver.ts': {
         ComponentRegistryExtendedResolver: ['SearchRegistryComponents', 'ResolveComponentDependencies', 'SendComponentFeedback'],
     },
+    // VerifyFrozenBlockSnapshot and ResolveArtifact*Permissions stay open for shared frozen
+    // artifact viewers; live-block execution, collaboration tickets, edits, @mention agent
+    // runs, and version restores refuse scope-limited sessions.
+    'DocumentCollaborationResolver.ts': {
+        DocumentCollaborationResolver: [
+            'MintArtifactCollaborationTicket',
+            'ExecuteDocumentLiveBlock',
+            'FreezeDocumentLiveBlock',
+            'CommitArtifactInlineEdit',
+            'CreateInlineDelegatedArtifact',
+            'ExecuteAnchoredCommentAgentMention',
+            'RestoreArtifactVersion',
+        ],
+    },
     'RunAIAgentResolver.ts': { RunAIAgentResolver: ['RunAIAgent', 'RespondToAgentRequest', 'ReassignAgentRequest'] },
 };
 

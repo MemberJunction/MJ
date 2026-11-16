@@ -46,7 +46,7 @@
 // import is the dependency-free turn-detection normalizer, so the module keeps its framework-free /
 // pure-transformation contract.
 import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
-import { NormalizeTurnDetectionSettings } from '@memberjunction/ai';
+import { ExtractRealtimeTimingConfig, NormalizeTurnDetectionSettings } from '@memberjunction/ai';
 import {
     AccumulateRealtimeChannelsConfig,
     type RealtimeChannelDisplayPolicy,
@@ -474,17 +474,34 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
  */
 export function GetModelCatalogSessionSettings(config: AIModelConfiguration | null | undefined): JSONObjectLike | null {
     const bag: JSONObjectLike = {};
-    const turnDetection = config?.Realtime?.TurnDetection;
+    const rt = config?.Realtime;
+    const turnDetection = rt?.TurnDetection;
     if (isPlainObject(turnDetection)) {
         bag['turnDetection'] = { ...turnDetection } as JSONObjectLike;
     }
-    const reasoning = config?.Realtime?.Reasoning;
+    const reasoning = rt?.Reasoning;
     if (isPlainObject(reasoning)) {
         bag['reasoning'] = { ...reasoning } as JSONObjectLike;
     }
-    const tooling = config?.Realtime?.Tooling;
+    const tooling = rt?.Tooling;
     if (isPlainObject(tooling)) {
         bag['tooling'] = { ...tooling } as JSONObjectLike;
+    }
+    const timing = ExtractRealtimeTimingConfig(rt ? (rt as Record<string, unknown>) : undefined);
+    if (timing.ConnectionMaxSeconds !== undefined) {
+        bag['connectionMaxSeconds'] = timing.ConnectionMaxSeconds;
+    }
+    if (timing.SessionMaxSeconds !== undefined) {
+        bag['sessionMaxSeconds'] = timing.SessionMaxSeconds;
+    }
+    if (timing.ReconnectBufferSeconds !== undefined) {
+        bag['reconnectBufferSeconds'] = timing.ReconnectBufferSeconds;
+    }
+    if (timing.TrustNativeResumption !== undefined) {
+        bag['trustNativeResumption'] = timing.TrustNativeResumption;
+    }
+    if (config?.Privacy?.ZeroDataRetention === true) {
+        bag['zeroDataRetention'] = true;
     }
     return Object.keys(bag).length > 0 ? bag : null;
 }

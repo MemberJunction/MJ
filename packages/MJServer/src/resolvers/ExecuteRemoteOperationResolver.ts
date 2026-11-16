@@ -6,6 +6,15 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
+import { LoadSynthesizeArtifactFromSourcesOperation } from '../operations/SynthesizeArtifactFromSourcesServerOperation.js';
+import { LoadArtifactComplianceAuditOperation } from '../operations/ArtifactComplianceAuditHelper.js';
+import { LoadArtifactEvaluateAiFormulaOperation } from '../operations/ArtifactEvaluateAiFormulaServerOperation.js';
+import { LoadArtifactGuestShareOperations } from '../operations/ArtifactGuestShareServerOperations.js';
+
+LoadSynthesizeArtifactFromSourcesOperation();
+LoadArtifactComplianceAuditOperation();
+LoadArtifactEvaluateAiFormulaOperation();
+LoadArtifactGuestShareOperations();
 
 /** PubSub topic carrying RemoteOpProgress envelopes for attached over-the-wire callers (RO-3). */
 const REMOTE_OP_PROGRESS_TOPIC = 'RemoteOperationProgress';

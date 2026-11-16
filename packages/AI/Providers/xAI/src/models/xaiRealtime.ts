@@ -84,6 +84,7 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsVoiceOutput: false,
     supportsLiveReconfigure: true,
     supportsDynamicToolSet: true,
+    supportsNativeResumption: true,
     unexpectedCloseMessage: 'xAI Grok Voice realtime connection closed unexpectedly',
     // server_vad is the only turn mode xAI documents on Grok Voice today. When xAI ships a
     // native full-duplex / smarter turn mode (the Grok Voice Think Fast family reasons while
@@ -184,6 +185,20 @@ export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-b
 
     public static override readonly SupportsDynamicToolSet = XAI_REALTIME_PROFILE.supportsDynamicToolSet;
 
+    public override get DefaultCallDurationSeconds(): number | undefined {
+        return 7200;
+    }
+
+    /**
+     * False by default: live probing against `wss://api.x.ai/v1/realtime` confirmed that resuming via
+     * `?conversation_id=<id>` drops all client-created `conversation.item.create` `message` items
+     * (`SendContextNote`, `SendText`, and any history seeded after a network drop), whereas `ConversationMemory`
+     * text seeding is lossless (~0.9 s). Explicit `Config.trustNativeResumption = true` still opts in.
+     */
+    public override get TrustsNativeResumption(): boolean {
+        return false;
+    }
+
     /**
      * @param apiKey The xAI API key used to authenticate the Grok Voice realtime socket.
      */
@@ -201,7 +216,7 @@ export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-b
 
     /** Returns the xAI-branded session subclass so instanceof checks and logs stay provider-true. */
     protected override createSessionInstance(connection: IOpenAIRealtimeConnection): OpenAIRealtimeSession {
-        return new xAIRealtimeSession(connection, RealtimeDriverFactsOf(this));
+        return new xAIRealtimeSession(connection, RealtimeDriverFactsOf(this), this);
     }
 
     /**
@@ -226,8 +241,21 @@ export class xAIRealtimeSession extends OpenAIRealtimeSession {  // case-violati
      * @param connection The injectable provider-connection seam (a real `OpenAIRealtimeWebSocket`
      * in production, a fake in tests).
      * @param driverFacts The creating driver's static facts; defaults to {@link xAIRealtime.DriverFacts} (xAI's own static) for direct construction.
+     * @param model Optional parent driver instance.
      */
-    constructor(connection: IxAIRealtimeConnection, driverFacts: Readonly<RealtimeDriverFacts> = xAIRealtime.DriverFacts) {
-        super(connection, XAI_REALTIME_PROFILE, driverFacts);
+    constructor(
+        connection: IxAIRealtimeConnection,
+        driverFacts: Readonly<RealtimeDriverFacts> = xAIRealtime.DriverFacts,
+        model?: BaseRealtimeModel,
+    ) {
+        super(connection, XAI_REALTIME_PROFILE, driverFacts, model);
+    }
+
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return this.model?.DefaultCallDurationSeconds ?? 7200;
+    }
+
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return this.model?.TrustsNativeResumption ?? false;
     }
 }

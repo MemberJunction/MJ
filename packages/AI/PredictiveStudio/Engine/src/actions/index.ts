@@ -31,6 +31,7 @@ export * from './promote-model.action';
 export * from './promote-model.gate';
 export * from './model-scoring-action-generator';
 export * from './schedule-model-scoring.action';
+export * from './evaluate-drift.action';
 export * from './migrate-pipelines.action';
 
 import { PredictiveStudioTrainModelAction } from './train-model.action';
@@ -38,6 +39,7 @@ import { PredictiveStudioScoreRecordSetAction } from './score-record-set.action'
 import { PredictiveStudioRunExperimentAction } from './run-experiment.action';
 import { PredictiveStudioPromoteModelAction } from './promote-model.action';
 import { PredictiveStudioScheduleModelScoringAction } from './schedule-model-scoring.action';
+import { EvaluateFeatureAndPredictionDriftAction } from './evaluate-drift.action';
 import { PredictiveStudioMigratePipelinesAction } from './migrate-pipelines.action';
 
 /**
@@ -52,5 +54,6 @@ export function LoadPredictiveStudioActions(): void {
   void PredictiveStudioRunExperimentAction;
   void PredictiveStudioPromoteModelAction;
   void PredictiveStudioScheduleModelScoringAction;
+  void EvaluateFeatureAndPredictionDriftAction;
   void PredictiveStudioMigratePipelinesAction;
 }

@@ -1,0 +1,1503 @@
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  EntityInfo,
+  type IMetadataProvider,
+  type IRunViewProvider,
+  type RunViewParams,
+  type RunViewResult,
+  type UserInfo,
+} from '@memberjunction/core';
+import { renderComponentFixture } from '@memberjunction/ng-test-utils';
+import { UserInfoEngine, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MarkdownArtifactViewerComponent } from './markdown-artifact-viewer.component';
+import { MjContextMenuComponent } from '../context-menu/mj-context-menu.component';
+import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
+import { ArtifactAgentRegionIndicatorComponent } from '../presence/artifact-agent-region-indicator.component';
+import { DocumentCollaborationService } from '../../services/document-collaboration.service';
+import { DocumentImportExportService } from '../../services/document-import-export.service';
+
+@Component({
+  standalone: true,
+  selector: 'mj-markdown',
+  template: `<div class="stub-mj-markdown">{{ data }}</div>`,
+})
+class StubMarkdownComponent {
+  @Input() data: string | null = null;
+  @Input() enableCollapsibleHeadings = false;
+  @Input() enableLineNumbers = false;
+  @Input() enableSyntaxHighlight = false;
+  @Input() enableSmartypants = false;
+  @Input() enableHtml = false;
+  @Input() enableCodeCopy = false;
+  @Input() enableHeadingIds = false;
+}
+
+@Component({
+  standalone: true,
+  selector: 'mj-artifact-type-plugin-viewer',
+  template: `<div class="stub-ole-plugin" [attr.data-readonly]="readonly">{{ ArtifactTypeName || artifactTypeName }}</div>`,
+})
+class StubArtifactTypePluginViewerComponent {
+  @Input() Provider: IMetadataProvider | null = null;
+  @Input() artifactVersion!: MJArtifactVersionEntity;
+  @Input() artifactTypeName = '';
+  @Input() ArtifactTypeName = '';
+  @Input() contentType?: string;
+  @Input() driverClass?: string;
+  @Input() height?: string;
+  @Input() readonly = false;
+  @Input() cssClass?: string;
+  @Output() ContentCommitted = new EventEmitter<string>();
+}
+
+const INITIAL_DOC_CONTENT = [
+  '# Q4 Strategy Document',
+  '',
+  'Initial narrative paragraph.',
+  '',
+  '## Live Metrics Section',
+  '',
+  ':::mj-block',
+  '{',
+  '  "BlockID": "blk-live-1",',
+  '  "Kind": "EntityView",',
+  '  "Mode": "Live",',
+  '  "Title": "Active Projects",',
+  '  "EntityName": "MJ: Projects"',
+  '}',
+  ':::',
+  '',
+  '## Architecture Whiteboard',
+  '',
+  ':::mj-block',
+  '{',
+  '  "BlockID": "blk-wb-1",',
+  '  "Kind": "Artifact",',
+  '  "Mode": "Live",',
+  '  "Title": "System Diagram",',
+  '  "ArtifactID": "wb-inline-1",',
+  '  "ArtifactType": "Whiteboard",',
+  '  "EmbedMode": "Inline"',
+  '}',
+  ':::',
+].join('\n');
+
+interface MockDocsProviderOptions {
+  currentUserId?: string;
+  artifactOwnerId?: string;
+  permissionGrants?: Array<{ ID: string; UserID: string; CanRead: boolean; CanEdit: boolean; CanShare: boolean }>;
+  failSaves?: boolean;
+}
+
+interface MockDocsEntityRecord {
+  ID: string;
+  LatestResult: { Message: string };
+  NewRecord: () => void;
+  Load: (id: string) => Promise<boolean>;
+  Delete: () => Promise<boolean>;
+  Save: () => Promise<boolean>;
+  ArtifactID?: string;
+  VersionNumber?: number;
+  Name?: string;
+  Content?: string;
+  UserID?: string;
+  Role?: string;
+  CanRead?: boolean;
+  CanEdit?: boolean;
+  CanShare?: boolean;
+}
+
+type MockDocsMetadataAndRunViewProvider = IMetadataProvider & IRunViewProvider;
+
+function createDocsMockProvider(opts: MockDocsProviderOptions = {}) {
+  const currentUserId = opts.currentUserId ?? '11111111-1111-4111-8111-111111111111';
+  const artifactOwnerId = opts.artifactOwnerId ?? currentUserId;
+  const permissionGrants = [...(opts.permissionGrants ?? [])];
+  let seq = 0;
+
+  const savedEntities: Array<{ entityName: string; record: MockDocsEntityRecord }> = [];
+  const deletedPermissionIds: string[] = [];
+  const childVersionsByArtifact = new Map<string, Array<{ ID: string; ArtifactID: string; VersionNumber: number; Name: string; Content: string }>>([
+    [
+      'wb-inline-1',
+      [
+        {
+          ID: 'ver-wb-inline-1-1',
+          ArtifactID: 'wb-inline-1',
+          VersionNumber: 1,
+          Name: 'System Diagram',
+          Content: '{"version":1,"activePageId":"page-1","pages":[{"id":"page-1","name":"Page 1","items":[]}]}',
+        },
+      ],
+    ],
+  ]);
+
+  const user = {
+    ID: currentUserId,
+    Name: 'Alex Author',
+    Email: 'alex@memberjunction.org',
+    IsActive: true,
+  } as Partial<UserInfo> as UserInfo;
+
+  const entities: EntityInfo[] = [
+    new EntityInfo({
+      ID: 'ent-artifacts',
+      Name: 'MJ: Artifacts',
+      DisplayName: 'Artifacts',
+      SchemaName: '__mj',
+      BaseTable: 'Artifact',
+      Icon: 'fa-solid fa-cube',
+      FieldLevelSecurityApplies: false,
+      Fields: [
+        { Name: 'ID', DisplayName: 'ID', IsPrimaryKey: true, DefaultInView: true, Type: 'uniqueidentifier' },
+        { Name: 'Name', DisplayName: 'Name', IsNameField: true, DefaultInView: true, Type: 'nvarchar' },
+      ],
+    }),
+    new EntityInfo({
+      ID: 'ent-projects',
+      Name: 'MJ: Projects',
+      DisplayName: 'Projects',
+      SchemaName: '__mj',
+      BaseTable: 'Project',
+      Icon: 'fa-solid fa-diagram-project',
+      FieldLevelSecurityApplies: false,
+      Fields: [
+        { Name: 'ID', DisplayName: 'ID', IsPrimaryKey: true, DefaultInView: true, Type: 'uniqueidentifier' },
+        { Name: 'Name', DisplayName: 'Name', IsNameField: true, DefaultInView: true, Type: 'nvarchar' },
+      ],
+    }),
+    new EntityInfo({
+      ID: 'ent-conversations',
+      Name: 'MJ: Conversations',
+      DisplayName: 'Conversations',
+      SchemaName: '__mj',
+      BaseTable: 'Conversation',
+      Icon: 'fa-solid fa-comments',
+      FieldLevelSecurityApplies: false,
+      Fields: [
+        { Name: 'ID', DisplayName: 'ID', IsPrimaryKey: true, DefaultInView: true, Type: 'uniqueidentifier' },
+        { Name: 'Name', DisplayName: 'Name', IsNameField: true, DefaultInView: true, Type: 'nvarchar' },
+        {
+          Name: 'Type',
+          DisplayName: 'Type',
+          DefaultInView: true,
+          Type: 'uniqueidentifier',
+          RelatedEntity: 'MJ: Artifact Types',
+          RelatedEntityFieldName: 'ID',
+        },
+      ],
+    }),
+    new EntityInfo({
+      ID: 'ent-ai-models',
+      Name: 'MJ: AI Models',
+      DisplayName: 'AI Models',
+      SchemaName: '__mj',
+      BaseTable: 'AIModel',
+      Icon: 'fa-solid fa-microchip',
+      FieldLevelSecurityApplies: false,
+      Fields: [
+        { Name: 'ID', DisplayName: 'ID', IsPrimaryKey: true, DefaultInView: true, Type: 'uniqueidentifier' },
+      ],
+    }),
+  ];
+  for (const entity of entities) {
+    entity.GetUserPermisions = () => ({
+      ID: `perm-${entity.ID}`,
+      Entity: entity,
+      User: user,
+      CanRead: true,
+      CanCreate: false,
+      CanUpdate: false,
+      CanDelete: false,
+    });
+  }
+
+  const okResult = <T>(results: T[], totalRowCount = results.length): RunViewResult<T> => ({
+    Success: true,
+    Results: results,
+    RowCount: results.length,
+    TotalRowCount: totalRowCount,
+    ExecutionTime: 0,
+    ErrorMessage: '',
+  });
+
+  const provider = {
+    CurrentUser: user,
+    Entities: entities,
+    EntityByName: (name: string) => entities.find((e) => e.Name === name),
+    RunView: async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
+      const extraFilter = String(params.ExtraFilter ?? '');
+      if (params.EntityName === 'MJ: Artifacts') {
+        return okResult([{ ID: 'art-doc-1', UserID: artifactOwnerId, EnvironmentID: 'env-doc-1' }]) as RunViewResult<T>;
+      }
+      if (params.EntityName === 'MJ: Artifact Permissions') {
+        return okResult(permissionGrants) as RunViewResult<T>;
+      }
+      if (params.EntityName === 'MJ: Artifact Types') {
+        return okResult([{ ID: 'type-wb-1', Name: 'Whiteboard' }]) as RunViewResult<T>;
+      }
+      if (params.EntityName === 'MJ: Artifact Versions') {
+        if (extraFilter.includes('wb-inline-1')) {
+          const list = childVersionsByArtifact.get('wb-inline-1') ?? [];
+          const sorted = [...list].sort((a, b) => b.VersionNumber - a.VersionNumber);
+          return okResult(sorted.slice(0, 1), sorted.length) as RunViewResult<T>;
+        }
+        return okResult([{ ID: 'ver-doc-1', VersionNumber: 1 }]) as RunViewResult<T>;
+      }
+      if (
+        params.EntityName === 'MJ: Projects' ||
+        (params.EntityName === 'MJ: Conversations' && !extraFilter.includes('LinkedRecordID'))
+      ) {
+        return okResult([
+          { ID: 'rec-1', Name: 'Project Alpha', Type: 'rec-type-1' },
+          { ID: 'rec-2', Name: 'Project Beta', Type: 'rec-type-2' },
+        ]) as RunViewResult<T>;
+      }
+      if (params.EntityName === 'MJ: Users') {
+        return okResult([
+          user,
+          { ID: 'user-colleague-1', Name: 'Jane Reviewer', Email: 'jane@example.com' },
+        ]) as RunViewResult<T>;
+      }
+      return okResult([]) as RunViewResult<T>;
+    },
+    GetEntityObject: async (entityName: string) => {
+      const generatedId = `66666666-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
+      const rec: MockDocsEntityRecord = {
+        ID: generatedId,
+        LatestResult: { Message: 'Mock persistence failure' },
+        NewRecord: () => undefined,
+        Load: async (id: string) => {
+          rec.ID = id;
+          return true;
+        },
+        Delete: async () => {
+          if (opts.failSaves) return false;
+          deletedPermissionIds.push(String(rec.ID));
+          return true;
+        },
+        Save: async () => {
+          if (opts.failSaves) return false;
+          savedEntities.push({ entityName, record: { ...rec } });
+          if (entityName === 'MJ: Artifact Versions' && rec.ArtifactID === 'wb-inline-1') {
+            const list = childVersionsByArtifact.get('wb-inline-1') ?? [];
+            list.push({
+              ID: String(rec.ID),
+              ArtifactID: 'wb-inline-1',
+              VersionNumber: Number(rec.VersionNumber),
+              Name: String(rec.Name ?? 'System Diagram'),
+              Content: String(rec.Content ?? ''),
+            });
+            childVersionsByArtifact.set('wb-inline-1', list);
+          }
+          return true;
+        },
+      };
+      return rec;
+    },
+  } as Partial<MockDocsMetadataAndRunViewProvider> as MockDocsMetadataAndRunViewProvider;
+
+  return { provider, savedEntities, deletedPermissionIds };
+}
+
+describe('MarkdownArtifactViewerComponent (DOM)', () => {
+  beforeEach(() => {
+    process.env.MJ_FROZEN_BLOCK_HMAC_SECRET =
+      'test-docs-dom-frozen-hmac-secret-at-least-32-bytes!!';
+  });
+  async function renderDocsViewer(
+    content = INITIAL_DOC_CONTENT,
+    readonly = false,
+    providerOverride?: IMetadataProvider | null,
+  ) {
+    const mock = providerOverride === undefined ? createDocsMockProvider().provider : providerOverride;
+    const f = renderComponentFixture(MarkdownArtifactViewerComponent, {
+      imports: [
+        CommonModule,
+        FormsModule,
+        StubMarkdownComponent,
+        StubArtifactTypePluginViewerComponent,
+        ArtifactAgentPresenceBarComponent,
+        ArtifactAgentRegionIndicatorComponent,
+      ],
+      declarations: [MarkdownArtifactViewerComponent, MjContextMenuComponent],
+      providers: [DocumentCollaborationService, DocumentImportExportService],
+      inputs: {
+        Provider: mock,
+        artifactVersion: {
+          ID: 'ver-doc-1',
+          ArtifactID: 'art-doc-1',
+          VersionNumber: 1,
+          Name: 'Q4 Strategy Document',
+          Content: content,
+        } as Partial<MJArtifactVersionEntity> as MJArtifactVersionEntity,
+        readonly,
+      },
+    });
+    await f.whenStable();
+    await new Promise((r) => setTimeout(r, 15));
+    f.detectChanges();
+    return f;
+  }
+
+  it('defaults HasEditPermission and CanUserShareArtifact to false when permissions are unresolved (B3)', async () => {
+    const fNoProvider = await renderDocsViewer('# Protected Doc', false, null);
+    expect(fNoProvider.componentInstance.HasEditPermission).toBe(false);
+    expect(fNoProvider.componentInstance.CanUserShareArtifact).toBe(false);
+    expect(fNoProvider.componentInstance.CanUserEdit).toBe(false);
+    expect((fNoProvider.nativeElement as HTMLElement).querySelector('[data-testid="open-permissions-modal-btn"]')).toBeNull();
+  });
+
+  it('gates Share button strictly on CanShare when user has CanEdit=true and CanShare=false (B3)', async () => {
+    const editorMock = createDocsMockProvider({
+      currentUserId: '22222222-2222-4222-8222-222222222222',
+      artifactOwnerId: '99999999-9999-4999-8999-999999999999',
+      permissionGrants: [
+        {
+          ID: 'perm-editor-1',
+          UserID: '22222222-2222-4222-8222-222222222222',
+          CanRead: true,
+          CanEdit: true,
+          CanShare: false,
+        },
+      ],
+    });
+    const fEditor = await renderDocsViewer('# Editor Doc', false, editorMock.provider);
+    expect(fEditor.componentInstance.HasEditPermission).toBe(true);
+    expect(fEditor.componentInstance.CanUserShareArtifact).toBe(false);
+    expect((fEditor.nativeElement as HTMLElement).querySelector('[data-testid="open-permissions-modal-btn"]')).toBeNull();
+  });
+
+  it('renders workspace toolbar, TOC outline rail, live MJ block, and inline OLE Artifact block', async () => {
+    const f = await renderDocsViewer();
+    const root = f.nativeElement as HTMLElement;
+
+    expect(root.querySelector('[data-testid="mj-docs-toolbar"]')).not.toBeNull();
+    expect(root.querySelector('[data-testid="docs-outline-rail"]')).not.toBeNull();
+
+    expect(f.componentInstance.OutlineItems.length).toBe(5);
+    expect(f.componentInstance.WordStats.LiveBlocks).toBe(1);
+    expect(f.componentInstance.WordStats.EmbeddedArtifacts).toBe(1);
+
+    expect(root.querySelector('[data-testid="live-mj-block-blk-live-1"]')).not.toBeNull();
+    expect(root.querySelector('[data-testid="ole-artifact-block-blk-wb-1"]')).not.toBeNull();
+  });
+
+  it('opens Slash Command Menu (/), creates and saves real delegated Whiteboard entities before inserting :::mj-block (A6)', async () => {
+    const mock = createDocsMockProvider();
+    const f = await renderDocsViewer('# Simple Doc', false, mock.provider);
+    f.componentInstance.SetViewMode('edit');
+    f.detectChanges();
+
+    f.componentInstance.ToggleSlashMenu();
+    f.detectChanges();
+    const root = f.nativeElement as HTMLElement;
+    expect(root.querySelector('[data-testid="slash-command-menu"]')).not.toBeNull();
+
+    const wbCmd = f.componentInstance.FilteredSlashCommands.find((c) => c.Command === '/whiteboard')!;
+    expect(wbCmd).toBeDefined();
+
+    f.componentInstance.ExecuteSlashCommand(wbCmd);
+    f.detectChanges();
+    expect(f.componentInstance.NewBlockArtifactID).toBe('');
+    expect(root.querySelector('[data-testid="insert-block-modal"]')).not.toBeNull();
+
+    await f.componentInstance.ConfirmBlockInsertModal();
+    f.detectChanges();
+
+    const createdArt = mock.savedEntities.find((e) => e.entityName === 'MJ: Artifacts');
+    const createdVer = mock.savedEntities.find((e) => e.entityName === 'MJ: Artifact Versions');
+    expect(createdArt).toBeDefined();
+    expect(createdVer).toBeDefined();
+    expect(String(createdVer?.record.Content)).toBe(
+      '{"version":1,"activePageId":"page-1","pages":[{"id":"page-1","name":"Page 1","items":[]}]}',
+    );
+    expect(f.componentInstance.MarkdownContent).toContain(`"ArtifactID": "${String(createdArt?.record.ID)}"`);
+    expect(f.componentInstance.MarkdownContent).toContain('"ArtifactType": "Whiteboard"');
+    expect(f.componentInstance.WordStats.EmbeddedArtifacts).toBe(1);
+  });
+
+  it('enforces O5 Security Warning confirmation modal before freezing a live MJ block and blocks freeze when execution fails (A2)', async () => {
+    const f = await renderDocsViewer();
+    const root = f.nativeElement as HTMLElement;
+
+    const liveSeg = f.componentInstance.DocumentSegments.find((s) => s.SegmentID === 'blk-live-1')!;
+    expect(liveSeg.Descriptor?.Mode).toBe('Live');
+
+    f.componentInstance.PromptFreezeBlock(liveSeg.Descriptor!);
+    f.detectChanges();
+
+    const modal = root.querySelector('[data-testid="freeze-warning-modal"]');
+    expect(modal).not.toBeNull();
+
+    const confirmBtn = root.querySelector<HTMLButtonElement>('[data-testid="confirm-freeze-btn"]')!;
+    expect(confirmBtn.disabled).toBe(true);
+
+    f.componentInstance.SetFreezeWarningAcknowledged(true);
+    f.detectChanges();
+    expect(confirmBtn.disabled).toBe(false);
+
+    await f.componentInstance.ConfirmFreezeBlock();
+    f.detectChanges();
+
+    const afterSeg = f.componentInstance.DocumentSegments.find((s) => s.SegmentID === 'blk-live-1')!;
+    expect(afterSeg.Descriptor?.Mode).toBe('Frozen');
+    expect(afterSeg.Descriptor?.FrozenSnapshot?.SecurityWarningAcknowledged).toBe(true);
+  });
+
+  it('loads embedded ArtifactVersion via RunView, tracks latest when unpinned, and advances VersionID when pinned only after Save() succeeds (A6)', async () => {
+    const mock = createDocsMockProvider();
+    const f = await renderDocsViewer(INITIAL_DOC_CONTENT, false, mock.provider);
+    const wbSeg = f.componentInstance.DocumentSegments.find((s) => s.SegmentID === 'blk-wb-1')!;
+
+    expect(f.componentInstance.IsInlineEditingBlock('blk-wb-1')).toBe(false);
+    f.componentInstance.ToggleInlineArtifactEdit(wbSeg.Descriptor!);
+    f.detectChanges();
+    expect(f.componentInstance.IsInlineEditingBlock('blk-wb-1')).toBe(true);
+
+    // 1. Unpinned: OnEmbeddedArtifactContentCommitted queries MAX(VersionNumber)=1, saves v2, keeps VersionID undefined
+    await f.componentInstance.OnEmbeddedArtifactContentCommitted(
+      wbSeg.Descriptor!,
+      JSON.stringify({ version: 1, activePageId: 'page-1', pages: [{ id: 'page-1', name: 'Updated', items: [] }] }),
+    );
+    f.detectChanges();
+
+    const unpinnedSeg = f.componentInstance.DocumentSegments.find((s) => s.SegmentID === 'blk-wb-1')!;
+    expect(unpinnedSeg.Descriptor?.VersionID).toBeUndefined();
+    const loadedV2 = f.componentInstance.GetEmbeddedArtifactVersion(unpinnedSeg.Descriptor!);
+    expect(loadedV2?.VersionNumber).toBe(2);
+
+    // 2. Pin to v2, then commit another inline edit -> saves v3 and advances VersionID to real saved entity ID
+    f.componentInstance.TogglePinArtifactVersion(unpinnedSeg.Descriptor!);
+    f.detectChanges();
+    const pinnedSeg = f.componentInstance.DocumentSegments.find((s) => s.SegmentID === 'blk-wb-1')!;
+    expect(pinnedSeg.Descriptor?.VersionID).toBe(loadedV2?.ID);
+
+    await f.componentInstance.OnEmbeddedArtifactContentCommitted(
+      pinnedSeg.Descriptor!,
+      JSON.stringify({ version: 1, activePageId: 'page-1', pages: [{ id: 'page-1', name: 'Updated v3', items: [] }] }),
+    );
+    f.detectChanges();
+
+    const updatedWbSeg = f.componentInstance.DocumentSegments.find((s) => s.SegmentID === 'blk-wb-1')!;
+    expect(updatedWbSeg.Descriptor?.VersionID).not.toBe(loadedV2?.ID);
+    expect(f.componentInstance.GetEmbeddedArtifactVersion(updatedWbSeg.Descriptor!)?.VersionNumber).toBe(3);
+  });
+
+  it('renders in-place WYSIWYG editable blocks in Edit mode (headings, paragraphs, task lists, tables) without a top raw textarea', async () => {
+    const richDoc = [
+      '# Interactive Heading',
+      '',
+      'Editable prose paragraph.',
+      '',
+      '- [ ] First task item',
+      '- [x] Completed task item',
+      '',
+      '| Metric | Target |',
+      '| --- | --- |',
+      '| Latency | 25ms |',
+    ].join('\n');
+
+    const f = await renderDocsViewer(richDoc, false);
+    const root = f.nativeElement as HTMLElement;
+
+    expect(f.componentInstance.ViewMode).toBe('edit');
+    f.componentInstance.SetViewMode('preview');
+    f.detectChanges();
+    expect(f.componentInstance.ViewMode).toBe('preview');
+    f.componentInstance.SetViewMode('edit');
+    f.detectChanges();
+    expect(f.componentInstance.ViewMode).toBe('edit');
+    expect(root.querySelector('[data-testid="docs-editor-textarea"]')).toBeNull();
+
+    const headingSeg = f.componentInstance.DocumentSegments[0];
+    const headingEl = root.querySelector<HTMLElement>(`[data-testid="editable-heading-${headingSeg.SegmentID}"]`);
+    expect(headingEl).not.toBeNull();
+    expect(headingEl?.getAttribute('contenteditable')).toBe('true');
+
+    const listSeg = f.componentInstance.DocumentSegments.find((s) => s.BlockKind === 'list')!;
+    const firstCheckbox = root.querySelector<HTMLInputElement>(
+      `[data-testid="task-checkbox-${listSeg.SegmentID}-0"]`,
+    )!;
+    expect(firstCheckbox).not.toBeNull();
+    expect(firstCheckbox.checked).toBe(false);
+
+    firstCheckbox.checked = true;
+    firstCheckbox.dispatchEvent(new Event('change'));
+    f.detectChanges();
+    expect(f.componentInstance.MarkdownContent).toContain('- [x] First task item');
+
+    const tableSeg = f.componentInstance.DocumentSegments.find((s) => s.BlockKind === 'table')!;
+    f.componentInstance.AddTableRow(tableSeg);
+    f.detectChanges();
+    const updatedTableSeg = f.componentInstance.DocumentSegments.find((s) => s.BlockKind === 'table')!;
+    expect(f.componentInstance.GetParsedTable(updatedTableSeg).Rows).toHaveLength(2);
+  });
+
+  it('switches cleanly to Suggest Mode without canned callouts, protects against non-matching AcceptSuggestion conflicts (B5), and persists only real User comments (A1)', async () => {
+    const mock = createDocsMockProvider();
+    const f = await renderDocsViewer(INITIAL_DOC_CONTENT, false, mock.provider);
+    const root = f.nativeElement as HTMLElement;
+
+    // 1. OpenSuggestionModalForSegment switches to 'suggest' mode without injecting canned [!TIP] text
+    const firstSeg = f.componentInstance.DocumentSegments[0];
+    f.componentInstance.OpenSuggestionModalForSegment(firstSeg);
+    f.detectChanges();
+    expect(f.componentInstance.ViewMode).toBe('suggest');
+    expect(f.componentInstance.PendingSuggestionsCount).toBe(0);
+    expect(f.componentInstance.MarkdownContent).not.toContain('Suggested refinement for this section.');
+
+    // 2. Non-matching suggestion conflict safety: must NOT overwrite the whole document with ProposedMarkdown!
+    const staleSug = f.componentInstance.CreateOrUpdatePendingSuggestion(
+      'deleted-block-999',
+      'Paragraph text that no longer exists anywhere in the document.',
+      'Replacement snippet only.',
+      'Stale suggestion',
+    );
+    const markdownBeforeConflict = f.componentInstance.MarkdownContent;
+    f.componentInstance.AcceptSuggestion(staleSug);
+    f.detectChanges();
+    expect(f.componentInstance.MarkdownContent).toBe(markdownBeforeConflict);
+    expect(staleSug.Status).toBe('Pending');
+    expect(f.componentInstance.StatusBannerMessage).toContain('Conflict');
+    f.componentInstance.RejectSuggestion(staleSug);
+
+    // 3. Matching suggestion applies cleanly to the target segment
+    const validSug = f.componentInstance.CreateOrUpdatePendingSuggestion(
+      firstSeg.SegmentID,
+      firstSeg.RawMarkdown,
+      '# Q4 Strategy Document — Approved',
+      'Title update',
+    );
+    f.componentInstance.AcceptSuggestion(validSug);
+    f.detectChanges();
+    expect(f.componentInstance.MarkdownContent).toContain('# Q4 Strategy Document — Approved');
+    expect(f.componentInstance.MarkdownContent).toContain('Initial narrative paragraph.');
+
+    // 4. PostAnchoredComment with @DocsAgent mention persists ONLY the real User comment (zero fake Agent reply or doc mutation)
+    f.componentInstance.OpenAnchorCommentForSegment(firstSeg);
+    f.componentInstance.NewCommentAgentMode = 'suggest';
+    f.componentInstance.NewCommentText = 'Please tighten this heading @DocsAgent';
+    await f.componentInstance.PostAnchoredComment();
+    f.detectChanges();
+
+    expect(root.querySelector('[data-testid="docs-comments-drawer"]')).not.toBeNull();
+    expect(f.componentInstance.AnchoredThreads).toHaveLength(1);
+    const newThread = f.componentInstance.AnchoredThreads[0];
+    expect(newThread.Messages).toHaveLength(1);
+    expect(newThread.Messages[0].Role).toBe('User');
+    expect(f.componentInstance.MarkdownContent).not.toContain('Updated by @DocsAgent');
+    const savedDetails = mock.savedEntities.filter((e) => e.entityName === 'MJ: Conversation Details');
+    expect(savedDetails).toHaveLength(1);
+    expect(savedDetails[0].record.Role).toBe('User');
+
+    // 5. Switch to Version Diff mode
+    f.componentInstance.SetViewMode('diff');
+    f.detectChanges();
+    expect(root.querySelector('[data-testid="docs-diff-view"]')).not.toBeNull();
+    expect(f.componentInstance.CurrentDiff.AddedLines).toBeGreaterThan(0);
+  });
+
+  it('supports Insert Live View dialog with searchable Entity Combobox and returns [] when md.Entities is empty (A2)', async () => {
+    const f = await renderDocsViewer('# Live View Doc', false);
+    const root = f.nativeElement as HTMLElement;
+
+    const viewCmd = f.componentInstance.FilteredSlashCommands.find((c) => c.Command === '/entity-view')!;
+    expect(viewCmd.Label).toBe('Live View');
+
+    f.componentInstance.ExecuteSlashCommand(viewCmd);
+    f.detectChanges();
+
+    expect(f.componentInstance.GetInsertModalTitle()).toBe('Insert Live View');
+    expect(root.querySelector('[data-testid="new-block-entity-input"]')).not.toBeNull();
+
+    f.componentInstance.OnEntitySearchInput('AI Models');
+    f.detectChanges();
+    expect(f.componentInstance.ShowEntityPickerDropdown).toBe(true);
+    expect(f.componentInstance.FilteredEntityPickerOptions.length).toBeGreaterThanOrEqual(1);
+
+    const aiModelsOpt = f.componentInstance.FilteredEntityPickerOptions.find((e) => e.Name === 'MJ: AI Models')!;
+    expect(aiModelsOpt).toBeDefined();
+
+    f.componentInstance.SelectEntityOption(aiModelsOpt);
+    f.detectChanges();
+    expect(f.componentInstance.NewBlockEntityName).toBe('MJ: AI Models');
+    expect(f.componentInstance.NewBlockLabel).toBe('AI Models — Default View');
+
+    f.componentInstance.AvailableEntityViews = [
+      { ID: 'view-active-models', Name: 'Active Production Models', Description: 'IsActive = 1' },
+    ];
+    f.componentInstance.SetBlockViewSelectionMode('saved');
+    f.detectChanges();
+    expect(f.componentInstance.NewBlockViewID).toBe('view-active-models');
+    expect(f.componentInstance.NewBlockViewName).toBe('Active Production Models');
+    expect(f.componentInstance.NewBlockLabel).toBe('AI Models — Active Production Models');
+
+    await f.componentInstance.ConfirmBlockInsertModal();
+    f.detectChanges();
+
+    expect(f.componentInstance.MarkdownContent).toContain('"EntityName": "MJ: AI Models"');
+    expect(f.componentInstance.MarkdownContent).toContain('"ViewID": "view-active-models"');
+    expect(f.componentInstance.MarkdownContent).toContain('"ViewName": "Active Production Models"');
+  });
+
+  it('supports Progressive Disclosure ribbon, reconfiguring existing Views, collapsible blocks/headings, bounded pagination, clickable PK/FK links, and Share modal', async () => {
+    const mock = createDocsMockProvider();
+    const f = await renderDocsViewer(INITIAL_DOC_CONTENT, false, mock.provider);
+    const comp = f.componentInstance;
+
+    // 1. Progressive Disclosure
+    expect(comp.ShowFormattingRibbon).toBe(false);
+    comp.ToggleFormattingRibbon();
+    expect(comp.ShowFormattingRibbon).toBe(true);
+
+    expect(comp.ShowMoreToolsMenu).toBe(false);
+    comp.ToggleMoreToolsMenu();
+    expect(comp.ShowMoreToolsMenu).toBe(true);
+    comp.CloseMoreToolsMenu();
+    expect(comp.ShowMoreToolsMenu).toBe(false);
+
+    // 2. Re-configuring an existing EntityView block in place
+    const liveBlockSeg = comp.DocumentSegments.find((s) => s.Descriptor?.BlockID === 'blk-live-1')!;
+    expect(liveBlockSeg).toBeDefined();
+
+    comp.OpenConfigureBlockModal(liveBlockSeg.Descriptor!);
+    f.detectChanges();
+    expect(comp.EditingBlockID).toBe('blk-live-1');
+    expect(comp.GetInsertModalTitle()).toBe('Configure Live View');
+    expect(comp.GetInsertConfirmButtonLabel()).toBe('Update View');
+
+    comp.NewBlockEntityName = 'MJ: Conversations';
+    comp.NewBlockViewSelectionMode = 'saved';
+    comp.NewBlockViewID = 'view-conv-open';
+    comp.NewBlockViewName = 'Open Discussions';
+    comp.NewBlockLabel = 'Conversations — Open Discussions';
+    comp.NewBlockPageSize = 25;
+    comp.NewBlockDefaultCollapsed = true;
+    await comp.ConfirmBlockInsertModal();
+    await new Promise((r) => setTimeout(r, 15));
+    f.detectChanges();
+
+    const updatedSeg = comp.DocumentSegments.find((s) => s.Descriptor?.BlockID === 'blk-live-1')!;
+    expect(updatedSeg.Descriptor?.EntityName).toBe('MJ: Conversations');
+    expect(updatedSeg.Descriptor?.ViewID).toBe('view-conv-open');
+    expect(updatedSeg.Descriptor?.ViewName).toBe('Open Discussions');
+    expect(updatedSeg.Descriptor?.PageSize).toBe(25);
+    expect(updatedSeg.Descriptor?.Collapsed).toBe(true);
+
+    // 3. Two-layer block collapse
+    expect(comp.IsBlockCollapsed(updatedSeg.Descriptor!)).toBe(true);
+    comp.ToggleBlockCollapsed(updatedSeg.Descriptor!);
+    expect(comp.IsBlockCollapsed(updatedSeg.Descriptor!)).toBe(false);
+
+    // 4. Heading collapse
+    const headingSeg = comp.DocumentSegments.find((s) => s.BlockKind === 'heading')!;
+    expect(comp.IsHeadingCollapsed(headingSeg)).toBe(false);
+    expect(comp.GetCollapsedChildCount(headingSeg)).toBeGreaterThan(0);
+    comp.ToggleHeadingCollapse(headingSeg);
+    expect(comp.IsHeadingCollapsed(headingSeg)).toBe(true);
+    const secondSeg = comp.DocumentSegments[1];
+    expect(comp.IsSegmentHiddenByCollapsedHeading(secondSeg)).toBe(true);
+    comp.ToggleHeadingCollapse(headingSeg);
+    expect(comp.IsSegmentHiddenByCollapsedHeading(secondSeg)).toBe(false);
+
+    // 5. Bounded pagination & clickable PK/FK record links from real ExecuteBlock results
+    comp.SetBlockPageSize(updatedSeg.Descriptor!, 1);
+    const execResult = comp.GetBlockExecutionResult(updatedSeg.Descriptor!);
+    const page1Rows = comp.GetPaginatedBlockRows(updatedSeg.Descriptor!, execResult.Rows);
+    expect(page1Rows).toHaveLength(1);
+    expect(comp.GetBlockTotalPages(updatedSeg.Descriptor!, execResult.Rows.length)).toBe(2);
+
+    comp.ChangeBlockPage(updatedSeg.Descriptor!, 1, execResult.Rows.length);
+    expect(comp.GetBlockPageNumber(updatedSeg.Descriptor!)).toBe(2);
+
+    const emittedRecords: Array<{ entityName: string; keyStr: string }> = [];
+    comp.OpenEntityRecord.subscribe((evt) => {
+      emittedRecords.push({ entityName: evt.entityName, keyStr: evt.compositeKey.ToConcatenatedString() });
+    });
+
+    const nameCol = execResult.Columns.find((c) => c.Name === 'Name')!;
+    const fkCol = execResult.Columns.find((c) => c.Name === 'Type')!;
+    expect(comp.IsCellRecordLink(nameCol, execResult.Rows[0])).toBe(true);
+    expect(comp.IsCellRecordLink(fkCol, execResult.Rows[0])).toBe(true);
+
+    comp.OnBlockRecordCellClick(updatedSeg.Descriptor!, nameCol, execResult.Rows[0]);
+    comp.OnBlockRecordCellClick(updatedSeg.Descriptor!, fkCol, execResult.Rows[0]);
+    expect(emittedRecords).toHaveLength(2);
+    expect(emittedRecords[0].entityName).toBe('MJ: Conversations');
+    expect(emittedRecords[1].entityName).toBe('MJ: Artifact Types');
+
+    // 6. Share & Permissions modal persists real MJArtifactPermissionEntity and deletes on revoke
+    comp.OpenPermissionsModal();
+    await new Promise((r) => setTimeout(r, 15));
+    expect(comp.ShowPermissionsModal).toBe(true);
+    comp.SelectedPermissionUserID = 'user-colleague-1';
+    comp.SelectedPermissionLevel = 'Edit';
+    await comp.GrantArtifactPermission();
+    const granted = comp.ArtifactPermissionEntries.find((e) => e.UserID === 'user-colleague-1');
+    expect(granted).toBeDefined();
+    expect(granted?.CanEdit).toBe(true);
+
+    await comp.RevokeArtifactPermission(granted!);
+    expect(mock.deletedPermissionIds).toContain(granted!.ID);
+    expect(comp.ArtifactPermissionEntries.some((e) => e.UserID === 'user-colleague-1')).toBe(false);
+    comp.ClosePermissionsModal();
+    expect(comp.ShowPermissionsModal).toBe(false);
+
+    // 7. Suggest Mode: word-level redline, per-word hunk accept/reject, and commit on Save Version
+    comp.SetViewMode('edit');
+    const initialParagraphSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.BlockKind === 'paragraph')!;
+    expect(initialParagraphSeg).toBeDefined();
+    comp.ApplyInPlaceSegmentChange(
+      initialParagraphSeg,
+      'This paragraph introduces the strategic vision and quarterly milestones.',
+      'Baseline paragraph',
+    );
+    comp.SetViewMode('suggest');
+    const paragraphSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.BlockKind === 'paragraph')!;
+    expect(paragraphSeg).toBeDefined();
+
+    comp.ApplyInPlaceSegmentChange(
+      paragraphSeg,
+      'This paragraph introduces the long-term vision and annual milestones.',
+      'Word-level suggestion',
+    );
+    f.detectChanges();
+
+    expect(comp.PendingSuggestionsCount).toBe(1);
+    expect(comp.HasUnsavedChanges).toBe(true);
+
+    const activeSug = comp.GetSuggestionsForBlock(paragraphSeg.SegmentID)[0];
+    expect(activeSug).toBeDefined();
+    const wordDiff = comp.GetSuggestionWordDiff(activeSug);
+    expect(wordDiff.Hunks).toHaveLength(2);
+
+    comp.AcceptSuggestionHunk(activeSug, wordDiff.Hunks[0]);
+    f.detectChanges();
+    const updatedParagraphSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.BlockKind === 'paragraph')!;
+    expect(updatedParagraphSeg.RawMarkdown).toBe('This paragraph introduces the long-term vision and quarterly milestones.');
+    expect(comp.PendingSuggestionsCount).toBe(1);
+
+    await comp.OnSaveDocumentVersion();
+    expect(comp.PendingSuggestionsCount).toBe(0);
+    expect(comp.MarkdownContent).toContain('This paragraph introduces the long-term vision and annual milestones.');
+
+    // 8. Read-only mode hides Write, Suggest, Format, Insert, and Save Version buttons
+    f.componentRef.setInput('readonly', true);
+    f.detectChanges();
+    const roRoot = f.nativeElement as HTMLElement;
+    expect(comp.ViewMode).toBe('preview');
+    expect(roRoot.querySelector('[data-testid="mode-edit-btn"]')).toBeNull();
+    expect(roRoot.querySelector('[data-testid="mode-suggest-btn"]')).toBeNull();
+    expect(roRoot.querySelector('[data-testid="save-doc-version-btn"]')).toBeNull();
+  });
+
+  it('renders Unverified Snapshot warning without attribution when SnapshotContentHash is missing/tampered (Blocker 3) and wires dispatchAgentCommentMention modes', async () => {
+    const unverifiedFrozenDoc = [
+      '# Governance Report',
+      '',
+      ':::mj-block',
+      JSON.stringify({
+        BlockID: 'blk-tampered-1',
+        Kind: 'EntityView',
+        Mode: 'Frozen',
+        EntityName: 'MJ: Projects',
+        FrozenSnapshot: {
+          FrozenAt: '2026-11-10T12:00:00.000Z',
+          FrozenByUserID: 'u-spoofed',
+          FrozenByUserName: 'Spoofed CFO',
+          Columns: [{ Name: 'Name', DisplayName: 'Name' }],
+          Rows: [{ Name: 'Tampered Row' }],
+          TotalRowCount: 1,
+          SecurityWarningAcknowledged: true,
+        },
+      }),
+      ':::',
+    ].join('\n');
+
+    const mock = createDocsMockProvider();
+    const f = await renderDocsViewer(unverifiedFrozenDoc, false, mock.provider);
+    const root = f.nativeElement as HTMLElement;
+    const comp = f.componentInstance;
+
+    const warningBanner = root.querySelector('[data-testid="unverified-snapshot-banner"]');
+    expect(warningBanner).not.toBeNull();
+    expect(warningBanner?.textContent).toContain('Unverified Snapshot — signature missing or invalid');
+    expect(warningBanner?.textContent).not.toContain('Spoofed CFO');
+    expect(root.querySelector('[data-testid="frozen-provenance-banner"]')).toBeNull();
+
+    // Verify DispatchAgentCommentMention modes ('comment' | 'suggest' | 'edit')
+    const firstSeg = comp.DocumentSegments[0];
+    comp.OpenAnchorCommentForSegment(firstSeg);
+    comp.NewCommentAgentMode = 'comment';
+    comp.NewCommentText = 'What do you think @Assistant?';
+    await comp.PostAnchoredComment();
+    const thread = comp.AnchoredThreads[0];
+
+    comp.DispatchAgentCommentMention(thread, 'Assistant', {
+      replyMessage: 'Looks well structured.',
+      proposedMarkdown: '# Should Not Apply In Comment Mode',
+    });
+    expect(thread.Messages).toHaveLength(2);
+    expect(comp.PendingSuggestionsCount).toBe(0);
+    expect(comp.MarkdownContent).toContain('# Governance Report');
+
+    thread.AgentMode = 'suggest';
+    comp.DispatchAgentCommentMention(thread, 'Assistant', {
+      replyMessage: 'Here is a suggested title.',
+      proposedMarkdown: '# Governance Report — Q4',
+      rationale: 'Add quarter',
+    });
+    expect(comp.PendingSuggestionsCount).toBe(1);
+    expect(comp.MarkdownContent).toContain('# Governance Report');
+
+    thread.AgentMode = 'edit';
+    comp.DispatchAgentCommentMention(thread, 'Assistant', {
+      replyMessage: 'Applied title update.',
+      proposedMarkdown: '# Governance Report — Final',
+    });
+    expect(comp.MarkdownContent).toContain('# Governance Report — Final');
+  });
+
+  it('renders WYSIWYG <strong>/<em> inside contenteditable surfaces and round-trips DOM bold/italic elements cleanly', async () => {
+    const mock = createDocsMockProvider();
+    const f = await renderDocsViewer(
+      '# Demo Doc\n\n- Collaborative real-time editing\n\nPlain paragraph text',
+      false,
+      mock.provider,
+    );
+    const root = f.nativeElement as HTMLElement;
+    const comp = f.componentInstance;
+
+    const listSeg = comp.DocumentSegments[1];
+    expect(listSeg.BlockKind).toBe('list');
+    const listEl = root.querySelector<HTMLElement>(`[data-testid="list-item-text-${listSeg.SegmentID}-0"]`);
+    expect(listEl).not.toBeNull();
+
+    // Select 'ative' in 'Collaborative' via visible DOM snapshot and apply Bold + Italic
+    comp.OnListItemFocus(listSeg, 0);
+    comp.CaptureSelectionSnapshot({
+      segmentId: listSeg.SegmentID,
+      listItemIndex: 0,
+      start: 8,
+      end: 13,
+    });
+    comp.InsertFormattingSnippet('**', '**');
+    f.detectChanges();
+
+    const updatedListSeg = comp.DocumentSegments[1];
+    const updatedListEl = root.querySelector<HTMLElement>(
+      `[data-testid="list-item-text-${updatedListSeg.SegmentID}-0"]`,
+    );
+    expect(updatedListEl).not.toBeNull();
+    expect(updatedListEl?.querySelector('strong')?.textContent).toBe('ative');
+    expect(updatedListEl?.textContent).toBe('Collaborative real-time editing');
+
+    // Simulate native browser <em> / <b> DOM nodes created inside contenteditable and verify ExtractMarkdownFromEditableElement round-trips them
+    const syntheticEditable = document.createElement('div');
+    syntheticEditable.innerHTML = 'Hello <b>bold</b> and <em>italic</em> and <code>snippet</code>';
+    expect(comp.ExtractMarkdownFromEditableElement(syntheticEditable)).toBe(
+      'Hello **bold** and *italic* and `snippet`',
+    );
+  });
+
+  it('uses progressive disclosure toolbar defaults, supports pinning actions and Blocks chip, and resets cleanly via DOM clicks', async () => {
+    const store = new Map<string, string>();
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => store.get(key));
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation((key: string, value: string) => {
+      store.set(key, value);
+      return Promise.resolve();
+    });
+
+    try {
+      const mock = createDocsMockProvider();
+      const f = await renderDocsViewer('# Calm Toolbar\n\nSimple starter doc.', false, mock.provider);
+      const root = f.nativeElement as HTMLElement;
+      const comp = f.componentInstance;
+
+      const leftBar = root.querySelector('.mj-docs-toolbar__left')!;
+      const rightBar = root.querySelector('.mj-docs-toolbar__right')!;
+      const moreMenu = root.querySelector<HTMLElement>('[data-testid="docs-more-tools-menu"]')!;
+
+      // Calm default toolbar buttons
+      expect(leftBar.querySelector('[data-testid="mode-preview-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="mode-edit-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="toggle-outline-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="toggle-format-ribbon-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="open-slash-menu-btn"]')).not.toBeNull();
+      expect(rightBar.querySelector('[data-testid="toggle-comments-btn"]')).not.toBeNull();
+      expect(rightBar.querySelector('[data-testid="save-doc-version-btn"]')).not.toBeNull();
+      expect(rightBar.querySelector('[data-testid="toggle-more-tools-btn"]')).not.toBeNull();
+
+      // Unpinned quick-add-section-btn is inside hidden More menu, not on leftBar
+      expect(moreMenu.hasAttribute('hidden')).toBe(true);
+      expect(leftBar.querySelector('[data-testid="quick-add-section-btn"]')).toBeNull();
+      expect(moreMenu.querySelector('[data-testid="quick-add-section-btn"]')).not.toBeNull();
+
+      // Open More menu and click pin for add-section -> moves quick-add-section-btn onto leftBar
+      root.querySelector<HTMLButtonElement>('[data-testid="toggle-more-tools-btn"]')!.click();
+      f.detectChanges();
+      expect(moreMenu.hasAttribute('hidden')).toBe(false);
+
+      root.querySelector<HTMLButtonElement>('[data-testid="menu-pin-add-section"]')!.click();
+      f.detectChanges();
+      expect(leftBar.querySelector('[data-testid="quick-add-section-btn"]')).not.toBeNull();
+      expect(moreMenu.querySelector('[data-testid="menu-quick-add-section-btn"]')).not.toBeNull();
+
+      // Switching to Block Studio while blocks-mode is unpinned reveals active-style-chip-blocks; clicking it returns to simple
+      comp.SetEditingStyle('blocks');
+      f.detectChanges();
+      const blocksChip = leftBar.querySelector<HTMLButtonElement>('[data-testid="active-style-chip-blocks"]');
+      expect(blocksChip).not.toBeNull();
+      blocksChip!.click();
+      f.detectChanges();
+      expect(comp.EditingStyle).toBe('simple');
+      expect(leftBar.querySelector('[data-testid="active-style-chip-blocks"]')).toBeNull();
+
+      // Clicking Reset resets pins back to calm defaults
+      const resetBtn = moreMenu.querySelector<HTMLButtonElement>('[data-testid="reset-toolbar-pins-btn"]')!;
+      expect(resetBtn).not.toBeNull();
+      resetBtn.click();
+      f.detectChanges();
+      expect(leftBar.querySelector('[data-testid="quick-add-section-btn"]')).toBeNull();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('rejects non-UUID embedded artifact short-IDs (e.g. "D") before executing SQL RunView and displays a clean error message', async () => {
+    const mock = createDocsMockProvider();
+    mock.provider.Entities.length = 0;
+    const runViewSpy = vi.spyOn(mock.provider, 'RunView').mockImplementation(async () => ({
+      Success: true,
+      Results: [],
+      RowCount: 0,
+      TotalRowCount: 0,
+      ExecutionTime: 0,
+      ErrorMessage: '',
+    }));
+
+    const brokenDoc = [
+      '# Silk Road History',
+      '',
+      ':::mj-block',
+      JSON.stringify(
+        {
+          BlockID: 'mj-artifact-bad-id',
+          Kind: 'Artifact',
+          Mode: 'Live',
+          Title: 'Silk Road Trade Analysis',
+          ArtifactID: 'D',
+          ArtifactType: 'Excel Spreadsheet',
+          EmbedMode: 'Inline',
+          VersionID: null,
+        },
+        null,
+        2,
+      ),
+      ':::',
+    ].join('\n');
+
+    const f = await renderDocsViewer(brokenDoc, true, mock.provider);
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+
+    const embeddedVersionCalls = runViewSpy.mock.calls.filter(
+      (call) =>
+        call[0]?.EntityName === 'MJ: Artifact Versions' &&
+        String(call[0]?.ExtraFilter ?? '').includes("'D'"),
+    );
+    expect(embeddedVersionCalls).toHaveLength(0);
+    const errMsg = f.componentInstance.GetEmbeddedArtifactError({
+      BlockID: 'mj-artifact-bad-id',
+      Kind: 'Artifact',
+      Mode: 'Live',
+      ArtifactID: 'D',
+      VersionID: null,
+    });
+    expect(errMsg).toContain('not a valid artifact UUID');
+  });
+
+  it('wraps selected prose text in Bold via right-click context menu and closes the menu', async () => {
+    const f = await renderDocsViewer('# Title\n\nInitial narrative paragraph.');
+    const comp = f.componentInstance;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const paraSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.RawMarkdown.includes('Initial narrative'));
+    expect(paraSeg).toBeTruthy();
+    const segId = paraSeg!.SegmentID;
+
+    comp.CaptureSelectionSnapshot({
+      segmentId: segId,
+      start: 8,
+      end: 17,
+    });
+
+    const paraEl = f.nativeElement.querySelector(
+      `[data-testid="editable-paragraph-${segId}"]`,
+    ) as HTMLElement | null;
+    expect(paraEl).toBeTruthy();
+
+    const ctxEvent = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 140,
+      clientY: 220,
+    });
+    paraEl!.dispatchEvent(ctxEvent);
+    f.detectChanges();
+
+    expect(ctxEvent.defaultPrevented).toBe(true);
+    expect(f.nativeElement.querySelector('[data-testid="mj-context-menu-root"]')).toBeTruthy();
+
+    const formatSubmenuBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-format-text"]',
+    ) as HTMLButtonElement | null;
+    expect(formatSubmenuBtn).toBeTruthy();
+    formatSubmenuBtn!.click();
+    f.detectChanges();
+
+    const boldBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-format-bold"]',
+    ) as HTMLButtonElement | null;
+    expect(boldBtn).toBeTruthy();
+    boldBtn!.click();
+    f.detectChanges();
+
+    expect(comp.MarkdownContent).toContain('Initial **narrative** paragraph.');
+    expect(f.nativeElement.querySelector('[data-testid="mj-context-menu-root"]')).toBeNull();
+  });
+
+  it('executes table context menu actions: insert row below, align center, delete row, and copy as CSV', async () => {
+    const writeTextMock = vi.fn(async (_text: string) => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: writeTextMock,
+        readText: vi.fn(async () => ''),
+      },
+      configurable: true,
+    });
+
+    const f = await renderDocsViewer('# Metrics\n\n| Metric | Value |\n| --- | --- |\n| ARR | 100 |\n| NRR | 120 |');
+    const comp = f.componentInstance;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const tableSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.RawMarkdown.includes('| Metric |'));
+    expect(tableSeg).toBeTruthy();
+    const segId = tableSeg!.SegmentID;
+
+    // 1. Insert Row Below on row 0, col 1
+    const cell01 = f.nativeElement.querySelector(
+      `[data-testid="table-cell-${segId}-0-1"]`,
+    ) as HTMLElement | null;
+    expect(cell01).toBeTruthy();
+    cell01!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+    f.detectChanges();
+
+    const insertBelowBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-insert-row-below"]',
+    ) as HTMLButtonElement | null;
+    expect(insertBelowBtn).toBeTruthy();
+    insertBelowBtn!.click();
+    f.detectChanges();
+
+    const updatedAfterInsert = comp.DocumentSegments.find((s) => s.SegmentID === segId)!;
+    expect(comp.GetParsedTable(updatedAfterInsert).Rows.length).toBe(3);
+
+    // 2. Align Column Center (:---:)
+    const cellAfterInsert = f.nativeElement.querySelector(
+      `[data-testid="table-cell-${segId}-0-1"]`,
+    ) as HTMLElement | null;
+    cellAfterInsert!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+    f.detectChanges();
+
+    const alignMenuBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-align-col"]',
+    ) as HTMLButtonElement | null;
+    expect(alignMenuBtn).toBeTruthy();
+    alignMenuBtn!.click();
+    f.detectChanges();
+
+    const alignCenterBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-align-center"]',
+    ) as HTMLButtonElement | null;
+    expect(alignCenterBtn).toBeTruthy();
+    alignCenterBtn!.click();
+    f.detectChanges();
+
+    expect(comp.MarkdownContent).toContain(':---:');
+    const alignedCell = f.nativeElement.querySelector(
+      `[data-testid="table-cell-${segId}-0-1"]`,
+    ) as HTMLElement | null;
+    expect(alignedCell?.style.textAlign).toBe('center');
+
+    // 3. Delete inserted row (row 1)
+    const insertedRowCell = f.nativeElement.querySelector(
+      `[data-testid="table-cell-${segId}-1-1"]`,
+    ) as HTMLElement | null;
+    expect(insertedRowCell).toBeTruthy();
+    insertedRowCell!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 160 }));
+    f.detectChanges();
+
+    const deleteRowBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-delete-row"]',
+    ) as HTMLButtonElement | null;
+    expect(deleteRowBtn).toBeTruthy();
+    deleteRowBtn!.click();
+    f.detectChanges();
+
+    const updatedAfterDelete = comp.DocumentSegments.find((s) => s.SegmentID === segId)!;
+    expect(comp.GetParsedTable(updatedAfterDelete).Rows.length).toBe(2);
+
+    // 4. Copy Table As CSV
+    const cellForCsv = f.nativeElement.querySelector(
+      `[data-testid="table-cell-${segId}-0-0"]`,
+    ) as HTMLElement | null;
+    cellForCsv!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+    f.detectChanges();
+
+    const copyAsBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-copy-as"]',
+    ) as HTMLButtonElement | null;
+    expect(copyAsBtn).toBeTruthy();
+    copyAsBtn!.click();
+    f.detectChanges();
+
+    const copyCsvBtn = f.nativeElement.querySelector(
+      '[data-testid="mj-context-menu-item-table-copy-csv"]',
+    ) as HTMLButtonElement | null;
+    expect(copyCsvBtn).toBeTruthy();
+    copyCsvBtn!.click();
+    f.detectChanges();
+
+    expect(writeTextMock).toHaveBeenCalledTimes(1);
+    const copiedCsv = writeTextMock.mock.calls[0]?.[0] ?? '';
+    expect(copiedCsv).toContain('Metric,Value');
+    expect(copiedCsv).toContain('ARR,100');
+    expect(copiedCsv).toContain('NRR,120');
+  });
+
+  it('bypasses custom context menu on Shift+Right-Click so native browser menu is preserved', async () => {
+    const f = await renderDocsViewer('# Title\n\nShift right click paragraph.');
+    const comp = f.componentInstance;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const paraSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.RawMarkdown.includes('Shift right click'));
+    expect(paraSeg).toBeTruthy();
+    const paraEl = f.nativeElement.querySelector(
+      `[data-testid="editable-paragraph-${paraSeg!.SegmentID}"]`,
+    ) as HTMLElement | null;
+    expect(paraEl).toBeTruthy();
+
+    const shiftCtx = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      shiftKey: true,
+      clientX: 100,
+      clientY: 100,
+    });
+    paraEl!.dispatchEvent(shiftCtx);
+    f.detectChanges();
+
+    expect(shiftCtx.defaultPrevented).toBe(false);
+    expect(f.nativeElement.querySelector('[data-testid="mj-context-menu-root"]')).toBeNull();
+  });
+
+  it('respects defaultPrevented from an embedded OLE whiteboard plugin without opening the Docs context menu', async () => {
+    const wbArtifactId = '22222222-2222-4222-8222-222222222222';
+    const docWithUuidWb = [
+      '# Architecture Doc',
+      '',
+      ':::mj-block',
+      '{',
+      '  "BlockID": "blk-wb-bypass",',
+      '  "Kind": "Artifact",',
+      '  "Mode": "Live",',
+      '  "Title": "System Diagram",',
+      `  "ArtifactID": "${wbArtifactId}",`,
+      '  "ArtifactType": "Whiteboard",',
+      '  "EmbedMode": "Inline"',
+      '}',
+      ':::',
+    ].join('\n');
+
+    const mock = createDocsMockProvider();
+    const baseRunView = mock.provider.RunView.bind(mock.provider);
+    vi.spyOn(mock.provider, 'RunView').mockImplementation(async (params, contextUser) => {
+      if (params.EntityName === 'MJ: Artifact Versions' && String(params.ExtraFilter ?? '').includes(wbArtifactId)) {
+        return {
+          Success: true,
+          Results: [
+            {
+              ID: '33333333-3333-4333-8333-333333333333',
+              ArtifactID: wbArtifactId,
+              VersionNumber: 1,
+              Name: 'System Diagram',
+              Content: '{"version":1,"activePageId":"page-1","pages":[{"id":"page-1","name":"Page 1","items":[]}]}',
+            },
+          ],
+          RowCount: 1,
+          TotalRowCount: 1,
+          ExecutionTime: 0,
+          ErrorMessage: '',
+        };
+      }
+      return baseRunView(params, contextUser);
+    });
+
+    const f = await renderDocsViewer(docWithUuidWb, false, mock.provider);
+    const comp = f.componentInstance;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const wbSeg = comp.DocumentSegments.find((s) => s.SegmentID === 'blk-wb-bypass');
+    expect(wbSeg?.Descriptor).toBeTruthy();
+    comp.ToggleInlineArtifactEdit(wbSeg!.Descriptor!);
+    await f.whenStable();
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+
+    const oleChild = f.nativeElement.querySelector(
+      '[data-testid="ole-artifact-block-blk-wb-bypass"] .stub-ole-plugin',
+    ) as HTMLElement | null;
+    expect(oleChild).toBeTruthy();
+
+    oleChild!.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+    });
+
+    const childEvent = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 200,
+      clientY: 200,
+    });
+    oleChild!.dispatchEvent(childEvent);
+    f.detectChanges();
+
+    expect(childEvent.defaultPrevented).toBe(true);
+    expect(f.nativeElement.querySelector('[data-testid="mj-context-menu-root"]')).toBeNull();
+  });
+
+  it('performs partial cuts on formatted text ("Hello **world**") without deleting the block or corrupting markers, and preserves heading prefixes on sub-element paste/cut', async () => {
+    const f = await renderDocsViewer('Hello **world**\n\n## Alpha Beta');
+    const comp = f.componentInstance;
+    const rootEl = f.nativeElement as HTMLElement;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const paraSeg = comp.DocumentSegments.find((s) => s.BlockKind === 'paragraph')!;
+    expect(paraSeg).toBeTruthy();
+
+    comp.CaptureSelectionSnapshot({
+      segmentId: paraSeg.SegmentID,
+      start: 6,
+      end: 11,
+    });
+    const paraEl = rootEl.querySelector<HTMLElement>(
+      `[data-testid="editable-paragraph-${paraSeg.SegmentID}"]`,
+    )!;
+    paraEl.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 }),
+    );
+    f.detectChanges();
+
+    comp.OnDocsContextMenuCommand({
+      Type: 'clipboard',
+      Action: 'cut',
+      SegmentID: paraSeg.SegmentID,
+    });
+    f.detectChanges();
+    expect(comp.DocumentSegments.length).toBe(2);
+    expect(comp.MarkdownContent).toContain('Hello');
+    expect(comp.MarkdownContent).not.toContain('**world**');
+    expect(comp.MarkdownContent).not.toContain('****');
+
+    // Cross-boundary cut on formatted inline tokens
+    comp.OnMarkdownChanged('Hello **world**\n\n## Alpha Beta');
+    f.detectChanges();
+    const paraSeg2 = comp.DocumentSegments.find((s) => s.BlockKind === 'paragraph')!;
+    comp.CaptureSelectionSnapshot({
+      segmentId: paraSeg2.SegmentID,
+      start: 3,
+      end: 8,
+    });
+    const paraEl2 = rootEl.querySelector<HTMLElement>(
+      `[data-testid="editable-paragraph-${paraSeg2.SegmentID}"]`,
+    )!;
+    paraEl2.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 }),
+    );
+    f.detectChanges();
+    comp.OnDocsContextMenuCommand({
+      Type: 'clipboard',
+      Action: 'cut',
+      SegmentID: paraSeg2.SegmentID,
+    });
+    f.detectChanges();
+    expect(comp.MarkdownContent).toContain('Hel**rld**');
+
+    // Heading sub-element paste preserves leading '## '
+    let resolveClipboard: ((value: string) => void) | undefined;
+    const origClipboard = navigator.clipboard;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+        readText: vi.fn(
+          () =>
+            new Promise<string>((resolve) => {
+              resolveClipboard = resolve;
+            }),
+        ),
+      },
+    });
+    try {
+      const headingSeg = comp.DocumentSegments.find((s) => s.BlockKind === 'heading')!;
+      comp.CaptureSelectionSnapshot({
+        segmentId: headingSeg.SegmentID,
+        start: 0,
+        end: 5,
+      });
+      const headingEl = rootEl.querySelector<HTMLElement>(
+        `[data-testid="editable-heading-${headingSeg.SegmentID}"]`,
+      )!;
+      headingEl.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 }),
+      );
+      f.detectChanges();
+
+      comp.PasteIntoDocsSegment(headingSeg);
+      expect(resolveClipboard).toBeDefined();
+      resolveClipboard!('Gamma');
+      await new Promise((r) => setTimeout(r, 10));
+      f.detectChanges();
+      expect(comp.MarkdownContent).toContain('## Gamma Beta');
+      expect(comp.MarkdownContent).not.toContain('Gamma##');
+
+      // Destroyed guard after async readText resolves
+      comp.PasteIntoDocsSegment(comp.DocumentSegments[0]);
+      f.destroy();
+      resolveClipboard!('ShouldNotApply');
+      await new Promise((r) => setTimeout(r, 10));
+      expect(comp.MarkdownContent).not.toContain('ShouldNotApply');
+    } finally {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: origClipboard });
+    }
+  });
+
+  it('prevents owner-lock bypass by CanShare collaborators', async () => {
+    const ownerId = '11111111-1111-4111-8111-111111111111';
+    const coEditorId = '22222222-2222-4222-8222-222222222222';
+    const collabMock = createDocsMockProvider({
+      currentUserId: coEditorId,
+      artifactOwnerId: ownerId,
+      permissionGrants: [
+        {
+          ID: 'perm-co-share',
+          UserID: coEditorId,
+          CanRead: true,
+          CanEdit: true,
+          CanShare: true,
+        },
+      ],
+    });
+    const lockedDoc = `<!-- mj-lock:${ownerId} -->\n## Locked Section\n\nProtected body\n\n## Open Section\n\nEditable body`;
+    const fCollab = await renderDocsViewer(lockedDoc, false, collabMock.provider);
+    const collabComp = fCollab.componentInstance;
+    collabComp.SetViewMode('edit');
+    fCollab.detectChanges();
+
+    const lockedHeading = collabComp.DocumentSegments[0];
+    const lockedBody = collabComp.DocumentSegments[1];
+    expect(collabComp.CanEditSegment(lockedHeading)).toBe(false);
+    expect(collabComp.CanEditSegment(lockedBody)).toBe(false);
+
+    const beforeMd = collabComp.MarkdownContent;
+    collabComp.ToggleHeadingLock(lockedHeading);
+    collabComp.MoveSegment(lockedBody, 1);
+    collabComp.DeleteSegment(lockedBody);
+    collabComp.InsertParagraphAboveSegment(lockedBody);
+    collabComp.DuplicateSegment(lockedBody);
+    fCollab.detectChanges();
+    expect(collabComp.MarkdownContent).toBe(beforeMd);
+  });
+
+  it('routes Suggest-mode block mutations to tracked suggestions without direct Markdown mutation', async () => {
+    const fSuggest = await renderDocsViewer('First paragraph\n\nSecond paragraph');
+    const sugComp = fSuggest.componentInstance;
+    sugComp.SetViewMode('suggest');
+    fSuggest.detectChanges();
+
+    const initialSuggestMd = sugComp.MarkdownContent;
+    const firstSeg = sugComp.DocumentSegments[0];
+    sugComp.MoveSegment(firstSeg, 1);
+    sugComp.InsertParagraphAboveSegment(firstSeg);
+    sugComp.DuplicateSegment(firstSeg);
+    sugComp.DeleteSegment(sugComp.DocumentSegments[1]);
+    fSuggest.detectChanges();
+
+    expect(sugComp.MarkdownContent).toBe(initialSuggestMd);
+    expect(sugComp.Suggestions.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('enforces window.open URL protocol allowlist, expands collapsed headings on anchor scroll, and orders modal footers with Primary LEFT / Cancel RIGHT', async () => {
+    const f = await renderDocsViewer('# Intro\n\nHidden details\n\n## Next');
+    const comp = f.componentInstance;
+    const origOpen = window.open;
+    const openSpy = vi.fn();
+    window.open = openSpy;
+    try {
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: 'javascript:alert(1)' });
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: 'java\tscript:alert(1)' });
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: 'data:text/html,<script>' });
+      expect(openSpy).not.toHaveBeenCalled();
+
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: 'https://memberjunction.org' });
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: 'mailto:docs@memberjunction.org' });
+      comp.OnDocsContextMenuCommand({ Type: 'preview-open-link', Url: '#intro' });
+      expect(openSpy).toHaveBeenCalledTimes(3);
+    } finally {
+      window.open = origOpen;
+    }
+
+    // Collapsed heading auto-expansion on FocusSegmentByAnchorKey
+    const introHeading = comp.DocumentSegments[0];
+    const hiddenChild = comp.DocumentSegments[1];
+    comp.ToggleHeadingCollapse(introHeading);
+    f.detectChanges();
+    expect(comp.IsHeadingCollapsed(introHeading)).toBe(true);
+    expect(comp.IsSegmentHiddenByCollapsedHeading(hiddenChild)).toBe(true);
+
+    const rootEl = f.nativeElement as HTMLElement;
+    const scrolledIds: string[] = [];
+    const childEl = rootEl.querySelector<HTMLElement>(
+      `[data-segment-id="${hiddenChild.SegmentID}"]`,
+    );
+    if (childEl) {
+      childEl.scrollIntoView = () => {
+        scrolledIds.push(hiddenChild.SegmentID);
+      };
+    }
+    comp.FocusSegmentByAnchorKey(hiddenChild.SegmentID);
+    f.detectChanges();
+    expect(comp.IsHeadingCollapsed(introHeading)).toBe(false);
+    expect(comp.IsSegmentHiddenByCollapsedHeading(hiddenChild)).toBe(false);
+
+    // Modal footer order: Primary LEFT, Cancel RIGHT
+    comp.PromptFreezeBlock({ BlockID: 'blk-freeze-1', Kind: 'SavedQuery', Mode: 'Live', Title: 'Sales Query' });
+    f.detectChanges();
+    const freezeFooterBtns = Array.from(
+      rootEl.querySelectorAll<HTMLButtonElement>('[data-testid="freeze-warning-modal"] .mj-docs-modal__footer button'),
+    );
+    expect(freezeFooterBtns.length).toBeGreaterThanOrEqual(2);
+    expect(freezeFooterBtns[0].textContent).toContain('Freeze');
+    expect(freezeFooterBtns[freezeFooterBtns.length - 1].textContent).toContain('Cancel');
+  });
+});

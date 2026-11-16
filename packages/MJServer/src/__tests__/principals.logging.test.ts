@@ -158,3 +158,63 @@ describe('the misconfiguration report stays bounded WITHOUT regressing to per-re
         expect(ReportedMisconfigurationCount()).toBeLessThanOrEqual(MAX_REPORTED_MISCONFIGURATIONS);
     });
 });
+
+describe('ResolveServerPrincipal', () => {
+    it('returns the active system user without logging', async () => {
+        const { ResolveServerPrincipal } = await loadSubject();
+        expect(ResolveServerPrincipal('RSU pending work')).toBe(SYSTEM);
+        expect(mockLogError).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the lowest-ID active Owner, matching the space-padded Type', async () => {
+        mockUsers.length = 0;
+        const laterOwner = { ...HOST_ADMIN, ID: 'BBBB1111-0000-0000-0000-000000000001', Type: 'Owner          ' };
+        const inactiveOwner = { ...HOST_ADMIN, ID: '0000AAAA-0000-0000-0000-000000000001', IsActive: false };
+        const plainUser = { ...HOST_ADMIN, ID: '00000000-0000-0000-0000-000000000001', Type: 'User           ' };
+        mockUsers.push(plainUser, laterOwner, inactiveOwner, { ...HOST_ADMIN, Type: 'Owner          ' });
+        const { ResolveServerPrincipal } = await loadSubject();
+
+        expect(ResolveServerPrincipal('RSU CodeGen')?.ID).toBe(HOST_ADMIN.ID);
+    });
+
+    it('returns null and logs once per purpose when there is no system user and no active Owner', async () => {
+        mockUsers.length = 0;
+        mockUsers.push({ ...HOST_ADMIN, Type: 'User           ' });
+        const { ResolveServerPrincipal } = await loadSubject();
+
+        expect(ResolveServerPrincipal('RSU CodeGen')).toBeNull();
+        expect(ResolveServerPrincipal('RSU CodeGen')).toBeNull();
+        expect(mockLogError).toHaveBeenCalledTimes(1);
+        expect(String(mockLogError.mock.calls[0][0])).toContain('RSU CodeGen');
+    });
+});
+
+describe('ValidateProvisioningPrincipals', () => {
+    const NON_OWNER = { ID: 'CCCC1111-0000-0000-0000-000000000001', Name: 'helper@acme.com', Email: 'helper@acme.com', Type: 'User           ', IsActive: true };
+
+    it('logs an error naming the setting when it resolves to a non-Owner user', async () => {
+        mockUsers.push(NON_OWNER);
+        const { ValidateProvisioningPrincipals } = await loadSubject();
+
+        ValidateProvisioningPrincipals([{ Setting: 'userHandling.contextUserForNewUserCreation', Candidate: 'helper@acme.com' }]);
+
+        expect(mockLogError).toHaveBeenCalledTimes(1);
+        const logged = String(mockLogError.mock.calls[0][0]);
+        expect(logged).toContain('userHandling.contextUserForNewUserCreation');
+        expect(logged).toContain('helper@acme.com');
+        expect(logged).toContain('provisioning will fail');
+    });
+
+    it('is silent for an Owner, for the system user and for an unset setting', async () => {
+        mockUsers.push(NON_OWNER);
+        const { ValidateProvisioningPrincipals } = await loadSubject();
+
+        ValidateProvisioningPrincipals([
+            { Setting: 'a', Candidate: 'jane.admin@acme.com' },
+            { Setting: 'b', Candidate: 'System' },
+            { Setting: 'c', Candidate: undefined },
+        ]);
+
+        expect(mockLogError).not.toHaveBeenCalled();
+    });
+});
