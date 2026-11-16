@@ -1068,15 +1068,26 @@ export class SampleQueryGenerator {
       validationQuery = validationQuery.replace(match[0], sampleValue);
     }
 
-    if (!validationQuery.toLowerCase().includes('top ') &&
-        !validationQuery.toLowerCase().includes('limit ')) {
-      const selectMatch = validationQuery.match(/SELECT\s+/i);
-      if (selectMatch) {
-        const insertPosition = selectMatch.index! + selectMatch[0].length;
-        validationQuery =
-          validationQuery.slice(0, insertPosition) +
-          'TOP 10 ' +
-          validationQuery.slice(insertPosition);
+    const hasRowLimit =
+      /\btop\s+\d+\b/i.test(validationQuery) ||
+      /\blimit\s+\d+\b/i.test(validationQuery) ||
+      /\bfetch\s+(?:first|next)\b/i.test(validationQuery);
+
+    if (!hasRowLimit) {
+      const provider = this.driver?.GetProviderName?.()?.toLowerCase() ?? 'sqlserver';
+      if (provider === 'postgresql' || provider === 'mysql') {
+        const hadSemicolon = /;\s*$/.test(validationQuery);
+        const trimmed = validationQuery.replace(/\s*;+\s*$/, '');
+        validationQuery = `${trimmed} LIMIT 10${hadSemicolon ? ';' : ''}`;
+      } else {
+        const selectMatch = validationQuery.match(/\bSELECT\s+(?:DISTINCT\s+)?/i);
+        if (selectMatch) {
+          const insertPosition = selectMatch.index! + selectMatch[0].length;
+          validationQuery =
+            validationQuery.slice(0, insertPosition) +
+            'TOP 10 ' +
+            validationQuery.slice(insertPosition);
+        }
       }
     }
 

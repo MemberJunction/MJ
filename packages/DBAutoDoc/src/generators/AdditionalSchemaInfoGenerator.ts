@@ -332,15 +332,23 @@ export class AdditionalSchemaInfoGenerator {
     const pks: SoftPKEntry[] = [];
     const fks: SoftFKEntry[] = [];
 
+    const allTablePKCandidates = (state.phases.keyDetection?.discovered?.primaryKeys ?? []).filter(
+      pk => pk.schemaName === schema.name && pk.tableName === table.name
+    );
+    const matchingDiscoveredPKs = discoveredPKs.filter(
+      pk => pk.schemaName === schema.name && pk.tableName === table.name
+    );
+    const allDiscoveredFKs = state.phases.keyDetection?.discovered?.foreignKeys ?? [];
+
     // Source 1: Hard keys from introspection (skip if discoveredOnly)
     if (!discoveredOnly) {
-      this.collectIntrospectedPKs(table, pks);
-      this.collectIntrospectedFKs(schema, table, fks, discoveredFKs);
+      this.collectIntrospectedPKs(table, allTablePKCandidates, matchingDiscoveredPKs, pks);
+      this.collectIntrospectedFKs(schema, table, fks, discoveredFKs, allDiscoveredFKs);
     }
 
     // Source 2: AI-discovered keys
-    this.collectDiscoveredPKs(schema.name, table.name, discoveredPKs, pks);
-    this.collectDiscoveredFKs(schema.name, table.name, discoveredFKs, fks);
+    this.collectDiscoveredPKs(schema.name, table, discoveredPKs, pks);
+    this.collectDiscoveredFKs(schema.name, table, discoveredFKs, fks);
 
     // A composite FK's column pairs whose target is not unique on its own are dropped whichever
     // source proposed them: introspection, a discovery pass, or the LLM confirming the constraint.
@@ -418,35 +426,81 @@ export class AdditionalSchemaInfoGenerator {
 
   /**
    * Collect primary key columns from introspected table definition.
+   * Columns flagged only by a rejected or non-winning PK candidate are skipped so pruned/losing
+   * discovery keys cannot leak into output even if `col.isPrimaryKey` was left true.
    */
-  private collectIntrospectedPKs(table: TableDefinition, pks: SoftPKEntry[]): void {
+  private collectIntrospectedPKs(
+    table: TableDefinition,
+    allTablePKCandidates: PKCandidate[],
+    survivingTablePKCandidates: PKCandidate[],
+    pks: SoftPKEntry[]
+  ): void {
     const existingFields = new Set(pks.map(p => p.FieldName));
+    const namedByAnyCandidate = new Set(
+      allTablePKCandidates.flatMap(pk => pk.columnNames.map(c => c.toLowerCase()))
+    );
+    const winning = this.pickBestPKCandidate(survivingTablePKCandidates);
+    const winningCols = new Set((winning?.columnNames ?? []).map(c => c.toLowerCase()));
 
     for (const col of table.columns) {
-      if (col.isPrimaryKey && !existingFields.has(col.name)) {
-        pks.push({
-          FieldName: col.name,
-          Description: col.description || `Primary key column for ${table.name}`
-        });
+      if (!col.isPrimaryKey || existingFields.has(col.name)) continue;
+      const lower = col.name.toLowerCase();
+      // If discovery proposed candidates for this column and this column is not part of the
+      // winning candidate (e.g., it was rejected or superseded by another candidate), do not emit it.
+      if (namedByAnyCandidate.has(lower) && !winningCols.has(lower)) {
+        continue;
       }
+      existingFields.add(col.name);
+      pks.push({
+        FieldName: col.name,
+        Description: col.description || `Primary key column for ${table.name}`
+      });
     }
   }
 
   /**
    * Collect foreign key columns from introspected table definition.
+   * Excludes any FK edge that matches a rejected or excluded discovery candidate so pruned FKs
+   * never leak out through ungated column flags or `dependsOn`.
    */
   private collectIntrospectedFKs(
     schema: SchemaDefinition,
     table: TableDefinition,
     fks: SoftFKEntry[],
-    discoveredFKs: FKCandidate[] = []
+    discoveredFKs: FKCandidate[] = [],
+    allRawFKCandidates: FKCandidate[] = []
   ): void {
     const existingKeys = new Set(fks.map(f => `${f.FieldName}->${f.RelatedTable}.${f.RelatedField}`));
+    const edgeKey = (
+      srcSchema: string,
+      srcTable: string,
+      srcCol: string,
+      tgtSchema: string,
+      tgtTable: string,
+      tgtCol: string
+    ): string =>
+      `${srcSchema}.${srcTable}.${srcCol}->${tgtSchema}.${tgtTable}.${tgtCol}`.toLowerCase();
+
+    const validDiscoveredEdgeKeys = new Set(
+      discoveredFKs
+        .filter(fk => fk.schemaName === schema.name && fk.sourceTable === table.name)
+        .map(fk => edgeKey(fk.schemaName, fk.sourceTable, fk.sourceColumn, fk.targetSchema || schema.name, fk.targetTable, fk.targetColumn))
+    );
+    const blockedDiscoveryEdgeKeys = new Set(
+      allRawFKCandidates
+        .filter(fk => fk.schemaName === schema.name && fk.sourceTable === table.name)
+        .map(fk => edgeKey(fk.schemaName, fk.sourceTable, fk.sourceColumn, fk.targetSchema || schema.name, fk.targetTable, fk.targetColumn))
+        .filter(key => !validDiscoveredEdgeKeys.has(key))
+    );
 
     // From column-level foreignKeyReferences
     for (const col of table.columns) {
       if (col.isForeignKey && col.foreignKeyReferences) {
         const ref = col.foreignKeyReferences;
+        const targetSchema = ref.schema || schema.name;
+        if (blockedDiscoveryEdgeKeys.has(edgeKey(schema.name, table.name, col.name, targetSchema, ref.table, ref.referencedColumn))) {
+          continue;
+        }
         const key = `${col.name}->${ref.table}.${ref.referencedColumn}`;
         if (!existingKeys.has(key)) {
           existingKeys.add(key);
@@ -458,7 +512,7 @@ export class AdditionalSchemaInfoGenerator {
           // visible rather than indistinguishable from a real introspected constraint.
           fks.push({
             FieldName: col.name,
-            SchemaName: ref.schema || schema.name,
+            SchemaName: targetSchema,
             RelatedTable: ref.table,
             RelatedField: ref.referencedColumn,
             Description: col.description,
@@ -470,12 +524,16 @@ export class AdditionalSchemaInfoGenerator {
 
     // From table-level dependsOn relationships
     for (const dep of table.dependsOn) {
+      const targetSchema = dep.schema || schema.name;
+      if (blockedDiscoveryEdgeKeys.has(edgeKey(schema.name, table.name, dep.column, targetSchema, dep.table, dep.referencedColumn))) {
+        continue;
+      }
       const key = `${dep.column}->${dep.table}.${dep.referencedColumn}`;
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
         fks.push({
           FieldName: dep.column,
-          SchemaName: dep.schema || schema.name,
+          SchemaName: targetSchema,
           RelatedTable: dep.table,
           RelatedField: dep.referencedColumn
         });
@@ -547,29 +605,51 @@ export class AdditionalSchemaInfoGenerator {
   }
 
   /**
+   * Pick the single best surviving PK candidate for a table: confirmed first, then highest confidence,
+   * preserving order on ties (matches ApplyBestPrimaryKeys).
+   */
+  private pickBestPKCandidate(candidates: PKCandidate[]): PKCandidate | undefined {
+    const rank = (c: PKCandidate): [number, number] => [c.status === 'confirmed' ? 1 : 0, c.confidence];
+    return candidates.reduce<PKCandidate | undefined>((top, c) => {
+      if (!top) return c;
+      const [cConfirmed, cConfidence] = rank(c);
+      const [tConfirmed, tConfidence] = rank(top);
+      return cConfirmed > tConfirmed || (cConfirmed === tConfirmed && cConfidence > tConfidence) ? c : top;
+    }, undefined);
+  }
+
+  /**
    * Collect discovered PKs from the key detection phase.
+   * Emits at most ONE winning candidate per table and never unions discovered PKs onto an
+   * already-collected introspected PK.
    */
   private collectDiscoveredPKs(
     schemaName: string,
-    tableName: string,
+    table: TableDefinition,
     discoveredPKs: PKCandidate[],
     pks: SoftPKEntry[]
   ): void {
-    const existingFields = new Set(pks.map(p => p.FieldName));
+    if (pks.length > 0) {
+      return;
+    }
 
     const matching = discoveredPKs.filter(
-      pk => pk.schemaName === schemaName && pk.tableName === tableName
+      pk => pk.schemaName === schemaName && pk.tableName === table.name
     );
+    const winner = this.pickBestPKCandidate(matching);
+    if (!winner) {
+      return;
+    }
 
-    for (const pk of matching) {
-      for (const colName of pk.columnNames) {
-        if (!existingFields.has(colName)) {
-          existingFields.add(colName);
-          pks.push({
-            FieldName: colName,
-            Description: `AI-discovered primary key (confidence: ${pk.confidence}%)`
-          });
-        }
+    const existingFields = new Set(pks.map(p => p.FieldName));
+    for (const colName of winner.columnNames) {
+      if (!existingFields.has(colName)) {
+        existingFields.add(colName);
+        const col = table.columns.find(c => c.name === colName);
+        pks.push({
+          FieldName: colName,
+          Description: col?.description || `AI-discovered primary key (confidence: ${winner.confidence}%)`
+        });
       }
     }
   }
@@ -579,26 +659,28 @@ export class AdditionalSchemaInfoGenerator {
    */
   private collectDiscoveredFKs(
     schemaName: string,
-    tableName: string,
+    table: TableDefinition,
     discoveredFKs: FKCandidate[],
     fks: SoftFKEntry[]
   ): void {
     const existingKeys = new Set(fks.map(f => `${f.FieldName}->${f.RelatedTable}.${f.RelatedField}`));
 
     const matching = discoveredFKs.filter(
-      fk => fk.schemaName === schemaName && fk.sourceTable === tableName
+      fk => fk.schemaName === schemaName && fk.sourceTable === table.name
     );
 
     for (const fk of matching) {
       const key = `${fk.sourceColumn}->${fk.targetTable}.${fk.targetColumn}`;
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
+        const col = table.columns.find(c => c.name === fk.sourceColumn);
+        const provenance = describeDiscoveredFK(fk);
         fks.push({
           FieldName: fk.sourceColumn,
           SchemaName: fk.targetSchema || schemaName,
           RelatedTable: fk.targetTable,
           RelatedField: fk.targetColumn,
-          Description: describeDiscoveredFK(fk),
+          Description: col?.description ? `${col.description} (${provenance})` : provenance,
           Verification: fk.verification
         });
       }
