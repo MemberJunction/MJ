@@ -75,6 +75,7 @@ const databaseSettingsInfoSchema = z.object({
   connectionPool: z.object({
     max: z.number().optional().default(50),
     min: z.number().optional().default(5),
+    readOnlyMax: z.number().optional(),
     idleTimeoutMillis: z.number().optional().default(30000),
     acquireTimeoutMillis: z.number().optional().default(30000),
   }).optional().default({}),

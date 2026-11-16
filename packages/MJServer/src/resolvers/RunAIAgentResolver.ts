@@ -345,6 +345,7 @@ export class RunAIAgentResolver extends ResolverBase {
         const agentRunRef = runRef ?? { current: null as MJAIAgentRunEntityExtended | null };
         // The publisher owns every status message, including the failure completion the catch below sends.
         const statusPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId);
+        let currentPublisher = statusPublisher;
 
         try {
             LogStatus(`=== RUNNING AI AGENT FOR ID: ${agentId} ===`);
@@ -381,7 +382,6 @@ export class RunAIAgentResolver extends ResolverBase {
             // The publisher owns every status message. The resolver still copies the run into
             // agentRunRef, including noise steps, for the fire-and-forget liveness pulse.
             const sourcePublisher = statusPublisher;
-            let currentPublisher = sourcePublisher;
 
             // A widget- or guest-hosted run must not get a handoffChain unless the host also passes an
             // allow-list under trusted run data.
@@ -595,6 +595,11 @@ export class RunAIAgentResolver extends ResolverBase {
                 executionTimeMs: executionTime,
                 result: JSON.stringify(errorResult)
             };
+        } finally {
+            currentPublisher.Dispose();
+            if (currentPublisher !== statusPublisher) {
+                statusPublisher.Dispose();
+            }
         }
     }
 

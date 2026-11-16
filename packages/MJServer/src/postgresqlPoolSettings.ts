@@ -6,6 +6,7 @@
  * |--------------------------------------|----------------------------------|----------------------------------------------|
  * | `requestTimeout`                     | driver request timeout           | `statement_timeout` on every backend         |
  * | `connectionPool.max` / `min`         | pool size                        | pool size                                    |
+ * | `connectionPool.readOnlyMax`         | —                                | application read-only pool size (defaults to `max`) |
  * | `connectionPool.idleTimeoutMillis`   | idle connection eviction         | idle connection eviction                     |
  * | `connectionPool.acquireTimeoutMillis`| wait for a pooled connection     | `connectionTimeoutMillis` (see below)        |
  * | `connectionTimeout`                  | time to open a connection        | not used                                     |
@@ -19,10 +20,12 @@
  * - `idle_in_transaction_session_timeout` has no SQL Server counterpart. It is derived as twice the
  *   statement timeout, so a transaction left open by an abandoned request is ended and its locks
  *   released.
- * - MJAPI opens a raw compatibility pool and a provider pool, each up to `connectionPool.max`, plus
- *   a CodeGen pool of 10 and, when a read-only login is configured, a read-only pool of at most 10,
- *   where SQL Server opens one pool (and a read-only one). PostgreSQL's default `max_connections`
- *   is 100, so the read-only and CodeGen pools are kept small.
+ * - When a read-only login is configured, MJAPI keeps two distinct pools on that login:
+ *   1. `'read-only'`: application `RunView*` reads, sized up to `connectionPool.readOnlyMax ?? apiMax`
+ *      (`MinConnections: 0`) so concurrent application reads scale with the API pool.
+ *   2. `'adhoc-read-only'`: untrusted caller-supplied SQL (`ExecuteAdhocQuery`, `TestQuerySQL`,
+ *      `GetDataContextData`), capped at `ADHOC_READ_ONLY_MAX_CONNECTIONS` (10) so ad-hoc queries
+ *      cannot starve application traffic.
  */
 import type { PGConnectionConfig } from '@memberjunction/postgresql-dataprovider';
 import type { Pool, PoolConfig } from 'pg';
@@ -35,14 +38,14 @@ export const CODEGEN_STATEMENT_TIMEOUT_MS = 600000;
 /** Pool size for the CodeGen/DDL pool. */
 const CODEGEN_MAX_CONNECTIONS = 10;
 
-/** Largest pool size for the read-only pool, which serves only caller-supplied SQL. */
-const READ_ONLY_MAX_CONNECTIONS = 10;
+/** Largest pool size for the untrusted ad-hoc read-only SQL pool (caller-supplied SQL). */
+export const ADHOC_READ_ONLY_MAX_CONNECTIONS = 10;
 
 /**
- * Which pool the settings are for: API traffic, the read-only pool for caller-supplied SQL, or
- * CodeGen and DDL work.
+ * Which pool the settings are for: API traffic, the application read-only pool (`RunView*`),
+ * the bounded ad-hoc read-only pool for caller-supplied SQL, or CodeGen and DDL work.
  */
-export type PostgreSQLPoolPurpose = 'api' | 'read-only' | 'codegen';
+export type PostgreSQLPoolPurpose = 'api' | 'read-only' | 'adhoc-read-only' | 'codegen';
 
 /** Where a PostgreSQL pool connects and as whom. */
 export interface PostgreSQLEndpoint {
@@ -87,11 +90,17 @@ export function BuildPostgreSQLConnectionConfig(
     const statementTimeoutMs = Math.max(0, settings.requestTimeout);
     const apiMax = pool?.max ?? 50;
     const apiMin = pool?.min ?? 5;
-    const readOnly = purpose === 'read-only';
+    let maxConnections = apiMax;
+    if (purpose === 'read-only') {
+        maxConnections = pool?.readOnlyMax ?? apiMax;
+    } else if (purpose === 'adhoc-read-only') {
+        maxConnections = Math.min(ADHOC_READ_ONLY_MAX_CONNECTIONS, apiMax);
+    }
+    const isReadOnlyPurpose = purpose === 'read-only' || purpose === 'adhoc-read-only';
     return {
         ...endpoint,
-        MaxConnections: readOnly ? Math.min(READ_ONLY_MAX_CONNECTIONS, apiMax) : apiMax,
-        MinConnections: readOnly ? 0 : apiMin,
+        MaxConnections: maxConnections,
+        MinConnections: isReadOnlyPurpose ? 0 : apiMin,
         IdleTimeoutMillis: pool?.idleTimeoutMillis ?? 30000,
         ConnectionTimeoutMillis: pool?.acquireTimeoutMillis ?? 30000,
         StatementTimeoutMs: statementTimeoutMs,
@@ -145,12 +154,13 @@ export function ResolvePostgreSQLReadOnlyCredentials(
 }
 
 /**
- * Holds MJAPI's PostgreSQL read-only pool, opened once at startup with the read-only login.
- * Per-request read-only providers share it, so they connect as the read-only user rather than
- * through the read-write pool.
+ * Holds MJAPI's PostgreSQL read-only pools, opened once at startup with the read-only login:
+ * - {@link Pool}: application `RunView*` read-only pool, sized up to `apiMax` (or `connectionPool.readOnlyMax`)
+ * - {@link AdhocPool}: bounded pool for untrusted caller-supplied SQL, capped at {@link ADHOC_READ_ONLY_MAX_CONNECTIONS}
  */
 export class PostgreSQLReadOnlyPool extends BaseSingleton<PostgreSQLReadOnlyPool> {
     private _pool: Pool | null = null;
+    private _adhocPool: Pool | null = null;
 
     /** Use {@link PostgreSQLReadOnlyPool.Instance}. */
     public constructor() {
@@ -161,13 +171,22 @@ export class PostgreSQLReadOnlyPool extends BaseSingleton<PostgreSQLReadOnlyPool
         return PostgreSQLReadOnlyPool.getInstance<PostgreSQLReadOnlyPool>();
     }
 
-    /** The read-only pool, or `null` when no read-only login is configured. */
+    /** The application read-only pool, or `null` when no read-only login is configured. */
     public get Pool(): Pool | null {
         return this._pool;
     }
 
     public set Pool(pool: Pool | null) {
         this._pool = pool;
+    }
+
+    /** The bounded ad-hoc read-only pool for caller-supplied SQL, or `null` when no read-only login is configured. */
+    public get AdhocPool(): Pool | null {
+        return this._adhocPool;
+    }
+
+    public set AdhocPool(pool: Pool | null) {
+        this._adhocPool = pool;
     }
 }
 
