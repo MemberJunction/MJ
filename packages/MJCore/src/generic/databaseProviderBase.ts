@@ -139,6 +139,12 @@ export interface SaveContext {
 export type PostCommitTask = () => Promise<void>;
 
 /**
+ * Deduplication strategy used by {@link DatabaseProviderBase.ScheduleAfterCommit} when multiple
+ * tasks share the same `coalesceKey` within one commit batch (or detached microtask turn).
+ */
+export type PostCommitCoalesceMode = 'last-wins' | 'first-wins';
+
+/**
  * Identifies the transaction frames that were open at one moment, so work registered *later* with
  * {@link DatabaseProviderBase.RunAfterCommit} is tied to the transaction it came from rather than to
  * whatever transaction happens to be open when it registers.
@@ -173,6 +179,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     private static _nextProviderInstanceId = 1;
     private readonly _providerInstanceId = DatabaseProviderBase._nextProviderInstanceId++;
     private _transactionEpoch = 0;
+    private readonly _detachedCoalescedTasks = new Map<string, { Task: PostCommitTask; Description: string }>();
+    private _detachedCoalesceScheduled = false;
 
     /**
      * Whether the calling async scope is part of this provider's ambient transaction.
@@ -392,6 +400,58 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public CapturePostCommitToken(): PostCommitToken | undefined {
         return undefined;
+    }
+
+    /**
+     * Enqueues post-commit work coalesced by `coalesceKey`.
+     *
+     * Outside an open transaction (on transactional providers) or on non-transactional providers,
+     * registrations sharing a `coalesceKey` within the same microtask turn collapse per `mode`
+     * (`'last-wins'` by default) before flushing once on a microtask. Inside a transaction,
+     * transactional providers bind each registration to the caller's ambient frame (or `token`)
+     * so rolled-back savepoints drop their entries cleanly while surviving entries coalesce at commit.
+     */
+    public ScheduleAfterCommit(
+        coalesceKey: string,
+        task: PostCommitTask,
+        description: string = 'post-commit task',
+        token?: PostCommitToken,
+        mode: PostCommitCoalesceMode = 'last-wins',
+    ): void {
+        if (!coalesceKey) {
+            this.RunAfterCommit(task, description, token);
+            return;
+        }
+        this.EnqueueDetachedCoalescedTask(coalesceKey, task, description, mode);
+    }
+
+    /** Runs a detached post-commit task safely; transactional subclasses detach transaction affinity here. */
+    protected ExecuteDetachedPostCommitTask(task: PostCommitTask, description: string): void {
+        void this.RunPostCommitTaskSafely(task, description);
+    }
+
+    /** Coalesces detached post-commit registrations onto a single microtask flush per turn. */
+    protected EnqueueDetachedCoalescedTask(
+        coalesceKey: string,
+        task: PostCommitTask,
+        description: string,
+        mode: PostCommitCoalesceMode,
+    ): void {
+        if (mode !== 'first-wins' || !this._detachedCoalescedTasks.has(coalesceKey)) {
+            this._detachedCoalescedTasks.set(coalesceKey, { Task: task, Description: description });
+        }
+        if (this._detachedCoalesceScheduled) {
+            return;
+        }
+        this._detachedCoalesceScheduled = true;
+        queueMicrotask(() => {
+            const entries = [...this._detachedCoalescedTasks.values()];
+            this._detachedCoalescedTasks.clear();
+            this._detachedCoalesceScheduled = false;
+            for (const entry of entries) {
+                this.ExecuteDetachedPostCommitTask(entry.Task, entry.Description);
+            }
+        });
     }
 
     /**

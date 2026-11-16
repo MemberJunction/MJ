@@ -2810,7 +2810,11 @@ export class BaseAgent {
         // `RunActionParams.AbortSignal` (see ActionEngine.RunAction) and are
         // unaffected by this wrapper — their timeout budget is independent.
         // =====================================================================================
-        const agentTimeoutMS = params.maxExecutionTimeMs ?? this.DefaultAgentTimeoutMS;
+        const configuredMaxTimeMs =
+            params.agent?.MaxTimePerRun != null && params.agent.MaxTimePerRun > 0
+                ? params.agent.MaxTimePerRun * 1000
+                : undefined;
+        const agentTimeoutMS = params.maxExecutionTimeMs ?? configuredMaxTimeMs ?? this.DefaultAgentTimeoutMS;
         const upstreamToken = params.cancellationToken;
         const timeoutController = new AbortController();
         const relayUpstreamAbort = () => {
