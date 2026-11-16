@@ -182,6 +182,9 @@ The file had 7 bytes left. Shortened four descriptions on the same line to add
 
 ## Phase 7 — the GitHub workflow
 
+**Removed (2026-11-16).** The workflow was taken out of the PR at the user's request. D22–D24 and
+the workflow parts of D29 no longer apply; they stay here as a record of the design.
+
 ### D22. When the workflow runs
 
 | Option | Pros | Cons |

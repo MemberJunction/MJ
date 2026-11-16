@@ -292,7 +292,7 @@ Every task writes its failing tests first, confirms they fail, then implements.
 | 4 | **Replay-script PR skill** (Part C) with `preflight.sh` and `harvest.sh`. Add it to the skills list in root `CLAUDE.md` (check `npm run check:claude-md`). | 0, 3 | M |
 | 5 | **Authoring skill** (A3). | 2, 3 | M |
 | 6 | **First real harvest.** Run the Part C skill on `next`. This is the first PR that commits replay scripts. Expect fewer than 155: a test whose run used an unmatched coordinate click records no script (§7). | 4, M3 | L (run time) |
-| 7 | **Later:** a `workflow_dispatch` / nightly GitHub Action that runs Part C's helpers, copied from the `bizapps-guide.yml` PR pattern (GitHub App token, fixed branch, reuse an open PR). Needs Auth0 and LLM secrets and a large runner. | 6 | L |
+| 7 | **Removed (2026-11-16, see §9).** A `workflow_dispatch` / nightly GitHub Action that runs Part C's helpers, copied from the `bizapps-guide.yml` PR pattern (GitHub App token, fixed branch, reuse an open PR). Needs Auth0 and LLM secrets and a large runner. | 6 | L |
 | M1 | **Split `mj app install`** into a package step and a database step (§8.4). | — | M |
 | M2 | **Stack installs Open Apps** from a pinned list: images run the package step, db-setup runs the database step (§8.4). | M1 | L |
 | M3 | **Move the suite's data to MoreCheese**: retarget the seeds, rewrite the 31 tests that use AssociationDB v1 data, run all 155 (§8.5). | M2 | L |
@@ -602,9 +602,9 @@ to the scaffold and the skill. Skill tests: baseline and with-skill subagent run
 
 ### Phase 7 — the GitHub workflow
 
-`.github/workflows/regression-replay-scripts.yml` runs the Part C helpers on demand (and nightly if
-`vars.REGRESSION_NIGHTLY` is `true`). It needs the `REGRESSION_*` secrets and a GitHub App, so it was
-not run. Its YAML parses and its shell steps pass `bash -n`.
+**Removed (2026-11-16).** The workflow (`.github/workflows/regression-replay-scripts.yml`) was built
+and then taken out of the PR at the user's request; it was never run. The `regression-replay-pr`
+skill is the only way to refresh replay scripts. D22–D24 record the design in case it comes back.
 
 
 ## 10. Results of the MoreCheese move and Phase 6 (2026-11-13)
