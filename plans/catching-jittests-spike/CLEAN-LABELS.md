@@ -44,3 +44,24 @@ Reports by label: tuning 4 *Bug*; held-out 4 *Bug*, 6 *Intended*, 8 *TestFault*.
 - The 8 *TestFault* reports share one cause: the test gives a mock or an input that no real caller can produce (string timestamp, Invalid Date, `..` path, padded UUID). The prompt now asks for edge inputs after the exact trigger.
 - The 6 *Intended* reports are behaviour that the PR text or a commit in the PR states. The judges rated them High or Medium.
 - 8 of the 22 reports are real defects that no fix PR was linked to, and later commits on `next` fixed or changed 5 of those (#3624 twice, #4276 twice, #3872).
+
+## Later rounds (2026-11-16, provisional labels by sub agents and the controller)
+
+Details are in [OVERNIGHT-DECISIONS.md](OVERNIGHT-DECISIONS.md) N30 to N34.
+
+| Set | Code | Clean PRs | PRs with a report | PRs with a false alarm | False-alarm rate |
+|---|---|---|---|---|---|
+| Held-out slice | Generator rule + judge prompt p3 (`6435a84225`) | 15 | 6 (#3525, #3907, #3892, #3872, #3895, #4276) | 5 (all but #4276) | 33% |
+| Held-out slice, same reports | The same, then the caller check offline (N32, rule C) | 15 | 2 to 3 | 1 to 2 (#3872; #3895 in some runs) | 7% to 13% |
+| Tuning slice | Generator of N25 + judge prompt p3 (round G) | 15 | 3 (#3624, #3823, #3801) | 1 (#3801) | 7% |
+
+Round G labels:
+
+| PR | Catch | Label | Confidence | Reason |
+|---|---|---|---|---|
+| #3624 | 54846f93, 2f3b8c75 | Bug | High | Same defect as cc6874b2 and a3af1d0b above. |
+| #3823 | c51ed4cc, 73af7def, a1bfded4 | Bug | Medium | Same defect as e76c0663 above (`Progress` of 1 or less is shown as a fraction). |
+| #3801 | 46cf2d1d | Bug | Medium | An unparseable `package-lock.json` in a sibling folder that is not a workspace member stops `mj dev workspace` and `status`. `4acaeed663` fixed the same problem for `mj-app.json` only. |
+| #3801 | 74e1dc2a | Intended | Medium | The PR states that an unparseable lockfile of a member must throw. |
+
+Two labels changed between labelers (#3872 and one #3895 test), so each rate can move by about one PR.

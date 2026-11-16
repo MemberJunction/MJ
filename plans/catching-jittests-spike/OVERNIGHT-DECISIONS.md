@@ -388,6 +388,78 @@ Decision: A. The code for B stays on the local branch `CB-jit-one-session` and i
 
 Decision: A, with B and C open for the user.
 
+## N29. Provisional labels for the clean reports
+
+The 22 clean reports of N28 were labelled by sub agents (Opus), not by the PR authors. See [CLEAN-LABELS.md](CLEAN-LABELS.md). Held-out slice with the code of N28: 9 of 15 PRs had a report that is *Intended* or *TestFault* (60%; the gate is 10% or less).
+
+| Option | For | Against |
+|---|---|---|
+| **A. Use these labels to steer the work, and do not record them (chosen)** | The work can continue in the night; the label store stays clean | The labels have noise: two labelers gave different labels for #3872 and for one #3895 test |
+| B. Wait for author labels | Correct by the design | No progress until the authors answer |
+| C. Record the labels in the label store | The report command can use them | They are not author labels |
+
+Decision: A. All rates below use provisional labels.
+
+## N30. Judges read the PR body and the commit messages; judge prompt with an intent and reachability checklist
+
+Most false alarms were behaviour that the PR text states on purpose, or a test input that no real caller sends. The judges had only the PR title and the diff summary.
+
+| Option | For | Against |
+|---|---|---|
+| A. Keep the judge prompt (p0) | No change | 9 of 15 held-out clean PRs with a false alarm |
+| B. Shorter prompt that asks only "is this intended" (p2) | Small | Offline it removed fewer false alarms than C |
+| **C. Checklist prompt (p3): first "does the PR text or a code comment state this behaviour", then "can a real caller send this input"; the PR body and commit messages (4000 characters at most) are in the input (chosen)** | Offline on the stored catches: false-alarm PRs 9 → 5 of 15; all matched catches of round G were still reported | The judges cannot read callers, so reachability is a guess (see N32) |
+
+Decision: C. Code: `GitRepo.Messages`, `ChangeAnalysis.CommitMessages`, `JudgePanel`, `BucketJudge`.
+
+## N31. Generator rule "use only inputs a real caller can send": tried and removed
+
+| Option | For | Against |
+|---|---|---|
+| A. Add the rule to the generator prompt | Fewer tests on unreachable inputs | Two runs of the 10 known-bug PRs gave 2 and 3 matched reports; the false-alarm PRs on the held-out clean set were 5 of 15, the same as p3 alone gives offline |
+| **B. No rule in the generator; the judges and the caller check decide (chosen)** | Keeps the edge-input tests that find the known bugs | The generator still writes tests that are rejected later (cost of the judge calls) |
+
+Decision: B. Note: round G (no rule) gave 3 of 10, so the difference between 6 (round V) and 2 to 3 is mostly run-to-run variation of the generator, not the rule. In round G the generator wrote a matching test for only 3 of the 10 PRs, and all 3 were reported.
+
+## N32. Caller check: one model with read tools on the head revision
+
+A judge without code access cannot see the callers. The caller check gives one model (`claude-opus-5-5`) two tools, `read_file` and `grep`, on the PR head revision through git. It labels each reported catch *Bug*, *Intended* or *TestFault* with a confidence. Setting: `Judges.CallerCheck` (default off). Cost: about 0.09 to 0.14 USD for each checked catch, 3 to 4 model turns.
+
+| Option | For | Against |
+|---|---|---|
+| A. No check | No cost | Held-out clean: about 5 of 15 PRs with a false alarm |
+| B. Report only when the check says *Bug* | Lowest false-alarm rate | Loses real catches where the check is not sure |
+| **C. Report when the check says *Bug*, or the check failed, or (confidence is not High and the judge median is High) (chosen)** | Offline on 36 labelled stored catches: false-alarm PRs 2, real-bug catches kept 6 of 8, known-bug PRs kept 4 | One *Intended* report stayed on #3801 in round G |
+| D. Give the tools to all three judges | One stage | About 3 times the cost; the first prompt version (v1) was also too strict |
+
+Decision: C, with prompt version 3 (v1 dropped 4 of 8 real-bug catches; v3 dropped 2). Stability: a second run on the same 36 catches gave the same *Bug* / not-*Bug* answer on 34. The prompt was tuned on these 36 catches, so round H (N35) is the first fair test.
+
+## N33. Four lanes and the early stop of the first clean rerun
+
+- Four parallel lanes gave the same throughput as three (8 to 9 PRs each hour); the disk is the limit. Three lanes are used.
+- The rerun of the tuning clean set with the code of N28 was stopped after 3 PRs (2.28 USD) on the user's instruction, to use the time for N30 to N32.
+
+## N34. Round G: known-bug PRs and tuning clean set, generator of N25, judge prompt p3
+
+| Set | PRs | PRs with a report | Result | Cost (USD) |
+|---|---|---|---|---|
+| Known bugs (10 that a base test can find) | 10 | 5 (#5481, #4450, #5703, #4120, #5729) | 3 matched: #5481, #4450, #4120 | 12.96 |
+| Clean, tuning slice | 15 | 3 (#3624, #3823, #3801) | 1 PR with a false alarm (#3801: one *Bug*, one *Intended*) = 7% | 12.76 |
+
+- #3624 and #3823 are the same defects as in N28 (*Bug*).
+- With the caller check (rule C): the clean set is the same (the *Intended* report on #3801 stays because the judge median is High and the check confidence is Medium). On the known-bug PRs the check keeps #4120 and rejects #5481 and #4450 as *Intended*.
+
+**The conflict.** The catches on #5481, #4450 and #5703 show behaviour that the PR text states on purpose (for example "10,000-entry ceiling, oldest dropped"). A later fix PR changed that behaviour, so the corpus counts them as bugs. A catch of this kind on a clean PR is a false alarm by the gate definition. The tool cannot tell the two apart; only the author can.
+
+| Option | Known-bug catch (of 10, one run) | Clean PRs with a false alarm | Note |
+|---|---|---|---|
+| A. Report stated-intent catches (judge prompt p0, no check) | about 6 | about 9 of 15 held-out | Fails the false-alarm gate |
+| B. Judge prompt p3, no check | 2 to 3 | 5 of 15 held-out (offline), 1 of 15 tuning | |
+| C. Judge prompt p3 and caller check | 1 to 4 | 1 to 2 of 15 held-out (offline), 1 of 15 tuning | Lowest false alarms |
+| D. Two classes: "likely bug" (passes the check) as a normal comment, "stated behaviour, please confirm" as a short low-priority note | Both counts can be reported | The gate definition must say which class counts | Not built |
+
+Decision: open for the user. The code has B as the default and C as a setting.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -411,3 +483,12 @@ Decision: A, with B and C open for the user.
 | V | Catch-rate validation, 10 PRs | 11.26 | 96.30 |
 | W | One session per package, 10 PRs | 10.01 | 106.31 |
 | HC | Clean, held-out slice, 15 PRs, final code | 14.05 | 120.36 |
+| L | Label sub agents for the clean reports (Claude Code session, no API spend) | 0.00 | 120.36 |
+| JP | Judge prompt trials p0, p2, p3 on stored catches | about 4 | about 124 |
+| TC | Tuning clean rerun, stopped after 3 PRs | 2.28 | about 127 |
+| FY/FZ | Held-out clean, generator rule + p3, 15 PRs | 14.01 | about 141 |
+| FX1 | Known bugs, generator rule + p3, 10 PRs | 12.31 | about 153 |
+| FX2 | Known bugs, second run | 13.96 | about 167 |
+| CC | Caller check trials (v1, v2, v3, repeat) and match steps | about 17 | about 184 |
+| G | Known bugs 10 PRs + tuning clean 15 PRs, generator of N25 + p3 | 25.72 | about 210 |
+| GC | Caller check on round G (offline and real stage) | about 4 | about 214 |

@@ -369,3 +369,20 @@ One session per package is rejected (N27). The 10 PRs were also used to find the
 **Clean sets.** Tuning slice with the code before N25: reports on 2 of 15 PRs (4 reports, 13.32 USD). Held-out slice with the final code: reports on 9 of 15 PRs (18 reports, 14.05 USD). No report is labelled by a person yet, and several read as real defects (N28). The 7 held-out bug PRs that were kept back were not run (N26).
 
 **Open for the user.** The gate 1 denominator or a corpus repair (N23); a second test mode for new code (N23 D); labels for the 22 clean reports, and if the report rate on clean PRs is acceptable (N28); the fix-merge fallback of the match step, which can give a false match (#4782); `PackagesPerPR 3` (N21 C).
+
+## False-alarm work (2026-11-16)
+
+Details and options are in [OVERNIGHT-DECISIONS.md](OVERNIGHT-DECISIONS.md) N29 to N34. All labels are provisional ([CLEAN-LABELS.md](CLEAN-LABELS.md)).
+
+**Changes kept.** The judges read the PR body and the commit messages, and the judge prompt has an intent and reachability checklist (N30). A caller check with read tools on the head revision is a setting, `Judges.CallerCheck`, default off (N32). A generator rule on reachable inputs was tried and removed (N31).
+
+| | Code of 2026-11-15 | Judge prompt p3 | Judge prompt p3 and caller check |
+|---|---|---|---|
+| Held-out clean PRs with a false alarm (of 15) | 9 | 5 | 1 to 2 (offline on the same reports) |
+| Tuning clean PRs with a false alarm (of 15) | 0 (code before N25) | 1 | 1 |
+| Known-bug PRs with a matched report (of 10, one run each) | 6 (round V) | 3 (round G); 2 and 3 with the generator rule | 1 (round G); about 4 offline on the round V catches |
+
+**Run-to-run variation is large.** In round G the generator wrote a matching test for 3 of the 10 PRs; in round V for at least 6. One run of 10 PRs cannot separate a change of 1 or 2 PRs from noise.
+
+**Open for the user.** Catches of behaviour that the PR text states on purpose (#5481, #4450, #5703) count as catches on known-bug PRs and as false alarms on clean PRs. The choice between reporting them, not reporting them, or a second lower class of report is in N34.
+
