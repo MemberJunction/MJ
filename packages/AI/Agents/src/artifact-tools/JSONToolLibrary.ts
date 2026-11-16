@@ -1,9 +1,15 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import {
+    BaseArtifactToolLibrary,
+    ArtifactJsonValue,
+    ArtifactToolArgs,
+    ArtifactToolDefinition,
+    ArtifactToolResult,
+} from '@memberjunction/ai-core-plus';
 
 interface SearchMatch {
     path: string;
-    value: unknown;
+    value: ArtifactJsonValue;
 }
 
 /**
@@ -65,14 +71,14 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
 
     protected async invokeSubclassTool(
         toolName: string,
-        input: Record<string, unknown>,
+        input: ArtifactToolArgs,
         artifactContent: string | Buffer
     ): Promise<ArtifactToolResult> {
         const contentStr = typeof artifactContent === 'string' ? artifactContent : artifactContent.toString('utf-8');
 
-        let parsed: unknown;
+        let parsed: ArtifactJsonValue;
         try {
-            parsed = JSON.parse(contentStr);
+            parsed = JSON.parse(contentStr) as ArtifactJsonValue;
         } catch {
             return { success: false, data: null, errorMessage: 'Invalid JSON: failed to parse artifact content.' };
         }
@@ -91,7 +97,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
         }
     }
 
-    private handleJsonPath(parsed: unknown, input: Record<string, unknown>): ArtifactToolResult {
+    private handleJsonPath(parsed: ArtifactJsonValue, input: ArtifactToolArgs): ArtifactToolResult {
         const path = String(input.path ?? '');
         if (path === '') {
             return { success: true, data: parsed };
@@ -104,7 +110,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
         return { success: true, data: result.value };
     }
 
-    private handleJsonKeys(parsed: unknown, input: Record<string, unknown>): ArtifactToolResult {
+    private handleJsonKeys(parsed: ArtifactJsonValue, input: ArtifactToolArgs): ArtifactToolResult {
         const path = String(input.path ?? '');
         const target = path === '' ? parsed : this.navigatePath(parsed, path).value;
 
@@ -115,10 +121,10 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
         if (Array.isArray(target)) {
             return { success: true, data: target.map((_, i) => i) };
         }
-        return { success: true, data: Object.keys(target as Record<string, unknown>) };
+        return { success: true, data: Object.keys(target) };
     }
 
-    private handleJsonSearch(parsed: unknown, input: Record<string, unknown>): ArtifactToolResult {
+    private handleJsonSearch(parsed: ArtifactJsonValue, input: ArtifactToolArgs): ArtifactToolResult {
         const key = String(input.key);
         const pattern = new RegExp(String(input.pattern));
         const matches: SearchMatch[] = [];
@@ -127,7 +133,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
         return { success: true, data: matches };
     }
 
-    private handleJsonIterate(parsed: unknown, input: Record<string, unknown>): ArtifactToolResult {
+    private handleJsonIterate(parsed: ArtifactJsonValue, input: ArtifactToolArgs): ArtifactToolResult {
         const arrayPath = String(input.arrayPath);
         const start = Number(input.start);
         const count = Number(input.count);
@@ -140,7 +146,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
     }
 
     /** Navigate a dot-separated path through a parsed JSON value. */
-    private navigatePath(obj: unknown, path: string): { found: boolean; value: unknown } {
+    private navigatePath(obj: ArtifactJsonValue, path: string): { found: boolean; value: ArtifactJsonValue | undefined } {
         // Empty path or "$" means the document root (e.g. iterating a top-level array). Also tolerate
         // a leading "$." that LLMs add out of JSONPath habit.
         const normalized = path.replace(/^\$\.?/, '');
@@ -148,7 +154,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
             return { found: true, value: obj };
         }
         const segments = normalized.split('.');
-        let current: unknown = obj;
+        let current: ArtifactJsonValue | undefined = obj;
 
         for (const segment of segments) {
             if (current == null || typeof current !== 'object') {
@@ -162,7 +168,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
                 }
                 current = current[idx];
             } else {
-                const record = current as Record<string, unknown>;
+                const record = current;
                 if (!(segment in record)) {
                     return { found: false, value: undefined };
                 }
@@ -175,7 +181,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
 
     /** Recursively search for keys matching `targetKey` with string values matching `pattern`. */
     private searchRecursive(
-        obj: unknown,
+        obj: ArtifactJsonValue | undefined,
         targetKey: string,
         pattern: RegExp,
         currentPath: string,
@@ -191,7 +197,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
                 this.searchRecursive(obj[i], targetKey, pattern, childPath, matches);
             }
         } else {
-            const record = obj as Record<string, unknown>;
+            const record = obj;
             for (const key of Object.keys(record)) {
                 const childPath = currentPath ? `${currentPath}.${key}` : key;
                 const value = record[key];

@@ -885,15 +885,16 @@ describe('TemplateEngineServer', () => {
             await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
             const compile = vi.spyOn(engine as unknown as { createNunjucksTemplate: () => unknown }, 'createNunjucksTemplate');
             try {
-                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                // Use a block tag so this test exercises compiled Nunjucks template caching rather than the pure-interpolation fast path.
+                await engine.RenderTemplateSimple('{% if name %}Hello {{ name }}{% endif %}', { name: 'World' });
                 expect(compile).toHaveBeenCalledTimes(1);
 
                 await engine.Config(false, { ID: 'test-user-2', Name: 'Test2' } as never);
-                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                await engine.RenderTemplateSimple('{% if name %}Hello {{ name }}{% endif %}', { name: 'World' });
                 expect(compile).toHaveBeenCalledTimes(1);
 
                 await engine.Config(true, { ID: 'test-user-2', Name: 'Test2' } as never);
-                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                await engine.RenderTemplateSimple('{% if name %}Hello {{ name }}{% endif %}', { name: 'World' });
                 expect(compile).toHaveBeenCalledTimes(2);
             } finally {
                 compile.mockRestore();

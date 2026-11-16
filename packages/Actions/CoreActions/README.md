@@ -588,6 +588,17 @@ const aggResult = await engine.RunAction({
 });
 ```
 
+### Governed Collaborative Artifacts (`src/custom/artifacts/`)
+
+Unlike binary document export actions (`__CreateDocument` -> `MJ: Files` `.pdf`/`.docx`/`.xlsx`), the four governed artifact actions wrap `GovernedArtifactService` in `@memberjunction/ai-agents` to create, inspect, and live-mutate collaborative **`MJ: Artifacts`** (`Markdown Document`, `Presentation`, `Excel Spreadsheet`) with per-user ACL checks, live Yjs room hydration/commit hooks, and spoof-proof server awareness broadcasts:
+
+| Action Name | `DriverClass` | Purpose |
+|---|---|---|
+| **Create Governed Artifact** | `__CreateGovernedArtifact` | Create a permission-checked Doc, Presentation, or Spreadsheet (optional initial `Content` / `SheetNames` / `CollectionID`) and persist Version 1. |
+| **Inspect Governed Artifact** | `__InspectGovernedArtifact` | Inspect summary or execute read-only library tools (`get_outline`, `get_workbook_outline`, `read_deck`, `get_sheets`, `read_range`, `search_cells`), hydrating uncompacted edits from active Yjs rooms. |
+| **Mutate Governed Artifact** | `__MutateGovernedArtifact` | Execute single (`Tool` + `Input`) or batched (`Operations`) mutations (`upsert_live_table`, `write_cells`, `format_range`, `add_sheet`, `upsert_chart`, `insert_block_after`, `replace_block`, `add_slide`, `upsert_slide_element`) through live Yjs sync + agent presence events. |
+| **List Workspace Artifacts** | `__ListWorkspaceArtifacts` | List collaborative artifacts readable by `ContextUser` filtered by `CollectionID`, `TypeFilter`, or `Search`. |
+
 ## Action Execution Flow
 
 The following diagram illustrates how an action invocation flows from caller through the engine to this package's registered classes.

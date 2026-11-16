@@ -6,6 +6,7 @@ import {
   OnDestroy,
   OnInit,
   Output,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -24,12 +25,15 @@ import {
   MJEnvironmentEntityExtended,
   ParseArtifactVersionConfiguration,
   ResolveArtifactTypeThumbnailPolicy,
+  ResolveGuestShareLinkOperation,
+  type ResolveGuestShareLinkOutput,
   UserInfoEngine,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import {
   ArtifactIconService,
+  ArtifactViewerPanelComponent,
   type ArtifactVersionSavedEvent,
 } from '@memberjunction/ng-artifacts';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -43,7 +47,10 @@ import {
 import { CollectionPermission } from '../../services/collection-permission.service';
 import {
   CreatedLibraryArtifactResult,
+  LibraryCreationService,
   LibraryStarterKind,
+  RemoteDriveConflictError,
+  SynthesizeArtifactFromSourcesResult,
 } from '../../services/library-creation.service';
 import { LibraryCreateDialogTab } from './library-create-dialog.component';
 import {
@@ -154,6 +161,7 @@ export interface LibraryExternalRouteParams {
   version?: string | number | null;
   canvas?: string | boolean | null;
   q?: string | null;
+  guestToken?: string | null;
 }
 
 @Component({
@@ -226,6 +234,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public IsCreateDialogOpen = false;
   public CreateDialogTab: LibraryCreateDialogTab = 'blank';
   public CreateDialogStarter: LibraryStarterKind = 'document';
+  public DefaultSynthesisArtifactIds: string[] = [];
 
   public IsExportDriveDialogOpen = false;
   public ExportingItem: LibraryItemSummary | null = null;
@@ -247,6 +256,17 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public SaveToCollectionExcludedIds: string[] = [];
 
   public readonly RefreshViewerSubject = new Subject<{ artifactId: string; versionNumber: number }>();
+
+  @ViewChild('fullCanvasViewerPanel') public FullCanvasViewerPanel?: ArtifactViewerPanelComponent;
+  @ViewChild('splitViewerPanel') public SplitViewerPanel?: ArtifactViewerPanelComponent;
+
+  // Frozen-only External Guest Share Link state (§6.3)
+  public ActiveGuestToken: string | null = null;
+  public IsGuestShareLoading = false;
+  public GuestShareLoadError: string | null = null;
+  public ActiveGuestShareSnapshot: ResolveGuestShareLinkOutput | null = null;
+  public GuestShareVersionEntity: MJArtifactVersionEntity | null = null;
+  public IsDriveSyncing = false;
 
   public readonly SurfaceToggleOptions: ViewToggleOption[] = [
     { key: 'hub', icon: 'fa-solid fa-compass', label: 'Hub', title: 'Hub Landing View' },
@@ -303,6 +323,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   private readonly iconService = inject(ArtifactIconService);
   private readonly notifications = inject(MJNotificationService);
   private readonly confirmService = inject(MJConfirmService);
+  private readonly creationService = inject(LibraryCreationService);
 
   public ngOnInit(): void {
     this.restoreUserPreferences();
@@ -919,12 +940,29 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public OpenCreateBlankDialog(kind: LibraryStarterKind = 'document'): void {
     this.CreateDialogTab = 'blank';
     this.CreateDialogStarter = kind;
+    this.DefaultSynthesisArtifactIds = [];
     this.IsCreateDialogOpen = true;
     this.cdr.detectChanges();
   }
 
   public OpenUploadConvertDialog(): void {
     this.CreateDialogTab = 'upload';
+    this.DefaultSynthesisArtifactIds = [];
+    this.IsCreateDialogOpen = true;
+    this.cdr.detectChanges();
+  }
+
+  public OpenSynthesizeDialog(sourceArtifactIds?: ReadonlyArray<string>): void {
+    this.CreateDialogTab = 'synthesize';
+    if (sourceArtifactIds && sourceArtifactIds.length > 0) {
+      this.DefaultSynthesisArtifactIds = Array.from(sourceArtifactIds);
+    } else if (this.SelectedCollectionId) {
+      this.DefaultSynthesisArtifactIds = this.FilteredItems.map((i) => i.Id);
+    } else if (this.ActiveArtifactId) {
+      this.DefaultSynthesisArtifactIds = [this.ActiveArtifactId];
+    } else {
+      this.DefaultSynthesisArtifactIds = [];
+    }
     this.IsCreateDialogOpen = true;
     this.cdr.detectChanges();
   }
@@ -933,6 +971,14 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.IsCreateDialogOpen = false;
     await this.ReloadWorkspaceData();
     this.OpenArtifactStudio(result.Artifact.ID, {
+      fullCanvas: true,
+    });
+  }
+
+  public async OnArtifactSynthesized(result: SynthesizeArtifactFromSourcesResult): Promise<void> {
+    this.IsCreateDialogOpen = false;
+    await this.ReloadWorkspaceData();
+    this.OpenArtifactStudio(result.ArtifactID, {
       fullCanvas: true,
     });
   }
@@ -1221,6 +1267,176 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       ...this.AllItems.slice(idx + 1),
     ];
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Handles 1-Click Connected Drive Round-Trip Sync (`push` / `pull`) triggered from
+   * `ArtifactViewerPanelComponent`'s header sync controls (§6.1).
+   */
+  public async OnConnectedDriveSyncRequested(event: {
+    artifactId: string;
+    versionId?: string;
+    direction: 'push' | 'pull';
+  }): Promise<void> {
+    if (this.IsDriveSyncing || !this.EffectiveUser) {
+      return;
+    }
+    const user = this.EffectiveUser;
+    const provider = this.ProviderToUse;
+    const storageOverride = this.StorageClientOverride ?? undefined;
+    this.IsDriveSyncing = true;
+    this.cdr.detectChanges();
+
+    try {
+      if (event.direction === 'push') {
+        try {
+          const pushed = await this.creationService.PushVersionToConnectedDrive({
+            ArtifactID: event.artifactId,
+            VersionID: event.versionId ?? null,
+            CurrentUser: user,
+            Provider: provider,
+            StorageClientOverride: storageOverride,
+          });
+          this.notifications.CreateSimpleNotification(
+            `Pushed v${pushed.VersionNumber} to Connected Drive (${pushed.ObjectPath})`,
+            'success',
+            3500,
+          );
+          this.RefreshViewerSubject.next({
+            artifactId: pushed.ArtifactID,
+            versionNumber: pushed.VersionNumber,
+          });
+        } catch (err) {
+          if (err instanceof RemoteDriveConflictError) {
+            const confirmed = await this.confirmService.Confirm({
+              title: 'Connected Drive File Changed',
+              message: `${err.message} Overwrite the remote Connected Drive copy with this MJ version?`,
+              confirmText: 'Overwrite Remote',
+              cancelText: 'Cancel',
+              type: 'warning',
+            });
+            if (confirmed) {
+              const forced = await this.creationService.PushVersionToConnectedDrive({
+                ArtifactID: event.artifactId,
+                VersionID: event.versionId ?? null,
+                ForceOverwrite: true,
+                CurrentUser: user,
+                Provider: provider,
+                StorageClientOverride: storageOverride,
+              });
+              this.notifications.CreateSimpleNotification(
+                `Overwrote remote Connected Drive copy (${forced.ObjectPath})`,
+                'success',
+                3500,
+              );
+              this.RefreshViewerSubject.next({
+                artifactId: forced.ArtifactID,
+                versionNumber: forced.VersionNumber,
+              });
+            }
+            return;
+          }
+          throw err;
+        }
+        return;
+      }
+
+      const pulled = await this.creationService.PullLatestFromConnectedDriveAsNewVersion({
+        ArtifactID: event.artifactId,
+        VersionID: event.versionId ?? null,
+        CurrentUser: user,
+        Provider: provider,
+        StorageClientOverride: storageOverride,
+      });
+      this.ActiveVersionNumber = pulled.NewVersionNumber;
+      this.notifications.CreateSimpleNotification(
+        `Pulled Connected Drive update as v${pulled.NewVersionNumber} (comparing v${pulled.PreviousVersionNumber} vs v${pulled.NewVersionNumber})`,
+        'success',
+        4000,
+      );
+      await this.ReloadWorkspaceData();
+      this.RefreshViewerSubject.next({
+        artifactId: pulled.ArtifactID,
+        versionNumber: pulled.NewVersionNumber,
+      });
+      const panel = this.IsFullCanvasOpen ? this.FullCanvasViewerPanel : this.SplitViewerPanel;
+      if (panel) {
+        await panel.OpenVersionCompare(pulled.PreviousVersionNumber, pulled.NewVersionNumber);
+      }
+    } catch (err) {
+      this.notifications.CreateSimpleNotification(
+        err instanceof Error ? err.message : 'Connected Drive sync failed.',
+        'error',
+        4500,
+      );
+    } finally {
+      this.IsDriveSyncing = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  public ExitGuestShareView(): void {
+    this.ActiveGuestToken = null;
+    this.ActiveGuestShareSnapshot = null;
+    this.GuestShareVersionEntity = null;
+    this.GuestShareLoadError = null;
+    this.IsGuestShareLoading = false;
+    this.emitWorkspaceState();
+    this.cdr.detectChanges();
+  }
+
+  private async loadGuestShareSnapshot(token: string): Promise<void> {
+    const cleanToken = token.trim();
+    if (!cleanToken) {
+      this.ExitGuestShareView();
+      return;
+    }
+    this.IsGuestShareLoading = true;
+    this.GuestShareLoadError = null;
+    this.ActiveGuestShareSnapshot = null;
+    this.GuestShareVersionEntity = null;
+    this.cdr.detectChanges();
+
+    try {
+      const op = new ResolveGuestShareLinkOperation();
+      const res = await op.Execute(
+        { Token: cleanToken },
+        { provider: this.ProviderToUse ?? GraphQLDataProvider.Instance },
+      );
+      if (!res.Success || !res.Output?.Valid) {
+        this.GuestShareLoadError =
+          res.Output?.Reason ||
+          res.ErrorMessage ||
+          'This guest link is invalid, expired, or revoked.';
+        return;
+      }
+
+      const snapshot = res.Output;
+      const syntheticVersion = await this.ProviderToUse.GetEntityObject<MJArtifactVersionEntity>(
+        'MJ: Artifact Versions',
+        this.EffectiveUser,
+      );
+      if (snapshot.VersionID) {
+        syntheticVersion.ID = snapshot.VersionID;
+      }
+      if (snapshot.ArtifactID) {
+        syntheticVersion.ArtifactID = snapshot.ArtifactID;
+      }
+      syntheticVersion.VersionNumber = snapshot.VersionNumber ?? 1;
+      syntheticVersion.Name = snapshot.Title ?? 'Shared Artifact Snapshot';
+      syntheticVersion.ContentMode = 'Text';
+      syntheticVersion.Content = snapshot.Content ?? '';
+      syntheticVersion.Configuration = snapshot.Configuration ?? null;
+
+      this.ActiveGuestShareSnapshot = snapshot;
+      this.GuestShareVersionEntity = syntheticVersion;
+    } catch (err) {
+      this.GuestShareLoadError =
+        err instanceof Error ? err.message : 'Failed to load external guest snapshot.';
+    } finally {
+      this.IsGuestShareLoading = false;
+      this.cdr.detectChanges();
+    }
   }
 
   public OnViewerNavigateToLink(event: {
@@ -2669,6 +2885,17 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       if (params.mode !== 'navigator' && this.SurfaceMode === 'navigator') {
         this.SurfaceMode = 'hub';
       }
+    }
+
+    const nextGuestToken = params.guestToken?.trim() || null;
+    if (nextGuestToken && nextGuestToken !== this.ActiveGuestToken) {
+      this.ActiveGuestToken = nextGuestToken;
+      void this.loadGuestShareSnapshot(nextGuestToken);
+    } else if (!nextGuestToken && this.ActiveGuestToken) {
+      this.ActiveGuestToken = null;
+      this.ActiveGuestShareSnapshot = null;
+      this.GuestShareVersionEntity = null;
+      this.GuestShareLoadError = null;
     }
   }
 

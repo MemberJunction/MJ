@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { MJEnvironmentConfig } from '@memberjunction/ng-bootstrap';
+import type { MJEnvironmentConfig } from '@memberjunction/ng-bootstrap/types';
 import { ValidateExplorerEnvironment } from '../lib/environment-validation';
 
 /** The fields every deployment needs, with placeholder values. */
