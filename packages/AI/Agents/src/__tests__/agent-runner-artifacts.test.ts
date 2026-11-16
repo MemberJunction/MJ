@@ -1456,8 +1456,7 @@ describe('BaseAgent — delegated sub-agent artifactDirective and payloadArtifac
             previousDecision: BaseAgentNextStep<Record<string, unknown>>,
             subAgentEntity: MJAIAgentEntityExtended
         ): Promise<BaseAgentNextStep<Record<string, unknown>>> {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return await (this as any).executeChildSubAgentStep(
+            return await this.executeChildSubAgentStep(
                 params,
                 previousDecision,
                 undefined,

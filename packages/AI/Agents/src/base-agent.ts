@@ -17288,7 +17288,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
      * @param subAgentPayloadOverride - Optional payload override for sub-agent execution, if provided the normal payload computation is skipped
      */
-    private async executeChildSubAgentStep<SC = any, SR = any>(
+    protected async executeChildSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
         parentStepId?: string,
