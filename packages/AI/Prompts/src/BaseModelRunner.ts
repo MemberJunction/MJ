@@ -337,6 +337,12 @@ export abstract class BaseModelRunner {
    */
   private readonly _trackedPromptRunsById = new Map<string, MJAIPromptRunEntityExtended>();
 
+  /**
+   * Hard cap on {@link _trackedPromptRunsById}. Saved runs are pruned on every insert, so in practice
+   * only runs whose INSERT is still pending (or failed) remain; the cap covers the failed ones.
+   */
+  private static readonly MAX_TRACKED_PROMPT_RUNS = 256;
+
   protected _promptRunQueue = new BaseEntitySaveQueue({
     onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
     saveReturnMode: 'datestamps_only',
@@ -1510,6 +1516,35 @@ export abstract class BaseModelRunner {
     await this.FlushPendingSaves();
   }
 
+  /** Number of prompt runs currently held for parent/child INSERT chaining. Exposed for diagnostics and tests. */
+  public get TrackedPromptRunCount(): number {
+    return this._trackedPromptRunsById.size;
+  }
+
+  /**
+   * Records a prompt run so a later child run can chain its INSERT after this one. An entry is only
+   * useful while its INSERT is pending: once `IsSaved` is true a child inserts normally. Long-lived
+   * runners (the shared realtime turn moderator, `LLMDecision`, `LLMReranker`, computer-use) never
+   * call {@link FlushPendingSaves}, so saved entries are pruned here and the map is capped, instead
+   * of keeping every prompt run entity for the runner's lifetime.
+   */
+  private trackPromptRun(promptRun: MJAIPromptRunEntityExtended): void {
+    const tracked = this._trackedPromptRunsById;
+    for (const [key, run] of tracked) {
+      if (run.IsSaved) {
+        tracked.delete(key);
+      }
+    }
+    while (tracked.size >= BaseModelRunner.MAX_TRACKED_PROMPT_RUNS) {
+      const oldestKey = tracked.keys().next().value;
+      if (oldestKey === undefined) {
+        break;
+      }
+      tracked.delete(oldestKey);
+    }
+    tracked.set(NormalizeUUID(promptRun.ID), promptRun);
+  }
+
   /**
    * Creates the `MJ: AI Prompt Runs` record for one model call, fills the fields every runner shares,
    * lets the subclass add its own request fields, then queues the INSERT (fire-and-forget).
@@ -1642,7 +1677,7 @@ export abstract class BaseModelRunner {
       applyRequestFields?.(promptRun);
 
       if (promptRun.ID) {
-        this._trackedPromptRunsById.set(NormalizeUUID(promptRun.ID), promptRun);
+        this.trackPromptRun(promptRun);
       }
 
       // Persist the initial 'Running' record fire-and-forget. The ID was already assigned by

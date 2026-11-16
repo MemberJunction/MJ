@@ -1,11 +1,45 @@
 # MemberJunction Memory & Resource Leak Audit
 
-**Generated:** 2026-11-07 (Round 21)
-**Prior Runs:** Round 19 (2026-10-17), Round 18 (2026-10-10) and Rounds 1–17 retained below as history.
-**Scope:** Full monorepo `packages/` tree, 10 parallel `Explore` subagents in two waves (5 broad + 5 deep-subtree) plus repo-wide static cross-check greps. This round concentrated on the **885 commits / 583 changed non-test source files** since Round 16, and re-verified every Round 16 finding at its cited location.
+**Generated:** 2026-11-14 (Round 22)
+**Prior Runs:** Round 21 (2026-11-07), Round 21b (2026-10-31), Round 20 (2026-10-24) and Rounds 1–19 retained below as history.
+**Scope (this round):** 3 parallel `Explore` subagents over the 1,111 non-test source files changed since the Round 21 fix commit (`43b22f966`, 1,139 commits), plus repo-wide static cross-check greps.
 **Re-run command:** `/audit-memory-leaks`
 
-This document is organised as: Round 20 (this round) first, then Round 19, Round 18 and earlier unchanged as history. Raw output lives in `plans/.memory-leak-snapshots/2026-10-17/` (git-ignored).
+This document is organised newest round first; earlier rounds are kept unchanged as history. Raw per-agent output for this round lives in `plans/.memory-leak-snapshots/2026-11-14/` (git-ignored).
+
+## Round 22 Executive Summary (2026-11-14)
+
+Scope: 3 parallel `Explore` subagents — A: Angular/UI (276 files), B: AI / Actions / TaskGraph / Realtime (434 files), C: server / core / engines / providers (399 files). `TestingFramework/integration-test-suite` (128 files) was excluded as test-only. Pattern-driven (grep, then read each hit and its teardown), not line-by-line. The orchestrator re-read every Critical, High and Medium finding before it was accepted or fixed.
+
+Static cross-checks (whole `packages/` tree, excluding `node_modules`, `dist`, `generated`, tests): 48 `MJGlobal…GetEventListener`, 194 `setInterval`, 356 `.addEventListener(`, 496 private `Map` fields, 165 `extends BaseSingleton`, 363 `package.json`.
+
+| Status | Critical | High | Medium | Low |
+|---|---:|---:|---:|---:|
+| **New in Round 22** | 1 | 2 | 4 | 7 |
+| **Fixed in this round's PR** | 1 | 2 | 2 | 0 |
+
+### Fixed in this round's PR
+| # | Package | Finding | Fix | Tests |
+|---|---|---|---|---|
+| 1 | `@memberjunction/ai-core-plus` | **Critical.** `AgentUserPolicyEngine.policyCache` / `nonePolicyCacheExpiry` (singleton) are keyed by `p:<provider-object-id>::agent::user`. MJServer builds a fresh provider per request (`context.ts createLazyOrEagerPerRequestProviders`) and every caller passes it (`base-agent.ts`, `AgentWakeTriggerService.ts` ×4, the CoreActions AI actions, `agent-data-policy-guard.ts` ×3), so each lookup added a key that was never read again. Expired "none" slots were only removed when re-read; found slots held a `BaseEntity` that pinned the request's provider. | Both maps merged into one `MJLruCache<string, PolicyCacheEntry>` (`MAX_POLICY_CACHE_ENTRIES = 2000`, 15 min TTL; the 30 s "none" expiry is kept per entry). A pair → keys index, maintained from `onEvict`, keeps `ClearCache(agent, user)` working across providers without scanning. New `CachedPolicySlotCount` getter. | 2 new tests in `AgentUserPolicyEngine.test.ts`: 2,100 fresh-provider lookups stay ≤ 2,000 and a pair clear empties them all; a pair clear spares other pairs. Suite 63 files / 1,297 tests pass; package builds. |
+| 2 | `@memberjunction/ai-prompts` | **High.** `BaseModelRunner._trackedPromptRunsById` held every prompt-run entity until `FlushPendingSaves()`, which only `BaseAgent` calls. Long-lived runners (the shared `RealtimeTurnModerator` runner, `LLMDecision`, `LLMReranker`, `MJComputerUseEngine`) grew it by one entity per call. | `trackPromptRun` drops entries whose INSERT has landed (`IsSaved`) before adding, and caps the table at 256 for INSERTs that never land. Parent/child INSERT chaining is unchanged (a saved parent needs no chaining). New `TrackedPromptRunCount` getter. | 2 new tests in `BaseModelRunner.runRecord.test.ts` (saved runs pruned; cap holds when INSERTs never settle); existing chaining test still passes. Suite 52 files / 975 tests pass; package builds. |
+| 3 | `@memberjunction/server` | **Medium.** Static `ArtifactCollaborationServer._compactedVectorKeysByArtifact` gained one entry per artifact ever compacted; the global cap trimmed only `_compactedStateVectors`. | The index is kept in recency order and capped at `MAX_TRACKED_COMPACTED_ARTIFACTS = 256` (half the vector cap: each artifact holds ≥ 2 vector keys); evicting an artifact also drops its vectors. | New test: 1,000 compactions leave ≤ 256 index entries and ≤ 512 vectors, newest still resolvable. Suite 273 files / 3,744 tests pass (4 files / 66 tests skipped, unchanged); `tsc` clean. |
+| 4 | `@memberjunction/ng-conversations` | **High + Medium.** `TasksFullViewComponent.LoadTasks()` ran `updateLivePollingState()` from its `finally` with no destroyed check, so a load in flight at destroy started a 4 s `setInterval(LoadTasks)` that was never cleared (reloading up to 1,000 `MJ: Tasks` rows per tick and pinning the view). `MessageItemComponent.loadTasks()` restarted its 1 s elapsed-time interval after its `await` the same way. | `updateLivePollingState` and `LoadTasks` return early once `isDestroyed`; `MessageItemComponent` gains `_isDestroyed` (set in `ngOnDestroy`), checked after the `await`, before the queued reload, and in `startElapsedTimeUpdater`. | New `task-polling-teardown.test.ts` (5 tests). **Not run in this sandbox:** the package's install needs `xlsx` from `cdn.sheetjs.com`, which the sandbox network policy blocks. CI runs it. |
+
+Not run: the deterministic integration tier (`pnpm run test:integration`) needs a provisioned database, which this sandbox doesn't have. No change touches schema, migrations or metadata.
+
+### New findings, deferred
+- **Medium — `AI/AgentHarness/src/adapters/BaseCloudHarnessAdapter.ts:150-179,505,592`:** `CloudDetachedSessionRegistry` keeps a detached cloud session plus its emitted-event-key set until a later turn *in the same process* sees it terminal. Resume error/cancel exits and wakes handled by another replica never clear it. → `MJLruCache` (~1,000, ~24 h TTL) and clear on the error/cancel exits.
+- **Medium — `Angular/Generic/whiteboard/src/lib/whiteboard-board.component.ts:1248`:** `URL.createObjectURL(file)` for pasted images is never revoked, and the `blob:` URL is saved into board state. That is also a correctness bug: the image breaks for other viewers and after reload. → store a data URL or upload to storage. Needs an owner decision on storage.
+- **Low:** `tab-container.component.ts:3058-3080` context-menu document listeners survive a menu-item close; `document-collaboration.service.ts:2298` `frozenSnapshotVerificationCache` has no cap; `SpreadsheetEngine.viewerCache` (`:2013`, browser-only today) has no sweep; `SQLServerDataProvider/src/config.ts:40` `RefreshIfNeeded` interval is never stored, unref'd or cleared; `WorkerThreadHost.ts:113-121` (LocalEmbeddings + CoreActions twin): a throwing `postMessage` leaves its pending entry and a ref'd worker; `shadow-scoring.ts:562` `artifactCache` holds artifacts for retired models; `DockerSandboxProvider.ts:228` `runDockerCommand` has no timeout.
+
+### Carried over, still open
+Round 21 deferred: `realtime-recording-capture.ts` in-memory PCM (needs a design decision), `ConversationEngine._detailCache`, `ml-sidecar.ts` buffers, `communication-oauth-service.ts:310` session sweep, RenderWorker byte cap, and the Round 21 Lows. Re-confirmed by subagent A: `ai-test-harness.component.ts` typing interval (now `:2522`), `application-manager.ts:152,177`, `shell.component.ts:888`. Re-confirmed by subagent C: `BaseEntity._subtypeLookupCache` (Round 19 #6, now provider → user → key), `TemplateEngine._referencedVariablesCache`, `ScheduledJobEngine.ts:565` shutdown race timer, `UserCache` staleness interval not `IShutdownable`.
+
+### Resolved since last run (verified by reading the code)
+- Round 20 "ResolverBase entity listener pins the first caller's pubSub": now one shared MJGlobal subscription with a 24 h session TTL and 2,048 sessions per entity (`MJServer/src/generic/ResolverBase.ts:119-170,1914-2003`). Note, not a leak: the cap evicts by insertion order, not recency.
+
+---
 
 ## Round 21 Executive Summary (2026-11-07)
 

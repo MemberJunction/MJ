@@ -464,6 +464,52 @@ describe('BaseModelRunner run record lifecycle', () => {
 
     expect(saveOrder).toEqual(['parent:start', 'parent:end', 'child:start', 'child:end']);
   });
+
+  it('a long-lived runner that never flushes drops saved prompt runs from its parent-chaining table', async () => {
+    const runner = new TestModelRunner();
+    const provider: IMetadataProvider = {
+      GetEntityObject: vi.fn(async () => {
+        const run = new FakePromptRun();
+        const baseSave = run.Save.bind(run);
+        run.Save = async () => {
+          const ok = await baseSave();
+          (run as Record<string, unknown>)['IsSaved'] = ok;
+          return ok;
+        };
+        return run as unknown;
+      }),
+    } as unknown as IMetadataProvider;
+    const prompt = createMockPrompt();
+    const model = createMockModel();
+
+    for (let i = 0; i < 50; i++) {
+      await runner.invokeCreateRunRecord(prompt, model, { prompt, provider }, new Date());
+      // Let the fire-and-forget INSERT land, as it would between moderated turns.
+      await new Promise((r) => setTimeout(r, 0));
+    }
+
+    // Only the most recent run (tracked before its predecessors were pruned) can remain.
+    expect(runner.TrackedPromptRunCount).toBeLessThanOrEqual(1);
+  });
+
+  it('caps the parent-chaining table even when INSERTs never complete', async () => {
+    const runner = new TestModelRunner();
+    const provider: IMetadataProvider = {
+      GetEntityObject: vi.fn(async () => {
+        const run = new FakePromptRun();
+        run.Save = () => new Promise<boolean>(() => undefined); // never settles
+        return run as unknown;
+      }),
+    } as unknown as IMetadataProvider;
+    const prompt = createMockPrompt();
+    const model = createMockModel();
+
+    for (let i = 0; i < 300; i++) {
+      await runner.invokeCreateRunRecord(prompt, model, { prompt, provider }, new Date());
+    }
+
+    expect(runner.TrackedPromptRunCount).toBe(256);
+  });
 });
 
 /** The prompt-run members FinalizeRunRecord's cost handling reads and writes, plus the save it queues. */

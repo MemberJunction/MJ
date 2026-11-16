@@ -8069,3 +8069,47 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(parsedWb1.elements.length).toBe(2);
     });
 });
+
+describe('ArtifactCollaborationServer compacted state-vector index stays bounded', () => {
+    type CompactionRecorder = {
+        recordCompactedStateVector(
+            artifactId: string,
+            versionId: string | undefined,
+            versionNumber: number,
+            savedStateVectorB64: string,
+            contentHash: string
+        ): void;
+    };
+    type CompactionStatics = {
+        _compactedStateVectors: Map<string, unknown>;
+        _compactedVectorKeysByArtifact: Map<string, unknown>;
+    };
+
+    it('drops index entries for artifacts whose vectors fell out of the global cap', () => {
+        const statics = ArtifactCollaborationServer as unknown as CompactionStatics;
+        statics._compactedStateVectors.clear();
+        statics._compactedVectorKeysByArtifact.clear();
+        const recorder = ArtifactCollaborationServer.Instance as unknown as CompactionRecorder;
+
+        const artifactCount = 1_000;
+        for (let i = 0; i < artifactCount; i++) {
+            const suffix = i.toString(16).padStart(12, '0');
+            recorder.recordCompactedStateVector(
+                `00000000-0000-4000-8000-${suffix}`,
+                `11111111-0000-4000-8000-${suffix}`,
+                1,
+                'c3Y=',
+                `hash-${i}`
+            );
+        }
+
+        expect(statics._compactedVectorKeysByArtifact.size).toBeLessThanOrEqual(256);
+        expect(statics._compactedStateVectors.size).toBeLessThanOrEqual(512);
+        // The most recently compacted artifact is still resolvable by version id.
+        const lastSuffix = (artifactCount - 1).toString(16).padStart(12, '0');
+        expect(statics._compactedStateVectors.has(`ver:11111111-0000-4000-8000-${lastSuffix}`)).toBe(true);
+
+        statics._compactedStateVectors.clear();
+        statics._compactedVectorKeysByArtifact.clear();
+    });
+});

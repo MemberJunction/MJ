@@ -530,6 +530,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private static readonly MAX_TRACKED_COMPACTED_VECTORS = 512;
     private static readonly MAX_TRACKED_COMPACTED_VECTORS_PER_ARTIFACT = 8;
+    /**
+     * Cap on artifacts in {@link _compactedVectorKeysByArtifact}. Each artifact contributes at least two
+     * keys to {@link _compactedStateVectors}, so more than half the vector cap can never all be live.
+     */
+    private static readonly MAX_TRACKED_COMPACTED_ARTIFACTS = ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_VECTORS / 2;
     private static readonly MAX_INLINE_RELAY_DOC_UPDATE_BYTES = 262_144;
     private static readonly SYNC_WAIT_TIMEOUT_MS = 1500;
     private static readonly _compactedStateVectors = new Map<
@@ -2476,7 +2481,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             map.delete(evicted.verKey);
             map.delete(evicted.artKey);
         }
+        // Re-insert so the artifact becomes most recent, then evict the least recent artifacts (and
+        // their vectors) past the cap. Without this the index kept one entry per artifact ever
+        // compacted for the life of the process, even after the global cap dropped its vectors.
+        perArtifactMap.delete(normArtId);
         perArtifactMap.set(normArtId, filteredPerArtifact);
+        while (perArtifactMap.size > ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_ARTIFACTS) {
+            const oldestArtifact = perArtifactMap.keys().next().value;
+            if (oldestArtifact === undefined) {
+                break;
+            }
+            for (const evicted of perArtifactMap.get(oldestArtifact) ?? []) {
+                map.delete(evicted.verKey);
+                map.delete(evicted.artKey);
+            }
+            perArtifactMap.delete(oldestArtifact);
+        }
 
         while (map.size > ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_VECTORS) {
             const oldestKey = map.keys().next().value;
