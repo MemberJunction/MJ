@@ -6,7 +6,7 @@ import {
     InputArtifact,
     SetArtifactLiveMutationHook,
 } from '../ArtifactToolManager';
-import { BuildMergedFileVersionConfiguration } from '../GovernedArtifactService';
+import { BuildMergedFileVersionConfiguration, GovernedArtifactService } from '../GovernedArtifactService';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import {
@@ -3381,10 +3381,21 @@ describe('ArtifactToolManager', () => {
                 });
                 expect(readSales.result.success).toBe(true);
                 const salesData = readSales.result.data as {
-                    cells?: Record<string, { RawValue?: string | number }>;
+                    cells?: Array<{ address: string; rawValue?: string | number }>;
                 };
-                expect(salesData.cells?.A1?.RawValue).toBe('Month');
-                expect(salesData.cells?.B2?.RawValue).toBe(12000);
+                expect(salesData.cells?.find((c) => c.address === 'A1')?.rawValue).toBe('Month');
+                expect(salesData.cells?.find((c) => c.address === 'B2')?.rawValue).toBe(12000);
+
+                const readSummary = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'read_range',
+                    input: { sheet: 'Summary', range: 'A1:B1' },
+                });
+                expect(readSummary.result.success).toBe(true);
+                const summaryData = readSummary.result.data as {
+                    cells?: Array<{ address: string; computedValue?: string | number | null }>;
+                };
+                expect(summaryData.cells?.find((c) => c.address === 'B1')?.computedValue).toBe(12000);
 
                 const badRes = await manager.ExecuteSingleToolCall({
                     artifactId: 'workspace',
@@ -3402,7 +3413,7 @@ describe('ArtifactToolManager', () => {
             });
 
             it('forwards InitialOperations (PascalCase) to GovernedArtifactService.CreateGovernedArtifact when provider + user are bound', async () => {
-                const user = makeUser();
+                const user = makeTestUser();
                 const createSpy = vi
                     .spyOn(GovernedArtifactService.Instance, 'CreateGovernedArtifact')
                     .mockResolvedValue({

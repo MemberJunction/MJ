@@ -2663,7 +2663,8 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
         }
-        const sourceRange = typeof input.sourceRange === 'string' ? input.sourceRange.trim() : '';
+        const rawSourceRange = input.sourceRange ?? input.dataRange ?? input.range;
+        const sourceRange = typeof rawSourceRange === 'string' ? rawSourceRange.trim() : '';
         if (!sourceRange) {
             return this.errorResult('Parameter "sourceRange" is required.');
         }
