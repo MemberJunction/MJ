@@ -3841,8 +3841,8 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
     
-    // Clean validation syntax if needed
-    if (parsedResult && (cleanValidationSyntax || (!skipValidation && prompt.OutputExample))) {
+    // Clean validation syntax if needed (skip implicit OutputExample cleaning when ValidationBehavior is 'None')
+    if (parsedResult && (cleanValidationSyntax || (!skipValidation && prompt.OutputExample && prompt.ValidationBehavior !== 'None'))) {
       parsedResult = this._jsonValidator.cleanValidationSyntax<unknown>(parsedResult);
     }
     

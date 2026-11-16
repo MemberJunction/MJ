@@ -215,25 +215,43 @@ export class JSONValidator {
         // Check for optional suffix (?)
         if (workingKey.endsWith('?')) {
             isOptional = true;
-            workingKey = workingKey.slice(0, -1);
+            workingKey = workingKey.slice(0, -1).trim();
+            if (workingKey.endsWith(':')) {
+                workingKey = workingKey.slice(0, -1).trim();
+            }
         }
         // Check for wildcard suffix (*)
         else if (workingKey.endsWith('*')) {
             isWildcard = true;
-            workingKey = workingKey.slice(0, -1);
+            workingKey = workingKey.slice(0, -1).trim();
+            if (workingKey.endsWith(':')) {
+                workingKey = workingKey.slice(0, -1).trim();
+            }
         }
 
-        // Parse validation rules (everything after first :)
-        const colonIndex = workingKey.indexOf(':');
+        // Parse validation rules: scan ':' positions so data keys containing colons
+        // (e.g. '16:9', '9:16', '1:1', '4:5', 'brand:logo', URLs) are preserved unless
+        // a ':' is followed exclusively by recognized validation rules.
         let fieldName = workingKey;
-        
-        if (colonIndex !== -1) {
-            fieldName = workingKey.substring(0, colonIndex);
-            const rulesString = workingKey.substring(colonIndex + 1);
-            
-            // Split by : but handle array syntax [N+] specially
-            const rules = this.parseValidationRules(rulesString);
-            validationRules.push(...rules);
+        let searchFrom = 1;
+        while (searchFrom < workingKey.length) {
+            const colonIndex = workingKey.indexOf(':', searchFrom);
+            if (colonIndex === -1) {
+                break;
+            }
+            const candidateRules = this.parseValidationRules(workingKey.substring(colonIndex + 1));
+            if (candidateRules.length > 0 && candidateRules.every(r => this.isRecognizedValidationRule(r))) {
+                fieldName = workingKey.substring(0, colonIndex).trim();
+                for (const rule of candidateRules) {
+                    if (rule === '?') {
+                        isOptional = true;
+                    } else {
+                        validationRules.push(rule);
+                    }
+                }
+                break;
+            }
+            searchFrom = colonIndex + 1;
         }
 
         return {
@@ -242,6 +260,28 @@ export class JSONValidator {
             isWildcard,
             validationRules
         };
+    }
+
+    /**
+     * Checks whether a parsed colon-delimited token is one of JSONValidator's
+     * recognized validation rules (type check, `!empty`, `?`, or `[N+]` / `[N-M]` / `[=N]`).
+     *
+     * @private
+     */
+    private isRecognizedValidationRule(rule: string): boolean {
+        const trimmed = rule.trim();
+        if (
+            trimmed === 'string' ||
+            trimmed === 'number' ||
+            trimmed === 'boolean' ||
+            trimmed === 'object' ||
+            trimmed === 'array' ||
+            trimmed === '!empty' ||
+            trimmed === '?'
+        ) {
+            return true;
+        }
+        return /^\[(?:\d+\+|\d+-\d+|=\d+)\]$/.test(trimmed);
     }
 
     /**
@@ -262,8 +302,9 @@ export class JSONValidator {
                 inBrackets = false;
                 currentRule += char;
             } else if (char === ':' && !inBrackets) {
-                if (currentRule) {
-                    rules.push(currentRule);
+                const trimmed = currentRule.trim();
+                if (trimmed) {
+                    rules.push(trimmed);
                     currentRule = '';
                 }
             } else {
@@ -271,8 +312,9 @@ export class JSONValidator {
             }
         }
 
-        if (currentRule) {
-            rules.push(currentRule);
+        const trimmed = currentRule.trim();
+        if (trimmed) {
+            rules.push(trimmed);
         }
 
         return rules;

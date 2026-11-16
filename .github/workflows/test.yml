@@ -193,6 +193,8 @@ jobs:
             .github/scripts/check-turbo-cache-env.mjs
             # The turbo root-data inputs guard runs in the guards job; its suite lives in __tests__ above.
             .github/scripts/check-turbo-root-inputs.mjs
+            # Video Studio real-render workflow: an edit to it must run the workflow guard suites.
+            .github/workflows/video-studio-render.yml
             # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
             # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
             # Its suite lives in __tests__ above, but without these entries a PR editing only one of

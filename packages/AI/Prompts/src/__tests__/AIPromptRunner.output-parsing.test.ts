@@ -139,6 +139,40 @@ describe('parseObjectOutput', () => {
     expect(res.name).toBe('John');
     expect(res.age).toBe(42);
   });
+
+  it('does not run implicit OutputExample key-cleaning when ValidationBehavior is None (#4827)', async () => {
+    const p = prompt({ OutputExample: '{"16:9":{}}', ValidationBehavior: 'None' });
+    const res = await priv(runner).parseObjectOutput(
+      '{"16:9":{"Width":1920,"Height":1080},"custom?":"kept-when-validation-none"}',
+      p,
+      false,
+      false,
+      [],
+      {},
+    ) as Record<string, unknown>;
+    expect(res).toEqual({
+      '16:9': { Width: 1920, Height: 1080 },
+      'custom?': 'kept-when-validation-none',
+    });
+  });
+
+  it('preserves aspect-ratio keys like 16:9 and 9:16 even when cleanValidationSyntax runs (#4827)', async () => {
+    const p = prompt({ OutputExample: '{"Source":{}}', ValidationBehavior: 'Warn' });
+    const res = await priv(runner).parseObjectOutput(
+      '{"Source":{"16:9":{"Files":{"index.html":"<html></html>"}},"9:16":{"Files":{}}}}',
+      p,
+      false,
+      true,
+      [],
+      {},
+    ) as Record<string, unknown>;
+    expect(res).toEqual({
+      Source: {
+        '16:9': { Files: { 'index.html': '<html></html>' } },
+        '9:16': { Files: {} },
+      },
+    });
+  });
 });
 
 describe('parsesAsJSON', () => {

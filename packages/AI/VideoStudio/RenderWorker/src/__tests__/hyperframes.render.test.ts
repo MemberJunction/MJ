@@ -1,5 +1,4 @@
-import { execFile, spawnSync } from 'node:child_process';
-import * as fssync from 'node:fs';
+import { execFile } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as http from 'node:http';
 import * as net from 'node:net';
@@ -19,6 +18,7 @@ import {
     RunRenderJob,
     RunStillsJob,
 } from '../index.js';
+import { CheckCanRunRealRenderTests } from './render-test-gate.js';
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -145,30 +145,7 @@ async function buildGoldenBundle(): Promise<RenderProjectBundle> {
     };
 }
 
-function checkCanRunRealRenderTests(): boolean {
-    if (process.env.VIDEO_STUDIO_RENDER_TESTS !== '1') {
-        console.info(
-            '[hyperframes.render.test] Skipping real-render suite: set VIDEO_STUDIO_RENDER_TESTS=1 to enable.',
-        );
-        return false;
-    }
-    const ffmpegRes = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' });
-    if (ffmpegRes.status !== 0) {
-        console.info(
-            '[hyperframes.render.test] Skipping real-render suite: ffmpeg binary not found on PATH.',
-        );
-        return false;
-    }
-    if (process.env.CHROME_PATH && !fssync.existsSync(process.env.CHROME_PATH)) {
-        console.info(
-            `[hyperframes.render.test] Skipping real-render suite: Chrome binary not found at CHROME_PATH (${process.env.CHROME_PATH}).`,
-        );
-        return false;
-    }
-    return true;
-}
-
-const CAN_RUN_RENDER_TESTS = checkCanRunRealRenderTests();
+const CAN_RUN_RENDER_TESTS = CheckCanRunRealRenderTests('hyperframes.render.test');
 
 describe.skipIf(!CAN_RUN_RENDER_TESTS)(
     'HyperFramesRenderBackend opt-in integration suite',

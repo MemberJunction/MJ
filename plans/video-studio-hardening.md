@@ -1,9 +1,9 @@
 # Video Studio — post-release hardening
 
-**Status:** Proposed
+**Status:** In Progress (WS1, WS2, WS3 review, WS4, WS5 decision record, and WS6-2 implemented on this branch)
 **Date:** 2026-11-09
 **Scope:** MJ core. Video Studio shipped in 6.2.0 (PR #5055, merged 2026-10-31; on npm 2026-11-04) and 6.2.1.
-**Related:** [`plans/video-studio.md`](video-studio.md) (the build spec), [`guides/VIDEO_STUDIO_GUIDE.md`](../guides/VIDEO_STUDIO_GUIDE.md), #4827, #6372
+**Related:** [`plans/video-studio.md`](video-studio.md) (the build spec), [`plans/video-studio-ws3-consult-handoff-review.md`](video-studio-ws3-consult-handoff-review.md) (WS3 review), [`plans/video-studio-orchestrator-loop-vs-code.md`](video-studio-orchestrator-loop-vs-code.md) (WS5 decision record), [`guides/VIDEO_STUDIO_GUIDE.md`](../guides/VIDEO_STUDIO_GUIDE.md), #4827, #6372
 
 ---
 
