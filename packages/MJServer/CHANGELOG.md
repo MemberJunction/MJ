@@ -1,5 +1,124 @@
 # Change Log - @memberjunction/server
 
+## 6.2.2
+
+### Patch Changes
+
+- ce47382: Test SQL and ad-hoc SQL no longer refuse valid read-only statements as "not a safe read-only statement".
+  - `StrictFragmentValidator.ValidateReadOnlyStatement` accepts a set operation (`UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`) whose branches are all read-only SELECTs. Every branch is still read and screened, a branch that is a `SELECT … INTO` is still refused, and the WHERE / ORDER BY fragment validators still refuse any set operation.
+  - On SQL Server, valid syntax node-sql-parser's TransactSQL grammar cannot read is parsed through a strict-only rewrite that keeps every relation and subquery in place: `STRING_AGG(…) WITHIN GROUP (ORDER BY …)`, `INTERSECT`, `EXCEPT`, `TRY_CAST`, `COUNT_BIG(*)`, `RANGE` window frames, `LIKE … ESCAPE`, `TOP … PERCENT WITH TIES` / `TOP (n) WITH TIES`, and a leading `;`. On SQL Server and PostgreSQL, `RANGE` window frames and `OFFSET n ROW[S]` / `FETCH FIRST|NEXT [n] ROW[S] ONLY|WITH TIES` with a literal count are read the same way. The database still runs the original text, and `SQLParser`'s own output is unchanged.
+
+- Updated dependencies [650b0c4]
+- Updated dependencies [414a6ff]
+- Updated dependencies [1cd06b6]
+- Updated dependencies [df8561a]
+- Updated dependencies [857a993]
+- Updated dependencies [d6ed1a0]
+- Updated dependencies [8883311]
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [c8204fd]
+- Updated dependencies [7110d1b]
+- Updated dependencies [718912c]
+- Updated dependencies [ce47382]
+- Updated dependencies [a96cd31]
+  - @memberjunction/ai-agents@6.2.2
+  - @memberjunction/ai-prompts@6.2.2
+  - @memberjunction/core@6.2.2
+  - @memberjunction/credentials@6.2.2
+  - @memberjunction/sql-parser@6.2.2
+  - @memberjunction/generic-database-provider@6.2.2
+  - @memberjunction/ai-core-plus@6.2.2
+  - @memberjunction/ai-agent-manager@6.2.2
+  - @memberjunction/core-actions@6.2.2
+  - @memberjunction/scheduling-engine@6.2.2
+  - @memberjunction/task-graph@6.2.2
+  - @memberjunction/testing-engine@6.2.2
+  - @memberjunction/clustering-engine@6.2.2
+  - @memberjunction/tag-engine@6.2.2
+  - @memberjunction/computer-use-engine@6.2.2
+  - @memberjunction/ai-vector-dupe@6.2.2
+  - @memberjunction/ai-vector-sync@6.2.2
+  - @memberjunction/codegen-lib@6.2.2
+  - @memberjunction/livekit-room-server@6.2.2
+  - @memberjunction/core-entities-server@6.2.2
+  - @memberjunction/search-engine@6.2.2
+  - @memberjunction/ai-agent-manager-actions@6.2.2
+  - @memberjunction/ai-engine-base@6.2.2
+  - @memberjunction/computer-use@6.2.2
+  - @memberjunction/aiengine@6.2.2
+  - @memberjunction/tag-engine-base@6.2.2
+  - @memberjunction/ai-mcp-client@6.2.2
+  - @memberjunction/ai-bridge-base@6.2.2
+  - @memberjunction/ai-bridge-ringcentral@6.2.2
+  - @memberjunction/ai-bridge-teams@6.2.2
+  - @memberjunction/ai-bridge-twilio@6.2.2
+  - @memberjunction/ai-bridge-vonage@6.2.2
+  - @memberjunction/ai-bridge-server@6.2.2
+  - @memberjunction/remote-browser-base@6.2.2
+  - @memberjunction/remote-browser-cdp@6.2.2
+  - @memberjunction/remote-browser-selfhost@6.2.2
+  - @memberjunction/remote-browser-server@6.2.2
+  - @memberjunction/ai-vectordb@6.2.2
+  - @memberjunction/ai-vectors-pinecone@6.2.2
+  - @memberjunction/api-keys@6.2.2
+  - @memberjunction/actions-apollo@6.2.2
+  - @memberjunction/actions-base@6.2.2
+  - @memberjunction/actions-bizapps-accounting@6.2.2
+  - @memberjunction/actions-bizapps-crm@6.2.2
+  - @memberjunction/actions-bizapps-formbuilders@6.2.2
+  - @memberjunction/actions-bizapps-lms@6.2.2
+  - @memberjunction/actions-bizapps-social@6.2.2
+  - @memberjunction/actions@6.2.2
+  - @memberjunction/actions-peopledatalabs@6.2.2
+  - @memberjunction/auth-providers@6.2.2
+  - @memberjunction/communication-types@6.2.2
+  - @memberjunction/communication-engine@6.2.2
+  - @memberjunction/entity-communications-base@6.2.2
+  - @memberjunction/entity-communications-server@6.2.2
+  - @memberjunction/notifications@6.2.2
+  - @memberjunction/communication-ms-graph@6.2.2
+  - @memberjunction/communication-sendgrid@6.2.2
+  - @memberjunction/component-registry-client-sdk@6.2.2
+  - @memberjunction/doc-utils@6.2.2
+  - @memberjunction/encryption@6.2.2
+  - @memberjunction/external-change-detection@6.2.2
+  - @memberjunction/graphql-dataprovider@6.2.2
+  - @memberjunction/integration-engine@6.2.2
+  - @memberjunction/integration-engine-base@6.2.2
+  - @memberjunction/integration-schema-builder@6.2.2
+  - @memberjunction/interactive-component-types@6.2.2
+  - @memberjunction/lists@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/data-context@6.2.2
+  - @memberjunction/data-context-server@6.2.2
+  - @memberjunction/queue@6.2.2
+  - @memberjunction/storage@6.2.2
+  - @memberjunction/postgresql-dataprovider@6.2.2
+  - @memberjunction/record-cloning@6.2.2
+  - @memberjunction/record-comparison@6.2.2
+  - @memberjunction/redis-provider@6.2.2
+  - @memberjunction/sqlserver-dataprovider@6.2.2
+  - @memberjunction/scheduling-actions@6.2.2
+  - @memberjunction/scheduling-engine-base@6.2.2
+  - @memberjunction/schema-engine@6.2.2
+  - @memberjunction/server-extensions-core@6.2.2
+  - @memberjunction/templates@6.2.2
+  - @memberjunction/testing-engine-base@6.2.2
+  - @memberjunction/version-history@6.2.2
+  - @memberjunction/work-queue-engine@6.2.2
+  - @memberjunction/esignature@6.2.2
+  - @memberjunction/ai-provider-bundle@6.2.2
+  - @memberjunction/ai@6.2.2
+  - @memberjunction/config@6.2.2
+  - @memberjunction/integration-progress-artifacts@6.2.2
+  - @memberjunction/lists-base@6.2.2
+  - @memberjunction/global@6.2.2
+  - @memberjunction/network-utils@6.2.2
+  - @memberjunction/sql-dialect@6.2.2
+  - @memberjunction/scheduling-base-types@6.2.2
+  - @memberjunction/theme-engine@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

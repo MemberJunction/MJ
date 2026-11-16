@@ -1,5 +1,13 @@
 # @memberjunction/ai-deepinfra
 
+## 6.2.2
+
+### Patch Changes
+
+- @memberjunction/ai-openai@6.2.2
+- @memberjunction/ai@6.2.2
+- @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

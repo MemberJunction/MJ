@@ -1,5 +1,31 @@
 # @memberjunction/generic-database-provider
 
+## 6.2.2
+
+### Patch Changes
+
+- ce47382: Test SQL and ad-hoc SQL no longer refuse valid read-only statements as "not a safe read-only statement".
+  - `StrictFragmentValidator.ValidateReadOnlyStatement` accepts a set operation (`UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`) whose branches are all read-only SELECTs. Every branch is still read and screened, a branch that is a `SELECT … INTO` is still refused, and the WHERE / ORDER BY fragment validators still refuse any set operation.
+  - On SQL Server, valid syntax node-sql-parser's TransactSQL grammar cannot read is parsed through a strict-only rewrite that keeps every relation and subquery in place: `STRING_AGG(…) WITHIN GROUP (ORDER BY …)`, `INTERSECT`, `EXCEPT`, `TRY_CAST`, `COUNT_BIG(*)`, `RANGE` window frames, `LIKE … ESCAPE`, `TOP … PERCENT WITH TIES` / `TOP (n) WITH TIES`, and a leading `;`. On SQL Server and PostgreSQL, `RANGE` window frames and `OFFSET n ROW[S]` / `FETCH FIRST|NEXT [n] ROW[S] ONLY|WITH TIES` with a literal count are read the same way. The database still runs the original text, and `SQLParser`'s own output is unchanged.
+
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+- Updated dependencies [ce47382]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/sql-parser@6.2.2
+  - @memberjunction/aiengine@6.2.2
+  - @memberjunction/ai-vectors-memory@6.2.2
+  - @memberjunction/actions-base@6.2.2
+  - @memberjunction/actions@6.2.2
+  - @memberjunction/encryption@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/queue@6.2.2
+  - @memberjunction/query-processor@6.2.2
+  - @memberjunction/geo-core@6.2.2
+  - @memberjunction/global@6.2.2
+  - @memberjunction/sql-dialect@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

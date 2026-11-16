@@ -1,5 +1,88 @@
 # @memberjunction/ng-dashboards
 
+## 6.2.2
+
+### Patch Changes
+
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [c8204fd]
+- Updated dependencies [24e088b]
+- Updated dependencies [7110d1b]
+- Updated dependencies [a96cd31]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/credentials@6.2.2
+  - @memberjunction/ng-base-forms@6.2.2
+  - @memberjunction/ai-core-plus@6.2.2
+  - @memberjunction/ai-engine-base@6.2.2
+  - @memberjunction/feature-pipelines@6.2.2
+  - @memberjunction/tag-engine-base@6.2.2
+  - @memberjunction/api-keys-base@6.2.2
+  - @memberjunction/actions-base@6.2.2
+  - @memberjunction/ng-auth-services@6.2.2
+  - @memberjunction/ng-base-application@6.2.2
+  - @memberjunction/ng-core-entity-forms@6.2.2
+  - @memberjunction/ng-explorer-settings@6.2.2
+  - @memberjunction/ng-shared@6.2.2
+  - @memberjunction/ng-testing@6.2.2
+  - @memberjunction/ng-action-gallery@6.2.2
+  - @memberjunction/ng-actions@6.2.2
+  - @memberjunction/ng-agent-requests@6.2.2
+  - @memberjunction/ng-agents@6.2.2
+  - @memberjunction/ng-ai-test-harness@6.2.2
+  - @memberjunction/ng-archive-manager@6.2.2
+  - @memberjunction/ng-artifacts@6.2.2
+  - @memberjunction/ng-base-types@6.2.2
+  - @memberjunction/ng-brand-kits@6.2.2
+  - @memberjunction/ng-clustering@6.2.2
+  - @memberjunction/ng-code-editor@6.2.2
+  - @memberjunction/ng-composer@6.2.2
+  - @memberjunction/ng-container-directives@6.2.2
+  - @memberjunction/ng-conversations@6.2.2
+  - @memberjunction/ng-credentials@6.2.2
+  - @memberjunction/ng-dashboard-viewer@6.2.2
+  - @memberjunction/ng-entity-relationship-diagram@6.2.2
+  - @memberjunction/ng-entity-viewer@6.2.2
+  - @memberjunction/ng-export-service@6.2.2
+  - @memberjunction/ng-filter-builder@6.2.2
+  - @memberjunction/ng-list-management@6.2.2
+  - @memberjunction/ng-media-player@6.2.2
+  - @memberjunction/ng-map-view@6.2.2
+  - @memberjunction/ng-notifications@6.2.2
+  - @memberjunction/ng-query-viewer@6.2.2
+  - @memberjunction/ng-react@6.2.2
+  - @memberjunction/ng-record-process-studio@6.2.2
+  - @memberjunction/ng-resource-permissions@6.2.2
+  - @memberjunction/ng-rubrics@6.2.2
+  - @memberjunction/ng-scheduling@6.2.2
+  - @memberjunction/ng-search@6.2.2
+  - @memberjunction/ng-shared-generic@6.2.2
+  - @memberjunction/ng-task-graph-editor@6.2.2
+  - @memberjunction/ng-trees@6.2.2
+  - @memberjunction/ng-user-routines@6.2.2
+  - @memberjunction/ng-versions@6.2.2
+  - @memberjunction/graphql-dataprovider@6.2.2
+  - @memberjunction/integration-engine-base@6.2.2
+  - @memberjunction/interactive-component-types@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/record-set-processor-base@6.2.2
+  - @memberjunction/rubrics-base@6.2.2
+  - @memberjunction/templates-base-types@6.2.2
+  - @memberjunction/testing-engine-base@6.2.2
+  - @memberjunction/work-queue-base@6.2.2
+  - @memberjunction/ng-tabstrip@6.2.2
+  - @memberjunction/ng-markdown@6.2.2
+  - @memberjunction/ng-ui-components@6.2.2
+  - @memberjunction/ng-word-cloud@6.2.2
+  - @memberjunction/predictive-studio-core@6.2.2
+  - @memberjunction/video-studio-core@6.2.2
+  - @memberjunction/ng-graph-view@6.2.2
+  - @memberjunction/lists-base@6.2.2
+  - @memberjunction/export-engine@6.2.2
+  - @memberjunction/global@6.2.2
+  - @memberjunction/theme-engine@6.2.2
+  - @memberjunction/work-queue-core@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

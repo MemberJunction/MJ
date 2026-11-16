@@ -1,5 +1,20 @@
 # @memberjunction/database-designer-actions
 
+## 6.2.2
+
+### Patch Changes
+
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/database-designer-core@6.2.2
+  - @memberjunction/actions-base@6.2.2
+  - @memberjunction/actions@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/schema-engine@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

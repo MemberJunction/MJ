@@ -1,5 +1,28 @@
 # @memberjunction/ai-prompts
 
+## 6.2.2
+
+### Patch Changes
+
+- 8883311: The native tool-calling decision and the sent-prefix fingerprint that the prompt runner records on a request or result are now kept in the Global Object Store, shared by every physical copy of this package in a process. A pnpm consumer can install more than one copy (one per peer-dependency variant), and since ClassFactory keeps the first registered copy of a class, the Loop agent type that reads the decision could come from a different copy than the runner that recorded it. The lookup then found nothing and native tool results silently stopped going back as tool turns: the model never saw its own calls, repeated them, and nothing was prompt-cached.
+- 718912c: A prompt run whose model turn answered only with tool calls no longer records `ErrorMessage` "Failed to parse result into expected format; raw output saved instead". Such a turn has no text to parse, so the empty result is expected. Every native tool-calling agent turn used to carry the message, which hid real errors when debugging. An empty text-only turn still records it.
+- a96cd31: A Loop agent's relocated specialization now renders with the same native tool-calling flags as the system prompt. The agent pre-renders a relocated child prompt into the trailing runtime-state message before a model is selected, so it rendered without `_NATIVE_TOOL_CALLING` / `_NATIVE_CONTROL_FLOW`, which the prompt runner sets from the selected model's tool-calling decision: a child prompt worded for the native or envelope path got the envelope wording while the system prompt got the native one. `AIPromptParams` gains an optional `OnTemplateDataFinalized` callback that the runner calls once the flags are set and before the prompt renders; the agent uses it to render the trailing message again and swaps it in when the text changed (keeping the first build if the re-render fails). A failover attempt whose decision differs still re-renders only the system prompt.
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [c8204fd]
+- Updated dependencies [7110d1b]
+- Updated dependencies [a96cd31]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/credentials@6.2.2
+  - @memberjunction/ai-core-plus@6.2.2
+  - @memberjunction/ai-engine-base@6.2.2
+  - @memberjunction/aiengine@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/templates-base-types@6.2.2
+  - @memberjunction/templates@6.2.2
+  - @memberjunction/ai@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

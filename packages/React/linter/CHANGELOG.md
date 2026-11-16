@@ -1,5 +1,26 @@
 # @memberjunction/react-linter
 
+## 6.2.2
+
+### Patch Changes
+
+- a3a71dc: `MapSQLTypeToJSType` treats a missing type as `'unknown'` instead of throwing. `sqlType` is optional on field and parameter metadata, and a field without one made the `entity-field-access-validation` rule throw "Cannot read properties of undefined (reading 'toLowerCase')", so the rule never checked that component.
+- 6ed24f6: Library lint validators and runtime rules no longer crash or flood the log:
+  - **One log line per failing validator.** A failing library validator now logs once per lint, with its error message and the number of AST nodes it failed on. Before, it logged `{}` once per node: 25,742 lines in one Skip eval run.
+  - **No crash without a component name.** `LintComponent` falls back to the spec's name when the caller passes none. `no-data-prop` and `component-name-mismatch` return early instead of throwing on a missing name. The mismatch rule no longer raises a false critical violation.
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+- Updated dependencies [7ea6dbe]
+- Updated dependencies [ce47382]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/react-runtime@6.2.2
+  - @memberjunction/sql-parser@6.2.2
+  - @memberjunction/interactive-component-types@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/global@6.2.2
+  - @memberjunction/sql-dialect@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

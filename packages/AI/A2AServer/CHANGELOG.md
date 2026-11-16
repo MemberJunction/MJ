@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/a2aserver
 
+## 6.2.2
+
+### Patch Changes
+
+- Updated dependencies [650b0c4]
+- Updated dependencies [414a6ff]
+- Updated dependencies [1cd06b6]
+- Updated dependencies [df8561a]
+- Updated dependencies [857a993]
+- Updated dependencies [d6ed1a0]
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+- Updated dependencies [ce47382]
+- Updated dependencies [a96cd31]
+  - @memberjunction/ai-agents@6.2.2
+  - @memberjunction/core@6.2.2
+  - @memberjunction/generic-database-provider@6.2.2
+  - @memberjunction/server@6.2.2
+  - @memberjunction/ai-core-plus@6.2.2
+  - @memberjunction/server-bootstrap-lite@6.2.2
+  - @memberjunction/aiengine@6.2.2
+  - @memberjunction/api-keys@6.2.2
+  - @memberjunction/encryption@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/sqlserver-dataprovider@6.2.2
+  - @memberjunction/ai@6.2.2
+  - @memberjunction/config@6.2.2
+  - @memberjunction/dynamic-packages@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

@@ -1,5 +1,20 @@
 # @memberjunction/react-runtime
 
+## 6.2.2
+
+### Patch Changes
+
+- 7ea6dbe: Component libraries load again on pages with an opaque origin. The subresource URL check added in 6.2 resolved every script and stylesheet URL against `window.location.origin`, which is the string "null" on about:blank, srcdoc and sandboxed iframes and data: pages. Used as a base, it made `new URL` throw even for an absolute https URL, so every library (antd, d3, chart.js, …) was refused with "Refused to load script from non-http(s) URL". The React test harness renders on about:blank, so every component test that used a library failed to register. An opaque origin is now treated like no window: relative URLs resolve against https://localhost and dangerous schemes are still refused.
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/ai-vectors-memory@6.2.2
+  - @memberjunction/graphql-dataprovider@6.2.2
+  - @memberjunction/interactive-component-types@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

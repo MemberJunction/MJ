@@ -1,5 +1,16 @@
 # @memberjunction/ng-realtime-channel-examples
 
+## 6.2.2
+
+### Patch Changes
+
+- Updated dependencies [a96cd31]
+  - @memberjunction/ai-core-plus@6.2.2
+  - @memberjunction/ng-realtime-channels@6.2.2
+  - @memberjunction/realtime-runtime@6.2.2
+  - @memberjunction/ai@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

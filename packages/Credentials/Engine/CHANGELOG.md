@@ -1,5 +1,18 @@
 # @memberjunction/credentials
 
+## 6.2.2
+
+### Patch Changes
+
+- 215696a: A peer server's cache event no longer leaves an engine holding encrypted field values. Server caches store encrypted fields as ciphertext and only the cache-read path decrypts them, but `BaseEngine` applied a peer's `set` or `row_delta` rows without decrypting whenever they carried a newer version than the engine held. With two or more servers on one Redis, `CredentialEngine` then held `Values` as `$ENC$…` and `GetCredential` returned empty values as a success, until that server's next save of the credential. An engine now reloads instead of applying a payload that carries ciphertext on an encrypted field; the reload reads the same slot and decrypts it. In a three-process reproduction on MJ 6.2.1, 20 of 20 targeted trials, 3 of 20 runs of a two-saves-then-read pattern and 8 of 20 key rotations left a server holding ciphertext; with the fix, none did. `CredentialEngine` also stops reading unparseable `Values` as `{}`: it throws `CredentialValuesUnreadableError` (with `StillEncrypted` set for ciphertext), and its message no longer quotes the start of the stored value.
+- c8204fd: `CredentialEngine` saves `LastUsedAt` and `LastValidatedAt` at most once per credential per minute from each process (`TimestampTouchIntervalMs`, default 60000; 0 restores a save on every use), as `APIKeyEngine` already does for API keys. Each touch is a full-row save, so a server reading a credential per request wrote a full row and a Record Change per request, and while a touch ran it could revert a change another server committed to the same row (issue #4339). In a multi-process reproduction with two MJAPIs, a key rotated through one MJAPI was reverted by another server's touch in 13 of 20 trials; with the throttle, 0 of 20. The throttle narrows that window but does not close it. A touch that fails to save no longer holds its slot, so the next read retries it.
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/predictive-studio-truth-suite",
-  "version": "6.2.1",
+  "version": "6.2.2",
   "private": true,
   "type": "module",
   "license": "BUSL-1.1",
@@ -20,15 +20,15 @@
     "setup:python": "node scripts/setup-python.mjs"
   },
   "dependencies": {
-    "@memberjunction/ai-core-plus": "6.2.1",
-    "@memberjunction/core": "6.2.1",
-    "@memberjunction/core-entities": "6.2.1",
-    "@memberjunction/global": "6.2.1",
-    "@memberjunction/graphql-dataprovider": "6.2.1",
-    "@memberjunction/predictive-studio": "6.2.1",
-    "@memberjunction/predictive-studio-core": "6.2.1",
-    "@memberjunction/predictive-studio-sidecar": "6.2.1",
-    "@memberjunction/testing-integration": "6.2.1",
+    "@memberjunction/ai-core-plus": "6.2.2",
+    "@memberjunction/core": "6.2.2",
+    "@memberjunction/core-entities": "6.2.2",
+    "@memberjunction/global": "6.2.2",
+    "@memberjunction/graphql-dataprovider": "6.2.2",
+    "@memberjunction/predictive-studio": "6.2.2",
+    "@memberjunction/predictive-studio-core": "6.2.2",
+    "@memberjunction/predictive-studio-sidecar": "6.2.2",
+    "@memberjunction/testing-integration": "6.2.2",
     "mssql": "^12.2.0"
   },
   "devDependencies": {
