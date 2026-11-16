@@ -46,11 +46,11 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
       fullPage: true,
     });
 
-    // Look 2: LXP (distinct type, density, spacing, radius, and brand-derived selected row)
+    // Look 2: LXP (Sidecar Learning Hub: warm cream, sage, 16px surface radius, 20px padding)
     await page.getByRole('button', { name: 'Look: LXP' }).click();
-    await expect(firstSurface).toHaveCSS('border-radius', '20px');
-    await expect(firstSurface).toHaveCSS('padding-top', '24px');
-    await expect(firstSurface).toHaveCSS('font-family', /Trebuchet MS/);
+    await expect(firstSurface).toHaveCSS('border-radius', '16px');
+    await expect(firstSurface).toHaveCSS('padding-top', '20px');
+    await expect(firstSurface).toHaveCSS('background-color', 'rgb(254, 247, 235)');
 
     // Bug fix 2: LXP selected row must NOT stay MJ blue (#e6f3f9 -> rgb(230, 243, 249))
     const selectedRow = page.locator('mj-row[selected="true"]');

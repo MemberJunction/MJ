@@ -67,28 +67,38 @@ body {
   --mj-brand-primary: #0076b6;
 }
 
-/* Look 2: LXP (airy, pill-shaped, violet, distinct type + spacing + elevation) */
+/* Look 2: LXP (Sidecar Learning Hub — warm cream, sage, charcoal, Poppins/Inter, generous 16/24px radii) */
 [data-look='lxp'] {
-  --mj-font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
-  --mj-font-family-display: 'Trebuchet MS', 'Segoe UI', sans-serif;
-  --mj-brand-primary: #7c3aed;
-  --mj-radius-control: var(--mj-radius-pill);
-  --mj-radius-surface: 20px;
+  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mj-font-family-display: 'Poppins', 'Inter', sans-serif;
+  --mj-bg-canvas: #f8f5ed;
+  --mj-bg-page: #fef7eb;
+  --mj-brand-primary: #5c7a73;
+  --mj-text-primary: #35353d;
+  --mj-text-secondary: #636e72;
+  --mj-radius-control: 12px;
+  --mj-radius-surface: 16px;
   --mj-radius-overlay: 24px;
-  --mj-surface-padding: var(--mj-space-6);
+  --mj-surface-padding: var(--mj-space-5);
   --mj-surface-gap: var(--mj-space-4);
   --mj-row-min-height: var(--mj-control-height-lg);
   --mj-row-padding-inline: var(--mj-space-4);
-  --mj-surface-base-bg: #faf5ff;
+  --mj-surface-base-bg: #fef7eb;
   --mj-surface-elevated-bg: #ffffff;
-  --mj-surface-base-border: #e9d5ff;
+  --mj-surface-base-border: #e8ebed;
+  --mj-surface-elevated-border: #99b3ac;
 }
 
 [data-theme='dark'][data-look='lxp'] {
-  --mj-brand-primary: #a78bfa;
-  --mj-surface-base-bg: #1e1b2e;
-  --mj-surface-elevated-bg: #2a2540;
-  --mj-surface-base-border: #4c1d95;
+  --mj-bg-canvas: #1f1f24;
+  --mj-bg-page: #27272e;
+  --mj-brand-primary: #99b3ac;
+  --mj-text-primary: #f5f5f5;
+  --mj-text-secondary: #d1d5db;
+  --mj-surface-base-bg: #2a2a32;
+  --mj-surface-elevated-bg: #35353d;
+  --mj-surface-base-border: #4a4a54;
+  --mj-surface-elevated-border: #7a9992;
 }
 
 /* Look 3: Editorial (dense, flat, square corners, Georgia serif, sharp borders) */
