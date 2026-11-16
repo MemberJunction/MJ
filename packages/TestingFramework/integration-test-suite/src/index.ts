@@ -23,6 +23,7 @@ export * from './checks/conversation-compaction.checks';
 export * from './checks/dataset-cache.checks';
 export * from './checks/entity-writes.checks';
 export * from './checks/field-rules-bulk-update.checks';
+export * from './checks/list-refresh.checks';
 export * from './checks/lists.checks';
 export * from './checks/metadata-consistency.checks';
 export * from './checks/open-app-teardown.checks';
