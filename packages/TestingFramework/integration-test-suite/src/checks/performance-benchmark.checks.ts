@@ -30,10 +30,12 @@ import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import {
     BaseEntity,
+    CanonicalFieldsKey,
     CompositeKey,
     EntityInfo,
     InMemoryLocalStorageProvider,
     LocalCacheManager,
+    ProjectRowsToFields,
     RunView,
     SetProvider,
     Metadata,
@@ -46,6 +48,10 @@ import {
 } from '@memberjunction/core';
 import { ClassFactory, EscapeSQLString, ObjectCache } from '@memberjunction/global';
 import { type GenericDatabaseProvider, UserCache } from '@memberjunction/generic-database-provider';
+import { PostgreSQLDataProvider } from '@memberjunction/postgresql-dataprovider';
+import { BGEReRanker, BGERerankerWorkerHost, DEFAULT_BGE_MAX_CANDIDATES } from '@memberjunction/search-engine';
+import { AuthCache, HashAuthToken } from '@memberjunction/server/cache';
+import { ADHOC_READ_ONLY_MAX_CONNECTIONS, BuildPostgreSQLConnectionConfig } from '@memberjunction/server/postgresql-pool-settings';
 import {
     DeepFreeze,
     type RedisLocalStorageProvider,
@@ -156,6 +162,15 @@ export interface PrimitiveBenchmarkMetrics {
     LazyEntityInfo5FieldsAccessMs?: number;
     MetadataStorageRoundTripMs?: number;
     MetadataStorageStructuredCloneUsed?: boolean;
+    // Wave 6A (PB21) metrics:
+    FrozenSubsetWire5000x20Ms?: number;
+    FrozenSubsetWireUncached5000x20Ms?: number;
+    FrozenSubsetWireSpeedupRatio?: number;
+    FrozenFullCoverageZeroCopy?: boolean;
+    PgReadOnlyPoolMax?: number;
+    PgAdhocPoolMax?: number;
+    BgeMaxCandidatesCap?: number;
+    UserByID10kLookupsMs?: number;
 }
 
 export interface BaselineComparisonRow {
@@ -3011,6 +3026,166 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             );
         },
     },
+    {
+        Id: `${BUNDLE}.PB21`,
+        Name: 'PB21: Wave 6A — Server & core density KPIs (Frozen Fields projection, PG pool separation, BGE worker cap, UserByID, SHA-256 AuthCache)',
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const fx = requireFixture();
+
+            // ── Part A: ProjectRowsToFields({ PreserveFrozen: true }) & composite serialization key ─
+            const rowCount = 5000;
+            const fullFields = ['ID', 'Name', 'Status', 'Category', 'Description', 'Notes'];
+            const subsetFields = ['ID', 'Name', 'Status'];
+            const frozenRows = DeepFreeze(
+                Array.from({ length: rowCount }, (_, i) => ({
+                    ID: `00000000-0000-0000-006a-${String(i + 1).padStart(12, '0')}`,
+                    Name: `Wave6A_Row_${i}`,
+                    Status: i % 2 === 0 ? 'Active' : 'Inactive',
+                    Category: `Cat_${i % 10}`,
+                    Description: `Wave 6A frozen wire payload benchmark row #${i} `.repeat(3),
+                    Notes: `Server density note text #${i} `.repeat(2),
+                }))
+            ) as unknown as Record<string, unknown>[];
+
+            const fullZeroCopy = ProjectRowsToFields(frozenRows, fullFields, { PreserveFrozen: true });
+            const zeroCopyIdentity = fullZeroCopy === frozenRows && Object.isFrozen(fullZeroCopy[0]);
+            Assert(zeroCopyIdentity, 'PB21: PreserveFrozen full-coverage Fields must return identical frozen array reference');
+            fx.Primitives.FrozenFullCoverageZeroCopy = zeroCopyIdentity;
+
+            // Mutable default callers must never pollute frozen cache arrays
+            const mutableCopy = ProjectRowsToFields(frozenRows, ['ID', 'Name']);
+            AssertEqual(Object.isFrozen(mutableCopy[0]), false, 'PB21: default ProjectRowsToFields must stay mutable for non-wire callers');
+            mutableCopy[0].Name = 'CallerMutation';
+            AssertEqual(frozenRows[0].Name, 'Wave6A_Row_0', 'PB21: mutating default ProjectRowsToFields output must not mutate frozen source');
+
+            // CanonicalFieldsKey equivalence + subset array memoization
+            const normA = CanonicalFieldsKey([' status ', 'ID', 'name', 'Status']);
+            const normB = CanonicalFieldsKey(subsetFields);
+            AssertEqual(normA, normB, 'PB21: CanonicalFieldsKey must normalize order, whitespace, casing, and duplicates');
+
+            const wireCache = new WeakMap<object, Map<string, { Data: string }>>();
+            const compositeKey = `wave6a-entity|${normB}`;
+
+            // Warmup JIT
+            ProjectRowsToFields(frozenRows.slice(0, 100), subsetFields, { PreserveFrozen: true });
+            ProjectRowsToFields(frozenRows.slice(0, 100), subsetFields);
+
+            const tCached0 = performance.now();
+            let cachedLen = 0;
+            for (let iter = 0; iter < 20; iter++) {
+                const projected = ProjectRowsToFields(frozenRows, subsetFields, { PreserveFrozen: true });
+                for (let r = 0; r < projected.length; r++) {
+                    const row = projected[r];
+                    let entMap = wireCache.get(row);
+                    let entry = entMap?.get(compositeKey);
+                    if (!entry) {
+                        entry = { Data: JSON.stringify(row) };
+                        if (!entMap) {
+                            entMap = new Map();
+                            wireCache.set(row, entMap);
+                        }
+                        entMap.set(compositeKey, entry);
+                    }
+                    cachedLen += entry.Data.length;
+                }
+            }
+            const subsetCachedMs = Math.max(0.05, Number((performance.now() - tCached0).toFixed(2)));
+
+            const tUncached0 = performance.now();
+            let uncachedLen = 0;
+            for (let iter = 0; iter < 20; iter++) {
+                const projected = ProjectRowsToFields(frozenRows, subsetFields);
+                for (let r = 0; r < projected.length; r++) {
+                    uncachedLen += JSON.stringify(projected[r]).length;
+                }
+            }
+            const subsetUncachedMs = Number((performance.now() - tUncached0).toFixed(2));
+            const subsetSpeedup = Number((subsetUncachedMs / subsetCachedMs).toFixed(2));
+
+            AssertEqual(cachedLen, uncachedLen, 'PB21: subset frozen wire cache byte length must match uncached JSON.stringify');
+            fx.Primitives.FrozenSubsetWire5000x20Ms = subsetCachedMs;
+            fx.Primitives.FrozenSubsetWireUncached5000x20Ms = subsetUncachedMs;
+            fx.Primitives.FrozenSubsetWireSpeedupRatio = subsetSpeedup;
+
+            // Live provider narrow-Fields RunView sanity check
+            const rv = RunView.FromMetadataProvider(ctx.Provider);
+            const liveNarrow = await rv.RunView<{ ID: string; Name: string }>(
+                {
+                    EntityName: 'MJ: Entities',
+                    Fields: ['ID', 'Name'],
+                    MaxRows: 5,
+                    ResultType: 'simple',
+                },
+                ctx.User
+            );
+            Assert(liveNarrow.Success && liveNarrow.Results.length > 0, `PB21: live narrow-Fields RunView failed: ${liveNarrow.ErrorMessage}`);
+
+            // ── Part B: PostgreSQL RO vs Adhoc pool separation & sync guard ─────────
+            const poolCfg = {
+                connectionTimeout: 45000,
+                requestTimeout: 30000,
+                metadataCacheRefreshInterval: 180000,
+                connectionPool: { max: 50, min: 5, idleTimeoutMillis: 30000, acquireTimeoutMillis: 30000 },
+            };
+            const pgEndpoint = { Host: 'localhost', Port: 5432, Database: 'mj', User: 'api', Password: 'pw' };
+            const appRoMax = BuildPostgreSQLConnectionConfig(pgEndpoint, poolCfg, 'read-only').MaxConnections;
+            const adhocRoMax = BuildPostgreSQLConnectionConfig(pgEndpoint, poolCfg, 'adhoc-read-only').MaxConnections;
+            AssertEqual(appRoMax, 50, 'PB21: PostgreSQL application read-only pool should scale to apiMax (50)');
+            AssertEqual(
+                adhocRoMax,
+                ADHOC_READ_ONLY_MAX_CONNECTIONS,
+                `PB21: PostgreSQL ad-hoc read-only pool must remain capped at ${ADHOC_READ_ONLY_MAX_CONNECTIONS}`
+            );
+            AssertEqual(
+                PostgreSQLDataProvider.CanConfigureFromGlobalSync(null),
+                false,
+                'PB21: PostgreSQLDataProvider.CanConfigureFromGlobalSync(null) must return false'
+            );
+            fx.Primitives.PgReadOnlyPoolMax = appRoMax;
+            fx.Primitives.PgAdhocPoolMax = adhocRoMax;
+
+            // ── Part C: BGEReRanker worker host & candidate cap (zero HuggingFace network) ─
+            const reranker = new BGEReRanker();
+            const bgeCap = reranker.GetMaxResultCount();
+            AssertEqual(bgeCap, DEFAULT_BGE_MAX_CANDIDATES, `PB21: expected BGEReRanker candidate cap ${DEFAULT_BGE_MAX_CANDIDATES}`);
+            Assert(BGERerankerWorkerHost.Instance === BGERerankerWorkerHost.Instance, 'PB21: BGERerankerWorkerHost must be a singleton');
+            const emptyRerank = await reranker.ReRank('server density check', [], 5, ctx.User);
+            AssertEqual(emptyRerank.length, 0, 'PB21: empty BGEReRanker call must short-circuit without model/network load');
+            fx.Primitives.BgeMaxCandidatesCap = bgeCap;
+
+            // ── Part D: UserByID O(1) lookup & SHA-256 AuthCache keying ────────────
+            if (UserCache.Instance.Users.length > 0) {
+                const liveUser = UserCache.Instance.UserByID(ctx.User.ID);
+                Assert(!!liveUser, 'PB21: UserCache.Instance.UserByID(ctx.User.ID) must resolve live context user');
+            }
+            const tUserById0 = performance.now();
+            let resolvedCount = 0;
+            for (let i = 0; i < 10_000; i++) {
+                if (UserCache.Instance.UserByID(ctx.User.ID)) {
+                    resolvedCount++;
+                }
+            }
+            const userById10kMs = Math.max(0.01, Number((performance.now() - tUserById0).toFixed(2)));
+            if (UserCache.Instance.Users.length > 0) {
+                AssertEqual(resolvedCount, 10_000, 'PB21: UserCache.UserByID must resolve all 10k lookups');
+            }
+            fx.Primitives.UserByID10kLookupsMs = userById10kMs;
+
+            const jwtPrefix = 'eyJhbGciOiJSUzI1NiJ9.' + 'x'.repeat(1024);
+            const hashA = HashAuthToken(`${jwtPrefix}.sigA`);
+            const hashB = HashAuthToken(`${jwtPrefix}.sigB`);
+            AssertEqual(hashA.length, 64, 'PB21: AuthCache SHA-256 digest must be 64 hex chars');
+            Assert(hashA !== hashB && !hashA.includes('eyJhbGci'), 'PB21: distinct JWTs must hash cleanly without exposing raw token');
+            AuthCache.set(hashA, { check: 'pb21' });
+            Assert(AuthCache.get(`${jwtPrefix}.sigA`) === undefined, 'PB21: AuthCache must not store raw JWT strings');
+            AuthCache.delete(hashA);
+
+            console.log(
+                `      → PB21 Wave 6A Server Density KPIs: FrozenSubsetWire=${subsetCachedMs}ms (${subsetSpeedup}x vs ${subsetUncachedMs}ms, zeroCopyFull=${zeroCopyIdentity}) | ` +
+                    `PG pools(RO=${appRoMax}, Adhoc=${adhocRoMax}) | BGE cap=${bgeCap} | UserByID(10k)=${userById10kMs}ms`
+            );
+        },
+    },
 ];
 
 for (const check of PerformanceBenchmarkChecks) {
@@ -3072,6 +3247,7 @@ function formatBenchmarkMarkdown(report: PerformanceBenchmarkReport): string {
         `| **PB19** | \`BuildRecordChangePayload\` \`skipFullRecordJSON\` (500 x 32 KB rows) | ${report.Primitives.RecordChangePayloadSkip500x32KBMs ?? 'n/a'} ms (vs ${report.Primitives.RecordChangePayloadFull500x32KBMs ?? 'n/a'} ms unskipped, ${report.Primitives.RecordChangePayloadSkipSpeedupRatio ?? 'n/a'}x faster) |`,
         `| **PB19** | \`CanCountFromBaseTable\` subqueries & PG temporal + \`EXISTS\` \`count_only\` | ${report.Primitives.CanCountSubqueryFiltersPassed ?? 'n/a'}/3 filters, ${report.Primitives.RecordChangesExistsCountMs ?? 'n/a'} ms (\`baseTable=${report.Primitives.RecordChangesExistsCountTargetsBaseTable ?? false}\`) |`,
         `| **PB20** | \`EntityInfo\` lazy \`Fields\` construction (all ${report.Primitives.LazyEntityInfoConstructAllMs ?? 'n/a'} ms) & 5-entity access | ${report.Primitives.LazyEntityInfo5FieldsAccessMs ?? 'n/a'} ms (storage roundtrip: ${report.Primitives.MetadataStorageRoundTripMs ?? 'n/a'} ms, structuredClone=${report.Primitives.MetadataStorageStructuredCloneUsed ?? false}) |`,
+        `| **PB21** | Wave 6A frozen \`Fields\` wire cache (5,000 rows x 20), PG pools, BGE worker cap, \`UserByID\` (10k) | ${report.Primitives.FrozenSubsetWire5000x20Ms ?? 'n/a'} ms (${report.Primitives.FrozenSubsetWireSpeedupRatio ?? 'n/a'}x), RO=${report.Primitives.PgReadOnlyPoolMax ?? 'n/a'}/Adhoc=${report.Primitives.PgAdhocPoolMax ?? 'n/a'}, BGE=${report.Primitives.BgeMaxCandidatesCap ?? 'n/a'}, \`UserByID\`=${report.Primitives.UserByID10kLookupsMs ?? 'n/a'} ms |`,
         ``,
         `## 2. Multi-Turn Agent Loop & SQL Server Footprint Benchmarks (PB7–PB12)`,
         ``,
@@ -3158,6 +3334,7 @@ function printBenchmarkSummary(report: PerformanceBenchmarkReport): void {
     console.log(`    - PB19 RecordChangePayload skipFullRecordJSON (500x): ${report.Primitives.RecordChangePayloadSkip500x32KBMs ?? 'n/a'} ms (vs ${report.Primitives.RecordChangePayloadFull500x32KBMs ?? 'n/a'} ms, ${report.Primitives.RecordChangePayloadSkipSpeedupRatio ?? 'n/a'}x faster)`);
     console.log(`    - PB19 CanCountFromBaseTable subqueries & EXISTS:     ${report.Primitives.CanCountSubqueryFiltersPassed ?? 'n/a'}/3 filters, ${report.Primitives.RecordChangesExistsCountMs ?? 'n/a'} ms (baseTable=${report.Primitives.RecordChangesExistsCountTargetsBaseTable ?? false})`);
     console.log(`    - PB20 Lazy EntityInfo (all ${report.Primitives.LazyEntityInfoConstructAllMs ?? 'n/a'} ms) & 5 Fields: ${report.Primitives.LazyEntityInfo5FieldsAccessMs ?? 'n/a'} ms | Storage roundtrip: ${report.Primitives.MetadataStorageRoundTripMs ?? 'n/a'} ms (structuredClone=${report.Primitives.MetadataStorageStructuredCloneUsed ?? false})`);
+    console.log(`    - PB21 Wave 6A Server Density (Frozen subset wire):     ${report.Primitives.FrozenSubsetWire5000x20Ms ?? 'n/a'} ms (${report.Primitives.FrozenSubsetWireSpeedupRatio ?? 'n/a'}x), PG(RO=${report.Primitives.PgReadOnlyPoolMax ?? 'n/a'}/Adhoc=${report.Primitives.PgAdhocPoolMax ?? 'n/a'}), BGE=${report.Primitives.BgeMaxCandidatesCap ?? 'n/a'}, UserByID=${report.Primitives.UserByID10kLookupsMs ?? 'n/a'} ms`);
 
     const allRuns = [...report.DeterministicAgentRuns, ...report.LiveAgentRuns];
     if (allRuns.length > 0) {

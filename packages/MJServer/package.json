@@ -27,6 +27,14 @@
     "./rest-entity-crud": {
       "types": "./dist/rest/EntityCRUDHandler.d.ts",
       "default": "./dist/rest/EntityCRUDHandler.js"
+    },
+    "./cache": {
+      "types": "./dist/cache.d.ts",
+      "default": "./dist/cache.js"
+    },
+    "./postgresql-pool-settings": {
+      "types": "./dist/postgresqlPoolSettings.d.ts",
+      "default": "./dist/postgresqlPoolSettings.js"
     }
   },
   "scripts": {
