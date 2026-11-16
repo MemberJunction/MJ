@@ -38,6 +38,7 @@
     "@memberjunction/feature-pipelines": "6.3.0-edge.0",
     "@memberjunction/generic-database-provider": "6.3.0-edge.0",
     "@memberjunction/global": "6.3.0-edge.0",
+    "@memberjunction/lists": "6.3.0-edge.0",
     "@memberjunction/rubrics-base": "6.3.0-edge.0",
     "@memberjunction/integration-engine": "6.3.0-edge.0",
     "@memberjunction/integration-pk-classifier": "6.3.0-edge.0",

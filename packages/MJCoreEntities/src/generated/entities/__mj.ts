@@ -78529,6 +78529,87 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
     }
 
     /**
+    * * Field Name: SourceQueryID
+    * * Display Name: Source Query
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+    * * Description: Optional ID of the saved query this list is refreshed from. A list has at most one source: this or SourceViewID.
+    */
+    get SourceQueryID(): string | null {
+        return this.Get('SourceQueryID');
+    }
+    set SourceQueryID(value: string | null) {
+        this.Set('SourceQueryID', value);
+    }
+
+    /**
+    * * Field Name: SourceQueryParameters
+    * * Display Name: Source Query Parameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object of the parameter values the source query runs with, keyed by parameter name. NULL when the query takes no parameters.
+    */
+    get SourceQueryParameters(): string | null {
+        return this.Get('SourceQueryParameters');
+    }
+    set SourceQueryParameters(value: string | null) {
+        this.Set('SourceQueryParameters', value);
+    }
+
+    /**
+    * * Field Name: SourceQueryKeyField
+    * * Display Name: Source Query Key Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the source query's result column that holds the primary key of the list's entity. Required when SourceQueryID is set.
+    */
+    get SourceQueryKeyField(): string | null {
+        return this.Get('SourceQueryKeyField');
+    }
+    set SourceQueryKeyField(value: string | null) {
+        this.Set('SourceQueryKeyField', value);
+    }
+
+    /**
+    * * Field Name: SourceFingerprint
+    * * Display Name: Source Fingerprint
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Definition fingerprint of the source query or view at the time the list was linked, or when the owner last approved a change to the source. A refresh compares it with the source's current DefinitionFingerprint and stops when they differ. NULL until the next successful refresh fills it.
+    */
+    get SourceFingerprint(): string | null {
+        return this.Get('SourceFingerprint');
+    }
+    set SourceFingerprint(value: string | null) {
+        this.Set('SourceFingerprint', value);
+    }
+
+    /**
+    * * Field Name: AutoRefresh
+    * * Display Name: Auto Refresh
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the list refreshes from its source on a schedule through the User Routine in RefreshRoutineID. When 0 (default), it refreshes only when someone runs a refresh.
+    */
+    get AutoRefresh(): boolean {
+        return this.Get('AutoRefresh');
+    }
+    set AutoRefresh(value: boolean) {
+        this.Set('AutoRefresh', value);
+    }
+
+    /**
+    * * Field Name: RefreshRoutineID
+    * * Display Name: Refresh Routine
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: User Routines (vwUserRoutines.ID)
+    * * Description: The User Routine that refreshes this list on a schedule. Created when AutoRefresh is first turned on, and disabled (not deleted) when it is turned off, so its run history stays.
+    */
+    get RefreshRoutineID(): string | null {
+        return this.Get('RefreshRoutineID');
+    }
+    set RefreshRoutineID(value: string | null) {
+        this.Set('RefreshRoutineID', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
@@ -78580,6 +78661,24 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
     */
     get LastRefreshedByUser(): string | null {
         return this.Get('LastRefreshedByUser');
+    }
+
+    /**
+    * * Field Name: SourceQuery
+    * * Display Name: Source Query Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceQuery(): string | null {
+        return this.Get('SourceQuery');
+    }
+
+    /**
+    * * Field Name: RefreshRoutine
+    * * Display Name: Refresh Routine Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RefreshRoutine(): string | null {
+        return this.Get('RefreshRoutine');
     }
 }
 
@@ -89626,6 +89725,19 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
     set ExtractionMessage(value: string | null) {
         this.Set('ExtractionMessage', value);
+    }
+
+    /**
+    * * Field Name: DefinitionFingerprint
+    * * Display Name: Definition Fingerprint
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Hash of this query's current definition: its SQL, template flag, external source, dialect SQL and parameter contract. Stamped on every save. A list linked to this query compares it with List.SourceFingerprint before each refresh. NULL until the query is next saved or checked.
+    */
+    get DefinitionFingerprint(): string | null {
+        return this.Get('DefinitionFingerprint');
+    }
+    set DefinitionFingerprint(value: string | null) {
+        this.Set('DefinitionFingerprint', value);
     }
 
     /**
@@ -116752,6 +116864,19 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set ApprovedFingerprint(value: string | null) {
         this.Set('ApprovedFingerprint', value);
+    }
+
+    /**
+    * * Field Name: DefinitionFingerprint
+    * * Display Name: Definition Fingerprint
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Hash of this view's current definition: its entity, filters and alternate base view. Stamped on every save. A list linked to this view compares it with List.SourceFingerprint before each refresh. NULL until the view is next saved or checked.
+    */
+    get DefinitionFingerprint(): string | null {
+        return this.Get('DefinitionFingerprint');
+    }
+    set DefinitionFingerprint(value: string | null) {
+        this.Set('DefinitionFingerprint', value);
     }
 
     /**
