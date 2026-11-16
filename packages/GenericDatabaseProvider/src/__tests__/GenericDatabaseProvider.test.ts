@@ -767,6 +767,27 @@ describe('GenericDatabaseProvider', () => {
             await expect(RLS().CheckCreateRLS(entity, mockUser)).rejects.toThrow(/no resolvable SQL type/i);
         });
 
+        it('renders numbers, booleans, dates and quoted strings', async () => {
+            const values: Record<string, unknown> = { Priority: 5, Ratio: '2.5', Active: true, DueAt: new Date('2026-01-02T03:04:05.000Z'), Name: "O'Neil" };
+            const unquoted = new Set(['Priority', 'Ratio', 'Active', 'DueAt']);
+            const entity = {
+                EntityInfo: {
+                    Fields: Object.keys(values).map(n => ({ Name: n, IsVirtual: false, NeedsQuotes: !unquoted.has(n) })),
+                    GetUserRowLevelSecurityWhereClause: () => 'Priority < 10',
+                },
+                Get: (n: string) => values[n],
+            } as unknown as BaseEntity;
+            provider.executeSQLResults = [[{ pass: 1 }]];
+
+            expect(await RLS().CheckCreateRLS(entity, mockUser)).toBe(true);
+            const sql = provider.executeSQLCalls[0].sql;
+            expect(sql).toContain('5 AS "Priority"');
+            expect(sql).toContain('2.5 AS "Ratio"');
+            expect(sql).toContain('1 AS "Active"');
+            expect(sql).toContain(`'2026-01-02T03:04:05.000Z' AS "DueAt"`);
+            expect(sql).toContain(`'O''Neil' AS "Name"`);
+        });
+
         it('throws for a numeric field whose value is not a number', async () => {
             const entity = {
                 EntityInfo: {

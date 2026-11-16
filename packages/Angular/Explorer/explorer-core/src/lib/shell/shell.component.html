@@ -255,6 +255,7 @@
   <div class="search-popup" [class.open]="isSearchOpen" [attr.inert]="isSearchOpen ? null : ''">
     <div class="search-popup-content" (click)="$event.stopPropagation()">
       <mj-dropdown
+        AriaLabel="Search in"
         [Data]="searchableEntities"
         TextField="Name"
         ValueField="ID"
