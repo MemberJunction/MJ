@@ -250,7 +250,7 @@ export class WorkingRecordCommitter {
             return this.resetAndSaveDiscoveredChild(child, entityObject, statusField, status, wasPendingDelete, written, unresolved);
         }
         if (request === 'MetadataChanged') {
-            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            await this.settleMetadataChange(entityObject, written);
             this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
             return this.save(child, entityObject, written, false);
         }
@@ -262,7 +262,7 @@ export class WorkingRecordCommitter {
         const currentStatus = this.readColumn(entityObject, statusField);
         if ((isSyncWalk || dateUnchanged) && request !== 'Reextract' && (currentStatus === 'Complete' || currentStatus === 'Skipped')) {
             if (nonDateMetadataChanged) {
-                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+                await this.settleMetadataChange(entityObject, written);
             }
             if (dateChanged) {
                 this.writeColumn(entityObject, statusField, status);
@@ -274,7 +274,7 @@ export class WorkingRecordCommitter {
             return this.save(child, entityObject, written, false);
         }
         if (nonDateMetadataChanged) {
-            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            await this.settleMetadataChange(entityObject, written);
         }
         this.writeColumn(entityObject, statusField, status);
         written.push(statusField);
@@ -321,7 +321,7 @@ export class WorkingRecordCommitter {
             if (written.length === 0 && request !== 'MetadataChanged') {
                 return { RecordID: this.readColumn(entityObject, 'ID') as string, ColumnsWritten: [], Created: false };
             }
-            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            await this.settleMetadataChange(entityObject, written);
             this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
             return this.save(child, entityObject, written, false);
         }
@@ -360,12 +360,17 @@ export class WorkingRecordCommitter {
         const request = record.GetExtension<PipelineStageRequest>('Pipeline', 'request');
         if (record.Entity !== 'Content Item' || statusField !== 'ExtractionStatus' || status !== 'Complete') {
             if (request === 'MetadataChanged') {
-                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+                await this.settleMetadataChange(entityObject, written);
             }
             return false;
         }
         const extractedChecksum = record.GetExtension<string>('Pipeline', 'checksum');
         if (!extractedChecksum) {
+            // No hash to compare, so the content is taken as unchanged. A new decorator still has to
+            // reach the chunks (see settleMetadataChange); other metadata waits for a hashed extraction.
+            if (this.decoratorChanged(written)) {
+                await this.settleMetadataChange(entityObject, written);
+            }
             return false;
         }
         const isValidStoredHash = storedChecksum !== null && SHA256_HEX_PATTERN.test(storedChecksum);
@@ -376,19 +381,44 @@ export class WorkingRecordCommitter {
                 return true;
             }
             if (metadataChanged || request === 'MetadataChanged') {
-                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+                await this.settleMetadataChange(entityObject, written);
             }
             return false;
         }
         if (extractedChecksum === storedChecksum && request !== 'Reprocess') {
             if (metadataChanged || request === 'MetadataChanged') {
-                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+                await this.settleMetadataChange(entityObject, written);
             }
             return false;
         }
         written.push(...this.applyValues(entityObject, { Checksum: extractedChecksum }));
         written.push(...this.resetDownstream(record, entityObject, statusField));
         return true;
+    }
+
+    /**
+     * An item's metadata changed but its content did not. Usually only the vectors' metadata needs
+     * refreshing (`MetadataOnly`). The decorator is the exception: Segment copies it onto every chunk
+     * and Embed embeds it in front of the chunk's text, so a refresh would leave the old one in every
+     * chunk and every vector. A changed `Decorator` sends the item back to Segment instead: new chunks
+     * carry the new decorator, the old ones are retired for the Delete stage, and Embed embeds the new
+     * ones. Extraction and tagging stand, since the text did not change. A record with no Segment stage
+     * (a chunk) whose own decorator changed is embedded again in full.
+     */
+    private async settleMetadataChange(entityObject: BaseEntity, written: string[]): Promise<void> {
+        if (!this.decoratorChanged(written)) {
+            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            return;
+        }
+        const reset = this.hasField(entityObject, 'SegmentationStatus')
+            ? { SegmentationStatus: 'Pending', EmbeddingStatus: 'Pending' }
+            : { EmbeddingStatus: 'Pending' };
+        written.push(...this.applyValues(entityObject, reset), ...this.clearRetrySchedule(entityObject));
+    }
+
+    /** Whether this commit wrote a new `Decorator` (the columns written hold only values that changed). */
+    private decoratorChanged(written: readonly string[]): boolean {
+        return written.includes('Decorator');
     }
 
     /** Set `EmbeddingStatus = 'MetadataOnly'` on the item and any live embedded chunks when metadata changed. */
