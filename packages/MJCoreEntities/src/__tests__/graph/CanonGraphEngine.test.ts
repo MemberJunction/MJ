@@ -300,6 +300,45 @@ describe('CanonGraphEngine', () => {
             expect((await CanonGraphEngine.Instance.ResolveConcepts('zebra crossings', analyst)).Status).toBe('NoMatch');
         });
 
+        it('matches concept names and short acronym synonyms only at word boundaries', async () => {
+            const baseRows = CanonMetadataRows()['MJ: Graph Concepts'];
+            provider.Reset({
+                ...CanonMetadataRows(),
+                'MJ: Graph Concepts': [
+                    { ...baseRows[0], Synonyms: JSON.stringify(['AR', 'Unpaid Invoices']) },
+                    baseRows[1],
+                    baseRows[2],
+                    { ...baseRows[1], ID: '77777777-7777-4777-8777-777777777795', Name: 'Series A', Synonyms: null },
+                    { ...baseRows[1], ID: '77777777-7777-4777-8777-777777777797', Name: 'Series B', Synonyms: null },
+                    { ...baseRows[1], ID: '77777777-7777-4777-8777-777777777796', Name: 'Reopen Rate', Synonyms: null },
+                ],
+            });
+            await GraphEngine.Instance.Config(true, analyst, provider as unknown as IMetadataProvider);
+
+            expect((await CanonGraphEngine.Instance.ResolveConcepts('what are our quarterly margin targets?', analyst)).Status).toBe('NoMatch');
+
+            const seriesB = await CanonGraphEngine.Instance.ResolveConcepts('what is series b?', analyst);
+            expect(seriesB.Status).toBe('Matched');
+            expect(seriesB.Matches[0]).toMatchObject({ Kind: 'Mention', Score: 0.9 });
+            expect(seriesB.Matches[0].Node.Label).toBe('Series B');
+            expect(seriesB.Matches.find((m) => m.Node.Label === 'Series A')?.Kind).toBe('Token');
+
+            const arMention = await CanonGraphEngine.Instance.ResolveConcepts('what is our ar balance?', analyst);
+            expect(arMention.Status).toBe('Matched');
+            expect(arMention.Matches[0]).toMatchObject({ Kind: 'Mention', Score: 0.85 });
+            expect(arMention.Matches[0].Node.Label).toBe('Open AR');
+
+            const seriesA = await CanonGraphEngine.Instance.ResolveConcepts('what is series a?', analyst);
+            expect(seriesA.Status).toBe('Matched');
+            expect(seriesA.Matches[0]).toMatchObject({ Kind: 'Mention', Score: 0.9 });
+            expect(seriesA.Matches[0].Node.Label).toBe('Series A');
+            expect(seriesA.Matches.find((m) => m.Node.Label === 'Series B')?.Kind).toBe('Token');
+
+            const openPartial = await CanonGraphEngine.Instance.ResolveConcepts('open', analyst);
+            expect(openPartial.Status).toBe('Matched');
+            expect(openPartial.Matches.map((m) => m.Node.Label)).toEqual(['Open AR']);
+        });
+
         it('ClassifyConceptMatches: two exact matches tie; partial matches tie only within the margin', () => {
             const m = (label: string, score: number, kind: ConceptMatch['Kind']): ConceptMatch => ({
                 Node: { Key: label, EntityName: 'MJ: Graph Concepts', RecordID: label, Label: label, Icon: null, Description: null },

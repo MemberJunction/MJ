@@ -9,11 +9,23 @@ const EDGE_ENTITY = 'MJ: Graph Edges';
 const ENTITY_ENTITY = 'MJ: Entities';
 const DOMAIN_CONCEPT_TYPE = 'Domain';
 const DESCRIBES_EDGE_TYPE = 'Describes';
+const INFERRED_AUTHORITY_TIER = 'Inferred';
 
 /** What {@link SaveDomainProposals} wrote. */
 export interface SavedDomainProposals {
     ConceptIDs: string[];
     EdgeCount: number;
+}
+
+/** Thrown when saving a batch of domain proposals fails; `Saved` holds proposals committed before the error. */
+export class DomainProposalSaveError extends Error {
+    public readonly Saved: SavedDomainProposals;
+
+    public constructor(message: string, saved: SavedDomainProposals) {
+        super(message);
+        this.name = 'DomainProposalSaveError';
+        this.Saved = { ConceptIDs: [...saved.ConceptIDs], EdgeCount: saved.EdgeCount };
+    }
 }
 
 /** The provider shape `RunInEntityTransaction` reads. */
@@ -26,7 +38,8 @@ type TransactableProvider = Parameters<typeof RunInEntityTransaction>[0];
  *
  * Every save runs as `user` through `provider`, so entity permissions apply. Each proposal is written
  * in one transaction (where the provider supports one), so a concept never lands without its edges.
- * Throws with the failing save's message; proposals written before the failure stay written.
+ * Throws {@link DomainProposalSaveError} with the failing save's message and any proposals
+ * committed before the failure.
  */
 export async function SaveDomainProposals(
     graph: MJGraphEntity,
@@ -36,19 +49,28 @@ export async function SaveDomainProposals(
 ): Promise<SavedDomainProposals> {
     const lookups = resolveLookups(graph, provider);
     const saved: SavedDomainProposals = { ConceptIDs: [], EdgeCount: 0 };
-    for (const proposal of proposals) {
-        // A server provider exposes entity transactions; a client one runs the work as-is.
-        const conceptId = await RunInEntityTransaction(provider as TransactableProvider, () => saveOne(graph, proposal, lookups, user, provider));
-        saved.ConceptIDs.push(conceptId);
-        saved.EdgeCount += proposal.Members.length;
+    try {
+        for (const proposal of proposals) {
+            // A server provider exposes entity transactions; a client one runs the work as-is.
+            const conceptId = await RunInEntityTransaction(provider as TransactableProvider, () => saveOne(graph, proposal, lookups, user, provider));
+            saved.ConceptIDs.push(conceptId);
+            saved.EdgeCount += proposal.Members.length;
+        }
+        return saved;
+    } catch (error: unknown) {
+        if (error instanceof DomainProposalSaveError) {
+            throw error;
+        }
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new DomainProposalSaveError(msg, saved);
     }
-    return saved;
 }
 
 interface WriterLookups {
     DomainTypeID: string;
     DescribesTypeID: string;
     DescribesWeight: number;
+    InferredTierID: string | null;
     EntityEntityID: string;
     ConceptEntityID: string;
 }
@@ -59,6 +81,7 @@ function resolveLookups(graph: MJGraphEntity, provider: IMetadataProvider): Writ
     const describes = engine.EdgeTypes.find(
         (t) => t.Name.trim().toLowerCase() === DESCRIBES_EDGE_TYPE.toLowerCase() && (t.GraphID == null || UUIDsEqual(t.GraphID, graph.ID)),
     );
+    const inferredTier = engine.AuthorityTiers.find((t) => t.Name.trim().toLowerCase() === INFERRED_AUTHORITY_TIER.toLowerCase());
     const entityEntity = provider.EntityByName(ENTITY_ENTITY);
     const conceptEntity = provider.EntityByName(CONCEPT_ENTITY);
     if (!domainType) {
@@ -74,6 +97,7 @@ function resolveLookups(graph: MJGraphEntity, provider: IMetadataProvider): Writ
         DomainTypeID: domainType.ID,
         DescribesTypeID: describes.ID,
         DescribesWeight: describes.DefaultWeight,
+        InferredTierID: inferredTier?.ID ?? null,
         EntityEntityID: entityEntity.ID,
         ConceptEntityID: conceptEntity.ID,
     };
@@ -85,6 +109,9 @@ async function saveOne(graph: MJGraphEntity, proposal: DomainProposal, lookups: 
     concept.GraphID = graph.ID;
     concept.Name = proposal.Name;
     concept.ConceptTypeID = lookups.DomainTypeID;
+    if (lookups.InferredTierID != null) {
+        concept.AuthorityTierID = lookups.InferredTierID;
+    }
     concept.Description = proposal.Description;
     concept.Status = 'Proposed';
     if (!(await concept.Save())) {

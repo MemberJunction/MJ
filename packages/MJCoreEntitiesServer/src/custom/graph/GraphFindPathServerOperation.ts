@@ -33,7 +33,7 @@ export class GraphFindPathServerOperation extends GraphFindPathOperation {
         }
         const graphName = input.GraphName?.trim() || DEFAULT_GRAPH_NAME;
         const result = await CanonGraphEngine.Instance.FindPathBetween(graphName, input.From, input.To, TraversalOptionsOf(input), user, provider);
-        return FindPathOutputOf(result);
+        return FindPathOutputOf(result, provider);
     }
 }
 
@@ -59,14 +59,14 @@ export function TraversalOptionsOf(input: GraphFindPathInput): GraphTraversalOpt
 }
 
 /** The wire form of an engine path result. */
-export function FindPathOutputOf(result: GraphPathRequestResult): GraphFindPathOutput {
+export function FindPathOutputOf(result: GraphPathRequestResult, provider?: IMetadataProvider): GraphFindPathOutput {
     return {
         Status: result.Status,
         Nodes: result.Path.Nodes.map(nodeOf),
         Edges: result.Path.Edges.map(edgeOf),
         PathWeight: result.Path.PathWeight,
-        PromptText: result.Status === 'Found' || result.Status === 'NoPath' ? GraphEngine.Instance.DescribePathForPrompt(result.Path) : '',
-        AmbiguousEndpoint: result.Endpoint,
+        PromptText: result.Status === 'Found' || result.Status === 'NoPath' ? GraphEngine.Instance.DescribePathForPrompt(result.Path, provider) : '',
+        Endpoint: result.Endpoint,
         Candidates: result.Candidates.map((c) => ({ Name: c.Node.Label, RecordID: c.Node.RecordID, Description: c.Node.Description, Score: c.Score })),
         Message: result.Path.Message,
     };

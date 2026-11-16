@@ -128,6 +128,7 @@ export function ProposeEntityDomains(entities: readonly EntityInfo[], options: P
             proposals.push(buildProposal(memberIds, graph.Edges, byId));
         }
     }
+    disambiguateProposalNames(proposals, byId);
     proposals.sort((a, b) => b.Members.length - a.Members.length || b.Cohesion - a.Cohesion || compareText(a.Name, b.Name));
     return proposals.slice(0, Math.max(0, options.MaxDomains ?? DEFAULT_MAX_DOMAINS));
 }
@@ -258,6 +259,42 @@ function buildProposal(memberIds: readonly string[], edges: readonly DomainGraph
     rows.sort((a, b) => (internal.get(NormalizeUUID(b.EntityID)) ?? 0) - (internal.get(NormalizeUUID(a.EntityID)) ?? 0) || compareText(a.EntityName, b.EntityName));
     const cohesion = roundTo4(internalWeight / Math.max(internalWeight + cutWeight, GAIN_EPSILON));
     return { Name: `${DisplayEntityLabel(rows[0].EntityName)} domain`, Description: describeProposal(rows, cohesion), Members: rows, Cohesion: cohesion };
+}
+
+function disambiguateProposalNames(proposals: DomainProposal[], byId: ReadonlyMap<string, EntityInfo>): void {
+    for (const group of groupProposalsByName(proposals).values()) {
+        if (group.length < 2) {
+            continue;
+        }
+        for (const proposal of group) {
+            const lead = proposal.Members[0];
+            const schema = lead ? byId.get(NormalizeUUID(lead.EntityID))?.SchemaName?.trim() : '';
+            if (schema) {
+                proposal.Name = `${DisplayEntityLabel(lead.EntityName)} (${schema}) domain`;
+            }
+        }
+    }
+    for (const group of groupProposalsByName(proposals).values()) {
+        if (group.length < 2) {
+            continue;
+        }
+        group.sort((a, b) => compareText(NormalizeUUID(a.Members[0]?.EntityID ?? ''), NormalizeUUID(b.Members[0]?.EntityID ?? '')));
+        group.forEach((proposal, index) => {
+            const base = proposal.Name.endsWith(' domain') ? proposal.Name.slice(0, -' domain'.length) : proposal.Name;
+            proposal.Name = `${base} (${index + 1}) domain`;
+        });
+    }
+}
+
+function groupProposalsByName(proposals: readonly DomainProposal[]): Map<string, DomainProposal[]> {
+    const grouped = new Map<string, DomainProposal[]>();
+    for (const proposal of proposals) {
+        const key = proposal.Name.trim().toLowerCase();
+        const bucket = grouped.get(key) ?? [];
+        bucket.push(proposal);
+        grouped.set(key, bucket);
+    }
+    return grouped;
 }
 
 function describeProposal(members: readonly DomainProposalMember[], cohesion: number): string {

@@ -139,6 +139,20 @@ describe('ProposeEntityDomains', () => {
         const b = ProposeEntityDomains([...salesAndSupport(3)].reverse());
         expect(b).toEqual(a);
     });
+
+    it('disambiguates colliding domain names across schemas with the lead entity schema', () => {
+        const id = (n: number): string => `BBBBBBBB-0000-0000-0000-${String(n).padStart(12, '0')}`;
+        const multiSchema: EntityInfo[] = [
+            entity({ id: id(1), name: 'CRM: Contacts', schema: 'crm', refs: [id(2), id(3)] }),
+            entity({ id: id(2), name: 'CRM: Contact Notes', schema: 'crm', refs: [id(1), id(3)] }),
+            entity({ id: id(3), name: 'CRM: Contact Activities', schema: 'crm', refs: [id(1)] }),
+            entity({ id: id(4), name: 'Support: Contacts', schema: 'support', refs: [id(5), id(6)] }),
+            entity({ id: id(5), name: 'Support: Contact Cases', schema: 'support', refs: [id(4), id(6)] }),
+            entity({ id: id(6), name: 'Support: Contact SLAs', schema: 'support', refs: [id(4)] }),
+        ];
+        const names = ProposeEntityDomains(multiSchema).map((p) => p.Name).sort();
+        expect(names).toEqual(['Contacts (crm) domain', 'Contacts (support) domain']);
+    });
 });
 
 describe('DisplayEntityLabel', () => {

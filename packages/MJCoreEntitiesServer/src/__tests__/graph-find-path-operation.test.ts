@@ -47,11 +47,12 @@ const found: GraphPathRequestResult = {
 
 describe('GraphFindPathServerOperation', () => {
     let betweenSpy: ReturnType<typeof vi.spyOn>;
+    let describeSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
         vi.restoreAllMocks();
         betweenSpy = vi.spyOn(CanonGraphEngine.Instance, 'FindPathBetween').mockResolvedValue(found);
-        vi.spyOn(GraphEngine.Instance, 'DescribePathForPrompt').mockReturnValue('### Graph Path (1 hop, weight 0.90)');
+        describeSpy = vi.spyOn(GraphEngine.Instance, 'DescribePathForPrompt').mockReturnValue('### Graph Path (1 hop, weight 0.90)');
     });
 
     it('forwards the request as the caller through the request provider, defaulting the graph to MJ Canon', async () => {
@@ -63,6 +64,7 @@ describe('GraphFindPathServerOperation', () => {
         expect(options).toMatchObject({ Direction: 'Both', Depth: 3, IncludeProposed: false });
         expect(user).toBe(caller);
         expect(usedProvider).toBe(provider);
+        expect(describeSpy).toHaveBeenCalledWith(found.Path, provider);
         expect(output.Status).toBe('Found');
         expect(output.Nodes.map((n) => n.Label)).toEqual(['Open AR', 'Open AR by Quarter']);
         expect(output.Edges[0]).toEqual({
@@ -90,9 +92,21 @@ describe('GraphFindPathServerOperation', () => {
         });
         const output = await new TestableOperation().Run({ From: { Concept: 'Open AR' }, To: { Concept: 'open' } });
         expect(output.Status).toBe('AmbiguousEndpoint');
-        expect(output.AmbiguousEndpoint).toBe('To');
+        expect(output.Endpoint).toBe('To');
         expect(output.Candidates).toEqual([{ Name: 'Open Orders', RecordID: 'c-9', Description: null, Score: 0.9 }]);
         expect(output.PromptText).toBe('');
+
+        betweenSpy.mockResolvedValue({
+            Status: 'EndpointNotFound',
+            Endpoint: 'From',
+            Path: { Found: false, Nodes: [], Edges: [], PathWeight: 0 },
+            Candidates: [],
+        });
+        const missing = await new TestableOperation().Run({ From: { Concept: 'zebra' }, To: { Concept: 'Open AR' } });
+        expect(missing.Status).toBe('EndpointNotFound');
+        expect(missing.Endpoint).toBe('From');
+        expect(missing.Candidates).toEqual([]);
+        expect(missing.PromptText).toBe('');
     });
 
     it('refuses a request missing an endpoint before reaching the engine', async () => {

@@ -103,4 +103,20 @@ describe('FindGraphPathAction', () => {
         expect((await run([{ Name: 'GraphName', Value: 'Nope' }, { Name: 'From', Value: 'a' }, { Name: 'To', Value: 'b' }])).ResultCode).toBe('GRAPH_NOT_FOUND');
         expect((await run([{ Name: 'From', Value: 'Open AR' }])).ResultCode).toBe('MISSING_PARAMETER');
     });
+
+    it('forwards params.Provider to FindPathBetween and DescribePathForPrompt', async () => {
+        const customProvider = { Entities: [] } as unknown as RunActionParams['Provider'];
+        const betweenSpy = vi.spyOn(CanonGraphEngine.Instance, 'FindPathBetween');
+        const describeSpy = vi.spyOn(GraphEngine.Instance, 'DescribePathForPrompt');
+        await new TestableFindGraphPathAction().RunForTest({
+            ContextUser: caller,
+            Provider: customProvider,
+            Params: [
+                { Name: 'From', Value: 'Open AR', Type: 'Input' },
+                { Name: 'To', Value: 'Accounts Receivable', Type: 'Input' },
+            ],
+        } as unknown as RunActionParams);
+        expect(betweenSpy.mock.calls[0][5]).toBe(customProvider);
+        expect(describeSpy).toHaveBeenCalledWith(foundPath, customProvider);
+    });
 });

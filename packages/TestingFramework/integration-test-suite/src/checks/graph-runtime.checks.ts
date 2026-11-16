@@ -32,6 +32,7 @@ import { UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     GraphEngine,
+    GraphFindPathOperation,
     LoadGraphEdgeProviders,
     QueryEngine,
     type GraphEdgeView,
@@ -43,7 +44,7 @@ import {
     type MJQueryEntityExtended,
     type MJQueryPermissionEntity,
 } from '@memberjunction/core-entities';
-import { GRAPH_APPROVE_EDGES_AUTHORIZATION } from '@memberjunction/core-entities-server';
+import { GRAPH_APPROVE_EDGES_AUTHORIZATION, LoadGraphFindPathServerOperation } from '@memberjunction/core-entities-server';
 import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
 import { RunActionParams } from '@memberjunction/actions-base';
 import {
@@ -476,10 +477,27 @@ export const GraphRuntimeChecks: NamedCheck[] = [
                 { Name: 'From', Value: from },
                 { Name: 'To', Value: to },
             ]);
+            const findAction = ActionEngineServer.Instance.Actions.find((a) => a.Name === FIND_PATH_ACTION && a.Status === 'Active');
+            Assert(findAction != null, `"${FIND_PATH_ACTION}" metadata row must be loaded`);
+            const findParams = ActionEngineServer.Instance.ActionParams.filter((p) => UUIDsEqual(p.ActionID, findAction!.ID));
+            Assert(
+                findParams.some((p) => p.Name === 'GraphName' && p.Type === 'Input'),
+                `"${FIND_PATH_ACTION}" must own its seeded GraphName input param`,
+            );
             AssertEqual(run.ResultCode, 'SUCCESS', `Find Graph Path between two real entities: ${run.Message}`);
             const hops = (run.Params ?? []).find((x) => x.Name === 'HopCount' && x.Type === 'Output')?.Value;
             Assert(typeof hops === 'number' && hops >= 1, `expected HopCount >= 1, got ${String(hops)}`);
-            console.log(`      → ${path.Edges.length}-hop path found; hidden endpoint answered like a missing one; action returned ${String(hops)} hop(s)`);
+
+            LoadGraphFindPathServerOperation();
+            const opResult = await new GraphFindPathOperation().Execute(
+                { From: from, To: { Concept: '__no_such_concept_6667__' } },
+                { provider: ctx.Provider, user: ctx.User },
+            );
+            Assert(opResult.Success, `Graph.FindPath remote op failed unexpectedly: ${opResult.ErrorMessage ?? ''}`);
+            AssertEqual(opResult.Output?.Status, 'EndpointNotFound', 'Graph.FindPath reports EndpointNotFound for an unknown endpoint');
+            AssertEqual(opResult.Output?.Endpoint, 'To', 'Graph.FindPath names the missing endpoint side as To');
+
+            console.log(`      → ${path.Edges.length}-hop path found; hidden endpoint answered like a missing one; action returned ${String(hops)} hop(s); remote op Endpoint=To`);
         },
     },
     {
@@ -491,6 +509,13 @@ export const GraphRuntimeChecks: NamedCheck[] = [
             const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, PROPOSE_DOMAINS_ACTION);
             Assert(registration != null, `no BaseAction is registered as "${PROPOSE_DOMAINS_ACTION}"`);
             const run = await runActionAsCaller(ctx, PROPOSE_DOMAINS_ACTION, [{ Name: 'SchemaNames', Value: [ctx.Provider.ConfigData.MJCoreSchemaName] }]);
+            const proposeAction = ActionEngineServer.Instance.Actions.find((a) => a.Name === PROPOSE_DOMAINS_ACTION && a.Status === 'Active');
+            Assert(proposeAction != null, `"${PROPOSE_DOMAINS_ACTION}" metadata row must be loaded`);
+            const proposeParams = ActionEngineServer.Instance.ActionParams.filter((p) => UUIDsEqual(p.ActionID, proposeAction!.ID));
+            Assert(
+                proposeParams.some((p) => p.Name === 'GraphName' && p.Type === 'Input'),
+                `"${PROPOSE_DOMAINS_ACTION}" must own its seeded GraphName input param without colliding with "${FIND_PATH_ACTION}"`,
+            );
             AssertEqual(run.ResultCode, 'SUCCESS', `a dry run over the core schema proposes domains: ${run.Message}`);
             const proposals = (run.Params ?? []).find((x) => x.Name === 'Proposals' && x.Type === 'Output')?.Value;
             Assert(Array.isArray(proposals) && proposals.length >= 2, `expected at least two proposed domains, got ${Array.isArray(proposals) ? proposals.length : 'none'}`);

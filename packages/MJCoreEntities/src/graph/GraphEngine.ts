@@ -644,17 +644,17 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
      * Render a {@link GraphPath} as one Markdown line per hop for LLM prompt injection. Each edge is
      * shown in its own direction, so a hop taken against an edge reads `<--`.
      */
-    public DescribePathForPrompt(path: GraphPath): string {
+    public DescribePathForPrompt(path: GraphPath, provider?: IMetadataProvider): string {
         if (!path.Found || path.Nodes.length === 0) {
             return path.Message ? `No graph path found. ${path.Message}` : 'No graph path found.';
         }
-        const provider = this.graphProvider();
+        const resolvedProvider = this.graphProvider(provider);
         const lines: string[] = [`### Graph Path (${path.Edges.length} hop${path.Edges.length === 1 ? '' : 's'}, weight ${path.PathWeight.toFixed(2)})`];
         lines.push(`- **[${path.Nodes[0].EntityName}] ${path.Nodes[0].Label}**`);
         for (let i = 0; i < path.Edges.length; i++) {
             const edge = path.Edges[i];
             const next = path.Nodes[i + 1];
-            const forward = this.nodeKey(edge.Source, provider) === path.Nodes[i].Key;
+            const forward = this.nodeKey(edge.Source, resolvedProvider) === path.Nodes[i].Key;
             const arrow = !edge.IsDirected ? '<-->' : forward ? '-->' : '<--';
             const desc = edge.Description ? ` (${edge.Description})` : '';
             lines.push(`  ${arrow} [${edge.TypeName} (${edge.Weight.toFixed(2)})]${desc} **[${next.EntityName}] ${next.Label}**`);

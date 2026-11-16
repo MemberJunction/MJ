@@ -1,7 +1,14 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { LogError, Metadata } from '@memberjunction/core';
-import { CanonGraphEngine, GraphEngine, SaveDomainProposals, type DomainProposal, type ProposeEntityDomainsOptions } from '@memberjunction/core-entities';
+import {
+    CanonGraphEngine,
+    DomainProposalSaveError,
+    GraphEngine,
+    SaveDomainProposals,
+    type DomainProposal,
+    type ProposeEntityDomainsOptions,
+} from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import {
     GetGraphActionBoolean,
@@ -67,6 +74,23 @@ export class ProposeCanonDomainsAction extends BaseAction {
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`ProposeCanonDomainsAction failed: ${msg}`);
+            if (error instanceof DomainProposalSaveError) {
+                const conceptsCreated = error.Saved.ConceptIDs.length;
+                const edgesCreated = error.Saved.EdgeCount;
+                SetGraphActionOutput(params, 'ConceptsCreated', conceptsCreated);
+                SetGraphActionOutput(params, 'EdgesCreated', edgesCreated);
+                const partialNote =
+                    conceptsCreated > 0
+                        ? ` (${conceptsCreated} concept${conceptsCreated === 1 ? '' : 's'} and ${edgesCreated} edge${edgesCreated === 1 ? '' : 's'} saved before failure)`
+                        : '';
+                return {
+                    Success: false,
+                    ResultCode: 'UNEXPECTED_ERROR',
+                    Message: `Propose Canon Domains failed${partialNote}: ${msg}`,
+                    ConceptsCreated: conceptsCreated,
+                    EdgesCreated: edgesCreated,
+                };
+            }
             return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: `Propose Canon Domains failed: ${msg}` };
         }
     }

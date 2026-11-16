@@ -6,7 +6,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
 import type { RunActionParams } from '@memberjunction/actions-base';
-import { CanonGraphEngine, GraphEngine, type DomainProposal, type MJGraphConceptTypeEntity, type MJGraphEdgeTypeEntity, type MJGraphEntity } from '@memberjunction/core-entities';
+import {
+    CanonGraphEngine,
+    GraphEngine,
+    type DomainProposal,
+    type MJGraphAuthorityTierEntity,
+    type MJGraphConceptTypeEntity,
+    type MJGraphEdgeTypeEntity,
+    type MJGraphEntity,
+} from '@memberjunction/core-entities';
 import { ProposeCanonDomainsAction, type ProposeCanonDomainsActionResult } from '../custom/data/propose-canon-domains.action';
 
 const caller = { ID: 'u-1', Name: 'User 1', UserRoles: [{ UserID: 'u-1', RoleID: 'r-1', Role: 'Curator' }] } as unknown as UserInfo;
@@ -69,6 +77,7 @@ describe('ProposeCanonDomainsAction', () => {
         proposeSpy = vi.spyOn(CanonGraphEngine.Instance, 'ProposeDomainConcepts').mockResolvedValue([proposal]);
         vi.spyOn(GraphEngine.Instance, 'ConceptTypes', 'get').mockReturnValue([{ ID: 'ct-domain', Name: 'Domain' }] as unknown as MJGraphConceptTypeEntity[]);
         vi.spyOn(GraphEngine.Instance, 'EdgeTypes', 'get').mockReturnValue([{ ID: 'et-describes', Name: 'Describes', GraphID: null, DefaultWeight: 0.7 }] as unknown as MJGraphEdgeTypeEntity[]);
+        vi.spyOn(GraphEngine.Instance, 'AuthorityTiers', 'get').mockReturnValue([{ ID: 'at-inferred', Name: 'Inferred' }] as unknown as MJGraphAuthorityTierEntity[]);
     });
 
     it('only returns proposals by default (dry run), passing the parsed options to the engine', async () => {
@@ -87,7 +96,14 @@ describe('ProposeCanonDomainsAction', () => {
         expect(result.ConceptsCreated).toBe(1);
         expect(result.EdgesCreated).toBe(3);
         const [conceptRow, ...edges] = saved;
-        expect(conceptRow).toMatchObject({ entityName: 'MJ: Graph Concepts', Name: 'Deals domain', ConceptTypeID: 'ct-domain', Status: 'Proposed', GraphID: 'g-canon' });
+        expect(conceptRow).toMatchObject({
+            entityName: 'MJ: Graph Concepts',
+            Name: 'Deals domain',
+            ConceptTypeID: 'ct-domain',
+            AuthorityTierID: 'at-inferred',
+            Status: 'Proposed',
+            GraphID: 'g-canon',
+        });
         expect(edges).toHaveLength(3);
         expect(edges[0]).toMatchObject({
             entityName: 'MJ: Graph Edges',
@@ -107,7 +123,29 @@ describe('ProposeCanonDomainsAction', () => {
         const result = await run([{ Name: 'DryRun', Value: false }], fakeProvider([], 'Deals domain'));
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('UNEXPECTED_ERROR');
+        expect(result.ConceptsCreated).toBe(0);
+        expect(result.EdgesCreated).toBe(0);
         expect(result.Message).toContain('permission denied');
+    });
+
+    it('reports partial ConceptsCreated and EdgesCreated counts when a later proposal in a batch fails', async () => {
+        const secondProposal: DomainProposal = { ...proposal, Name: 'Orders domain' };
+        proposeSpy.mockResolvedValue([proposal, secondProposal]);
+        const saved: Array<Record<string, unknown>> = [];
+        const params = [{ Name: 'DryRun', Value: false, Type: 'Input' as const }];
+        const result = await new TestableProposeCanonDomainsAction().RunForTest({
+            ContextUser: caller,
+            Provider: fakeProvider(saved, 'Orders domain'),
+            Params: params,
+        } as unknown as RunActionParams);
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('UNEXPECTED_ERROR');
+        expect(result.ConceptsCreated).toBe(1);
+        expect(result.EdgesCreated).toBe(3);
+        expect(result.Message).toContain('1 concept and 3 edges saved before failure');
+        expect(result.Message).toContain('permission denied');
+        expect(params.find((p) => p.Name === 'ConceptsCreated')?.Value).toBe(1);
+        expect(params.find((p) => p.Name === 'EdgesCreated')?.Value).toBe(3);
     });
 
     it('answers NO_PROPOSALS when there is nothing new, and GRAPH_NOT_FOUND for an unknown graph', async () => {

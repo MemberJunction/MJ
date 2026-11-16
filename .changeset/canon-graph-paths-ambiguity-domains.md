@@ -2,6 +2,8 @@
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
 "@memberjunction/core-actions": minor
+"@memberjunction/server-bootstrap": minor
+"@memberjunction/server-bootstrap-lite": minor
 ---
 
 Semantic graph: path finding, ambiguity reporting, and deterministic domain proposals (minor because it adds action, agent-binding and remote-operation metadata).

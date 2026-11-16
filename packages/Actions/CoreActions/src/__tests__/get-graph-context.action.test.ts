@@ -99,6 +99,22 @@ describe('GetGraphContextAction', () => {
         expect(subgraphSpy.mock.calls[0][1]).toEqual([{ EntityName: 'MJ: Graph Concepts', EntityID: undefined, RecordID: 'c-open-ar' }]);
     });
 
+    it('skips non-visible concept ID seeds without calling Subgraph or ResolveConcepts', async () => {
+        vi.spyOn(GraphEngine.Instance, 'Concepts', 'get').mockReturnValue([
+            { ID: '33333333-3333-4333-8333-333333333333', GraphID: 'g-canon', Name: 'Draft Concept', Status: 'Proposed' },
+            { ID: '44444444-4444-4444-8444-444444444444', GraphID: 'g-canon', Name: 'Old Concept', Status: 'Deprecated' },
+        ] as unknown as typeof GraphEngine.Instance.Concepts);
+        const hidden = await run([{ Name: 'Seeds', Value: ['33333333-3333-4333-8333-333333333333', '44444444-4444-4444-8444-444444444444'] }]);
+        expect(hidden.Success).toBe(true);
+        expect(hidden.ResultCode).toBe('NO_MATCH');
+        expect(resolveSpy).not.toHaveBeenCalled();
+        expect(subgraphSpy).not.toHaveBeenCalled();
+
+        const withProposed = await run([{ Name: 'Seeds', Value: ['33333333-3333-4333-8333-333333333333'] }, { Name: 'IncludeProposed', Value: true }]);
+        expect(withProposed.ResultCode).toBe('SUCCESS');
+        expect(subgraphSpy.mock.calls[0][1]).toEqual([{ EntityName: 'MJ: Graph Concepts', RecordID: '33333333-3333-4333-8333-333333333333' }]);
+    });
+
     it('reports AMBIGUOUS_CONCEPT with the candidates when the question fits several concepts equally well, and still returns their context', async () => {
         const candidates = [match(concept, 0.9, 'Partial'), match(openOrders, 0.9, 'Partial')];
         resolveSpy.mockResolvedValue({ Status: 'Ambiguous', Matches: candidates, Candidates: candidates });

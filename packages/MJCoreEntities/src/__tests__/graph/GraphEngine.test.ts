@@ -560,7 +560,8 @@ describe('GraphEngine', () => {
             const n3 = NODE.Account('n3');
 
             it('returns the fewest-hop path, in order, with the edge joining each pair', async () => {
-                const engine = await configure(chainProvider());
+                const chainProv = chainProvider();
+                const engine = await configure(chainProv);
                 const path = await engine.FindPath('MJ Canon', canonSeed[0], n3, {}, analyst);
                 expect(path.Found).toBe(true);
                 expect(path.Nodes.map((n) => n.RecordID)).toEqual([IDS.ConceptOpenAr, 'n1', 'n2', 'n3']);
@@ -568,6 +569,7 @@ describe('GraphEngine', () => {
                 expect(path.Edges[2].Source.RecordID).toBe('n2');
                 expect(path.PathWeight).toBeCloseTo(path.Nodes[3].PathWeight ?? 0);
                 expect(engine.DescribePathForPrompt(path)).toContain('### Graph Path (3 hops');
+                expect(engine.DescribePathForPrompt(path, chainProv as unknown as IMetadataProvider)).toContain('### Graph Path (3 hops');
             });
 
             it('says no path when the end is beyond the depth limit', async () => {

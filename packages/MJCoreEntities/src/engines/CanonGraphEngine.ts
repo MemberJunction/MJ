@@ -525,12 +525,13 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         matchable: MatchableConceptFields,
     ): Array<{ Concept: MJGraphConceptEntity; Score: number; Kind: ConceptMatchKind }> {
         const queryTokens = tokenizeAlphanumeric(query);
+        const queryWords = tokenizeAlphanumeric(query, 1);
         const scored: Array<{ Concept: MJGraphConceptEntity; Score: number; Kind: ConceptMatchKind }> = [];
         for (const concept of GraphEngine.Instance.Concepts) {
             if (!IsGraphConceptStatusVisible(concept.Status, includeProposed) || !graphIds.Has(concept.GraphID)) {
                 continue;
             }
-            const match = scoreConceptMatch(concept, query, queryTokens, matchable);
+            const match = scoreConceptMatch(concept, query, queryWords, queryTokens, matchable);
             if (match.Score > 0) {
                 scored.push({ Concept: concept, Score: match.Score, Kind: match.Kind });
             }
@@ -799,6 +800,7 @@ function emptyPath(message: string | undefined): GraphPath {
 function scoreConceptMatch(
     concept: MJGraphConceptEntity,
     queryLower: string,
+    queryWords: readonly string[],
     queryTokens: readonly string[],
     matchable: MatchableConceptFields,
 ): { Score: number; Kind: ConceptMatchKind } {
@@ -806,23 +808,23 @@ function scoreConceptMatch(
     if (nameLower && nameLower === queryLower) {
         return { Score: 1.0, Kind: 'Exact' };
     }
-    if (nameLower && queryLower.includes(nameLower)) {
+    const synonyms = matchable.Synonyms ? parseSynonyms(concept.Synonyms).map((s) => s.toLowerCase()) : [];
+    if (synonyms.some((syn) => syn === queryLower)) {
+        return { Score: 0.95, Kind: 'Exact' };
+    }
+    const nameWords = nameLower ? tokenizeAlphanumeric(nameLower, 1) : [];
+    if (nameWords.length > 0 && containsTokenSequence(queryWords, nameWords)) {
         return { Score: 0.9, Kind: 'Mention' };
     }
-    if (nameLower && nameLower.startsWith(queryLower)) {
+    if (queryLower.length >= 2 && nameWords.length > 0 && isPrefixFragmentOf(nameWords, queryWords)) {
         return { Score: 0.9, Kind: 'Partial' };
     }
-    const synonyms = matchable.Synonyms ? parseSynonyms(concept.Synonyms).map((s) => s.toLowerCase()) : [];
-    for (const syn of synonyms) {
-        if (syn === queryLower) {
-            return { Score: 0.95, Kind: 'Exact' };
-        }
-        if (queryLower.includes(syn)) {
-            return { Score: 0.85, Kind: 'Mention' };
-        }
-        if (syn.includes(queryLower)) {
-            return { Score: 0.85, Kind: 'Partial' };
-        }
+    const synonymWords = synonyms.map((s) => tokenizeAlphanumeric(s, 1));
+    if (synonymWords.some((words) => containsTokenSequence(queryWords, words))) {
+        return { Score: 0.85, Kind: 'Mention' };
+    }
+    if (queryLower.length >= 2 && synonymWords.some((words) => isPrefixFragmentOf(words, queryWords))) {
+        return { Score: 0.85, Kind: 'Partial' };
     }
     if (queryTokens.length > 0) {
         const candidateTokens = new Set(tokenizeAlphanumeric([nameLower, ...synonyms].join(' ')));
@@ -834,7 +836,46 @@ function scoreConceptMatch(
     return { Score: 0, Kind: 'Token' };
 }
 
-function tokenizeAlphanumeric(input: string): string[] {
+function containsTokenSequence(haystack: readonly string[], needle: readonly string[]): boolean {
+    if (needle.length === 0 || needle.length > haystack.length) {
+        return false;
+    }
+    for (let i = 0; i <= haystack.length - needle.length; i++) {
+        let allMatch = true;
+        for (let k = 0; k < needle.length; k++) {
+            if (haystack[i + k] !== needle[k]) {
+                allMatch = false;
+                break;
+            }
+        }
+        if (allMatch) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function isPrefixFragmentOf(candidate: readonly string[], query: readonly string[]): boolean {
+    if (query.length === 0 || query.length > candidate.length) {
+        return false;
+    }
+    const lastIdx = query.length - 1;
+    for (let i = 0; i <= candidate.length - query.length; i++) {
+        let prefixMatch = true;
+        for (let k = 0; k < lastIdx; k++) {
+            if (candidate[i + k] !== query[k]) {
+                prefixMatch = false;
+                break;
+            }
+        }
+        if (prefixMatch && candidate[i + lastIdx].startsWith(query[lastIdx])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function tokenizeAlphanumeric(input: string, minLength = 2): string[] {
     const tokens: string[] = [];
     let start = -1;
     for (let i = 0; i <= input.length; i++) {
@@ -845,7 +886,7 @@ function tokenizeAlphanumeric(input: string): string[] {
                 start = i;
             }
         } else if (start !== -1) {
-            if (i - start >= 2) {
+            if (i - start >= minLength) {
                 tokens.push(input.slice(start, i));
             }
             start = -1;

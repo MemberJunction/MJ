@@ -322,8 +322,8 @@ export interface GraphFindPathCandidate {
  * - `Found`: `Nodes` run from From to To, and `Edges[i]` joins `Nodes[i]` and `Nodes[i + 1]`.
  * - `NoPath`: the endpoints are not connected within the limits by anything the caller may see.
  *   A record the caller cannot see gives this same answer.
- * - `AmbiguousEndpoint`: `AmbiguousEndpoint` names the side and `Candidates` lists the concepts it fits.
- * - `EndpointNotFound`: an endpoint names no concept the caller may see.
+ * - `AmbiguousEndpoint`: `Endpoint` names the side and `Candidates` lists the concepts it fits.
+ * - `EndpointNotFound`: `Endpoint` names the side whose concept could not be found or seen by the caller.
  * - `GraphNotFound`: the graph is unknown or not active.
  */
 export interface GraphFindPathOutput {
@@ -335,7 +335,7 @@ export interface GraphFindPathOutput {
     /** The path as compact Markdown, one line per hop. */
     PromptText: string;
     /** Which endpoint was ambiguous or not found, when that is the status. */
-    AmbiguousEndpoint?: 'From' | 'To';
+    Endpoint?: 'From' | 'To';
     Candidates: GraphFindPathCandidate[];
     Message?: string;
 }
@@ -2093,7 +2093,7 @@ export class GraphFindPathOperation extends BaseRemotableOperation<GraphFindPath
     public readonly OperationKey = "Graph.FindPath";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_b3d8130afd9fc1c7";
+    public readonly ContractFingerprint = "ro_fp_75cf012a87110c1f";
 }
 
 // ============================================================

@@ -4,6 +4,7 @@ import { LogError } from '@memberjunction/core';
 import {
     CanonGraphEngine,
     GraphEngine,
+    IsGraphConceptStatusVisible,
     type ConceptMatch,
     type FindConceptsOptions,
     type GraphNodeRef,
@@ -192,7 +193,9 @@ export class GetGraphContextAction extends BaseAction {
                 const text = item.trim();
                 const byId = conceptsById.Get(text);
                 if (byId) {
-                    pushSeed({ EntityName: 'MJ: Graph Concepts', RecordID: byId.ID });
+                    if (IsGraphConceptStatusVisible(byId.Status, conceptSearch.IncludeProposed === true)) {
+                        pushSeed({ EntityName: 'MJ: Graph Concepts', RecordID: byId.ID });
+                    }
                 } else {
                     await this.addTextSeeds(text, GetGraphContextAction.SEED_TEXT_MATCHES, conceptSearch, params, result, pushSeed);
                 }

@@ -120,7 +120,7 @@ export class FindGraphPathAction extends BaseAction {
     }
 
     private pathResult(params: RunActionParams, graphName: string, path: GraphPath): FindGraphPathActionResult {
-        const promptText = GraphEngine.Instance.DescribePathForPrompt(path);
+        const promptText = GraphEngine.Instance.DescribePathForPrompt(path, params.Provider);
         const hopCount = path.Found ? path.Edges.length : 0;
         SetGraphActionOutput(params, 'Path', path);
         SetGraphActionOutput(params, 'PromptText', promptText);
