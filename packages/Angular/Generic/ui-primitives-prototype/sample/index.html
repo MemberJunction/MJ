@@ -3,38 +3,37 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self';"
-    />
+    <meta name="csp-nonce" content="__CSP_NONCE__" />
     <title>Project Lego Wave 0 Prototype Gate</title>
     <link rel="stylesheet" href="../dist/element/mj-wave0-prototype.css" />
     <link rel="stylesheet" href="./gate.css" />
-    <script defer src="../dist/element/mj-wave0-prototype.js"></script>
-    <script defer src="./gate.js"></script>
+    <script nonce="__CSP_NONCE__" defer src="../dist/element/mj-wave0-prototype.js"></script>
+    <script nonce="__CSP_NONCE__" defer src="./gate.js"></script>
   </head>
   <body>
     <main class="gate-shell">
       <header class="gate-topbar">
-        <div class="gate-heading">
-          <span class="gate-eyebrow">Project Lego · Wave 0 Gate</span>
-          <h1 class="gate-title">Surface, Layer &amp; Row</h1>
-          <p class="gate-subtitle">
-            Same Angular Element markup rendered across three token themes under strict CSP and hostile host CSS.
-          </p>
-        </div>
-
-        <div class="host-controls" role="toolbar" aria-label="Look and layer controls">
+        <div class="gate-brand-row">
+          <div class="gate-heading">
+            <span class="gate-eyebrow">Project Lego · Wave 0 Gate</span>
+            <h1 class="gate-title">Surface, Layer &amp; Row</h1>
+            <p class="gate-subtitle">
+              Identical Angular Element markup rendered across three token looks on CDK Overlay.
+            </p>
+          </div>
           <div class="gate-segmented" role="group" aria-label="Theme look">
             <button type="button" class="host-btn is-active" data-set-look="mj">Look: MJ Default</button>
             <button type="button" class="host-btn" data-set-look="lxp">Look: LXP</button>
             <button type="button" class="host-btn" data-set-look="editorial">Look: Editorial</button>
           </div>
+        </div>
+
+        <div class="host-controls" role="toolbar" aria-label="Theme and overlay controls">
+          <button type="button" class="host-btn" id="toggle-theme">Toggle Dark</button>
           <div class="gate-actions">
-            <button type="button" class="host-btn" id="toggle-theme">Toggle Dark</button>
             <button type="button" class="host-btn host-btn-primary" id="open-dialog">Open Dialog</button>
             <button type="button" class="host-btn" id="open-sheet">Open Sheet</button>
-            <button type="button" class="host-btn" id="open-popover">Open Popover</button>
+            <button type="button" class="host-btn" id="open-popover">Open Popover ▾</button>
           </div>
         </div>
       </header>
@@ -43,7 +42,7 @@
         <mj-surface level="base" elevation="sm">
           <div class="mj-surface-header">
             <span>Active Modules</span>
-            <span class="gate-badge">2 items</span>
+            <span class="gate-badge">3 items</span>
           </div>
           <div class="mj-surface-body">
             <mj-row interactive="true" selected="true">
@@ -53,7 +52,7 @@
                 <span class="gate-row-meta">Brand-derived selection state</span>
               </span>
               <span class="mj-row-trailing">
-                <span class="gate-badge">Active</span>
+                <span class="gate-badge gate-badge-accent">Selected</span>
               </span>
             </mj-row>
             <mj-row interactive="true" tone="plum" visual-role="nav-item">
@@ -66,40 +65,65 @@
                 <button type="button" class="host-btn host-btn-sm">Configure</button>
               </span>
             </mj-row>
+            <mj-row interactive="true">
+              <span class="mj-row-leading gate-avatar gate-avatar-neutral" aria-hidden="true">LY</span>
+              <span class="mj-row-content">
+                <span class="gate-row-title">CDK Overlay &amp; Announcer</span>
+                <span class="gate-row-meta">Shared LIFO stack for dialog, sheet &amp; popover</span>
+              </span>
+              <span class="mj-row-trailing">
+                <span class="gate-badge">Ready</span>
+              </span>
+            </mj-row>
           </div>
           <div class="mj-surface-footer">
-            <span class="gate-row-meta">Updated just now</span>
+            <span class="gate-row-meta">All primitives running zoneless</span>
+            <span class="gate-row-meta">v0.1</span>
           </div>
         </mj-surface>
 
         <mj-surface level="elevated" elevation="md" class="host-override-surface">
           <div class="mj-surface-footer">
             <span class="gate-badge">Parts reordered · footer first</span>
+            <span class="gate-row-meta">Host override</span>
           </div>
           <div class="mj-surface-body">
-            <span class="gate-row-title">Elevated Host Override Zone</span>
-            <span class="gate-row-meta">
-              Headerless surface with footer projected first and an unlayered host dashed border (no !important).
-            </span>
-            <mj-row density="sm" interactive="true">
-              <span class="mj-row-content">
-                <span class="gate-row-title">Compact density row</span>
-                <span class="gate-row-meta">32px desktop · 44px on coarse pointer</span>
+            <div class="gate-section-intro">
+              <span class="gate-row-title">Host Escape-Hatch Zone</span>
+              <span class="gate-row-meta">
+                Header omitted, footer projected first, and dashed border applied by an unlayered host rule without !important.
               </span>
-              <span class="mj-row-trailing">→</span>
-            </mj-row>
+            </div>
+            <mj-surface level="sunken" padding="sm">
+              <div class="mj-surface-body">
+                <mj-row density="sm" interactive="true">
+                  <span class="mj-row-content">
+                    <span class="gate-row-title">Compact density row</span>
+                    <span class="gate-row-meta">32px desktop · 44px touch target</span>
+                  </span>
+                  <span class="mj-row-trailing">→</span>
+                </mj-row>
+                <mj-row density="sm" tone="success">
+                  <span class="mj-row-content">
+                    <span class="gate-row-title">WCAG 2.1 AA Verified</span>
+                    <span class="gate-row-meta">Zero axe violations across all looks</span>
+                  </span>
+                  <span class="mj-row-trailing">✓</span>
+                </mj-row>
+              </div>
+            </mj-surface>
           </div>
         </mj-surface>
       </div>
 
       <mj-layer id="proto-dialog" kind="dialog" modal="true" closeable="true" label="Prototype Dialog">
         <div class="mj-layer-header">
-          <h2 class="mj-layer-title">Publish Wave 0 Tokens?</h2>
-          <button type="button" class="host-btn host-btn-sm" data-close-layer="proto-dialog" aria-label="Close dialog">✕</button>
+          <h2 class="mj-layer-title">Publish Wave 0 Foundation?</h2>
+          <button type="button" class="host-btn host-btn-icon" data-close-layer="proto-dialog" aria-label="Close dialog">✕</button>
         </div>
         <div class="mj-layer-body">
           <p class="gate-dialog-copy">
-            Focus is trapped inside this CDK Overlay, Escape dismisses it and returns focus to the trigger, and on phone widths it collapses into a bottom sheet.
+            This dialog renders inside CDK Overlay's top layer over a translucent backdrop. Focus is trapped inside, Escape dismisses it and restores focus, and phone viewports collapse it into a bottom sheet.
           </p>
         </div>
         <div class="mj-layer-footer">
@@ -111,11 +135,11 @@
       <mj-layer id="proto-sheet" kind="sheet" placement="end" modal="true" closeable="true" label="Prototype Sheet">
         <div class="mj-layer-header">
           <h2 class="mj-layer-title">Layer Inspector</h2>
-          <button type="button" class="host-btn host-btn-sm" data-close-layer="proto-sheet" aria-label="Close sheet">✕</button>
+          <button type="button" class="host-btn host-btn-icon" data-close-layer="proto-sheet" aria-label="Close sheet">✕</button>
         </div>
         <div class="mj-layer-body">
           <p class="gate-dialog-copy">
-            Slide-out sheet sharing the same CDK Overlay stack, focus trap, and ref-counted scroll lock.
+            Slide-out sheet sharing the same MJLayerService stack, focus trap, and scroll block. Nested custom elements stay alive across open/close cycles via DomPortal.
           </p>
           <mj-surface level="sunken" padding="sm">
             <div class="mj-surface-body">
@@ -127,8 +151,14 @@
               </mj-row>
               <mj-row density="sm">
                 <span class="mj-row-content">
-                  <span class="gate-row-title">CSP Mode</span>
-                  <span class="gate-row-meta">style-src 'self' (no unsafe-inline)</span>
+                  <span class="gate-row-title">Change Detection</span>
+                  <span class="gate-row-meta">Zoneless signals (no zone.js patch)</span>
+                </span>
+              </mj-row>
+              <mj-row density="sm">
+                <span class="mj-row-content">
+                  <span class="gate-row-title">Token Source</span>
+                  <span class="gate-row-meta">@memberjunction/ng-shared-generic</span>
                 </span>
               </mj-row>
             </div>
@@ -141,15 +171,15 @@
 
       <mj-layer id="proto-popover" kind="popover" modal="false" closeable="true" anchor="#open-popover" label="Prototype Popover">
         <div class="mj-layer-body">
-          <p class="gate-popover-title">Quick Actions</p>
+          <span class="gate-popover-label">Switch Theme Preset</span>
           <mj-row density="sm" interactive="true" data-popover-action="mj">
-            <span class="mj-row-content">Switch to MJ Default</span>
+            <span class="mj-row-content">MJ Default</span>
           </mj-row>
           <mj-row density="sm" interactive="true" data-popover-action="lxp">
-            <span class="mj-row-content">Switch to LXP</span>
+            <span class="mj-row-content">Sidecar LXP</span>
           </mj-row>
           <mj-row density="sm" interactive="true" data-popover-action="editorial">
-            <span class="mj-row-content">Switch to Editorial</span>
+            <span class="mj-row-content">Editorial Serif</span>
           </mj-row>
         </div>
         <div class="mj-layer-footer">

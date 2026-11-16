@@ -1,13 +1,12 @@
-import { Injectable, TemplateRef, ViewContainerRef, inject, DOCUMENT } from '@angular/core';
+import { Injectable, inject, DOCUMENT } from '@angular/core';
 import { Overlay, OverlayConfig, OverlayRef, PositionStrategy } from '@angular/cdk/overlay';
-import { TemplatePortal } from '@angular/cdk/portal';
+import { DomPortal } from '@angular/cdk/portal';
 import { ConfigurableFocusTrap, ConfigurableFocusTrapFactory } from '@angular/cdk/a11y';
 import { Subscription } from 'rxjs';
 
 export interface MJLayerOpenRequest {
   Id: string;
-  Template: TemplateRef<unknown>;
-  ViewContainerRef: ViewContainerRef;
+  PanelElement: HTMLElement;
   Kind: string;
   Placement: string;
   Modal: boolean;
@@ -20,16 +19,16 @@ export interface MJLayerOpenRequest {
 interface ActiveOverlayEntry {
   Id: string;
   OverlayRef: OverlayRef;
+  Portal: DomPortal<HTMLElement>;
   FocusTrap: ConfigurableFocusTrap | null;
   PreviousFocus: HTMLElement | null;
   Subscriptions: Subscription;
-  Request: MJLayerOpenRequest;
 }
 
 /**
  * Single CDK-backed overlay stack manager for Wave 0 layers.
- * Uses @angular/cdk/overlay for portal rendering outside transformed ancestors,
- * open-order stacking, scroll blocking, backdrop clicks, Escape handling, and focus trap/restore.
+ * Uses DomPortal so nested Angular Elements inside a closed <mj-layer> stay connected
+ * in a hidden staging container rather than being destroyed on disconnect.
  */
 @Injectable({ providedIn: 'root' })
 export class MJLayerService {
@@ -39,7 +38,7 @@ export class MJLayerService {
 
   private readonly stack: ActiveOverlayEntry[] = [];
 
-  /** Opens a layer via CDK Overlay and registers it on top of the LIFO stack. */
+  /** Opens a layer via CDK Overlay + DomPortal and registers it on top of the LIFO stack. */
   public Open(request: MJLayerOpenRequest): OverlayRef {
     this.Close(request.Id);
 
@@ -48,7 +47,7 @@ export class MJLayerService {
 
     const config = this.buildOverlayConfig(request);
     const overlayRef = this.overlay.create(config);
-    const portal = new TemplatePortal(request.Template, request.ViewContainerRef);
+    const portal = new DomPortal(request.PanelElement);
     overlayRef.attach(portal);
 
     let focusTrap: ConfigurableFocusTrap | null = null;
@@ -93,16 +92,16 @@ export class MJLayerService {
     this.stack.push({
       Id: request.Id,
       OverlayRef: overlayRef,
+      Portal: portal,
       FocusTrap: focusTrap,
       PreviousFocus: previousFocus,
       Subscriptions: subs,
-      Request: request,
     });
 
     return overlayRef;
   }
 
-  /** Closes and disposes the CDK Overlay for a layer id and restores focus. */
+  /** Closes and disposes the CDK Overlay, returning the panel DOM back to its staging parent. */
   public Close(id: string): void {
     const index = this.stack.findIndex((entry) => entry.Id === id);
     if (index === -1) {
@@ -113,6 +112,9 @@ export class MJLayerService {
     removed.Subscriptions.unsubscribe();
     if (removed.FocusTrap) {
       removed.FocusTrap.destroy();
+    }
+    if (removed.OverlayRef.hasAttached()) {
+      removed.OverlayRef.detach();
     }
     removed.OverlayRef.dispose();
 
@@ -135,7 +137,11 @@ export class MJLayerService {
   }
 
   private buildOverlayConfig(request: MJLayerOpenRequest): OverlayConfig {
-    let positionStrategy: PositionStrategy = this.overlay.position().global().centerHorizontally().centerVertically();
+    let positionStrategy: PositionStrategy = this.overlay
+      .position()
+      .global()
+      .centerHorizontally()
+      .centerVertically();
 
     if (request.Kind === 'sheet') {
       if (request.Placement === 'bottom') {
@@ -152,9 +158,9 @@ export class MJLayerService {
           .position()
           .flexibleConnectedTo(anchorEl)
           .withPositions([
-            { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 8 },
             { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 8 },
-            { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -8 },
+            { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 8 },
+            { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -8 },
           ]);
       } else {
         positionStrategy = this.overlay.position().global().left('24px').top('72px');

@@ -64,7 +64,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     // Look 3: Editorial (dense, flat, square corners, serif)
     await page.getByRole('button', { name: 'Look: Editorial' }).click();
     await expect(firstSurface).toHaveCSS('border-radius', '0px');
-    await expect(firstSurface).toHaveCSS('padding-top', '8px');
+    await expect(firstSurface).toHaveCSS('padding-top', '12px');
     await expect(firstSurface).toHaveCSS('font-family', /Georgia/);
     await expect(page).toHaveScreenshot(`gate-editorial-light-${testInfo.project.name}.png`, {
       fullPage: false,
@@ -132,7 +132,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await page.goto('/');
     await page.waitForSelector('mj-surface.mj-surface');
 
-    const compactRow = page.locator('mj-row[density="sm"]');
+    const compactRow = page.locator('mj-row[density="sm"][interactive="true"]').first();
 
     // Focus-visible check across all 3 looks (press Tab first so Chromium enables :focus-visible)
     await page.keyboard.press('Tab');

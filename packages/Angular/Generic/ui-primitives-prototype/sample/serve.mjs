@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { randomBytes } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +18,10 @@ const MIME = {
 const server = createServer((req, res) => {
   const urlPath = (req.url || '/').split('?')[0];
   const rel = urlPath === '/' ? 'sample/index.html' : urlPath.replace(/^\/+/, '');
-  const target = resolve(packageRoot, rel.startsWith('dist/') || rel.startsWith('sample/') ? rel : join('sample', rel));
+  const target = resolve(
+    packageRoot,
+    rel.startsWith('dist/') || rel.startsWith('sample/') ? rel : join('sample', rel)
+  );
 
   if (!target.startsWith(packageRoot) || !existsSync(target)) {
     res.writeHead(404);
@@ -26,6 +30,18 @@ const server = createServer((req, res) => {
   }
 
   const ext = extname(target);
+  if (ext === '.html') {
+    const nonce = randomBytes(16).toString('base64');
+    const html = readFileSync(target, 'utf8').replaceAll('__CSP_NONCE__', nonce);
+    res.writeHead(200, {
+      'Content-Type': MIME['.html'],
+      'Content-Security-Policy':
+        `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}' 'unsafe-hashes'; style-src-attr 'unsafe-inline';`,
+    });
+    res.end(html);
+    return;
+  }
+
   res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
   res.end(readFileSync(target));
 });

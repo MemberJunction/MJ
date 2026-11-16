@@ -3,8 +3,6 @@ import {
   Directive,
   ElementRef,
   OnDestroy,
-  TemplateRef,
-  ViewContainerRef,
   ViewEncapsulation,
   booleanAttribute,
   computed,
@@ -51,16 +49,18 @@ export class MJLayerBodyDirective {}
 export class MJLayerFooterDirective {}
 
 /**
- * Wave 0 overlay primitive rendered via CDK Overlay (MJLayerService).
- * Uses two-way `open` model so Escape/backdrop dismissal cannot leave a zombie DOM panel.
+ * Wave 0 overlay primitive rendered via CDK Overlay + DomPortal (MJLayerService).
+ * Keeps its panel connected inside `.mj-layer-staging` while closed so nested
+ * Angular Elements (<mj-surface>, <mj-row>) are never destroyed on disconnect.
  */
 @Component({
   selector: 'mj-layer',
   standalone: true,
   encapsulation: ViewEncapsulation.None,
   template: `
-    <ng-template #layerTemplate>
+    <div class="mj-layer-staging" aria-hidden="true">
       <div
+        #layerPanel
         class="mj-layer-panel mj-surface-overlay"
         tabindex="-1"
         [attr.role]="ariaRole()"
@@ -73,17 +73,16 @@ export class MJLayerFooterDirective {}
       >
         <ng-content />
       </div>
-    </ng-template>
+    </div>
   `,
 })
 export class MJLayerComponent implements OnDestroy {
   private readonly hostEl = inject(ElementRef<HTMLElement>);
-  private readonly viewContainerRef = inject(ViewContainerRef);
   private readonly layerService = inject(MJLayerService);
   private readonly announcer = inject(MJAnnouncerService);
   private readonly layerId = `mj-layer-${++nextLayerId}`;
 
-  private readonly layerTemplate = viewChild<TemplateRef<unknown>>('layerTemplate');
+  private readonly layerPanel = viewChild<ElementRef<HTMLElement>>('layerPanel');
 
   public readonly kind = input<string>('dialog');
   public readonly placement = input<string>('center');
@@ -121,15 +120,14 @@ export class MJLayerComponent implements OnDestroy {
 
     effect(() => {
       const shouldBeOpen = this.isOpenState();
-      const template = this.layerTemplate();
+      const panelEl = this.layerPanel()?.nativeElement;
 
-      if (shouldBeOpen && template && !this.isCurrentlyOpen) {
+      if (shouldBeOpen && panelEl && !this.isCurrentlyOpen) {
         this.isCurrentlyOpen = true;
         untracked(() => {
           this.layerService.Open({
             Id: this.layerId,
-            Template: template,
-            ViewContainerRef: this.viewContainerRef,
+            PanelElement: panelEl,
             Kind: this.kind(),
             Placement: this.placement(),
             Modal: this.modal(),

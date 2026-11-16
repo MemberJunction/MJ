@@ -8,13 +8,17 @@ const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, '..');
 
-// 1. Compile real _tokens.scss from @memberjunction/ng-shared-generic (no hand-copied tokens).
-const sharedPkgPath = require.resolve('@memberjunction/ng-shared-generic/package.json');
-const tokensScssPath = join(dirname(sharedPkgPath), 'dist', 'lib', '_tokens.scss');
-const tokensScss = readFileSync(tokensScssPath, 'utf8');
+// 1. Compile real _tokens.scss from @memberjunction/ng-shared-generic.
+const sharedPkgDir = dirname(require.resolve('@memberjunction/ng-shared-generic/package.json'));
+const tokensScss = readFileSync(join(sharedPkgDir, 'dist', 'lib', '_tokens.scss'), 'utf8');
 const compiledTokensCss = compileString(tokensScss).css;
 
-// 2. Wave 0 additions (WS6b radius roles, control heights, surface levels, brand-derived selected bg, open tone/role defaults).
+// 2. Read real @angular/cdk prebuilt overlay + a11y CSS (includes .cdk-overlay-popover top-layer reset).
+const cdkPkgDir = dirname(require.resolve('@angular/cdk/package.json'));
+const cdkOverlayCss = readFileSync(join(cdkPkgDir, 'overlay-prebuilt.css'), 'utf8');
+const cdkA11yCss = readFileSync(join(cdkPkgDir, 'a11y-prebuilt.css'), 'utf8');
+
+// 3. Wave 0 foundation additions (WS6b radius roles, control heights, surface levels, open tone defaults).
 const wave0FoundationCss = `
 :root {
   --mj-control-height-sm: 32px;
@@ -51,7 +55,6 @@ const wave0FoundationCss = `
   --mj-surface-overlay-border: var(--mj-border-default);
   --mj-surface-overlay-shadow: var(--mj-shadow-xl);
 
-  /* Default shipped tones on the open tone axis */
   --mj-tone-success-text: var(--mj-status-success-text);
   --mj-tone-success-border: var(--mj-status-success-border);
   --mj-tone-success-bg: var(--mj-status-success-bg);
@@ -120,7 +123,7 @@ const wave0FoundationCss = `
 const primitivesCssPath = resolve(packageRoot, 'src/lib/styles/primitives-prototype.css');
 const primitivesCss = readFileSync(primitivesCssPath, 'utf8');
 
-const combinedCss = `@layer reset, foundation, primitives;\n\n@layer foundation {\n${compiledTokensCss}\n${wave0FoundationCss}\n}\n\n${primitivesCss}`;
+const combinedCss = `@layer reset, foundation, primitives;\n\n@layer foundation {\n${compiledTokensCss}\n${wave0FoundationCss}\n}\n\n@layer primitives {\n${cdkOverlayCss}\n${cdkA11yCss}\n}\n\n${primitivesCss}`;
 
 const outTsPath = resolve(packageRoot, 'src/lib/styles/prototype-css.generated.ts');
 writeFileSync(
