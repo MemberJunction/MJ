@@ -33,7 +33,7 @@ export interface Risk { ID: string; File: string; Symbol: string; WhatCouldBreak
 /** `Fallback` is true when the analyzer reply was invalid twice; the analysis then has no risks and no LLM-ranked packages. It is null in an analysis that did not record it. */
 export interface ChangeAnalysis {
     RunID: string; IntentType: IntentType; Summary: string; Risks: Risk[]; PackagesToTest: string[];
-    ChangedFiles: ChangedFile[]; CommitPrefix: string | null; RiskScore: number; Title: string; Body: string;
+    ChangedFiles: ChangedFile[]; CommitPrefix: string | null; RiskScore: number; Title: string; Body: string; CommitMessages: string;
     Fallback: boolean | null;
 }
 

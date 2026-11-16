@@ -24,6 +24,10 @@ export class GitRepo {
     public async FirstParent(sha: string): Promise<string> { return this.ResolveSHA(`${sha}^1`); }
     /** The subject line of commit `sha`, trimmed. */
     public async Subject(sha: string): Promise<string> { return (await this.git(['log', '-1', '--format=%s', sha])).trim(); }
+    /** The subject and body of every non-merge commit in base..head, newest first, without blank lines. */
+    public async Messages(base: string, head: string): Promise<string> {
+        return (await this.git(['log', '--no-merges', '--format=%s%n%b', `${base}..${head}`])).split('\n').filter((l) => l.trim()).join('\n');
+    }
     public async Fetch(ref: string): Promise<void> { await this.git(['fetch', '--no-tags', 'origin', ref]); }
     /** Unified diff of base..head. `NoRenames` shows a renamed file as a delete of the old path plus an add of the new one. */
     public async Diff(base: string, head: string, paths: string[] = [], o: { NoRenames?: boolean } = {}): Promise<string> {

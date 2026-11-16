@@ -12,9 +12,12 @@ export const BUCKET_SCORE: Record<Bucket, number> = { High: 1, Medium: 0, Low: -
 /** The panel's result for one weak catch. `Usage` lists the token usage each judge reported, in judge order. */
 export interface PanelResult { TPProb: number | null; Buckets: JudgeBucket[]; Median: Bucket | null; Usage: TokenUsage[]; }
 
+/** Character cap of the PR body and of the commit messages in the judge input. */
+const TEXT_MAX = 4000;
+
 /**
- * §9.2 judge input for one weak catch. The run-constant part (intent, diff, PR title and summary) comes first and the
- * per-catch part (boosts, risk, mutant, test, head failure) after it. PR title and summary form one untrusted block,
+ * §9.2 judge input for one weak catch. The run-constant part (intent, diff, PR title, summary, body and commit messages) comes first and the
+ * per-catch part (boosts, risk, mutant, test, head failure) after it. The PR texts form one untrusted block,
  * test source and head failure another; markers are removed from every free-text field. With `markCachePrefix`, the
  * Anthropic cache marker sits between the two parts; the text is otherwise the same.
  */
@@ -24,7 +27,14 @@ export function BuildJudgeInput(c: CatchContext, markCachePrefix = false): strin
     const shared = [
         `Intent: ${c.Analysis.IntentType}`,
         `Diff:\n${NeutraliseMarkers(diff).slice(0, 40_000)}`,
-        [UNTRUSTED_OPEN, `PR title: ${NeutraliseMarkers(c.Analysis.Title)}`, `PR summary: ${NeutraliseMarkers(c.Analysis.Summary)}`, UNTRUSTED_CLOSE].join('\n'),
+        [
+            UNTRUSTED_OPEN,
+            `PR title: ${NeutraliseMarkers(c.Analysis.Title)}`,
+            `PR summary: ${NeutraliseMarkers(c.Analysis.Summary)}`,
+            `PR body:\n${NeutraliseMarkers(c.Analysis.Body).slice(0, TEXT_MAX)}`,
+            `Commit messages:\n${NeutraliseMarkers(c.Analysis.CommitMessages).slice(0, TEXT_MAX)}`,
+            UNTRUSTED_CLOSE,
+        ].join('\n'),
     ].join('\n\n');
     const perCatch = [
         `Boosts that fired: ${c.Boosts.join(', ') || 'none'}`,
