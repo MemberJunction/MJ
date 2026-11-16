@@ -29,7 +29,7 @@ describe('GenerateStep', () => {
       },
       Analyzer: { Analyze: async (_run, text) => { pr = text; return a; }, Usage: { Model: 'claude-sonnet-5-5', InputTokens: 7, OutputTokens: 3, CacheReadTokens: 1, CostUSD: 0.25 } },
       Generator: { Generate: async (r: GenerationRequest): Promise<GenerationResult> => { requests.push(r); return { Tests: r.Method === 'DodgyDiff' ? [candidate(ID_A)] : [], Tokens: { Model: 'm', InputTokens: 2, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.5 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }; } },
-      PackageMap: { Get: (n: string) => (n === PKG ? { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true } : null), PackageForPath: (p: string) => (p.startsWith(`${PKG_DIR}/`) ? { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true } : null) },
+      PackageMap: { Get: (n: string) => (n === PKG ? { Name: PKG, Dir: PKG_DIR, HasVitest: true } : null), PackageForPath: (p: string) => (p.startsWith(`${PKG_DIR}/`) ? { Name: PKG, Dir: PKG_DIR, HasVitest: true } : null) },
     };
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const subject = vi.fn(async () => 'fix(x): keep Open');
@@ -57,7 +57,7 @@ describe('GenerateStep', () => {
         BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
       Analyzer: { Analyze: async () => { order.push('analyze'); return a; }, Usage: { Model: 'm', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 } },
       Generator: { Generate: async (): Promise<GenerationResult> => ({ Tests: [], Tokens: { Model: 'm', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }) },
-      PackageMap: { Get: (n: string) => ({ Name: n, Dir: PKG_DIR, HasVitest: true, HasTests: true }), PackageForPath: () => null },
+      PackageMap: { Get: (n: string) => ({ Name: n, Dir: PKG_DIR, HasVitest: true }), PackageForPath: () => null },
     };
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Local', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
@@ -76,7 +76,7 @@ describe('GenerateStep', () => {
         PackagesAt: (_r: PreparedRevision, p: string[]) => p.filter((n) => n !== NEW) },
       Analyzer: { Analyze: async () => a, Usage: { Model: 'claude-sonnet-5-5', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 } },
       Generator: { Generate: async (r: GenerationRequest): Promise<GenerationResult> => { requests.push(r); return { Tests: [], Tokens: { Model: 'm', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }; } },
-      PackageMap: { Get: (n: string) => (n === PKG ? { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true } : n === NEW ? { Name: NEW, Dir: 'packages/New', HasVitest: true, HasTests: false } : null), PackageForPath: () => null },
+      PackageMap: { Get: (n: string) => (n === PKG ? { Name: PKG, Dir: PKG_DIR, HasVitest: true } : n === NEW ? { Name: NEW, Dir: 'packages/New', HasVitest: true } : null), PackageForPath: () => null },
     };
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr: string[] = []; vi.spyOn(process.stderr, 'write').mockImplementation((c) => { stderr.push(String(c)); return true; });
@@ -95,7 +95,7 @@ describe('GenerateStep', () => {
     const a: ChangeAnalysis = { ...analysis(), Risks: [
       { ID: 'R1', File: `${PKG_DIR}/src/svc.ts`, Symbol: 'Open', WhatCouldBreak: 'x', HowObserved: 'y' },
       { ID: 'R3', File: `${PKG_DIR}/src/svc.ts`, Symbol: 'Close', WhatCouldBreak: 'x', HowObserved: 'y' }] };
-    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true };
     const tools: GenerateTools = {
       EnsureImage: async () => undefined,
       Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
@@ -115,7 +115,7 @@ describe('GenerateStep', () => {
   it('records a session that throws as one failed test and still writes generation.json', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
     const a: ChangeAnalysis = { ...analysis(), Risks: [{ ID: 'R1', File: `${PKG_DIR}/src/svc.ts`, Symbol: 'Open', WhatCouldBreak: 'x', HowObserved: 'y' }] };
-    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true };
     const tools: GenerateTools = {
       EnsureImage: async () => undefined,
       Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
@@ -140,7 +140,7 @@ describe('GenerateStep', () => {
 
   it('keeps the usage a failed session reported on its Failed test and in the run totals', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
-    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true };
     const spent = { Model: DEFAULT_SETTINGS.GeneratorModel, InputTokens: 900, OutputTokens: 40, CacheReadTokens: 300, CostUSD: 0.75 };
     const tools: GenerateTools = {
       EnsureImage: async () => undefined,
@@ -161,7 +161,7 @@ describe('GenerateStep', () => {
 
   it('throws a GenerateError with the run ID, the analyzer and finished session usage and the cause when it fails after the analyzer ran', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck(['super-secret-value-123']);
-    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true };
     const tools: GenerateTools = {
       EnsureImage: async () => undefined,
       Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
@@ -190,7 +190,7 @@ describe('GenerateStep', () => {
 
   describe('risks per session', () => {
     const five = ['R1', 'R2', 'R3', 'R4', 'R5'].map((id) => ({ ID: id, File: `${PKG_DIR}/src/svc.ts`, Symbol: id, WhatCouldBreak: 'x', HowObserved: 'y' }));
-    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true };
     const settings = { ...DEFAULT_SETTINGS, Limits: { ...DEFAULT_SETTINGS.Limits, RisksPerPackage: 5, RisksPerSession: 3 } };
     async function run(generate: GenerateTools['Generator']['Generate']) {
       const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
@@ -232,10 +232,10 @@ describe('GenerateStep', () => {
       },
       Analyzer: { Analyze: async (_run, text) => { pr = text; return { ...analysis(), Risks: [] }; }, Usage: { Model: 'a', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 } },
       Generator: { Generate: async (): Promise<GenerationResult> => ({ Tests: [], Tokens: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }) },
-      PackageMap: { Get: (n: string) => (n === PKG ? { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true } : null), PackageForPath: () => null },
+      PackageMap: { Get: (n: string) => (n === PKG ? { Name: PKG, Dir: PKG_DIR, HasVitest: true } : null), PackageForPath: () => null },
     };
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    const getPr = vi.fn(async () => ({ Number: 12, Title: 'fix(x): keep Open', Body: 'Open must stay open.', HeadSHA: 'c'.repeat(40), BaseRef: 'next', HeadRepo: 'o/r', Author: 'a' }));
+    const getPr = vi.fn(async () => ({ Number: 12, Title: 'fix(x): keep Open', Body: 'Open must stay open.', HeadSHA: 'c'.repeat(40) }));
     const { RunID } = await GenerateStep({ PR: 12, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Backtest', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
       Deps: { GitHub: { GetPullRequest: getPr }, Repo: { Fetch: async (ref: string) => { fetches.push(ref); }, MergeBase: vi.fn(), Subject: vi.fn() }, Redaction: redaction, ForRun: () => tools } });
 
@@ -247,7 +247,7 @@ describe('GenerateStep', () => {
 
   it('records how long each stage took in generation.json and prints them on one stdout line', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
-    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true };
     let now = 0;
     const tools: GenerateTools = {
       EnsureImage: async () => { now += 500; },

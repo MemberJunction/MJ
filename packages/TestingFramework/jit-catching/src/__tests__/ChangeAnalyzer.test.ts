@@ -14,7 +14,7 @@ const diff = `diff --git a/packages/MJCore/src/generic/securityInfo.ts b/package
  c
 `;
 const repo = { ChangedPaths: async () => ['packages/MJCore/src/generic/securityInfo.ts', 'README.md'], Diff: async () => diff, Messages: async () => '' } as never;
-const pm = { PackageForPath: (p: string) => (p.startsWith('packages/MJCore/') ? { Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true } : null) } as never;
+const pm = { PackageForPath: (p: string) => (p.startsWith('packages/MJCore/') ? { Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true } : null) } as never;
 const run: Run = { ID: 'r', Trigger: 'Local', PRNumber: 1, BaseSHA: 'a'.repeat(40), HeadSHA: 'b'.repeat(40), Status: 'Generated', GeneratorModel: 'm', TokensByModel: [], RunnerMinutes: 0, StartedAt: new Date().toISOString(), EndedAt: null };
 const answer = { intent_type: 'perf', summary: 'caches permission checks', risks: [{ file: 'packages/MJCore/src/generic/securityInfo.ts', symbol: 'canRead', what_could_break: 'cache key ignores the user', how_observed: 'second user gets first user answer' }], packages_to_test: ['@memberjunction/core'] };
 
@@ -46,7 +46,7 @@ describe('ChangeAnalyzer', () => {
   it('tests the packages of the highest-ranked risks before the other packages the LLM lists', async () => {
     const paths = ['packages/A/src/a.ts', 'packages/B/src/b.ts', 'packages/C/src/c.ts'];
     const threeRepo = { ChangedPaths: async () => paths, Diff: async () => '', Messages: async () => '' } as never;
-    const threePm = { PackageForPath: (p: string) => { const d = /^packages\/([ABC])\//.exec(p)?.[1]; return d ? { Name: `@x/${d.toLowerCase()}`, Dir: `packages/${d}`, HasVitest: true, HasTests: true } : null; } } as never;
+    const threePm = { PackageForPath: (p: string) => { const d = /^packages\/([ABC])\//.exec(p)?.[1]; return d ? { Name: `@x/${d.toLowerCase()}`, Dir: `packages/${d}`, HasVitest: true } : null; } } as never;
     const risk = (file: string) => ({ file, symbol: 's', what_could_break: 'w', how_observed: 'h' });
     const llm = new TestLLM().Script({ kind: 'succeed', content: JSON.stringify({ ...answer, risks: [risk('packages/C/src/c.ts'), risk('packages/A/src/a.ts')], packages_to_test: ['@x/a', '@x/b'] }) });
     const settings = { ...DEFAULT_SETTINGS, Limits: { ...DEFAULT_SETTINGS.Limits, PackagesPerPR: 2 } };
@@ -81,7 +81,7 @@ diff --git a/packages/X/src/types.d.ts b/packages/X/src/types.d.ts
 +b
 `;
     const xRepo = { ChangedPaths: async () => ['packages/X/src/__mocks__/a.ts', 'packages/X/src/types.d.ts'], Diff: async () => mockDiff, Messages: async () => '' } as never;
-    const xPm = { PackageForPath: (p: string) => (p.startsWith('packages/X/') ? { Name: '@memberjunction/x', Dir: 'packages/X', HasVitest: true, HasTests: true } : null) } as never;
+    const xPm = { PackageForPath: (p: string) => (p.startsWith('packages/X/') ? { Name: '@memberjunction/x', Dir: 'packages/X', HasVitest: true } : null) } as never;
     const llm = new TestLLM().Script({ kind: 'succeed', content: JSON.stringify({ ...answer, intent_type: 'fix', packages_to_test: ['@memberjunction/x'] }) });
     const a = await new ChangeAnalyzer({ Repo: xRepo, PackageMap: xPm, LLM: llm, Model: 'm', Settings: DEFAULT_SETTINGS }).Analyze(run, { Title: 'fix: x', Body: '' });
     expect(a.ChangedFiles).toEqual([]);

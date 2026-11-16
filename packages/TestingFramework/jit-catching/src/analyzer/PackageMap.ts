@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-export interface WorkspacePackage { Name: string; Dir: string; HasVitest: boolean; HasTests: boolean; }
+export interface WorkspacePackage { Name: string; Dir: string; HasVitest: boolean; }
 
 /** Workspace packages by name and by directory, read from `pnpm-workspace.yaml` globs (`packages/*` and `packages/A/B/*` shapes only). */
 export class PackageMap {
@@ -17,7 +17,7 @@ export class PackageMap {
                 const dir = join(parent, entry); const pj = join(dir, 'package.json');
                 if (!statSync(dir).isDirectory() || !existsSync(pj)) continue;
                 const name = (JSON.parse(readFileSync(pj, 'utf8')) as { name?: string }).name; if (!name) continue;
-                const pkg: WorkspacePackage = { Name: name, Dir: relative(root, dir).split(sep).join('/'), HasVitest: existsSync(join(dir, 'vitest.config.ts')) || existsSync(join(dir, 'vitest.config.mts')), HasTests: hasTestFiles(join(dir, 'src')) };
+                const pkg: WorkspacePackage = { Name: name, Dir: relative(root, dir).split(sep).join('/'), HasVitest: existsSync(join(dir, 'vitest.config.ts')) || existsSync(join(dir, 'vitest.config.mts')) };
                 byName.set(name, pkg); dirs.push(pkg);
             }
         }
@@ -26,15 +26,4 @@ export class PackageMap {
     }
     public PackageForPath(repoRelative: string): WorkspacePackage | null { return this.dirs.find((p) => repoRelative.startsWith(p.Dir + '/')) ?? null; }
     public Get(name: string): WorkspacePackage | null { return this.byName.get(name) ?? null; }
-    public All(): WorkspacePackage[] { return [...this.dirs]; }
-}
-
-function hasTestFiles(dir: string): boolean {
-    if (!existsSync(dir)) return false;
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-        if (e.name === 'node_modules' || e.name === 'dist') continue;
-        if (e.isDirectory() && hasTestFiles(join(dir, e.name))) return true;
-        if (e.isFile() && /\.test\.ts$/.test(e.name) && !/\.jit\.test\.ts$/.test(e.name)) return true;
-    }
-    return false;
 }

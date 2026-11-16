@@ -100,7 +100,7 @@ export async function FinishRun(dir: RunDir, target: Pick<VitestCatchTarget, 'Cl
 }
 
 /** The repository-relative folder of each package name; a name `dirOf` does not know is skipped with a stderr line. */
-export function PackageDirs(names: string[], dirOf: (name: string) => string | null): string[] {
+function PackageDirs(names: string[], dirOf: (name: string) => string | null): string[] {
     const dirs: string[] = [];
     for (const n of names) {
         const d = dirOf(n);

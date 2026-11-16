@@ -81,17 +81,20 @@ function reportNotAssessed(ledger: BacktestLedger): void {
 async function matchOne(entry: LedgerEntry, fixSHA: string, o: MatchOptions, deps: MatchDeps): Promise<MatchRecord> {
     const runID = entry.RunID ?? '';
     const catches = (await deps.Store.ListCatches(runID)).filter(IsWeakUndropped);
-    const tests = catches.length > 0 ? testsOf(catches, new RunDir(o.RepoRoot, runID, deps.Redaction)) : [];
+    if (catches.length === 0) return record('NoCatch');
+    const dir = new RunDir(o.RepoRoot, runID, deps.Redaction);
+    const tests = testsOf(catches, dir);
     if (tests.length === 0) return record('NoCatch');
-    const fixed = await fixedCommit(entry.HeadSHA, fixSHA, new RunDir(o.RepoRoot, runID, deps.Redaction), deps.Repo);
+    const fixed = await fixedCommit(entry.HeadSHA, fixSHA, dir, deps.Repo);
     if (fixed === null) process.stderr.write(`match ${o.LedgerID}: PR #${entry.PR}: the fix does not apply on head; trying the fix merge ${fixSHA.slice(0, 7)}\n`);
     await deps.EnsureImage?.();
+    const packages = [...new Set(tests.map((t) => t.Package))];
     let head: PreparedRevision | null = null;
     try {
-        const prepared = await prepareHead(entry.PR, fixed, fixSHA, o.LedgerID, deps, [...new Set(tests.map((t) => t.Package))]);
+        const prepared = await prepareHead(entry.PR, fixed, fixSHA, o.LedgerID, deps, packages);
         if ('Error' in prepared) return record('PrepareFailed', {}, false, { Head: 'FixMerge', Error: prepared.Error });
         head = prepared.Revision;
-        return { ...await runOnFixedHead(deps.Target, head, tests, catches, o.Settings.Repeats), Head: prepared.Head };
+        return { ...await runOnFixedHead(deps.Target, head, tests, packages, catches, o.Settings.Repeats), Head: prepared.Head };
     } finally {
         if (head) await deps.Target.Cleanup(head);
         await deps.RemoveStore?.();
@@ -143,9 +146,9 @@ async function fixedCommit(headSHA: string, fixSHA: string, dir: RunDir, repo: M
     return repo.CommitWithPatch(headSHA, patchFile, join(work, 'fix'));
 }
 
-/** Builds, writes and runs the tests on the prepared fixed head and records which passed every repeat. */
-async function runOnFixedHead(target: MatchTarget, head: PreparedRevision, tests: CandidateTest[], catches: Catch[], repeats: number): Promise<MatchRecord> {
-    await target.BuildPackages(head, [...new Set(tests.map((t) => t.Package))]);
+/** Builds `packages`, writes and runs the tests on the prepared fixed head and records which passed every repeat. */
+async function runOnFixedHead(target: MatchTarget, head: PreparedRevision, tests: CandidateTest[], packages: string[], catches: Catch[], repeats: number): Promise<MatchRecord> {
+    await target.BuildPackages(head, packages);
     await target.WriteTests(head, tests);
     const passing = passedEveryRepeat(tests, await target.Run(head, tests, repeats), repeats);
     const outcome: Record<string, boolean> = Object.fromEntries(tests.map((t) => [t.ID, passing.Has(t.ID)]));

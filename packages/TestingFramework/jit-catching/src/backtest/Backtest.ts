@@ -95,7 +95,7 @@ export function DefaultCostOfRun(store: Pick<BaseCatchStore, 'GetRun'>, repoRoot
         const run = await store.GetRun(runID);
         if (run) return sumCost(run.TokensByModel);
         const dir = new RunDir(repoRoot, runID, redaction);
-        return existsSync(join(dir.Path, 'generation.json')) ? sumCost(dir.ReadGeneration().Run.TokensByModel) : null;
+        return dir.HasGeneration() ? sumCost(dir.ReadGeneration().Run.TokensByModel) : null;
     };
 }
 
@@ -115,8 +115,7 @@ export function DefaultOrphanRunCost(repoRoot: string, redaction: RedactionCheck
 
 /** The run recorded in the folder's generation file, or null when it has none or it does not parse. */
 function readRun(dir: RunDir): Run | null {
-    if (!existsSync(join(dir.Path, 'generation.json'))) return null;
-    try { return dir.ReadGeneration().Run; } catch { return null; }
+    try { return dir.HasGeneration() ? dir.ReadGeneration().Run : null; } catch { return null; }
 }
 
 function defaultDeps(o: BacktestOptions): BacktestDeps {

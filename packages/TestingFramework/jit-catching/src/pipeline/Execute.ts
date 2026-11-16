@@ -37,11 +37,12 @@ export async function ExecuteStep(o: ExecuteOptions): Promise<void> {
     const base: PreparedRevision = { Ref: { Kind: 'Base', SHA: gen.Run.BaseSHA }, RootDir: baseRoot };
     await d.EnsureImage?.();
     const now = d.Now ?? Date.now;
-    const prepared = await Timed(now, () => d.Target.Prepare({ Kind: 'Head', SHA: gen.Run.HeadSHA }, [...new Set(tests.map((t) => t.Package))]));
+    const packages = [...new Set(tests.map((t) => t.Package))];
+    const prepared = await Timed(now, () => d.Target.Prepare({ Kind: 'Head', SHA: gen.Run.HeadSHA }, packages));
     const head = prepared.Result;
     let timings: ExecutionTimings;
     try {
-        const executed = await executeOn(d.Target, gen, tests, base, head, o.Settings, { Now: now, PrepareHeadMs: prepared.Ms });
+        const executed = await executeOn(d.Target, gen, tests, packages, base, head, o.Settings, { Now: now, PrepareHeadMs: prepared.Ms });
         timings = executed.Timings;
         dir.WriteExecution({ ...executed.File, Timings: timings });
     } finally {
@@ -53,12 +54,12 @@ export async function ExecuteStep(o: ExecuteOptions): Promise<void> {
 }
 
 /**
- * Build head, write, type-check and run the tests on both revisions, then measure coverage for tests that pass on both when `settings.Coverage` is on.
+ * Build head for `packages`, write, type-check and run the tests on both revisions, then measure coverage for tests that pass on both when `settings.Coverage` is on.
  * Returns the file contents and the stage times: `clock.PrepareHeadMs` and the others on `clock.Now`, with `CoverageMs` 0 when coverage is not measured.
  */
-async function executeOn(target: PipelineTarget, gen: GenerationFile, tests: CandidateTest[], base: PreparedRevision, head: PreparedRevision, settings: Settings,
+async function executeOn(target: PipelineTarget, gen: GenerationFile, tests: CandidateTest[], packages: string[], base: PreparedRevision, head: PreparedRevision, settings: Settings,
     clock: { Now: () => number; PrepareHeadMs: number }): Promise<{ File: ExecutionFile; Timings: ExecutionTimings }> {
-    const built = await Timed(clock.Now, () => target.BuildPackages(head, [...new Set(tests.map((t) => t.Package))]));
+    const built = await Timed(clock.Now, () => target.BuildPackages(head, packages));
     await target.WriteTests(base, tests);
     await target.WriteTests(head, tests);
     const checked = await Timed(clock.Now, async () => ({ Base: await target.TypeCheck(base, tests), Head: await target.TypeCheck(head, tests) }));
@@ -79,7 +80,7 @@ function verdictOf(id: string, results: ExecutionResult[], typeErrors: TypeError
 }
 
 /** Added line numbers at head per changed file, from the analysis. */
-export function ChangedLinesOf(gen: GenerationFile): ChangedLines {
+function ChangedLinesOf(gen: GenerationFile): ChangedLines {
     return Object.fromEntries(gen.Analysis.ChangedFiles.map((f) => [f.Path, f.AddedLines]));
 }
 

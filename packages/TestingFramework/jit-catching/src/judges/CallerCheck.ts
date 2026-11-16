@@ -7,7 +7,7 @@ import type { Bucket, CatchCheck, CatchContext, CheckLabel, TokenUsage } from '.
 import { AddUsage, NoUsage, UsageFromChat, type Price } from '../generator/UsageCounter';
 import { SafeChat } from './SafeChat';
 import { BuildJudgeInput } from './JudgePanel';
-import { FirstBalancedObject } from './BucketJudge';
+import { FirstBalancedObject, MatchWord } from './BucketJudge';
 
 /** The caller check's answer and the token usage of its session. */
 export interface CallerCheckResult extends CatchCheck { Usage: TokenUsage; }
@@ -48,15 +48,11 @@ const TOOLS: ChatTool[] = [
 const ReadFileArgs = z.object({ path: z.string().min(1), offset: z.number().int().optional(), limit: z.number().int().optional() });
 const GrepArgs = z.object({ pattern: z.string().min(1), path: z.string().optional() });
 
-/** A word in any case → its spelling in `words`; other values pass through to fail the enum. */
-function matchWord<T extends string>(words: readonly T[]): (v: unknown) => unknown {
-    return (v) => typeof v === 'string' ? words.find((w) => w.toLowerCase() === v.trim().toLowerCase()) ?? v : v;
-}
 const LABELS: readonly CheckLabel[] = ['Bug', 'Intended', 'TestFault'];
 const BUCKETS: readonly Bucket[] = ['High', 'Medium', 'Low'];
 const Answer = z.object({
-    label: z.preprocess(matchWord(LABELS), z.enum(['Bug', 'Intended', 'TestFault'])),
-    confidence: z.preprocess(matchWord(BUCKETS), z.enum(['High', 'Medium', 'Low'])),
+    label: z.preprocess(MatchWord(LABELS), z.enum(['Bug', 'Intended', 'TestFault'])),
+    confidence: z.preprocess(MatchWord(BUCKETS), z.enum(['High', 'Medium', 'Low'])),
     reason: z.string().transform((s) => s.slice(0, REASON_MAX)),
 });
 

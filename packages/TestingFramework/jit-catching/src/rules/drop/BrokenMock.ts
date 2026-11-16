@@ -16,7 +16,7 @@ function testFramePattern(c: CatchContext): RegExp {
     return new RegExp(`(?:^|[\\s/(])${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:(\\d+):\\d+`);
 }
 /** Line number of the first stack frame that points into the test file, or null. Shared by BrokenMock and TestOwnError. */
-export function FailingTestLine(c: CatchContext): number | null {
+function FailingTestLine(c: CatchContext): number | null {
     const m = testFramePattern(c).exec(c.Head[0]?.Failure?.StackExcerpt ?? '');
     return m ? Number(m[1]) : null;
 }

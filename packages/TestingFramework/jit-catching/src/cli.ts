@@ -30,8 +30,8 @@ import { RunDir } from './pipeline/RunDir';
 import { BuildGateReport, RenderMarkdown } from './report/Report';
 import { FilterProcessWarnings } from './generator/ClaudeAgentGenerator';
 
-export const COMMANDS = ['generate', 'execute', 'assess', 'run', 'recheck', 'feedback', 'backtest', 'label', 'report', 'corpus', 'clean'] as const;
-export type CommandName = (typeof COMMANDS)[number];
+const COMMANDS = ['generate', 'execute', 'assess', 'run', 'recheck', 'feedback', 'backtest', 'label', 'report', 'corpus', 'clean'] as const;
+type CommandName = (typeof COMMANDS)[number];
 
 /** The steps and the repository root lookup, injected so tests never run git, a container or a provider. */
 export interface CliDeps {
@@ -209,15 +209,10 @@ function parseLabel(catchID: string | undefined, answer: string | undefined, use
     return { CatchID: catchID, Answer: answer, User: user };
 }
 
-/** The parsed `backtest` options; `parse` sets them for every backtest command but `backtest match`. */
-function backtestArgs(p: Parsed): BacktestArgs {
-    if (!p.Backtest) throw new Error('backtest options were not parsed');
-    return p.Backtest;
-}
-
-/** The parsed `backtest` options, after checking that the settings price `--model`; a usage error otherwise. */
+/** The parsed `backtest` options, after checking that the settings price `--model`; a usage error otherwise. `parse` sets them for every backtest command but `backtest match`. */
 function pricedBacktestArgs(p: Parsed, settings: Settings): BacktestArgs {
-    const args = backtestArgs(p);
+    const args = p.Backtest;
+    if (!args) throw new Error('backtest options were not parsed');
     const unpriced = UnpricedModel(settings.Prices, args.Model);
     if (unpriced) throw new UsageError(unpriced);
     return args;
@@ -234,7 +229,7 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
     const repoRoot = await deps.RepoRoot();
     if (p.Command === 'label') return label(p, deps, repoRoot);
     const settings: Settings = LoadSettings(p.SettingsPath);
-    const storeDir = p.Store ? resolve(p.Store) : join(repoRoot, '.jit-catch', 'store');
+    const storeDir = storeDirOf(p, repoRoot);
     const runID = p.RunID ?? '';
     switch (p.Command) {
         case 'generate': await deps.GenerateStep({ PR: p.PR, BaseSHA: p.Base, HeadSHA: p.Head, Trigger: p.Trigger, RepoRoot: repoRoot, Settings: settings }); break;
@@ -260,7 +255,7 @@ async function report(p: Parsed, deps: CliDeps): Promise<number> {
         if (!file.Exists()) throw new Error(`no backtest ledger ${id} at ${file.Path}`);
         return file.Read();
     });
-    const store = new FileCatchStore(p.Store ? resolve(p.Store) : join(repoRoot, '.jit-catch', 'store'), redaction);
+    const store = new FileCatchStore(storeDirOf(p, repoRoot), redaction);
     const r = await deps.BuildGateReport({ Ledgers: ledgers, Corpus: LoadCorpus(o.CorpusPath), Store: store, RunDirOf: (id) => new RunDir(repoRoot, id, redaction), Prices: LoadSettings(p.SettingsPath).Prices });
     const md = RenderMarkdown(r);
     redaction.AssertClean(md, 'gate report');
@@ -279,15 +274,18 @@ async function clean(p: Parsed, deps: CliDeps): Promise<number> {
 
 /** Records one label, or prints the label packet of a run to stdout. */
 async function label(p: Parsed, deps: CliDeps, repoRoot: string): Promise<number> {
-    const storeDir = p.Store ? resolve(p.Store) : join(repoRoot, '.jit-catch', 'store');
+    const storeDir = storeDirOf(p, repoRoot);
     const redaction = DefaultRedaction();
     if (p.Label) await deps.LabelCatch({ StoreDir: storeDir, CatchID: p.Label.CatchID, Answer: p.Label.Answer, User: p.Label.User, Redaction: redaction });
     else process.stdout.write(await deps.LabelPacket({ StoreDir: storeDir, RepoRoot: repoRoot, RunID: p.RunID ?? '', Redaction: redaction }));
     return 0;
 }
 
+/** `--store`, or `<repo root>/.jit-catch/store`. */
+function storeDirOf(p: Parsed, repoRoot: string): string { return p.Store ? resolve(p.Store) : join(repoRoot, '.jit-catch', 'store'); }
+
 /** One redacted line for stderr: a `RunAllError` as its cause, a zod error as `path: message` pairs, anything else as the first line of its message. */
-export function OneLine(e: unknown): string {
+function OneLine(e: unknown): string {
     if (e instanceof RunAllError) return OneLine(e.cause);
     if (e instanceof ZodError) return RedactTail(e.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; '));
     const message = e instanceof Error ? e.message : String(e);

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { AssignSlices, LoadCorpus, RevisionsOf } from '../corpus/Corpus';
+import { LoadCorpus, RevisionsOf } from '../corpus/Corpus';
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -16,29 +16,6 @@ function writeCorpus(content: object): string {
 }
 
 const sha = (c: string) => c.repeat(40);
-const entries = (n: number) => Array.from({ length: n }, (_, i) => ({ PR: i + 1 }));
-const heldOut = (list: { Slice: string }[]) => list.filter(e => e.Slice === 'HeldOut').length;
-
-describe('AssignSlices', () => {
-  it('gives the same assignment for the same seed', () => {
-    const a = AssignSlices(entries(45), 7).map(e => e.Slice);
-    const b = AssignSlices(entries(45), 7).map(e => e.Slice);
-    expect(a).toEqual(b);
-    expect(AssignSlices(entries(45), 8).map(e => e.Slice)).not.toEqual(a);
-  });
-  it('holds out a third of 45 entries', () => {
-    const out = AssignSlices(entries(45), 1);
-    expect(heldOut(out)).toBe(15);
-    expect(out.length).toBe(45);
-    expect(out.map(e => e.PR)).toEqual(entries(45).map(e => e.PR));
-  });
-  it('holds out at least 10 of 12 entries', () => {
-    expect(heldOut(AssignSlices(entries(12), 1))).toBe(10);
-  });
-  it('holds out all of 6 entries', () => {
-    expect(heldOut(AssignSlices(entries(6), 1))).toBe(6);
-  });
-});
 
 describe('RevisionsOf', () => {
   it('takes the base from the first parent of the landing commit', async () => {

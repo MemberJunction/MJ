@@ -15,7 +15,7 @@ export class AccessChange extends BaseCatchRule {
         const literals = accessLiterals(ast.SourceFile, (n) => ast.Text(n));
         if (literals === null) return { Fired: false, Reason: 'no access check in the test' };
         if (literals.length === 0) return { Fired: false, Reason: 'the access check names no role or entity' };
-        const diffText = changedLinesText(c);
+        const diffText = ChangedLinesText(c);
         const mentioned = literals.filter((l) => diffText.includes(l));
         return mentioned.length === 0
             ? { Fired: true, Reason: `access changed for ${literals.join(', ')}, which the diff does not mention` }
@@ -34,7 +34,7 @@ function accessLiterals(sf: ts.SourceFile, text: (n: ts.Node) => string): string
     return found ? [...out] : null;
 }
 /** The added and removed lines of every hunk in the PR, joined by newlines. */
-function changedLinesText(c: CatchContext): string {
+export function ChangedLinesText(c: CatchContext): string {
     return c.Analysis.ChangedFiles.flatMap((f) => f.Hunks).flatMap((h) => h.Lines).filter((l) => l.startsWith('+') || l.startsWith('-')).join('\n');
 }
 /** The last name of a callee: `b` for `a.b`, otherwise the callee text. */

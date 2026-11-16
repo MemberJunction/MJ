@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NewRunID, NewID, IsSafeFileID } from '../ids';
+import { NewRunID, NewID } from '../ids';
 
 describe('ids', () => {
   it('NewRunID embeds the PR number and short head SHA', () => {
@@ -12,7 +12,5 @@ describe('ids', () => {
   it('NewID returns a UUID that is safe in a file name', () => {
     const id = NewID();
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(IsSafeFileID(id)).toBe(true);
-    expect(IsSafeFileID('../x')).toBe(false);
   });
 });

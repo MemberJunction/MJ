@@ -24,7 +24,7 @@ export interface LastMutantRecord { Edits: MutantEdit[]; Patch: string; Failure:
 
 const ROOT = '/work';
 /** The most base lines between a mutant edit and the nearest line the PR changes. */
-export const MUTANT_MAX_DISTANCE = 10;
+const MUTANT_MAX_DISTANCE = 10;
 
 /** A mutant prepared on the host: the scratch package copy and the patch that produced it. */
 interface PreparedMutant { Scratch: string; Patch: string; }

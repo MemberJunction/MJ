@@ -14,7 +14,7 @@ export type MemberVisibility = 'public' | 'private' | 'protected' | 'none';
 
 /** A TypeScript program over one generated test file plus the base package it imports, with the queries the rules need. */
 export class TestAst {
-    private constructor(public readonly SourceFile: ts.SourceFile, public readonly Checker: ts.TypeChecker, private readonly program: ts.Program) {}
+    private constructor(public readonly SourceFile: ts.SourceFile, public readonly Checker: ts.TypeChecker) {}
 
     /**
      * Builds the program. `extraFiles` maps absolute paths to in-memory sources that take precedence over disk.
@@ -46,7 +46,7 @@ export class TestAst {
         const program = ts.createProgram([testAbs], { ...options, noEmit: true, types: [] }, host);
         const sourceFile = program.getSourceFile(testAbs);
         if (!sourceFile) throw new Error(`TestAst: test file not in program: ${testAbs}`);
-        return new TestAst(sourceFile, program.getTypeChecker(), program);
+        return new TestAst(sourceFile, program.getTypeChecker());
     }
 
     /** A check for disk paths the host may read: outside `jitDir`, and a regular file when it exists. */

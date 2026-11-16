@@ -36,7 +36,7 @@ export { RunAll, RunAllError, FinishRun, type RunAllOptions } from './pipeline/R
 export { SnapshotBaseSources, CheckedBaseSourceDir } from './pipeline/BaseSnapshot';
 export { CleanRun, FinishedRunIDs } from './pipeline/Clean';
 export { LabelCatch, LabelPacket, IsLabelAnswer, LABEL_ANSWERS, type LabelAnswer } from './pipeline/Label';
-export { SliceSchema, BugPairSchema, CleanEntrySchema, CorpusSchema, LoadCorpus, AssignSlices, RevisionsOf, type Corpus, type Slice } from './corpus/Corpus';
+export { SliceSchema, BugPairSchema, CleanEntrySchema, CorpusSchema, LoadCorpus, RevisionsOf, type Corpus, type Slice } from './corpus/Corpus';
 export { MineClean, MineBugs, IsEligibleSource, PullRequestNumberOf, RemovedRangesByFile, MonthWindows, type CleanCandidate, type BugCandidate, type MinerDeps, type LineRange } from './corpus/Miner';
 export { LedgerFile, LedgerID, MatchRecordSchema, LedgerEntrySchema, BacktestLedgerSchema, type MatchRecord, type LedgerEntry, type BacktestLedger } from './backtest/Ledger';
 export { BacktestStep, DefaultCostOfRun, DefaultOrphanRunCost, type BacktestOptions, type BacktestDeps, type BacktestResult, type BacktestStop, type OrphanRun } from './backtest/Backtest';

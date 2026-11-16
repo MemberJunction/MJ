@@ -3,8 +3,8 @@ import { z } from 'zod';
 const sha = z.string().regex(/^[0-9a-f]{7,40}$/);
 const iso = z.iso.datetime();
 export const TriggerSchema = z.enum(['Nightly', 'Label', 'Recheck', 'Backtest', 'Local']);
-export const BucketSchema = z.enum(['High', 'Medium', 'Low']);
-export const TokenUsageSchema = z.object({ Model: z.string(), Role: z.enum(['Generator', 'Analyzer', 'Judge', 'Check']).optional(), InputTokens: z.number().int().nonnegative(), OutputTokens: z.number().int().nonnegative(), CacheReadTokens: z.number().int().nonnegative(), CostUSD: z.number().nonnegative() });
+const BucketSchema = z.enum(['High', 'Medium', 'Low']);
+const TokenUsageSchema = z.object({ Model: z.string(), Role: z.enum(['Generator', 'Analyzer', 'Judge', 'Check']).optional(), InputTokens: z.number().int().nonnegative(), OutputTokens: z.number().int().nonnegative(), CacheReadTokens: z.number().int().nonnegative(), CostUSD: z.number().nonnegative() });
 
 export const RunSchema = z.object({
     ID: z.string().min(1), Trigger: TriggerSchema, PRNumber: z.number().int().positive().nullable(), BaseSHA: sha, HeadSHA: sha,
@@ -12,9 +12,9 @@ export const RunSchema = z.object({
     RunnerMinutes: z.number().nonnegative(), StartedAt: iso, EndedAt: iso.nullable(),
 });
 
-export const DiffHunkSchema = z.object({ Path: z.string(), OldStart: z.number().int(), OldLines: z.number().int(), NewStart: z.number().int(), NewLines: z.number().int(), Lines: z.array(z.string()) });
-export const ChangedFileSchema = z.object({ Path: z.string(), Package: z.string().nullable(), AddedLines: z.array(z.number().int().positive()), RemovedLineCount: z.number().int().nonnegative(), Hunks: z.array(DiffHunkSchema) });
-export const RiskSchema = z.object({ ID: z.string(), File: z.string(), Symbol: z.string(), WhatCouldBreak: z.string(), HowObserved: z.string() });
+const DiffHunkSchema = z.object({ Path: z.string(), OldStart: z.number().int(), OldLines: z.number().int(), NewStart: z.number().int(), NewLines: z.number().int(), Lines: z.array(z.string()) });
+const ChangedFileSchema = z.object({ Path: z.string(), Package: z.string().nullable(), AddedLines: z.array(z.number().int().positive()), RemovedLineCount: z.number().int().nonnegative(), Hunks: z.array(DiffHunkSchema) });
+const RiskSchema = z.object({ ID: z.string(), File: z.string(), Symbol: z.string(), WhatCouldBreak: z.string(), HowObserved: z.string() });
 /** `Fallback` is null for an analysis written before the analyzer recorded it. */
 export const ChangeAnalysisSchema = z.object({
     RunID: z.string(), IntentType: z.enum(['feature', 'fix', 'refactor', 'perf', 'dead_code_removal', 'logging', 'config', 'other']),
@@ -25,8 +25,8 @@ export const ChangeAnalysisSchema = z.object({
 /** Generated tests may live only under a package's `src/__tests__/jit/` and must use the `.jit.test.ts` suffix. Every path segment here and in `MutantEditSchema.File` starts with a letter, digit or underscore, so `.` and `..` are never segments. */
 export const JitTestPath = z.string().regex(/^packages\/(?:[A-Za-z0-9_][A-Za-z0-9_.-]*\/)+src\/__tests__\/jit\/[0-9a-f-]{36}\.jit\.test\.ts$/);
 export const MutantEditSchema = z.object({ File: z.string().regex(/^packages\/(?:[A-Za-z0-9_][A-Za-z0-9_.-]*\/)+src\/(?!__tests__\/)(?:[A-Za-z0-9_][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\.ts$/), Find: z.string().min(1), Replace: z.string() });
-export const MutantSchema = z.object({ Edits: z.array(MutantEditSchema).min(1), Patch: z.string() });
-export const FailureDetailSchema = z.object({ Assertion: z.string().nullable(), Expected: z.string().nullable(), Actual: z.string().nullable(), Message: z.string(), StackExcerpt: z.string().nullable(), ErrorName: z.string().nullable() });
+const MutantSchema = z.object({ Edits: z.array(MutantEditSchema).min(1), Patch: z.string() });
+const FailureDetailSchema = z.object({ Assertion: z.string().nullable(), Expected: z.string().nullable(), Actual: z.string().nullable(), Message: z.string(), StackExcerpt: z.string().nullable(), ErrorName: z.string().nullable() });
 
 export const CandidateTestSchema = z.object({
     ID: z.string(), RunID: z.string(), Package: z.string(), Method: z.enum(['DodgyDiff', 'IntentAware']), RiskID: z.string().nullable(), RiskText: z.string().nullable(),
@@ -39,8 +39,8 @@ export const ExecutionResultSchema = z.object({
     Status: z.enum(['Pass', 'Fail', 'Timeout', 'CompileError', 'RunnerError']), TestName: z.string().nullable(), Failure: FailureDetailSchema.nullable(), DurationMs: z.number().nonnegative(),
 }).refine((r) => (r.Status === 'Pass') === (r.Failure === null), { error: 'Failure is required exactly when Status is not Pass' });
 
-export const VerdictSchema = z.object({ Label: z.enum(['WeakCatch', 'PassesBoth', 'ApiChanged', 'Invalid', 'Flaky']), Timeout: z.boolean(), Reason: z.string() });
-export const JudgeBucketSchema = z.object({ Model: z.string(), Bucket: BucketSchema.nullable(), Reason: z.string() });
+const VerdictSchema = z.object({ Label: z.enum(['WeakCatch', 'PassesBoth', 'ApiChanged', 'Invalid', 'Flaky']), Timeout: z.boolean(), Reason: z.string() });
+const JudgeBucketSchema = z.object({ Model: z.string(), Bucket: BucketSchema.nullable(), Reason: z.string() });
 export const CatchSchema = z.object({
     ID: z.string(), RunID: z.string(), CandidateTestID: z.string(), Verdict: VerdictSchema, DroppedByRule: z.string().nullable(), Boosts: z.array(z.string()),
     TPProb: z.number().min(-1).max(1).nullable(), JudgeBuckets: z.array(JudgeBucketSchema), Median: BucketSchema.nullable(), Rank: z.number().int().nullable(), Reported: z.boolean(), CommentID: z.string().nullable(),
@@ -49,7 +49,7 @@ export const CatchSchema = z.object({
 });
 export const FeedbackSchema = z.object({ CatchID: z.string(), User: z.string(), Answer: z.enum(['Bug', 'Intended', 'TestFault', 'AuthorChangedPR']), Source: z.enum(['Comment', 'Label', 'Recheck']), At: iso });
 export const PromotionCandidateSchema = z.object({ CandidateTestID: z.string(), RunID: z.string(), NewlyCoveredLines: z.number().int().nonnegative(), State: z.enum(['Offered', 'Added']) });
-export const CoverageResultSchema = z.object({ CandidateTestID: z.string(), CoveredChangedLines: z.number().int().nonnegative() });
+const CoverageResultSchema = z.object({ CandidateTestID: z.string(), CoveredChangedLines: z.number().int().nonnegative() });
 
 // ---- files passed between jobs (§5.4) ----
 /** `BaseRootDir` is the base worktree the generate step prepared and kept; execute and assess reuse it. */
@@ -57,8 +57,8 @@ export const SessionRecordSchema = z.object({ RunID: z.string(), Package: z.stri
     Turns: z.number().int().nonnegative(), Tokens: TokenUsageSchema, TranscriptURL: z.string().nullable(), Produced: z.number().int().nonnegative(), Failed: z.number().int().nonnegative() });
 const ms = z.number().int().nonnegative();
 /** Stage times in milliseconds; every field and the object itself are optional. */
-export const GenerationTimingsSchema = z.object({ AnalyzeMs: ms, PrepareBaseMs: ms, BuildBaseMs: ms, GenerateMs: ms }).partial();
-export const ExecutionTimingsSchema = z.object({ PrepareHeadMs: ms, BuildHeadMs: ms, TypeCheckMs: ms, RunMs: ms, CoverageMs: ms }).partial();
+const GenerationTimingsSchema = z.object({ AnalyzeMs: ms, PrepareBaseMs: ms, BuildBaseMs: ms, GenerateMs: ms }).partial();
+const ExecutionTimingsSchema = z.object({ PrepareHeadMs: ms, BuildHeadMs: ms, TypeCheckMs: ms, RunMs: ms, CoverageMs: ms }).partial();
 /** `BaseSourceDir` is the run's `base-src` copy of the tested packages' sources; null until the run finishes. */
 export const GenerationFileSchema = z.object({ Run: RunSchema, Analysis: ChangeAnalysisSchema, Tests: z.array(CandidateTestSchema), BaseRootDir: z.string().min(1), Sessions: z.array(SessionRecordSchema).default([]),
     BaseSourceDir: z.string().nullable().default(null), Timings: GenerationTimingsSchema.optional() });

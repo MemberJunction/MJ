@@ -6,8 +6,6 @@ export function NewRunID(prNumber: number | null, headSHA: string, now: Date = n
     return `${stamp}-${prNumber === null ? 'local' : `pr${prNumber}`}-${headSHA.slice(0, 7)}`;
 }
 export function NewID(): string { return randomUUID(); }
-/** True when the ID can be used as a file name component with no path meaning. */
-export function IsSafeFileID(id: string): boolean { return /^[0-9a-f-]{36}$/.test(id); }
 /** A UUID-shaped ID derived from `parts`; the same parts always give the same ID. */
 export function StableID(...parts: string[]): string {
     const h = createHash('sha256').update(parts.join('\u0000')).digest('hex');

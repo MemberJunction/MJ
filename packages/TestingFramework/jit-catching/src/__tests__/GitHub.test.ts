@@ -6,7 +6,7 @@ const payload = { number: 7, title: 'perf: cache', body: 'desc', headRefOid: 'c'
 describe('GitHub.GetPullRequest', () => {
   it('maps gh JSON to PullRequestInfo', async () => {
     const gh = new GitHub(async (args) => { expect(args.slice(0, 3)).toEqual(['pr', 'view', '7']); return JSON.stringify(payload); });
-    expect(await gh.GetPullRequest(7)).toEqual({ Number: 7, Title: 'perf: cache', Body: 'desc', HeadSHA: 'c'.repeat(40), BaseRef: 'next', HeadRepo: 'MemberJunction/MJ', Author: 'dev' });
+    expect(await gh.GetPullRequest(7)).toEqual({ Number: 7, Title: 'perf: cache', Body: 'desc', HeadSHA: 'c'.repeat(40) });
   });
   it('rejects a fork PR', async () => {
     const gh = new GitHub(async () => JSON.stringify({ ...payload, headRepositoryOwner: { login: 'someone' } }));
@@ -28,7 +28,7 @@ describe('GitHub.ListMergedPullRequests', () => {
       return JSON.stringify([listItem]);
     });
     expect(await gh.ListMergedPullRequests({ Since: '2026-10-01', Until: '2026-10-31' })).toEqual([
-      { Number: 9, Title: 'fix: x', MergedAt: '2026-10-01T00:00:00Z', MergeSHA: 'm'.repeat(40), Author: 'dev', HeadRef: 'CB-x' },
+      { Number: 9, Title: 'fix: x', MergedAt: '2026-10-01T00:00:00Z', MergeSHA: 'm'.repeat(40) },
     ]);
   });
   it('throws when 1000 results come back', async () => {
@@ -43,7 +43,7 @@ describe('GitHub.GetMergedPullRequest', () => {
   it('maps gh JSON to MergedPullRequestDetail', async () => {
     const gh = new GitHub(async (args) => { expect(args.slice(0, 3)).toEqual(['pr', 'view', '9']); return JSON.stringify(detail); });
     expect(await gh.GetMergedPullRequest(9)).toEqual({
-      Number: 9, Title: 'fix: x', MergedAt: '2026-10-01T00:00:00Z', MergeSHA: 'm'.repeat(40), Author: 'dev', HeadRef: 'CB-x', Body: 'desc', Files: ['a.ts', 'b.ts'],
+      Number: 9, Title: 'fix: x', MergedAt: '2026-10-01T00:00:00Z', MergeSHA: 'm'.repeat(40), Files: ['a.ts', 'b.ts'],
     });
   });
   it('throws when the PR is not merged', async () => {

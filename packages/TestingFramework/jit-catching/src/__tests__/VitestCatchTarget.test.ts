@@ -11,7 +11,7 @@ function fakeTarget(onRun: (o: SandboxRunOptions) => { Stdout: string; ExitCode:
   const calls: SandboxRunOptions[] = [];
   const sandbox = new Sandbox(DEFAULT_SETTINGS.Sandbox, async (_f, _a) => ({ ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 }));
   vi.spyOn(sandbox, 'Run').mockImplementation(async (o) => { calls.push(o); const r = onRun(o); return { ExitCode: r.ExitCode, TimedOut: false, Stdout: r.Stdout, Stderr: '', DurationMs: 1 }; });
-  const target = new VitestCatchTarget({ Repo: { Root: '/repo' } as never, Sandbox: sandbox, Settings: DEFAULT_SETTINGS, WorkRoot: '/work', StoreDir: '/work/pnpm-store', PackageMap: { Get: (n: string) => ({ Name: n, Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never });
+  const target = new VitestCatchTarget({ Repo: { Root: '/repo' } as never, Sandbox: sandbox, Settings: DEFAULT_SETTINGS, WorkRoot: '/work', StoreDir: '/work/pnpm-store', PackageMap: { Get: (n: string) => ({ Name: n, Dir: 'packages/MJCore', HasVitest: true }) } as never });
   return { target, calls, sandbox };
 }
 const test = (id: string): CandidateTest => ({ ID: id, RunID: 'r', Package: '@memberjunction/core', Method: 'DodgyDiff', RiskID: null, RiskText: null, Mutant: null, MutantFailure: null,
@@ -89,7 +89,7 @@ describe('VitestCatchTarget.Run', () => {
 
 describe('VitestCatchTarget.PackagesAt', () => {
   it('keeps the packages whose package.json is a regular file in the revision and drops the rest', () => {
-    const map = { Get: (n: string) => (n === '@memberjunction/core' ? { Name: n, Dir: 'packages/MJCore', HasVitest: true, HasTests: true } : null) };
+    const map = { Get: (n: string) => (n === '@memberjunction/core' ? { Name: n, Dir: 'packages/MJCore', HasVitest: true } : null) };
     const target = new VitestCatchTarget({ Repo: { Root: '/repo' } as never, Sandbox: new Sandbox(DEFAULT_SETTINGS.Sandbox, async () => ({ ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 })), Settings: DEFAULT_SETTINGS, WorkRoot: '/work', StoreDir: '/work/pnpm-store', PackageMap: map as never });
     const root = mkdtempSync(join(tmpdir(), 'jit-pkgs-'));
     const revision = { Ref: { Kind: 'Base' as const, SHA: 'a' }, RootDir: root };
@@ -215,7 +215,7 @@ describe('VitestCatchTarget.Prepare', () => {
     const o = (target as never as { o: { Repo: { AddWorktree: (d: string, s: string) => Promise<void> } } }).o;
     const add = o.Repo.AddWorktree;
     (target as never as { o: object }).o = { ...o, Repo: { ...o.Repo, AddWorktree: async (d: string, sha: string) => { await add(d, sha); mkdirSync(join(work, 'head', 'packages/MJCore'), { recursive: true }); writeFileSync(join(work, 'head', 'packages/MJCore/package.json'), '{}'); } },
-      PackageMap: { Get: (n: string) => ({ Name: n, Dir: n === '@memberjunction/core' ? 'packages/MJCore' : 'packages/Missing', HasVitest: true, HasTests: true }) } } as never;
+      PackageMap: { Get: (n: string) => ({ Name: n, Dir: n === '@memberjunction/core' ? 'packages/MJCore' : 'packages/Missing', HasVitest: true }) } } as never;
     await target.Prepare({ Kind: 'Head', SHA: 'h' }, ['@memberjunction/core', '@memberjunction/missing']);
     const command = calls[0].Command.join(' ');
     expect(command).toContain(`--ignore-scripts --store-dir /pnpm-store --filter . --filter '@memberjunction/core...' && pnpm rebuild`);

@@ -14,13 +14,12 @@ const REASON_MAX = 400;
 const MAX_OUTPUT_TOKENS = 4096;
 const BUCKET_WORD_RE = /\b(high|medium|low)\b/gi;
 
-/** Bucket word in any case → the `Bucket` spelling; other values pass through to fail the enum. */
-function toBucketWord(v: unknown): unknown {
-    if (typeof v !== 'string') return v;
-    return BUCKETS.find((b) => b.toLowerCase() === v.trim().toLowerCase()) ?? v;
+/** A word in any case → its spelling in `words`; other values pass through to fail the enum. */
+export function MatchWord<T extends string>(words: readonly T[]): (v: unknown) => unknown {
+    return (v) => typeof v === 'string' ? words.find((w) => w.toLowerCase() === v.trim().toLowerCase()) ?? v : v;
 }
 const BucketAnswer = z.object({
-    bucket: z.preprocess(toBucketWord, z.enum(['High', 'Medium', 'Low'])),
+    bucket: z.preprocess(MatchWord(BUCKETS), z.enum(['High', 'Medium', 'Low'])),
     reason: z.string().transform((s) => s.slice(0, REASON_MAX)),
 });
 const SYSTEM = `You judge one catching test: it passes on the base code and fails on a pull request. Decide how likely the failure is an unintended bug the author would want to know about. Reply with JSON only: {"bucket": "High"|"Medium"|"Low", "reason": "<one sentence>"}. High = probably a bug or an unintended behavior change; Medium = unclear; Low = intended change or a weak/incorrect test.

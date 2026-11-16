@@ -4,13 +4,13 @@ import type { MergedPullRequest, MergedPullRequestDetail } from '../git/GitHub';
 import type { WorkspacePackage } from '../analyzer/PackageMap';
 
 const sha = (c: string): string => c.repeat(40);
-const pr = (n: number, title: string, c: string): MergedPullRequest => ({ Number: n, Title: title, MergedAt: '2026-01-20T10:00:00Z', MergeSHA: sha(c), Author: 'dev', HeadRef: `b${n}` });
-const detail = (p: MergedPullRequest, files: string[]): MergedPullRequestDetail => ({ ...p, Body: '', Files: files });
+const pr = (n: number, title: string, c: string): MergedPullRequest => ({ Number: n, Title: title, MergedAt: '2026-01-20T10:00:00Z', MergeSHA: sha(c) });
+const detail = (p: MergedPullRequest, files: string[]): MergedPullRequestDetail => ({ ...p, Files: files });
 
 const packageMap = {
   PackageForPath: (path: string): WorkspacePackage | null =>
-    path.startsWith('packages/X/') ? { Name: '@mj/x', Dir: 'packages/X', HasVitest: true, HasTests: true }
-    : path.startsWith('packages/NoVitest/') ? { Name: '@mj/nv', Dir: 'packages/NoVitest', HasVitest: false, HasTests: false }
+    path.startsWith('packages/X/') ? { Name: '@mj/x', Dir: 'packages/X', HasVitest: true }
+    : path.startsWith('packages/NoVitest/') ? { Name: '@mj/nv', Dir: 'packages/NoVitest', HasVitest: false }
     : null,
 };
 

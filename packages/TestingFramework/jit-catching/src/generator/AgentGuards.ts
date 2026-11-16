@@ -4,12 +4,10 @@ import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 const MAX_LINK_HOPS = 40;
 
 /**
- * `realpath` of the path, or of its nearest existing parent joined with the rest, so a new file under a symlinked
+ * `realpath` of the absolute path, or of its nearest existing parent joined with the rest, so a new file under a symlinked
  * folder resolves to where it would land. A dangling symlink resolves to where its target would be.
  */
-export function ResolveNearest(path: string): string { return resolveNearest(resolve(path), 0); }
-
-function resolveNearest(abs: string, hops: number): string {
+function resolveNearest(abs: string, hops = 0): string {
     const stat = lstatSync(abs, { throwIfNoEntry: false });
     if (stat) {
         try { return realpathSync.native(abs); }
@@ -22,9 +20,9 @@ function resolveNearest(abs: string, hops: number): string {
     return parent === abs ? abs : join(resolveNearest(parent, hops), basename(abs));
 }
 
-/** True when `target` lands inside `root`; both sides go through `ResolveNearest`. */
+/** True when `target` lands inside `root`; both sides go through `resolveNearest`. */
 export function IsInside(root: string, target: string): boolean {
-    const r = ResolveNearest(root); const t = ResolveNearest(target);
+    const r = resolveNearest(resolve(root)); const t = resolveNearest(resolve(target));
     return t === r || t.startsWith(r.endsWith(sep) ? r : r + sep);
 }
 

@@ -12,7 +12,7 @@ import { RedactionCheck, SecretsFromEnvironment } from '../sandbox/Redaction';
 import { RunTestTool, type LastMutantRecord, type RunTestInput, type RunTestOutput, type RunTestToolOptions } from './RunTestTool';
 import { BuildSystemPrompt, BuildTaskPrompt, type PromptContext } from './prompts';
 import { AgentEnv, AssertApiKeySource, IsInside, ReadAllowed } from './AgentGuards';
-import { SessionError, UsageCounter, type Price } from './UsageCounter';
+import { NoUsage, SessionError, UsageCounter, type Price } from './UsageCounter';
 import { GeminiRunner } from './GeminiRunner';
 import { RunTestShape, WriteTestShape } from './ToolShapes';
 import { GeneratorVendor } from '../pipeline/Preflight';
@@ -66,7 +66,7 @@ export class ClaudeAgentGenerator extends BaseTestGenerator {
         const s: Session = { Request: r, PackageDir: pkg.Dir, JitDir: jitDir, IDs: ids, RiskOf: riskOf, Files: new Map(), Transcript: [],
             Tool: factory({ Sandbox: this.o.Sandbox, BaseRootDir: r.BaseRootDir, PackageRelDir: pkg.Dir, PackageName: r.Package, ScratchRoot: this.o.ScratchRoot, Settings: this.o.Settings,
                 ChangedRanges: changedRanges(r, pkg.Dir) }) };
-        let usage: TokenUsage = { Model: r.Model, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }; let subtype = 'none'; let turns = 0;
+        let usage: TokenUsage = NoUsage(r.Model); let subtype = 'none'; let turns = 0;
         const transcriptPath = this.transcriptPath(s);
         try {
             const ctx = buildContext(s, perRisk);

@@ -51,15 +51,18 @@ export class RunDir {
 }
 
 /**
- * The base worktree path recorded in `generation.json`, after checking that it is the run's own
- * `<run dir>/work/base` folder (same real path, an existing folder). Throws a one-line error otherwise,
+ * A folder path recorded in `generation.json`, after checking that it is the run's own `<run dir>/<sub>` folder
+ * (same real path, an existing folder). `what` names the folder in the one-line error thrown otherwise,
  * so a crafted file can never make a step mount, read or remove another host folder.
  */
-export function CheckedBaseRootDir(dir: RunDir, recorded: string): string {
-    const expected = join(dir.Path, 'work', 'base');
+export function CheckedRunFolder(dir: RunDir, sub: string, recorded: string, what: string): string {
+    const expected = join(dir.Path, sub);
     const real = (p: string): string | null => { try { return statSync(p).isDirectory() ? realpathSync.native(p) : null; } catch { return null; } };
     const want = real(expected); const got = real(recorded);
-    if (want === null) throw new Error(`run ${dir.RunID} has no base worktree at ${expected}`);
-    if (got !== want) throw new Error(`run ${dir.RunID}: recorded base worktree ${JSON.stringify(recorded)} is not ${expected}`);
+    if (want === null) throw new Error(`run ${dir.RunID} has no ${what} at ${expected}`);
+    if (got !== want) throw new Error(`run ${dir.RunID}: recorded ${what} ${JSON.stringify(recorded)} is not ${expected}`);
     return recorded;
 }
+
+/** The recorded base worktree, checked to be the run's own `<run dir>/work/base`. */
+export function CheckedBaseRootDir(dir: RunDir, recorded: string): string { return CheckedRunFolder(dir, join('work', 'base'), recorded, 'base worktree'); }

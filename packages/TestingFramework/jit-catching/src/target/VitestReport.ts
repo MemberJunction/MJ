@@ -56,7 +56,7 @@ export function ParseVitestOutput(stdout: string, mapping: ReportMapping): Execu
 }
 
 /** Splits one `failureMessages` string (an `error.stack`) into error name, assertion and the first frame outside node_modules. */
-export function ParseFailureMessage(message: string): FailureDetail {
+function ParseFailureMessage(message: string): FailureDetail {
     const lines = message.split('\n');
     const head = /^([A-Za-z]*Error[A-Za-z]*): (.*)$/.exec(lines[0] ?? '');
     const errorName = head?.[1] ?? null;

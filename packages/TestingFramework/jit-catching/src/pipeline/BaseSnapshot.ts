@@ -1,7 +1,7 @@
-import { copyFileSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, lstatSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
-import type { RunDir } from './RunDir';
+import { CheckedRunFolder, type RunDir } from './RunDir';
 
 /** Files copied from each package folder next to its `src/`. */
 const PACKAGE_FILES = ['tsconfig.json', 'package.json'];
@@ -28,18 +28,8 @@ export function SnapshotBaseSources(baseRoot: string, packageDirs: string[], des
     return count;
 }
 
-/**
- * The base source snapshot path recorded in `generation.json`, after checking that it is the run's own
- * `<run dir>/base-src` folder (same real path, an existing folder). Throws a one-line error otherwise.
- */
-export function CheckedBaseSourceDir(dir: RunDir, recorded: string): string {
-    const expected = join(dir.Path, 'base-src');
-    const real = (p: string): string | null => { try { return statSync(p).isDirectory() ? realpathSync.native(p) : null; } catch { return null; } };
-    const want = real(expected); const got = real(recorded);
-    if (want === null) throw new Error(`run ${dir.RunID} has no base source snapshot at ${expected}`);
-    if (got !== want) throw new Error(`run ${dir.RunID}: recorded base source snapshot ${JSON.stringify(recorded)} is not ${expected}`);
-    return recorded;
-}
+/** The recorded base source snapshot, checked to be the run's own `<run dir>/base-src`. */
+export function CheckedBaseSourceDir(dir: RunDir, recorded: string): string { return CheckedRunFolder(dir, 'base-src', recorded, 'base source snapshot'); }
 
 /** Writes one base source snapshot line to stderr. */
 function warn(message: string): void { process.stderr.write(`base source snapshot: ${message}\n`); }

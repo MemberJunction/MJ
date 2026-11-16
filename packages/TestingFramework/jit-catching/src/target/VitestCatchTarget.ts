@@ -310,7 +310,7 @@ function sq(value: string): string { return `'${value.replace(/'/g, `'\\''`)}'`;
  * Walks `rel` below `root` one part at a time. Each part must be a real folder, not a symlink; missing parts are
  * created when `create` is true and refused otherwise. The real path of the result must lie inside the real root.
  */
-export function SafeDir(root: string, rel: string, create: boolean): string {
+function SafeDir(root: string, rel: string, create: boolean): string {
     let p = root;
     for (const part of rel.split('/')) {
         p = join(p, part);
@@ -379,7 +379,7 @@ export function ReadTypeCheck(r: SandboxRunResult, files: string[], maxChars: nu
 }
 
 /** Exit code and the redacted tail of stderr (stdout when stderr is empty) of a sandbox run. */
-export function SandboxEvidence(r: SandboxRunResult): string {
+function SandboxEvidence(r: SandboxRunResult): string {
     return `exit ${r.ExitCode ?? 'none'}: ${RedactTail(r.Stderr.trim() || r.Stdout.trim())}`;
 }
 

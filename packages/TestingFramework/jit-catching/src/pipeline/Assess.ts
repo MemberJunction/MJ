@@ -133,7 +133,7 @@ async function save(store: BaseCatchStore, gen: GenerationFile, exec: ExecutionF
 }
 
 /** The printed summary: one header line, one line per ranked catch, and the promotion count. */
-export function Summary(gen: GenerationFile, exec: ExecutionFile, catches: Catch[], promotions: PromotionCandidate[]): string {
+function Summary(gen: GenerationFile, exec: ExecutionFile, catches: Catch[], promotions: PromotionCandidate[]): string {
     const weak = catches.filter((c) => c.Verdict.Label === 'WeakCatch');
     const dropped = weak.filter((c) => c.DroppedByRule !== null).length;
     const reported = catches.filter((c) => c.Reported).length;

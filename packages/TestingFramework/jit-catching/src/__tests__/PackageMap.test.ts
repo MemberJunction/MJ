@@ -26,9 +26,9 @@ describe('PackageMap', () => {
     expect(map.PackageForPath('packages/AI/Core/src/y.ts')?.Name).toBe('@memberjunction/ai');
     expect(map.PackageForPath('README.md')).toBeNull();
   });
-  it('knows whether a package has vitest and tests', () => {
-    expect(map.Get('@memberjunction/core')).toMatchObject({ HasVitest: true, HasTests: true });
-    expect(map.Get('@memberjunction/ai')).toMatchObject({ HasVitest: true, HasTests: false });
-    expect(map.Get('@memberjunction/notests')).toMatchObject({ HasVitest: false, HasTests: false });
+  it('knows whether a package has vitest', () => {
+    expect(map.Get('@memberjunction/core')).toMatchObject({ HasVitest: true });
+    expect(map.Get('@memberjunction/ai')).toMatchObject({ HasVitest: true });
+    expect(map.Get('@memberjunction/notests')).toMatchObject({ HasVitest: false });
   });
 });
