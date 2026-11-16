@@ -11,14 +11,20 @@
       "Priority": 0,
       "DefaultDeliveryMode": "Inline",
       "SystemSupplied": true,
-      "Icon": "fa-solid fa-video"
+      "Icon": "fa-solid fa-video",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "AE8893ED-05F8-4314-8D6F-F4B758F37A78"
     },
     "sync": {
-      "lastModified": "2026-11-01T22:53:23.000Z",
-      "checksum": "7958069419355a040e2e0ed3866220939b1f1185bd19fbd8db8198f19905c384"
+      "lastModified": "2026-11-13T23:26:26.389Z",
+      "checksum": "e3f8be549d73df8455d7e164f301dc99f85c03301972710ceb0d2fc99b995d07"
     }
   }
 ]

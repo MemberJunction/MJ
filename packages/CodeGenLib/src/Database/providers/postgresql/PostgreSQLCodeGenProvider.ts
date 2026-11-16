@@ -1147,9 +1147,44 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
     }
 
     protected formatIndexStatement(entity: EntityInfo, f: EntityFieldInfo, indexName: string): string {
-        return (
+        return this.guardedCreateIndex(
+            entity,
+            [f],
             `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
-            `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${pgDialect.QuoteIdentifier(f.Name)});`
+            `            ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${pgDialect.QuoteIdentifier(f.Name)});`
+        );
+    }
+
+    /**
+     * Wraps a generated `CREATE INDEX IF NOT EXISTS` in a `DO` block that skips it when another
+     * non-partial index on the table already has `fields` as its leading key columns, in order
+     * (#6466). `IF NOT EXISTS` still covers the generated name itself.
+     */
+    protected guardedCreateIndex(entity: EntityInfo, fields: EntityFieldInfo[], createStatement: string): string {
+        const literal = (value: string) => `'${value.replace(/'/g, "''")}'`;
+        const leading = fields
+            .map((f, i) =>
+                `              AND ix.indkey[${i}] = (SELECT a.attnum FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attname = ${literal(f.Name)})`)
+            .join('\n');
+        return (
+            `-- Skipped when another non-partial index already leads with ${fields.length === 1 ? 'the column' : 'these columns'}.\n` +
+            `DO $$\n` +
+            `BEGIN\n` +
+            `    IF NOT EXISTS (\n` +
+            `        SELECT 1\n` +
+            `        FROM pg_index ix\n` +
+            `        INNER JOIN pg_class t ON t.oid = ix.indrelid\n` +
+            `        INNER JOIN pg_namespace n ON n.oid = t.relnamespace\n` +
+            `        WHERE n.nspname = ${literal(entity.SchemaName)}\n` +
+            `          AND t.relname = ${literal(entity.BaseTable)}\n` +
+            `          AND ix.indpred IS NULL\n` +
+            `          AND ix.indnkeyatts >= ${fields.length}\n` +
+            `${leading}\n` +
+            `    ) THEN\n` +
+            `        ${createStatement}\n` +
+            `    END IF;\n` +
+            `END\n` +
+            `$$;`
         );
     }
 
@@ -1173,8 +1208,12 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
             `-- Index for the soft primary key (${fields.map(f => f.Name).join(', ')}) in table ${entity.BaseTable}.\n` +
             `-- The key is metadata-only — no PRIMARY KEY constraint — so without this the per-record\n` +
             `-- existence check on the create path scans the whole table.\n` +
-            `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
-            `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${cols});`
+            this.guardedCreateIndex(
+                entity,
+                fields,
+                `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
+                `            ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${cols});`
+            )
         );
     }
 

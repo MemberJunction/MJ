@@ -783,6 +783,28 @@ export interface ILocalStorageProvider {
     SetItem<T>(key: string, value: T, category?: string, options?: LocalStorageWriteOptions): Promise<void>;
 
     /**
+     * Stores a structured object directly without requiring caller-side serialization.
+     * When implemented by providers like `BrowserIndexedDBStorageProvider`, the underlying
+     * store uses native structured cloning rather than JSON stringification.
+     *
+     * @typeParam T - Type of the object being stored
+     * @param key - The key to store under
+     * @param value - The object to store
+     * @param category - Optional category for key isolation
+     */
+    SetObject?<T>(key: string, value: T, category?: string): Promise<void>;
+
+    /**
+     * Retrieves a structured object directly without requiring caller-side parsing.
+     * Returns `null` if the key is missing or not present.
+     *
+     * @typeParam T - Expected type of the retrieved object
+     * @param key - The key to retrieve
+     * @param category - Optional category for key isolation
+     */
+    GetObject?<T>(key: string, category?: string): Promise<T | null>;
+
+    /**
      * Removes an item from storage.
      * @param key - The key to remove
      * @param category - Optional category for key isolation

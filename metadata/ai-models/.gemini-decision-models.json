@@ -1,0 +1,118 @@
+[
+  {
+    "fields": {
+      "Name": "Gemini Decision 1",
+      "Description": "Google's purpose-built decision model, gemini-decision-1, released November 11, 2026 and served directly by the Gemini Decisions API (POST https://generativelanguage.googleapis.com/v1beta/decisions, preferred) in Google AI Studio and through OpenRouter's Decisions API (google/gemini-decision-1-20261111). It answers Likelihood (noul), Choice (2 to 255 options) and Score (2 to 255 levels) questions, up to 1,000 in one call, about one shared input of up to 262,144 tokens, and returns a probability for every option or level plus a confidence. It scores the candidates in a single forward pass and writes no text, so only input tokens are billed ($0.10 per million input tokens on both routes). Google's direct API takes text, images, audio, video and PDFs in input; MJ sends text only. On MJ's 60-scenario, 337-note memory-gate corpus (2 reps), Gemini Decision 1 reached 0.993 raw AUC ([0.989, 0.997]), 0.993 5-fold Platt-calibrated AUC ([0.988, 0.997], A = 1.8161, B = -2.4230), 100.0% repeatability at calibrated 0.6, p50 = 265 ms / p95 = 402 ms, and $0.0212 per 1,000 notes (vs Jev's 0.991 raw / 0.990 calibrated AUC at $0.0099 per 1,000 notes). Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 61,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxQuestionsPerCall": 1000,
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 255,
+          "MaxStateTokens": 262144
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "1C6DF195-1526-4309-9924-BCDE74E9FF29"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 2,
+            "Status": "Active",
+            "DriverClass": "GeminiDecision",
+            "APIName": "gemini-decision-1",
+            "MaxInputTokens": 262144,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1BBF8C0F-2FEA-42AF-A2F0-E24B01D60250"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenRouterDecision",
+            "APIName": "google/gemini-decision-1-20261111",
+            "MaxInputTokens": 262144,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8B83F82F-F6FD-4573-A134-F00C406ECADE"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-11-11T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini Decisions API (gemini-decision-1), November 2026: $0.10 per million input tokens; no output-token charge. The shared input is billed once per request however many questions it carries; each question adds only its own instruction and criteria tokens. No separate audio-transcription or OCR charge. A no-cost tier is available in Google AI Studio for prototyping. Source: https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/"
+          },
+          "primaryKey": {
+            "ID": "5C4650A1-9159-4198-A918-62B08C3EEF34"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-11-11T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "OpenRouter pricing for google/gemini-decision-1-20261111 (pinned dated snapshot, 262,144 context, November 2026): $0.10 per million input tokens ($0.0000001/token), $0 output tokens. Source: https://openrouter.ai/api/v1/models?output_modalities=all"
+          },
+          "primaryKey": {
+            "ID": "912836D6-A473-41E9-8243-078D9700F04B"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0807032D-2C97-4C1B-8F44-D80006D6A6A6"
+    }
+  }
+]

@@ -27,8 +27,10 @@
  */
 
 import type { BaseEntity } from './baseEntity';
-import type { EntitySaveOptions, EntityDeleteOptions } from './interfaces';
+import { CrossEntityPolicyEngine } from './crossEntityPolicyEngine';
+import type { EntitySaveOptions, EntityDeleteOptions, IEntityDataProvider } from './interfaces';
 import { LogError } from './logging';
+import type { TransactionGroupBase } from './transactionGroup';
 
 /**
  * What a plan node does to its record.
@@ -280,6 +282,16 @@ export type EntitySavePlanExecuteOptions = {
      * does not exist. Carried on the options, its lifetime is exactly one unit of work.
      */
     Visited?: Set<string>;
+    /**
+     * Optional predicate controlling whether an eligible leaf node can be batched into a provider
+     * {@link TransactionGroupBase}. Used by `BaseEntity` so subclasses overriding `Save()` or `Delete()`
+     * run sequentially instead of deferring through a transaction group.
+     */
+    CanBatchLeaf?: (entity: BaseEntity, operation: EntitySavePlanOperation) => boolean;
+};
+
+type BatchableProvider = IEntityDataProvider & {
+    CreateTransactionGroup(): Promise<TransactionGroupBase>;
 };
 
 /**
@@ -325,7 +337,24 @@ export async function ExecuteEntitySavePlan(
     }
 
     try {
-        for (const node of plan.Nodes) {
+        let idx = 0;
+        while (idx < plan.Nodes.length) {
+            const batchRun = collectContiguousLeafBatch(plan.Nodes, idx, options, visited);
+            if (batchRun) {
+                const batchOutcome = await executeLeafBatch(batchRun.nodes, batchRun.provider, options, visited);
+                nodeResults.push(...batchOutcome.results);
+                if (!batchOutcome.success) {
+                    return {
+                        Success: false,
+                        NodeResults: nodeResults,
+                        ErrorMessage: batchOutcome.errorMessage,
+                    };
+                }
+                idx += batchRun.nodes.length;
+                continue;
+            }
+
+            const node = plan.Nodes[idx];
             // A child node re-entering a record already in progress above it is a cycle. Detect it
             // here rather than letting the recursion run until the stack overflows, which surfaces
             // as an unattributable crash rather than a fixable message.
@@ -356,6 +385,7 @@ export async function ExecuteEntitySavePlan(
                 // failure mask the real one.
                 return { Success: false, NodeResults: nodeResults, ErrorMessage: outcome.ErrorMessage };
             }
+            idx++;
         }
 
         return { Success: true, NodeResults: nodeResults };
@@ -365,6 +395,156 @@ export async function ExecuteEntitySavePlan(
         if (rootKey && !rootWasAlreadyVisited) {
             visited.delete(rootKey);
         }
+    }
+}
+
+function getBatchableProvider(entity: BaseEntity): BatchableProvider | null {
+    const provider = entity.ProviderToUse as BatchableProvider | undefined;
+    if (!provider || typeof provider.CreateTransactionGroup !== 'function') {
+        return null;
+    }
+    return provider;
+}
+
+function isBatchEligibleLeafNode(
+    node: EntitySavePlanNode,
+    expectedProvider: BatchableProvider | null,
+    options: EntitySavePlanExecuteOptions,
+    visited: Set<string>,
+    batchKeys: Set<string>,
+): BatchableProvider | null {
+    if (node.SelfOnly) {
+        return null;
+    }
+    const entity = node.Entity;
+    if (!entity || entity.HasCompanions || entity.TransactionGroup) {
+        return null;
+    }
+    if (entity.EntityInfo?.IsParentType || entity.EntityInfo?.IsChildType) {
+        return null;
+    }
+    if (options.CanBatchLeaf && !options.CanBatchLeaf(entity, node.Operation)) {
+        return null;
+    }
+    const provider = getBatchableProvider(entity);
+    if (!provider || (expectedProvider !== null && provider !== expectedProvider)) {
+        return null;
+    }
+    const key = GraphNodeKey(entity);
+    if (key && (visited.has(key) || batchKeys.has(key))) {
+        return null;
+    }
+    return provider;
+}
+
+/**
+ * Collects a contiguous slice of 2+ leaf nodes sharing a provider capable of `CreateTransactionGroup()`
+ * so they enqueue and flush as a single batched `TransactionGroup` round-trip.
+ */
+function collectContiguousLeafBatch(
+    nodes: readonly EntitySavePlanNode[],
+    startIndex: number,
+    options: EntitySavePlanExecuteOptions,
+    visited: Set<string>,
+): { nodes: EntitySavePlanNode[]; provider: BatchableProvider } | null {
+    const batchKeys = new Set<string>();
+    const firstNode = nodes[startIndex];
+    const provider = isBatchEligibleLeafNode(firstNode, null, options, visited, batchKeys);
+    if (!provider) {
+        return null;
+    }
+    const firstKey = GraphNodeKey(firstNode.Entity);
+    if (firstKey) {
+        batchKeys.add(firstKey);
+    }
+
+    const collected: EntitySavePlanNode[] = [firstNode];
+    for (let i = startIndex + 1; i < nodes.length; i++) {
+        const candidate = nodes[i];
+        if (!isBatchEligibleLeafNode(candidate, provider, options, visited, batchKeys)) {
+            break;
+        }
+        const candidateKey = GraphNodeKey(candidate.Entity);
+        if (candidateKey) {
+            batchKeys.add(candidateKey);
+        }
+        collected.push(candidate);
+    }
+
+    return collected.length >= 2 ? { nodes: collected, provider } : null;
+}
+
+async function executeLeafBatch(
+    nodes: readonly EntitySavePlanNode[],
+    provider: BatchableProvider,
+    options: EntitySavePlanExecuteOptions,
+    visited: Set<string>,
+): Promise<{ success: boolean; results: EntitySavePlanNodeResult[]; errorMessage?: string }> {
+    const tg = await provider.CreateTransactionGroup();
+    tg.BatchedSubmit = true;
+
+    const attached: Array<{ entity: BaseEntity; previousGroup: TransactionGroupBase | null }> = [];
+    const results: EntitySavePlanNodeResult[] = [];
+    const initialResultCounts: number[] = [];
+
+    try {
+        for (const node of nodes) {
+            if (node.Prepare) {
+                node.Prepare();
+            }
+            initialResultCounts.push(node.Entity.ResultHistory?.length ?? 0);
+            attached.push({ entity: node.Entity, previousGroup: node.Entity.TransactionGroup ?? null });
+            node.Entity.TransactionGroup = tg;
+
+            const outcome = await executePlanNode(node, { ...options, Visited: visited });
+            if (!outcome.Success) {
+                results.push(outcome);
+                return { success: false, results, errorMessage: outcome.ErrorMessage };
+            }
+        }
+
+        const committed = await tg.Submit();
+        if (committed) {
+            for (const node of nodes) {
+                results.push({ Node: node, Success: true });
+            }
+            return { success: true, results };
+        }
+
+        let firstFailureMessage: string | undefined;
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            const history = node.Entity.ResultHistory;
+            const latest = node.Entity.LatestResult;
+            const failed = Boolean(history && history.length > initialResultCounts[i] && latest && !latest.Success);
+            if (failed) {
+                const detail = latest?.CompleteMessage ?? 'batch transaction failed';
+                const errorMessage = `${node.Operation} failed for ${node.Label} (${node.Entity.EntityInfo?.Name}): ${detail}`;
+                if (!firstFailureMessage) {
+                    firstFailureMessage = errorMessage;
+                }
+                results.push({ Node: node, Success: false, ErrorMessage: errorMessage });
+            } else {
+                results.push({ Node: node, Success: false, ErrorMessage: firstFailureMessage ?? 'Transaction batch rolled back' });
+            }
+        }
+        if (!firstFailureMessage) {
+            const firstNode = nodes[0];
+            firstFailureMessage = `${firstNode.Operation} failed for ${firstNode.Label} (${firstNode.Entity.EntityInfo?.Name}): Transaction batch failed`;
+        }
+        return { success: false, results, errorMessage: firstFailureMessage };
+    } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
+        LogError(`EntitySavePlan batch failed: ${detail}`);
+        const firstNode = nodes[0];
+        const errorMessage = `${firstNode.Operation} threw during batch for ${firstNode.Label} (${firstNode.Entity.EntityInfo?.Name}): ${detail}`;
+        results.push({ Node: firstNode, Success: false, ErrorMessage: errorMessage });
+        return { success: false, results, errorMessage };
+    } finally {
+        for (let i = attached.length - 1; i >= 0; i--) {
+            attached[i].entity.TransactionGroup = attached[i].previousGroup;
+        }
+        CrossEntityPolicyEngine.Instance.ClearTransactionGroupScope(tg);
     }
 }
 

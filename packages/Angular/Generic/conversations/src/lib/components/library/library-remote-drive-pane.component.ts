@@ -987,6 +987,14 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
         AccountID: this.Account.account.ID,
         ObjectPath: this.SelectedObject.fullPath,
         FileName: this.SelectedObject.name,
+        ProviderType: this.Account.provider?.Name ?? this.Account.account?.Name ?? 'ConnectedDrive',
+        ETag: this.SelectedObject.etag || undefined,
+        RemoteModifiedAt:
+          this.SelectedObject.lastModified instanceof Date
+            ? this.SelectedObject.lastModified.toISOString()
+            : typeof this.SelectedObject.lastModified === 'string'
+              ? this.SelectedObject.lastModified
+              : undefined,
         EnvironmentID: this.EnvironmentId,
         CurrentUser: this.CurrentUser,
         Provider: this.ProviderToUse,
