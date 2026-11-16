@@ -27,6 +27,8 @@ import {
     GetDiagnosticContext,
     IsDiagnosticCaptureSuppressed,
     RunViewWithCacheCheckParams,
+    Metadata,
+    LocalCacheManager,
 } from '@memberjunction/core';
 
 
@@ -421,6 +423,36 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             && ka.Database === kb.Database
             && ka.User === kb.User
             && ka.Password === kb.Password;
+    }
+
+    /**
+     * Returns `true` when global metadata and `LocalCacheManager` are warm in memory and `pool`
+     * is non-null so {@link ConfigureFromGlobalSync} can configure a per-request provider without I/O.
+     */
+    public static CanConfigureFromGlobalSync(pool: pg.Pool | null | undefined): boolean {
+        if (!pool || !Metadata.Provider || !LocalCacheManager.Instance.IsInitialized) { // global-provider-ok: fast-path readiness check for global metadata
+            return false;
+        }
+        return (Metadata.Provider.AllMetadata?.AllEntities?.length ?? 0) > 0; // global-provider-ok: verifies global metadata entities are warm
+    }
+
+    /**
+     * Synchronously configures a per-request `PostgreSQLDataProvider` sharing `existingPool` when
+     * global metadata and `LocalCacheManager` are already warm in memory. Returns `false` if any
+     * dependency is not yet warm, allowing callers to fall back to async {@link ConfigWithSharedPool}.
+     */
+    public ConfigureFromGlobalSync(configData: PostgreSQLProviderConfigData, existingPool: pg.Pool): boolean {
+        if (!existingPool) {
+            return false;
+        }
+        if (!this.ConfigureFromGlobalMetadataSync(configData)) {
+            return false;
+        }
+        this._configData = configData;
+        this._schemaName = configData.MJCoreSchemaName || '__mj';
+        this._connectionManager.InitializeWithExistingPool(existingPool, configData.ConnectionConfig);
+        RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
+        return true;
     }
 
     /**

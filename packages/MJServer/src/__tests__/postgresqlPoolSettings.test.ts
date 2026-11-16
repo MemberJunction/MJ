@@ -3,12 +3,17 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+    ADHOC_READ_ONLY_MAX_CONNECTIONS,
     BuildPostgreSQLConnectionConfig,
     CODEGEN_STATEMENT_TIMEOUT_MS,
+    PostgreSQLReadOnlyPool,
     ResolvePostgreSQLEndpoint,
     ResolvePostgreSQLReadOnlyCredentials,
     ToPGPoolConfig
 } from '../postgresqlPoolSettings.js';
+import { GetReadOnlyProvider } from '../util.js';
+import type { ProviderInfo } from '../types.js';
+import type { DatabaseProviderBase } from '@memberjunction/core';
 import type { DatabaseSettingsInfo } from '../config.js';
 import { DescribeReadOnlyLoginOverreach } from '../postgresqlPoolSettings.js';
 import type { ReadOnlyLoginCheckClient, ReadOnlyLoginGrants } from '../postgresqlPoolSettings.js';
@@ -50,10 +55,21 @@ describe('BuildPostgreSQLConnectionConfig', () => {
         expect(config.IdleInTransactionSessionTimeoutMs).toBe(0);
     });
 
-    it('keeps the read-only pool small but gives it the API timeouts', () => {
+    it('sizes the application read-only pool up to apiMax (or connectionPool.readOnlyMax) with MinConnections=0 and API timeouts', () => {
         const config = BuildPostgreSQLConnectionConfig(endpoint, defaults, 'read-only');
-        expect(config).toMatchObject({ MaxConnections: 10, MinConnections: 0, StatementTimeoutMs: 30000, IdleInTransactionSessionTimeoutMs: 60000 });
+        expect(config).toMatchObject({ MaxConnections: 50, MinConnections: 0, StatementTimeoutMs: 30000, IdleInTransactionSessionTimeoutMs: 60000 });
+        expect(BuildPostgreSQLConnectionConfig(endpoint, {
+            ...defaults,
+            connectionPool: { max: 50, min: 5, readOnlyMax: 35, idleTimeoutMillis: 30000, acquireTimeoutMillis: 30000 }
+        }, 'read-only').MaxConnections).toBe(35);
         expect(BuildPostgreSQLConnectionConfig(endpoint, { ...defaults, connectionPool: { max: 4, min: 1, idleTimeoutMillis: 1, acquireTimeoutMillis: 1 } }, 'read-only').MaxConnections).toBe(4);
+    });
+
+    it('bounds the untrusted ad-hoc read-only pool at ADHOC_READ_ONLY_MAX_CONNECTIONS (10) while keeping API timeouts', () => {
+        expect(ADHOC_READ_ONLY_MAX_CONNECTIONS).toBe(10);
+        const config = BuildPostgreSQLConnectionConfig(endpoint, defaults, 'adhoc-read-only');
+        expect(config).toMatchObject({ MaxConnections: 10, MinConnections: 0, StatementTimeoutMs: 30000, IdleInTransactionSessionTimeoutMs: 60000 });
+        expect(BuildPostgreSQLConnectionConfig(endpoint, { ...defaults, connectionPool: { max: 4, min: 1, idleTimeoutMillis: 1, acquireTimeoutMillis: 1 } }, 'adhoc-read-only').MaxConnections).toBe(4);
     });
 
     it('gives the CodeGen pool the long timeout the SQL Server CodeGen pool has, and no idle-in-transaction limit', () => {
@@ -127,5 +143,40 @@ describe('DescribeReadOnlyLoginOverreach', () => {
     it('warns when the login can read server files', async () => {
         const warnings = await DescribeReadOnlyLoginOverreach(clientAnswering({ ReadsServerFiles: true, ReadableBaseTables: 0 }), '__mj');
         expect(warnings[0]).toMatch(/pg_read_server_files/);
+    });
+});
+
+describe('PostgreSQLReadOnlyPool & GetReadOnlyProvider purpose routing', () => {
+    it('tracks separate application Pool and bounded AdhocPool handles', () => {
+        const prevPool = PostgreSQLReadOnlyPool.Instance.Pool;
+        const prevAdhoc = PostgreSQLReadOnlyPool.Instance.AdhocPool;
+        try {
+            const appPool = { kind: 'app' } as unknown as import('pg').Pool;
+            const adhocPool = { kind: 'adhoc' } as unknown as import('pg').Pool;
+            PostgreSQLReadOnlyPool.Instance.Pool = appPool;
+            PostgreSQLReadOnlyPool.Instance.AdhocPool = adhocPool;
+            expect(PostgreSQLReadOnlyPool.Instance.Pool).toBe(appPool);
+            expect(PostgreSQLReadOnlyPool.Instance.AdhocPool).toBe(adhocPool);
+        } finally {
+            PostgreSQLReadOnlyPool.Instance.Pool = prevPool;
+            PostgreSQLReadOnlyPool.Instance.AdhocPool = prevAdhoc;
+        }
+    });
+
+    it('routes purpose:"adhoc" to Adhoc-Read-Only (never Read-Write) and app RunView* to Read-Only', () => {
+        const rw = { type: 'Read-Write', provider: { id: 'rw' } as unknown as DatabaseProviderBase } satisfies ProviderInfo;
+        const ro = { type: 'Read-Only', provider: { id: 'ro' } as unknown as DatabaseProviderBase } satisfies ProviderInfo;
+        const adhoc = { type: 'Adhoc-Read-Only', provider: { id: 'adhoc' } as unknown as DatabaseProviderBase } satisfies ProviderInfo;
+
+        expect(GetReadOnlyProvider([rw, ro, adhoc], { allowFallbackToReadWrite: true })).toBe(ro.provider);
+        expect(GetReadOnlyProvider([rw, ro, adhoc], { allowFallbackToReadWrite: false, purpose: 'adhoc' })).toBe(adhoc.provider);
+        // Falls back to Read-Only (never Read-Write) when no separate Adhoc-Read-Only exists (e.g. SQL Server)
+        expect(GetReadOnlyProvider([rw, ro], { allowFallbackToReadWrite: false, purpose: 'adhoc' })).toBe(ro.provider);
+        // Never falls back to Read-Write when RO + Adhoc pools are absent and allowFallbackToReadWrite is false
+        expect(GetReadOnlyProvider([rw], { allowFallbackToReadWrite: false, purpose: 'adhoc' })).toBeNull();
+        expect(GetReadOnlyProvider([rw], { allowFallbackToReadWrite: false, purpose: 'app' })).toBeNull();
+        // App queries never route onto the bounded Adhoc-Read-Only pool when Read-Only is absent
+        expect(GetReadOnlyProvider([rw, adhoc], { allowFallbackToReadWrite: false, purpose: 'app' })).toBeNull();
+        expect(GetReadOnlyProvider([], { allowFallbackToReadWrite: false, purpose: 'adhoc' })).toBeNull();
     });
 });

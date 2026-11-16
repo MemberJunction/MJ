@@ -21,6 +21,9 @@ import { ProjectEntityObjectForCaller, ProjectValuesForCaller } from '../generic
 
 const SIGNIFICANT_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
 
+/** Default coalescing window (ms) for high-frequency `OnStreaming` token chunks (~40 fps ceiling). */
+export const DEFAULT_STREAMING_COALESCE_MS = 25;
+
 /** The run fields the published messages read. Entities and test fakes both satisfy this. */
 interface StatusRun {
     ID?: string;
@@ -39,8 +42,27 @@ interface StatusRun {
 /** The run fields a streamed chunk carries. */
 type RunSummary = Pick<StatusRun, 'ID' | 'AgentID' | 'Agent' | 'ParentRunID' | 'Status' | 'ConversationID' | 'ConversationDetailID'>;
 
+interface BufferedStreamingChunk {
+    agentRunId: string;
+    run: StatusRun;
+    content: string;
+    isPartial: boolean;
+    stepType?: string;
+    modelName?: string;
+    kind?: string;
+}
+
 export class AgentRunStatusPublisher {
     private run: StatusRun | null = null;
+    private streamBuffer: BufferedStreamingChunk | null = null;
+    private streamTimer: ReturnType<typeof setTimeout> | null = null;
+    private lastStreamPublishMs: number = -Infinity;
+    private cachedSummary: {
+        run: StatusRun;
+        status: string | undefined;
+        detailId: string | undefined;
+        summary: RunSummary;
+    } | null = null;
 
     /**
      * @param sessionId Session stamped on the message body. Defaults to the payload's session.
@@ -48,12 +70,15 @@ export class AgentRunStatusPublisher {
      * @param conversationDetailId The run's reply row. When set, every message carries it as
      *   `conversationDetailId`, not only the completion, so a client that reconnects mid-run can
      *   find its row. When omitted, messages are as before.
+     * @param coalesceMs Minimum interval (ms) between consecutive `StreamingContent` publishes
+     *   for rapid partial chunks. Defaults to {@link DEFAULT_STREAMING_COALESCE_MS} (25 ms).
      */
     constructor(
         private readonly pubSub: PubSubEngine,
         private readonly userPayload: UserPayload,
         private readonly sessionId: string = userPayload.sessionId,
         private readonly conversationDetailId?: string,
+        private readonly coalesceMs: number = DEFAULT_STREAMING_COALESCE_MS,
     ) {}
 
     /** Latest run observed from a progress event, including steps that are not published. */
@@ -66,11 +91,17 @@ export class AgentRunStatusPublisher {
         return (progress) => {
             const fromEvent = progress.metadata?.agentRun as StatusRun | undefined;
             if (fromEvent) {
+                if (this.streamBuffer && fromEvent.ID && fromEvent.ID !== this.streamBuffer.agentRunId) {
+                    this.Flush();
+                }
                 this.run = fromEvent;
+                this.cachedSummary = null;
             }
             if (!SIGNIFICANT_STEPS.includes(progress.step)) {
                 return;
             }
+            // Preserve strict chronological ordering: flush any buffered tokens before emitting a step progress event.
+            this.Flush();
             const agentRun = fromEvent || this.run;
             if (!agentRun?.ID) {
                 // A host that streams before the first progress event otherwise sees nothing and no reason.
@@ -97,7 +128,11 @@ export class AgentRunStatusPublisher {
         };
     }
 
-    /** AgentRunner's streaming callback. Publishes nothing until a progress event has carried the run. */
+    /**
+     * AgentRunner's streaming callback. Publishes nothing until a progress event has carried the run.
+     * Coalesces high-frequency partial chunks within {@link coalesceMs} while preserving leading-edge
+     * delivery and ordered concatenation, flushing immediately on completion or metadata change.
+     */
     public get OnStreaming(): AgentExecutionStreamingCallback {
         return (chunk) => {
             const agentRun = this.run;
@@ -105,22 +140,78 @@ export class AgentRunStatusPublisher {
                 console.error('❌ No agent run available for streaming callback');
                 return;
             }
-            this.publish('StreamingContent', {
-                sessionId: this.sessionId,
-                agentRunId: agentRun.ID,
-                type: 'streaming',
-                ...this.replyRow(),
-                agentRun: this.runSummary(agentRun),
-                streaming: {
+
+            if (this.streamBuffer && !this.matchesBufferMetadata(this.streamBuffer, agentRun.ID, chunk)) {
+                this.Flush();
+            }
+
+            if (chunk.isComplete) {
+                if (this.streamBuffer) {
+                    this.streamBuffer.content += chunk.content;
+                    this.streamBuffer.isPartial = false;
+                    this.Flush();
+                } else {
+                    this.publishStreamingChunk(agentRun, chunk.content, false, chunk.stepType, chunk.modelName, chunk.kind);
+                }
+                return;
+            }
+
+            const now = Date.now();
+            if (!this.streamBuffer && (this.coalesceMs <= 0 || now - this.lastStreamPublishMs >= this.coalesceMs)) {
+                this.publishStreamingChunk(agentRun, chunk.content, true, chunk.stepType, chunk.modelName, chunk.kind);
+                return;
+            }
+
+            if (!this.streamBuffer) {
+                this.streamBuffer = {
+                    agentRunId: agentRun.ID,
+                    run: agentRun,
                     content: chunk.content,
-                    isPartial: !chunk.isComplete,
-                    stepName: chunk.stepType,
-                    agentName: chunk.modelName,
+                    isPartial: true,
+                    stepType: chunk.stepType,
+                    modelName: chunk.modelName,
                     kind: chunk.kind,
-                },
-                timestamp: new Date(),
-            });
+                };
+            } else {
+                this.streamBuffer.content += chunk.content;
+                this.streamBuffer.run = agentRun;
+            }
+
+            if (!this.streamTimer) {
+                const delayMs = Math.max(1, this.coalesceMs - (now - this.lastStreamPublishMs));
+                this.streamTimer = setTimeout(() => {
+                    this.streamTimer = null;
+                    this.Flush();
+                }, delayMs);
+                this.streamTimer.unref?.();
+            }
         };
+    }
+
+    /** Synchronously flushes any buffered streaming tokens and cancels the pending coalesce timer. */
+    public Flush(): void {
+        if (this.streamTimer) {
+            clearTimeout(this.streamTimer);
+            this.streamTimer = null;
+        }
+        if (!this.streamBuffer) {
+            return;
+        }
+        const buffered = this.streamBuffer;
+        this.streamBuffer = null;
+        this.publishStreamingChunk(
+            buffered.run,
+            buffered.content,
+            buffered.isPartial,
+            buffered.stepType,
+            buffered.modelName,
+            buffered.kind,
+        );
+    }
+
+    /** Flushes any pending streaming chunks and clears timers (safe on disconnect/cancellation). */
+    public Dispose(): void {
+        this.Flush();
     }
 
     /**
@@ -128,6 +219,7 @@ export class AgentRunStatusPublisher {
      * chat should update. When omitted, the completion uses the run's own detail id.
      */
     public PublishFinal(result: ExecuteAgentResult, conversationDetailId?: string, resultJson?: string): void {
+        this.Flush();
         const agentRun = result.agentRun as StatusRun | undefined;
         if (agentRun?.ID) {
             let lastStep = 'Completed';
@@ -167,6 +259,7 @@ export class AgentRunStatusPublisher {
      * and the error. That completion is what tells the chat the reply finished.
      */
     public PublishFailure(conversationDetailId: string | undefined, errorMessage: string): void {
+        this.Flush();
         this.publish('StreamingContent', {
             sessionId: this.sessionId,
             agentRunId: 'unknown',
@@ -176,6 +269,48 @@ export class AgentRunStatusPublisher {
             success: false,
             errorMessage,
             result: JSON.stringify({ success: false, errorMessage }),
+        });
+    }
+
+    private matchesBufferMetadata(
+        buffer: BufferedStreamingChunk,
+        agentRunId: string,
+        chunk: Parameters<AgentExecutionStreamingCallback>[0],
+    ): boolean {
+        return (
+            buffer.agentRunId === agentRunId &&
+            buffer.stepType === chunk.stepType &&
+            buffer.kind === chunk.kind &&
+            buffer.modelName === chunk.modelName
+        );
+    }
+
+    private publishStreamingChunk(
+        agentRun: StatusRun,
+        content: string,
+        isPartial: boolean,
+        stepType?: string,
+        modelName?: string,
+        kind?: string,
+    ): void {
+        if (!agentRun.ID) {
+            return;
+        }
+        this.lastStreamPublishMs = Date.now();
+        this.publish('StreamingContent', {
+            sessionId: this.sessionId,
+            agentRunId: agentRun.ID,
+            type: 'streaming',
+            ...this.replyRow(),
+            agentRun: this.runSummary(agentRun),
+            streaming: {
+                content,
+                isPartial,
+                stepName: stepType,
+                agentName: modelName,
+                kind,
+            },
+            timestamp: new Date(),
         });
     }
 
@@ -201,6 +336,14 @@ export class AgentRunStatusPublisher {
      * these: the run's `GetAll()` holds every step and prompt run, and a run streams many chunks.
      */
     private runSummary(agentRun: StatusRun): RunSummary {
+        if (
+            this.cachedSummary &&
+            this.cachedSummary.run === agentRun &&
+            this.cachedSummary.status === agentRun.Status &&
+            this.cachedSummary.detailId === agentRun.ConversationDetailID
+        ) {
+            return this.cachedSummary.summary;
+        }
         const summary: RunSummary = {
             ID: agentRun.ID,
             AgentID: agentRun.AgentID,
@@ -210,7 +353,14 @@ export class AgentRunStatusPublisher {
             ConversationID: agentRun.ConversationID,
             ConversationDetailID: agentRun.ConversationDetailID,
         };
-        return ProjectValuesForCaller(agentRun.EntityInfo, summary, this.userPayload?.userRecord);
+        const projected = ProjectValuesForCaller(agentRun.EntityInfo, summary, this.userPayload?.userRecord);
+        this.cachedSummary = {
+            run: agentRun,
+            status: agentRun.Status,
+            detailId: agentRun.ConversationDetailID,
+            summary: projected,
+        };
+        return projected;
     }
 
     private publish(type: 'ExecutionProgress' | 'StreamingContent', data: unknown): void {

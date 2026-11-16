@@ -214,6 +214,57 @@ export type OrganicKeyMetadataRow = BaseMetadataRow & {
 export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrganicKeyID: string };
 
 /**
+ * Options controlling mutability vs. frozen-reference preservation in {@link ProjectRowsToFields}.
+ */
+export interface ProjectRowsToFieldsOptions {
+    /**
+     * When `true`, callers that treat returned rows as read-only (e.g. server GraphQL wire
+     * serialization) allow frozen cached inputs (including L1 CoW cached arrays) to be returned
+     * untouched when `requestedFields` covers 100% of row keys, and allow subset projections of
+     * frozen rows to be memoized as frozen objects so downstream serialization caches
+     * (`FrozenRowSerializationCache`) stay warm. Defaults to `false` so direct callers receive
+     * mutable unfrozen copies.
+     */
+    PreserveFrozen?: boolean;
+}
+
+/**
+ * Produces a canonical, order- and case-insensitive key for a requested `Fields` list, suitable
+ * for keying memoized row projections and wire-serialization caches. Returns `''` when no field
+ * list is provided.
+ */
+export function CanonicalFieldsKey(fields: string[] | null | undefined): string {
+    if (!fields || fields.length === 0) {
+        return '';
+    }
+    const unique = new Set<string>();
+    for (const f of fields) {
+        const normalized = f.trim().toLowerCase();
+        if (normalized.length > 0) {
+            unique.add(normalized);
+        }
+    }
+    if (unique.size === 0) {
+        return '';
+    }
+    return Array.from(unique).sort().join(',');
+}
+
+/**
+ * Memoizes frozen subset-projected row objects per `(sourceRow, canonicalFieldsKey)` when
+ * `ProjectRowsToFields` runs with `{ PreserveFrozen: true }` on frozen L1/cache rows. Weakly
+ * keyed on the source row so entries are automatically garbage-collected when cache slots evict.
+ */
+const FrozenProjectedRowCache = new WeakMap<object, Map<string, Record<string, unknown>>>();
+
+/**
+ * Memoizes the entire frozen projected result array per `(frozenSourceArray, canonicalFieldsKey)`
+ * when `ProjectRowsToFields` runs with `{ PreserveFrozen: true }` on a frozen cached array.
+ * Turns repeat N-row subset projections into a single O(1) WeakMap lookup.
+ */
+const FrozenProjectedArrayCache = new WeakMap<object, Map<string, unknown[]>>();
+
+/**
  * Projects plain-object rows down to a caller-requested field subset, matching
  * field names case-insensitively (and ignoring surrounding whitespace).
  *
@@ -229,14 +280,28 @@ export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrgan
  *
  * @param rows - Plain-object result rows (NOT BaseEntity objects)
  * @param requestedFields - The caller's original Fields list, or null for "all fields"
+ * @param options - Optional mutability/freeze preservation controls
  */
 export function ProjectRowsToFields<T = Record<string, unknown>>(
     rows: T[],
-    requestedFields: string[] | null | undefined
+    requestedFields: string[] | null | undefined,
+    options?: ProjectRowsToFieldsOptions
 ): T[] {
     if (!requestedFields || requestedFields.length === 0 || !rows || rows.length === 0) {
         return rows;
     }
+    const preserveFrozen = Boolean(options?.PreserveFrozen);
+    const rowsAreFrozen = Object.isFrozen(rows);
+    const canonicalKey = preserveFrozen ? CanonicalFieldsKey(requestedFields) : '';
+
+    // O(1) array-level hit for repeat subset projections over the same frozen cached array.
+    if (preserveFrozen && rowsAreFrozen && canonicalKey.length > 0) {
+        const cachedArray = FrozenProjectedArrayCache.get(rows)?.get(canonicalKey);
+        if (cachedArray) {
+            return cachedArray as T[];
+        }
+    }
+
     const requestedFieldSet = new Set(requestedFields.map(f => f.trim().toLowerCase()));
 
     // No-op probe: SQL result rows are uniform (same SELECT list), so if every key of
@@ -257,10 +322,9 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
             // to yield a per-caller row set the caller may mutate, and full coverage is not a
             // narrower promise than partial coverage — it just happens to project to the same
             // shape. Frozen input means `rows` is the cache's shared array, so returning it here
-            // would quietly hand a Fields caller immutable rows and break that contract for the
-            // one field list that covers everything. Fall through to the copy path in that case;
-            // unfrozen input (the DB-miss path) keeps the allocation-free fast path.
-            if (!Object.isFrozen(rows)) {
+            // would quietly hand a Fields caller immutable rows and break that contract unless
+            // the caller explicitly opts into `PreserveFrozen: true` (read-only wire transport).
+            if (preserveFrozen || !rowsAreFrozen) {
                 return rows;
             }
         }
@@ -268,8 +332,22 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
 
     // Cache lowercase key→keep decisions across rows to avoid repeated allocations
     const keyCache = new Map<string, boolean>();
-    return rows.map((row) => {
+    const projected = rows.map((row) => {
         const source = row as Record<string, unknown>;
+        const canMemoizeFrozen =
+            preserveFrozen &&
+            canonicalKey.length > 0 &&
+            source !== null &&
+            typeof source === 'object' &&
+            Object.isFrozen(source);
+
+        if (canMemoizeFrozen) {
+            const cachedProjected = FrozenProjectedRowCache.get(source)?.get(canonicalKey);
+            if (cachedProjected) {
+                return cachedProjected as T;
+            }
+        }
+
         const filtered: Record<string, unknown> = {};
         for (const key of Object.keys(source)) {
             let keep = keyCache.get(key);
@@ -281,8 +359,31 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
                 filtered[key] = source[key];
             }
         }
+
+        if (canMemoizeFrozen) {
+            Object.freeze(filtered);
+            let fieldMap = FrozenProjectedRowCache.get(source);
+            if (!fieldMap) {
+                fieldMap = new Map<string, Record<string, unknown>>();
+                FrozenProjectedRowCache.set(source, fieldMap);
+            }
+            fieldMap.set(canonicalKey, filtered);
+        }
+
         return filtered as T;
     });
+
+    if (preserveFrozen && rowsAreFrozen && canonicalKey.length > 0) {
+        Object.freeze(projected);
+        let arrayMap = FrozenProjectedArrayCache.get(rows);
+        if (!arrayMap) {
+            arrayMap = new Map<string, unknown[]>();
+            FrozenProjectedArrayCache.set(rows, arrayMap);
+        }
+        arrayMap.set(canonicalKey, projected);
+    }
+
+    return projected;
 }
 
 /**
