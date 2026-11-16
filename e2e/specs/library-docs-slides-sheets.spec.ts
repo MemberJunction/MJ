@@ -19,10 +19,11 @@
  *   • Real-time 2-browser-context Yjs collaboration (`Criterion #14 D.3`): edits
  *     made in Context A converge immediately in Context B (and vice versa) over
  *     `/collaboration/yjs` without saving a version or reloading.
- *   • External Guest Share (`/guest/artifact/:token`, `NW-1`) verified in a fresh
- *     unauthenticated browser context via `POST /guest-share/resolve` (`{ token }`,
- *     never `GET`), `[DriverClass]`, `[PreVerifiedFrozenSnapshots]` (zero red
- *     `unverified-snapshot-banner`), and blocks access after revocation.
+ *   • External Guest Share (`/magic-link/redeem?token=...` -> `/guest/artifact#token=<jwt>`, `NW-1`)
+ *     verified in a fresh unauthenticated browser context via Magic Link anonymous
+ *     session + authenticated `ResolveGuestArtifactSnapshot`, `[DriverClass]`,
+ *     `[PreVerifiedFrozenSnapshots]` (zero red `unverified-snapshot-banner`), and
+ *     immediate revocation (`?mlError=revoked` / `REVOKED` banner).
  *   • Multi-Artifact Synthesis (`NW-5`) creating a Presentation from Library sources.
  *
  * PREREQUISITES (NOT started by these tests): MJAPI + MJExplorer running,
@@ -450,7 +451,7 @@ test.describe.serial('Library workspace & collaborative Docs, Slides, and Sheets
     }
   });
 
-  test('creates an External Guest Share link (/guest/artifact/:token), verifies POST /guest-share/resolve + DriverClass + zero unverified banners, and blocks access after revocation (NW-1)', async ({
+  test('creates an External Guest Share link (/magic-link/redeem -> /guest/artifact#token), verifies ResolveGuestArtifactSnapshot + DriverClass + zero unverified banners, and blocks access after revocation (NW-1)', async ({
     page,
     browser,
   }) => {
@@ -475,39 +476,37 @@ test.describe.serial('Library workspace & collaborative Docs, Slides, and Sheets
     const createdUrlInput = page.locator('[data-testid="guest-share-created-url"] input');
     await expect(createdUrlInput).toBeVisible({ timeout: 20_000 });
     const guestUrl = await createdUrlInput.inputValue();
-    const tokenMatch = guestUrl.match(/\/guest\/artifact\/([A-Za-z0-9_-]+)/);
-    expect(tokenMatch).not.toBeNull();
-    const shareToken = tokenMatch ? tokenMatch[1] : '';
+    expect(guestUrl).toContain('/magic-link/redeem?token=');
 
     // Verify in a fresh unauthenticated browser context (zero session cookies/localStorage)
     const guestContext = await browser.newContext();
     try {
       const guestPage = await guestContext.newPage();
-      const getGuestResolveRequests: string[] = [];
-      guestPage.on('request', (req) => {
-        if (req.method() === 'GET' && req.url().includes('/guest-share/resolve')) {
-          getGuestResolveRequests.push(req.url());
-        }
-      });
+      await guestPage.goto(guestUrl, { waitUntil: 'domcontentloaded' });
 
-      const resolvePostResponsePromise = guestPage.waitForResponse(
-        (res) => res.url().includes('/guest-share/resolve') && res.request().method() === 'POST',
+      // Safe GET /magic-link/redeem renders human click interstitial before minting session JWT
+      const continueBtn = guestPage.locator('button[type="submit"]');
+      await expect(continueBtn).toBeVisible({ timeout: 20_000 });
+
+      const gqlResolvePromise = guestPage.waitForResponse(
+        (res) =>
+          res.url().includes('/graphql') &&
+          res.request().method() === 'POST' &&
+          (res.request().postData() ?? '').includes('ResolveGuestArtifactSnapshot'),
         { timeout: 30_000 },
       );
 
-      await guestPage.goto(guestUrl, { waitUntil: 'domcontentloaded' });
-      const resolveResponse = await resolvePostResponsePromise;
+      await continueBtn.click();
+      const resolveResponse = await gqlResolvePromise;
       expect(resolveResponse.status()).toBe(200);
-      expect(resolveResponse.request().url()).not.toContain(shareToken);
-      const postedPayload = resolveResponse.request().postDataJSON() as { token?: string };
-      expect(postedPayload?.token).toBe(shareToken);
-
-      const resolvedBody = (await resolveResponse.json()) as GuestResolveResponseBody;
-      expect(resolvedBody.Success).toBe(true);
-      expect(resolvedBody.Valid).toBe(true);
-      expect(resolvedBody.DriverClass).toBe('MarkdownArtifactViewerPlugin');
-      expect(resolvedBody.ReadOnly).toBe(true);
-      expect(getGuestResolveRequests).toHaveLength(0);
+      const gqlBody = (await resolveResponse.json()) as {
+        data?: { ResolveGuestArtifactSnapshot?: GuestResolveResponseBody };
+      };
+      const resolvedBody = gqlBody.data?.ResolveGuestArtifactSnapshot;
+      expect(resolvedBody?.Success).toBe(true);
+      expect(resolvedBody?.Valid).toBe(true);
+      expect(resolvedBody?.DriverClass).toBe('MarkdownArtifactViewerPlugin');
+      expect(resolvedBody?.ReadOnly).toBe(true);
 
       await expect(guestPage.locator('.guest-page')).toBeVisible({ timeout: 30_000 });
       await expect(guestPage.locator('.guest-badge')).toContainText('Guest View', { timeout: 20_000 });
@@ -527,22 +526,16 @@ test.describe.serial('Library workspace & collaborative Docs, Slides, and Sheets
       await revokeBtn.click();
       await expect(revokeBtn).toBeHidden({ timeout: 15_000 });
 
-      // Reloading the guest link in the unauthenticated context must now render Revoked state
-      const revokedResponsePromise = guestPage.waitForResponse(
-        (res) => res.url().includes('/guest-share/resolve') && res.request().method() === 'POST',
-        { timeout: 30_000 },
-      );
-      await guestPage.reload({ waitUntil: 'domcontentloaded' });
-      const revokedResponse = await revokedResponsePromise;
-      const revokedBody = (await revokedResponse.json()) as GuestResolveResponseBody;
-      expect(revokedBody.Valid).toBe(false);
-      expect(revokedBody.ErrorCode).toBe('REVOKED');
+      // Re-opening the Magic Link in the unauthenticated context must now render Revoked state
+      await guestPage.goto(guestUrl, { waitUntil: 'domcontentloaded' });
+      const retryContinueBtn = guestPage.locator('button[type="submit"]');
+      await expect(retryContinueBtn).toBeVisible({ timeout: 20_000 });
+      await retryContinueBtn.click();
 
       await expect(guestPage.locator('.guest-error-banner')).toBeVisible({ timeout: 20_000 });
       await expect(guestPage.locator('.guest-error-title')).toContainText(/Revoked/i, {
         timeout: 15_000,
       });
-      expect(getGuestResolveRequests).toHaveLength(0);
     } finally {
       await guestContext.close();
     }

@@ -52,6 +52,16 @@ vi.mock('../config.js', () => ({
     configInfo: {
         apiBasePath: '/',
         cors: { allowedOrigins: ['*'] },
+        magicLink: {
+            enabled: false,
+            audience: 'mj-magic-link',
+            restrictedRoleName: 'Magic Link Baseline',
+            grantableRoleNames: [],
+            inviteIssuerRoleNames: [],
+            sessionTokenTtlHours: 8,
+            defaultExpiresInHours: 72,
+            explorerUrl: 'http://localhost:4200',
+        },
     },
 }));
 
@@ -99,11 +109,10 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import {
     BuildGuestShareRateLimitKey,
     ContainsLiveMJFormula,
-    ResolvePublicArtifactGuestShareData,
-    SetGuestShareSigningSecret,
+    IsGuestShareSupportedArtifactType,
+    ResolveGuestArtifactSnapshotForSession,
 } from '../operations/ArtifactGuestShareServerOperations.js';
 import { PublicGuestShareResolver } from '../resolvers/PublicGuestShareResolver.js';
-import { CreatePublicGuestShareRouter, GUEST_SHARE_MOUNT_PATH } from '../rest/PublicGuestShareHandler.js';
 import {
     ARTIFACT_COLLABORATION_WS_PATH,
     ArtifactCollaborationServer,
@@ -206,7 +215,6 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
 
     afterEach(async () => {
         vi.restoreAllMocks();
-        SetGuestShareSigningSecret(null);
         await ArtifactCollaborationServer.Instance.Shutdown();
         ArtifactCollaborationServer.Instance.ResetShutdownForTests();
         ArtifactCollaborationServer.Instance.SetMetadataProviderOverride(null);
@@ -350,7 +358,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         ).toEqual({ ID: attrId, ArtifactVersionID: versionId, Name: 'OwnerAttr' });
     });
 
-    it('P0-R4 & NW-1: Detects nested =MJ.* formulas, enforces per-IP+token rate limit, fails closed without SystemUser, populates FrozenProvenance, and rejects GET /guest-share/resolve', async () => {
+    it('P0-R4 & NW-1: Detects nested =MJ.* formulas, enforces per-IP+invite rate limit, blocks Component viewer, checks active inviter & SystemUser, and populates FrozenProvenance via Magic Link session', async () => {
         // 1. AST / tokenizer nested =MJ.* detection (vs safe formulas & string literals)
         expect(ContainsLiveMJFormula('=IF(1, MJ.QUERY("SELECT 1"), 0)')).toBe(true);
         expect(ContainsLiveMJFormula('=SUM(1, MJ.EXTRACT(A1, "topic"))')).toBe(true);
@@ -358,21 +366,26 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         expect(ContainsLiveMJFormula('="MJ.QUERY(\'test\')"')).toBe(false);
         expect(ContainsLiveMJFormula('=SUM(A1:B10)')).toBe(false);
 
-        // 2. Per-IP + token prefix rate-limit keys (never a shared global 'graphql-public')
-        const keyIpA = BuildGuestShareRateLimitKey('198.51.100.1', 'token-alpha-secret');
-        const keyIpB = BuildGuestShareRateLimitKey('198.51.100.2', 'token-alpha-secret');
-        const keyOtherTok = BuildGuestShareRateLimitKey('198.51.100.1', 'token-beta-secret');
+        // 2. Per-IP + invite rate-limit keys (never a shared global 'graphql-public')
+        const keyIpA = BuildGuestShareRateLimitKey('198.51.100.1', 'invite-alpha');
+        const keyIpB = BuildGuestShareRateLimitKey('198.51.100.2', 'invite-alpha');
+        const keyOtherTok = BuildGuestShareRateLimitKey('198.51.100.1', 'invite-beta');
         expect(keyIpA).not.toBe('graphql-public');
         expect(keyIpA).not.toBe(keyIpB);
         expect(keyIpA).not.toBe(keyOtherTok);
 
-        // 3. Valid token creation + SystemUser fail-closed + FrozenProvenance resolution
-        SetGuestShareSigningSecret(TEST_SECRET);
+        // 2b. Safe DriverClass allowlist blocks ComponentArtifactViewerPlugin & binary Files
+        expect(IsGuestShareSupportedArtifactType('Component', 'ComponentArtifactViewerPlugin', 'Text')).toMatch(/Component/i);
+        expect(IsGuestShareSupportedArtifactType('Markdown Document', 'MarkdownArtifactViewerPlugin', 'File')).toMatch(/Binary File/i);
+        expect(IsGuestShareSupportedArtifactType('Markdown Document', 'MarkdownArtifactViewerPlugin', 'Text')).toBeNull();
+
+        // 3. Valid Magic Link session + SystemUser fail-closed + active inviter + FrozenProvenance resolution
         DocumentLiveBlockEngine.Instance.SetSigningSecret(TEST_SECRET);
 
         const artifactId = 'aaaaaaaa-1111-4111-8111-111111111111';
         const versionId = 'bbbbbbbb-2222-4222-8222-222222222222';
         const linkId = 'cccccccc-3333-4333-8333-333333333333';
+        const inviteId = 'dddddddd-4444-4444-8444-444444444444';
         const frozenAt = '2026-11-15T12:00:00.000Z';
 
         const frozenRows = [{ Total: 42 }];
@@ -398,48 +411,43 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         };
         const docContent = `# Report\n\n:::mj-block\n${JSON.stringify(blockSpec)}\n:::\n`;
 
-        // Build real HMAC token matching GuestShareTokenClaims v1
-        const claimsPayload = Buffer.from(
-            JSON.stringify({
-                v: 1,
-                lid: linkId,
-                aid: artifactId,
-                vid: versionId,
-                mode: 'Frozen',
-                exp: Date.now() + 60_000,
-            }),
-            'utf8'
-        ).toString('base64url');
-        const { createHmac } = await import('node:crypto');
-        const sigB64 = createHmac('sha256', Buffer.from(TEST_SECRET, 'utf8'))
-            .update(claimsPayload)
-            .digest('base64url');
-        const guestToken = `${claimsPayload}.${sigB64}`;
-        const tokenHash = createHash('sha256').update(guestToken, 'utf8').digest('hex');
-
-        const storedLink: MockGuestShareLinkRecord = {
+        let currentInviteStatus = 'Active';
+        const storedLink = {
             ID: linkId,
+            MagicLinkInviteID: inviteId,
             ArtifactID: artifactId,
             ArtifactVersionID: versionId,
-            TokenHash: tokenHash,
-            ShareMode: 'Frozen',
-            ExpiresAt: new Date(Date.now() + 60_000),
-            RevokedAt: null,
+            CreatedByUserID: ownerUser.ID,
             Label: 'Board Review',
-            AccessCount: 0,
-            LastAccessedAt: null,
         };
 
         const provider: IMetadataProvider & IRunViewProvider = {
             Entities: [],
-            RunView: vi.fn(async (params: RunViewParams) => {
-                if (params.EntityName === 'MJ: Artifact Guest Share Links') {
-                    return { Success: true, Results: [storedLink], TotalRowCount: 1 };
-                }
-                return { Success: true, Results: [], TotalRowCount: 0 };
-            }),
+            RunView: vi.fn(async () => ({ Success: true, Results: [], TotalRowCount: 0 })),
             RunViews: vi.fn(async (requests: RunViewParams[]) =>
                 requests.map((req) => {
+                    if (req.EntityName === 'MJ: Magic Link Invites') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: inviteId,
+                                    Kind: 'resource-share',
+                                    IdentityMode: 'anonymous',
+                                    Status: currentInviteStatus,
+                                    ResourceID: artifactId,
+                                    CreatedByUserID: ownerUser.ID,
+                                    ExpiresAt: new Date(Date.now() + 60_000),
+                                    UseCount: 1,
+                                    MaxUses: 1000,
+                                },
+                            ],
+                            TotalRowCount: 1,
+                        };
+                    }
+                    if (req.EntityName === 'MJ: Artifact Guest Share Links') {
+                        return { Success: true, Results: [storedLink], TotalRowCount: 1 };
+                    }
                     if (req.EntityName === 'MJ: Artifact Versions') {
                         return {
                             Success: true,
@@ -464,47 +472,84 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                     if (req.EntityName === 'MJ: Artifacts') {
                         return {
                             Success: true,
-                            Results: [{ ID: artifactId, Name: 'Q4 Report', TypeID: 'type-doc', Type: 'Document' }],
+                            Results: [{ ID: artifactId, Name: 'Q4 Report', TypeID: 'type-doc', Type: 'Markdown Document' }],
                             TotalRowCount: 1,
                         };
                     }
                     return { Success: true, Results: [], TotalRowCount: 0 };
                 })
             ),
-            GetEntityObject: vi.fn(async (entityName: string) => {
-                if (entityName === 'MJ: Artifact Guest Share Links') {
-                    return {
-                        Load: vi.fn(async () => true),
-                        Save: vi.fn(async () => true),
-                        AccessCount: storedLink.AccessCount,
-                        LastAccessedAt: storedLink.LastAccessedAt,
-                    } as Partial<MJArtifactGuestShareLinkEntity> as MJArtifactGuestShareLinkEntity;
-                }
-                return {};
-            }),
         } as IMetadataProvider & IRunViewProvider;
 
         vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
         vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue([
-            { ID: 'type-doc', Name: 'Document', DriverClass: 'DocumentArtifactPlugin' } as MJArtifactTypeEntity,
+            { ID: 'type-doc', Name: 'Markdown Document', DriverClass: 'MarkdownArtifactViewerPlugin' } as MJArtifactTypeEntity,
+        ]);
+        const usersSpy = vi.spyOn(UserCache.Instance, 'Users', 'get').mockReturnValue([
+            { ...ownerUser, IsActive: true } as UserInfo,
         ]);
 
-        // 3a. Fail closed when GetSystemUser returns undefined (no UserCache.Users[0] fallback)
-        const sysUserSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(undefined);
-        const failClosedResult = await ResolvePublicArtifactGuestShareData(
-            guestToken,
+        const makeSessionPayload = (targetInviteId = inviteId): NonNullable<AppContext['userPayload']> => ({
+            email: 'anonymous@magic-link.local',
+            sessionId: 'sess-ml-1',
+            tokenExpiresAtMs: Date.now() + 3600_000,
+            userRecord: {
+                ID: 'ecaf2a70-d33f-4484-9b7a-8b93a84a16f4',
+                IsActive: true,
+                IsMagicLinkAnonymous: true,
+                MagicLinkScope: {
+                    ResourceType: 'Artifacts',
+                    ResourceID: artifactId,
+                    ApplicationID: 'app-chat',
+                    RoleName: 'Magic Link Baseline',
+                },
+            } as UserInfo,
+            magicLinkScopes: [
+                {
+                    inviteId: targetInviteId,
+                    appId: 'app-chat',
+                    resourceType: 'Artifacts',
+                    resourceId: artifactId,
+                },
+            ],
+        });
+
+        // 3a. Fail closed when caller is not an anonymous Magic Link Artifacts session
+        const nonAnonRes = await ResolveGuestArtifactSnapshotForSession(
+            { email: 'u@example.com', sessionId: 's', userRecord: ownerUser },
             provider,
-            BuildGuestShareRateLimitKey('198.51.100.10', guestToken)
+            '198.51.100.10',
+        );
+        expect(nonAnonRes.Valid).toBe(false);
+        expect(nonAnonRes.ErrorCode).toBe('ACCESS_DENIED');
+
+        // 3b. Fail closed when GetSystemUser returns undefined (no UserCache.Users[0] fallback)
+        const sysUserSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(undefined);
+        const failClosedResult = await ResolveGuestArtifactSnapshotForSession(
+            makeSessionPayload(),
+            provider,
+            '198.51.100.10',
         );
         expect(failClosedResult.Valid).toBe(false);
         expect(failClosedResult.ErrorCode).toBe('INTERNAL_ERROR');
 
-        // 3b. Valid resolution returns server-verified FrozenProvenance + scrubbed config
+        // 3c. Fail closed if the inviter user was deactivated
         sysUserSpy.mockReturnValue(systemUser);
-        const okResult = await ResolvePublicArtifactGuestShareData(
-            guestToken,
+        usersSpy.mockReturnValue([{ ...ownerUser, IsActive: false } as UserInfo]);
+        const inactiveInviterRes = await ResolveGuestArtifactSnapshotForSession(
+            makeSessionPayload(),
             provider,
-            BuildGuestShareRateLimitKey('198.51.100.11', guestToken)
+            '198.51.100.10',
+        );
+        expect(inactiveInviterRes.Valid).toBe(false);
+        expect(inactiveInviterRes.ErrorCode).toBe('REVOKED');
+
+        // 3d. Valid resolution returns server-verified FrozenProvenance + scrubbed config
+        usersSpy.mockReturnValue([{ ...ownerUser, IsActive: true } as UserInfo]);
+        const okResult = await ResolveGuestArtifactSnapshotForSession(
+            makeSessionPayload(),
+            provider,
+            '198.51.100.11',
         );
         expect(okResult.Valid).toBe(true);
         expect(okResult.Success).toBe(true);
@@ -523,61 +568,44 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         expect(parsedConfig.apiKey).toBeUndefined();
         expect(parsedConfig.guestShareLinks).toBeUndefined();
 
-        // 4. REST PublicGuestShareHandler: POST /guest-share/resolve succeeds, GET returns 404
-        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue(provider);
-        ArtifactCollaborationServer.Instance.SetMetadataProviderOverride(provider);
-        const app = express();
-        app.use(GUEST_SHARE_MOUNT_PATH, CreatePublicGuestShareRouter());
-        const restServer = createServer(app);
-        await new Promise<void>((resolve) => restServer.listen(0, '127.0.0.1', () => resolve()));
-        try {
-            const port = (restServer.address() as AddressInfo).port;
-            const getResp = await fetch(
-                `http://127.0.0.1:${port}${GUEST_SHARE_MOUNT_PATH}/resolve?token=${encodeURIComponent(guestToken)}`
-            );
-            expect(getResp.status).toBe(404);
+        // 4. Reject ComponentArtifactViewerPlugin even on resolution if artifact type changed post-issuance
+        vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue([
+            { ID: 'type-doc', Name: 'Component', DriverClass: 'ComponentArtifactViewerPlugin' } as MJArtifactTypeEntity,
+        ]);
+        const compRes = await ResolveGuestArtifactSnapshotForSession(makeSessionPayload(), provider, '198.51.100.12');
+        expect(compRes.Valid).toBe(false);
+        expect(compRes.ErrorCode).toBe('FROZEN_REQUIRED');
 
-            const postResp = await fetch(`http://127.0.0.1:${port}${GUEST_SHARE_MOUNT_PATH}/resolve`, {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ token: guestToken }),
-            });
-            expect(postResp.status).toBe(200);
-            const postBody = (await postResp.json()) as {
-                Valid: boolean;
-                FrozenProvenance?: Array<{ SnapshotVerified: boolean; BlockID?: string }>;
-            };
-            expect(postBody.Valid).toBe(true);
-            expect(postBody.FrozenProvenance?.[0]?.SnapshotVerified).toBe(true);
-            expect(postBody.FrozenProvenance?.[0]?.BlockID).toBe('blk-frozen-1');
-        } finally {
-            await new Promise<void>((resolve) => restServer.close(() => resolve()));
-        }
+        // Restore valid type for rate limit test
+        vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue([
+            { ID: 'type-doc', Name: 'Markdown Document', DriverClass: 'MarkdownArtifactViewerPlugin' } as MJArtifactTypeEntity,
+        ]);
 
-        // 5. PublicGuestShareResolver rate-limits per IP + token, not globally across IPs
+        // 5. PublicGuestShareResolver rate-limits per IP + invite, not globally across IPs
         const gqlResolver = new PublicGuestShareResolver();
-        const makeGqlCtx = (ip: string): AppContext =>
+        const makeGqlCtx = (ip: string, scopedInviteId = inviteId): AppContext =>
             ({
                 ClientIp: ip,
+                userPayload: makeSessionPayload(scopedInviteId),
                 providers: [
                     { type: 'Read-Write', provider },
                     { type: 'Read-Only', provider },
                 ],
             }) as AppContext;
 
-        const spamToken = `${guestToken}-bad`;
+        const spamInviteId = 'eeeeeeee-5555-4555-8555-555555555555';
+        currentInviteStatus = 'Revoked';
         for (let i = 0; i < 60; i += 1) {
-            await gqlResolver.ResolvePublicArtifactGuestShare(spamToken, makeGqlCtx('203.0.113.50'));
+            await gqlResolver.ResolveGuestArtifactSnapshot(makeGqlCtx('203.0.113.50', spamInviteId));
         }
-        const limitedRes = await gqlResolver.ResolvePublicArtifactGuestShare(
-            spamToken,
-            makeGqlCtx('203.0.113.50')
+        const limitedRes = await gqlResolver.ResolveGuestArtifactSnapshot(
+            makeGqlCtx('203.0.113.50', spamInviteId),
         );
         expect(limitedRes.ErrorCode).toBe('RATE_LIMITED');
 
-        const isolatedIpRes = await gqlResolver.ResolvePublicArtifactGuestShare(
-            guestToken,
-            makeGqlCtx('203.0.113.51')
+        currentInviteStatus = 'Active';
+        const isolatedIpRes = await gqlResolver.ResolveGuestArtifactSnapshot(
+            makeGqlCtx('203.0.113.51', inviteId),
         );
         expect(isolatedIpRes.Valid).toBe(true);
     });
@@ -1370,8 +1398,9 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         expect(directLoaded).toEqual(expectedBytes);
     });
 
-    it('ListArtifactGuestShareLinksForOwner enforces CanShare/CanDelete and queries only non-secret summary fields without TokenHash', async () => {
+    it('ListArtifactGuestShareLinksForOwner enforces CanShare/CanDelete, joins MagicLinkInvite state, and enforces artifact:read API key scope', async () => {
         const artifactId = '11111111-1111-4111-8111-111111111111';
+        const inviteId = '66666666-6666-4666-8666-666666666666';
         const uiSharer = {
             ID: '22222222-2222-4222-8222-222222222222',
             Name: 'UI Sharer',
@@ -1385,21 +1414,37 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             Type: 'User',
         } as UserInfo;
 
-        const runViewMock = vi.fn(async () => ({
-            Success: true,
-            TotalRowCount: 1,
-            Results: [
-                {
-                    ID: '44444444-4444-4444-8444-444444444444',
-                    ArtifactID: artifactId,
-                    ArtifactVersionID: '55555555-5555-4555-8555-555555555555',
-                    Label: 'Board Review',
-                    ExpiresAt: '2026-12-01T00:00:00.000Z',
-                    RevokedAt: null,
-                    __mj_CreatedAt: '2026-11-15T12:00:00.000Z',
-                },
-            ],
-        }));
+        const runViewMock = vi.fn(async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: Magic Link Invites') {
+                return {
+                    Success: true,
+                    TotalRowCount: 1,
+                    Results: [
+                        {
+                            ID: inviteId,
+                            Status: 'Active',
+                            ExpiresAt: '2026-12-01T00:00:00.000Z',
+                            UseCount: 3,
+                            __mj_UpdatedAt: '2026-11-15T12:05:00.000Z',
+                        },
+                    ],
+                };
+            }
+            return {
+                Success: true,
+                TotalRowCount: 1,
+                Results: [
+                    {
+                        ID: '44444444-4444-4444-8444-444444444444',
+                        MagicLinkInviteID: inviteId,
+                        ArtifactID: artifactId,
+                        ArtifactVersionID: '55555555-5555-4555-8555-555555555555',
+                        Label: 'Board Review',
+                        __mj_CreatedAt: '2026-11-15T12:00:00.000Z',
+                    },
+                ],
+            };
+        });
 
         const mockProvider = {
             Entities: [],
@@ -1435,10 +1480,13 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         expect(allowed.Links).toHaveLength(1);
         expect(allowed.Links[0]).toEqual({
             ID: '44444444-4444-4444-8444-444444444444',
+            MagicLinkInviteID: inviteId,
             ArtifactID: artifactId,
             ArtifactVersionID: '55555555-5555-4555-8555-555555555555',
             Label: 'Board Review',
             ShareMode: 'Frozen',
+            Status: 'Active',
+            AccessCount: 3,
             ExpiresAt: '2026-12-01T00:00:00.000Z',
             RevokedAt: null,
             CreatedAt: '2026-11-15T12:00:00.000Z',
@@ -1447,9 +1495,18 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         expect(runViewMock).toHaveBeenCalledWith(
             expect.objectContaining({
                 EntityName: 'MJ: Artifact Guest Share Links',
-                Fields: ['ID', 'ArtifactID', 'ArtifactVersionID', 'Label', 'ExpiresAt', 'RevokedAt', '__mj_CreatedAt'],
+                Fields: ['ID', 'MagicLinkInviteID', 'ArtifactID', 'ArtifactVersionID', 'Label', '__mj_CreatedAt'],
             }),
             systemUser
         );
+
+        // GraphQL resolver also enforces CheckAPIKeyScopeAuthorization('artifact:read', ...)
+        const resolver = new PublicGuestShareResolver();
+        const scopeSpy = vi.spyOn(resolver, 'CheckAPIKeyScopeAuthorization' as keyof PublicGuestShareResolver).mockResolvedValue(undefined as never);
+        await resolver.ListArtifactGuestShareLinks(artifactId, {
+            userPayload: { email: uiSharer.Email, userRecord: uiSharer, sessionId: 's1' },
+            providers: [{ type: 'Read-Only', provider: mockProvider }],
+        } as AppContext);
+        expect(scopeSpy).toHaveBeenCalledWith('artifact:read', artifactId, expect.anything());
     });
 });

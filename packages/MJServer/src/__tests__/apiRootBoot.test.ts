@@ -40,12 +40,12 @@ vi.mock('../rest/OAuthCallbackHandler.js', () => ({
 }));
 vi.mock('../rest/SignatureWebhookHandler.js', () => ({ CreateSignatureWebhookHandler: stubRouter }));
 vi.mock('../rest/MediaStreamHandler.js', () => ({ CreateMediaStreamRouter: stubRouter }));
-vi.mock('../rest/PublicGuestShareHandler.js', () => ({ CreatePublicGuestShareRouter: stubRouter }));
 vi.mock('../rest/RealtimeSdpBrokerHandler.js', () => ({ CreateRealtimeSdpBrokerRouter: stubRouter }));
 vi.mock('../auth/AuthProviderCatalogRouter.js', () => ({ CreateAuthProviderCatalogRouter: stubRouter, AUTH_CATALOG_MOUNT_PATH: '/auth' }));
 vi.mock('../auth/magicLink/index.js', () => ({
     CreateMagicLinkHandler: stubHandler,
     CreateMagicLinkJwksRouter: stubRouter,
+    MagicLinkService: { SetActiveInstance: () => undefined, GetActiveInstance: () => null },
     RegisterMagicLinkAuthProvider: () => undefined,
     MAGIC_LINK_MOUNT_PATH: '/magic-link',
 }));
@@ -112,7 +112,6 @@ const ROOT_MOUNTS_BEFORE_5674 = [
     '/magic-link',
     '/widget',
     '/realtime/verify',
-    '/guest-share',
     '/health/extensions',
     '/auth',
     '/oauth',

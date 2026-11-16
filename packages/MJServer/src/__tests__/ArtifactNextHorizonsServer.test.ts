@@ -9,13 +9,12 @@ import {
     type IRunViewProvider,
     type RunViewParams,
     type RunViewResult,
-    type UserInfo,
+    UserInfo,
 } from '@memberjunction/core';
 import {
     ARTIFACT_CREATE_GUEST_SHARE_LINK_KEY,
     ARTIFACT_EVALUATE_AI_FORMULA_KEY,
     ARTIFACT_LOG_COMPLIANCE_AUDIT_KEY,
-    ARTIFACT_RESOLVE_GUEST_SHARE_LINK_KEY,
     ARTIFACT_REVOKE_GUEST_SHARE_LINK_KEY,
     type ArtifactComplianceAuditInput,
     type ArtifactComplianceAuditOutput,
@@ -29,8 +28,6 @@ import {
     type CreateGuestShareLinkOutput,
     type FrozenBlockSnapshot,
     MAX_AI_FORMULA_BATCH_CELLS,
-    type ResolveGuestShareLinkInput,
-    type ResolveGuestShareLinkOutput,
     type RevokeGuestShareLinkInput,
     type RevokeGuestShareLinkOutput,
     SlideDeckEngine,
@@ -49,14 +46,14 @@ import {
     ArtifactEvaluateAiFormulaServerOperation,
     LoadArtifactEvaluateAiFormulaOperation,
 } from '../operations/ArtifactEvaluateAiFormulaServerOperation.js';
-import { type Request, type Response, type Router } from 'express';
-import type sql from 'mssql';
 import {
+    CreateGuestShareLinkServerOperation,
     LoadArtifactGuestShareOperations,
-    SetGuestShareSigningSecret,
 } from '../operations/ArtifactGuestShareServerOperations.js';
+import { configInfo } from '../config.js';
+import { MagicLinkKeyManager, MagicLinkService } from '../auth/magicLink/index.js';
 import { PublicGuestShareResolver } from '../resolvers/PublicGuestShareResolver.js';
-import { CreatePublicGuestShareRouter } from '../rest/PublicGuestShareHandler.js';
+import { DocumentCollaborationResolver } from '../resolvers/DocumentCollaborationResolver.js';
 import { RedisTicketReplayStore, RedisYjsRoomRelay } from '../collaboration/YjsRoomRelay.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import type { AppContext } from '../types.js';
@@ -69,12 +66,58 @@ vi.mock('../config.js', () => ({
     configInfo: {
         apiBasePath: '/',
         cors: { allowedOrigins: ['*'] },
+        magicLink: {
+            enabled: false,
+            audience: 'mj-magic-link',
+            restrictedRoleName: 'Magic Link Baseline',
+            grantableRoleNames: [],
+            inviteIssuerRoleNames: [],
+            sessionTokenTtlHours: 8,
+            defaultExpiresInHours: 72,
+            explorerUrl: 'http://localhost:4200',
+        },
     },
 }));
 
 vi.mock('../context.js', () => ({
     getUserPayload: vi.fn(async () => null),
 }));
+
+vi.mock('type-graphql', () => {
+    const noopDecorator = () => () => undefined;
+    const decorators = [
+        'Resolver',
+        'Query',
+        'Mutation',
+        'Subscription',
+        'Arg',
+        'Args',
+        'ArgsType',
+        'Ctx',
+        'Root',
+        'Info',
+        'Field',
+        'FieldResolver',
+        'ObjectType',
+        'InputType',
+        'InterfaceType',
+        'Authorized',
+        'UseMiddleware',
+        'Extensions',
+        'Directive',
+        'PubSub',
+    ];
+    return {
+        ...Object.fromEntries(decorators.map((name) => [name, noopDecorator])),
+        Float: class {},
+        Int: class {},
+        ID: class {},
+        PubSubEngine: class {},
+        AuthorizationError: class AuthorizationError extends Error {},
+        registerEnumType: () => undefined,
+        createUnionType: () => class {},
+    };
+});
 
 const OWNER_ID = '11111111-1111-4111-8111-111111111111';
 const EDITOR_ID = '22222222-2222-4222-8222-222222222222';
@@ -98,10 +141,13 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
     const versionsById = new Map<string, MockEntityRecord>();
     const workingStatesByArtId = new Map<string, MockEntityRecord>();
     const guestShareLinksById = new Map<string, MockEntityRecord>();
+    const magicLinkInvitesById = new Map<string, MockEntityRecord>();
+    let currentArtifactTypeId = ART_TYPE_ID;
     let resolvePermsSpy: ReturnType<typeof vi.spyOn> | null = null;
     let sysUserSpy: ReturnType<typeof vi.spyOn> | null = null;
     let artConfigSpy: ReturnType<typeof vi.spyOn> | null = null;
     let artTypesSpy: ReturnType<typeof vi.spyOn> | null = null;
+    let usersListSpy: ReturnType<typeof vi.spyOn> | null = null;
     let currentProvider: DatabaseProviderBase & IMetadataProvider & IRunViewProvider;
 
     function createMockProvider(): DatabaseProviderBase & IMetadataProvider & IRunViewProvider {
@@ -114,7 +160,9 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
                           ? `ver-${versionsById.size + 1}`
                           : entityName === 'MJ: Artifact Guest Share Links'
                             ? `gsl-${guestShareLinksById.size + 1}`
-                            : `ws-${workingStatesByArtId.size + 1}`,
+                            : entityName === 'MJ: Magic Link Invites'
+                              ? `77777777-7777-4777-8777-${String(magicLinkInvitesById.size + 1).padStart(12, '0')}`
+                              : `ws-${workingStatesByArtId.size + 1}`,
                 ...(initial ?? {}),
             };
             const base = Object.assign(Object.create(BaseEntity.prototype) as MJAuditLogEntity & MJArtifactVersionEntity, fields);
@@ -125,6 +173,14 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
                         return async (id?: string) => {
                             if (entityName === 'MJ: Artifact Guest Share Links' && id) {
                                 const found = Array.from(guestShareLinksById.values()).find(
+                                    (r) => String(r['ID'] ?? '').toLowerCase() === id.toLowerCase(),
+                                );
+                                if (!found) return false;
+                                Object.assign(fields, found);
+                                return true;
+                            }
+                            if (entityName === 'MJ: Magic Link Invites' && id) {
+                                const found = Array.from(magicLinkInvitesById.values()).find(
                                     (r) => String(r['ID'] ?? '').toLowerCase() === id.toLowerCase(),
                                 );
                                 if (!found) return false;
@@ -150,6 +206,8 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
                                 workingStatesByArtId.set(String(fields['ArtifactID'] ?? ''), { ...fields });
                             } else if (entityName === 'MJ: Artifact Guest Share Links') {
                                 guestShareLinksById.set(String(fields['ID']), { ...fields });
+                            } else if (entityName === 'MJ: Magic Link Invites') {
+                                magicLinkInvitesById.set(String(fields['ID']), { ...fields });
                             }
                             return true;
                         };
@@ -170,12 +228,34 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
         };
 
         const runViewFn = async (params: RunViewParams): Promise<RunViewResult<MockEntityRecord>> => {
+            if (params.EntityName === 'MJ: Magic Link Invites') {
+                const filter = params.ExtraFilter ?? '';
+                let rows = Array.from(magicLinkInvitesById.values());
+                const idMatch = filter.match(/\bID='([^']+)'/i);
+                if (idMatch) {
+                    rows = rows.filter((r) => String(r['ID'] ?? '').toLowerCase() === idMatch[1].toLowerCase());
+                }
+                const hashMatch = filter.match(/TokenHash\s*=\s*'([^']+)'/i);
+                if (hashMatch) {
+                    rows = rows.filter((r) => String(r['TokenHash'] ?? '') === hashMatch[1]);
+                }
+                return { Success: true, Results: rows, TotalRowCount: rows.length };
+            }
+            if (params.EntityName === 'MJ: Resource Types') {
+                return {
+                    Success: true,
+                    Results: [{ ID: '6BA617C4-0CBA-4C79-B037-456DF4B03D3D', Name: 'Artifacts' }],
+                    TotalRowCount: 1,
+                };
+            }
             if (params.EntityName === 'MJ: Artifact Guest Share Links') {
                 const filter = params.ExtraFilter ?? '';
                 let rows = Array.from(guestShareLinksById.values());
-                const hashMatch = filter.match(/TokenHash='([^']+)'/i);
-                if (hashMatch) {
-                    rows = rows.filter((r) => String(r['TokenHash'] ?? '') === hashMatch[1]);
+                const inviteMatch = filter.match(/MagicLinkInviteID='([^']+)'/i);
+                if (inviteMatch) {
+                    rows = rows.filter(
+                        (r) => String(r['MagicLinkInviteID'] ?? '').toLowerCase() === inviteMatch[1].toLowerCase(),
+                    );
                 }
                 const idMatch = filter.match(/\bID='([^']+)'/i);
                 if (idMatch) {
@@ -206,7 +286,7 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
             if (params.EntityName === 'MJ: Artifacts') {
                 return {
                     Success: true,
-                    Results: [{ ID: ARTIFACT_ID, Name: 'Board Pack', TypeID: ART_TYPE_ID, Type: 'Markdown Document' }],
+                    Results: [{ ID: ARTIFACT_ID, Name: 'Board Pack', TypeID: currentArtifactTypeId, Type: 'Markdown Document' }],
                     TotalRowCount: 1,
                 };
             }
@@ -225,6 +305,16 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
             Object.create(DatabaseProviderBase.prototype) as DatabaseProviderBase & IMetadataProvider & IRunViewProvider,
             {
                 Entities: { value: [], enumerable: true, configurable: true },
+                Roles: {
+                    value: [{ ID: '611283EE-C8AB-4A2D-A378-53BEED1E0D89', Name: 'Magic Link Baseline' }],
+                    enumerable: true,
+                    configurable: true,
+                },
+                Applications: {
+                    value: [{ ID: '88888888-8888-4888-8888-888888888888', Name: 'Chat' }],
+                    enumerable: true,
+                    configurable: true,
+                },
                 AuditLogTypes: {
                     value: [
                         { ID: 'alt-1', Name: 'Artifact Block Frozen' },
@@ -274,7 +364,10 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
         versionsById.clear();
         workingStatesByArtId.clear();
         guestShareLinksById.clear();
-        SetGuestShareSigningSecret('unit-test-guest-share-secret-32bytes!!');
+        magicLinkInvitesById.clear();
+        currentArtifactTypeId = ART_TYPE_ID;
+        MagicLinkService.SetActiveInstance(null);
+        MagicLinkKeyManager.Instance.Initialize();
         DocumentLiveBlockEngine.Instance.SetSigningSecret('unit-test-frozen-block-secret-32b!!');
 
         versionsById.set(VERSION_ID, {
@@ -287,8 +380,9 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
         });
 
         sysUserSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(OWNER_USER);
+        usersListSpy = vi.spyOn(UserCache.Instance, 'Users', 'get').mockReturnValue([OWNER_USER, EDITOR_USER]);
         artConfigSpy = vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue();
-        const mockArtType = Object.defineProperties(
+        const mockDocType = Object.defineProperties(
             Object.create(MJArtifactTypeEntity.prototype) as MJArtifactTypeEntity,
             {
                 ID: { value: ART_TYPE_ID, enumerable: true },
@@ -296,7 +390,17 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
                 DriverClass: { value: 'MarkdownArtifactViewerPlugin', enumerable: true },
             },
         );
-        artTypesSpy = vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue([mockArtType]);
+        const mockComponentType = Object.defineProperties(
+            Object.create(MJArtifactTypeEntity.prototype) as MJArtifactTypeEntity,
+            {
+                ID: { value: '99999999-9999-4999-8999-999999999999', enumerable: true },
+                Name: { value: 'Component', enumerable: true },
+                DriverClass: { value: 'ComponentArtifactViewerPlugin', enumerable: true },
+            },
+        );
+        artTypesSpy = vi
+            .spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get')
+            .mockReturnValue([mockDocType, mockComponentType]);
         resolvePermsSpy = vi
             .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
             .mockImplementation(async (_p, _aid, u) => ({
@@ -317,11 +421,12 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
     });
 
     afterEach(async () => {
-        SetGuestShareSigningSecret(null);
+        MagicLinkService.SetActiveInstance(null);
         DocumentLiveBlockEngine.Instance.SetSigningSecret(null);
         ArtifactEvaluateAiFormulaServerOperation.SetCompletionRunnerForTest(null);
         resolvePermsSpy?.mockRestore();
         sysUserSpy?.mockRestore();
+        usersListSpy?.mockRestore();
         artConfigSpy?.mockRestore();
         artTypesSpy?.mockRestore();
         await ArtifactCollaborationServer.Instance.Shutdown();
@@ -495,6 +600,7 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
             ID: VERSION_ID,
             ArtifactID: ARTIFACT_ID,
             VersionNumber: 2,
+            Name: 'Frozen Board Pack',
             ContentMode: 'Text',
             Content: [
                 '# Frozen Report',
@@ -522,31 +628,70 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
         expect(issuedRes.Success).toBe(true);
         const issued = issuedRes.Output!;
         expect(issued.ShareMode).toBe('Frozen');
-        expect(issued.Token).toContain('.');
+        expect(issued.Token).toMatch(/^mj_ml_/);
+        expect(issued.MagicLinkInviteID).toBeTruthy();
+        expect(issued.ShareUrlPath).toContain('/magic-link/redeem?token=');
 
-        const resolvedRes = await DispatchRemoteOperationInProcess<ResolveGuestShareLinkInput, ResolveGuestShareLinkOutput>(
-            ARTIFACT_RESOLVE_GUEST_SHARE_LINK_KEY,
-            { Token: issued.Token },
+        // Component artifacts execute client code and are rejected from guest sharing
+        currentArtifactTypeId = '99999999-9999-4999-8999-999999999999';
+        const componentRejected = await DispatchRemoteOperationInProcess<CreateGuestShareLinkInput, CreateGuestShareLinkOutput>(
+            ARTIFACT_CREATE_GUEST_SHARE_LINK_KEY,
+            { ArtifactID: ARTIFACT_ID, VersionID: VERSION_ID, ExpiresInHours: 24 },
             {},
             currentProvider,
-            EDITOR_USER,
+            OWNER_USER,
         );
-        expect(resolvedRes.Output?.Valid).toBe(true);
-        expect(resolvedRes.Output?.ReadOnly).toBe(true);
-        expect(resolvedRes.Output?.ShareMode).toBe('Frozen');
-        expect(resolvedRes.Output?.Title).toBe('Board Pack');
+        expect(componentRejected.Success).toBe(false);
+        expect(componentRejected.ResultCode).toBe('FROZEN_REQUIRED');
+        currentArtifactTypeId = ART_TYPE_ID;
 
-        // Tampered token fails
-        const tamperedRes = await DispatchRemoteOperationInProcess<ResolveGuestShareLinkInput, ResolveGuestShareLinkOutput>(
-            ARTIFACT_RESOLVE_GUEST_SHARE_LINK_KEY,
-            { Token: `${issued.Token}tamper` },
-            {},
-            currentProvider,
-            EDITOR_USER,
+        const resolver = new PublicGuestShareResolver();
+        const makeMagicLinkGuestCtx = (inviteId: string, overrides?: { anonymous?: boolean; resourceType?: string }): AppContext =>
+            ({
+                ClientIp: '198.51.100.77',
+                userPayload: {
+                    email: 'anonymous@magic-link.local',
+                    sessionId: 'ml-sess-1',
+                    userRecord: Object.assign(Object.create(UserInfo.prototype) as UserInfo, {
+                        ID: 'ecaf2a70-d33f-4484-9b7a-8b93a84a16f4',
+                        IsActive: true,
+                        IsMagicLinkAnonymous: overrides?.anonymous ?? true,
+                        MagicLinkScope: {
+                            ResourceType: overrides?.resourceType ?? 'Artifacts',
+                            ResourceID: ARTIFACT_ID,
+                            ApplicationID: '88888888-8888-4888-8888-888888888888',
+                            RoleName: 'Magic Link Baseline',
+                        },
+                    }),
+                    tokenExpiresAtMs: Date.now() + 3600_000,
+                    magicLinkScopes: [
+                        {
+                            inviteId,
+                            appId: '88888888-8888-4888-8888-888888888888',
+                            resourceType: overrides?.resourceType ?? 'Artifacts',
+                            resourceId: ARTIFACT_ID,
+                        },
+                    ],
+                },
+                providers: [{ type: 'Read-Only', provider: currentProvider }],
+            }) as AppContext;
+
+        const resolvedRes = await resolver.ResolveGuestArtifactSnapshot(
+            makeMagicLinkGuestCtx(issued.MagicLinkInviteID!),
         );
-        expect(tamperedRes.Output?.Valid).toBe(false);
+        expect(resolvedRes.Valid).toBe(true);
+        expect(resolvedRes.ReadOnly).toBe(true);
+        expect(resolvedRes.ShareMode).toBe('Frozen');
+        expect(resolvedRes.Title).toBe('Frozen Board Pack');
 
-        // Revoking invalidates token
+        // Wrong ResourceType / non-anonymous callers fail closed
+        const wrongScopeRes = await resolver.ResolveGuestArtifactSnapshot(
+            makeMagicLinkGuestCtx(issued.MagicLinkInviteID!, { resourceType: 'Dashboards' }),
+        );
+        expect(wrongScopeRes.Valid).toBe(false);
+        expect(wrongScopeRes.ErrorCode).toBe('ACCESS_DENIED');
+
+        // Revoking invalidates the backing MagicLinkInvite immediately
         const revokedRes = await DispatchRemoteOperationInProcess<RevokeGuestShareLinkInput, RevokeGuestShareLinkOutput>(
             ARTIFACT_REVOKE_GUEST_SHARE_LINK_KEY,
             { ArtifactID: ARTIFACT_ID, VersionID: VERSION_ID, LinkID: issued.LinkID },
@@ -556,15 +701,77 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
         );
         expect(revokedRes.Output?.Revoked).toBe(true);
 
-        const afterRevokeRes = await DispatchRemoteOperationInProcess<ResolveGuestShareLinkInput, ResolveGuestShareLinkOutput>(
-            ARTIFACT_RESOLVE_GUEST_SHARE_LINK_KEY,
-            { Token: issued.Token },
-            {},
-            currentProvider,
-            EDITOR_USER,
+        const afterRevokeRes = await resolver.ResolveGuestArtifactSnapshot(
+            makeMagicLinkGuestCtx(issued.MagicLinkInviteID!),
         );
-        expect(afterRevokeRes.Output?.Valid).toBe(false);
-        expect(afterRevokeRes.Output?.Reason).toMatch(/revoked/i);
+        expect(afterRevokeRes.Valid).toBe(false);
+        expect(afterRevokeRes.ErrorCode).toBe('REVOKED');
+
+        // DocumentCollaborationResolver forwards upstream JWT tokenExpiresAtMs into IssueTicket
+        const collabResolver = new DocumentCollaborationResolver();
+        const shortExpMs = Date.now() + 15_000;
+        const issueTicketSpy = vi.spyOn(ArtifactCollaborationServer.Instance, 'IssueTicket').mockReturnValue({
+            Ticket: 'mock-ws-ticket',
+            ExpiresAt: new Date(shortExpMs).toISOString(),
+        });
+        const guestTicketCtx = makeMagicLinkGuestCtx(issued.MagicLinkInviteID!);
+        guestTicketCtx.userPayload!.tokenExpiresAtMs = shortExpMs;
+        const ticketRes = await collabResolver.MintArtifactCollaborationTicket(ARTIFACT_ID, guestTicketCtx);
+        expect(ticketRes.Success).toBe(true);
+        expect(issueTicketSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                ArtifactID: ARTIFACT_ID,
+                TokenExpiresAtMs: shortExpMs,
+            }),
+        );
+        expect(Date.parse(ticketRes.ExpiresAt!)).toBeLessThanOrEqual(shortExpMs + 50);
+
+        // Explorer redirect fail-loud gate when magicLink.explorerUrl is unset under wildcard CORS
+        const origExplorerUrl = configInfo.magicLink.explorerUrl;
+        const origCors = configInfo.cors.allowedOrigins;
+        const origEnvExplorer = process.env.MJ_MAGIC_LINK_EXPLORER_URL;
+        try {
+            configInfo.magicLink.explorerUrl = '';
+            delete process.env.MJ_MAGIC_LINK_EXPLORER_URL;
+            configInfo.cors.allowedOrigins = ['*'];
+            MagicLinkService.SetActiveInstance(null);
+
+            const createOp = new CreateGuestShareLinkServerOperation();
+            const noOriginRes = await createOp.ExecuteServer(
+                { ArtifactID: ARTIFACT_ID, VersionID: VERSION_ID },
+                {
+                    provider: currentProvider,
+                    user: OWNER_USER,
+                    emitProgress: () => undefined,
+                },
+            );
+            expect(noOriginRes.Success).toBe(false);
+            expect(noOriginRes.ResultCode).toBe('CONFIG_ERROR');
+
+            // Concrete cors.allowedOrigins + matching requestOrigin succeeds and binds &rt=
+            configInfo.cors.allowedOrigins = ['https://portal.example.org'];
+            MagicLinkService.SetActiveInstance(null);
+            const originRes = await createOp.ExecuteServer(
+                { ArtifactID: ARTIFACT_ID, VersionID: VERSION_ID },
+                {
+                    provider: currentProvider,
+                    user: OWNER_USER,
+                    emitProgress: () => undefined,
+                    requestOrigin: 'https://portal.example.org',
+                },
+            );
+            expect(originRes.Success).toBe(true);
+            expect(originRes.Output?.ShareUrlPath).toContain('rt=');
+        } finally {
+            configInfo.magicLink.explorerUrl = origExplorerUrl;
+            configInfo.cors.allowedOrigins = origCors;
+            if (origEnvExplorer !== undefined) {
+                process.env.MJ_MAGIC_LINK_EXPLORER_URL = origEnvExplorer;
+            } else {
+                delete process.env.MJ_MAGIC_LINK_EXPLORER_URL;
+            }
+            MagicLinkService.SetActiveInstance(null);
+        }
     });
 
     it('enforces Document locks, Slide locks, and Spreadsheet ProtectedRanges in ArtifactCollaborationServer', async () => {
@@ -674,6 +881,7 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
             Email: 'shareonly@example.com',
             IsActive: true,
         } as UserInfo;
+        usersListSpy?.mockReturnValue([OWNER_USER, EDITOR_USER, shareOnlyUser]);
 
         resolvePermsSpy?.mockImplementation(async (_p, _aid, u) => ({
             ArtifactID: ARTIFACT_ID,
@@ -724,7 +932,6 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
             Configuration: originalConfig,
         });
 
-        // Share-only user (CanShare=true, CanEdit=false) issues link without mutating version Configuration
         const issuedRes = await DispatchRemoteOperationInProcess<CreateGuestShareLinkInput, CreateGuestShareLinkOutput>(
             ARTIFACT_CREATE_GUEST_SHARE_LINK_KEY,
             { ArtifactID: ARTIFACT_ID, VersionID: VERSION_ID, ExpiresInHours: 24, Label: 'Board Review' },
@@ -733,18 +940,49 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
             shareOnlyUser,
         );
         expect(issuedRes.Success).toBe(true);
-        const token = issuedRes.Output!.Token;
+        const inviteId = issuedRes.Output!.MagicLinkInviteID!;
         expect(versionsById.get(VERSION_ID)?.['Configuration']).toBe(originalConfig);
 
-        // Unauthenticated GraphQL PublicGuestShareResolver resolves the frozen share and scrubs sensitive Configuration keys
         const resolver = new PublicGuestShareResolver();
-        const publicCtx: AppContext = {
-            dataSource: {} as sql.ConnectionPool,
-            dataSources: [],
+        // Unauthenticated GraphQL requests fail closed on ResolveGuestArtifactSnapshot (no @Public())
+        const unauthCtx: AppContext = {
             userPayload: { email: '', userRecord: null, sessionId: '' },
             providers: [{ type: 'Read-Only', provider: currentProvider }],
         };
-        const gqlResolved = await resolver.ResolvePublicArtifactGuestShare(token, publicCtx);
+        const unauthResolved = await resolver.ResolveGuestArtifactSnapshot(unauthCtx);
+        expect(unauthResolved.Valid).toBe(false);
+        expect(unauthResolved.ErrorCode).toBe('ACCESS_DENIED');
+
+        // Magic-Link-authenticated anonymous resource-share session resolves and scrubs secrets
+        const magicLinkCtx: AppContext = {
+            ClientIp: '198.51.100.88',
+            userPayload: {
+                email: 'anonymous@magic-link.local',
+                sessionId: 'ml-sess-2',
+                userRecord: Object.assign(Object.create(UserInfo.prototype) as UserInfo, {
+                    ID: 'ecaf2a70-d33f-4484-9b7a-8b93a84a16f4',
+                    IsActive: true,
+                    IsMagicLinkAnonymous: true,
+                    MagicLinkScope: {
+                        ResourceType: 'Artifacts',
+                        ResourceID: ARTIFACT_ID,
+                        ApplicationID: '88888888-8888-4888-8888-888888888888',
+                        RoleName: 'Magic Link Baseline',
+                    },
+                }),
+                tokenExpiresAtMs: Date.now() + 3600_000,
+                magicLinkScopes: [
+                    {
+                        inviteId,
+                        appId: '88888888-8888-4888-8888-888888888888',
+                        resourceType: 'Artifacts',
+                        resourceId: ARTIFACT_ID,
+                    },
+                ],
+            },
+            providers: [{ type: 'Read-Only', provider: currentProvider }],
+        };
+        const gqlResolved = await resolver.ResolveGuestArtifactSnapshot(magicLinkCtx);
         expect(gqlResolved.Success).toBe(true);
         expect(gqlResolved.Valid).toBe(true);
         expect(gqlResolved.ReadOnly).toBe(true);
@@ -784,17 +1022,63 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
         expect(liveTableRejected.Success).toBe(false);
         expect(liveTableRejected.ResultCode).toBe('FROZEN_REQUIRED');
 
-        // Unauthenticated REST /guest-share/resolve router mounts ONLY POST /resolve (GET ?token= removed for security)
-        const router = CreatePublicGuestShareRouter() as Router & {
-            stack: Array<{ route?: { path: string; methods: Record<string, boolean> } }>;
+        // Dual-field EmbeddedArtifacts with valid FrozenSnapshot + unfrozen InlineContentJSON must still fail closed
+        const dualSnapPayload = {
+            FrozenAt: '2026-01-01T00:00:00.000Z',
+            FrozenByUserID: OWNER_ID,
+            FrozenByUserName: 'Owner User',
+            Columns: [{ Name: 'A', DisplayName: 'A' }],
+            Rows: [{ A: 1 }],
+            TotalRowCount: 1,
+            SecurityWarningAcknowledged: true,
         };
-        const routePaths = router.stack
-            .filter((layer) => layer.route)
-            .map((layer) => ({ path: layer.route!.path, methods: layer.route!.methods }));
-        expect(routePaths.some((r) => r.path === '/resolve' && r.methods['get'])).toBe(false);
-        expect(routePaths.some((r) => r.path === '/resolve' && r.methods['post'])).toBe(true);
-        const _dummyReqResCheck: [Request | null, Response | null] = [null, null];
-        expect(_dummyReqResCheck).toHaveLength(2);
+        versionsById.set(VERSION_ID, {
+            ID: VERSION_ID,
+            ArtifactID: ARTIFACT_ID,
+            VersionNumber: 9,
+            ContentMode: 'Text',
+            Content: JSON.stringify({
+                WorkbookID: 'wb-dual',
+                Worksheets: [
+                    {
+                        SheetID: 's1',
+                        Name: 'Sheet1',
+                        Cells: {},
+                        EmbeddedArtifacts: [
+                            {
+                                EmbedID: 'emb-dual',
+                                ArtifactID: ARTIFACT_ID,
+                                Mode: 'Frozen',
+                                FrozenSnapshot: {
+                                    ...dualSnapPayload,
+                                    SnapshotContentHash: ComputeFrozenSnapshotHash(dualSnapPayload),
+                                },
+                                InlineContentJSON: JSON.stringify({
+                                    WorkbookID: 'nested-wb',
+                                    Worksheets: [
+                                        {
+                                            SheetID: 'ns1',
+                                            Name: 'Nested',
+                                            Cells: { A1: { Formula: '=MJ.QUERY("SELECT * FROM Secret")' } },
+                                        },
+                                    ],
+                                }),
+                            },
+                        ],
+                    },
+                ],
+            }),
+            Configuration: '{}',
+        });
+        const dualEmbedRejected = await DispatchRemoteOperationInProcess<CreateGuestShareLinkInput, CreateGuestShareLinkOutput>(
+            ARTIFACT_CREATE_GUEST_SHARE_LINK_KEY,
+            { ArtifactID: ARTIFACT_ID, VersionID: VERSION_ID },
+            {},
+            currentProvider,
+            shareOnlyUser,
+        );
+        expect(dualEmbedRejected.Success).toBe(false);
+        expect(dualEmbedRejected.ResultCode).toBe('FROZEN_REQUIRED');
     });
 
     it('P0-12 & P1-4 & NW-5: closes Slide/Sheet lock bypasses, preserves workbook timestamps on hydrate, and validates RedisTicketReplayStore + ZSET HasRoomPeers', async () => {

@@ -1,63 +1,7 @@
 <!-- ========================================================================= -->
-<!-- 0. EXTERNAL GUEST SHARE LINK READ-ONLY FROZEN SNAPSHOT VIEW (§6.3)       -->
+<!-- 1. FULL CANVAS ARTIFACT READER / EDITOR (when an artifact is opened full-screen) -->
 <!-- ========================================================================= -->
-@if (ActiveGuestToken) {
-  <div class="library-guest-view" data-testid="library-guest-share-view">
-    <header class="library-guest-banner">
-      <div class="library-guest-banner-left">
-        <span class="library-guest-badge">
-          <i class="fa-solid fa-lock"></i>
-          Frozen Read-Only Guest Snapshot
-        </span>
-        @if (ActiveGuestShareSnapshot; as guest) {
-          <strong class="library-guest-title">{{ guest.Title || 'Shared Artifact' }}</strong>
-          <span class="library-guest-meta">
-            v{{ guest.VersionNumber ?? 1 }}
-            @if (guest.ExpiresAt) {
-              · Expires {{ guest.ExpiresAt | date: 'medium' }}
-            }
-          </span>
-        }
-      </div>
-      <button
-        type="button"
-        mjButton
-        variant="secondary"
-        size="sm"
-        (click)="ExitGuestShareView()"
-        data-testid="guest-share-exit-btn"
-      >
-        <i class="fa-solid fa-arrow-left"></i>
-        Back to Library
-      </button>
-    </header>
-
-    <div class="library-guest-stage">
-      @if (IsGuestShareLoading) {
-        <mj-loading text="Loading frozen guest snapshot..."></mj-loading>
-      } @else if (GuestShareLoadError) {
-        <mj-empty-state
-          Icon="fa-solid fa-link-slash"
-          Title="Guest Link Unavailable"
-          [Message]="GuestShareLoadError"
-          ActionText="Open Library"
-          ActionIcon="fa-solid fa-book-open"
-          (Action)="ExitGuestShareView()"
-        ></mj-empty-state>
-      } @else if (GuestShareVersionEntity && ActiveGuestShareSnapshot) {
-        <mj-artifact-type-plugin-viewer
-          [artifactVersion]="GuestShareVersionEntity"
-          [ArtifactTypeName]="ActiveGuestShareSnapshot.ArtifactTypeName || 'Document'"
-          [DriverClass]="ActiveGuestShareSnapshot.DriverClass || undefined"
-          [PreVerifiedFrozenSnapshots]="GuestSharePreVerifiedSnapshots"
-          [GuestSnapshotMode]="true"
-          [readonly]="true"
-          height="100%"
-        ></mj-artifact-type-plugin-viewer>
-      }
-    </div>
-  </div>
-} @else if (IsFullCanvasOpen && ActiveArtifactId) {
+@if (IsFullCanvasOpen && ActiveArtifactId) {
   <div class="library-full-canvas" data-testid="library-full-canvas">
     <header class="full-canvas-topbar">
       <div class="full-canvas-left">

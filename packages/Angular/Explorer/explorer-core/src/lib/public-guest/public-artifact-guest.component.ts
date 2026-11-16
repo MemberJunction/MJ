@@ -1,9 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { Metadata, ResolveMJAPIURL } from '@memberjunction/core';
 import { GuestFrozenProvenanceItem, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { AuthProviderCatalog, MJ_PUBLIC_API_BASE_URL } from '@memberjunction/ng-auth-services';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subscription } from 'rxjs';
 
@@ -64,14 +62,14 @@ export function BuildPreVerifiedFrozenSnapshotsMap(
 }
 
 /**
- * Contract returned by both `POST /guest-share/resolve` (pre-auth REST endpoint)
- * and the `@Public()` `ResolvePublicArtifactGuestShare(token)` GraphQL query.
+ * Contract returned by the Magic-Link-authenticated `ResolveGuestArtifactSnapshot` GraphQL query.
  */
 export interface PublicArtifactGuestShareResult {
   Success: boolean;
   Valid: boolean;
   ErrorCode?: string | null;
   ErrorMessage?: string | null;
+  LinkID?: string | null;
   ArtifactID?: string | null;
   ArtifactName?: string | null;
   Title?: string | null;
@@ -88,9 +86,13 @@ export interface PublicArtifactGuestShareResult {
   ReadOnly: boolean;
 }
 
-interface ResolvePublicGuestGraphQLResponse {
-  ResolvePublicArtifactGuestShare?: PublicArtifactGuestShareResult | null;
+interface ResolveGuestArtifactSnapshotResponse {
+  ResolveGuestArtifactSnapshot?: PublicArtifactGuestShareResult | null;
 }
+
+const MAGIC_LINK_TOKEN_STORAGE_KEY = 'mj_magic_link_token';
+const PROVIDER_WAIT_INTERVAL_MS = 50;
+const PROVIDER_WAIT_TIMEOUT_MS = 10_000;
 
 const SENSITIVE_CONFIG_KEYS = new Set([
   '__mj_guestlinks',
@@ -104,13 +106,14 @@ const SENSITIVE_CONFIG_KEYS = new Set([
   'refreshtoken',
 ]);
 
-const RESOLVE_PUBLIC_GUEST_SHARE_GQL = `
-  query ResolvePublicArtifactGuestShare($token: String!) {
-    ResolvePublicArtifactGuestShare(token: $token) {
+const RESOLVE_GUEST_ARTIFACT_SNAPSHOT_GQL = `
+  query ResolveGuestArtifactSnapshot {
+    ResolveGuestArtifactSnapshot {
       Success
       Valid
       ErrorCode
       ErrorMessage
+      LinkID
       ArtifactID
       ArtifactName
       Title
@@ -186,6 +189,18 @@ export function DescribeGuestShareError(errorCode: string | null | undefined, fa
         message: fallbackMessage || 'The owner revoked access for this external guest share link.',
         icon: 'fa-solid fa-ban',
       };
+    case 'CONSUMED':
+      return {
+        title: 'Share Link Limit Reached',
+        message: fallbackMessage || 'This external guest share link has reached its maximum number of uses.',
+        icon: 'fa-solid fa-ban',
+      };
+    case 'ACCESS_DENIED':
+      return {
+        title: 'Guest Session Required',
+        message: fallbackMessage || 'Open a valid Magic Link share URL to view this shared artifact.',
+        icon: 'fa-solid fa-lock',
+      };
     case 'FROZEN_REQUIRED':
       return {
         title: 'Frozen Snapshot Required',
@@ -199,6 +214,7 @@ export function DescribeGuestShareError(errorCode: string | null | undefined, fa
         icon: 'fa-solid fa-gauge-high',
       };
     case 'NOT_FOUND':
+    case 'INVALID':
     case 'INVALID_TOKEN':
       return {
         title: 'Invalid or Unknown Share Link',
@@ -215,13 +231,12 @@ export function DescribeGuestShareError(errorCode: string | null | undefined, fa
 }
 
 /**
- * Anonymous, zero-OAuth route component mounted at `/guest/artifact/:token`.
- *
- * Calls the pre-auth REST endpoint `GET /guest-share/resolve?token=...`
- * (falling back to `@Public()` GraphQL `ResolvePublicArtifactGuestShare` when a
- * GraphQL provider is configured and REST fails) so external guests can view frozen
- * read-only artifacts (`Markdown Document`, `Presentation`, `Excel Spreadsheet`, etc.)
- * without signing in.
+ * Standalone guest route component mounted at `/guest/artifact`.
+ * Activated after Magic Link redemption redirects to `/guest/artifact#token=<jwt>`
+ * (or `/guest/artifact?mlError=<code>` when redemption fails) and calls the
+ * Magic-Link-authenticated GraphQL query `ResolveGuestArtifactSnapshot` so
+ * external guests view frozen read-only artifacts (`Markdown Document`, `Presentation`,
+ * `Excel Spreadsheet`, etc.) with strict scoped session credentials and no OAuth wall.
  */
 @Component({
   standalone: false,
@@ -261,7 +276,7 @@ export function DescribeGuestShareError(errorCode: string | null | undefined, fa
               Expires {{ FormattedExpiresAt }}
             </span>
           }
-          <a class="guest-signin-link" href="/">
+          <a class="guest-signin-link" href="/" (click)="OnSignInClick()">
             <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>
             Sign In
           </a>
@@ -539,25 +554,6 @@ export function DescribeGuestShareError(errorCode: string | null | undefined, fa
 export class PublicArtifactGuestComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly cdr = inject(ChangeDetectorRef);
-  private readonly publicApiBaseUrl = inject(MJ_PUBLIC_API_BASE_URL, { optional: true });
-
-  private _token = '';
-  @Input()
-  public set Token(value: string) {
-    const normalized = (value ?? '').trim();
-    if (normalized !== this._token) {
-      this._token = normalized;
-      if (this.initialized) {
-        void this.LoadGuestShare(this._token);
-      }
-    }
-  }
-  public get Token(): string {
-    return this._token;
-  }
-
-  /** Optional explicit MJAPI base URL override (primarily for host integration or unit tests). */
-  @Input() public ApiBaseUrl = '';
 
   /** Optional viewer fallback mode when host bundle has no plugin registered. */
   @Input() public ViewerFallbackOnly = false;
@@ -571,8 +567,8 @@ export class PublicArtifactGuestComponent extends BaseAngularComponent implement
   public GuestArtifactVersion: MJArtifactVersionEntity | null = null;
   public PreVerifiedFrozenSnapshots: Record<string, PreVerifiedFrozenSnapshotEntry> | null = null;
 
-  private initialized = false;
   private activeLoadSeq = 0;
+  private providerWaitTimer: ReturnType<typeof setInterval> | null = null;
   private readonly subscriptions: Subscription[] = [];
 
   public get DisplayTitle(): string {
@@ -599,55 +595,53 @@ export class PublicArtifactGuestComponent extends BaseAngularComponent implement
   }
 
   public ngOnInit(): void {
-    this.initialized = true;
-    const paramSub = this.route.paramMap.subscribe((params) => {
-      const routeToken = (params.get('token') ?? '').trim();
-      const queryToken = (
-        this.route.snapshot?.queryParamMap?.get('token') ??
-        this.route.snapshot?.queryParamMap?.get('guestToken') ??
-        ''
-      ).trim();
-      const effectiveToken = routeToken || queryToken || this._token;
-      if (effectiveToken !== this._token || !this.Payload) {
-        this._token = effectiveToken;
-        void this.LoadGuestShare(effectiveToken);
-      }
-    });
     const querySub = this.route.queryParamMap.subscribe((qparams) => {
-      const routeToken = (this.route.snapshot?.paramMap?.get('token') ?? '').trim();
-      const queryToken = (qparams.get('token') ?? qparams.get('guestToken') ?? '').trim();
-      const effectiveToken = routeToken || queryToken;
-      if (effectiveToken && effectiveToken !== this._token) {
-        this._token = effectiveToken;
-        void this.LoadGuestShare(effectiveToken);
+      const mlError = (qparams.get('mlError') ?? '').trim();
+      if (mlError) {
+        this.activeLoadSeq++;
+        this.Payload = null;
+        this.GuestArtifactVersion = null;
+        this.PreVerifiedFrozenSnapshots = null;
+        this.applyError(mlError, undefined);
+        return;
+      }
+      if (!this.Payload) {
+        void this.LoadGuestShare();
       }
     });
-    this.subscriptions.push(paramSub, querySub);
-
-    if (this._token && !this.Payload) {
-      void this.LoadGuestShare(this._token);
-    }
+    this.subscriptions.push(querySub);
   }
 
   public ngOnDestroy(): void {
     this.activeLoadSeq++;
+    this.clearProviderWaitTimer();
     for (const sub of this.subscriptions) {
       sub.unsubscribe();
     }
     this.subscriptions.length = 0;
   }
 
+  public OnSignInClick(): void {
+    try {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage?.removeItem(MAGIC_LINK_TOKEN_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage access errors in hardened browser contexts
+    }
+  }
+
   public Retry(): void {
-    void this.LoadGuestShare(this._token);
+    void this.LoadGuestShare();
   }
 
   public OnPluginLoaded(): void {
     this.cdr.markForCheck();
   }
 
-  public async LoadGuestShare(rawToken: string): Promise<void> {
+  public async LoadGuestShare(): Promise<void> {
     const seq = ++this.activeLoadSeq;
-    const token = (rawToken ?? '').trim();
+    this.clearProviderWaitTimer();
     this.IsLoading = true;
     this.ErrorTitle = '';
     this.ErrorMessage = '';
@@ -657,12 +651,13 @@ export class PublicArtifactGuestComponent extends BaseAngularComponent implement
     this.PreVerifiedFrozenSnapshots = null;
     this.cdr.markForCheck();
 
-    if (!token) {
-      this.applyError('INVALID_TOKEN', 'No guest share token was provided in the URL.');
+    const mlError = (this.route.snapshot?.queryParamMap?.get('mlError') ?? '').trim();
+    if (mlError) {
+      this.applyError(mlError, undefined);
       return;
     }
 
-    const result = await this.resolveGuestShareToken(token);
+    const result = await this.resolveGuestSnapshot(seq);
     if (seq !== this.activeLoadSeq) {
       return;
     }
@@ -696,130 +691,132 @@ export class PublicArtifactGuestComponent extends BaseAngularComponent implement
     this.cdr.markForCheck();
   }
 
-  private async resolveGuestShareToken(token: string): Promise<PublicArtifactGuestShareResult> {
-    const restBaseUrl = this.resolveApiBaseUrl();
-    const resolveUrl = `${restBaseUrl}/guest-share/resolve`;
-
-    try {
-      const response = await fetch(resolveUrl, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token }),
-      });
-      const contentType = response.headers?.get?.('content-type') ?? '';
-      if (contentType.includes('application/json') || response.ok || response.status === 400 || response.status === 403 || response.status === 404 || response.status === 410 || response.status === 429) {
-        const parsed = (await response.json()) as Partial<PublicArtifactGuestShareResult>;
-        if (parsed && typeof parsed === 'object' && 'Success' in parsed) {
-          return {
-            Success: Boolean(parsed.Success),
-            Valid: Boolean(parsed.Valid),
-            ErrorCode: parsed.ErrorCode ?? (response.status === 429 ? 'RATE_LIMITED' : null),
-            ErrorMessage: parsed.ErrorMessage ?? null,
-            ArtifactID: parsed.ArtifactID ?? null,
-            ArtifactName: parsed.ArtifactName ?? null,
-            Title: parsed.Title ?? null,
-            ArtifactTypeName: parsed.ArtifactTypeName ?? null,
-            DriverClass: parsed.DriverClass ?? null,
-            VersionID: parsed.VersionID ?? null,
-            VersionNumber: parsed.VersionNumber ?? null,
-            Content: parsed.Content ?? '',
-            Configuration: parsed.Configuration ?? '',
-            FrozenProvenance: Array.isArray(parsed.FrozenProvenance) ? parsed.FrozenProvenance : null,
-            ExpiresAt: parsed.ExpiresAt ?? null,
-            Label: parsed.Label ?? null,
-            ShareMode: parsed.ShareMode ?? 'Frozen',
-            ReadOnly: true,
-          };
-        }
-      }
-    } catch {
-      // Fall through to @Public() GraphQL fallback when REST fetch cannot connect.
+  private clearProviderWaitTimer(): void {
+    if (this.providerWaitTimer) {
+      clearInterval(this.providerWaitTimer);
+      this.providerWaitTimer = null;
     }
-
-    const gqlResult = await this.tryResolveViaPublicGraphQL(token);
-    if (gqlResult) {
-      return gqlResult;
-    }
-
-    return {
-      Success: false,
-      Valid: false,
-      ErrorCode: 'INTERNAL_ERROR',
-      ErrorMessage: 'Unable to reach the guest share verification service.',
-      ShareMode: 'Frozen',
-      ReadOnly: true,
-    };
   }
 
-  private async tryResolveViaPublicGraphQL(token: string): Promise<PublicArtifactGuestShareResult | null> {
-    const provider = this.ProviderToUse instanceof GraphQLDataProvider
-      ? this.ProviderToUse
-      : (GraphQLDataProvider.Instance ?? null);
+  private getReadyGraphQLProvider(): GraphQLDataProvider | null {
+    // Explicit [Provider] input (primarily in unit tests) bypasses singleton ConfigData readiness check
+    if (this.Provider instanceof GraphQLDataProvider && typeof this.Provider.ExecuteGQL === 'function') {
+      return this.Provider;
+    }
+    const singleton = GraphQLDataProvider.Instance ?? null;
+    if (
+      singleton instanceof GraphQLDataProvider &&
+      typeof singleton.ExecuteGQL === 'function' &&
+      Boolean(singleton.ConfigData?.URL?.trim()) &&
+      Boolean(singleton.ConfigData?.Token?.trim())
+    ) {
+      return singleton;
+    }
+    return null;
+  }
+
+  private waitForReadyGraphQLProvider(seq: number): Promise<GraphQLDataProvider | null> {
+    const immediate = this.getReadyGraphQLProvider();
+    if (immediate) {
+      return Promise.resolve(immediate);
+    }
+
+    // If an explicit non-GraphQL provider was injected, fail fast rather than polling the singleton
+    if (this.Provider) {
+      return Promise.resolve(null);
+    }
+
+    const startedAt = Date.now();
+    this.clearProviderWaitTimer();
+
+    return new Promise<GraphQLDataProvider | null>((resolve) => {
+      this.providerWaitTimer = setInterval(() => {
+        if (seq !== this.activeLoadSeq) {
+          this.clearProviderWaitTimer();
+          resolve(null);
+          return;
+        }
+        const ready = this.getReadyGraphQLProvider();
+        if (ready) {
+          this.clearProviderWaitTimer();
+          resolve(ready);
+          return;
+        }
+        if (Date.now() - startedAt >= PROVIDER_WAIT_TIMEOUT_MS) {
+          this.clearProviderWaitTimer();
+          resolve(null);
+        }
+      }, PROVIDER_WAIT_INTERVAL_MS);
+    });
+  }
+
+  private async resolveGuestSnapshot(seq: number): Promise<PublicArtifactGuestShareResult> {
+    const provider = await this.waitForReadyGraphQLProvider(seq);
+    if (seq !== this.activeLoadSeq) {
+      return {
+        Success: false,
+        Valid: false,
+        ErrorCode: 'INTERNAL_ERROR',
+        ErrorMessage: 'Guest snapshot request superseded.',
+        ShareMode: 'Frozen',
+        ReadOnly: true,
+      };
+    }
 
     if (!provider || typeof provider.ExecuteGQL !== 'function') {
-      return null;
+      const singleton = GraphQLDataProvider.Instance ?? null;
+      const missingSessionToken =
+        singleton instanceof GraphQLDataProvider &&
+        Boolean(singleton.ConfigData?.URL?.trim()) &&
+        !singleton.ConfigData?.Token?.trim();
+      return {
+        Success: false,
+        Valid: false,
+        ErrorCode: missingSessionToken ? 'ACCESS_DENIED' : 'INTERNAL_ERROR',
+        ErrorMessage: missingSessionToken
+          ? 'A valid Magic Link guest session is required to view this artifact.'
+          : 'Unable to reach the GraphQL provider for guest snapshot verification.',
+        ShareMode: 'Frozen',
+        ReadOnly: true,
+      };
     }
 
     try {
-      const data = await provider.ExecuteGQL(RESOLVE_PUBLIC_GUEST_SHARE_GQL, { token });
-      const resolved = (data as ResolvePublicGuestGraphQLResponse | null | undefined)?.ResolvePublicArtifactGuestShare;
+      const data = await provider.ExecuteGQL(RESOLVE_GUEST_ARTIFACT_SNAPSHOT_GQL, {});
+      const resolved = (data as ResolveGuestArtifactSnapshotResponse | null | undefined)?.ResolveGuestArtifactSnapshot;
       if (!resolved) {
-        return null;
+        return {
+          Success: false,
+          Valid: false,
+          ErrorCode: 'ACCESS_DENIED',
+          ErrorMessage: 'A valid Magic Link guest session is required to view this artifact.',
+          ShareMode: 'Frozen',
+          ReadOnly: true,
+        };
       }
       return {
         ...resolved,
         ReadOnly: true,
         ShareMode: resolved.ShareMode || 'Frozen',
       };
-    } catch {
-      return null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isAuthErr = /unauth|401|expired|token/i.test(msg);
+      return {
+        Success: false,
+        Valid: false,
+        ErrorCode: isAuthErr ? 'ACCESS_DENIED' : 'INTERNAL_ERROR',
+        ErrorMessage: isAuthErr
+          ? 'Your Magic Link guest session is missing or expired. Please reopen the original share link.'
+          : 'Unable to reach the guest share verification service.',
+        ShareMode: 'Frozen',
+        ReadOnly: true,
+      };
     }
-  }
-
-  private resolveApiBaseUrl(): string {
-    const explicit = this.ApiBaseUrl.trim().replace(/\/+$/, '');
-    if (explicit) {
-      return explicit;
-    }
-
-    try {
-      const provider = this.ProviderToUse instanceof GraphQLDataProvider
-        ? this.ProviderToUse
-        : GraphQLDataProvider.Instance;
-      const configData = provider?.ConfigData;
-      const resolvedMjapi = ResolveMJAPIURL(configData?.MJAPIURL);
-      if (resolvedMjapi) {
-        return resolvedMjapi;
-      }
-      if (configData?.URL) {
-        return new URL(configData.URL).origin;
-      }
-    } catch {
-      // Ignore unconfigured provider errors in standalone anonymous contexts.
-    }
-
-    const injectedBase = this.publicApiBaseUrl?.trim().replace(/\/+$/, '');
-    if (injectedBase) {
-      return injectedBase;
-    }
-
-    const preloadedBase = AuthProviderCatalog.GetPreloadedApiBaseUrl()?.trim().replace(/\/+$/, '');
-    if (preloadedBase) {
-      return preloadedBase;
-    }
-
-    if (typeof window !== 'undefined' && window.location?.origin) {
-      return window.location.origin;
-    }
-
-    return '';
   }
 
   private buildReadOnlyArtifactVersion(payload: PublicArtifactGuestShareResult): MJArtifactVersionEntity {
-    // Use Object.create so anonymous /guest/artifact/:token loads cleanly before EntityInfo metadata is initialized.
+    // Use Object.create so standalone /guest/artifact loads cleanly with minimal session scope.
     const entity = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
     const versionNumber = payload.VersionNumber ?? 1;
     const displayName = payload.Title ?? payload.ArtifactName ?? 'Shared Artifact';

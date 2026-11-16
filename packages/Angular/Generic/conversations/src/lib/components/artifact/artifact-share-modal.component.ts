@@ -4,8 +4,8 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormsModule } from '@angular/forms';
 import { MJWindowComponent, MJButtonDirective, MJEmptyStateComponent, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { RunView, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     CreateGuestShareLinkOperation,
     type CreateGuestShareLinkInput,
@@ -822,63 +822,33 @@ export class ArtifactShareModalComponent extends BaseAngularComponent implements
             const cache = this.sessionCreatedUrls;
             const fallbackArtifactId = this.Artifact.ID;
             const gqlProvider = this.ProviderToUse as ExecuteGQLProvider;
-            if (typeof gqlProvider?.ExecuteGQL === 'function') {
-                const gqlData = await gqlProvider.ExecuteGQL(LIST_ARTIFACT_GUEST_SHARE_LINKS_GQL, {
-                    artifactId: fallbackArtifactId,
-                });
-                const payload = gqlData?.ListArtifactGuestShareLinks;
-                if (!payload || !payload.Success) {
-                    this.GuestLinksError = payload?.ErrorMessage || 'Failed to load guest share links.';
-                    this.GuestLinks = [];
-                    return;
-                }
-                this.GuestLinks = (payload.Links ?? [])
-                    .filter((row) => typeof row.ID === 'string' && row.ID.length > 0)
-                    .map((row) => ({
-                        ID: row.ID,
-                        ArtifactID: row.ArtifactID || fallbackArtifactId,
-                        ArtifactVersionID: row.ArtifactVersionID ?? null,
-                        Label: row.Label ?? null,
-                        ShareMode: row.ShareMode ?? 'Frozen',
-                        ExpiresAt: row.ExpiresAt ?? null,
-                        RevokedAt: row.RevokedAt ?? null,
-                        __mj_CreatedAt: row.CreatedAt ?? null,
-                        CreatedShareUrl: cache.get(row.ID) ?? null,
-                    }));
-                return;
-            }
-
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const result = await rv.RunView<MJArtifactGuestShareLinkEntityType>(
-                {
-                    EntityName: 'MJ: Artifact Guest Share Links',
-                    ExtraFilter: `ArtifactID='${EscapeSQLString(this.Artifact.ID)}' AND RevokedAt IS NULL`,
-                    OrderBy: '__mj_CreatedAt DESC',
-                    ResultType: 'simple',
-                },
-                this.CurrentUser
-            );
-            if (!result.Success) {
-                this.GuestLinksError = result.ErrorMessage || 'Failed to load guest share links.';
+            if (typeof gqlProvider?.ExecuteGQL !== 'function') {
+                this.GuestLinksError = 'Failed to load guest share links: GraphQL provider is unavailable.';
                 this.GuestLinks = [];
                 return;
             }
-            this.GuestLinks = (result.Results ?? [])
+            const gqlData = await gqlProvider.ExecuteGQL(LIST_ARTIFACT_GUEST_SHARE_LINKS_GQL, {
+                artifactId: fallbackArtifactId,
+            });
+            const payload = gqlData?.ListArtifactGuestShareLinks;
+            if (!payload || !payload.Success) {
+                this.GuestLinksError = payload?.ErrorMessage || 'Failed to load guest share links.';
+                this.GuestLinks = [];
+                return;
+            }
+            this.GuestLinks = (payload.Links ?? [])
                 .filter((row) => typeof row.ID === 'string' && row.ID.length > 0)
-                .map((row) => {
-                    const id = row.ID ?? '';
-                    return {
-                        ID: id,
-                        ArtifactID: row.ArtifactID ?? fallbackArtifactId,
-                        ArtifactVersionID: row.ArtifactVersionID ?? null,
-                        Label: row.Label ?? null,
-                        ShareMode: 'Frozen',
-                        ExpiresAt: row.ExpiresAt ?? null,
-                        RevokedAt: row.RevokedAt ?? null,
-                        __mj_CreatedAt: row.__mj_CreatedAt ?? null,
-                        CreatedShareUrl: cache.get(id) ?? null,
-                    };
-                });
+                .map((row) => ({
+                    ID: row.ID,
+                    ArtifactID: row.ArtifactID || fallbackArtifactId,
+                    ArtifactVersionID: row.ArtifactVersionID ?? null,
+                    Label: row.Label ?? null,
+                    ShareMode: row.ShareMode ?? 'Frozen',
+                    ExpiresAt: row.ExpiresAt ?? null,
+                    RevokedAt: row.RevokedAt ?? null,
+                    __mj_CreatedAt: row.CreatedAt ?? null,
+                    CreatedShareUrl: cache.get(row.ID) ?? null,
+                }));
         } catch (err) {
             this.GuestLinksError = err instanceof Error ? err.message : 'Failed to load guest share links.';
             this.GuestLinks = [];
@@ -1014,7 +984,7 @@ export class ArtifactShareModalComponent extends BaseAngularComponent implements
     }
 
     private buildFullGuestShareUrl(shareUrlPath: string, token: string): string {
-        const normalizedPath = shareUrlPath?.trim() || `/guest/artifact/${encodeURIComponent(token)}`;
+        const normalizedPath = shareUrlPath?.trim() || `/magic-link/redeem?token=${encodeURIComponent(token)}`;
         if (/^https?:\/\//i.test(normalizedPath)) {
             return normalizedPath;
         }

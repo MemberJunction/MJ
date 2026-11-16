@@ -12,7 +12,6 @@ import {
   MJArtifactTypeEntity,
   MJArtifactVersionEntity,
   MJConversationDetailEntity,
-  ResolveGuestShareLinkOperation,
 } from '@memberjunction/core-entities';
 import {
   RequestArtifactAiAssistant,
@@ -396,71 +395,5 @@ describe('Next Horizons — Inline AI Overlay, Connected Drive Round-Trip Sync, 
       artifactId: created.Artifact.ID,
       versionNumber: 2,
     });
-  });
-
-  it('resolves guestToken in LibraryWorkspaceComponent into a read-only Frozen snapshot', async () => {
-    vi.spyOn(ResolveGuestShareLinkOperation.prototype, 'Execute').mockResolvedValue({
-      Success: true,
-      Output: {
-        Valid: true,
-        ArtifactID: 'art-frozen-1',
-        VersionID: 'ver-frozen-2',
-        VersionNumber: 2,
-        Title: 'Q4 Board Deck (Frozen)',
-        ArtifactTypeName: 'Presentation',
-        DriverClass: 'SlideDeckArtifactViewerPlugin',
-        Content: JSON.stringify({ Title: 'Q4 Board Deck', Slides: [] }),
-        Configuration: '{}',
-        ExpiresAt: '2026-12-01T00:00:00.000Z',
-        ReadOnly: true,
-        ShareMode: 'Frozen',
-      },
-    });
-
-    const workspace = Object.create(LibraryWorkspaceComponent.prototype) as LibraryWorkspaceComponent;
-    const mockProvider: Partial<IMetadataProvider> = {
-      CurrentUser: TEST_USER,
-      GetEntityObject: async <T>() => ({}) as T,
-    };
-    Object.assign(workspace as object, {
-      IsLoading: false,
-      AllItems: [],
-      FlatCollections: [],
-      CollectionTree: [],
-      ConnectedDrives: [],
-      ExpandedCollectionIds: new Set<string>(),
-      CategoryFilter: 'all',
-      OwnershipFilter: 'all',
-      isDestroyed: false,
-      CurrentUser: TEST_USER,
-      ActiveGuestToken: null,
-      ActiveGuestShareSnapshot: null,
-      GuestShareVersionEntity: null,
-      GuestShareLoadError: null,
-      IsGuestShareLoading: false,
-      SelectedCollectionId: null,
-      SelectedDriveId: null,
-      DriveFolderPrefix: '',
-      SearchQuery: '',
-      ActiveArtifactId: null,
-      ActiveVersionNumber: undefined,
-      IsFullCanvasOpen: false,
-      StateChange: { emit: vi.fn() },
-      cdr: { detectChanges: vi.fn() },
-    });
-    Object.defineProperty(workspace, 'ProviderToUse', {
-      configurable: true,
-      get: () => mockProvider as IMetadataProvider,
-    });
-
-    workspace.ApplyExternalRouteState({ guestToken: 'guest-token-xyz' });
-    await new Promise((r) => setTimeout(r, 15));
-
-    expect(workspace.ActiveGuestToken).toBe('guest-token-xyz');
-    expect(workspace.ActiveGuestShareSnapshot?.ReadOnly).toBe(true);
-    expect(workspace.ActiveGuestShareSnapshot?.ShareMode).toBe('Frozen');
-    expect(workspace.GuestShareVersionEntity?.ContentMode).toBe('Text');
-    expect(workspace.GuestShareVersionEntity?.VersionNumber).toBe(2);
-    expect(workspace.GuestShareLoadError).toBeNull();
   });
 });

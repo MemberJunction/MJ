@@ -279,19 +279,18 @@ export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/DocumentCollaborationResolver.js';
 export * from './resolvers/PublicGuestShareResolver.js';
-export * from './rest/PublicGuestShareHandler.js';
 export { SynthesizeArtifactFromSourcesServerOperation, LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
 export { ArtifactComplianceAuditServerOperation, LoadArtifactComplianceAuditOperation, WriteArtifactComplianceAudit } from './operations/ArtifactComplianceAuditHelper.js';
 export { ArtifactEvaluateAiFormulaServerOperation, LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
 export {
     CreateGuestShareLinkServerOperation,
     RevokeGuestShareLinkServerOperation,
-    ResolveGuestShareLinkServerOperation,
     LoadArtifactGuestShareOperations,
-    SetGuestShareSigningSecret,
-    ResolvePublicArtifactGuestShareData,
+    ResolveGuestArtifactSnapshotForSession,
     FindUnfrozenLiveContentReason,
     SanitizeGuestShareConfiguration,
+    IsGuestShareSupportedArtifactType,
+    SAFE_GUEST_SHARE_DRIVER_CLASSES,
     type PublicArtifactGuestShareResolution,
     type PublicGuestShareErrorCode,
 } from './operations/ArtifactGuestShareServerOperations.js';

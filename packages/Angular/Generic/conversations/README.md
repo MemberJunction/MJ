@@ -508,7 +508,7 @@ Folder sharing controls which conversations are listed, not who can read them. C
 | Component | Selector | Description |
 |-----------|----------|-------------|
 | `ShareModalComponent` | `mj-share-modal` | Generic conversation/collection sharing modal |
-| `ArtifactShareModalComponent` | `mj-artifact-share-modal` | Artifact ACL sharing modal + **Guest Share Link** creation/revocation (`/guest/artifact/:token`, `artifact:share` scope, Frozen-only invariant) |
+| `ArtifactShareModalComponent` | `mj-artifact-share-modal` | Artifact ACL sharing modal + **Guest Share Link** creation/revocation (Magic Link `/guest/artifact`, `artifact:share` scope, Frozen-only invariant) |
 | `MembersModalComponent` | `mj-members-modal` | Members management |
 | `ExportModalComponent` | `mj-export-modal` | Data export modal |
 | `SearchPanelComponent` | `mj-search-panel` | Search across conversations |

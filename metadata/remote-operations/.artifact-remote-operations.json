@@ -93,6 +93,10 @@
     },
     "primaryKey": {
       "ID": "810B2AD9-17AF-45B9-ACDD-FD83685C27DB"
+    },
+    "sync": {
+      "lastModified": "2026-11-16T18:14:12.157Z",
+      "checksum": "926f38a92d81deccf23bd84e4080519b2a106656132393cc598c2aa4a9819c1e"
     }
   },
   {
@@ -116,33 +120,6 @@
     },
     "primaryKey": {
       "ID": "8D2B8D23-BC44-4101-94AC-0494E9A734EF"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Resolve Artifact Guest Share Link",
-      "OperationKey": "Artifact.ResolveGuestShareLink",
-      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Artifacts",
-      "Description": "Validates an external guest share link token (signature, expiration, revocation, Frozen-only invariant) and returns the read-only artifact snapshot. Implemented by ResolveGuestShareLinkServerOperation in @memberjunction/server.",
-      "InputTypeName": "ResolveGuestShareLinkInput",
-      "InputTypeDefinition": "@file:types/artifact-resolve-guest-share-link.input.ts",
-      "InputTypeIsArray": false,
-      "OutputTypeName": "ResolveGuestShareLinkOutput",
-      "OutputTypeDefinition": "@file:types/artifact-resolve-guest-share-link.output.ts",
-      "OutputTypeIsArray": false,
-      "ExecutionMode": "Sync",
-      "RequiredScope": "artifact:read",
-      "RequiresSystemUser": false,
-      "GenerationType": "Manual",
-      "CodeApprovalStatus": "Approved",
-      "Status": "Active"
-    },
-    "primaryKey": {
-      "ID": "205CEC06-54D2-4406-9CE0-072545E58659"
-    },
-    "sync": {
-      "lastModified": "2026-11-15T21:23:51.945Z",
-      "checksum": "55654569392f48f8949ed65238defe48da35c3d0ed890b3e75ec81339a759979"
     }
   }
 ]

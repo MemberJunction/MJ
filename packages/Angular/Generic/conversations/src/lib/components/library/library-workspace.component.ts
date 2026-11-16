@@ -16,7 +16,6 @@ import {
   ArtifactMetadataEngine,
   ArtifactPermissionEngine,
   FileStorageEngineBase,
-  type GuestFrozenProvenanceItem,
   MJArtifactEntity,
   MJArtifactPermissionEntity,
   MJArtifactTypeEntity,
@@ -27,8 +26,6 @@ import {
   MJEnvironmentEntityExtended,
   ParseArtifactVersionConfiguration,
   ResolveArtifactTypeThumbnailPolicy,
-  ResolveGuestShareLinkOperation,
-  type ResolveGuestShareLinkOutput,
   UserInfoEngine,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
@@ -163,7 +160,6 @@ export interface LibraryExternalRouteParams {
   version?: string | number | null;
   canvas?: string | boolean | null;
   q?: string | null;
-  guestToken?: string | null;
 }
 
 @Component({
@@ -263,15 +259,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   @ViewChild('splitViewerPanel') public SplitViewerPanel?: ArtifactViewerPanelComponent;
 
   // Frozen-only External Guest Share Link state (§6.3)
-  public ActiveGuestToken: string | null = null;
-  public IsGuestShareLoading = false;
-  public GuestShareLoadError: string | null = null;
-  public ActiveGuestShareSnapshot: ResolveGuestShareLinkOutput | null = null;
-  public GuestShareVersionEntity: MJArtifactVersionEntity | null = null;
-  public GuestSharePreVerifiedSnapshots: Record<
-    string,
-    { Verified: boolean; FrozenByUserName?: string; FrozenAt?: string }
-  > | null = null;
   public IsDriveSyncing = false;
 
   public readonly SurfaceToggleOptions: ViewToggleOption[] = [
@@ -1445,271 +1432,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     } finally {
       this.IsDriveSyncing = false;
       this.cdr.detectChanges();
-    }
-  }
-
-  public ExitGuestShareView(): void {
-    this.ActiveGuestToken = null;
-    this.ActiveGuestShareSnapshot = null;
-    this.GuestShareVersionEntity = null;
-    this.GuestSharePreVerifiedSnapshots = null;
-    this.GuestShareLoadError = null;
-    this.IsGuestShareLoading = false;
-    this.emitWorkspaceState();
-    this.cdr.detectChanges();
-  }
-
-  private async loadGuestShareSnapshot(token: string): Promise<void> {
-    const cleanToken = token.trim();
-    if (!cleanToken) {
-      this.ExitGuestShareView();
-      return;
-    }
-    this.IsGuestShareLoading = true;
-    this.GuestShareLoadError = null;
-    this.ActiveGuestShareSnapshot = null;
-    this.GuestShareVersionEntity = null;
-    this.GuestSharePreVerifiedSnapshots = null;
-    this.cdr.detectChanges();
-
-    try {
-      const op = new ResolveGuestShareLinkOperation();
-      const res = await op.Execute(
-        { Token: cleanToken },
-        { provider: this.ProviderToUse ?? GraphQLDataProvider.Instance },
-      );
-      if (res.Success && res.Output?.Valid) {
-        const snapshot = res.Output;
-        const syntheticVersion = await this.buildGuestVersionEntity({
-          VersionID: snapshot.VersionID,
-          ArtifactID: '',
-          VersionNumber: snapshot.VersionNumber ?? 1,
-          Title: snapshot.Title ?? 'Shared Artifact Snapshot',
-          Content: snapshot.Content ?? '',
-          Configuration: snapshot.Configuration ?? null,
-        });
-
-        this.ActiveGuestShareSnapshot = snapshot;
-        this.GuestSharePreVerifiedSnapshots = this.buildGuestPreVerifiedSnapshotsMap(snapshot.FrozenProvenance);
-        this.GuestShareVersionEntity = syntheticVersion;
-        return;
-      }
-
-      const restFallback = await this.tryResolveGuestShareViaPublicRest(cleanToken);
-      if (restFallback) {
-        if (!restFallback.Valid) {
-          this.GuestShareLoadError =
-            restFallback.ErrorMessage ||
-            res.Output?.Reason ||
-            res.ErrorMessage ||
-            'This guest link is invalid, expired, or revoked.';
-          return;
-        }
-        await this.applyRestGuestShareSnapshot(restFallback);
-        return;
-      }
-
-      this.GuestShareLoadError =
-        res.Output?.Reason ||
-        res.ErrorMessage ||
-        'This guest link is invalid, expired, or revoked.';
-    } catch (err) {
-      const restFallback = await this.tryResolveGuestShareViaPublicRest(cleanToken);
-      if (restFallback?.Valid) {
-        await this.applyRestGuestShareSnapshot(restFallback);
-        return;
-      }
-      this.GuestShareLoadError =
-        restFallback?.ErrorMessage ||
-        (err instanceof Error ? err.message : 'Failed to load external guest snapshot.');
-    } finally {
-      this.IsGuestShareLoading = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  private buildGuestPreVerifiedSnapshotsMap(
-    items?: ReadonlyArray<GuestFrozenProvenanceItem> | null,
-  ): Record<string, { Verified: boolean; FrozenByUserName?: string; FrozenAt?: string }> | null {
-    if (!items || items.length === 0) {
-      return null;
-    }
-    const map: Record<string, { Verified: boolean; FrozenByUserName?: string; FrozenAt?: string }> = {};
-    for (const item of items) {
-      const entry = {
-        Verified: Boolean(item.SnapshotVerified),
-        FrozenByUserName: item.FrozenByUserName || undefined,
-        FrozenAt: item.FrozenAt || undefined,
-      };
-      const exactKeys = [
-        item.TargetID,
-        item.BlockID,
-        item.LiveTableID,
-        item.RegionID,
-        item.SlideID && item.RegionID ? `${item.SlideID}:${item.RegionID}` : undefined,
-      ];
-      for (const rawKey of exactKeys) {
-        const key = typeof rawKey === 'string' ? rawKey.trim() : '';
-        if (key) {
-          const existing = map[key];
-          map[key] = existing ? { ...entry, Verified: existing.Verified && entry.Verified } : entry;
-        }
-      }
-      const slideKey = typeof item.SlideID === 'string' ? item.SlideID.trim() : '';
-      if (slideKey) {
-        const existingSlide = map[slideKey];
-        map[slideKey] = existingSlide ? { ...entry, Verified: existingSlide.Verified && entry.Verified } : entry;
-      }
-    }
-    return Object.keys(map).length > 0 ? map : null;
-  }
-
-  private async applyRestGuestShareSnapshot(
-    restFallback: NonNullable<Awaited<ReturnType<LibraryWorkspaceComponent['tryResolveGuestShareViaPublicRest']>>>,
-  ): Promise<void> {
-    const syntheticVersion = await this.buildGuestVersionEntity({
-      VersionID: restFallback.VersionID ?? undefined,
-      ArtifactID: '',
-      VersionNumber: restFallback.VersionNumber ?? 1,
-      Title: restFallback.Title ?? restFallback.ArtifactName ?? 'Shared Artifact Snapshot',
-      Content: restFallback.Content ?? '',
-      Configuration: restFallback.Configuration ?? null,
-    });
-    this.ActiveGuestShareSnapshot = {
-      Valid: true,
-      ArtifactID: restFallback.ArtifactID ?? undefined,
-      VersionID: restFallback.VersionID ?? undefined,
-      VersionNumber: restFallback.VersionNumber ?? 1,
-      Title: restFallback.Title ?? restFallback.ArtifactName ?? 'Shared Artifact Snapshot',
-      ArtifactTypeName: restFallback.ArtifactTypeName ?? undefined,
-      DriverClass: restFallback.DriverClass ?? undefined,
-      Content: restFallback.Content ?? '',
-      Configuration: restFallback.Configuration ?? undefined,
-      FrozenProvenance: restFallback.FrozenProvenance ?? undefined,
-      ReadOnly: true,
-      ShareMode: 'Frozen',
-      ExpiresAt: restFallback.ExpiresAt ?? undefined,
-    };
-    this.GuestSharePreVerifiedSnapshots = this.buildGuestPreVerifiedSnapshotsMap(restFallback.FrozenProvenance);
-    this.GuestShareVersionEntity = syntheticVersion;
-  }
-
-  private async buildGuestVersionEntity(snapshot: {
-    VersionID?: string;
-    ArtifactID?: string;
-    VersionNumber: number;
-    Title: string;
-    Content: string;
-    Configuration: string | null;
-  }): Promise<MJArtifactVersionEntity> {
-    try {
-      const syntheticVersion = await this.ProviderToUse.GetEntityObject<MJArtifactVersionEntity>(
-        'MJ: Artifact Versions',
-        this.EffectiveUser,
-      );
-      if (snapshot.VersionID) {
-        syntheticVersion.ID = snapshot.VersionID;
-      }
-      if (snapshot.ArtifactID) {
-        syntheticVersion.ArtifactID = snapshot.ArtifactID;
-      }
-      syntheticVersion.VersionNumber = snapshot.VersionNumber;
-      syntheticVersion.Name = snapshot.Title;
-      syntheticVersion.ContentMode = 'Text';
-      syntheticVersion.Content = snapshot.Content;
-      syntheticVersion.Configuration = snapshot.Configuration;
-      return syntheticVersion;
-    } catch {
-      const entity = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-      Object.defineProperties(entity, {
-        ID: { value: snapshot.VersionID ?? 'guest-snapshot-version', configurable: true, enumerable: true },
-        ArtifactID: { value: snapshot.ArtifactID ?? 'guest-snapshot-artifact', configurable: true, enumerable: true },
-        VersionNumber: { value: snapshot.VersionNumber, configurable: true, enumerable: true },
-        Name: { value: snapshot.Title, configurable: true, enumerable: true },
-        ContentMode: { value: 'Text', configurable: true, enumerable: true },
-        Content: { value: snapshot.Content, configurable: true, enumerable: true },
-        Configuration: { value: snapshot.Configuration, configurable: true, enumerable: true },
-      });
-      return entity;
-    }
-  }
-
-  private async tryResolveGuestShareViaPublicRest(token: string): Promise<{
-    Success: boolean;
-    Valid: boolean;
-    ErrorMessage?: string | null;
-    ArtifactID?: string | null;
-    ArtifactName?: string | null;
-    Title?: string | null;
-    ArtifactTypeName?: string | null;
-    DriverClass?: string | null;
-    VersionID?: string | null;
-    VersionNumber?: number | null;
-    Content?: string | null;
-    Configuration?: string | null;
-    FrozenProvenance?: GuestFrozenProvenanceItem[] | null;
-    ExpiresAt?: string | null;
-    Label?: string | null;
-  } | null> {
-    if (typeof fetch !== 'function') {
-      return null;
-    }
-    try {
-      const gql = this.ProviderToUse instanceof GraphQLDataProvider
-        ? this.ProviderToUse
-        : GraphQLDataProvider.Instance;
-      const base =
-        gql?.ConfigData?.MJAPIURL?.replace(/\/+$/, '') ||
-        (gql?.ConfigData?.URL ? new URL(gql.ConfigData.URL).origin : '') ||
-        (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '');
-      const url = `${base}/guest-share/resolve`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token }),
-      });
-      const parsed = (await response.json()) as {
-        Success?: boolean;
-        Valid?: boolean;
-        ErrorMessage?: string | null;
-        ArtifactID?: string | null;
-        ArtifactName?: string | null;
-        Title?: string | null;
-        ArtifactTypeName?: string | null;
-        DriverClass?: string | null;
-        VersionID?: string | null;
-        VersionNumber?: number | null;
-        Content?: string | null;
-        Configuration?: string | null;
-        FrozenProvenance?: GuestFrozenProvenanceItem[] | null;
-        ExpiresAt?: string | null;
-        Label?: string | null;
-      };
-      if (parsed && typeof parsed === 'object' && ('Valid' in parsed || 'Success' in parsed)) {
-        return {
-          Success: Boolean(parsed.Success),
-          Valid: Boolean(parsed.Valid),
-          ErrorMessage: parsed.ErrorMessage ?? null,
-          ArtifactID: parsed.ArtifactID ?? null,
-          ArtifactName: parsed.ArtifactName ?? null,
-          Title: parsed.Title ?? null,
-          ArtifactTypeName: parsed.ArtifactTypeName ?? null,
-          DriverClass: parsed.DriverClass ?? null,
-          VersionID: parsed.VersionID ?? null,
-          VersionNumber: parsed.VersionNumber ?? null,
-          Content: parsed.Content ?? null,
-          Configuration: parsed.Configuration ?? null,
-          FrozenProvenance: Array.isArray(parsed.FrozenProvenance) ? parsed.FrozenProvenance : null,
-          ExpiresAt: parsed.ExpiresAt ?? null,
-          Label: parsed.Label ?? null,
-        };
-      }
-      return null;
-    } catch {
-      return null;
     }
   }
 
@@ -3269,17 +2991,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       ) {
         this.SurfaceMode = 'hub';
       }
-    }
-
-    const nextGuestToken = params.guestToken?.trim() || null;
-    if (nextGuestToken && nextGuestToken !== this.ActiveGuestToken) {
-      this.ActiveGuestToken = nextGuestToken;
-      void this.loadGuestShareSnapshot(nextGuestToken);
-    } else if (!nextGuestToken && this.ActiveGuestToken) {
-      this.ActiveGuestToken = null;
-      this.ActiveGuestShareSnapshot = null;
-      this.GuestShareVersionEntity = null;
-      this.GuestShareLoadError = null;
     }
   }
 

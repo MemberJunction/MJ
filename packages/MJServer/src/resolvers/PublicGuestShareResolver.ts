@@ -1,13 +1,11 @@
 import { Arg, Ctx, Field, Int, ObjectType, Query, Resolver } from 'type-graphql';
 import { type GuestFrozenProvenanceItem } from '@memberjunction/core-entities';
-import { Public } from '../directives/index.js';
 import { AppContext } from '../types.js';
 import { GetReadOnlyProvider } from '../util.js';
 import {
-    BuildGuestShareRateLimitKey,
     ListArtifactGuestShareLinksForOwner,
+    ResolveGuestArtifactSnapshotForSession,
     ResolveGuestShareProviderFallback,
-    ResolvePublicArtifactGuestShareData,
 } from '../operations/ArtifactGuestShareServerOperations.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
@@ -59,6 +57,9 @@ export class PublicArtifactGuestShareResult {
     ErrorMessage?: string;
 
     @Field(() => String, { nullable: true })
+    LinkID?: string;
+
+    @Field(() => String, { nullable: true })
     ArtifactID?: string;
 
     @Field(() => String, { nullable: true })
@@ -106,6 +107,9 @@ export class ArtifactGuestShareLinkSummaryGQL {
     @Field(() => String)
     ID!: string;
 
+    @Field(() => String, { nullable: true })
+    MagicLinkInviteID?: string | null;
+
     @Field(() => String)
     ArtifactID!: string;
 
@@ -117,6 +121,12 @@ export class ArtifactGuestShareLinkSummaryGQL {
 
     @Field(() => String)
     ShareMode!: string;
+
+    @Field(() => String, { nullable: true })
+    Status?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    AccessCount?: number | null;
 
     @Field(() => String, { nullable: true })
     ExpiresAt?: string | null;
@@ -142,22 +152,15 @@ export class ListArtifactGuestShareLinksResult {
 
 @Resolver()
 export class PublicGuestShareResolver extends ResolverBase {
-    @Public()
     @Query(() => PublicArtifactGuestShareResult)
-    async ResolvePublicArtifactGuestShare(
-        @Arg('token', () => String) token: string,
+    async ResolveGuestArtifactSnapshot(
         @Ctx() context: AppContext,
     ): Promise<PublicArtifactGuestShareResult> {
         const provider =
             (context?.providers
                 ? GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true })
                 : null) ?? ResolveGuestShareProviderFallback();
-        const clientKey = BuildGuestShareRateLimitKey(
-            context?.ClientIp,
-            token,
-            context?.userPayload?.userRecord?.ID
-        );
-        return ResolvePublicArtifactGuestShareData(token, provider, clientKey);
+        return ResolveGuestArtifactSnapshotForSession(context?.userPayload, provider, context?.ClientIp);
     }
 
     @Query(() => ListArtifactGuestShareLinksResult)
@@ -165,8 +168,10 @@ export class PublicGuestShareResolver extends ResolverBase {
         @Arg('artifactId', () => String) artifactId: string,
         @Ctx() context: AppContext,
     ): Promise<ListArtifactGuestShareLinksResult> {
+        const trimmedId = (artifactId ?? '').trim();
+        await this.CheckAPIKeyScopeAuthorization('artifact:read', trimmedId || '*', context.userPayload);
         const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
         const actor = this.GetUserFromPayload(context.userPayload);
-        return ListArtifactGuestShareLinksForOwner(artifactId, provider, actor);
+        return ListArtifactGuestShareLinksForOwner(trimmedId, provider, actor);
     }
 }

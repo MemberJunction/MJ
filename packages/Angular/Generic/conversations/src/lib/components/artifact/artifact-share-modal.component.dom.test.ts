@@ -2,11 +2,10 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { IMetadataProvider, RunView, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
   CreateGuestShareLinkOperation,
   MJArtifactEntity,
-  MJArtifactGuestShareLinkEntityType,
   RevokeGuestShareLinkOperation,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -72,21 +71,36 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise((r) => setTimeout(r, 10));
 }
 
+interface MockGuestShareLinkSummary {
+  ID: string;
+  MagicLinkInviteID?: string;
+  ArtifactID: string;
+  ArtifactVersionID?: string | null;
+  Label?: string | null;
+  ShareMode: string;
+  ExpiresAt?: string | null;
+  RevokedAt?: string | null;
+  CreatedAt?: string | null;
+}
+
 describe('ArtifactShareModalComponent (DOM — Guest Share Links & Setter Reload)', () => {
-  let activeLinks: Array<Partial<MJArtifactGuestShareLinkEntityType>>;
+  let activeLinks: MockGuestShareLinkSummary[];
   let confirmDeleteMock: ReturnType<typeof vi.fn>;
   let permissionServiceMock: Partial<ArtifactPermissionService>;
+  let mockProvider: IMetadataProvider & { ExecuteGQL: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     activeLinks = [
       {
         ID: 'link-existing-1',
+        MagicLinkInviteID: 'invite-existing-1',
         ArtifactID: TEST_ARTIFACT.ID,
         ArtifactVersionID: 'ver-1',
         Label: 'Client Preview',
-        ExpiresAt: new Date('2027-01-01T00:00:00.000Z'),
-        RevokedAt: undefined,
-        __mj_CreatedAt: new Date('2026-11-10T00:00:00.000Z'),
+        ShareMode: 'Frozen',
+        ExpiresAt: '2027-01-01T00:00:00.000Z',
+        RevokedAt: null,
+        CreatedAt: '2026-11-10T00:00:00.000Z',
       },
     ];
 
@@ -102,28 +116,17 @@ describe('ArtifactShareModalComponent (DOM — Guest Share Links & Setter Reload
       revokePermission: vi.fn().mockResolvedValue(undefined),
     };
 
-    vi.spyOn(RunView.prototype, 'RunView').mockImplementation(
-      async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
-        if (params.EntityName === 'MJ: Artifact Guest Share Links') {
-          return {
-            Success: true,
-            Results: activeLinks as T[],
-            RowCount: activeLinks.length,
-            TotalRowCount: activeLinks.length,
-            ExecutionTime: 1,
-            ErrorMessage: '',
-          };
-        }
-        return {
-          Success: true,
-          Results: [],
-          RowCount: 0,
-          TotalRowCount: 0,
-          ExecutionTime: 1,
-          ErrorMessage: '',
-        };
+    const executeGqlMock = vi.fn(async () => ({
+      ListArtifactGuestShareLinks: {
+        Success: true,
+        Links: activeLinks,
       },
-    );
+    }));
+    mockProvider = {
+      Entities: [],
+      EntityByName: () => undefined,
+      ExecuteGQL: executeGqlMock,
+    } as Partial<IMetadataProvider> & { ExecuteGQL: typeof executeGqlMock } as typeof mockProvider;
 
     TestBed.overrideComponent(ArtifactShareModalComponent, {
       set: {
@@ -140,6 +143,7 @@ describe('ArtifactShareModalComponent (DOM — Guest Share Links & Setter Reload
 
   afterEach(() => {
     vi.restoreAllMocks();
+    TestBed.resetTestingModule();
   });
 
   function renderModal(isOpen = true, artifact: MJArtifactEntity | null = TEST_ARTIFACT) {
@@ -150,6 +154,7 @@ describe('ArtifactShareModalComponent (DOM — Guest Share Links & Setter Reload
       ],
       inputs: {
         CurrentUser: TEST_USER,
+        Provider: mockProvider,
         Artifact: artifact,
         IsOpen: isOpen,
       },
@@ -179,14 +184,16 @@ describe('ArtifactShareModalComponent (DOM — Guest Share Links & Setter Reload
     );
 
     vi.spyOn(CreateGuestShareLinkOperation.prototype, 'Execute').mockImplementation(async (input) => {
-      const created: Partial<MJArtifactGuestShareLinkEntityType> = {
+      const created: MockGuestShareLinkSummary = {
         ID: 'link-new-2',
+        MagicLinkInviteID: 'invite-new-2',
         ArtifactID: input.ArtifactID,
         ArtifactVersionID: 'ver-2',
-        Label: input.Label ?? undefined,
-        ExpiresAt: new Date('2027-02-01T00:00:00.000Z'),
-        RevokedAt: undefined,
-        __mj_CreatedAt: new Date('2026-11-15T12:00:00.000Z'),
+        Label: input.Label ?? 'External',
+        ShareMode: 'Frozen',
+        ExpiresAt: '2027-02-01T00:00:00.000Z',
+        RevokedAt: null,
+        CreatedAt: '2026-11-15T12:00:00.000Z',
       };
       activeLinks = [created, ...activeLinks];
       return {
@@ -194,7 +201,7 @@ describe('ArtifactShareModalComponent (DOM — Guest Share Links & Setter Reload
         Output: {
           LinkID: 'link-new-2',
           Token: 'raw-guest-tok',
-          ShareUrlPath: '/guest/artifact/raw-guest-tok',
+          ShareUrlPath: '/magic-link/redeem?token=raw-guest-tok',
           ExpiresAt: '2027-02-01T00:00:00.000Z',
           ArtifactID: input.ArtifactID,
           VersionID: 'ver-2',
@@ -236,16 +243,16 @@ describe('ArtifactShareModalComponent (DOM — Guest Share Links & Setter Reload
       expect.any(Object),
     );
     expect(query(f, '[data-testid="guest-link-created-banner"]')).not.toBeNull();
-    expect(text(f, '[data-testid="guest-link-created-banner"]')).toContain('/guest/artifact/raw-guest-tok');
+    expect(text(f, '[data-testid="guest-link-created-banner"]')).toContain('/magic-link/redeem?token=raw-guest-tok');
 
     // Copy succeeds
     click(f, '[data-testid="copy-new-guest-link-btn"]');
     await flushMicrotasks();
-    expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('/guest/artifact/raw-guest-tok'));
+    expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('/magic-link/redeem?token=raw-guest-tok'));
 
     // Copy rejection notifies user safely
     writeTextMock.mockRejectedValueOnce(new Error('NotAllowedError'));
-    const copiedOk = await f.componentInstance.CopyGuestShareUrl('https://example.org/guest/artifact/x');
+    const copiedOk = await f.componentInstance.CopyGuestShareUrl('https://example.org/magic-link/redeem?token=x');
     expect(copiedOk).toBe(false);
     expect(createNotifSpy).toHaveBeenCalledWith(
       expect.stringContaining('Failed to copy'),

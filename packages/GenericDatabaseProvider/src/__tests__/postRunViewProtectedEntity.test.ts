@@ -417,4 +417,61 @@ describe('GenericDatabaseProvider PostRunView-protected Aggregates & Differentia
             Metadata.Provider = prevProvider;
         }
     });
+
+    it('never returns smart-cache status=current and still enforces PostRunView after ACL revocation even when COUNT/MAX(__mj_UpdatedAt) match', async () => {
+        RegisterPostRunViewProtectedEntity('MJ: Artifacts');
+        const regularUser = new UserInfo(null, { ID: '22222222-2222-4222-8222-222222222222', Name: 'User', Email: 'u@example.com' });
+        const ent = new EntityInfo({
+            ID: 'ent-art-1',
+            Name: 'MJ: Artifacts',
+            SchemaName: '__mj',
+            BaseTable: 'Artifact',
+            BaseView: 'vwArtifacts',
+            AllowAllRowsAPI: true,
+            AllowCaching: true,
+            TrackRecordChanges: false,
+            Fields: [
+                { ID: 'f1', EntityID: 'ent-art-1', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1 },
+                { ID: 'f2', EntityID: 'ent-art-1', Name: 'Name', Type: 'nvarchar', Sequence: 2 },
+                { ID: 'f3', EntityID: 'ent-art-1', Name: '__mj_UpdatedAt', Type: 'datetimeoffset', Sequence: 3 },
+            ],
+        });
+        Object.defineProperty(ent, 'GetUserPermisions', {
+            value: () => ({ CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false }),
+        });
+
+        const artifactId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        const matchingMaxUpdatedAt = '2026-11-15T12:00:00.000Z';
+        const provider = new ProtectedProviderHarness([ent]);
+        provider.FullRows = [{ ID: artifactId, Name: 'Secret Artifact', __mj_UpdatedAt: matchingMaxUpdatedAt }];
+
+        // Simulate ACL revocation: DB row itself is unchanged (same COUNT and MAX(__mj_UpdatedAt)),
+        // but PostRunView hook now rejects the user after ArtifactPermission was deleted.
+        let userStillHasAccess = false;
+        const hook: PostRunViewHook = async (_params: RunViewParams, results: RunViewResult): Promise<RunViewResult> => {
+            const kept = userStillHasAccess ? results.Results : [];
+            return { ...results, Results: kept, RowCount: kept.length, TotalRowCount: kept.length };
+        };
+        RegisterDataHook('PostRunView', hook);
+
+        const prevProvider = Metadata.Provider;
+        Metadata.Provider = provider;
+        try {
+            const res = await provider.RunViewsWithCacheCheck<{ ID: string; Name: string }>(
+                [
+                    {
+                        params: { EntityName: 'MJ: Artifacts', CacheLocal: true, ResultType: 'simple' },
+                        cacheStatus: { maxUpdatedAt: matchingMaxUpdatedAt, rowCount: 1 },
+                    },
+                ],
+                regularUser,
+            );
+            expect(res.success).toBe(true);
+            expect(res.results[0]?.status).toBe('stale');
+            expect(res.results[0]?.results).toEqual([]);
+            expect(res.results[0]?.rowCount).toBe(0);
+        } finally {
+            Metadata.Provider = prevProvider;
+        }
+    });
 });

@@ -50,21 +50,15 @@ type GuestLinkRowValue = string | number | boolean | Date | null | undefined;
 interface GuestLinkRawRow {
     ID?: string | null;
     id?: string | null;
+    MagicLinkInviteID?: string | null;
     ArtifactID?: string | null;
     ArtifactVersionID?: string | null;
     CreatedByUserID?: string | null;
-    TokenHash?: string | null;
     Label?: string | null;
-    ExpiresAt?: Date | string | null;
-    RevokedAt?: Date | string | null;
-    RevokedByUserID?: string | null;
-    LastAccessedAt?: Date | string | null;
-    AccessCount?: number | null;
     [key: string]: GuestLinkRowValue;
 }
 
 type GuestLinkViewRow = BaseEntity | GuestLinkRawRow;
-type SqlBindingValue = string | number | boolean | Date;
 
 function isServerSystemUser(user: UserInfo | undefined | null): boolean {
     if (!user) {
@@ -125,18 +119,6 @@ function readGuestLinkArtifactId(row: GuestLinkViewRow | null | undefined): stri
     return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
 }
 
-function clearGuestLinkEntityTokenHash(entity: MJArtifactGuestShareLinkEntity): void {
-    entity.TokenHash = '';
-    const tokenHashField =
-        (Array.isArray(entity.Fields)
-            ? entity.Fields.find((f) => f.Name.toLowerCase() === 'tokenhash')
-            : undefined) ??
-        (typeof entity.GetFieldByName === 'function' ? entity.GetFieldByName('TokenHash') : undefined);
-    if (tokenHashField && typeof tokenHashField.ResetOldValue === 'function') {
-        tokenHashField.ResetOldValue();
-    }
-}
-
 function sanitizeGuestLinkRow(
     row: GuestLinkViewRow,
     originalFields: string[] | undefined
@@ -144,35 +126,14 @@ function sanitizeGuestLinkRow(
     if (!row || typeof row !== 'object') {
         return row;
     }
-    if (row instanceof MJArtifactGuestShareLinkEntity) {
-        clearGuestLinkEntityTokenHash(row);
-        return row;
-    }
     if (row instanceof BaseEntity) {
         return row;
     }
-    const copy: GuestLinkRawRow = { ...(row as GuestLinkRawRow) };
-    if (Object.prototype.hasOwnProperty.call(copy, 'TokenHash')) {
-        copy.TokenHash = '';
-    }
-    if (Object.prototype.hasOwnProperty.call(copy, 'tokenHash')) {
-        copy.tokenHash = '';
-    }
+    const copy: Record<string, unknown> = { ...(row as Record<string, unknown>) };
     if (originalFields && !hasFieldIgnoreCase(originalFields, 'ArtifactID')) {
-        delete copy.ArtifactID;
+        delete copy['ArtifactID'];
     }
-    return copy;
-}
-
-function normalizeOptionalDate(val: Date | string | null | undefined): Date | null {
-    if (val === null || val === undefined) {
-        return null;
-    }
-    if (val instanceof Date) {
-        return Number.isNaN(val.getTime()) ? null : val;
-    }
-    const parsed = new Date(val);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+    return copy as GuestLinkViewRow;
 }
 
 function normalizeOptionalString(val: string | null | undefined): string | null {
@@ -360,16 +321,10 @@ export class MJArtifactGuestShareLinkEntityServer extends MJArtifactGuestShareLi
             );
         }
 
-        if (!IsValidUUID(this.ArtifactID) || !IsValidUUID(this.ArtifactVersionID) || !IsValidUUID(this.CreatedByUserID)) {
+        if (!IsValidUUID(this.MagicLinkInviteID) || !IsValidUUID(this.ArtifactID) || !IsValidUUID(this.ArtifactVersionID) || !IsValidUUID(this.CreatedByUserID)) {
             return this.failResult(
                 this.IsSaved ? 'update' : 'create',
-                'ArtifactID, ArtifactVersionID, and CreatedByUserID must be valid UUIDs.'
-            );
-        }
-        if (!this.TokenHash || this.TokenHash.trim().length === 0) {
-            return this.failResult(
-                this.IsSaved ? 'update' : 'create',
-                'TokenHash is required on MJ: Artifact Guest Share Links.'
+                'MagicLinkInviteID, ArtifactID, ArtifactVersionID, and CreatedByUserID must be valid UUIDs.'
             );
         }
 
@@ -415,19 +370,9 @@ export class MJArtifactGuestShareLinkEntityServer extends MJArtifactGuestShareLi
             const recordId =
                 this.ID && IsValidUUID(this.ID) ? this.ID.trim() : randomUUID();
             const label = normalizeOptionalString(this.Label);
-            const expiresAt = normalizeOptionalDate(this.ExpiresAt);
-            const revokedAt = normalizeOptionalDate(this.RevokedAt);
-            const revokedByUserId =
-                this.RevokedByUserID && IsValidUUID(this.RevokedByUserID)
-                    ? this.RevokedByUserID.trim()
-                    : null;
-            const lastAccessedAt = normalizeOptionalDate(this.LastAccessedAt);
-            const accessCount =
-                typeof this.AccessCount === 'number' && Number.isFinite(this.AccessCount) && this.AccessCount >= 0
-                    ? Math.trunc(this.AccessCount)
-                    : 0;
+            type SqlBindingValue = string | number | boolean | Date;
 
-            let hydratedRow: GuestLinkRawRow | undefined;
+            let hydratedRow: GuestLinkViewRow | undefined;
 
             if (dbProvider.PlatformKey === 'sqlserver') {
                 if (this.IsSaved) {
@@ -437,26 +382,24 @@ export class MJArtifactGuestShareLinkEntityServer extends MJArtifactGuestShareLi
                     );
                     const params: SqlBindingValue[] = [
                         recordId,
+                        this.MagicLinkInviteID.trim(),
                         this.ArtifactID.trim(),
                         this.ArtifactVersionID.trim(),
-                        this.CreatedByUserID.trim(),
-                        this.TokenHash.trim()
+                        this.CreatedByUserID.trim()
                     ];
                     const args: string[] = [
                         `@ID = ${dbProvider.BuildParameterPlaceholder(0)}`,
-                        `@ArtifactID = ${dbProvider.BuildParameterPlaceholder(1)}`,
-                        `@ArtifactVersionID = ${dbProvider.BuildParameterPlaceholder(2)}`,
-                        `@CreatedByUserID = ${dbProvider.BuildParameterPlaceholder(3)}`,
-                        `@TokenHash = ${dbProvider.BuildParameterPlaceholder(4)}`
+                        `@MagicLinkInviteID = ${dbProvider.BuildParameterPlaceholder(1)}`,
+                        `@ArtifactID = ${dbProvider.BuildParameterPlaceholder(2)}`,
+                        `@ArtifactVersionID = ${dbProvider.BuildParameterPlaceholder(3)}`,
+                        `@CreatedByUserID = ${dbProvider.BuildParameterPlaceholder(4)}`
                     ];
-                    this.appendSqlServerOptionalUpdateArg(dbProvider, args, params, 'Label', label);
-                    this.appendSqlServerOptionalUpdateArg(dbProvider, args, params, 'ExpiresAt', expiresAt);
-                    this.appendSqlServerOptionalUpdateArg(dbProvider, args, params, 'RevokedAt', revokedAt);
-                    this.appendSqlServerOptionalUpdateArg(dbProvider, args, params, 'RevokedByUserID', revokedByUserId);
-                    this.appendSqlServerOptionalUpdateArg(dbProvider, args, params, 'LastAccessedAt', lastAccessedAt);
-                    args.push(`@AccessCount = ${dbProvider.BuildParameterPlaceholder(params.length)}`);
-                    params.push(accessCount);
-
+                    if (label === null) {
+                        args.push('@Label_Clear = 1');
+                    } else {
+                        args.push(`@Label_Clear = 0`, `@Label = ${dbProvider.BuildParameterPlaceholder(params.length)}`);
+                        params.push(label);
+                    }
                     const sql = `EXEC ${spUpdateRef} ${args.join(', ')}`;
                     const rows = await dbProvider.ExecuteSQL<GuestLinkRawRow>(sql, params, { isMutation: true }, actor);
                     hydratedRow = rows?.[0];
@@ -467,41 +410,22 @@ export class MJArtifactGuestShareLinkEntityServer extends MJArtifactGuestShareLi
                     );
                     const params: SqlBindingValue[] = [
                         recordId,
+                        this.MagicLinkInviteID.trim(),
                         this.ArtifactID.trim(),
                         this.ArtifactVersionID.trim(),
-                        this.CreatedByUserID.trim(),
-                        this.TokenHash.trim()
+                        this.CreatedByUserID.trim()
                     ];
                     const args: string[] = [
                         `@ID = ${dbProvider.BuildParameterPlaceholder(0)}`,
-                        `@ArtifactID = ${dbProvider.BuildParameterPlaceholder(1)}`,
-                        `@ArtifactVersionID = ${dbProvider.BuildParameterPlaceholder(2)}`,
-                        `@CreatedByUserID = ${dbProvider.BuildParameterPlaceholder(3)}`,
-                        `@TokenHash = ${dbProvider.BuildParameterPlaceholder(4)}`
+                        `@MagicLinkInviteID = ${dbProvider.BuildParameterPlaceholder(1)}`,
+                        `@ArtifactID = ${dbProvider.BuildParameterPlaceholder(2)}`,
+                        `@ArtifactVersionID = ${dbProvider.BuildParameterPlaceholder(3)}`,
+                        `@CreatedByUserID = ${dbProvider.BuildParameterPlaceholder(4)}`
                     ];
                     if (label !== null) {
                         args.push(`@Label = ${dbProvider.BuildParameterPlaceholder(params.length)}`);
                         params.push(label);
                     }
-                    if (expiresAt !== null) {
-                        args.push(`@ExpiresAt = ${dbProvider.BuildParameterPlaceholder(params.length)}`);
-                        params.push(expiresAt);
-                    }
-                    if (revokedAt !== null) {
-                        args.push(`@RevokedAt = ${dbProvider.BuildParameterPlaceholder(params.length)}`);
-                        params.push(revokedAt);
-                    }
-                    if (revokedByUserId !== null) {
-                        args.push(`@RevokedByUserID = ${dbProvider.BuildParameterPlaceholder(params.length)}`);
-                        params.push(revokedByUserId);
-                    }
-                    if (lastAccessedAt !== null) {
-                        args.push(`@LastAccessedAt = ${dbProvider.BuildParameterPlaceholder(params.length)}`);
-                        params.push(lastAccessedAt);
-                    }
-                    args.push(`@AccessCount = ${dbProvider.BuildParameterPlaceholder(params.length)}`);
-                    params.push(accessCount);
-
                     const sql = `EXEC ${spCreateRef} ${args.join(', ')}`;
                     const rows = await dbProvider.ExecuteSQL<GuestLinkRawRow>(sql, params, { isMutation: true }, actor);
                     hydratedRow = rows?.[0];
@@ -510,58 +434,31 @@ export class MJArtifactGuestShareLinkEntityServer extends MJArtifactGuestShareLi
                 const q = (col: string): string => dbProvider.QuoteIdentifier(col);
                 if (this.IsSaved) {
                     const params: SqlBindingValue[] = [];
-                    const setClauses: string[] = [];
-                    const addCol = (col: string, val: SqlBindingValue | null): void => {
-                        if (val === null) {
-                            setClauses.push(`${q(col)} = NULL`);
-                        } else {
-                            setClauses.push(`${q(col)} = ${dbProvider.BuildParameterPlaceholder(params.length)}`);
-                            params.push(val);
-                        }
-                    };
-                    addCol('Label', label);
-                    addCol('ExpiresAt', expiresAt);
-                    addCol('RevokedAt', revokedAt);
-                    addCol('RevokedByUserID', revokedByUserId);
-                    addCol('LastAccessedAt', lastAccessedAt);
-                    addCol('AccessCount', accessCount);
-                    addCol('__mj_UpdatedAt', new Date());
-
-                    const wherePlaceholder = dbProvider.BuildParameterPlaceholder(params.length);
+                    const labelExpr =
+                        label === null ? 'NULL' : (params.push(label), dbProvider.BuildParameterPlaceholder(0));
+                    const updatedAtExpr = dbProvider.BuildParameterPlaceholder(params.length);
+                    params.push(new Date());
+                    const idExpr = dbProvider.BuildParameterPlaceholder(params.length);
                     params.push(recordId);
-                    const updateSql = `UPDATE ${table} SET ${setClauses.join(', ')} WHERE ${colId} = ${wherePlaceholder}`;
+                    const updateSql = `UPDATE ${table} SET ${q('Label')} = ${labelExpr}, ${q('__mj_UpdatedAt')} = ${updatedAtExpr} WHERE ${colId} = ${idExpr}`;
                     await dbProvider.ExecuteSQL(updateSql, params, { isMutation: true }, actor);
                 } else {
                     const params: SqlBindingValue[] = [
                         recordId,
+                        this.MagicLinkInviteID.trim(),
                         this.ArtifactID.trim(),
                         this.ArtifactVersionID.trim(),
-                        this.CreatedByUserID.trim(),
-                        this.TokenHash.trim()
+                        this.CreatedByUserID.trim()
                     ];
                     const valExprs: string[] = [
                         dbProvider.BuildParameterPlaceholder(0),
                         dbProvider.BuildParameterPlaceholder(1),
                         dbProvider.BuildParameterPlaceholder(2),
                         dbProvider.BuildParameterPlaceholder(3),
-                        dbProvider.BuildParameterPlaceholder(4)
+                        dbProvider.BuildParameterPlaceholder(4),
+                        label === null ? 'NULL' : (params.push(label), dbProvider.BuildParameterPlaceholder(5))
                     ];
-                    const pushOpt = (val: SqlBindingValue | null): void => {
-                        if (val === null) {
-                            valExprs.push('NULL');
-                        } else {
-                            valExprs.push(dbProvider.BuildParameterPlaceholder(params.length));
-                            params.push(val);
-                        }
-                    };
-                    pushOpt(label);
-                    pushOpt(expiresAt);
-                    pushOpt(revokedAt);
-                    pushOpt(revokedByUserId);
-                    pushOpt(lastAccessedAt);
-                    pushOpt(accessCount);
-
-                    const insertSql = `INSERT INTO ${table} (${q('ID')}, ${q('ArtifactID')}, ${q('ArtifactVersionID')}, ${q('CreatedByUserID')}, ${q('TokenHash')}, ${q('Label')}, ${q('ExpiresAt')}, ${q('RevokedAt')}, ${q('RevokedByUserID')}, ${q('LastAccessedAt')}, ${q('AccessCount')}) VALUES (${valExprs.join(', ')})`;
+                    const insertSql = `INSERT INTO ${table} (${q('ID')}, ${q('MagicLinkInviteID')}, ${q('ArtifactID')}, ${q('ArtifactVersionID')}, ${q('CreatedByUserID')}, ${q('Label')}) VALUES (${valExprs.join(', ')})`;
                     await dbProvider.ExecuteSQL(insertSql, params, { isMutation: true }, actor);
                 }
             }
@@ -591,24 +488,6 @@ export class MJArtifactGuestShareLinkEntityServer extends MJArtifactGuestShareLi
             res.Message = err instanceof Error ? err.message : String(err);
             this.ResultHistory.push(res);
             return false;
-        }
-    }
-
-    private appendSqlServerOptionalUpdateArg(
-        dbProvider: DatabaseProviderBase,
-        args: string[],
-        params: SqlBindingValue[],
-        fieldName: string,
-        val: SqlBindingValue | null
-    ): void {
-        if (val === null) {
-            args.push(`@${fieldName}_Clear = 1`);
-        } else {
-            args.push(
-                `@${fieldName}_Clear = 0`,
-                `@${fieldName} = ${dbProvider.BuildParameterPlaceholder(params.length)}`
-            );
-            params.push(val);
         }
     }
 
@@ -661,7 +540,6 @@ export class MJArtifactGuestShareLinkEntityServer extends MJArtifactGuestShareLi
         }
         const provider = resolveMetadataProvider(this.ProviderToUse, actor);
         if (!actor && provider !== null && provider.ProviderType !== 'Database') {
-            clearGuestLinkEntityTokenHash(this);
             return true;
         }
         if (!actor || !provider || !IsValidUUID(this.ArtifactID)) {
@@ -677,7 +555,6 @@ export class MJArtifactGuestShareLinkEntityServer extends MJArtifactGuestShareLi
             this.NewRecord();
             return false;
         }
-        clearGuestLinkEntityTokenHash(this);
         return true;
     }
 

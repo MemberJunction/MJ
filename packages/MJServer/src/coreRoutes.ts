@@ -18,7 +18,6 @@ import { ApiRoute } from './apiRoot.js';
 import { CreateOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { CreateSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { CreateMediaStreamRouter } from './rest/MediaStreamHandler.js';
-import { CreatePublicGuestShareRouter } from './rest/PublicGuestShareHandler.js';
 import { CreateRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
 import { CreateMagicLinkHandler, CreateMagicLinkJwksRouter, MagicLinkService, RegisterMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { CreateWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
@@ -83,8 +82,6 @@ export function MountPublicCoreRoutes(app: Application, publicUrl: string, log: 
     routers.Widget = mountWidgetPublic(app, publicUrl, log);
     mountLocalDevAuthPublic(app, publicUrl, log);
     mountRealtimeVerify(app, log);
-    app.use(ApiRoute('/guest-share'), cors<cors.CorsRequest>(), CreatePublicGuestShareRouter());
-    log.LogIf('verbose', `[GuestShare] Public resolution route registered at ${ApiRoute('/guest-share')}/resolve`);
     return routers;
 }
 
@@ -95,8 +92,7 @@ function mountLocalDevAuthPublic(app: Application, publicUrl: string, log: Route
     }
     RegisterLocalDevAuthProvider(publicUrl);
     if (!configInfo.magicLink?.enabled && !configInfo.widget?.enabled) {
-        app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), CreateMagicLinkJwksRouter());
-        log.LogIf('verbose', `[LocalDevAuth] Published RS256 signing key at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
+        log.LogIf('verbose', `[LocalDevAuth] Reusing shared RS256 JWKS endpoint at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
     }
     log.LogIf('verbose', `[LocalDevAuth] Local dev auth routes enabled at ${ApiRoute(AUTH_CATALOG_MOUNT_PATH)}/dev-login (localhost only)`);
 }
@@ -127,15 +123,16 @@ function mountMagicLinkPublic(
     app: Application,
     publicUrl: string,
     log: RouteLog,
-): { authenticatedRouter: Router; service: MagicLinkService } | undefined {
-    if (!configInfo.magicLink?.enabled) {
-        return undefined;
-    }
+): { authenticatedRouter: Router | undefined; service: MagicLinkService } {
     const { publicRouter, authenticatedRouter, service } = CreateMagicLinkHandler(publicUrl, configInfo.magicLink);
+    MagicLinkService.SetActiveInstance(service);
     RegisterMagicLinkAuthProvider(publicUrl, configInfo.magicLink);
     app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), publicRouter);
     log.LogIf('verbose', `[MagicLink] Public routes registered at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/redeem and ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
-    return { authenticatedRouter, service };
+    return {
+        authenticatedRouter: configInfo.magicLink?.enabled ? authenticatedRouter : undefined,
+        service,
+    };
 }
 
 /**
@@ -149,8 +146,7 @@ function mountWidgetPublic(app: Application, publicUrl: string, log: RouteLog): 
     const { publicRouter, authenticatedRouter } = CreateWidgetHandler(publicUrl, configInfo.widget);
     app.use(ApiRoute(WIDGET_MOUNT_PATH), cors<cors.CorsRequest>(), publicRouter);
     if (!configInfo.magicLink?.enabled) {
-        app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), CreateMagicLinkJwksRouter());
-        log.LogIf('verbose', `[Widget] Published reused signing key at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json (magic-link flow disabled)`);
+        log.LogIf('verbose', `[Widget] Reusing shared RS256 signing key at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json (magic-link flow disabled)`);
     }
     log.LogIf('verbose', `[Widget] Public routes registered at ${ApiRoute(WIDGET_MOUNT_PATH)}/session and ${ApiRoute(WIDGET_MOUNT_PATH)}/session/refresh`);
     return authenticatedRouter;

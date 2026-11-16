@@ -10,7 +10,6 @@ import {
   MJArtifactEntity,
   MJCollectionArtifactEntity,
   MJCollectionEntity,
-  ResolveGuestShareLinkOperation,
   UserInfoEngine,
 } from '@memberjunction/core-entities';
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
@@ -466,16 +465,6 @@ describe('LibraryWorkspaceComponent & LibraryFullViewComponent (DOM)', () => {
       },
     );
 
-    vi.spyOn(ResolveGuestShareLinkOperation.prototype, 'Execute').mockResolvedValue({
-      Success: true,
-      Output: {
-        Valid: false,
-        ReadOnly: true,
-        Reason: 'Guest link has expired.',
-        ShareMode: 'Frozen',
-      },
-    });
-
     setupTestBed();
     const fixture = TestBed.createComponent(LibraryWorkspaceComponent);
     const comp = fixture.componentInstance;
@@ -496,15 +485,6 @@ describe('LibraryWorkspaceComponent & LibraryFullViewComponent (DOM)', () => {
     expect(comp.SelectedCollectionId).toBe(colId);
     expect(comp.ActiveVersionNumber).toBeUndefined();
     expect(emittedStates.at(-1)?.CollectionId).toBe(colId);
-
-    // 2. Expired guestToken renders Guest Link Unavailable empty-state banner in DOM
-    comp.ApplyExternalRouteState({ guestToken: 'expired-guest-tok' });
-    await flushAsync();
-    fixture.detectChanges();
-
-    const errorCard = fixture.nativeElement.querySelector('[data-title="Guest Link Unavailable"]');
-    expect(errorCard).not.toBeNull();
-    expect(errorCard?.textContent).toContain('Guest link has expired.');
   });
 
   it('hydrates off-page ?artifactId= permissions cleanly so owners keep CanEdit/CanShare and resolves v1 collection link on v2+ removal', async () => {

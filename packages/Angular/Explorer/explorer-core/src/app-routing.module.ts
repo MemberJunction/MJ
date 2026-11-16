@@ -794,12 +794,8 @@ const routes: Routes = [
     component: OfficeConnectComponent
   },
 
-  // Anonymous external guest artifact share route (NW-1) — zero OAuth wall; resolves via
-  // pre-auth REST GET /guest-share/resolve?token=... (with @Public GraphQL fallback).
-  {
-    path: 'guest/artifact/:token',
-    component: PublicArtifactGuestComponent
-  },
+  // External guest artifact share route (NW-1) — standalone route activated via Magic Link
+  // `#token=<jwt>` redemption redirect; resolves the Frozen snapshot via ResolveGuestArtifactSnapshot.
   {
     path: 'guest/artifact',
     component: PublicArtifactGuestComponent

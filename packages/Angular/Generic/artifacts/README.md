@@ -2,7 +2,7 @@
 
 Angular artifact viewer, real-time Yjs collaboration, unified context menu, live AI presence, and Git-style visual version comparison library for MemberJunction — powering **MJ Docs** (`Markdown Document`), **MJ Slides** (`Presentation`), **MJ Sheets** (`Excel Spreadsheet`), interactive React/Angular `ComponentSpec` forms, PDF/Office file previews, audio/video playback, and inline **MS OLE-style** embedded artifacts.
 
-> **Architectural Deep Dive:** See [`guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md`](../../../../guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md) for the end-to-end architecture covering Yjs CRDT synchronization, guest sharing (`/guest/artifact/:token`), hierarchical collection ACL inheritance, viewer-scoped Live MJ Blocks (`RLS`/`FLS` + `O5` HMAC freeze), word-level Suggesting redlines, dynamic array formulas, and Visual Version Compare.
+> **Architectural Deep Dive:** See [`guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md`](../../../../guides/DOCS_SLIDES_SHEETS_ARCHITECTURE.md) for the end-to-end architecture covering Yjs CRDT synchronization, Magic-Link guest sharing (`/guest/artifact`), hierarchical collection ACL inheritance, viewer-scoped Live MJ Blocks (`RLS`/`FLS` + `O5` HMAC freeze), word-level Suggesting redlines, dynamic array formulas, and Visual Version Compare.
 
 ## Overview
 

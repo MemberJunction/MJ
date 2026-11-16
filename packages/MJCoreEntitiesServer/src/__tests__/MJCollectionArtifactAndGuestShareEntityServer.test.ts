@@ -372,18 +372,19 @@ describe('MJArtifactGuestShareLinkEntityServer direct-DB SystemUser & read ACL',
         );
     });
 
-    it('blocks non-system Save/Delete and executes SystemUser SQL Server sprocs without untyped null positional params', async () => {
+    const INVITE_ID = '99999999-9999-9999-9999-999999999999';
+
+    it('blocks non-system Save/Delete and executes SystemUser SQL Server sprocs cleanly for 6-column MagicLinkInvite binding', async () => {
         const mssqlProvider = new MockSqlGuestShareDbProvider('sqlserver', (sql) => {
             if (sql.includes('spCreateArtifactGuestShareLink') || sql.includes('spUpdateArtifactGuestShareLink')) {
                 return [
                     {
                         ID: LINK_ID,
+                        MagicLinkInviteID: INVITE_ID,
                         ArtifactID: ARTIFACT_ID,
                         ArtifactVersionID: VERSION_ID,
                         CreatedByUserID: SHARER_ID,
-                        TokenHash: 'hash-123',
                         Label: null,
-                        AccessCount: 0
                     }
                 ];
             }
@@ -399,16 +400,11 @@ describe('MJArtifactGuestShareLinkEntityServer direct-DB SystemUser & read ACL',
             Object.defineProperty(entity, 'ContextCurrentUser', { value: actor, writable: true });
             Object.defineProperty(entity, 'IsSaved', { value: false, writable: true });
             Object.defineProperty(entity, 'ID', { value: LINK_ID, writable: true });
+            Object.defineProperty(entity, 'MagicLinkInviteID', { value: INVITE_ID, writable: true });
             Object.defineProperty(entity, 'ArtifactID', { value: ARTIFACT_ID, writable: true });
             Object.defineProperty(entity, 'ArtifactVersionID', { value: VERSION_ID, writable: true });
             Object.defineProperty(entity, 'CreatedByUserID', { value: SHARER_ID, writable: true });
-            Object.defineProperty(entity, 'TokenHash', { value: 'sha256-test-hash', writable: true });
             Object.defineProperty(entity, 'Label', { value: null, writable: true });
-            Object.defineProperty(entity, 'ExpiresAt', { value: null, writable: true });
-            Object.defineProperty(entity, 'RevokedAt', { value: null, writable: true });
-            Object.defineProperty(entity, 'RevokedByUserID', { value: null, writable: true });
-            Object.defineProperty(entity, 'LastAccessedAt', { value: null, writable: true });
-            Object.defineProperty(entity, 'AccessCount', { value: 0, writable: true });
             Object.defineProperty(entity, 'LoadFromData', {
                 value: vi.fn().mockResolvedValue(true),
                 configurable: true
@@ -437,7 +433,7 @@ describe('MJArtifactGuestShareLinkEntityServer direct-DB SystemUser & read ACL',
         expect(mssqlProvider.calls[0]?.sql).toContain('EXEC [__mj].[spDeleteArtifactGuestShareLink]');
     });
 
-    it('gates RunView reads on MJ: Artifact Guest Share Links to CanShare || CanDelete and redacts TokenHash', async () => {
+    it('gates RunView reads on MJ: Artifact Guest Share Links to CanShare || CanDelete', async () => {
         const provider = new MockCollectionProvider(async () => ({
             Success: true,
             Results: [],
@@ -469,7 +465,7 @@ describe('MJArtifactGuestShareLinkEntityServer direct-DB SystemUser & read ACL',
 
         const raw: RunViewResult = {
             Success: true,
-            Results: [{ ID: LINK_ID, ArtifactID: ARTIFACT_ID, Label: 'Board Packet', TokenHash: 'secret-sha' }],
+            Results: [{ ID: LINK_ID, MagicLinkInviteID: INVITE_ID, ArtifactID: ARTIFACT_ID, Label: 'Board Packet' }],
             RowCount: 1,
             TotalRowCount: 1,
             ExecutionTime: 1,
@@ -478,7 +474,7 @@ describe('MJArtifactGuestShareLinkEntityServer direct-DB SystemUser & read ACL',
 
         const sharerRes = await ArtifactGuestShareLinkPostRunViewHook(params, raw, sharerUser, provider);
         expect(sharerRes.Results).toHaveLength(1);
-        expect((sharerRes.Results[0] as { TokenHash?: string }).TokenHash).toBe('');
+        expect((sharerRes.Results[0] as { MagicLinkInviteID?: string }).MagicLinkInviteID).toBe(INVITE_ID);
 
         const outsiderRes = await ArtifactGuestShareLinkPostRunViewHook(
             { EntityName: 'MJ: Artifact Guest Share Links', ResultType: 'simple' },
@@ -490,7 +486,7 @@ describe('MJArtifactGuestShareLinkEntityServer direct-DB SystemUser & read ACL',
         expect(outsiderRes.TotalRowCount).toBe(0);
     });
 
-    it('strips TokenHash and OldValue on InnerLoad/Load for authorized non-system users while preserving for SystemUser and denying outsiders', async () => {
+    it('permits InnerLoad/Load for authorized sharers and SystemUser while denying outsiders', async () => {
         const provider = new MockCollectionProvider(async () => ({
             Success: true,
             Results: [],
@@ -517,59 +513,33 @@ describe('MJArtifactGuestShareLinkEntityServer direct-DB SystemUser & read ACL',
 
         const makeLoadedEntity = (actor: UserInfo) => {
             const entity = Object.create(MJArtifactGuestShareLinkEntityServer.prototype) as MJArtifactGuestShareLinkEntityServer;
-            const fields = [
-                {
-                    Name: 'TokenHash',
-                    Value: 'secret-sha-256',
-                    OldValue: 'secret-sha-256',
-                    ResetOldValue() {
-                        this.OldValue = this.Value;
-                    }
-                }
-            ];
-            let tokenHashVal = 'secret-sha-256';
             Object.defineProperty(entity, 'ContextCurrentUser', { value: actor, configurable: true });
             Object.defineProperty(entity, 'ProviderToUse', { value: provider, configurable: true });
             Object.defineProperty(entity, 'ID', { value: LINK_ID, writable: true, configurable: true });
+            Object.defineProperty(entity, 'MagicLinkInviteID', { value: INVITE_ID, writable: true, configurable: true });
             Object.defineProperty(entity, 'ArtifactID', { value: ARTIFACT_ID, writable: true, configurable: true });
-            Object.defineProperty(entity, 'Fields', { value: fields, configurable: true });
-            Object.defineProperty(entity, 'TokenHash', {
-                get: () => tokenHashVal,
-                set: (v: string) => {
-                    tokenHashVal = v;
-                    fields[0]!.Value = v;
-                },
-                configurable: true
-            });
+            Object.defineProperty(entity, 'Fields', { value: [], configurable: true });
             Object.defineProperty(entity, 'NewRecord', {
                 value: () => {
                     entity.ID = '';
-                    tokenHashVal = '';
-                    fields[0]!.Value = '';
-                    fields[0]!.OldValue = '';
                 },
                 configurable: true
             });
-            return { entity, fields };
+            return { entity };
         };
 
         superInnerLoadSpy.mockResolvedValue(true);
 
-        // Authorized sharer gets record back with TokenHash AND OldValue stripped
         const sharer = makeLoadedEntity(sharerUser);
         expect(await sharer.entity.Load(LINK_ID)).toBe(true);
-        expect(sharer.entity.TokenHash).toBe('');
-        expect(sharer.fields[0]?.OldValue).toBe('');
+        expect(sharer.entity.MagicLinkInviteID).toBe(INVITE_ID);
 
-        // Unauthorized outsider fails closed
         const outsider = makeLoadedEntity(outsiderUser);
         expect(await outsider.entity.Load(LINK_ID)).toBe(false);
         expect(outsider.entity.ID).toBe('');
-        expect(outsider.entity.TokenHash).toBe('');
 
-        // SystemUser retains TokenHash for internal validation
         const sys = makeLoadedEntity(sysUser);
         expect(await sys.entity.Load(LINK_ID)).toBe(true);
-        expect(sys.entity.TokenHash).toBe('secret-sha-256');
+        expect(sys.entity.MagicLinkInviteID).toBe(INVITE_ID);
     });
 });

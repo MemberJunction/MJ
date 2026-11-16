@@ -139,6 +139,13 @@ export interface DocumentOutlineNode {
  */
 @RegisterClass(BaseArtifactToolLibrary, 'DocumentToolLibrary')
 export class DocumentToolLibrary extends BaseArtifactToolLibrary {
+    /**
+     * Wall-clock budget, in milliseconds, for one regex `search_blocks` or `grep` call.
+     * Defaults to {@link TOOL_REGEX_BUDGET_MS}; tests that assert a complete search raise it so
+     * a loaded CI runner does not turn a timing margin into a failure.
+     */
+    public RegexBudgetMs: number = TOOL_REGEX_BUDGET_MS;
+
     protected override getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
@@ -1028,7 +1035,8 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         let tooLongCount = 0;
         let timeoutCount = 0;
         let budgetExpired = false;
-        const regexDeadline = performance.now() + TOOL_REGEX_BUDGET_MS;
+        const budgetMs = this.RegexBudgetMs;
+        const regexDeadline = performance.now() + budgetMs;
 
         const recordUnsearchableBlock = (
             block: ParsedMarkdownLogicalBlock,
@@ -1117,7 +1125,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
         if (timeoutCount > 0) {
             warnings.push(
-                `${timeoutCount} block(s) were skipped because regex evaluation reached the ${TOOL_REGEX_BUDGET_MS}ms tool time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
+                `${timeoutCount} block(s) were skipped because regex evaluation reached the ${budgetMs}ms tool time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
             );
         }
         if (unsearchableCount > unsearchableBlocks.length) {
@@ -1142,7 +1150,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
     }
 
     private handleGrep(content: string, input: Parameters<BaseArtifactToolLibrary['InvokeTool']>[1]): Promise<ArtifactToolResult> {
-        return ExecuteStructuredLineGrep(content, input);
+        return ExecuteStructuredLineGrep(content, input, this.RegexBudgetMs);
     }
 
     private handleGetLines(content: string, input: ArtifactToolArgs): ArtifactToolResult {

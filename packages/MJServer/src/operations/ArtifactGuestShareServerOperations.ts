@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
     BaseRemotableOperation,
     type IMetadataProvider,
@@ -11,7 +11,6 @@ import {
 } from '@memberjunction/core';
 import {
     ARTIFACT_CREATE_GUEST_SHARE_LINK_KEY,
-    ARTIFACT_RESOLVE_GUEST_SHARE_LINK_KEY,
     ARTIFACT_REVOKE_GUEST_SHARE_LINK_KEY,
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
@@ -26,10 +25,8 @@ import {
     type MJArtifactGuestShareLinkEntity,
     type MJArtifactGuestShareLinkEntityType,
     type MJArtifactVersionEntity,
+    type MJMagicLinkInviteEntity,
     type ParsedDocumentSegment,
-    type ResolveGuestShareLinkInput,
-    ResolveGuestShareLinkOperation,
-    type ResolveGuestShareLinkOutput,
     type RevokeGuestShareLinkInput,
     RevokeGuestShareLinkOperation,
     type RevokeGuestShareLinkOutput,
@@ -37,40 +34,28 @@ import {
     ValidateFrozenBlockSnapshot,
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { EscapeSQLString, IsValidUUID, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { IsMagicLinkRedirectUrlAllowed, MagicLinkService, RegisterMagicLinkAuthProvider } from '../auth/magicLink/index.js';
+import { configInfo } from '../config.js';
+import type { UserPayload } from '../types.js';
 import { WriteArtifactComplianceAudit } from './ArtifactComplianceAuditHelper.js';
 
 const MIN_GUEST_SHARE_HOURS = 1;
 const MAX_GUEST_SHARE_HOURS = 720;
-const MIN_SECRET_BYTES = 32;
 const MAX_LABEL_LENGTH = 200;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 60;
 const RATE_LIMIT_MAX_KEYS = 5_000;
 
-const GUEST_SHARE_SECRET_STORE_KEY = '___SINGLETON__MJ_GUEST_SHARE_SECRET_STATE';
 const GUEST_SHARE_RATE_LIMIT_STORE_KEY = '___SINGLETON__MJ_GUEST_SHARE_RATE_LIMIT_MAP';
-
-interface GuestShareSecretState {
-    ExplicitSecret: string | null;
-    EphemeralDevSecret: string | null;
-}
 
 interface GuestShareRateLimitEntry {
     Count: number;
     ResetAt: number;
 }
 
-interface GuestShareTokenClaims {
-    v: 1;
-    lid: string;
-    aid: string;
-    vid: string;
-    mode: 'Frozen';
-    exp: number;
-}
-
 export type PublicGuestShareErrorCode =
+    | 'ACCESS_DENIED'
     | 'INVALID_TOKEN'
     | 'EXPIRED'
     | 'REVOKED'
@@ -84,6 +69,7 @@ export interface PublicArtifactGuestShareResolution {
     Valid: boolean;
     ErrorCode?: PublicGuestShareErrorCode;
     ErrorMessage?: string;
+    LinkID?: string;
     ArtifactID?: string;
     ArtifactName?: string;
     Title?: string;
@@ -103,19 +89,8 @@ export interface PublicArtifactGuestShareResolution {
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
-function getSecretState(): GuestShareSecretState {
-    const store = MJGlobal.Instance.GetGlobalObjectStore();
-    if (!store[GUEST_SHARE_SECRET_STORE_KEY]) {
-        store[GUEST_SHARE_SECRET_STORE_KEY] = {
-            ExplicitSecret: null,
-            EphemeralDevSecret: null,
-        } satisfies GuestShareSecretState;
-    }
-    return store[GUEST_SHARE_SECRET_STORE_KEY] as GuestShareSecretState;
-}
-
 function getRateLimitMap(): Map<string, GuestShareRateLimitEntry> {
-    const store = MJGlobal.Instance.GetGlobalObjectStore();
+    const store = GetGlobalObjectStore();
     if (!store[GUEST_SHARE_RATE_LIMIT_STORE_KEY]) {
         store[GUEST_SHARE_RATE_LIMIT_STORE_KEY] = new Map<string, GuestShareRateLimitEntry>();
     }
@@ -189,108 +164,6 @@ function checkRateLimit(clientKey: string): boolean {
         }
     }
     return true;
-}
-
-/**
- * Configures an explicit guest-share HMAC secret (intended for unit tests and multi-node deployments).
- * Rejects non-null secrets shorter than 32 bytes.
- */
-export function SetGuestShareSigningSecret(secret: string | null): void {
-    const state = getSecretState();
-    if (secret == null || secret.trim().length === 0) {
-        state.ExplicitSecret = null;
-        return;
-    }
-    const trimmed = secret.trim();
-    if (Buffer.byteLength(trimmed, 'utf8') < MIN_SECRET_BYTES) {
-        throw new Error(`Guest share signing secret must be at least ${MIN_SECRET_BYTES} bytes.`);
-    }
-    state.ExplicitSecret = trimmed;
-}
-
-function resolveGuestShareSecret(): Buffer {
-    const state = getSecretState();
-    const configured =
-        state.ExplicitSecret ||
-        process.env.MJ_ARTIFACT_GUEST_SHARE_SECRET?.trim() ||
-        process.env.ARTIFACT_GUEST_SHARE_SECRET?.trim() ||
-        process.env.MJ_GUEST_SHARE_SECRET?.trim() ||
-        null;
-
-    if (configured) {
-        if (Buffer.byteLength(configured, 'utf8') < MIN_SECRET_BYTES) {
-            throw new RemoteOperationError(
-                'SECRET_CONFIGURATION_ERROR',
-                `Configured MJ_ARTIFACT_GUEST_SHARE_SECRET must be at least ${MIN_SECRET_BYTES} bytes.`,
-            );
-        }
-        return Buffer.from(configured, 'utf8');
-    }
-
-    if (process.env.NODE_ENV === 'production') {
-        throw new RemoteOperationError(
-            'SECRET_CONFIGURATION_ERROR',
-            'MJ_ARTIFACT_GUEST_SHARE_SECRET (>= 32 bytes) must be configured in production to issue or verify guest share tokens.',
-        );
-    }
-
-    if (!state.EphemeralDevSecret) {
-        state.EphemeralDevSecret = randomBytes(32).toString('hex');
-    }
-    return Buffer.from(state.EphemeralDevSecret, 'utf8');
-}
-
-function computeTokenHash(token: string): string {
-    return createHash('sha256').update(token, 'utf8').digest('hex');
-}
-
-function signTokenClaims(claims: GuestShareTokenClaims): string {
-    const secret = resolveGuestShareSecret();
-    const payloadB64 = Buffer.from(JSON.stringify(claims), 'utf8').toString('base64url');
-    const sigB64 = createHmac('sha256', secret).update(payloadB64).digest('base64url');
-    return `${payloadB64}.${sigB64}`;
-}
-
-function verifyTokenClaims(token: string): { Valid: boolean; Claims?: GuestShareTokenClaims; Reason?: string; Expired?: boolean } {
-    if (typeof token !== 'string' || token.trim().length === 0 || token.length > 4096) {
-        return { Valid: false, Reason: 'Missing or malformed guest share token.' };
-    }
-    const parts = token.trim().split('.');
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
-        return { Valid: false, Reason: 'Malformed guest share token.' };
-    }
-    const [payloadB64, sigB64] = parts;
-    const secret = resolveGuestShareSecret();
-    const expectedSigB64 = createHmac('sha256', secret).update(payloadB64).digest('base64url');
-    const actualBuf = Buffer.from(sigB64, 'utf8');
-    const expectedBuf = Buffer.from(expectedSigB64, 'utf8');
-    if (actualBuf.length !== expectedBuf.length || !timingSafeEqual(actualBuf, expectedBuf)) {
-        return { Valid: false, Reason: 'Invalid guest share token signature.' };
-    }
-
-    try {
-        const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as Partial<GuestShareTokenClaims>;
-        if (
-            parsed.v !== 1 ||
-            parsed.mode !== 'Frozen' ||
-            typeof parsed.lid !== 'string' ||
-            !IsValidUUID(parsed.lid) ||
-            typeof parsed.aid !== 'string' ||
-            !IsValidUUID(parsed.aid) ||
-            typeof parsed.vid !== 'string' ||
-            !IsValidUUID(parsed.vid) ||
-            typeof parsed.exp !== 'number' ||
-            !Number.isFinite(parsed.exp)
-        ) {
-            return { Valid: false, Reason: 'Invalid guest share token claims.' };
-        }
-        if (parsed.exp <= Date.now()) {
-            return { Valid: false, Expired: true, Reason: 'Guest share link has expired.' };
-        }
-        return { Valid: true, Claims: parsed as GuestShareTokenClaims };
-    } catch {
-        return { Valid: false, Reason: 'Unparseable guest share token payload.' };
-    }
 }
 
 function resolveSystemUser(): UserInfo {
@@ -678,6 +551,9 @@ function inspectFrozenGuestShareContentInternal(
                         if (emb.Mode !== 'Frozen') {
                             return `Spreadsheet '${sheetName}' embedded artifact '${emb.Title ?? emb.EmbedID ?? 'embed'}' must be Frozen for guest sharing.`;
                         }
+                        if (!emb.FrozenSnapshot && !emb.InlineContentJSON) {
+                            return `Spreadsheet '${sheetName}' embedded artifact '${emb.Title ?? emb.EmbedID ?? 'embed'}' is missing a verified frozen snapshot.`;
+                        }
                         if (emb.FrozenSnapshot) {
                             const snapValidation = ValidateFrozenBlockSnapshot(emb.FrozenSnapshot);
                             if (!snapValidation.Valid) {
@@ -693,7 +569,8 @@ function inspectFrozenGuestShareContentInternal(
                                     { ArtifactID: emb.ArtifactID }
                                 )
                             );
-                        } else if (emb.InlineContentJSON) {
+                        }
+                        if (emb.InlineContentJSON) {
                             const nestedErr = inspectFrozenGuestShareContentInternal(
                                 emb.InlineContentJSON,
                                 null,
@@ -704,8 +581,6 @@ function inspectFrozenGuestShareContentInternal(
                             if (nestedErr) {
                                 return nestedErr;
                             }
-                        } else {
-                            return `Spreadsheet '${sheetName}' embedded artifact '${emb.Title ?? emb.EmbedID ?? 'embed'}' is missing a verified frozen snapshot.`;
                         }
                     }
                 }
@@ -808,29 +683,265 @@ function buildFailedPublicResolution(
 }
 
 /**
- * Resolves and validates a public/guest frozen artifact share token, returning the locked
- * `PublicArtifactGuestShareResult` contract used by both `/guest-share/resolve` REST and
- * `@Public() ResolvePublicArtifactGuestShare` GraphQL.
+ * Viewer plugin driver classes allowed for Frozen external guest shares.
+ * Executable / dynamic components (`ComponentArtifactViewerPlugin`) and non-frozen binary plugins
+ * are explicitly excluded.
  */
-export async function ResolvePublicArtifactGuestShareData(
-    token: string,
+export const SAFE_GUEST_SHARE_DRIVER_CLASSES: ReadonlySet<string> = new Set([
+    'MarkdownArtifactViewerPlugin',
+    'SpreadsheetArtifactViewerPlugin',
+    'SlideDeckArtifactViewerPlugin',
+    'SvgArtifactViewerPlugin',
+    'HtmlArtifactViewerPlugin',
+    'JsonArtifactViewerPlugin',
+    'CodeArtifactViewerPlugin',
+    'TextArtifactViewerPlugin',
+    'CsvArtifactViewerPlugin',
+    'DataArtifactViewerPlugin',
+    'WhiteboardArtifactViewerPlugin',
+]);
+
+const ARTIFACTS_RESOURCE_TYPE_FALLBACK_ID = '6BA617C4-0CBA-4C79-B037-456DF4B03D3D';
+const MAGIC_LINK_BASELINE_ROLE_FALLBACK_ID = '611283EE-C8AB-4A2D-A378-53BEED1E0D89';
+
+/**
+ * Verifies that an artifact's type, viewer plugin driver class, and content mode are permitted for
+ * Frozen-only external guest sharing. Returns a rejection message or `null` when allowed.
+ */
+export function IsGuestShareSupportedArtifactType(
+    artifactTypeName: string | null | undefined,
+    driverClass: string | null | undefined,
+    contentMode: string | null | undefined,
+): string | null {
+    if (contentMode === 'File') {
+        return 'Binary File artifacts cannot be shared via Frozen-only guest share links.';
+    }
+    const normalizedType = artifactTypeName?.trim().toLowerCase() ?? '';
+    if (normalizedType === 'component') {
+        return "Artifact type 'Component' executes client code and cannot be shared via external guest links.";
+    }
+    const trimmedDriver = driverClass?.trim() ?? '';
+    if (!trimmedDriver || !SAFE_GUEST_SHARE_DRIVER_CLASSES.has(trimmedDriver)) {
+        return `Artifact viewer '${trimmedDriver || artifactTypeName || 'Unknown'}' is not allowlisted for external Frozen guest sharing.`;
+    }
+    return null;
+}
+
+async function resolveArtifactTypeDetails(
+    typeId: string | null | undefined,
     provider: IMetadataProvider,
-    rateLimitClientKey = 'anonymous',
-): Promise<PublicArtifactGuestShareResolution> {
-    if (!checkRateLimit(rateLimitClientKey)) {
-        return buildFailedPublicResolution('RATE_LIMITED', 'Too many guest share resolution requests. Please wait before retrying.');
+    systemUser: UserInfo,
+): Promise<{ artifactTypeName?: string; driverClass?: string }> {
+    if (!typeId) {
+        return {};
+    }
+    await ArtifactMetadataEngine.Instance.Config(false, systemUser, provider);
+    const findType = (id: string) =>
+        ArtifactMetadataEngine.Instance.ArtifactTypes.find((t) => UUIDsEqual(t.ID, id));
+
+    const direct = findType(typeId);
+    if (!direct) {
+        return {};
+    }
+    let driverClass = direct.DriverClass ?? undefined;
+    let cursor = direct;
+    let guard = 0;
+    while (!driverClass && cursor.ParentID && guard < 6) {
+        const parent = findType(cursor.ParentID);
+        if (!parent) {
+            break;
+        }
+        driverClass = parent.DriverClass ?? undefined;
+        cursor = parent;
+        guard += 1;
+    }
+    return {
+        artifactTypeName: direct.Name ?? undefined,
+        driverClass,
+    };
+}
+
+function scrubWorkbookEmbeddedInlineJson(content: string): string {
+    const trimmed = content.trim();
+    if (!trimmed.startsWith('{')) {
+        return content;
+    }
+    try {
+        const parsed = JSON.parse(trimmed) as {
+            Worksheets?: Array<{
+                EmbeddedArtifacts?: Array<{
+                    FrozenSnapshot?: FrozenBlockSnapshot | null;
+                    InlineContentJSON?: string | null;
+                }>;
+            }>;
+        };
+        if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.Worksheets)) {
+            return content;
+        }
+        let modified = false;
+        for (const sheet of parsed.Worksheets) {
+            for (const emb of sheet.EmbeddedArtifacts ?? []) {
+                if (emb.FrozenSnapshot && Object.prototype.hasOwnProperty.call(emb, 'InlineContentJSON')) {
+                    delete emb.InlineContentJSON;
+                    modified = true;
+                }
+            }
+        }
+        return modified ? JSON.stringify(parsed) : content;
+    } catch {
+        return content;
+    }
+}
+
+function resolveDefaultServerPublicUrl(): string {
+    const rawPublic = configInfo.publicUrl?.trim();
+    if (rawPublic) {
+        return rawPublic.replace(/\/$/, '');
+    }
+    const base = (configInfo.baseUrl?.trim() || 'http://localhost').replace(/\/$/, '');
+    const port = configInfo.graphqlPort;
+    return port ? `${base}:${port}` : base;
+}
+
+/**
+ * Resolves the concrete Explorer frontend `/guest/artifact` redirect URL for Magic Link guest shares.
+ * Rejects wildcard CORS configs and unconfigured deployments with `CONFIG_ERROR` rather than
+ * minting a broken link that renders raw JSON in a recipient's browser.
+ */
+function resolveGuestShareRedirectUrl(requestOrigin?: string): string {
+    const explicitExplorer = (
+        configInfo.magicLink?.explorerUrl?.trim() ||
+        process.env.MJ_MAGIC_LINK_EXPLORER_URL?.trim() ||
+        ''
+    ).replace(/\/$/, '');
+    if (explicitExplorer) {
+        return `${explicitExplorer}/guest/artifact`;
     }
 
-    const tokenCheck = verifyTokenClaims(token);
-    if (!tokenCheck.Valid || !tokenCheck.Claims) {
-        return buildFailedPublicResolution(
-            tokenCheck.Expired ? 'EXPIRED' : 'INVALID_TOKEN',
-            tokenCheck.Reason ?? 'Invalid guest share token.',
+    const concreteAllowedOrigins = [
+        ...(configInfo.magicLink?.allowedRedirectOrigins ?? []),
+        ...(configInfo.cors?.allowedOrigins ?? []),
+    ]
+        .map((origin) => origin?.trim() ?? '')
+        .filter((origin) => origin.length > 0 && origin !== '*');
+
+    const candidateOrigin = requestOrigin?.trim().replace(/\/$/, '') ?? '';
+    if (candidateOrigin) {
+        const candidateRedirect = `${candidateOrigin}/guest/artifact`;
+        if (IsMagicLinkRedirectUrlAllowed(candidateRedirect, concreteAllowedOrigins)) {
+            return candidateRedirect;
+        }
+    }
+
+    throw new RemoteOperationError(
+        'CONFIG_ERROR',
+        'External guest sharing requires magicLink.explorerUrl, MJ_MAGIC_LINK_EXPLORER_URL, or a matching origin in magicLink.allowedRedirectOrigins / non-wildcard cors.allowedOrigins so redeemed links redirect to /guest/artifact.',
+    );
+}
+
+function resolveGuestShareMagicLinkService(): MagicLinkService {
+    const existing = MagicLinkService.GetActiveInstance();
+    if (existing) {
+        return existing;
+    }
+    const publicUrl = resolveDefaultServerPublicUrl();
+    const service = new MagicLinkService(publicUrl, configInfo.magicLink);
+    MagicLinkService.SetActiveInstance(service);
+    RegisterMagicLinkAuthProvider(publicUrl, configInfo.magicLink);
+    return service;
+}
+
+async function resolveResourceShareScopeTargets(
+    provider: IMetadataProvider,
+    systemUser: UserInfo,
+): Promise<{ applicationId: string; roleId: string; resourceTypeId: string }> {
+    const baselineName = (configInfo.magicLink?.restrictedRoleName || 'Magic Link Baseline').trim().toLowerCase();
+    const roleMatch = provider.Roles.find((r) => r.Name.trim().toLowerCase() === baselineName);
+    const roleId = roleMatch?.ID ?? MAGIC_LINK_BASELINE_ROLE_FALLBACK_ID;
+
+    const appMatch =
+        provider.Applications.find((a) => a.Name.trim().toLowerCase() === 'chat') ??
+        provider.Applications.find((a) => a.Name.trim().toLowerCase() === 'library') ??
+        provider.Applications[0];
+    if (!appMatch?.ID) {
+        throw new RemoteOperationError(
+            'CONFIG_ERROR',
+            'No MJ Application metadata is available to bind Magic Link resource-share invite scope.',
         );
     }
 
-    const claims = tokenCheck.Claims;
-    const tokenHash = computeTokenHash(token.trim());
+    let resourceTypeId = ARTIFACTS_RESOURCE_TYPE_FALLBACK_ID;
+    try {
+        const rv = RunView.FromMetadataProvider(provider);
+        const rtRes = await rv.RunView<{ ID?: string }>(
+            {
+                EntityName: 'MJ: Resource Types',
+                ExtraFilter: "Name='Artifacts'",
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            systemUser,
+        );
+        const foundId = rtRes.Success ? rtRes.Results?.[0]?.ID : undefined;
+        if (foundId && IsValidUUID(foundId)) {
+            resourceTypeId = foundId;
+        }
+    } catch {
+        // Fall back to canonical seed Artifacts ResourceType ID when tests mock RunView without Resource Types
+    }
+
+    return {
+        applicationId: appMatch.ID,
+        roleId,
+        resourceTypeId,
+    };
+}
+
+/**
+ * Resolves and validates a Frozen external guest artifact snapshot for an authenticated
+ * Magic Link `anonymous` `resource-share` session (`ResourceType === 'Artifacts'`).
+ * Enforces invite status/expiry, active inviter check, viewer allowlist, Frozen-only invariants,
+ * and scrubs sensitive config keys. Never writes access counters directly (redemptions audit per use).
+ */
+export async function ResolveGuestArtifactSnapshotForSession(
+    userPayload: UserPayload | undefined,
+    provider: IMetadataProvider,
+    clientIp?: string,
+): Promise<PublicArtifactGuestShareResolution> {
+    const sessionUser = userPayload?.userRecord as UserInfo | undefined;
+    if (!userPayload || !sessionUser) {
+        return buildFailedPublicResolution('ACCESS_DENIED', 'Authentication is required to view a guest artifact share.');
+    }
+    const scope = sessionUser.MagicLinkScope;
+    if (!sessionUser.IsMagicLinkAnonymous || !scope || scope.ResourceType !== 'Artifacts' || !IsValidUUID(scope.ResourceID)) {
+        return buildFailedPublicResolution(
+            'ACCESS_DENIED',
+            'A Magic Link anonymous resource-share session scoped to Artifacts is required.',
+        );
+    }
+
+    const artifactId = scope.ResourceID.trim();
+    const matchingScopeClaim = (userPayload.magicLinkScopes ?? []).find(
+        (entry) =>
+            entry.resourceType === 'Artifacts' &&
+            entry.resourceId &&
+            UUIDsEqual(entry.resourceId, artifactId) &&
+            IsValidUUID(entry.inviteId),
+    );
+    const inviteId = matchingScopeClaim?.inviteId?.trim();
+    if (!inviteId || !IsValidUUID(inviteId)) {
+        return buildFailedPublicResolution(
+            'INVALID_TOKEN',
+            'Magic Link session token is missing a valid inviteId binding for this artifact.',
+        );
+    }
+
+    const rateKey = BuildGuestShareRateLimitKey(clientIp, inviteId, `${sessionUser.ID}:${inviteId}`);
+    if (!checkRateLimit(rateKey)) {
+        return buildFailedPublicResolution('RATE_LIMITED', 'Too many guest share resolution requests. Please wait before retrying.');
+    }
+
     let systemUser: UserInfo;
     try {
         systemUser = resolveSystemUser();
@@ -840,50 +951,84 @@ export async function ResolvePublicArtifactGuestShareData(
     const rv = RunView.FromMetadataProvider(provider);
 
     try {
-        const linkRes = await rv.RunView<Record<string, string | number | boolean | Date | null>>(
-            {
-                EntityName: 'MJ: Artifact Guest Share Links',
-                ExtraFilter: `TokenHash='${EscapeSQLString(tokenHash)}' AND ID='${EscapeSQLString(claims.lid)}'`,
-                MaxRows: 1,
-                ResultType: 'simple',
-            },
+        const [inviteRes, linkRes] = await rv.RunViews<Record<string, string | number | boolean | Date | null>>(
+            [
+                {
+                    EntityName: 'MJ: Magic Link Invites',
+                    ExtraFilter: `ID='${EscapeSQLString(inviteId)}'`,
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: Artifact Guest Share Links',
+                    ExtraFilter: `MagicLinkInviteID='${EscapeSQLString(inviteId)}' AND ArtifactID='${EscapeSQLString(artifactId)}'`,
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+            ],
             systemUser,
         );
 
+        const inviteRow = inviteRes.Success ? inviteRes.Results?.[0] : undefined;
+        if (!inviteRow) {
+            return buildFailedPublicResolution('NOT_FOUND', 'Guest share invite could not be found.');
+        }
+
+        if (
+            String(inviteRow['Kind'] ?? '') !== 'resource-share' ||
+            String(inviteRow['IdentityMode'] ?? '') !== 'anonymous' ||
+            !UUIDsEqual(String(inviteRow['ResourceID'] ?? ''), artifactId)
+        ) {
+            return buildFailedPublicResolution('INVALID_TOKEN', 'Magic Link invite does not authorize this artifact share.');
+        }
+
+        const status = String(inviteRow['Status'] ?? '');
+        if (status === 'Revoked') {
+            return buildFailedPublicResolution('REVOKED', 'This guest share link has been revoked.');
+        }
+        if (status === 'Expired') {
+            return buildFailedPublicResolution('EXPIRED', 'Guest share link has expired.');
+        }
+
+        const dbExpiresRaw = inviteRow['ExpiresAt'];
+        let dbExpiresMs = Number.NaN;
+        if (dbExpiresRaw != null) {
+            dbExpiresMs = dbExpiresRaw instanceof Date ? dbExpiresRaw.getTime() : Date.parse(String(dbExpiresRaw));
+            if (Number.isFinite(dbExpiresMs) && dbExpiresMs <= Date.now()) {
+                return buildFailedPublicResolution('EXPIRED', 'Guest share link has expired.');
+            }
+        }
+
+        const inviterId = String(inviteRow['CreatedByUserID'] ?? '');
+        if (UserCache.Instance.Users.length > 0 && IsValidUUID(inviterId)) {
+            const inviter = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, inviterId));
+            if (!inviter || !inviter.IsActive) {
+                return buildFailedPublicResolution('REVOKED', 'The user who issued this share link is no longer active.');
+            }
+        }
+
         const linkRow = linkRes.Success ? linkRes.Results?.[0] : undefined;
         if (!linkRow) {
-            return buildFailedPublicResolution('NOT_FOUND', 'Guest share link could not be found.');
+            return buildFailedPublicResolution('NOT_FOUND', 'Guest share link binding could not be found.');
         }
 
         const linkArtifactId = String(linkRow['ArtifactID'] ?? '');
         const linkVersionId = String(linkRow['ArtifactVersionID'] ?? '');
-        if (!UUIDsEqual(linkArtifactId, claims.aid) || !UUIDsEqual(linkVersionId, claims.vid)) {
-            return buildFailedPublicResolution('INVALID_TOKEN', 'Guest share token does not match stored link metadata.');
-        }
-
-        if (linkRow['RevokedAt'] != null && String(linkRow['RevokedAt']).trim().length > 0) {
-            return buildFailedPublicResolution('REVOKED', 'This guest share link has been revoked.');
-        }
-
-        const dbExpiresRaw = linkRow['ExpiresAt'];
-        if (dbExpiresRaw != null) {
-            const dbExpiresMs = dbExpiresRaw instanceof Date ? dbExpiresRaw.getTime() : Date.parse(String(dbExpiresRaw));
-            if (Number.isFinite(dbExpiresMs) && dbExpiresMs <= Date.now()) {
-                return buildFailedPublicResolution('EXPIRED', 'Guest share link has expired.');
-            }
+        if (!UUIDsEqual(linkArtifactId, artifactId) || !IsValidUUID(linkVersionId)) {
+            return buildFailedPublicResolution('INVALID_TOKEN', 'Guest share link metadata is invalid.');
         }
 
         const [verRes, artRes] = await rv.RunViews<Record<string, string | number | boolean | Date | null>>(
             [
                 {
                     EntityName: 'MJ: Artifact Versions',
-                    ExtraFilter: `ID='${EscapeSQLString(claims.vid)}' AND ArtifactID='${EscapeSQLString(claims.aid)}'`,
+                    ExtraFilter: `ID='${EscapeSQLString(linkVersionId)}' AND ArtifactID='${EscapeSQLString(artifactId)}'`,
                     MaxRows: 1,
                     ResultType: 'simple',
                 },
                 {
                     EntityName: 'MJ: Artifacts',
-                    ExtraFilter: `ID='${EscapeSQLString(claims.aid)}'`,
+                    ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
                     MaxRows: 1,
                     ResultType: 'simple',
                 },
@@ -901,6 +1046,18 @@ export async function ResolvePublicArtifactGuestShareData(
         const configuration = versionRow['Configuration'] != null ? String(versionRow['Configuration']) : '{}';
         const contentMode = versionRow['ContentMode'] != null ? String(versionRow['ContentMode']) : null;
 
+        const typeId = artRow?.['TypeID'] != null ? String(artRow['TypeID']) : '';
+        const resolvedType = await resolveArtifactTypeDetails(typeId, provider, systemUser);
+        const artifactTypeName =
+            resolvedType.artifactTypeName ??
+            (artRow?.['Type'] != null ? String(artRow['Type']) : undefined);
+        const driverClass = resolvedType.driverClass;
+
+        const typeRejection = IsGuestShareSupportedArtifactType(artifactTypeName, driverClass, contentMode);
+        if (typeRejection) {
+            return buildFailedPublicResolution('FROZEN_REQUIRED', typeRejection);
+        }
+
         const inspection = InspectFrozenGuestShareContent(content, configuration, contentMode);
         if (inspection.UnfrozenReason) {
             return buildFailedPublicResolution(
@@ -909,49 +1066,31 @@ export async function ResolvePublicArtifactGuestShareData(
             );
         }
 
-        await ArtifactMetadataEngine.Instance.Config(false, systemUser, provider);
-        const typeId = artRow?.['TypeID'] != null ? String(artRow['TypeID']) : '';
-        const typeMeta = typeId
-            ? ArtifactMetadataEngine.Instance.ArtifactTypes.find((t) => UUIDsEqual(t.ID, typeId))
-            : undefined;
-        const artifactTypeName = typeMeta?.Name ?? (artRow?.['Type'] != null ? String(artRow['Type']) : undefined);
-        const driverClass = typeMeta?.DriverClass ?? undefined;
-
         const title =
             (versionRow['Name'] != null && String(versionRow['Name']).trim().length > 0
                 ? String(versionRow['Name'])
                 : undefined) ??
             (artRow?.['Name'] != null ? String(artRow['Name']) : 'Shared Artifact');
 
-        // Best-effort access tracking via SystemUser
-        try {
-            const linkEntity = await provider.GetEntityObject<MJArtifactGuestShareLinkEntity>(
-                'MJ: Artifact Guest Share Links',
-                systemUser,
-            );
-            if (await linkEntity.Load(String(linkRow['ID']))) {
-                linkEntity.AccessCount = Number(linkEntity.AccessCount ?? 0) + 1;
-                linkEntity.LastAccessedAt = new Date();
-                await linkEntity.Save();
-            }
-        } catch (err) {
-            LogError(`Failed to update guest share link access telemetry for ${claims.lid}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-
-        const expiresIso = new Date(claims.exp).toISOString();
+        const expiresIso = Number.isFinite(dbExpiresMs)
+            ? new Date(dbExpiresMs).toISOString()
+            : userPayload.tokenExpiresAtMs
+              ? new Date(userPayload.tokenExpiresAtMs).toISOString()
+              : undefined;
         const label = linkRow['Label'] != null ? String(linkRow['Label']) : undefined;
 
         return {
             Success: true,
             Valid: true,
-            ArtifactID: claims.aid,
+            LinkID: String(linkRow['ID']),
+            ArtifactID: artifactId,
             ArtifactName: artRow?.['Name'] != null ? String(artRow['Name']) : title,
             Title: title,
             ArtifactTypeName: artifactTypeName,
             DriverClass: driverClass,
-            VersionID: claims.vid,
+            VersionID: linkVersionId,
             VersionNumber: Number(versionRow['VersionNumber'] ?? 1),
-            Content: content,
+            Content: scrubWorkbookEmbeddedInlineJson(content),
             Configuration: SanitizeGuestShareConfiguration(configuration),
             FrozenProvenance: inspection.FrozenProvenance,
             ExpiresAt: expiresIso,
@@ -961,8 +1100,8 @@ export async function ResolvePublicArtifactGuestShareData(
         };
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        LogError(`ResolvePublicArtifactGuestShareData failed: ${msg}`);
-        return buildFailedPublicResolution('INTERNAL_ERROR', 'Failed to resolve guest share link.');
+        LogError(`ResolveGuestArtifactSnapshotForSession failed: ${msg}`);
+        return buildFailedPublicResolution('INTERNAL_ERROR', 'Failed to resolve guest share snapshot.');
     }
 }
 
@@ -1001,29 +1140,56 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
         input: CreateGuestShareLinkInput,
         provider: IMetadataProvider,
         user: UserInfo,
+        context?: RemoteOpServerContext,
     ): Promise<CreateGuestShareLinkOutput> {
         const systemUser = resolveSystemUser();
         const rv = RunView.FromMetadataProvider(provider);
         const extraFilter = input.VersionID
             ? `ID='${EscapeSQLString(input.VersionID)}' AND ArtifactID='${EscapeSQLString(input.ArtifactID)}'`
             : `ArtifactID='${EscapeSQLString(input.ArtifactID)}'`;
-        const res = await rv.RunView<MJArtifactVersionEntity>(
-            {
-                EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: extraFilter,
-                OrderBy: 'VersionNumber DESC',
-                MaxRows: 1,
-                ResultType: 'entity_object',
-            },
+        const artifactId = input.ArtifactID.trim();
+        const normalizedArtifactId = NormalizeUUID(artifactId);
+
+        const [verRes, artRes] = await rv.RunViews<MJArtifactVersionEntity | MJArtifactEntity>(
+            [
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: extraFilter,
+                    OrderBy: 'VersionNumber DESC',
+                    MaxRows: 1,
+                    ResultType: 'entity_object',
+                },
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
+                    MaxRows: 1,
+                    ResultType: 'entity_object',
+                },
+            ],
             systemUser,
         );
 
-        const version = res.Success ? res.Results?.[0] : undefined;
+        const version = verRes.Success ? (verRes.Results?.[0] as MJArtifactVersionEntity | undefined) : undefined;
         if (!version) {
             throw new RemoteOperationError(
                 'NOT_FOUND',
                 `Target version not found for artifact '${input.ArtifactID}'.`,
             );
+        }
+        const artifact = artRes.Success ? (artRes.Results?.[0] as MJArtifactEntity | undefined) : undefined;
+
+        const { artifactTypeName, driverClass } = await resolveArtifactTypeDetails(
+            artifact?.TypeID ?? null,
+            provider,
+            systemUser,
+        );
+        const typeRejection = IsGuestShareSupportedArtifactType(
+            artifactTypeName,
+            driverClass,
+            version.ContentMode,
+        );
+        if (typeRejection) {
+            throw new RemoteOperationError('FROZEN_REQUIRED', typeRejection);
         }
 
         const unfrozenReason = FindUnfrozenLiveContentReason(
@@ -1040,53 +1206,72 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
 
         const rawHours = Number.isFinite(input.ExpiresInHours) ? Number(input.ExpiresInHours) : 168;
         const expiresInHours = Math.max(MIN_GUEST_SHARE_HOURS, Math.min(MAX_GUEST_SHARE_HOURS, rawHours));
-        const expiresAtMs = Date.now() + expiresInHours * 3600_000;
-        const expiresAtDate = new Date(expiresAtMs);
-        const expiresAtIso = expiresAtDate.toISOString();
-        const linkId = randomUUID();
-        const normalizedArtifactId = NormalizeUUID(input.ArtifactID);
-        const normalizedVersionId = NormalizeUUID(version.ID);
-
-        const token = signTokenClaims({
-            v: 1,
-            lid: NormalizeUUID(linkId),
-            aid: normalizedArtifactId,
-            vid: normalizedVersionId,
-            mode: 'Frozen',
-            exp: expiresAtMs,
-        });
-        const tokenHash = computeTokenHash(token);
         const sanitizedLabel = input.Label ? input.Label.trim().slice(0, MAX_LABEL_LENGTH) : null;
 
+        const mlService = resolveGuestShareMagicLinkService();
+        const { applicationId, roleId, resourceTypeId } = await resolveResourceShareScopeTargets(
+            provider,
+            systemUser,
+        );
+        const redirectUrl = resolveGuestShareRedirectUrl(context?.requestOrigin);
+
+        const inviteRes = await mlService.CreateResourceShareInvite(
+            {
+                Kind: 'resource-share',
+                IdentityMode: 'anonymous',
+                ApplicationId: applicationId,
+                RoleId: roleId,
+                ResourceTypeID: resourceTypeId,
+                ResourceID: normalizedArtifactId,
+                ExpiresInHours: expiresInHours,
+                MaxUses: 1000,
+                SendEmail: false,
+                RedirectUrl: redirectUrl,
+            },
+            user,
+            provider,
+        );
+        if (!inviteRes.success || !inviteRes.inviteId || !inviteRes.rawToken) {
+            throw new RemoteOperationError(
+                'INVITE_CREATE_FAILED',
+                inviteRes.error || 'Failed to issue Magic Link resource-share invite.',
+            );
+        }
+
+        const linkId = randomUUID();
         const linkEntity = await provider.GetEntityObject<MJArtifactGuestShareLinkEntity>(
             'MJ: Artifact Guest Share Links',
             systemUser,
         );
         linkEntity.NewRecord();
         linkEntity.ID = linkId;
+        linkEntity.MagicLinkInviteID = inviteRes.inviteId;
         linkEntity.ArtifactID = input.ArtifactID;
         linkEntity.ArtifactVersionID = version.ID;
         linkEntity.CreatedByUserID = user.ID;
-        linkEntity.TokenHash = tokenHash;
         linkEntity.Label = sanitizedLabel;
-        linkEntity.ExpiresAt = expiresAtDate;
 
         const saved = await linkEntity.Save();
         if (!saved) {
+            await mlService.RevokeResourceShareInvite(inviteRes.inviteId, user, provider).catch(() => undefined);
             throw new RemoteOperationError(
                 'PERSIST_FAILED',
                 linkEntity.LatestResult?.CompleteMessage || 'Failed to persist guest share link.',
             );
         }
 
+        const expiresAtIso =
+            inviteRes.expiresAt ?? new Date(Date.now() + expiresInHours * 3600_000).toISOString();
+
         await WriteArtifactComplianceAudit(provider, user, {
             AuditLogTypeName: 'Artifact Guest Share Link',
             ArtifactID: input.ArtifactID,
             ArtifactVersionID: version.ID,
-            Summary: `Created Frozen guest share link ${linkId} (expires ${expiresAtIso})`,
+            Summary: `Created Frozen guest share link ${linkId} (MagicLinkInvite ${inviteRes.inviteId}, expires ${expiresAtIso})`,
             Details: {
                 action: 'Create',
                 linkId,
+                magicLinkInviteId: inviteRes.inviteId,
                 label: sanitizedLabel ?? undefined,
                 expiresAt: expiresAtIso,
                 shareMode: 'Frozen',
@@ -1095,13 +1280,15 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
 
         return {
             LinkID: linkId,
-            Token: token,
-            ShareUrlPath: `/guest/artifact/${encodeURIComponent(token)}`,
+            MagicLinkInviteID: inviteRes.inviteId,
+            Token: inviteRes.rawToken,
+            ShareUrlPath: inviteRes.redemptionUrl ?? `/magic-link/redeem?token=${encodeURIComponent(inviteRes.rawToken)}`,
             ArtifactID: input.ArtifactID,
             VersionID: version.ID,
             VersionNumber: version.VersionNumber,
             ExpiresAt: expiresAtIso,
             ShareMode: 'Frozen',
+            ...(sanitizedLabel ? { Label: sanitizedLabel } : {}),
         };
     }
 }
@@ -1152,84 +1339,35 @@ export class RevokeGuestShareLinkServerOperation extends RevokeGuestShareLinkOpe
             };
         }
 
-        if (!linkEntity.RevokedAt) {
-            linkEntity.RevokedAt = new Date();
-            linkEntity.RevokedByUserID = user.ID;
-            const saved = await linkEntity.Save();
-            if (!saved) {
-                throw new RemoteOperationError(
-                    'PERSIST_FAILED',
-                    linkEntity.LatestResult?.CompleteMessage || 'Failed to revoke guest share link.',
-                );
-            }
+        const mlService = resolveGuestShareMagicLinkService();
+        const revokeRes = await mlService.RevokeResourceShareInvite(
+            linkEntity.MagicLinkInviteID,
+            user,
+            provider,
+        );
+        if (!revokeRes.success && revokeRes.errorCode !== 'not_found') {
+            throw new RemoteOperationError(
+                'PERSIST_FAILED',
+                revokeRes.error || 'Failed to revoke backing Magic Link invite.',
+            );
         }
 
         await WriteArtifactComplianceAudit(provider, user, {
             AuditLogTypeName: 'Artifact Guest Share Link',
             ArtifactID: input.ArtifactID,
             ArtifactVersionID: linkEntity.ArtifactVersionID,
-            Summary: `Revoked guest share link ${input.LinkID}`,
+            Summary: `Revoked guest share link ${input.LinkID} (MagicLinkInvite ${linkEntity.MagicLinkInviteID})`,
             Details: {
                 action: 'Revoke',
                 linkId: input.LinkID,
+                magicLinkInviteId: linkEntity.MagicLinkInviteID,
             },
         });
 
         return {
             Revoked: true,
             LinkID: linkEntity.ID,
-        };
-    }
-}
-
-/**
- * Server-side Remote Operation implementing `Artifact.ResolveGuestShareLink` (`§6.3`, `NW-1`).
- */
-@RegisterClass(BaseRemotableOperation, ARTIFACT_RESOLVE_GUEST_SHARE_LINK_KEY)
-export class ResolveGuestShareLinkServerOperation extends ResolveGuestShareLinkOperation {
-    protected override async Authorize(
-        _input: ResolveGuestShareLinkInput,
-        user: UserInfo,
-    ): Promise<boolean> {
-        if (!user) {
-            throw new RemoteOperationError('UNAUTHORIZED', 'Authentication required.');
-        }
-        return true;
-    }
-
-    protected override async InternalExecute(
-        input: ResolveGuestShareLinkInput,
-        provider: IMetadataProvider,
-        user: UserInfo,
-    ): Promise<ResolveGuestShareLinkOutput> {
-        const resolved = await ResolvePublicArtifactGuestShareData(
-            input.Token,
-            provider,
-            `user:${user.ID}`,
-        );
-        if (!resolved.Valid) {
-            return {
-                Valid: false,
-                ShareMode: 'Frozen',
-                ReadOnly: true,
-                Reason: resolved.ErrorMessage ?? 'Invalid guest share token.',
-            };
-        }
-
-        return {
-            Valid: true,
-            ArtifactID: resolved.ArtifactID,
-            VersionID: resolved.VersionID,
-            VersionNumber: resolved.VersionNumber,
-            Title: resolved.Title,
-            ArtifactTypeName: resolved.ArtifactTypeName,
-            DriverClass: resolved.DriverClass,
-            Content: resolved.Content,
-            Configuration: resolved.Configuration,
-            FrozenProvenance: resolved.FrozenProvenance,
-            ExpiresAt: resolved.ExpiresAt,
-            ShareMode: 'Frozen',
-            ReadOnly: true,
+            RevokedAt: new Date().toISOString(),
         };
     }
 }
@@ -1237,19 +1375,21 @@ export class ResolveGuestShareLinkServerOperation extends ResolveGuestShareLinkO
 export function LoadArtifactGuestShareOperations(): void {
     void CreateGuestShareLinkServerOperation;
     void RevokeGuestShareLinkServerOperation;
-    void ResolveGuestShareLinkServerOperation;
 }
 
 export function ResolveGuestShareProviderFallback(): IMetadataProvider {
-    return Metadata.Provider; // global-provider-ok: public guest share route has no authenticated per-request provider
+    return Metadata.Provider; // global-provider-ok: fallback for unit tests without GraphQL provider context
 }
 
 export interface ArtifactGuestShareLinkSummary {
     ID: string;
+    MagicLinkInviteID?: string | null;
     ArtifactID: string;
     ArtifactVersionID?: string | null;
     Label?: string | null;
     ShareMode: string;
+    Status?: string | null;
+    AccessCount?: number | null;
     ExpiresAt?: string | null;
     RevokedAt?: string | null;
     CreatedAt?: string | null;
@@ -1273,7 +1413,8 @@ function toIsoStringOrNull(value: Date | string | null | undefined): string | nu
 
 /**
  * Lists active (non-revoked) guest share links for an artifact on behalf of an authorized
- * sharer/owner (`CanShare || CanDelete`), returning only non-secret summary fields (`TokenHash` omitted).
+ * sharer/owner (`CanShare || CanDelete`), joining status/expiry/use-count metadata from
+ * their backing `MJ: Magic Link Invites`.
  */
 export async function ListArtifactGuestShareLinksForOwner(
     artifactId: string,
@@ -1314,8 +1455,8 @@ export async function ListArtifactGuestShareLinksForOwner(
     const result = await rv.RunView<MJArtifactGuestShareLinkEntityType>(
         {
             EntityName: 'MJ: Artifact Guest Share Links',
-            Fields: ['ID', 'ArtifactID', 'ArtifactVersionID', 'Label', 'ExpiresAt', 'RevokedAt', '__mj_CreatedAt'],
-            ExtraFilter: `ArtifactID='${EscapeSQLString(trimmedArtifactId)}' AND RevokedAt IS NULL`,
+            Fields: ['ID', 'MagicLinkInviteID', 'ArtifactID', 'ArtifactVersionID', 'Label', '__mj_CreatedAt'],
+            ExtraFilter: `ArtifactID='${EscapeSQLString(trimmedArtifactId)}'`,
             OrderBy: '__mj_CreatedAt DESC',
             ResultType: 'simple',
         },
@@ -1329,18 +1470,58 @@ export async function ListArtifactGuestShareLinksForOwner(
         };
     }
 
-    const links: ArtifactGuestShareLinkSummary[] = (result.Results ?? [])
-        .filter((row) => typeof row.ID === 'string' && row.ID.length > 0)
-        .map((row) => ({
+    const linkRows = (result.Results ?? []).filter((row) => typeof row.ID === 'string' && row.ID.length > 0);
+    const inviteIds = Array.from(
+        new Set(
+            linkRows
+                .map((row) => (typeof row.MagicLinkInviteID === 'string' ? row.MagicLinkInviteID.trim() : ''))
+                .filter((id) => IsValidUUID(id)),
+        ),
+    );
+
+    const inviteMap = new Map<string, MJMagicLinkInviteEntity>();
+    if (inviteIds.length > 0) {
+        const inClause = inviteIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+        const inviteRes = await rv.RunView<MJMagicLinkInviteEntity>(
+            {
+                EntityName: 'MJ: Magic Link Invites',
+                Fields: ['ID', 'Status', 'ExpiresAt', 'UseCount', '__mj_UpdatedAt'],
+                ExtraFilter: `ID IN (${inClause})`,
+                ResultType: 'simple',
+            },
+            systemUser,
+        );
+        if (inviteRes.Success && inviteRes.Results) {
+            for (const inv of inviteRes.Results) {
+                if (inv?.ID) {
+                    inviteMap.set(NormalizeUUID(inv.ID), inv);
+                }
+            }
+        }
+    }
+
+    const links: ArtifactGuestShareLinkSummary[] = [];
+    for (const row of linkRows) {
+        const invite = row.MagicLinkInviteID
+            ? inviteMap.get(NormalizeUUID(row.MagicLinkInviteID))
+            : undefined;
+        if (invite && invite.Status === 'Revoked') {
+            continue;
+        }
+        links.push({
             ID: row.ID,
+            MagicLinkInviteID: row.MagicLinkInviteID ?? null,
             ArtifactID: row.ArtifactID ?? trimmedArtifactId,
             ArtifactVersionID: row.ArtifactVersionID ?? null,
             Label: row.Label ?? null,
             ShareMode: 'Frozen',
-            ExpiresAt: toIsoStringOrNull(row.ExpiresAt),
-            RevokedAt: toIsoStringOrNull(row.RevokedAt),
+            Status: invite?.Status ?? 'Active',
+            AccessCount: typeof invite?.UseCount === 'number' ? invite.UseCount : 0,
+            ExpiresAt: toIsoStringOrNull(invite?.ExpiresAt),
+            RevokedAt: null,
             CreatedAt: toIsoStringOrNull(row.__mj_CreatedAt),
-        }));
+        });
+    }
 
     return {
         Success: true,

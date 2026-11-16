@@ -761,7 +761,7 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
 
         const gslParams: RunViewParams = {
             EntityName: 'MJ: Artifact Guest Share Links',
-            Fields: ['ID', 'TokenHash'],
+            Fields: ['ID', 'MagicLinkInviteID'],
             MaxRows: 1,
             ResultType: 'simple'
         };
@@ -771,8 +771,8 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
             {
                 Success: true,
                 Results: [
-                    { ID: LINK_ALLOWED_ID, ArtifactID: ART_ALLOWED_ID, TokenHash: 'secret-hash' },
-                    { ID: LINK_DENIED_ID, ArtifactID: ART_DENIED_ID, TokenHash: 'other-secret' }
+                    { ID: LINK_ALLOWED_ID, ArtifactID: ART_ALLOWED_ID, MagicLinkInviteID: 'invite-allowed-1' },
+                    { ID: LINK_DENIED_ID, ArtifactID: ART_DENIED_ID, MagicLinkInviteID: 'invite-denied-2' }
                 ],
                 RowCount: 2,
                 TotalRowCount: 50,
@@ -782,7 +782,7 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
             ownerUser,
             provider
         );
-        expect(gslResult.Results).toEqual([{ ID: LINK_ALLOWED_ID, TokenHash: '' }]);
+        expect(gslResult.Results).toEqual([{ ID: LINK_ALLOWED_ID, MagicLinkInviteID: 'invite-allowed-1' }]);
         expect(gslResult.TotalRowCount).toBe(1);
     });
 

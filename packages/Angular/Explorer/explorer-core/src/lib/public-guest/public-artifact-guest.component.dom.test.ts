@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ComponentFixture } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +7,6 @@ import { IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { RenderComponentFixture, Query } from '@memberjunction/ng-test-utils';
-import { MJ_PUBLIC_API_BASE_URL } from '@memberjunction/ng-auth-services';
 import {
   BuildPreVerifiedFrozenSnapshotsMap,
   DescribeGuestShareError,
@@ -45,8 +44,6 @@ class StubArtifactTypePluginViewerComponent {
   @Output() public PluginLoaded = new EventEmitter<void>();
 }
 
-const VALID_TOKEN = 'guest_tok_abc123';
-
 function makeValidSharePayload(overrides: Partial<PublicArtifactGuestShareResult> = {}): PublicArtifactGuestShareResult {
   return {
     Success: true,
@@ -72,6 +69,23 @@ function makeValidSharePayload(overrides: Partial<PublicArtifactGuestShareResult
   };
 }
 
+function makeMockGraphQLProvider(
+  resolveResult: PublicArtifactGuestShareResult | null | Error,
+): GraphQLDataProvider & { ExecuteGQL: ReturnType<typeof vi.fn> } {
+  const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider & {
+    ExecuteGQL: ReturnType<typeof vi.fn>;
+  };
+  provider.ExecuteGQL = vi.fn(async () => {
+    if (resolveResult instanceof Error) {
+      throw resolveResult;
+    }
+    return {
+      ResolveGuestArtifactSnapshot: resolveResult,
+    };
+  });
+  return provider;
+}
+
 async function settle(fixture: ComponentFixture<PublicArtifactGuestComponent>): Promise<void> {
   for (let i = 0; i < 6; i++) {
     await Promise.resolve();
@@ -80,19 +94,13 @@ async function settle(fixture: ComponentFixture<PublicArtifactGuestComponent>): 
 }
 
 async function renderGuestPage(options: {
-  paramMap?: Record<string, string>;
   queryParamMap?: Record<string, string>;
   provider?: IMetadataProvider;
-  apiBaseUrl?: string;
   viewerFallbackOnly?: boolean;
 }): Promise<ComponentFixture<PublicArtifactGuestComponent>> {
-  const paramSnapshot = {
-    get: (k: string) => options.paramMap?.[k] ?? null,
-  };
   const querySnapshot = {
     get: (k: string) => options.queryParamMap?.[k] ?? null,
   };
-  const paramMapSubject = new BehaviorSubject(paramSnapshot);
   const queryParamMapSubject = new BehaviorSubject(querySnapshot);
 
   const fixture = RenderComponentFixture(PublicArtifactGuestComponent, {
@@ -101,17 +109,14 @@ async function renderGuestPage(options: {
       {
         provide: ActivatedRoute,
         useValue: {
-          paramMap: paramMapSubject.asObservable(),
           queryParamMap: queryParamMapSubject.asObservable(),
           snapshot: {
-            paramMap: paramSnapshot,
             queryParamMap: querySnapshot,
           },
         },
       },
     ],
     inputs: {
-      ApiBaseUrl: options.apiBaseUrl ?? 'https://api.example.org',
       ViewerFallbackOnly: options.viewerFallbackOnly ?? false,
       ...(options.provider ? { Provider: options.provider } : {}),
     },
@@ -121,10 +126,11 @@ async function renderGuestPage(options: {
   return fixture;
 }
 
-describe('PublicArtifactGuestComponent (NW-1 anonymous guest share route)', () => {
+describe('PublicArtifactGuestComponent (Magic Link resource-share guest route)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    TestBed.resetTestingModule();
   });
 
   it('strips residual secret keys via SanitizeGuestConfigurationJson', () => {
@@ -143,39 +149,33 @@ describe('PublicArtifactGuestComponent (NW-1 anonymous guest share route)', () =
     expect(SanitizeGuestConfigurationJson('[1,2,3]')).toBe('');
   });
 
-  it('maps EXPIRED, REVOKED, FROZEN_REQUIRED, and RATE_LIMITED error codes cleanly', () => {
+  it('maps EXPIRED, REVOKED, CONSUMED, ACCESS_DENIED, FROZEN_REQUIRED, and RATE_LIMITED error codes cleanly', () => {
     expect(DescribeGuestShareError('EXPIRED').title).toContain('Expired');
     expect(DescribeGuestShareError('REVOKED').title).toContain('Revoked');
+    expect(DescribeGuestShareError('CONSUMED').title).toContain('Limit Reached');
+    expect(DescribeGuestShareError('ACCESS_DENIED').title).toContain('Guest Session Required');
     expect(DescribeGuestShareError('FROZEN_REQUIRED').title).toContain('Frozen');
     expect(DescribeGuestShareError('RATE_LIMITED').title).toContain('Too Many');
     expect(DescribeGuestShareError('INVALID_TOKEN').title).toContain('Invalid');
   });
 
   it.each(['Markdown Document', 'Presentation', 'Excel Spreadsheet'] as const)(
-    'resolves :token via pre-auth REST without OAuth and renders read-only viewer for %s',
+    'resolves frozen snapshot via Magic-Link-authenticated ResolveGuestArtifactSnapshot query for %s',
     async (artifactType) => {
-      const fetchMock = vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        headers: { get: () => 'application/json' },
-        json: async () =>
-          makeValidSharePayload({
-            ArtifactTypeName: artifactType,
-            Content: artifactType === 'Presentation' ? '{"slides":[]}' : 'content',
-          }),
-      }));
-      vi.stubGlobal('fetch', fetchMock);
+      const gqlProvider = makeMockGraphQLProvider(
+        makeValidSharePayload({
+          ArtifactTypeName: artifactType,
+          Content: artifactType === 'Presentation' ? '{"slides":[]}' : 'content',
+        }),
+      );
 
       const fixture = await renderGuestPage({
-        paramMap: { token: VALID_TOKEN },
+        provider: gqlProvider,
       });
 
-      expect(fetchMock).toHaveBeenCalledWith(
-        'https://api.example.org/guest-share/resolve',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ token: VALID_TOKEN }),
-        }),
+      expect(gqlProvider.ExecuteGQL).toHaveBeenCalledWith(
+        expect.stringContaining('ResolveGuestArtifactSnapshot'),
+        {},
       );
       expect(fixture.componentInstance.ErrorMessage).toBe('');
       expect(fixture.componentInstance.GuestArtifactVersion?.ID).toBe('ver-100');
@@ -184,10 +184,10 @@ describe('PublicArtifactGuestComponent (NW-1 anonymous guest share route)', () =
       expect(sanitizedConfig).toEqual({ theme: 'light' });
 
       const viewer = Query(fixture, '.stub-plugin-viewer');
+      expect(viewer).not.toBeNull();
       expect(viewer?.getAttribute('data-has-provider')).toBe('false');
       expect(viewer?.getAttribute('data-artifact-id')).toBe('');
       expect(viewer?.getAttribute('data-driver-class')).toBe('MarkdownArtifactViewerPlugin');
-      expect(viewer).not.toBeNull();
       expect(viewer?.getAttribute('data-type')).toBe(artifactType);
       expect(viewer?.getAttribute('data-readonly')).toBe('true');
       expect(viewer?.getAttribute('data-guest-mode')).toBe('true');
@@ -196,108 +196,67 @@ describe('PublicArtifactGuestComponent (NW-1 anonymous guest share route)', () =
     },
   );
 
-  it('renders clear expired error banner when guest share has EXPIRED', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: false,
-        status: 410,
-        headers: { get: () => 'application/json' },
-        json: async () => ({
-          Success: false,
-          Valid: false,
-          ErrorCode: 'EXPIRED',
-          ErrorMessage: 'This share link expired yesterday.',
-          ShareMode: 'Frozen',
-          ReadOnly: true,
-        }),
-      })),
-    );
+  it('renders EXPIRED banner immediately from ?mlError=expired without calling GraphQL', async () => {
+    const gqlProvider = makeMockGraphQLProvider(makeValidSharePayload());
 
     const expiredFixture = await renderGuestPage({
-      queryParamMap: { guestToken: 'expired-tok' },
-    });
-
-    const banner = Query(expiredFixture, '.guest-error-banner');
-    expect(banner).not.toBeNull();
-    expect(banner?.textContent).toContain('Guest Share Link Expired');
-    expect(banner?.textContent).toContain('This share link expired yesterday.');
-    expect(Query(expiredFixture, '.stub-plugin-viewer')).toBeNull();
-  });
-
-  it('renders clear revoked error banner when guest share has REVOKED', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: false,
-        status: 403,
-        headers: { get: () => 'application/json' },
-        json: async () => ({
-          Success: false,
-          Valid: false,
-          ErrorCode: 'REVOKED',
-          ErrorMessage: 'Owner revoked this link.',
-          ShareMode: 'Frozen',
-          ReadOnly: true,
-        }),
-      })),
-    );
-
-    const revokedFixture = await renderGuestPage({
-      paramMap: { token: 'revoked-tok' },
-    });
-    const revokedBanner = Query(revokedFixture, '.guest-error-banner');
-    expect(revokedBanner?.textContent).toContain('Guest Share Link Revoked');
-    expect(revokedBanner?.textContent).toContain('Owner revoked this link.');
-  });
-
-  it('falls back to @Public() GraphQL ResolvePublicArtifactGuestShare when REST fetch fails', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new Error('Network offline');
-      }),
-    );
-
-    const gqlProvider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider & {
-      ExecuteGQL: ReturnType<typeof vi.fn>;
-    };
-    gqlProvider.ExecuteGQL = vi.fn(async () => ({
-      ResolvePublicArtifactGuestShare: makeValidSharePayload({
-        Title: 'GraphQL Fallback Deck',
-        ArtifactTypeName: 'Presentation',
-      }),
-    }));
-
-    const fixture = await renderGuestPage({
-      paramMap: { token: 'gql-tok-1' },
+      queryParamMap: { mlError: 'expired' },
       provider: gqlProvider,
     });
 
-    expect(gqlProvider.ExecuteGQL).toHaveBeenCalledWith(
-      expect.stringContaining('ResolvePublicArtifactGuestShare'),
-      { token: 'gql-tok-1' },
-    );
-    expect(fixture.componentInstance.ErrorMessage).toBe('');
-    expect(Query(fixture, '.stub-plugin-viewer')?.getAttribute('data-type')).toBe('Presentation');
+    expect(gqlProvider.ExecuteGQL).not.toHaveBeenCalled();
+    const banner = Query(expiredFixture, '.guest-error-banner');
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toContain('Guest Share Link Expired');
+    expect(Query(expiredFixture, '.stub-plugin-viewer')).toBeNull();
+  });
+
+  it('renders REVOKED banner immediately from ?mlError=revoked', async () => {
+    const viaQueryFixture = await renderGuestPage({
+      queryParamMap: { mlError: 'revoked' },
+    });
+    const viaQueryBanner = Query(viaQueryFixture, '.guest-error-banner');
+    expect(viaQueryBanner?.textContent).toContain('Guest Share Link Revoked');
+  });
+
+  it('renders REVOKED banner when GraphQL ResolveGuestArtifactSnapshot returns REVOKED', async () => {
+    const gqlProvider = makeMockGraphQLProvider({
+      Success: false,
+      Valid: false,
+      ErrorCode: 'REVOKED',
+      ErrorMessage: 'Owner revoked this link.',
+      ShareMode: 'Frozen',
+      ReadOnly: true,
+    });
+    const viaGqlFixture = await renderGuestPage({ provider: gqlProvider });
+    const viaGqlBanner = Query(viaGqlFixture, '.guest-error-banner');
+    expect(viaGqlBanner?.textContent).toContain('Guest Share Link Revoked');
+    expect(viaGqlBanner?.textContent).toContain('Owner revoked this link.');
+  });
+
+  it('shows Guest Session Required banner when GraphQL returns null snapshot', async () => {
+    const nullResultProvider = makeMockGraphQLProvider(null);
+    const nullFixture = await renderGuestPage({ provider: nullResultProvider });
+    expect(Query(nullFixture, '.guest-error-banner')?.textContent).toContain('Guest Session Required');
+    expect(Query(nullFixture, '.guest-error-banner')?.textContent).toContain('Magic Link guest session');
+  });
+
+  it('shows Guest Session Required banner when GraphQL rejects with unauthorized error', async () => {
+    const unauthProvider = makeMockGraphQLProvider(new Error('401 Unauthorized: invalid token'));
+    const unauthFixture = await renderGuestPage({ provider: unauthProvider });
+    expect(unauthFixture.componentInstance.ErrorCode).toBe('ACCESS_DENIED');
+    expect(Query(unauthFixture, '.guest-error-banner')?.textContent).toContain('Guest Session Required');
   });
 
   it('renders sanitized fallback text when ViewerFallbackOnly is enabled', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        headers: { get: () => 'application/json' },
-        json: async () =>
-          makeValidSharePayload({
-            Content: '# Frozen Markdown Snapshot',
-          }),
-      })),
+    const gqlProvider = makeMockGraphQLProvider(
+      makeValidSharePayload({
+        Content: '# Frozen Markdown Snapshot',
+      }),
     );
 
     const fixture = await renderGuestPage({
-      paramMap: { token: VALID_TOKEN },
+      provider: gqlProvider,
       viewerFallbackOnly: true,
     });
 
@@ -305,80 +264,35 @@ describe('PublicArtifactGuestComponent (NW-1 anonymous guest share route)', () =
     expect(fallback?.textContent).toContain('# Frozen Markdown Snapshot');
   });
 
-  it('resolves MJ_PUBLIC_API_BASE_URL for anonymous cross-origin routes when ApiBaseUrl is unset', async () => {
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      headers: { get: () => 'application/json' },
-      json: async () => makeValidSharePayload({ Title: 'Cross-Origin Guest Doc' }),
-    }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    const paramSnapshot = { get: (k: string) => (k === 'token' ? VALID_TOKEN : null) };
-    const querySnapshot = { get: () => null };
-    const fixture = RenderComponentFixture(PublicArtifactGuestComponent, {
-      declarations: [PublicArtifactGuestComponent, StubArtifactTypePluginViewerComponent],
-      providers: [
-        { provide: MJ_PUBLIC_API_BASE_URL, useValue: 'http://localhost:4115/' },
-        {
-          provide: ActivatedRoute,
-          useValue: {
-            paramMap: new BehaviorSubject(paramSnapshot).asObservable(),
-            queryParamMap: new BehaviorSubject(querySnapshot).asObservable(),
-            snapshot: { paramMap: paramSnapshot, queryParamMap: querySnapshot },
+  it('passes DriverClass and PreVerifiedFrozenSnapshots for safe artifact types while failing closed on unverified snapshots', async () => {
+    const gqlProvider = makeMockGraphQLProvider(
+      makeValidSharePayload({
+        ArtifactTypeName: 'Code',
+        DriverClass: 'CodeArtifactViewerPlugin',
+        Title: 'SQL Migration Preview',
+        FrozenProvenance: [
+          {
+            TargetType: 'DocumentBlock',
+            TargetID: 'blk-verified',
+            BlockID: 'blk-verified',
+            SnapshotVerified: true,
+            FrozenByUserName: 'Alice Reviewer',
+            FrozenAt: '2026-11-15T12:00:00Z',
           },
-        },
-      ],
-    });
-    await settle(fixture);
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4115/guest-share/resolve',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ token: VALID_TOKEN }),
+          {
+            TargetType: 'LiveTable',
+            TargetID: 'tbl-tampered',
+            LiveTableID: 'tbl-tampered',
+            SnapshotVerified: false,
+            FrozenByUserName: 'Mallory',
+            FrozenAt: '2026-11-15T12:05:00Z',
+          },
+        ],
       }),
-    );
-    expect(fixture.componentInstance.ErrorMessage).toBe('');
-    expect(fixture.componentInstance.DisplayTitle).toBe('Cross-Origin Guest Doc');
-  });
-
-  it('passes DriverClass and PreVerifiedFrozenSnapshots for arbitrary artifact types while failing closed on unverified snapshots', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        headers: { get: () => 'application/json' },
-        json: async () =>
-          makeValidSharePayload({
-            ArtifactTypeName: 'Code',
-            DriverClass: 'CodeArtifactViewerPlugin',
-            Title: 'SQL Migration Preview',
-            FrozenProvenance: [
-              {
-                TargetType: 'DocumentBlock',
-                TargetID: 'blk-verified',
-                BlockID: 'blk-verified',
-                SnapshotVerified: true,
-                FrozenByUserName: 'Alice Reviewer',
-                FrozenAt: '2026-11-15T12:00:00Z',
-              },
-              {
-                TargetType: 'LiveTable',
-                TargetID: 'tbl-tampered',
-                LiveTableID: 'tbl-tampered',
-                SnapshotVerified: false,
-                FrozenByUserName: 'Mallory',
-                FrozenAt: '2026-11-15T12:05:00Z',
-              },
-            ],
-          }),
-      })),
     );
 
     const fixture = await renderGuestPage({
-      paramMap: { token: VALID_TOKEN },
+      provider: gqlProvider,
     });
 
     const viewer = Query(fixture, '.stub-plugin-viewer');
@@ -394,5 +308,49 @@ describe('PublicArtifactGuestComponent (NW-1 anonymous guest share route)', () =
     });
     expect(map?.['tbl-tampered']?.Verified).toBe(false);
     expect(BuildPreVerifiedFrozenSnapshotsMap([])).toBeNull();
+  });
+
+  it('waits on cold load until GraphQLDataProvider.Instance populates ConfigData URL & Token before resolving', async () => {
+    const singletonMock = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider & {
+      ConfigData: { URL: string; Token: string };
+      ExecuteGQL: ReturnType<typeof vi.fn>;
+    };
+    Object.defineProperty(singletonMock, 'ConfigData', {
+      value: { URL: '', Token: '' },
+      writable: true,
+      configurable: true,
+    });
+    singletonMock.ExecuteGQL = vi.fn(async () => ({
+      ResolveGuestArtifactSnapshot: makeValidSharePayload({ Title: 'Delayed Cold Load Snapshot' }),
+    }));
+    vi.spyOn(GraphQLDataProvider, 'Instance', 'get').mockReturnValue(singletonMock);
+
+    const fixture = await renderGuestPage({});
+    // Before auth initialization finishes ConfigData.Token, ExecuteGQL must not fire prematurely
+    expect(singletonMock.ExecuteGQL).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.IsLoading).toBe(true);
+
+    // Simulate WorkspaceInitializer setting ConfigData URL & Bearer token asynchronously
+    singletonMock.ConfigData = { URL: 'https://api.example.org/graphql', Token: 'ml-jwt-cold' };
+    await new Promise((resolve) => setTimeout(resolve, 90));
+    await settle(fixture);
+
+    expect(singletonMock.ExecuteGQL).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.IsLoading).toBe(false);
+    expect(fixture.componentInstance.ErrorMessage).toBe('');
+    expect(fixture.componentInstance.DisplayTitle).toBe('Delayed Cold Load Snapshot');
+  });
+
+  it('clears mj_magic_link_token from sessionStorage when Sign In link is clicked', async () => {
+    window.sessionStorage.setItem('mj_magic_link_token', 'stale-guest-jwt');
+    const gqlProvider = makeMockGraphQLProvider(makeValidSharePayload());
+    const fixture = await renderGuestPage({ provider: gqlProvider });
+
+    const signInLink = Query(fixture, '.guest-signin-link') as HTMLAnchorElement | null;
+    expect(signInLink).not.toBeNull();
+    signInLink?.addEventListener('click', (e) => e.preventDefault());
+    signInLink?.click();
+
+    expect(window.sessionStorage.getItem('mj_magic_link_token')).toBeNull();
   });
 });

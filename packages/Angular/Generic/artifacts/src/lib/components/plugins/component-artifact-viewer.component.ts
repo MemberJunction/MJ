@@ -326,6 +326,25 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     }
   }
 
+  protected override onGuestSnapshotModeChanged(guestMode: boolean): void {
+    if (guestMode) {
+      this.failClosedGuestSnapshot();
+      this.cdr.markForCheck();
+    }
+  }
+
+  private failClosedGuestSnapshot(): void {
+    this._cachedResolvedSpec = null;
+    this.Component = null;
+    this.ComponentCode = '';
+    this.ComponentName = '';
+    this.IsFormArtifact = false;
+    this.PermissionResult = null;
+    this.HasError = true;
+    this.errorMessage = 'Interactive Component Artifacts Disabled in Guest Mode';
+    this.ErrorDetails = 'Interactive Component artifacts execute dynamic client code and cannot run inside an external Frozen guest snapshot session.';
+  }
+
   /**
    * Synchronously load the component spec from artifact content.
    * This is intentionally synchronous so that tabs are available immediately
@@ -337,6 +356,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * fires for the first time.
    */
   private loadComponentSpec(): void {
+    if (this.isGuestSnapshotMode) {
+      this.failClosedGuestSnapshot();
+      return;
+    }
     try {
       // Clear cached resolved spec from previous version so stale data doesn't persist
       this._cachedResolvedSpec = null;
@@ -410,6 +433,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * The async adapter initialization happens here and doesn't block tab availability.
    */
   async ngOnInit(): Promise<void> {
+    if (this.isGuestSnapshotMode) {
+      this.failClosedGuestSnapshot();
+      return;
+    }
     // Initialize Angular adapter for React components (async operation)
     try {
       await this.adapter.initialize();

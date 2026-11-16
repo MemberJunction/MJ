@@ -25,7 +25,6 @@ export const CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS: readonly string[] = [
     '/realtime',
     '/realtime-proxy',
     '/collaboration',
-    '/guest-share',
 ];
 
 /**

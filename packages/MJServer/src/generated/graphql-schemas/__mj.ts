@@ -26076,11 +26076,15 @@ export class MJArchiveRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Artifact Guest Share Links
 //****************************************************************************
-@ObjectType({ description: "Stores durable server-side records for Frozen-only external guest share links, enabling immediate token revocation, expiration checks, and access auditing." })
+@ObjectType({ description: "Links an anonymous resource-share MagicLinkInvite to an immutable Frozen ArtifactVersion and optional recipient label for external guest sharing." })
 export class MJArtifactGuestShareLink_ {
-    @Field({description: "Primary key of the guest share link record (corresponds to token jti / LinkID)."}) 
+    @Field({description: "Primary key of the artifact guest share link binding record."}) 
     @MaxLength(36)
     ID: string;
+        
+    @Field({nullable: true, description: "Foreign key to the MagicLinkInvite managing token hashing, expiry, revocation, usage limits, and redemption audit."}) 
+    @MaxLength(36)
+    MagicLinkInviteID?: string;
         
     @Field({nullable: true, description: "Foreign key to the shared Artifact record. Cascades on artifact deletion."}) 
     @MaxLength(36)
@@ -26094,29 +26098,9 @@ export class MJArtifactGuestShareLink_ {
     @MaxLength(36)
     CreatedByUserID?: string;
         
-    @Field({nullable: true, description: "Unique SHA-256 hex digest of the signed guest share token used for constant-lookup server verification without persisting the raw bearer token."}) 
-    @MaxLength(128)
-    TokenHash?: string;
-        
     @Field({nullable: true, description: "Optional human-readable label identifying the external recipient or review purpose."}) 
     @MaxLength(200)
     Label?: string;
-        
-    @Field({nullable: true, description: "UTC timestamp after which the guest share link is expired and must be rejected."}) 
-    ExpiresAt?: Date;
-        
-    @Field({nullable: true, description: "UTC timestamp when the guest share link was explicitly revoked, or NULL while active."}) 
-    RevokedAt?: Date;
-        
-    @Field({nullable: true, description: "Foreign key to the User who revoked this guest share link, if revoked."}) 
-    @MaxLength(36)
-    RevokedByUserID?: string;
-        
-    @Field({nullable: true, description: "UTC timestamp of the most recent successful guest token resolution."}) 
-    LastAccessedAt?: Date;
-        
-    @Field(() => Int, {nullable: true, description: "Total count of successful guest link resolutions recorded for this link."}) 
-    AccessCount?: number;
         
     @Field() 
     _mj__CreatedAt: Date;
@@ -26135,10 +26119,6 @@ export class MJArtifactGuestShareLink_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     CreatedByUser?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    RevokedByUser?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -80008,7 +79988,7 @@ export class MJProjectResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Public Links
 //****************************************************************************
-@ObjectType({ description: "Shareable links for external access to artifacts and other resources. Supports password protection and expiration." })
+@ObjectType({ description: "DEPRECATED: dormant v2 schema table never wired to server or UI runtime. Use MJ: Magic Link Invites (Kind='resource-share', IdentityMode='anonymous') paired with MJ: Artifact Guest Share Links for Frozen external guest sharing, or MJ: Artifact Permissions / MJ: Collection Permissions / MJ: Access Control Rules for authenticated sharing." })
 export class MJPublicLink_ {
     @Field() 
     @MaxLength(36)

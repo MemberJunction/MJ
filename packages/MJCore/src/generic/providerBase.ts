@@ -24,7 +24,7 @@ import { Metadata } from "./metadata";
 import { RunView, RunViewParams, IsMaterializedDataSource, ExtractRunViewParameterNames } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { Observable, Subscription } from "rxjs";
-import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
+import { GetDataHooks, IsPostRunViewProtectedEntity, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
 import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
 import { ContextToken, GetLocalTimeZone } from "./contextTokens";
@@ -5451,6 +5451,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // (`PostRunView` never passes `ttlMs`), so treating them as server-cacheable only forces
         // wasted `Fields` widening and futile cache lookups.
         if (entity.ExternalDataSourceID) return false;
+
+        // PostRunView-protected entities enforce per-caller ACL filtering inside PostRunView hooks
+        // from sibling permission tables whose mutations never change this entity's table timestamps.
+        if (IsPostRunViewProtectedEntity(entity.Name)) return false;
 
         return entity.TrustServerCacheCompletely !== false;
     }

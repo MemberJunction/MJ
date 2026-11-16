@@ -236,6 +236,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 ArtifactID: normalizedArtifactId,
                 User: user,
                 ApiKeyHash: context.userPayload.apiKeyHash,
+                TokenExpiresAtMs: context.userPayload.tokenExpiresAtMs,
                 Provider: provider
             });
         } catch (err) {

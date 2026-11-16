@@ -5148,8 +5148,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (!payload?.userRecord || payload.userRecord.IsActive !== true) {
                 return null;
             }
-            let tokenExpiresAtMs: number | undefined;
-            if (bearerToken) {
+            let tokenExpiresAtMs: number | undefined = payload.tokenExpiresAtMs;
+            if (tokenExpiresAtMs === undefined && bearerToken) {
                 try {
                     const rawJwt = bearerToken.slice(7).trim();
                     const decoded = jwt.decode(rawJwt);

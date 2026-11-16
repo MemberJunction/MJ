@@ -30,7 +30,6 @@ import {
     ArtifactEvaluateAiFormulaOperation,
     ArtifactLogComplianceAuditOperation,
     ArtifactPermissionEngine,
-    ArtifactResolveGuestShareLinkOperation,
     ArtifactRevokeGuestShareLinkOperation,
     ArtifactSynthesizeFromSourcesOperation,
     ArtifactSynthesisEngine,
@@ -277,14 +276,13 @@ async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Prom
         'Chat DefaultNavItems must not use the ambiguous legacy "Tasks" label',
     );
 
-    // 5. All 6 Artifact.* Remote Operations and artifact API scopes must be seeded in metadata
+    // 5. All 5 Artifact.* Remote Operations and artifact API scopes must be seeded in metadata
     const expectedRemoteOps = [
         'Artifact.EvaluateAiFormula',
         'Artifact.SynthesizeFromSources',
         'Artifact.LogComplianceAudit',
         'Artifact.CreateGuestShareLink',
         'Artifact.RevokeGuestShareLink',
-        'Artifact.ResolveGuestShareLink',
     ];
     const remoteOpsRes = await rv.RunView<MJRemoteOperationEntityType>(
         {
@@ -2548,7 +2546,7 @@ async function checkDslc5ArtifactRemoteOperations(ctx: IntegrationCheckContext):
     );
     Assert(validAuditRes.Success, `Artifact.LogComplianceAudit failed on allowlisted event: ${validAuditRes.ErrorMessage ?? ''}`);
 
-    // 4. Guest share lifecycle: CreateGuestShareLink -> ResolveGuestShareLink -> RevokeGuestShareLink -> Re-resolve
+    // 4. Guest share lifecycle via native Magic Link resource-share: CreateGuestShareLink -> MagicLinkInvite binding -> RevokeGuestShareLink
     const granteeCreateShareRes = await new ArtifactCreateGuestShareLinkOperation().Execute(
         { ArtifactID: fx.ParentDocID!, VersionID: fx.ParentVerID!, ExpiresInHours: 1, Label: 'Unauthorized Share' },
         { provider: granteeProvider, user: granteeUser },
@@ -2559,19 +2557,34 @@ async function checkDslc5ArtifactRemoteOperations(ctx: IntegrationCheckContext):
         { ArtifactID: fx.ParentDocID!, VersionID: fx.ParentVerID!, ExpiresInHours: 1, Label: 'IT171 Wire Link' },
         { provider: ownerProvider, user: ctx.User },
     );
-    Assert(createShareRes.Success && Boolean(createShareRes.Output?.Token) && Boolean(createShareRes.Output?.LinkID), `CreateGuestShareLink failed: ${createShareRes.ErrorMessage ?? ''}`);
-    const shareToken = createShareRes.Output!.Token!;
-    const shareLinkId = createShareRes.Output!.LinkID;
-
-    const resolveValidRes = await new ArtifactResolveGuestShareLinkOperation().Execute(
-        { Token: shareToken },
-        { provider: ownerProvider, user: ctx.User },
-    );
-    Assert(resolveValidRes.Success && resolveValidRes.Output?.Valid === true, `ResolveGuestShareLink failed for active token: ${resolveValidRes.ErrorMessage ?? ''}`);
     Assert(
-        UUIDsEqual(resolveValidRes.Output?.ArtifactID, fx.ParentDocID!),
-        `Resolved guest share ArtifactID mismatch: expected ${fx.ParentDocID!}, got ${resolveValidRes.Output?.ArtifactID ?? ''}`,
+        createShareRes.Success &&
+            Boolean(createShareRes.Output?.Token) &&
+            Boolean(createShareRes.Output?.LinkID) &&
+            Boolean(createShareRes.Output?.MagicLinkInviteID),
+        `CreateGuestShareLink failed: ${createShareRes.ErrorMessage ?? ''}`,
     );
+    const shareLinkId = createShareRes.Output!.LinkID;
+    const magicInviteId = createShareRes.Output!.MagicLinkInviteID;
+    Assert(
+        (createShareRes.Output!.ShareUrlPath ?? '').includes('/magic-link/redeem?token='),
+        `Expected ShareUrlPath to route through /magic-link/redeem, got ${createShareRes.Output!.ShareUrlPath ?? ''}`,
+    );
+
+    const rv = RunView.FromMetadataProvider(ownerProvider);
+    const inviteCheck = await rv.RunView<{ ID: string; Kind: string; IdentityMode: string; Status: string; ResourceID: string }>(
+        {
+            EntityName: 'MJ: Magic Link Invites',
+            ExtraFilter: `ID = '${magicInviteId}'`,
+            MaxRows: 1,
+            ResultType: 'simple',
+        },
+        ctx.User,
+    );
+    Assert(inviteCheck.Success && inviteCheck.Results.length === 1, 'Backing MJ: Magic Link Invites row must exist for guest share');
+    AssertEqual(inviteCheck.Results[0].Kind, 'resource-share', 'Backing Magic Link Invite must have Kind=resource-share');
+    AssertEqual(inviteCheck.Results[0].IdentityMode, 'anonymous', 'Backing Magic Link Invite must have IdentityMode=anonymous');
+    AssertEqual(inviteCheck.Results[0].Status, 'Active', 'Backing Magic Link Invite must initially be Active');
 
     const granteeRevokeRes = await new ArtifactRevokeGuestShareLinkOperation().Execute(
         { ArtifactID: fx.ParentDocID!, VersionID: fx.ParentVerID!, LinkID: shareLinkId },
@@ -2585,14 +2598,19 @@ async function checkDslc5ArtifactRemoteOperations(ctx: IntegrationCheckContext):
     );
     Assert(revokeRes.Success && revokeRes.Output?.Revoked === true, `RevokeGuestShareLink failed: ${revokeRes.ErrorMessage ?? ''}`);
 
-    const resolveRevokedRes = await new ArtifactResolveGuestShareLinkOperation().Execute(
-        { Token: shareToken },
-        { provider: ownerProvider, user: ctx.User },
+    const afterRevokeInvite = await rv.RunView<{ Status: string }>(
+        {
+            EntityName: 'MJ: Magic Link Invites',
+            ExtraFilter: `ID = '${magicInviteId}'`,
+            MaxRows: 1,
+            ResultType: 'simple',
+        },
+        ctx.User,
     );
-    Assert(!resolveRevokedRes.Output?.Valid, 'Revoked guest share token must fail ResolveGuestShareLink');
+    AssertEqual(afterRevokeInvite.Results[0]?.Status, 'Revoked', 'Revoking guest share link must mark backing Magic Link Invite as Revoked');
 }
 
-// ─── DSLC6: NW-1 Pre-auth Guest Share REST + @Public() GraphQL + Frozen-only ──
+// ─── DSLC6: NW-1 Magic Link Guest Share Redeem + GraphQL Snapshot + Frozen Gate ──
 
 interface PublicGuestFrozenProvenanceItem {
     TargetType: string;
@@ -2625,7 +2643,7 @@ async function checkDslc6PublicGuestSharePreAuthAndFrozenGate(ctx: IntegrationCh
     const fx = requireDslClientFixture();
     const ownerProvider = fx.OwnerProvider!;
     const clientCfg = LoadClientConfig();
-    const guestResolveUrl = new URL('/guest-share/resolve', clientCfg.Url).toString();
+    const gqlUrl = new URL('/graphql', clientCfg.Url).toString();
 
     const typesRv = RunView.FromMetadataProvider(ownerProvider);
     const typeRes = await typesRv.RunView<{ ID: string }>(
@@ -2635,8 +2653,16 @@ async function checkDslc6PublicGuestSharePreAuthAndFrozenGate(ctx: IntegrationCh
     Assert(typeRes.Success && typeRes.Results.length > 0, 'Markdown Document artifact type required for DSLC6');
     const docTypeId = typeRes.Results[0].ID;
 
+    const compTypeRes = await typesRv.RunView<{ ID: string }>(
+        { EntityName: 'MJ: Artifact Types', ExtraFilter: "Name = 'Component'", MaxRows: 1, ResultType: 'simple' },
+        ctx.User,
+    );
+    const compTypeId = compTypeRes.Success ? compTypeRes.Results[0]?.ID : undefined;
+
     let liveArtifact: MJArtifactEntity | null = null;
     let liveVer: MJArtifactVersionEntity | null = null;
+    let compArtifact: MJArtifactEntity | null = null;
+    let compVer: MJArtifactVersionEntity | null = null;
     let shareArt: MJArtifactEntity | null = null;
     let shareVer: MJArtifactVersionEntity | null = null;
 
@@ -2671,6 +2697,33 @@ async function checkDslc6PublicGuestSharePreAuthAndFrozenGate(ctx: IntegrationCh
             { provider: ownerProvider, user: ctx.User },
         );
         AssertEqual(liveShareAttempt.Success, false, 'Guest share creation must refuse artifacts containing unfrozen Live blocks');
+
+        // 1b. Component artifacts execute client code and must be refused guest sharing
+        if (compTypeId) {
+            compArtifact = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
+            compArtifact.NewRecord();
+            compArtifact.Name = `__IT171_ComponentRefuse_${Date.now()}`;
+            compArtifact.TypeID = compTypeId;
+            compArtifact.UserID = ctx.User.ID;
+            compArtifact.Visibility = 'Always';
+            Assert(await compArtifact.Save(), 'Failed saving temporary component artifact for DSLC6');
+
+            compVer = await ownerProvider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', ctx.User);
+            compVer.NewRecord();
+            compVer.ArtifactID = compArtifact.ID;
+            compVer.VersionNumber = 1;
+            compVer.Name = compArtifact.Name;
+            compVer.UserID = ctx.User.ID;
+            compVer.ContentMode = 'Text';
+            compVer.Content = JSON.stringify({ name: 'BlockedGuestComp', code: 'export default () => null;' });
+            Assert(await compVer.Save(), 'Failed saving component artifact v1');
+
+            const compShareAttempt = await new ArtifactCreateGuestShareLinkOperation().Execute(
+                { ArtifactID: compArtifact.ID, VersionID: compVer.ID, ExpiresInHours: 1 },
+                { provider: ownerProvider, user: ctx.User },
+            );
+            AssertEqual(compShareAttempt.Success, false, 'Guest share creation must refuse executable Component artifacts');
+        }
 
         // 2. Frozen document succeeds, rejects GET ?token=, and resolves via POST /guest-share/resolve + @Public() GraphQL with DriverClass & FrozenProvenance
         shareArt = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
@@ -2733,81 +2786,120 @@ async function checkDslc6PublicGuestSharePreAuthAndFrozenGate(ctx: IntegrationCh
             { ArtifactID: shareArt.ID, VersionID: shareVer.ID, ExpiresInHours: 2, Label: 'Public Press Release' },
             { provider: ownerProvider, user: ctx.User },
         );
-        Assert(shareCreated.Success && Boolean(shareCreated.Output?.Token), `Failed creating public guest share token: ${shareCreated.ErrorMessage ?? ''}`);
+        Assert(
+            shareCreated.Success && Boolean(shareCreated.Output?.Token) && Boolean(shareCreated.Output?.ShareUrlPath),
+            `Failed creating public guest share token: ${shareCreated.ErrorMessage ?? ''}`,
+        );
         const token = shareCreated.Output!.Token!;
         const linkId = shareCreated.Output!.LinkID;
+        const redeemUrl = new URL(shareCreated.Output!.ShareUrlPath!, clientCfg.Url);
+        const redeemEndpoint = `${redeemUrl.origin}${redeemUrl.pathname}`;
 
-        // Unauthenticated GET /guest-share/resolve?token=... MUST be rejected (bearer tokens never allowed in URL query)
-        const getResp = await fetch(`${guestResolveUrl}?token=${encodeURIComponent(token)}`, { method: 'GET' });
-        Assert(
-            getResp.status !== 200,
-            `Pre-auth GET /guest-share/resolve?token=... must be rejected (got HTTP ${getResp.status})`,
-        );
+        // Unauthenticated GET /magic-link/redeem?token=... serves safe HTML interstitial without redeeming; format=json returns 405
+        const getHtmlResp = await fetch(redeemUrl.toString(), { method: 'GET' });
+        AssertEqual(getHtmlResp.status, 200, 'Safe GET /magic-link/redeem must serve interstitial HTML');
+        const getJsonResp = await fetch(`${redeemEndpoint}?token=${encodeURIComponent(token)}&format=json`, { method: 'GET' });
+        AssertEqual(getJsonResp.status, 405, 'GET /magic-link/redeem?format=json must refuse redemption with HTTP 405');
 
-        // Unauthenticated POST /guest-share/resolve with JSON { token }
-        const postResp = await fetch(guestResolveUrl, {
+        // POST /magic-link/redeem?format=json exchanges token for RS256 session JWT
+        const redeemPostResp = await fetch(`${redeemEndpoint}?format=json`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token }),
+            body: JSON.stringify({ token, rt: redeemUrl.searchParams.get('rt') ?? undefined }),
         });
-        AssertEqual(postResp.status, 200, 'Pre-auth POST /guest-share/resolve must return HTTP 200');
-        const postJson = (await postResp.json()) as PublicGuestShareResponse;
-        Assert(postJson.Valid && postJson.ReadOnly === true, 'Pre-auth REST POST must resolve Valid=true & ReadOnly=true');
-        AssertEqual(postJson.ShareMode, 'Frozen', 'Pre-auth REST POST ShareMode must be Frozen');
-        AssertEqual(postJson.DriverClass, 'MarkdownArtifactViewerPlugin', 'Pre-auth REST POST must return DriverClass');
-        Assert(
-            Array.isArray(postJson.FrozenProvenance) &&
-                postJson.FrozenProvenance.some((p) => p.BlockID === 'blk-guest-frozen' && p.SnapshotVerified === true),
-            'Pre-auth REST POST must return server-verified FrozenProvenance with SnapshotVerified=true for blk-guest-frozen',
-        );
-        Assert(!(postJson.Configuration ?? '').includes('GuestShareLinks'), 'Guest share metadata must scrub GuestShareLinks from Configuration');
+        AssertEqual(redeemPostResp.status, 200, 'POST /magic-link/redeem?format=json must return HTTP 200');
+        const redeemJson = (await redeemPostResp.json()) as { success?: boolean; token?: string; errorCode?: string };
+        Assert(redeemJson.success === true && Boolean(redeemJson.token), 'POST /magic-link/redeem must mint a session JWT');
+        const guestJwt = redeemJson.token!;
 
-        // @Public() GraphQL ResolvePublicArtifactGuestShare works for any caller without internal artifact ACL (even a non-grantee via ExecuteGQL)
-        const granteeProvider = fx.GranteeProvider!;
-        const gqlBody = (await granteeProvider.ExecuteGQL(
-            `query PublicResolve($token: String!) {
-                ResolvePublicArtifactGuestShare(token: $token) {
-                    Success Valid ErrorCode ArtifactID DriverClass ShareMode ReadOnly Content
-                    FrozenProvenance { TargetType TargetID BlockID SnapshotVerified FrozenByUserName FrozenAt }
-                }
-            }`,
-            { token },
-        )) as { ResolvePublicArtifactGuestShare?: PublicGuestShareResponse };
-        AssertEqual(gqlBody?.ResolvePublicArtifactGuestShare?.Valid, true, '@Public() GraphQL query must resolve Valid=true without internal artifact ACL');
-        AssertEqual(gqlBody?.ResolvePublicArtifactGuestShare?.ReadOnly, true, '@Public() GraphQL query must return ReadOnly=true');
-        AssertEqual(gqlBody?.ResolvePublicArtifactGuestShare?.DriverClass, 'MarkdownArtifactViewerPlugin', '@Public() GraphQL query must return DriverClass');
+        const resolveSnapshotQuery = `query ResolveGuestArtifactSnapshot {
+            ResolveGuestArtifactSnapshot {
+                Success Valid ErrorCode ArtifactID DriverClass ShareMode ReadOnly Content Configuration
+                FrozenProvenance { TargetType TargetID BlockID SnapshotVerified FrozenByUserName FrozenAt }
+            }
+        }`;
+
+        // Unauthenticated GraphQL call (no Bearer JWT) must be refused
+        const unauthGqlResp = await fetch(gqlUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: resolveSnapshotQuery }),
+        });
+        const unauthGqlJson = (await unauthGqlResp.json()) as {
+            errors?: Array<{ message: string }>;
+            data?: { ResolveGuestArtifactSnapshot?: PublicGuestShareResponse };
+        };
         Assert(
-            Array.isArray(gqlBody?.ResolvePublicArtifactGuestShare?.FrozenProvenance) &&
-                gqlBody.ResolvePublicArtifactGuestShare.FrozenProvenance.some((p) => p.BlockID === 'blk-guest-frozen' && p.SnapshotVerified === true),
-            '@Public() GraphQL query must return FrozenProvenance with SnapshotVerified=true',
+            unauthGqlResp.status === 401 ||
+                Boolean(unauthGqlJson.errors?.length) ||
+                unauthGqlJson.data?.ResolveGuestArtifactSnapshot?.Valid !== true,
+            'ResolveGuestArtifactSnapshot must fail closed without an authenticated Magic Link session',
         );
 
-        // Invalid token must reject fail-closed via POST
-        const invalidResp = await fetch(guestResolveUrl, {
+        // Authenticated Magic Link Bearer JWT resolves frozen snapshot with DriverClass & FrozenProvenance
+        const guestGqlResp = await fetch(gqlUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${guestJwt}`,
+            },
+            body: JSON.stringify({ query: resolveSnapshotQuery }),
+        });
+        AssertEqual(guestGqlResp.status, 200, 'Authenticated Magic Link GraphQL ResolveGuestArtifactSnapshot must return HTTP 200');
+        const guestGqlJson = (await guestGqlResp.json()) as {
+            data?: { ResolveGuestArtifactSnapshot?: PublicGuestShareResponse };
+        };
+        const resolved = guestGqlJson.data?.ResolveGuestArtifactSnapshot;
+        Assert(resolved?.Valid === true && resolved?.ReadOnly === true, 'ResolveGuestArtifactSnapshot must return Valid=true & ReadOnly=true');
+        AssertEqual(resolved?.ShareMode, 'Frozen', 'ResolveGuestArtifactSnapshot ShareMode must be Frozen');
+        AssertEqual(resolved?.DriverClass, 'MarkdownArtifactViewerPlugin', 'ResolveGuestArtifactSnapshot must return DriverClass');
+        Assert(
+            Array.isArray(resolved?.FrozenProvenance) &&
+                resolved.FrozenProvenance.some((p) => p.BlockID === 'blk-guest-frozen' && p.SnapshotVerified === true),
+            'ResolveGuestArtifactSnapshot must return server-verified FrozenProvenance with SnapshotVerified=true for blk-guest-frozen',
+        );
+        Assert(!(resolved?.Configuration ?? '').includes('GuestShareLinks'), 'Guest share metadata must scrub GuestShareLinks from Configuration');
+
+        // Forged Magic Link token must reject fail-closed on POST /magic-link/redeem
+        const invalidResp = await fetch(`${redeemEndpoint}?format=json`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token: 'forged-invalid-token' }),
         });
-        const invalidJson = (await invalidResp.json()) as PublicGuestShareResponse;
-        AssertEqual(invalidJson.Valid, false, 'Forged guest share token must fail resolution');
+        const invalidJson = (await invalidResp.json()) as { success?: boolean; errorCode?: string };
+        AssertEqual(invalidJson.success, false, 'Forged guest share token must fail redemption');
 
-        // Revoke then confirm immediate unauthenticated revocation on POST REST
+        // Revoke then confirm immediate revocation on both /magic-link/redeem and existing session JWT
         const revokeRes = await new ArtifactRevokeGuestShareLinkOperation().Execute(
             { ArtifactID: shareArt.ID, VersionID: shareVer.ID, LinkID: linkId },
             { provider: ownerProvider, user: ctx.User },
         );
         Assert(revokeRes.Success && revokeRes.Output?.Revoked === true, 'Owner revoke of guest link failed');
 
-        const afterRevokeResp = await fetch(guestResolveUrl, {
+        const afterRevokeRedeemResp = await fetch(`${redeemEndpoint}?format=json`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token }),
         });
-        const afterRevokeJson = (await afterRevokeResp.json()) as PublicGuestShareResponse;
-        AssertEqual(afterRevokeJson.Valid, false, 'Revoked token must be rejected on unauthenticated POST REST');
-        AssertEqual(afterRevokeJson.ErrorCode, 'REVOKED', 'Revoked token must return ErrorCode=REVOKED');
+        const afterRevokeRedeemJson = (await afterRevokeRedeemResp.json()) as { success?: boolean; errorCode?: string };
+        AssertEqual(afterRevokeRedeemJson.success, false, 'Revoked token must be rejected on POST /magic-link/redeem');
+        AssertEqual(afterRevokeRedeemJson.errorCode, 'revoked', 'Revoked token must return errorCode=revoked');
+
+        const afterRevokeGqlResp = await fetch(gqlUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${guestJwt}`,
+            },
+            body: JSON.stringify({ query: resolveSnapshotQuery }),
+        });
+        const afterRevokeGqlJson = (await afterRevokeGqlResp.json()) as {
+            data?: { ResolveGuestArtifactSnapshot?: PublicGuestShareResponse };
+        };
+        AssertEqual(afterRevokeGqlJson.data?.ResolveGuestArtifactSnapshot?.Valid, false, 'Previously minted session JWT must reject immediately after invite revocation');
+        AssertEqual(afterRevokeGqlJson.data?.ResolveGuestArtifactSnapshot?.ErrorCode, 'REVOKED', 'Revoked session JWT must return ErrorCode=REVOKED');
     } finally {
-        for (const ent of [liveVer, liveArtifact, shareVer, shareArt]) {
+        for (const ent of [liveVer, liveArtifact, compVer, compArtifact, shareVer, shareArt]) {
             if (ent?.IsSaved) {
                 await ent.Delete();
             }
@@ -3527,12 +3619,12 @@ export const DocsSlidesSheetsLibraryClientChecks: NamedCheck[] = [
     },
     {
         Id: 'docs-slides-sheets-library-client.DSLC5',
-        Name: 'DSLC5: all 6 Artifact.* Remote Operations over GraphQL wire (EvaluateAiFormula, SynthesizeFromSources, LogComplianceAudit, GuestShare Create/Resolve/Revoke)',
+        Name: 'DSLC5: all 5 Artifact.* Remote Operations over GraphQL wire (EvaluateAiFormula, SynthesizeFromSources, LogComplianceAudit, GuestShare Create/Revoke via Magic Link)',
         Fn: checkDslc5ArtifactRemoteOperations,
     },
     {
         Id: 'docs-slides-sheets-library-client.DSLC6',
-        Name: 'DSLC6: NW-1 pre-auth REST POST /guest-share/resolve (rejecting GET ?token=) + @Public() ResolvePublicArtifactGuestShare, DriverClass & FrozenProvenance, Frozen-only gate, and immediate revocation',
+        Name: 'DSLC6: NW-1 Magic Link resource-share /magic-link/redeem + ResolveGuestArtifactSnapshot, DriverClass & FrozenProvenance, Component & Live block gates, and immediate revocation',
         Fn: checkDslc6PublicGuestSharePreAuthAndFrozenGate,
     },
     {

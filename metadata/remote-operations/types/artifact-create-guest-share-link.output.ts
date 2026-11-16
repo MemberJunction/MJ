@@ -1,10 +1,12 @@
 /** Output payload returned by `Artifact.CreateGuestShareLink`. */
 export interface CreateGuestShareLinkOutput {
-    /** Unique share link ID (`jti`) stored in `ArtifactGuestShareLink` and `Configuration.guestShareLinks`. */
+    /** Unique share link ID (`MJ: Artifact Guest Share Links.ID`). */
     LinkID: string;
-    /** HMAC-SHA256 signed guest token encoding ArtifactID, VersionID, LinkID, Mode='Frozen', and ExpiresAt. */
+    /** Backing `MJ: Magic Link Invites.ID` that governs redemption, expiration, revocation, and audit. */
+    MagicLinkInviteID?: string;
+    /** Raw opaque Magic Link token (high-entropy secret redeemed once at `/magic-link/redeem?token=...`). */
     Token: string;
-    /** Relative Explorer route path (e.g. `'/library?guestToken=...'`). */
+    /** Full or relative Magic Link redemption URL (e.g. `'/magic-link/redeem?token=...'` or `'https://api.../magic-link/redeem?token=...'`). */
     ShareUrlPath: string;
     /** Target `MJ: Artifacts.ID`. */
     ArtifactID: string;

@@ -5,8 +5,9 @@ describe('IsStandaloneRoute', () => {
     it('matches the OAuth callback, Excel connect, and public guest artifact pages', () => {
         expect(IsStandaloneRoute('/oauth/callback')).toBe(true);
         expect(IsStandaloneRoute('/office/connect')).toBe(true);
-        expect(IsStandaloneRoute('/guest/artifact/abc-token-123')).toBe(true);
-        expect(IsStandaloneRoute('/guest/artifact?token=abc')).toBe(true);
+        expect(IsStandaloneRoute('/guest/artifact')).toBe(true);
+        expect(IsStandaloneRoute('/guest/artifact#token=abc')).toBe(true);
+        expect(IsStandaloneRoute('/guest/artifact?mlError=expired')).toBe(true);
     });
 
     it('ignores the query string and fragment', () => {

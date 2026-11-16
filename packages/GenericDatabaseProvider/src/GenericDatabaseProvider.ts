@@ -5507,6 +5507,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     continue;
                 }
 
+                // PostRunView-protected entities enforce per-caller ACL filtering inside PostRunView
+                // hooks driven by sibling permission tables (e.g., ArtifactPermission / CollectionPermission).
+                // Global COUNT(*)/MAX(__mj_UpdatedAt) checks cannot detect ACL revocations on sibling tables,
+                // so never return status: 'current'; always run the full query + PostRunView hook.
+                if (this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
+                    itemsWithoutCacheCheck.push({ index: i, item });
+                    continue;
+                }
+
                 itemsNeedingValidation.push({ index: i, item, entityInfo });
             }
 
@@ -5626,7 +5635,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         if (this.isCacheCurrent(cachedSlotStatus, serverStatus)) {
                             // Server cache slot is confirmed current against SQL — refresh its verification timestamp in O(1)
                             LocalCacheManager.Instance.TouchRunViewResultVerifiedAt(fingerprint);
-                            if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                            if (!this.IsPostRunViewProtectedEntity(entityInfo.Name) && this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                                 LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — server cache verified against DB and matches client cache`, verboseOnly: true });
                                 currentResults.push({ viewIndex: index, status: 'current' });
                             } else if (this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
@@ -5643,7 +5652,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             // Evict the stale server slot and refresh from DB so LocalCacheManager and the client self-heal.
                             LogStatusEx({ message: `    ♻️ [SmartCache RECONCILE-EVICT] "${entityLabel}" — server cache slot disagreed with DB status; invalidating and refreshing from DB`, verboseOnly: true });
                             await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
-                            if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                            if (!this.IsPostRunViewProtectedEntity(entityInfo.Name) && this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                                 currentResults.push({ viewIndex: index, status: 'current' });
                             } else {
                                 staleItemsNoTracking.push({ index, params: item.params });
@@ -5652,7 +5661,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         }
                     }
 
-                    if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                    if (!this.IsPostRunViewProtectedEntity(entityInfo.Name) && this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                         LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
                         currentResults.push({ viewIndex: index, status: 'current' });
                     } else if (entityInfo.TrackRecordChanges && !this.IsPostRunViewProtectedEntity(entityInfo.Name)) {
@@ -6236,6 +6245,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         | null
     > {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
+        if (item.params.EntityName && this.IsPostRunViewProtectedEntity(item.params.EntityName)) {
+            return null;
+        }
         if (!this.runViewCacheEligible(item.params) || this.cacheDeniedForViewOnlyRequest(item.params, contextUser)) {
             return null;
         }

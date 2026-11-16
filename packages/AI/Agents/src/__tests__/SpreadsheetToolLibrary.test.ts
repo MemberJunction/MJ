@@ -646,6 +646,7 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
     it('R9-4: search_cells recovers from single-cell VM regex timeout and finds matches before and after', async () => {
         const engine = SpreadsheetEngine.Instance;
         const sheetLib = new SpreadsheetToolLibrary();
+        sheetLib.RegexBudgetMs = 750;
         const wb = engine.CreateEmptyWorkbook('TimeoutRecovery', ['Sheet1'], 400, 2);
         for (let r = 1; r <= 400; r++) {
             engine.SetCell(wb, 'Sheet1', `A${r}`, { Value: `Row ${r} text normal` }, false);
@@ -680,6 +681,7 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
 
         // DocumentToolLibrary grep & search_blocks: match on line 10 and line 300 survive a pathological line 50 in the same batch
         const docLib = new DocumentToolLibrary();
+        docLib.RegexBudgetMs = 750;
         const docLines: string[] = [];
         for (let i = 1; i <= 400; i++) {
             if (i === 10) docLines.push('Line 10 TARGET_HIT alpha');

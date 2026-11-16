@@ -10707,7 +10707,13 @@ export const MJArtifactGuestShareLinkSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
-        * * Description: Primary key of the guest share link record (corresponds to token jti / LinkID).`),
+        * * Description: Primary key of the artifact guest share link binding record.`),
+    MagicLinkInviteID: z.string().describe(`
+        * * Field Name: MagicLinkInviteID
+        * * Display Name: Magic Link Invite ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+        * * Description: Foreign key to the MagicLinkInvite managing token hashing, expiry, revocation, usage limits, and redemption audit.`),
     ArtifactID: z.string().describe(`
         * * Field Name: ArtifactID
         * * Display Name: Artifact ID
@@ -10726,43 +10732,11 @@ export const MJArtifactGuestShareLinkSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Foreign key to the User who created this external guest share link.`),
-    TokenHash: z.string().describe(`
-        * * Field Name: TokenHash
-        * * Display Name: Token Hash
-        * * SQL Data Type: nvarchar(128)
-        * * Description: Unique SHA-256 hex digest of the signed guest share token used for constant-lookup server verification without persisting the raw bearer token.`),
     Label: z.string().nullable().describe(`
         * * Field Name: Label
         * * Display Name: Label
         * * SQL Data Type: nvarchar(200)
         * * Description: Optional human-readable label identifying the external recipient or review purpose.`),
-    ExpiresAt: z.date().nullable().describe(`
-        * * Field Name: ExpiresAt
-        * * Display Name: Expires At
-        * * SQL Data Type: datetimeoffset
-        * * Description: UTC timestamp after which the guest share link is expired and must be rejected.`),
-    RevokedAt: z.date().nullable().describe(`
-        * * Field Name: RevokedAt
-        * * Display Name: Revoked At
-        * * SQL Data Type: datetimeoffset
-        * * Description: UTC timestamp when the guest share link was explicitly revoked, or NULL while active.`),
-    RevokedByUserID: z.string().nullable().describe(`
-        * * Field Name: RevokedByUserID
-        * * Display Name: Revoked By User ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-        * * Description: Foreign key to the User who revoked this guest share link, if revoked.`),
-    LastAccessedAt: z.date().nullable().describe(`
-        * * Field Name: LastAccessedAt
-        * * Display Name: Last Accessed At
-        * * SQL Data Type: datetimeoffset
-        * * Description: UTC timestamp of the most recent successful guest token resolution.`),
-    AccessCount: z.number().describe(`
-        * * Field Name: AccessCount
-        * * Display Name: Access Count
-        * * SQL Data Type: int
-        * * Default Value: 0
-        * * Description: Total count of successful guest link resolutions recorded for this link.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -10773,7 +10747,7 @@ export const MJArtifactGuestShareLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Artifact: z.string().nullable().describe(`
+    Artifact: z.string().describe(`
         * * Field Name: Artifact
         * * Display Name: Artifact
         * * SQL Data Type: nvarchar(255)`),
@@ -10781,13 +10755,9 @@ export const MJArtifactGuestShareLinkSchema = z.object({
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
         * * SQL Data Type: nvarchar(255)`),
-    CreatedByUser: z.string().nullable().describe(`
+    CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
-        * * SQL Data Type: nvarchar(100)`),
-    RevokedByUser: z.string().nullable().describe(`
-        * * Field Name: RevokedByUser
-        * * Display Name: Revoked By User
         * * SQL Data Type: nvarchar(100)`),
 });
 

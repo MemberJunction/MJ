@@ -16,6 +16,7 @@ import { BuildPostgreSQLConnectionConfig, PostgreSQLReadOnlyPool, ResolvePostgre
 import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, ProviderInfo, UserPayload } from './types.js';
+import type { MagicLinkScopeEntry } from './auth/magicLink/types.js';
 import { ReadRequestOrigin } from './requestOrigin.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { RunWithRequestSessionId, StampProviderOriginSessionId } from './requestSessionContext.js';
@@ -624,7 +625,21 @@ export const GetUserPayload = async (
       }
     }
 
-    return { userRecord: sessionUser, email: sessionUser.Email, sessionId, emailVerified };
+    const tokenExpiresAtMs =
+      typeof payload.exp === 'number' && Number.isFinite(payload.exp) ? payload.exp * 1000 : undefined;
+    const magicLinkScopes =
+      payload['mj_magic_link'] === true && Array.isArray(payload['mj_scopes'])
+        ? (payload['mj_scopes'] as MagicLinkScopeEntry[])
+        : undefined;
+
+    return {
+      userRecord: sessionUser,
+      email: sessionUser.Email,
+      sessionId,
+      emailVerified,
+      ...(tokenExpiresAtMs !== undefined ? { tokenExpiresAtMs } : {}),
+      ...(magicLinkScopes ? { magicLinkScopes } : {}),
+    };
   } catch (error) {
     // An anonymous request presenting no credentials at all (a health check, a CORS
     // preflight-adjacent probe, a client mid-handshake) is routine, same as an expired
