@@ -16040,8 +16040,8 @@ export class MarkdownArtifactViewerComponent
           text: parsed.Headers[colIdx] ?? '',
           isCodeBlock: false,
           applySubMarkdown: (nextSubMd) => {
-            const nextHeaders = [...parsed.Headers];
-            nextHeaders[colIdx] = nextSubMd.replace(/\|/g, '/');
+            const sanitizedCell = nextSubMd.replace(/\|/g, '/');
+            const nextHeaders = parsed.Headers.map((h, hIdx) => (hIdx === colIdx ? sanitizedCell : h));
             return this.serializeParsedTable(nextHeaders, parsed.Rows, parsed.Alignments);
           },
         };
@@ -16060,10 +16060,12 @@ export class MarkdownArtifactViewerComponent
           text: parsed.Rows[rowIdx][colIdx] ?? '',
           isCodeBlock: false,
           applySubMarkdown: (nextSubMd) => {
-            const nextRows = parsed.Rows.map((r) => [...r]);
-            if (rowIdx >= 0 && rowIdx < nextRows.length && colIdx >= 0 && colIdx < nextRows[rowIdx].length) {
-              nextRows[rowIdx][colIdx] = nextSubMd.replace(/\|/g, '/');
-            }
+            const sanitizedCell = nextSubMd.replace(/\|/g, '/');
+            const nextRows = parsed.Rows.map((row, rIdx) =>
+              rIdx === rowIdx
+                ? row.map((cell, cIdx) => (cIdx === colIdx ? sanitizedCell : cell))
+                : [...row],
+            );
             return this.serializeParsedTable(parsed.Headers, nextRows, parsed.Alignments);
           },
         };

@@ -3583,65 +3583,55 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return `${formatSheetQualifier(cross.ws.Name)}${startC}:${endC}`;
         });
 
-        resolved = resolved.replace(
-            /@SHEET_ROWS\(([^,]+),([^,]+),([^)]+)\)/g,
-            (_full, sId: string, r1: string, r2: string) => {
-                const cross = getCrossLookup(sId.trim());
-                if (!cross) return '#REF!';
-                const startR = resolveRowTokenAgainst(cross, r1.trim());
-                const endR = resolveRowTokenAgainst(cross, r2.trim());
-                if (startR === '#REF!' || endR === '#REF!') return '#REF!';
-                return `${formatSheetQualifier(cross.ws.Name)}${startR}:${endR}`;
-            }
-        );
+        resolved = replaceFormulaMacro(resolved, '@SHEET_ROWS(', 3, (args) => {
+            const [sId, r1, r2] = args;
+            const cross = getCrossLookup(sId.trim());
+            if (!cross) return '#REF!';
+            const startR = resolveRowTokenAgainst(cross, r1.trim());
+            const endR = resolveRowTokenAgainst(cross, r2.trim());
+            if (startR === '#REF!' || endR === '#REF!') return '#REF!';
+            return `${formatSheetQualifier(cross.ws.Name)}${startR}:${endR}`;
+        });
 
-        resolved = resolved.replace(
-            /@SHEET_CELL\(([^,]+),([^,]+),([^)]+)\)/g,
-            (_full, sId: string, r: string, c: string) => {
-                const cross = getCrossLookup(sId.trim());
-                if (!cross) return '#REF!';
-                const addr = resolveTokenAgainst(cross, r.trim(), c.trim());
-                if (addr === '#REF!') return '#REF!';
-                return `${formatSheetQualifier(cross.ws.Name)}${addr}`;
-            }
-        );
+        resolved = replaceFormulaMacro(resolved, '@SHEET_CELL(', 3, (args) => {
+            const [sId, r, c] = args;
+            const cross = getCrossLookup(sId.trim());
+            if (!cross) return '#REF!';
+            const addr = resolveTokenAgainst(cross, r.trim(), c.trim());
+            if (addr === '#REF!') return '#REF!';
+            return `${formatSheetQualifier(cross.ws.Name)}${addr}`;
+        });
 
-        resolved = resolved.replace(
-            /@RANGE\(([^,]+),([^,]+),([^,]+),([^)]+)\)/g,
-            (_full, r1: string, c1: string, r2: string, c2: string) => {
-                const start = resolveTokenAgainst(localLookup, r1.trim(), c1.trim());
-                const end = resolveTokenAgainst(localLookup, r2.trim(), c2.trim());
-                if (start === '#REF!' || end === '#REF!') {
-                    return '#REF!';
-                }
-                return `${start}:${end}`;
+        resolved = replaceFormulaMacro(resolved, '@RANGE(', 4, (args) => {
+            const [r1, c1, r2, c2] = args;
+            const start = resolveTokenAgainst(localLookup, r1.trim(), c1.trim());
+            const end = resolveTokenAgainst(localLookup, r2.trim(), c2.trim());
+            if (start === '#REF!' || end === '#REF!') {
+                return '#REF!';
             }
-        );
+            return `${start}:${end}`;
+        });
 
-        resolved = resolved.replace(
-            /@COLS\(([^,]+),([^)]+)\)/g,
-            (_full, c1: string, c2: string) => {
-                const startC = resolveColTokenAgainst(localLookup, c1.trim());
-                const endC = resolveColTokenAgainst(localLookup, c2.trim());
-                if (startC === '#REF!' || endC === '#REF!') return '#REF!';
-                return `${startC}:${endC}`;
-            }
-        );
+        resolved = replaceFormulaMacro(resolved, '@COLS(', 2, (args) => {
+            const [c1, c2] = args;
+            const startC = resolveColTokenAgainst(localLookup, c1.trim());
+            const endC = resolveColTokenAgainst(localLookup, c2.trim());
+            if (startC === '#REF!' || endC === '#REF!') return '#REF!';
+            return `${startC}:${endC}`;
+        });
 
-        resolved = resolved.replace(
-            /@ROWS\(([^,]+),([^)]+)\)/g,
-            (_full, r1: string, r2: string) => {
-                const startR = resolveRowTokenAgainst(localLookup, r1.trim());
-                const endR = resolveRowTokenAgainst(localLookup, r2.trim());
-                if (startR === '#REF!' || endR === '#REF!') return '#REF!';
-                return `${startR}:${endR}`;
-            }
-        );
+        resolved = replaceFormulaMacro(resolved, '@ROWS(', 2, (args) => {
+            const [r1, r2] = args;
+            const startR = resolveRowTokenAgainst(localLookup, r1.trim());
+            const endR = resolveRowTokenAgainst(localLookup, r2.trim());
+            if (startR === '#REF!' || endR === '#REF!') return '#REF!';
+            return `${startR}:${endR}`;
+        });
 
-        const out = resolved.replace(
-            /@CELL\(([^,]+),([^)]+)\)/g,
-            (_full, r: string, c: string) => resolveTokenAgainst(localLookup, r.trim(), c.trim())
-        );
+        const out = replaceFormulaMacro(resolved, '@CELL(', 2, (args) => {
+            const [r, c] = args;
+            return resolveTokenAgainst(localLookup, r.trim(), c.trim());
+        });
         return out.trim().startsWith('=') ? out : `=${out.trim()}`;
     }
 

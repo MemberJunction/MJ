@@ -5,16 +5,16 @@
       "Description": "Logged when a live data block inside a Document or Presentation is frozen to a static snapshot."
     },
     "primaryKey": {
-      "ID": "C4132201-CD84-45CD-96C1-16709810C2E1"
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000001"
     }
   },
   {
     "fields": {
       "Name": "Artifact Connected Drive Sync",
-      "Description": "Logged when an artifact version is pushed to or pulled from a connected Microsoft 365 or Google Drive file."
+      "Description": "Logged when an artifact version is pushed to or pulled from a linked external Connected Drive (OneDrive, SharePoint, or Google Drive)."
     },
     "primaryKey": {
-      "ID": "C2B06C36-9BF5-4234-B09E-B6F7C133B7F8"
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000002"
     }
   },
   {
@@ -23,7 +23,7 @@
       "Description": "Logged when a governed artifact is exported to DOCX, PPTX, XLSX, PDF, Markdown, or HTML."
     },
     "primaryKey": {
-      "ID": "67AB0A2D-F134-4E73-BD51-D9DBA4F0EB63"
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000003"
     }
   },
   {
@@ -32,7 +32,7 @@
       "Description": "Logged when Read/Edit/Delete/Share access on a governed artifact or collection is granted or updated."
     },
     "primaryKey": {
-      "ID": "47959623-2B24-432A-8DEE-7100035A64E2"
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000004"
     }
   },
   {
@@ -41,7 +41,7 @@
       "Description": "Logged when an external Frozen-only guest share link is created or revoked."
     },
     "primaryKey": {
-      "ID": "D709E3B4-E5AD-4C9A-AF50-605BA7067881"
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000005"
     }
   }
 ]
