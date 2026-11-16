@@ -5,54 +5,14 @@
  * to execute app migrations against the app's own schema, using a per-app
  * flyway_schema_history table.
  *
- * The skyway packages (`@memberjunction/skyway-core` + the platform providers) are
- * declared as optionalDependencies of this package but loaded dynamically at runtime,
- * so this module compiles and loads even when they are not installed (e.g. in CI
- * builds that don't need them, or installs run with --no-optional).
+ * The skyway packages are optionalDependencies of this package, loaded dynamically at
+ * runtime so this module still loads when they are absent (an install run with
+ * --no-optional). Their types come in via `import type`, which is erased at compile time.
  */
 import path from 'node:path';
 import type { DatabasePlatform } from '@memberjunction/core';
 import { GetDialect } from '@memberjunction/sql-dialect';
-
-/**
- * Minimal type definition for Skyway config so we don't need
- * `@memberjunction/skyway-core` at compile time.
- *
- * `Provider` is typed as `unknown` because it's constructed from a dynamically
- * imported provider package (e.g. `@memberjunction/skyway-sqlserver`). Skyway
- * 0.6.x requires a provider; the field is optional here purely because it's
- * filled in inside `RunAppMigrations` after the dynamic import resolves.
- */
-interface SkywayConfig {
-    Database: {
-        Server: string;
-        Port: number;
-        Database: string;
-        User: string;
-        Password: string;
-        Options?: { Encrypt?: boolean; TrustServerCertificate?: boolean; RequestTimeout?: number };
-    };
-    Migrations: {
-        Locations: string[];
-        DefaultSchema: string;
-        BaselineVersion: string;
-        BaselineOnMigrate: boolean;
-    };
-    Placeholders?: Record<string, string>;
-    TransactionMode?: 'per-run' | 'per-migration';
-    Provider?: unknown;
-}
-
-/** Minimal interface for the Skyway instance returned at runtime. */
-interface SkywayInstance {
-    Migrate(): Promise<{
-        Success: boolean;
-        MigrationsApplied: number;
-        ErrorMessage?: string;
-        Details: { Success: boolean; Migration: { Filename: string } }[];
-    }>;
-    Close(): Promise<void>;
-}
+import type { DatabaseProvider, MigrateResult, MigrationExecutionResult, Skyway, SkywayConfig } from '@memberjunction/skyway-core';
 
 /**
  * Options for running migrations.
@@ -132,6 +92,41 @@ export interface SkywayDatabaseConfig {
 export type FlywayDatabaseConfig = SkywayDatabaseConfig;
 
 /**
+ * mssql rejects with the LAST error of a chain (`See previous errors.`) and keeps the earlier
+ * ones on `precedingErrors`; the first of those is the one that names the actual problem.
+ */
+export function FirstDatabaseError(error: Error | undefined): string | undefined {
+    const seen = new Set<Error>();
+    let current: unknown = error;
+    while (current instanceof Error && !seen.has(current)) {
+        seen.add(current);
+        const preceding = (current as Error & { precedingErrors?: unknown }).precedingErrors;
+        if (Array.isArray(preceding) && preceding[0] instanceof Error) {
+            return preceding[0].message;
+        }
+        current = current.cause;
+    }
+    return undefined;
+}
+
+/**
+ * The caller-facing message for a failed run: Skyway's own message for the failing migration,
+ * prefixed with its file, plus the first database error when mssql hid it (MJ#3975).
+ *
+ * `captured` is the failure reported to `OnMigrationEnd`. In `per-migration` mode Skyway's
+ * rollback of the doomed transaction throws, and `Migrate()` then returns empty `Details` with
+ * only `Transaction has been aborted.` — so the callback is the only place the failure survives.
+ */
+export function DescribeMigrationFailure(schemaName: string, result?: MigrateResult, captured?: MigrationExecutionResult): string {
+    const failed = captured ?? result?.Details?.find((detail) => !detail.Success);
+    const file = failed ? ` in ${failed.Migration.Filename}` : '';
+    const message = failed?.Error?.message || result?.ErrorMessage || 'no error detail was reported by the migration engine';
+    const first = FirstDatabaseError(failed?.Error);
+    const firstNote = first && !message.includes(first) ? ` [first database error: ${first}]` : '';
+    return `Migration failed for schema '${schemaName}'${file}: ${message}${firstNote}`;
+}
+
+/**
  * Result of running migrations.
  */
 export interface MigrationRunResult {
@@ -170,7 +165,8 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
     }
     const platform: DatabasePlatform = options.Platform ?? 'sqlserver';
 
-    let skyway: SkywayInstance | undefined;
+    let skyway: Skyway | undefined;
+    let capturedFailure: MigrationExecutionResult | undefined;
 
     try {
         // The skyway packages are declared as optionalDependencies of THIS package (and as
@@ -178,10 +174,10 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         // npm's hoisted layout and pnpm's strict per-package layout — a bare dynamic import
         // resolves from the importing module, not the host entrypoint, so a host-provides
         // contract alone cannot work under pnpm (MJ#3677). The import stays dynamic (via
-        // ImportSkywayClass) so this module compiles and loads even when the optional
+        // ImportSkywayClass) so this module loads even when the optional
         // packages are not installed — and a genuinely-missing package gets the actionable
         // optionalDependencies guidance instead of a raw resolver error.
-        const Skyway = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
+        const SkywayClass = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
         const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform, TransactionMode);
         // Skyway 0.6.x requires an explicit provider, selected by platform.
         config.Provider = await CreateSkywayProvider(platform, config.Database);
@@ -192,7 +188,17 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             console.log(`  Server: ${DatabaseConfig.Host}:${DatabaseConfig.Port}`);
         }
 
-        skyway = new Skyway(config) as SkywayInstance;
+        skyway = new SkywayClass(config) as Skyway;
+        // See DescribeMigrationFailure. Runtime-checked: an older skyway has no OnProgress.
+        if (typeof skyway.OnProgress === 'function') {
+            skyway.OnProgress({
+                OnMigrationEnd: (migration) => {
+                    if (!migration.Success && !capturedFailure) {
+                        capturedFailure = migration;
+                    }
+                },
+            });
+        }
         const result = await skyway.Migrate();
 
         const appliedFiles = result.Details
@@ -229,9 +235,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             Success: result.Success,
             MigrationsApplied: result.MigrationsApplied,
             AppliedFiles: appliedFiles,
-            ErrorMessage: result.Success
-                ? undefined
-                : `Migration failed for schema '${SchemaName}': ${result.ErrorMessage ?? 'unknown error'}`,
+            ErrorMessage: result.Success ? undefined : DescribeMigrationFailure(SchemaName, result, capturedFailure),
         };
     }
     catch (error: unknown) {
@@ -240,7 +244,9 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             Success: false,
             MigrationsApplied: 0,
             AppliedFiles: [],
-            ErrorMessage: `Migration failed for schema '${SchemaName}': ${message}`
+            ErrorMessage: capturedFailure
+                ? DescribeMigrationFailure(SchemaName, undefined, capturedFailure)
+                : `Migration failed for schema '${SchemaName}': ${message}`,
         };
     }
     finally {
@@ -255,13 +261,13 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
  * packages are optionalDependencies of this package — only the one matching the
  * target database needs to be installed. Mirrors MJCLI's `createSkywayProvider`.
  */
-async function CreateSkywayProvider(platform: DatabasePlatform, dbConfig: SkywayConfig['Database']): Promise<unknown> {
+async function CreateSkywayProvider(platform: DatabasePlatform, dbConfig: SkywayConfig['Database']): Promise<DatabaseProvider> {
     if (platform === 'postgresql') {
         const PostgresProvider = await ImportSkywayClass('@memberjunction/skyway-postgres', 'PostgresProvider', 'the PostgreSQL provider');
-        return new PostgresProvider(dbConfig);
+        return new PostgresProvider(dbConfig) as DatabaseProvider;
     }
     const SqlServerProvider = await ImportSkywayClass('@memberjunction/skyway-sqlserver', 'SqlServerProvider', 'the SQL Server provider');
-    return new SqlServerProvider(dbConfig);
+    return new SqlServerProvider(dbConfig) as DatabaseProvider;
 }
 
 /**
