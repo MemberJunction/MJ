@@ -3440,4 +3440,398 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(expValXml).toContain('<f>B1+1</f>');
         expect(expValXml).not.toContain('t="array"');
     });
+
+    it('extracts charts from comma-separated non-contiguous ranges, row orientation, and custom category/series filters', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('NonContiguousCharts', ['Trade'], 10, 6);
+        const ws = wb.Worksheets[0];
+        const rows: Array<[string, string, number, number]> = [
+            ['Era', 'Notes', 100, 500],
+            ['Han', 'Early', 120, 420],
+            ['Tang', 'Peak', 350, 980],
+            ['Song', 'Maritime', 280, 760],
+        ];
+        engine.SetCell(wb, ws.SheetID, 'A1', { Value: 'Era' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B1', { Value: 'Notes' }, false);
+        engine.SetCell(wb, ws.SheetID, 'C1', { Value: 'Caravans' }, false);
+        engine.SetCell(wb, ws.SheetID, 'D1', { Value: 'Volume' }, false);
+        for (let i = 1; i < rows.length; i++) {
+            const [era, note, caravans, volume] = rows[i];
+            const r = i + 1;
+            engine.SetCell(wb, ws.SheetID, `A${r}`, { Value: era }, false);
+            engine.SetCell(wb, ws.SheetID, `B${r}`, { Value: note }, false);
+            engine.SetCell(wb, ws.SheetID, `C${r}`, { Value: caravans }, false);
+            engine.SetCell(wb, ws.SheetID, `D${r}`, { Value: volume }, false);
+        }
+
+        // 1) Non-contiguous column union A1:A4,D1:D4
+        const unionDs = engine.ExtractChartDataset(wb, ws.SheetID, 'A1:A4,D1:D4');
+        expect(unionDs).not.toBeNull();
+        expect(unionDs!.Categories).toEqual(['Han', 'Tang', 'Song']);
+        expect(unionDs!.Series).toHaveLength(1);
+        expect(unionDs!.Series[0].Name).toBe('Volume');
+        expect(unionDs!.Series[0].Values).toEqual([420, 980, 760]);
+
+        // 2) Non-contiguous stacked row union A1:D2,A4:D4
+        const stackedDs = engine.ExtractChartDataset(wb, ws.SheetID, 'A1:D2,A4:D4');
+        expect(stackedDs).not.toBeNull();
+        expect(stackedDs!.Categories).toEqual(['Han · Early', 'Song · Maritime']);
+        expect(stackedDs!.Series.map((s) => s.Name)).toEqual(['Caravans', 'Volume']);
+        expect(stackedDs!.Series[1].Values).toEqual([420, 760]);
+
+        // 3) Override spec: explicit CategoryColumnIndex & IncludedSeriesIndices
+        const filteredDs = engine.ExtractChartDataset(wb, ws.SheetID, 'A1:D4', {
+            CategoryColumnIndex: 1,
+            IncludedSeriesIndices: [2],
+            HasHeaderRow: true,
+        });
+        expect(filteredDs).not.toBeNull();
+        expect(filteredDs!.Categories).toEqual(['Early', 'Peak', 'Maritime']);
+        expect(filteredDs!.Series).toHaveLength(1);
+        expect(filteredDs!.Series[0].Name).toBe('Caravans');
+        expect(filteredDs!.Series[0].Values).toEqual([120, 350, 280]);
+
+        // 4) Row-oriented series (transposed layout)
+        const wbRows = engine.CreateEmptyWorkbook('RowOriented', ['Summary'], 6, 6);
+        const wsRows = wbRows.Worksheets[0];
+        engine.SetCell(wbRows, wsRows.SheetID, 'A1', { Value: 'Region' }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'B1', { Value: 'Q1' }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'C1', { Value: 'Q2' }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'A2', { Value: 'North' }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'B2', { Value: 10 }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'C2', { Value: 25 }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'A3', { Value: 'South' }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'B3', { Value: 15 }, false);
+        engine.SetCell(wbRows, wsRows.SheetID, 'C3', { Value: 30 }, false);
+
+        const rowDs = engine.ExtractChartDataset(wbRows, wsRows.SheetID, 'A1:C3', {
+            SeriesOrientation: 'rows',
+        });
+        expect(rowDs).not.toBeNull();
+        expect(rowDs!.Categories).toEqual(['Q1', 'Q2']);
+        expect(rowDs!.Series.map((s) => s.Name)).toEqual(['North', 'South']);
+        expect(rowDs!.Series[0].Values).toEqual([10, 25]);
+        expect(rowDs!.Series[1].Values).toEqual([15, 30]);
+    });
+
+    it('preserves PreferredObjectsPaneHeightPx and sheet chart placement metadata across JSON and XLSX round-trips', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('ChartMetaPersist', ['Overview'], 12, 8);
+        const ws = wb.Worksheets[0];
+        engine.SetCell(wb, ws.SheetID, 'A1', { Value: 'Item' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B1', { Value: 'Amount' }, false);
+        engine.SetCell(wb, ws.SheetID, 'A2', { Value: 'Alpha' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B2', { Value: 42 }, false);
+
+        wb.PreferredObjectsPaneHeightPx = 384;
+        ws.Charts.push({
+            ChartID: 'chart-sheet-1',
+            Title: 'Floating Sheet Chart',
+            ChartType: 'area',
+            SheetID: ws.SheetID,
+            SourceRange: 'A1:B2',
+            PositionCell: 'D3',
+            Placement: 'sheet',
+            OffsetX: 390,
+            OffsetY: 96,
+            WidthPx: 440,
+            HeightPx: 260,
+            ShowLegend: false,
+            ShowDataLabels: true,
+            HasHeaderRow: true,
+            SeriesOrientation: 'columns',
+            CategoryColumnIndex: 0,
+            IncludedSeriesIndices: [1],
+        });
+
+        const parsedJson = engine.ParseWorkbook(engine.SerializeWorkbook(wb));
+        expect(parsedJson.PreferredObjectsPaneHeightPx).toBe(384);
+        const jsonChart = parsedJson.Worksheets[0].Charts[0];
+        expect(jsonChart.Placement).toBe('sheet');
+        expect(jsonChart.OffsetX).toBe(390);
+        expect(jsonChart.OffsetY).toBe(96);
+        expect(jsonChart.WidthPx).toBe(440);
+        expect(jsonChart.HeightPx).toBe(260);
+        expect(jsonChart.ShowDataLabels).toBe(true);
+        expect(jsonChart.IncludedSeriesIndices).toEqual([1]);
+
+        const xlsxBytes = engine.ExportToXlsxBytes(parsedJson);
+        const reimported = engine.ImportFromXlsxBytes(xlsxBytes);
+        expect(reimported.PreferredObjectsPaneHeightPx).toBe(384);
+        expect(reimported.Worksheets[0].Charts[0].Placement).toBe('sheet');
+        expect(reimported.Worksheets[0].Charts[0].OffsetX).toBe(390);
+    });
+
+    it('[C-P0-2] preserves ProtectedRanges, cell styles (including var(--mj-*) and empty styled cells), SortSpec/FilterSpecs, hidden rows/cols, and row heights across XLSX round-trip', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('FidelityRoundTrip', ['Ledger'], 10, 6);
+        const ws = wb.Worksheets[0];
+
+        engine.SetCell(wb, ws.SheetID, 'A1', { Value: 'Category' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B1', { Value: 'Amount' }, false);
+        engine.SetCell(wb, ws.SheetID, 'A2', { Value: 'Travel' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B2', { Value: 1200 }, false);
+
+        // Apply rich styles including Italic, TextColor, BackgroundColor (hex and CSS var token), HorizontalAlign, plus an empty styled cell
+        const a1 = ws.Cells['A1'];
+        a1.Style = {
+            Bold: true,
+            Italic: true,
+            TextColor: '#1e293b',
+            BackgroundColor: '#e0f2fe',
+            HorizontalAlign: 'center',
+        };
+        const a2 = ws.Cells['A2'];
+        a2.Style = {
+            Italic: true,
+            TextColor: 'var(--mj-text-primary)',
+            BackgroundColor: 'var(--mj-bg-surface-sunken)',
+            HorizontalAlign: 'right',
+        };
+        engine.SetCell(
+            wb,
+            ws.SheetID,
+            'C3',
+            {
+                Value: null,
+                Style: {
+                    BackgroundColor: '#fef3c7',
+                    HorizontalAlign: 'left',
+                },
+            },
+            false
+        );
+
+        ws.ProtectedRanges = [
+            {
+                RangeID: 'prot-1',
+                Range: 'B1:B10',
+                LockedByUserID: 'user-admin-1',
+                AllowEditors: false,
+                Description: 'Locked forecast column',
+            },
+        ];
+        ws.SortSpec = {
+            ColumnLetter: 'B',
+            Direction: 'desc',
+            HeaderRows: 1,
+        };
+        ws.FilterSpecs = [
+            {
+                ColumnLetter: 'A',
+                Operator: 'equals',
+                Value: 'Travel',
+                HeaderRows: 1,
+            },
+        ];
+
+        // Hidden column D (col 4), custom row height + hidden row 4
+        const colD = ws.Columns.find((c) => c.Index === 4);
+        expect(colD).toBeDefined();
+        colD!.Hidden = true;
+        colD!.Width = 22;
+
+        const row3 = ws.Rows.find((r) => r.Index === 3);
+        const row4 = ws.Rows.find((r) => r.Index === 4);
+        expect(row3).toBeDefined();
+        expect(row4).toBeDefined();
+        row3!.Height = 44;
+        row4!.Height = 36;
+        row4!.Hidden = true;
+
+        // 1) Full MJ metadata round-trip (preserves var(--mj-*), ProtectedRanges, SortSpec, FilterSpecs, empty styled cells, rows/cols)
+        const fullBytes = engine.ExportToXlsxBytes(wb, true);
+        const fullRoundTrip = engine.ImportFromXlsxBytes(fullBytes);
+        const rtSheet = fullRoundTrip.Worksheets[0];
+
+        expect(rtSheet.ProtectedRanges).toEqual([
+            {
+                RangeID: 'prot-1',
+                Range: 'B1:B10',
+                LockedByUserID: 'user-admin-1',
+                AllowEditors: false,
+                Description: 'Locked forecast column',
+            },
+        ]);
+        expect(rtSheet.SortSpec).toEqual(ws.SortSpec);
+        expect(rtSheet.FilterSpecs).toEqual(ws.FilterSpecs);
+        expect(rtSheet.Cells['A1']?.Style).toMatchObject({
+            Bold: true,
+            Italic: true,
+            TextColor: '#1e293b',
+            BackgroundColor: '#e0f2fe',
+            HorizontalAlign: 'center',
+        });
+        expect(rtSheet.Cells['A2']?.Style).toMatchObject({
+            Italic: true,
+            TextColor: 'var(--mj-text-primary)',
+            BackgroundColor: 'var(--mj-bg-surface-sunken)',
+            HorizontalAlign: 'right',
+        });
+        expect(rtSheet.Cells['C3']?.Style).toMatchObject({
+            BackgroundColor: '#fef3c7',
+            HorizontalAlign: 'left',
+        });
+        expect(rtSheet.Columns.find((c) => c.Index === 4)?.Hidden).toBe(true);
+        expect(rtSheet.Columns.find((c) => c.Index === 4)?.Width).toBe(22);
+        expect(rtSheet.Rows.find((r) => r.Index === 3)?.Height).toBe(44);
+        expect(rtSheet.Rows.find((r) => r.Index === 4)?.Hidden).toBe(true);
+        expect(rtSheet.Rows.find((r) => r.Index === 4)?.Height).toBe(36);
+
+        // 2) Standard OOXML-only round-trip (without mj_meta) preserves hex styles, alignment, empty styled cell, hidden rows/cols, and row heights
+        const ooxmlOnlyBytes = engine.ExportToXlsxBytes(wb, false);
+        const ooxmlRoundTrip = engine.ImportFromXlsxBytes(ooxmlOnlyBytes);
+        const ooxmlSheet = ooxmlRoundTrip.Worksheets[0];
+
+        expect(ooxmlSheet.Cells['A1']?.Style).toMatchObject({
+            Bold: true,
+            Italic: true,
+            TextColor: '#1e293b',
+            BackgroundColor: '#e0f2fe',
+            HorizontalAlign: 'center',
+        });
+        expect(ooxmlSheet.Cells['C3']?.Style).toMatchObject({
+            BackgroundColor: '#fef3c7',
+            HorizontalAlign: 'left',
+        });
+        expect(ooxmlSheet.Columns.find((c) => c.Index === 4)?.Hidden).toBe(true);
+        expect(ooxmlSheet.Rows.find((r) => r.Index === 3)?.Height).toBe(44);
+        expect(ooxmlSheet.Rows.find((r) => r.Index === 4)?.Hidden).toBe(true);
+    });
+
+    it('[C-P1-2] disambiguates duplicate chart column headers and honors sparse IncludedSeriesIndices', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('ChartHeaders', ['Data'], 6, 4);
+        const ws = wb.Worksheets[0];
+
+        // Duplicate series header ("Total") and a series header matching category column header ("Name")
+        engine.SetCell(wb, ws.SheetID, 'A1', { Value: 'Name' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B1', { Value: 'Total' }, false);
+        engine.SetCell(wb, ws.SheetID, 'C1', { Value: 'Total' }, false);
+        engine.SetCell(wb, ws.SheetID, 'D1', { Value: 'Name' }, false);
+
+        engine.SetCell(wb, ws.SheetID, 'A2', { Value: 'East' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B2', { Value: 10 }, false);
+        engine.SetCell(wb, ws.SheetID, 'C2', { Value: 20 }, false);
+        engine.SetCell(wb, ws.SheetID, 'D2', { Value: 30 }, false);
+
+        engine.SetCell(wb, ws.SheetID, 'A3', { Value: 'West' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B3', { Value: 15 }, false);
+        engine.SetCell(wb, ws.SheetID, 'C3', { Value: 25 }, false);
+        engine.SetCell(wb, ws.SheetID, 'D3', { Value: 'n/a' }, false);
+
+        engine.SetCell(wb, ws.SheetID, 'A4', { Value: 'North' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B4', { Value: 12 }, false);
+        engine.SetCell(wb, ws.SheetID, 'C4', { Value: 22 }, false);
+        engine.SetCell(wb, ws.SheetID, 'D4', { Value: 'n/a' }, false);
+
+        const ds = engine.ExtractChartDataset(wb, ws.SheetID, 'A1:D4', {
+            CategoryColumnIndex: 0,
+            IncludedSeriesIndices: [1, 2, 3],
+        });
+        expect(ds).not.toBeNull();
+        // Column D is <50% numeric (1 out of 3), yet must STILL be included when explicitly listed in IncludedSeriesIndices
+        expect(ds!.Series.map((s) => s.ColumnIndex)).toEqual([1, 2, 3]);
+        const seriesNames = ds!.Series.map((s) => s.Name);
+        expect(new Set(seriesNames).size).toBe(3);
+        expect(seriesNames).not.toContain(ds!.Columns[0].Name);
+        expect(ds!.Columns).toHaveLength(4);
+        expect(new Set(ds!.Columns.map((c) => c.Name)).size).toBe(4);
+        expect(ds!.Rows[0][ds!.Columns[0].Name]).toBe('East');
+        expect(ds!.Rows[0][seriesNames[0]]).toBe(10);
+        expect(ds!.Rows[0][seriesNames[1]]).toBe(20);
+        expect(ds!.Rows[0][seriesNames[2]]).toBe(30);
+        expect(ds!.Rows[1][seriesNames[2]]).toBe(0);
+    });
+
+    it('ShiftFormulaReferences shifts relative refs cleanly while preserving anchors, strings, sheet prefixes, and functions', () => {
+        const engine = SpreadsheetEngine.Instance;
+        expect(engine.ShiftFormulaReferences('=SUM(A1:B2)+$A$1+B$2+$C3', 2, 1)).toBe(
+            '=SUM(B3:C4)+$A$1+C$2+$C5'
+        );
+        expect(engine.ShiftFormulaReferences('="A1 is B2" & A1', 3, 2)).toBe('="A1 is B2" & C4');
+        expect(engine.ShiftFormulaReferences("='FY24 Q1'!A1+Sheet2!B2", 1, 1)).toBe(
+            "='FY24 Q1'!B2+Sheet2!C3"
+        );
+        expect(engine.ShiftFormulaReferences('=LOG10(A1)+ATAN2(B1,C1)', 4, 0)).toBe(
+            '=LOG10(A5)+ATAN2(B5,C5)'
+        );
+        expect(engine.ShiftFormulaReferences('=A1+$B$2', -1, 0)).toBe('=#REF!+$B$2');
+        expect(engine.ShiftFormulaReferences('plain text A1', 2, 2)).toBe('plain text A1');
+    });
+
+    it('[R2-P1-2] shifts ProtectedRanges on row/col insert and delete (shift, expand, shrink, and remove when deleted)', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('ProtectedRangeShift', ['Sheet1'], 12, 10);
+        const ws = wb.Worksheets[0];
+
+        engine.AddProtectedRange(wb, ws.SheetID, {
+            RangeID: 'prot-rect',
+            Range: 'C3:E6',
+            LockedByUserID: 'owner-1',
+            AllowEditors: false
+        });
+        engine.AddProtectedRange(wb, ws.SheetID, {
+            RangeID: 'prot-single',
+            Range: 'B2',
+            LockedByUserID: 'owner-1',
+            AllowEditors: false
+        });
+        engine.AddProtectedRange(wb, ws.SheetID, {
+            RangeID: 'prot-doomed',
+            Range: 'G8:H9',
+            LockedByUserID: 'owner-1',
+            AllowEditors: false
+        });
+
+        // 1. Insert 2 rows at row 2 -> shifts B2 -> B4, C3:E6 -> C5:E8, G8:H9 -> G10:H11
+        engine.InsertRows(wb, ws.SheetID, 2, 2);
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-single')?.Range).toBe('B4');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('C5:E8');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-doomed')?.Range).toBe('G10:H11');
+
+        // 2. Insert 1 row inside C5:E8 (at row 6) -> expands to C5:E9, shifts G10:H11 -> G11:H12, B4 unchanged
+        engine.InsertRows(wb, ws.SheetID, 6, 1);
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-single')?.Range).toBe('B4');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('C5:E9');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-doomed')?.Range).toBe('G11:H12');
+
+        // 3. Insert 2 columns at col 3 (C) -> B4 unchanged, C5:E9 -> E5:G9, G11:H12 -> I11:J12
+        engine.InsertColumns(wb, ws.SheetID, 3, 2);
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-single')?.Range).toBe('B4');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('E5:G9');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-doomed')?.Range).toBe('I11:J12');
+
+        // 4. Insert 1 column inside E5:G9 (at col 6 = F) -> expands to E5:H9, shifts I11:J12 -> J11:K12
+        engine.InsertColumns(wb, ws.SheetID, 6, 1);
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('E5:H9');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-doomed')?.Range).toBe('J11:K12');
+
+        // 5. Delete 1 row at row 3 (before B4 / E5:H9) -> B3, E4:H8, J10:K11
+        engine.DeleteRows(wb, ws.SheetID, 3, 1);
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-single')?.Range).toBe('B3');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('E4:H8');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-doomed')?.Range).toBe('J10:K11');
+
+        // 6. Delete 1 row inside E4:H8 (at row 6) -> shrinks to E4:H7, shifts J10:K11 -> J9:K10
+        engine.DeleteRows(wb, ws.SheetID, 6, 1);
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('E4:H7');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-doomed')?.Range).toBe('J9:K10');
+
+        // 7. Delete 1 column inside E4:H7 (at col 6 = F) -> shrinks to E4:G7, shifts J9:K10 -> I9:J10
+        engine.DeleteColumns(wb, ws.SheetID, 6, 1);
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('E4:G7');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-doomed')?.Range).toBe('I9:J10');
+
+        // 8. Delete rows 9..10 (entirely covering prot-doomed I9:J10) -> prot-doomed is removed
+        engine.DeleteRows(wb, ws.SheetID, 9, 2);
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-doomed')).toBeUndefined();
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('E4:G7');
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-single')?.Range).toBe('B3');
+
+        // 9. Delete column 2 (B, covering prot-single B3) -> prot-single is removed, E4:G7 shifts to D4:F7
+        engine.DeleteColumns(wb, ws.SheetID, 2, 1);
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-single')).toBeUndefined();
+        expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('D4:F7');
+    });
 });

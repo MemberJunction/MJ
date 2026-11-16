@@ -247,6 +247,14 @@ Each `ArtifactType` in `/metadata/artifact-types/.artifact-types.json` can decla
 
 This ensures data/query artifacts display meaningful titles (such as `"Top 5 Schemas by Entity Count"`) in chat cards and the Artifact Panel header instead of generic `<AgentName> Payload` fallbacks.
 
+## Always-On Workspace Tools & `GovernedArtifactService`
+
+When `ArtifactToolManager` is initialized with `contextUser` and `provider` (`workspaceEnabled: true`), Loop agents automatically receive workspace-level artifact tools (`create_artifact`, `open_artifact`, `list_workspace_artifacts`, `create_synthesized_artifact`) **even if zero initial artifacts were attached at the start of the turn**, regardless of whether `ArtifactCreationMode` is `'Never'` (which gates automatic turn-end JSON payload emission, not explicit workspace tool calls):
+
+- **`ArtifactToolExecutionContext`**: `BaseArtifactToolLibrary.InvokeTool` forwards `{ contextUser, provider, artifactId, agentRunId }` so tools like `SpreadsheetToolLibrary.upsert_live_table` and `write_cells` (`=MJ.QUERY`) materialize live data immediately on the server under the caller's permissions.
+- **`ExecuteAgentResult.touchedArtifacts`**: Summarizes governed collaborative artifacts (`GovernedRunArtifactSummary`: `ArtifactID`, `ArtifactVersionID`, `VersionNumber`, `Name`, `ArtifactTypeName`, `DriverClass?`, `Operation`) created or mutated mid-run so callers (including realtime delegation and UI surfaces) can open them even when the agent's final JSON payload is `{}`.
+- **`GovernedArtifactService` & Presence Attribution**: Shared service (`packages/AI/Agents/src/GovernedArtifactService.ts`) powering both the 4 CoreActions (`__CreateGovernedArtifact`, `__InspectGovernedArtifact`, `__MutateGovernedArtifact`, `__ListWorkspaceArtifacts`) and live Yjs hydration/checkpoint hooks + structural target location extraction (`artifact-presence-locator.ts`).
+
 ## Deprecated: ConversationDetailAttachment
 
 The `MJ: Conversation Detail Attachments` entity is `Status='Deprecated'`

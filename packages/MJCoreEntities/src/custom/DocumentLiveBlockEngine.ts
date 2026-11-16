@@ -198,8 +198,35 @@ export interface DocumentBlockSpec {
     PageSize?: number;
     /** Whether the block starts collapsed by default in the document (`false` when omitted). */
     Collapsed?: boolean;
+    /** When true, modifying or removing this block is restricted to owner/locker (`§6.2`). */
+    Locked?: boolean;
+    /** Optional `UserInfo.ID` of the user who locked this block. */
+    LockedByUserID?: string;
     /** Point-in-time snapshot used when `Mode === 'Frozen'`. */
     FrozenSnapshot?: FrozenBlockSnapshot | null;
+}
+
+/**
+ * Governance lock mode parsed from `<!-- mj-lock: ... -->` directives in Markdown documents (`§6.2`).
+ */
+export type DocumentLockScope = 'owner-only' | 'editors-allowed';
+
+/**
+ * Represents a locked Markdown section, block directive, or fenced span in a Document (`§6.2`).
+ */
+export interface DocumentLockedRange {
+    /** 1-based inclusive start line containing the lock directive or heading. */
+    StartLine: number;
+    /** 1-based inclusive end line covered by the lock. */
+    EndLine: number;
+    /** Lock enforcement mode (`'owner-only'` by default). */
+    Scope: DocumentLockScope;
+    /** Optional user ID encoded in the directive (`user=<id>`). */
+    LockedByUserID?: string;
+    /** Optional target kind (`'fenced' | 'heading' | 'block'`). */
+    Kind: 'fenced' | 'heading' | 'block';
+    /** Heading title or block ID covered by the lock, for clear error messages. */
+    Label: string;
 }
 
 /**
@@ -1181,6 +1208,250 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
     public SerializeBlockToMarkdownDirective(spec: DocumentBlockSpec): string {
         const json = JSON.stringify(spec, null, 2);
         return `:::mj-block\n${json}\n:::`;
+    }
+
+    /**
+     * Parses `<!-- mj-lock: owner-only -->` directives, `<!-- /mj-lock -->` spans, heading section locks,
+     * and `"Locked": true` `:::mj-block` specs into 1-based {@link DocumentLockedRange} entries (`§6.2`).
+     */
+    public ParseDocumentLocks(markdown: string): DocumentLockedRange[] {
+        const lines = (markdown ?? '').replace(/\r\n/g, '\n').split('\n');
+        const locks: DocumentLockedRange[] = [];
+        const lockDirectiveRe = /^\s*<!--\s*mj-lock\s*:\s*([a-zA-Z0-9_-]+)(?:\s+user=([^\s>]+))?\s*-->\s*$/i;
+        const unlockDirectiveRe = /^\s*<!--\s*\/mj-lock\s*-->\s*$/i;
+        const headingRe = /^(#{1,6})\s+([^\n]*)$/;
+        let inCodeFence: '`' | '~' | null = null;
+
+        let i = 0;
+        while (i < lines.length) {
+            const trimmed = lines[i].trim();
+            if (!inCodeFence && (trimmed.startsWith('```') || trimmed.startsWith('~~~'))) {
+                inCodeFence = trimmed[0] === '`' ? '`' : '~';
+                i++;
+                continue;
+            }
+            if (inCodeFence && trimmed.startsWith(inCodeFence.repeat(3))) {
+                inCodeFence = null;
+                i++;
+                continue;
+            }
+            if (inCodeFence) {
+                i++;
+                continue;
+            }
+
+            const match = lockDirectiveRe.exec(lines[i]);
+            if (!match) {
+                i++;
+                continue;
+            }
+
+            const rawScope = match[1].toLowerCase();
+            const scope: DocumentLockScope = rawScope === 'editors-allowed' ? 'editors-allowed' : 'owner-only';
+            const lockedByUserId = match[2]?.trim() || undefined;
+            const startLine = i + 1;
+
+            // Check if there is a closing <!-- /mj-lock --> ahead
+            let explicitCloseIdx = -1;
+            for (let j = i + 1; j < lines.length; j++) {
+                if (unlockDirectiveRe.test(lines[j])) {
+                    explicitCloseIdx = j;
+                    break;
+                }
+            }
+            if (explicitCloseIdx >= 0) {
+                locks.push({
+                    StartLine: startLine,
+                    EndLine: explicitCloseIdx + 1,
+                    Scope: scope,
+                    LockedByUserID: lockedByUserId,
+                    Kind: 'fenced',
+                    Label: `lines ${startLine}-${explicitCloseIdx + 1}`
+                });
+                i = explicitCloseIdx + 1;
+                continue;
+            }
+
+            // Otherwise check next non-empty line: heading -> lock entire section; :::mj-block -> lock block
+            let nextIdx = i + 1;
+            while (nextIdx < lines.length && lines[nextIdx].trim() === '') {
+                nextIdx++;
+            }
+            const nextLine = nextIdx < lines.length ? lines[nextIdx] : '';
+            const headingMatch = headingRe.exec(nextLine);
+            if (headingMatch) {
+                const headingLevel = headingMatch[1].length;
+                let endIdx = lines.length - 1;
+                for (let j = nextIdx + 1; j < lines.length; j++) {
+                    const h = headingRe.exec(lines[j]);
+                    if (h && h[1].length <= headingLevel) {
+                        endIdx = j - 1;
+                        break;
+                    }
+                }
+                locks.push({
+                    StartLine: startLine,
+                    EndLine: endIdx + 1,
+                    Scope: scope,
+                    LockedByUserID: lockedByUserId,
+                    Kind: 'heading',
+                    Label: headingMatch[2].trim()
+                });
+                i = endIdx + 1;
+                continue;
+            }
+
+            if (nextLine.trim().startsWith(':::mj-block')) {
+                let endIdx = nextIdx;
+                for (let j = nextIdx + 1; j < lines.length; j++) {
+                    if (lines[j].trim() === ':::') {
+                        endIdx = j;
+                        break;
+                    }
+                }
+                locks.push({
+                    StartLine: startLine,
+                    EndLine: endIdx + 1,
+                    Scope: scope,
+                    LockedByUserID: lockedByUserId,
+                    Kind: 'block',
+                    Label: `block at line ${nextIdx + 1}`
+                });
+                i = endIdx + 1;
+                continue;
+            }
+
+            // Fallback: single-line / trailing paragraph lock
+            locks.push({
+                StartLine: startLine,
+                EndLine: Math.min(lines.length, nextIdx + 1),
+                Scope: scope,
+                LockedByUserID: lockedByUserId,
+                Kind: 'fenced',
+                Label: `line ${startLine}`
+            });
+            i = Math.max(i + 1, nextIdx + 1);
+        }
+
+        // Also detect JSON-level `"Locked": true` inside :::mj-block segments
+        const segments = this.ParseMarkdownDirectives(markdown);
+        for (const seg of segments) {
+            if (seg.Type === 'mj-block' && seg.BlockSpec?.Locked) {
+                const alreadyCovered = locks.some(
+                    (l) => seg.StartLine >= l.StartLine && seg.EndLine <= l.EndLine
+                );
+                if (!alreadyCovered) {
+                    locks.push({
+                        StartLine: seg.StartLine,
+                        EndLine: seg.EndLine,
+                        Scope: 'owner-only',
+                        LockedByUserID: seg.BlockSpec.LockedByUserID,
+                        Kind: 'block',
+                        Label: seg.BlockSpec.Title || seg.BlockSpec.BlockID
+                    });
+                }
+            }
+        }
+
+        return locks;
+    }
+
+    /**
+     * Checks whether a given actor can edit a parsed {@link DocumentLockedRange}.
+     */
+    public CanActorEditLockedRange(
+        lock: DocumentLockedRange,
+        actorUserId?: string | null,
+        ownerUserId?: string | null,
+        isEditor = false
+    ): boolean {
+        const actor = (actorUserId ?? '').trim();
+        if (actor && ownerUserId && UUIDsEqual(actor, ownerUserId)) {
+            return true;
+        }
+        if (actor && lock.LockedByUserID && UUIDsEqual(actor, lock.LockedByUserID)) {
+            return true;
+        }
+        if (lock.Scope === 'editors-allowed' && isEditor) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Verifies that an edit transitioning `originalMarkdown` -> `nextMarkdown` does not alter
+     * any locked section or strip any `<!-- mj-lock -->` marker without owner permission (`§6.2`).
+     */
+    public ValidateDocumentEditAgainstLocks(
+        originalMarkdown: string,
+        nextMarkdown: string,
+        actorUserId?: string | null,
+        ownerUserId?: string | null,
+        isEditor = false
+    ): { Allowed: boolean; ViolationReason?: string; ViolatedLock?: DocumentLockedRange } {
+        const originalLocks = this.ParseDocumentLocks(originalMarkdown);
+        if (originalLocks.length === 0) {
+            return { Allowed: true };
+        }
+
+        const origLines = (originalMarkdown ?? '').replace(/\r\n/g, '\n').split('\n');
+        const nextNormalized = (nextMarkdown ?? '').replace(/\r\n/g, '\n');
+        const nextLines = nextNormalized.split('\n');
+        const nextLocks = this.ParseDocumentLocks(nextNormalized);
+
+        for (const lock of originalLocks) {
+            if (this.CanActorEditLockedRange(lock, actorUserId, ownerUserId, isEditor)) {
+                continue;
+            }
+            const lockedSlice = origLines.slice(lock.StartLine - 1, lock.EndLine).join('\n');
+            if (!nextNormalized.includes(lockedSlice)) {
+                return {
+                    Allowed: false,
+                    ViolationReason: `Cannot modify locked region '${lock.Label}' (${lock.Scope}): owner-only protection.`,
+                    ViolatedLock: lock
+                };
+            }
+            const matchingNextLock = nextLocks.find((nl) => {
+                const nlSlice = nextLines.slice(nl.StartLine - 1, nl.EndLine).join('\n');
+                return nlSlice === lockedSlice;
+            });
+            if (!matchingNextLock) {
+                return {
+                    Allowed: false,
+                    ViolationReason: `Cannot alter or unlock protected region '${lock.Label}' (${lock.Scope}).`,
+                    ViolatedLock: lock
+                };
+            }
+        }
+
+        return { Allowed: true };
+    }
+
+    /**
+     * Toggles `<!-- mj-lock: owner-only -->` immediately above a 1-based heading line in Markdown (`§6.2`).
+     */
+    public ToggleHeadingLockInMarkdown(
+        markdown: string,
+        headingLineNumber: number,
+        locked: boolean,
+        actorUserId?: string
+    ): string {
+        const lines = (markdown ?? '').replace(/\r\n/g, '\n').split('\n');
+        const idx = headingLineNumber - 1;
+        if (idx < 0 || idx >= lines.length) {
+            return markdown;
+        }
+        const lockRe = /^\s*<!--\s*mj-lock\s*:/i;
+        const prevIsLock = idx > 0 && lockRe.test(lines[idx - 1]);
+        if (locked && !prevIsLock) {
+            const directive = actorUserId
+                ? `<!-- mj-lock: owner-only user=${actorUserId} -->`
+                : '<!-- mj-lock: owner-only -->';
+            lines.splice(idx, 0, directive);
+        } else if (!locked && prevIsLock) {
+            lines.splice(idx - 1, 1);
+        }
+        return lines.join('\n');
     }
 
     /**

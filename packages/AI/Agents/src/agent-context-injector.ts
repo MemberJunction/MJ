@@ -432,6 +432,9 @@ export class AgentContextInjector {
 
         // Filter examples matching our scoping criteria
         const filtered = this.filterExamplesByScoping(allExamples, params);
+        if (filtered.length === 0) {
+            return [];
+        }
 
         // Sort based on strategy
         const sorted = this.sortExamples(filtered, params.strategy);

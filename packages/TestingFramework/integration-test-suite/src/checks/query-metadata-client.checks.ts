@@ -1,5 +1,5 @@
 /**
- * Saved-query metadata is not loaded into the metadata object by default (IT175, client transport,
+ * Saved-query metadata is not loaded into the metadata object by default (IT177, client transport,
  * QM3 mutates).
  *
  * A browser's provider leaves the query items of the MJ_Metadata dataset unread: it asks the server

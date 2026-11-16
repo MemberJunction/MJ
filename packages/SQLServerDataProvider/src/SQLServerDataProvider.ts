@@ -95,6 +95,7 @@ import { BehaviorSubject, Observable, Subject, concatMap, from, catchError, of }
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import {
   EXECUTED_VARIABLE_SUFFIX,
+  IsKeptAsInlineLiteral,
   IsSaveParameterList,
   RenderSaveSQL,
   SaveParameterCollector,
@@ -2076,7 +2077,6 @@ export class SQLServerDataProvider
   ): SaveSQLFragment {
     const saveBinding = this.asSaveBinding(binding, 'WrapSaveCallWithRecordChange');
     const params = new SaveParameterCollector(saveBinding.parameters);
-    const recordChangesEntityInfo = this.EntityByName('MJ: Record Changes');
     const spName = this.GetCreateUpdateSPName(entity, payload.type === 'Create');
     const concatPKIDString = `CONCAT(${entity.EntityInfo.PrimaryKeys
       .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',[${pk.Name}]`)
@@ -2121,13 +2121,8 @@ export class SQLServerDataProvider
 
                     IF @ID IS NOT NULL
                     BEGIN
-                        DECLARE @ResultChangesTable TABLE (
-                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        );
-
                         ${snapshotDeclareSQL}
 
-                        INSERT INTO @ResultChangesTable
                         ${recordChangeEXEC};
                     END;
 
@@ -2160,6 +2155,7 @@ export class SQLServerDataProvider
                                                                                         @ChangeContext=${bind('ChangeContext', `N'${EscapeSQLString(payload.changeContext)}'`)}`
       : '';
     return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
+                                                                                        @EntityID='${payload.entityID}',
                                                                                         @RecordID=${recordIDSQL},
                                                                                         @UserID=${bind('UserID', `'${payload.userID}'`)},
                                                                                         @Type='${payload.type}',
@@ -2167,7 +2163,8 @@ export class SQLServerDataProvider
                                                                                         @ChangesDescription=${bind('ChangesDescription', `N'${payload.changesDescription}'`)},
                                                                                         @FullRecordJSON=${fullRecordJSONSQL ?? bind('FullRecordJSON', `N'${payload.fullRecordJSON}'`)},
                                                                                         @Status='Complete',
-                                                                                        @Comments=null${lineageClause}`;
+                                                                                        @Comments=null,
+                                                                                        @SuppressReturn=1${lineageClause}`;
   }
 
   /** The batch variable a save's Record Change snapshot is built into from `@ResultTable`. */
@@ -2263,6 +2260,19 @@ export class SQLServerDataProvider
    * @param value The value to set
    * @returns SQL value string
    */
+  /**
+   * Renders a value for a numeric field as a SQL number literal, keeping the caller's digits so a
+   * high-precision decimal isn't rounded through a JS number. Throws for anything else: this text
+   * goes into the save statement as written, and a value that isn't a number must not reach it.
+   */
+  protected static RenderNumberLiteral(value: unknown, fieldName: string): string {
+    const raw = String(value).trim();
+    if (!/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(raw)) {
+      throw new Error(`Invalid non-numeric value provided for numeric field ${fieldName}`);
+    }
+    return raw;
+  }
+
   private generateSetStatementValue(f: EntityFieldInfo, value: any): string {
     if (f.IsBinaryFieldType) return this.FormatBinaryLiteral(f, value);
     let val: any = value;
@@ -2302,7 +2312,10 @@ export class SQLServerDataProvider
         return `'${val}'`;
         
       case EntityFieldTSType.Number:
-        return val.toString();
+        if (f.Type && (IsKeptAsInlineLiteral(f) || f.Type.trim().toLowerCase() === 'sysname')) {
+          return val.toString();
+        }
+        return SQLServerDataProvider.RenderNumberLiteral(val, f.Name);
         
       default:
         // For other types, convert to string and quote if needed
@@ -2549,7 +2562,6 @@ export class SQLServerDataProvider
     });
     const sParams = pkRefs.map((pk) => `@${pk.Field.CodeName}=${pk.Ref}`).join(', ');
     const sSimpleSQL = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
-    const recordChangesEntityInfo = this.EntityByName('MJ: Record Changes');
 
     let sSQL: string;
     if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
@@ -2597,48 +2609,38 @@ export class SQLServerDataProvider
         const sWhere = pkRefs.map((pk) => `[${pk.Field.Name}]=${pk.Ref}`).join(' AND ');
         const sKeyWhen = (flag: string) => pkRefs.map((pk) => `CASE WHEN ${flag} = 1 THEN ${pk.Ref} END AS [${pk.Field.Name}]`).join(', ');
         sSQL = `
-                    DECLARE @MJDeleteRowExisted BIT = CASE WHEN EXISTS (SELECT 1 FROM ${sView} WHERE ${sWhere}) THEN 1 ELSE 0 END
-                    SELECT ${sKeyWhen('@MJDeleteRowExisted')}
+                    DECLARE @MJDeleteRowExisted BIT = CASE WHEN EXISTS (SELECT 1 FROM ${sView} WHERE ${sWhere}) THEN 1 ELSE 0 END;
+                    SELECT ${sKeyWhen('@MJDeleteRowExisted')};
 
                     IF @MJDeleteRowExisted = 1
-                        ${sSimpleSQL}
+                        ${sSimpleSQL};
 
-                    DECLARE @MJDeleteRowDeleted BIT = CASE WHEN @MJDeleteRowExisted = 1 AND NOT EXISTS (SELECT 1 FROM ${sView} WHERE ${sWhere}) THEN 1 ELSE 0 END
+                    DECLARE @MJDeleteRowDeleted BIT = CASE WHEN @MJDeleteRowExisted = 1 AND NOT EXISTS (SELECT 1 FROM ${sView} WHERE ${sWhere}) THEN 1 ELSE 0 END;
                     IF @MJDeleteRowDeleted = 1
                     BEGIN
-                        DECLARE @ResultChangesTable TABLE (
-                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        )
-
-                        INSERT INTO @ResultChangesTable
-                        ${recordChangeSQL}
-                    END
+                        ${recordChangeSQL};
+                    END;
 
                     SELECT ${sKeyWhen('@MJDeleteRowDeleted')}`;
         return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
       }
       sSQL = `
                     IF OBJECT_ID('tempdb..#ResultTable') IS NOT NULL
-                        DROP TABLE #ResultTable
+                        DROP TABLE #ResultTable;
 
                     DECLARE @ResultTable TABLE (
                         ${sTableDeclare}
-                    )
+                    );
 
                     INSERT INTO @ResultTable
-                    ${sSimpleSQL}
+                    ${sSimpleSQL};
 
-                    DECLARE ${sVariableDeclare}
-                    SELECT ${sSelectDeclare} FROM @ResultTable
+                    DECLARE ${sVariableDeclare};
+                    SELECT ${sSelectDeclare} FROM @ResultTable;
                     IF ${sIF}
                     BEGIN
-                        DECLARE @ResultChangesTable TABLE (
-                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        )
-
-                        INSERT INTO @ResultChangesTable
-                        ${recordChangeSQL}
-                    END
+                        ${recordChangeSQL};
+                    END;
 
                     SELECT ${sReturnList}`;
     } else {
@@ -3638,6 +3640,7 @@ DECLARE ${varName} NVARCHAR(MAX) = (
 IF ${varName} IS NOT NULL
     EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
         @EntityName=N'${safeEntityName}',
+        @EntityID='${entityInfo.ID}',
         @RecordID=N'${recordID}',
         @UserID='${safeUserId}',
         @Type='Update',
@@ -3645,7 +3648,8 @@ IF ${varName} IS NOT NULL
         @ChangesDescription=N'${safeChangesDesc}',
         @FullRecordJSON=${varName},
         @Status='Complete',
-        @Comments=NULL${lineageClause};`;
+        @Comments=NULL,
+        @SuppressReturn=1${lineageClause};`;
   }
 
   protected override get HasPhysicalTransaction(): boolean {

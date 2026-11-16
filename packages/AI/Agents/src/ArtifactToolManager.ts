@@ -1,110 +1,61 @@
 import { createHash } from 'node:crypto';
-import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, IsValidUUID, MJEventType, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   ArtifactPermissionEngine,
+  ArtifactSynthesisEngine,
+  ArtifactSynthesisSourceDigest,
+  ArtifactSynthesisSourceInput,
+  BuildArtifactVersionConfigurationWithPreview,
+  MJArtifactEntity,
+  MJArtifactTypeEntity,
   MJArtifactVersionEntity,
+  MJCollectionArtifactEntity,
+  MJEnvironmentEntityExtended,
   MJFileEntity,
   SpreadsheetEngine,
   XlsxOpenXmlAdapter,
 } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult, NativeFileInput, InputArtifact } from '@memberjunction/ai-core-plus';
-import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
-import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
-import { TextToolLibrary } from './artifact-tools/TextToolLibrary';
+import {
+  ArtifactJsonValue,
+  ArtifactToolArgs,
+  ArtifactToolExecutionContext,
+  ArtifactToolResult,
+  BaseArtifactToolLibrary,
+  GovernedRunArtifactSummary,
+  InputArtifact,
+  NativeFileInput,
+} from '@memberjunction/ai-core-plus';
+import {
+  ARTIFACT_LIVE_MUTATION_EVENT_CODE,
+  ArtifactLiveMutationEvent,
+  ArtifactLiveMutationHook,
+  ArtifactLiveMutationHookResult,
+  ExtractAgentTargetLocation,
+  FormatAgentActionSummary,
+  GetArtifactLiveContentReaderHook,
+  GetArtifactLiveMutationHook,
+  MUTATING_ARTIFACT_TOOL_NAMES,
+  ResolvePresenceDomain,
+  SetArtifactLiveMutationHook,
+} from './artifact-presence-locator';
+import {
+  ArtifactToolLibraryWithRevisionHash,
+  FormatFileModeStructuralToolError,
+  GovernedArtifactService,
+  MergeTouchedArtifactSummary,
+  STRUCTURAL_SPREADSHEET_TOOLS,
+} from './GovernedArtifactService';
 
-// Re-export so existing consumers that import { InputArtifact } from
-// './ArtifactToolManager' continue to compile. The canonical declaration
-// now lives in @memberjunction/ai-core-plus alongside ExecuteAgentParams.
-export type { InputArtifact };
+// Re-export within @memberjunction/ai-agents so existing callers continue to resolve
+// InputArtifact and live-mutation hooks from ArtifactToolManager.
+export type { InputArtifact, ArtifactLiveMutationEvent, ArtifactLiveMutationHookResult, ArtifactLiveMutationHook };
+export { SetArtifactLiveMutationHook, GetArtifactLiveMutationHook };
 
-const ARTIFACT_LIVE_MUTATION_HOOK_KEY = '___MJ_ARTIFACT_LIVE_MUTATION_HOOK___';
-const ARTIFACT_LIVE_MUTATION_EVENT_CODE = 'ArtifactCollaboration.LiveContentMutation';
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-/**
- * Payload emitted whenever an agent artifact mutation tool updates an artifact's content (`A4`).
- */
-export interface ArtifactLiveMutationEvent {
-  /** Underlying `MJ: Artifacts` primary key UUID. */
-  artifactId: string;
-  /** Run-scoped alpha identifier (`"A"`, `"B"`, ...). */
-  alphaId: string;
-  /** Newly persisted `MJ: Artifact Versions` primary key UUID, if persisted. */
-  versionId?: string;
-  /** Newly persisted sequential `VersionNumber`, if persisted. */
-  versionNumber?: number;
-  /** Content snapshot prior to this tool mutation, used as the 3-way merge base against live rooms (`R8-2d`). */
-  previousContent?: string;
-  /** Updated serialized artifact content (`Markdown`, `SlideDeckSpec` JSON, `WorkbookSpec` JSON, etc.). */
-  updatedContent: string;
-  /** Optional base64-encoded `.xlsx` binary when produced by `SpreadsheetToolLibrary`. */
-  xlsxBase64?: string;
-  /** Name of the artifact mutation tool that produced the update. */
-  tool: string;
-  /** User context under which the agent tool executed. */
-  contextUser?: UserInfo;
-  /** Active `MJ: AI Agent Runs` ID, if available. */
-  agentRunId?: string;
-  /** Display name of the agent performing the mutation (`D5`). */
-  agentName?: string;
-  /** Whether room commit should be deferred until MJ: Artifact Versions persistence succeeds (`R9-5`). */
-  deferCommit?: boolean;
-}
-
-/**
- * Optional reconciliation outcome returned by {@link ArtifactLiveMutationHook} when merging an agent
- * mutation into a live Yjs room or persisted working state (`R8-2d`).
- */
-export interface ArtifactLiveMutationHookResult {
-  applied?: boolean;
-  mergedContent?: string;
-  hadConflict?: boolean;
-  rejectedHunksCount?: number;
-  rejectedAgentHunks?: Array<{
-    BaseLines: string[];
-    LiveLines: string[];
-    RejectedAgentLines: string[];
-  }>;
-  /** Optional commit callback executed after version persistence succeeds (`R9-5`). */
-  commit?: (persisted?: { versionId?: string; versionNumber?: number }) => Promise<ArtifactLiveMutationHookResult | void>;
-  /** Optional rollback callback executed if version persistence fails (`R9-5`). */
-  rollback?: (rolledBackVersionId?: string) => Promise<void> | void;
-}
-
-/**
- * Callback registered by collaboration hosts (e.g. `ArtifactCollaborationServer`) to broadcast
- * and reconcile live agent mutations against connected Yjs rooms (`A4`, `R8-2d`).
- */
-export type ArtifactLiveMutationHook = (
-  event: ArtifactLiveMutationEvent,
-) => void | ArtifactLiveMutationHookResult | Promise<void | ArtifactLiveMutationHookResult>;
-
-/**
- * Registers (or clears when `null`) the process-wide {@link ArtifactLiveMutationHook}
- * backed by `GetGlobalObjectStore()['___MJ_ARTIFACT_LIVE_MUTATION_HOOK___']` (`A4`).
- */
-export function SetArtifactLiveMutationHook(hook: ArtifactLiveMutationHook | null): void {
-  const store = GetGlobalObjectStore();
-  if (!store) return;
-  if (hook) {
-    store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] = hook;
-  } else {
-    delete store[ARTIFACT_LIVE_MUTATION_HOOK_KEY];
-  }
-}
-
-/**
- * Retrieves the currently registered process-wide {@link ArtifactLiveMutationHook}, if any (`A4`).
- */
-export function GetArtifactLiveMutationHook(): ArtifactLiveMutationHook | null {
-  const store = GetGlobalObjectStore();
-  const candidate = store?.[ARTIFACT_LIVE_MUTATION_HOOK_KEY];
-  return typeof candidate === 'function' ? (candidate as ArtifactLiveMutationHook) : null;
-}
 
 /**
  * Optional persistence and execution context passed to {@link ArtifactToolManager.Initialize} (`A4`).
@@ -120,6 +71,8 @@ export interface ArtifactToolManagerOptions {
   agentRunId?: string;
   /** Explicit agent display name for D5 version attribution (`"Edited by <agentName>"`). */
   agentName?: string;
+  /** Whether always-on artifact workspace tools are exposed even when no artifacts are attached yet. */
+  workspaceEnabled?: boolean;
 }
 
 /**
@@ -131,18 +84,17 @@ export interface ArtifactToolCall {
   /** Tool name from the documented tool list */
   tool: string;
   /** Tool-specific input parameters */
-  input: Record<string, unknown>;
-}
-
-interface ArtifactToolLibraryWithRevisionHash extends BaseArtifactToolLibrary {
-  ComputeRevisionHash?(content: string): string;
+  input: ArtifactToolArgs;
 }
 
 interface ArtifactEntry {
   alphaId: string;
   name: string;
   typeName: string;
+  driverClass?: string;
+  toolLibraryClass?: string;
   artifactId?: string;
+  ownerUserId?: string;
   versionId?: string;
   versionNumber?: number;
   baseVersionNumber?: number;
@@ -161,75 +113,6 @@ interface ArtifactEntry {
   annotation?: string;
   deliveryMode?: 'Inline' | 'ToolsOnly';
   forceToolsOnly?: boolean;
-}
-
-/**
- * Merges tool libraries from an artifact type's inheritance chain.
- *
- * Given a chain ordered leaf-first (most-specific at index 0), tool lookups
- * scan front-to-back, so a child type's tool with the same name as a parent
- * type's tool wins. `GetToolList()` deduplicates by tool name.
- *
- * Used transparently by ArtifactToolManager — callers continue to see a
- * single BaseArtifactToolLibrary.
- */
-class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
-  constructor(private readonly chain: BaseArtifactToolLibrary[]) {
-    super();
-  }
-
-  // Composite wraps a chain of real libraries and fully overrides the public
-  // dispatchers — the abstract Subclass methods below are required to make the
-  // class concrete but are never reached.
-  public override GetToolList(): ArtifactToolDefinition[] {
-    const seen = new Set<string>();
-    const merged: ArtifactToolDefinition[] = [];
-    for (const lib of this.chain) {
-      for (const tool of lib.GetToolList()) {
-        if (seen.has(tool.name)) continue;
-        seen.add(tool.name);
-        merged.push(tool);
-      }
-    }
-    return merged;
-  }
-
-  public override async InvokeTool(
-    toolName: string,
-    input: Record<string, unknown>,
-    artifactContent: string | Buffer,
-  ): Promise<ArtifactToolResult> {
-    // Dispatch to the first library (leaf-first) that declares this tool.
-    for (const lib of this.chain) {
-      if (lib.GetToolList().some((t) => t.name === toolName)) {
-        return lib.InvokeTool(toolName, input, artifactContent);
-      }
-    }
-    return {
-      success: false,
-      data: null,
-      errorMessage: `Tool "${toolName}" is not defined by any library in this artifact type's chain.`,
-    };
-  }
-
-  public ComputeRevisionHash?(content: string): string | undefined {
-    for (const lib of this.chain) {
-      const candidate = lib as ArtifactToolLibraryWithRevisionHash;
-      if (typeof candidate.ComputeRevisionHash === 'function') {
-        return candidate.ComputeRevisionHash(content);
-      }
-    }
-    return undefined;
-  }
-
-  // Required by the abstract base but never invoked — GetToolList / InvokeTool
-  // are fully overridden above.
-  protected getSubclassToolList(): ArtifactToolDefinition[] {
-    return [];
-  }
-  protected async invokeSubclassTool(): Promise<ArtifactToolResult> {
-    return { success: false, data: null, errorMessage: 'CompositeArtifactToolLibrary does not dispatch via invokeSubclassTool.' };
-  }
 }
 
 interface PersistVersionRollbackSnapshot {
@@ -269,7 +152,7 @@ interface PersistMutationOutcome {
 export interface StoredToolResult {
   artifactId: string;
   tool: string;
-  input: Record<string, unknown>;
+  input: ArtifactToolArgs;
   result: ArtifactToolResult;
   /** When the invocation completed (UTC) */
   timestamp: Date;
@@ -302,68 +185,13 @@ export class ArtifactToolManager {
   private getAgentRun?: () => { ID?: string; Agent?: string | null } | null | undefined;
   private agentRunId?: string;
   private agentName?: string;
+  private workspaceEnabled = false;
+  private touchedArtifacts: Map<string, GovernedRunArtifactSummary> = new Map();
+  private enteredPresenceArtifactIds: Set<string> = new Set();
 
-  private static readonly MUTATING_TOOL_NAMES: ReadonlySet<string> = new Set([
-    // DocumentToolLibrary
-    'insert_block_after',
-    'replace_block',
-    'delete_block',
-    'upsert_table',
-    'insert_live_block',
-    'embed_artifact_block',
-    'propose_suggestion',
-    'replace_section',
-    'insert_section',
-    'delete_section',
-    // SpreadsheetToolLibrary
-    'write_cells',
-    'set_cells',
-    'insert_rows',
-    'delete_rows',
-    'insert_columns',
-    'delete_columns',
-    'add_sheet',
-    'rename_sheet',
-    'delete_sheet',
-    'upsert_live_table',
-    'upsert_chart',
-    'embed_artifact',
-    'sort_and_filter',
-    // SlideDeckToolLibrary
-    'add_slide',
-    'update_slide',
-    'delete_slide',
-    'reorder_slides',
-    'upsert_slide_element',
-    'update_slide_region',
-    'delete_slide_element',
-    'update_speaker_notes',
-    'apply_theme',
-    'generate_deck_from_markdown',
-    // WhiteboardToolLibrary
-    'upsert_nodes',
-    'UpsertNodes',
-    'connect_nodes',
-    'ConnectNodes',
-    'add_sticky_notes',
-    'AddStickyNotes',
-    'delete_elements',
-    'DeleteElements',
-    'auto_layout',
-    'AutoLayout',
-  ]);
+  private static readonly MUTATING_TOOL_NAMES: ReadonlySet<string> = MUTATING_ARTIFACT_TOOL_NAMES;
 
-  private static readonly STRUCTURAL_SPREADSHEET_TOOLS: ReadonlySet<string> = new Set([
-    'insert_rows',
-    'delete_rows',
-    'insert_columns',
-    'delete_columns',
-    'add_sheet',
-    'delete_sheet',
-    'rename_sheet',
-    'merge_cells',
-    'unmerge_cells',
-  ]);
+  private static readonly STRUCTURAL_SPREADSHEET_TOOLS: ReadonlySet<string> = STRUCTURAL_SPREADSHEET_TOOLS;
 
   // ─── LIFECYCLE ───
 
@@ -383,32 +211,9 @@ export class ArtifactToolManager {
     this.getAgentRun = options?.getAgentRun;
     this.agentRunId = options?.agentRunId;
     this.agentName = options?.agentName;
+    this.workspaceEnabled = options?.workspaceEnabled ?? Boolean(options?.contextUser || inputArtifacts.length > 0);
     for (const artifact of inputArtifacts) {
-      const alphaId = this.nextAlphaId();
-      const isXlsxBinary =
-        Buffer.isBuffer(artifact.content) &&
-        artifact.content.length > 4 &&
-        artifact.content[0] === 0x50 &&
-        artifact.content[1] === 0x4b;
-      this.artifacts.set(alphaId, {
-        alphaId,
-        name: artifact.name,
-        typeName: artifact.typeName,
-        artifactId: artifact.artifactId,
-        versionId: artifact.versionId,
-        versionNumber: artifact.versionNumber,
-        baseVersionNumber: artifact.versionNumber,
-        currentVersionNumber: artifact.versionNumber,
-        contentMode: isXlsxBinary ? 'File' : undefined,
-        originalXlsxBytes: isXlsxBinary ? new Uint8Array(artifact.content as Buffer) : undefined,
-        description: artifact.description,
-        mimeType: artifact.mimeType,
-        content: artifact.content,
-        library: this.resolveLibrary(artifact.typeName, artifact.toolLibraryClass),
-        annotation: artifact.annotation,
-        deliveryMode: artifact.deliveryMode,
-        forceToolsOnly: artifact.forceToolsOnly,
-      });
+      this.RegisterArtifact(artifact);
     }
   }
 
@@ -420,10 +225,13 @@ export class ArtifactToolManager {
       artifact.content.length > 4 &&
       artifact.content[0] === 0x50 &&
       artifact.content[1] === 0x4b;
+    const typeEntity = ArtifactMetadataEngine.Instance.FindArtifactType(artifact.typeName);
     this.artifacts.set(alphaId, {
       alphaId,
       name: artifact.name,
       typeName: artifact.typeName,
+      driverClass: typeEntity?.DriverClass ?? undefined,
+      toolLibraryClass: artifact.toolLibraryClass ?? typeEntity?.ToolLibraryClass ?? undefined,
       artifactId: artifact.artifactId,
       versionId: artifact.versionId,
       versionNumber: artifact.versionNumber,
@@ -435,8 +243,23 @@ export class ArtifactToolManager {
       mimeType: artifact.mimeType,
       content: artifact.content,
       library: this.resolveLibrary(artifact.typeName, artifact.toolLibraryClass),
+      annotation: artifact.annotation,
+      deliveryMode: artifact.deliveryMode,
+      forceToolsOnly: artifact.forceToolsOnly,
     });
     return alphaId;
+  }
+
+  private parseIdentifierRef(idOrAlpha: string | undefined | null) {
+    if (typeof idOrAlpha !== 'string') return undefined;
+    const trimmed = idOrAlpha.trim();
+    if (!trimmed) return undefined;
+    const normalizedAlpha = trimmed.replace(/^artifact\s+/i, '').trim().toUpperCase();
+    return {
+      trimmed,
+      byAlpha: this.artifacts.get(normalizedAlpha),
+      isUuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed),
+    };
   }
 
   /**
@@ -445,29 +268,47 @@ export class ArtifactToolManager {
    * Allows agents to reference either `"A"` or the full UUID in `artifactDirective.targetArtifactId`.
    */
   ResolveArtifactUuid(idOrAlpha: string | undefined | null): string | undefined {
-    if (typeof idOrAlpha !== 'string') return undefined;
-    const trimmed = idOrAlpha.trim();
-    if (!trimmed) return undefined;
+    const parsed = this.parseIdentifierRef(idOrAlpha);
+    if (!parsed) return undefined;
 
     // 1. Direct alpha ID lookup (case-insensitive, e.g. 'A', 'B', 'AA', or 'Artifact B')
-    const normalizedAlpha = trimmed.replace(/^artifact\s+/i, '').trim().toUpperCase();
-    const byAlpha = this.artifacts.get(normalizedAlpha);
-    if (byAlpha?.artifactId) {
-      return byAlpha.artifactId;
+    if (parsed.byAlpha?.artifactId) {
+      return parsed.byAlpha.artifactId;
     }
 
     // 2. Match by artifactId or versionId UUID
     for (const entry of this.artifacts.values()) {
-      if (entry.artifactId && (UUIDsEqual(entry.artifactId, trimmed) || (entry.versionId && UUIDsEqual(entry.versionId, trimmed)))) {
+      if (entry.artifactId && (UUIDsEqual(entry.artifactId, parsed.trimmed) || (entry.versionId && UUIDsEqual(entry.versionId, parsed.trimmed)))) {
         return entry.artifactId;
       }
     }
 
     // 3. Pass through well-formed UUIDs so callers can pass an explicit artifact UUID directly
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
-      return trimmed;
+    return parsed.isUuid ? parsed.trimmed : undefined;
+  }
+
+  /**
+   * Resolves a manifest alpha ID (e.g. `"E"`, `"Artifact E"`) or version UUID
+   * to the underlying `MJ: Artifact Versions` record UUID (`versionId`).
+   */
+  ResolveArtifactVersionUuid(idOrAlpha: string | undefined | null): string | undefined {
+    const parsed = this.parseIdentifierRef(idOrAlpha);
+    if (!parsed) return undefined;
+
+    // 1. Direct alpha ID lookup: map session short ID to its tracked ArtifactVersion UUID
+    if (parsed.byAlpha) {
+      return parsed.byAlpha.versionId ?? undefined;
     }
-    return undefined;
+
+    // 2. Match by tracked versionId UUID
+    for (const entry of this.artifacts.values()) {
+      if (entry.versionId && UUIDsEqual(entry.versionId, parsed.trimmed)) {
+        return entry.versionId;
+      }
+    }
+
+    // 3. Pass through well-formed UUIDs so callers can pass an explicit version UUID directly
+    return parsed.isUuid ? parsed.trimmed : undefined;
   }
 
   /** Reset all state */
@@ -481,11 +322,113 @@ export class ArtifactToolManager {
     this.getAgentRun = undefined;
     this.agentRunId = undefined;
     this.agentName = undefined;
+    this.workspaceEnabled = false;
+    this.touchedArtifacts.clear();
+    this.enteredPresenceArtifactIds.clear();
   }
 
-  /** Whether any artifacts are available */
+  /** Whether any artifacts are attached/registered in the session */
   HasArtifacts(): boolean {
     return this.artifacts.size > 0;
+  }
+
+  /** Whether artifact workspace tools (including `create_artifact`, `open_artifact`, etc.) are available */
+  IsWorkspaceEnabled(): boolean {
+    return this.artifacts.size > 0 || this.workspaceEnabled;
+  }
+
+  /** Returns deduplicated summaries of all governed artifacts created or mutated during this run. */
+  GetTouchedArtifacts(): GovernedRunArtifactSummary[] {
+    const merged = new Map<string, GovernedRunArtifactSummary>();
+    for (const [key, item] of this.touchedArtifacts.entries()) {
+      merged.set(key, { ...item });
+    }
+    const runId = this.agentRunId ?? this.getAgentRun?.()?.ID;
+    for (const item of GovernedArtifactService.Instance.PeekTouchedArtifacts(runId)) {
+      const key = item.ArtifactID.trim().toLowerCase();
+      merged.set(key, MergeTouchedArtifactSummary(merged.get(key), item));
+    }
+    return Array.from(merged.values());
+  }
+
+  /** Records a sub-agent or service touched artifact into this manager's run summary set. */
+  AbsorbTouchedArtifacts(items?: GovernedRunArtifactSummary[]): void {
+    if (!items?.length) return;
+    for (const item of items) {
+      if (!item.ArtifactID) continue;
+      this.recordTouchedArtifactSummary(item);
+    }
+  }
+
+  /** Exports current artifacts merged with any caller seeds so sub-agents see artifacts created earlier in the run. */
+  ExportInputArtifacts(seed?: InputArtifact[]): InputArtifact[] | undefined {
+    const out: InputArtifact[] = [];
+    const seen = new Set<string>();
+    for (const entry of this.artifacts.values()) {
+      const key = (entry.artifactId ?? entry.alphaId).toLowerCase();
+      seen.add(key);
+      out.push({
+        name: entry.name,
+        typeName: entry.typeName,
+        content: entry.content,
+        mimeType: entry.mimeType,
+        description: entry.description,
+        artifactId: entry.artifactId,
+        versionId: entry.versionId,
+        versionNumber: entry.currentVersionNumber ?? entry.versionNumber,
+        toolLibraryClass: entry.toolLibraryClass,
+        annotation: entry.annotation,
+        deliveryMode: entry.deliveryMode,
+        forceToolsOnly: entry.forceToolsOnly,
+      });
+    }
+    if (seed?.length) {
+      for (const s of seed) {
+        const key = (s.artifactId ?? s.name).toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          out.push(s);
+        }
+      }
+    }
+    return out.length > 0 ? out : undefined;
+  }
+
+  /** Emits `'exit'` awareness on every artifact this run entered so remote viewers clear active badges cleanly. */
+  async NotifyRunCompleted(): Promise<void> {
+    if (!this.contextUser) {
+      this.enteredPresenceArtifactIds.clear();
+      return;
+    }
+    const activeRunId = this.agentRunId ?? this.getAgentRun?.()?.ID;
+    const activeAgentName = this.agentName ?? this.getAgentRun?.()?.Agent ?? undefined;
+    const allIds = new Set<string>(this.enteredPresenceArtifactIds);
+    for (const touched of GovernedArtifactService.Instance.PeekTouchedArtifacts(activeRunId)) {
+      if (touched.ArtifactID) {
+        allIds.add(touched.ArtifactID);
+      }
+    }
+    this.enteredPresenceArtifactIds.clear();
+    if (allIds.size === 0) return;
+
+    await Promise.all(
+      Array.from(allIds).map((artifactId) =>
+        GovernedArtifactService.Instance.EmitAgentPresence({
+          artifactId,
+          phase: 'exit',
+          contextUser: this.contextUser!,
+          agentRunId: activeRunId,
+          agentName: activeAgentName,
+        }),
+      ),
+    );
+  }
+
+  private recordTouchedArtifactSummary(summary: GovernedRunArtifactSummary): void {
+    if (!summary.ArtifactID) return;
+    const key = summary.ArtifactID.trim().toLowerCase();
+    const prev = this.touchedArtifacts.get(key);
+    this.touchedArtifacts.set(key, MergeTouchedArtifactSummary(prev, summary));
   }
 
   /**
@@ -587,67 +530,66 @@ export class ArtifactToolManager {
    *        Pass `undefined` to disable the check (legacy callers).
    */
   ToManifestString(opts?: { supportedMimeTypes?: ReadonlyArray<string> | null; nativeTools?: boolean }): string {
-    if (this.artifacts.size === 0) return '';
-
-    const lines: string[] = ['## Available Artifacts\n'];
-    const supportedMimes = opts?.supportedMimeTypes ?? null;
-    for (const entry of this.artifacts.values()) {
-      const sizeSuffix = Buffer.isBuffer(entry.content)
-        ? ` (${(entry.content.length / 1024).toFixed(0)} KB)`
-        : typeof entry.content === 'string' && entry.content.length > 0
+    const lines: string[] = [];
+    if (this.artifacts.size === 0) {
+      if (!this.workspaceEnabled) return '';
+      lines.push('## Available Artifacts\n');
+      lines.push('No artifacts are currently attached to this conversation turn. Use `create_artifact` to create a new governed Spreadsheet, Markdown Document, or Presentation, `list_workspace_artifacts` to discover existing workspace artifacts, or `open_artifact` to load an artifact by UUID into this session.\n');
+    } else {
+      lines.push('## Available Artifacts\n');
+      const supportedMimes = opts?.supportedMimeTypes ?? null;
+      for (const entry of this.artifacts.values()) {
+        const sizeSuffix = Buffer.isBuffer(entry.content)
           ? ` (${(entry.content.length / 1024).toFixed(0)} KB)`
-          : '';
-      const versionNote = entry.versionNumber != null ? ` (v${entry.versionNumber})` : '';
-      const idNote = entry.artifactId ? ` [artifactId: ${entry.artifactId}]` : '';
-      const mimeNote = entry.mimeType ? ` [${entry.mimeType}]` : '';
-      lines.push(`**${entry.alphaId}** — ${entry.typeName}: "${entry.name}"${versionNote}${idNote}${mimeNote}${sizeSuffix}`);
+          : typeof entry.content === 'string' && entry.content.length > 0
+            ? ` (${(entry.content.length / 1024).toFixed(0)} KB)`
+            : '';
+        const versionNote = entry.versionNumber != null ? ` (v${entry.versionNumber})` : '';
+        const idNote = entry.artifactId ? ` [artifactId: ${entry.artifactId}]` : '';
+        const mimeNote = entry.mimeType ? ` [${entry.mimeType}]` : '';
+        lines.push(`**${entry.alphaId}** — ${entry.typeName}: "${entry.name}"${versionNote}${idNote}${mimeNote}${sizeSuffix}`);
 
-      if (entry.description) {
-        const desc = entry.description.length > 240 ? entry.description.slice(0, 240) + '…' : entry.description;
-        lines.push(`    > Description: ${desc}`);
-      }
+        if (entry.description) {
+          const desc = entry.description.length > 240 ? entry.description.slice(0, 240) + '…' : entry.description;
+          lines.push(`    > Description: ${desc}`);
+        }
 
-      // Surface the content SHAPE so the agent paths correctly (e.g. knows it's a top-level JSON
-      // array, not a `content`-wrapped object) instead of guessing and failing on the first tool call.
-      const shape = this.describeContentShape(entry.content);
-      if (shape) {
-        lines.push(`    > Shape: ${shape}`);
-      }
+        const shape = this.describeContentShape(entry.content);
+        if (shape) {
+          lines.push(`    > Shape: ${shape}`);
+        }
 
-      // Modality-mismatch warning: when the driver can't process the
-      // artifact's media type, tell the agent explicitly so it doesn't
-      // hallucinate a description from few-shot examples or pretend the
-      // base64 it gets from get_full means something visual to it.
-      const mismatch = this.modalityMismatchMessage(entry.mimeType, supportedMimes);
-      if (mismatch) {
-        lines.push(`    > ⚠ ${mismatch}`);
+        const mismatch = this.modalityMismatchMessage(entry.mimeType, supportedMimes);
+        if (mismatch) {
+          lines.push(`    > ⚠ ${mismatch}`);
+        }
+        if (entry.annotation) {
+          const annotation = entry.annotation.length > ArtifactToolManager.MAX_MANIFEST_PREVIEW_CHARS_PER_ARTIFACT
+            ? entry.annotation.slice(0, ArtifactToolManager.MAX_MANIFEST_PREVIEW_CHARS_PER_ARTIFACT) + '...[truncated]'
+            : entry.annotation;
+          lines.push(`    > Note: ${annotation}`);
+        }
       }
-      if (entry.annotation) {
-        const annotation = entry.annotation.length > ArtifactToolManager.MAX_MANIFEST_PREVIEW_CHARS_PER_ARTIFACT
-          ? entry.annotation.slice(0, ArtifactToolManager.MAX_MANIFEST_PREVIEW_CHARS_PER_ARTIFACT) + '...[truncated]'
-          : entry.annotation;
-        lines.push(`    > Note: ${annotation}`);
-      }
+      lines.push('');
+      lines.push('These artifacts are ALREADY available to you server-side. Read them directly with the');
+      lines.push('artifact tools below (e.g. `get_full`), or use one as a pipeline source (e.g. `get_full`');
+      lines.push('then `where`/`select`/`distinct`). NEVER ask the user to paste, provide, upload, or "send"');
+      lines.push('an artifact\'s content, and do NOT request a data snapshot to obtain it — you already have it.');
     }
-    lines.push('');
-    lines.push('These artifacts are ALREADY available to you server-side. Read them directly with the');
-    lines.push('artifact tools below (e.g. `get_full`), or use one as a pipeline source (e.g. `get_full`');
-    lines.push('then `where`/`select`/`distinct`). NEVER ask the user to paste, provide, upload, or "send"');
-    lines.push('an artifact\'s content, and do NOT request a data snapshot to obtain it — you already have it.');
+
     if (opts?.nativeTools) {
-      // Native-only mode: artifact tools are called through the `artifact_tool` tool, and there is no artifactDirective.
-      lines.push('IMPORTANT: Always use the single-letter artifact ID (A, B, C, etc.) as the `artifactId` argument of `artifact_tool` — NOT the artifact name.');
+      lines.push('IMPORTANT: For per-artifact tools, pass the single-letter artifact ID (A, B, C, etc.) as `artifactId` on `artifact_tool` (for workspace-wide tools such as `create_artifact`, `open_artifact`, or `list_workspace_artifacts`, `artifactId` may be omitted).');
       return lines.join('\n');
     }
-    lines.push('IMPORTANT: Always use the single-letter artifact ID (A, B, C, etc.) as the `artifactId` value in `artifactToolCalls` — NOT the artifact name.');
-    lines.push('When setting `artifactDirective.targetArtifactId` (with `behavior: "version-source"`), you may use either the artifact\'s `artifactId` UUID or its single-letter ID (A, B, C, etc.).');
+    lines.push('IMPORTANT: For per-artifact tools, pass the single-letter artifact ID (A, B, C, etc.) as `artifactId` in `artifactToolCalls` (for workspace-wide tools such as `create_artifact`, `open_artifact`, or `list_workspace_artifacts`, pass `artifactId: "workspace"`).');
+    if (this.artifacts.size > 0) {
+      lines.push('Artifact tools persist and version your edits directly — do NOT write artifact contents or tool state into `payload`/`payloadChangeRequest`, and do NOT emit `artifactDirective` (`version-source`) for artifacts you edited via artifact tools. Reserve `artifactDirective.targetArtifactId` (UUID or single-letter ID) only when persisting a standalone JSON `payload` deliverable.');
+    }
     return lines.join('\n');
   }
 
   /**
-   * Distinct artifact tool names available across all input artifacts. Used to register
-   * artifact tools into a pipeline's tool registry (one invocable per name; the target
-   * artifact is selected at call time via an `artifactId` param).
+   * Distinct artifact tool names available across all input artifacts and workspace tools.
    */
   public GetAvailableToolNames(): string[] {
     const names = new Set<string>();
@@ -655,6 +597,12 @@ export class ArtifactToolManager {
       for (const tool of entry.library.GetToolList()) {
         names.add(tool.name);
       }
+    }
+    if (this.IsWorkspaceEnabled()) {
+      names.add('create_artifact');
+      names.add('open_artifact');
+      names.add('list_workspace_artifacts');
+      names.add('create_synthesized_artifact');
     }
     if (this.artifacts.size > 0) {
       names.add('reload_artifact');
@@ -689,20 +637,22 @@ export class ArtifactToolManager {
           );
         }
         if (parsed !== null && typeof parsed === 'object') {
-          const obj = parsed as Record<string, unknown>;
+          const obj = parsed as ArtifactToolArgs;
           const base = `JSON object; keys: ${Object.keys(obj).slice(0, 20).join(', ')}.`;
           const extras: string[] = [];
           if (typeof obj.title === 'string' && obj.title.trim()) {
             extras.push(`Title: "${obj.title.trim().slice(0, 120)}".`);
           }
           if (Array.isArray(obj.tables) && obj.tables.length > 0) {
-            const tableSummaries = (obj.tables as Array<Record<string, unknown>>).slice(0, 8).map((t) => {
+            const tableSummaries = obj.tables.slice(0, 8).map((item) => {
+              const t = item !== null && typeof item === 'object' && !Array.isArray(item) ? (item as ArtifactToolArgs) : undefined;
               const tName = typeof t?.name === 'string' ? t.name : (typeof t?.id === 'string' ? t.id : 'table');
+              const meta = t?.metadata !== null && typeof t?.metadata === 'object' && !Array.isArray(t?.metadata)
+                ? (t.metadata as ArtifactToolArgs)
+                : undefined;
               const tRows = Array.isArray(t?.rows)
                 ? t.rows.length
-                : (typeof (t?.metadata as Record<string, unknown> | undefined)?.rowCount === 'number'
-                  ? ((t.metadata as Record<string, unknown>).rowCount as number)
-                  : 0);
+                : (typeof meta?.rowCount === 'number' ? meta.rowCount : 0);
               return `"${tName}" (${tRows} rows)`;
             });
             extras.push(`Tables (${obj.tables.length}): ${tableSummaries.join(', ')}.`);
@@ -721,9 +671,9 @@ export class ArtifactToolManager {
     return `text, ${s.split('\n').length} line(s); starts: "${preview}${s.length > 120 ? '…' : ''}"`;
   }
 
-  /** Markdown tool documentation grouped by artifact type */
+  /** Markdown tool documentation grouped by artifact type and workspace capabilities */
   GetToolDocumentation(): string {
-    if (this.artifacts.size === 0) return '';
+    if (!this.IsWorkspaceEnabled()) return '';
 
     // Collect unique type → library pairs
     const typeLibraries = new Map<string, BaseArtifactToolLibrary>();
@@ -740,7 +690,11 @@ export class ArtifactToolManager {
 
       sections.push(`## ${typeName} Artifact Tools`);
       for (const tool of tools) {
-        const params = Object.keys((tool.inputSchema.properties as Record<string, unknown>) || {}).join(', ');
+        const schemaProps = tool.inputSchema.properties;
+        const propObj = schemaProps !== null && typeof schemaProps === 'object' && !Array.isArray(schemaProps)
+          ? (schemaProps as ArtifactToolArgs)
+          : {};
+        const params = Object.keys(propObj).join(', ');
         sections.push(`- **${tool.name}**(artifactId${params ? ', ' + params : ''}) — ${tool.description}`);
       }
       sections.push(
@@ -748,6 +702,21 @@ export class ArtifactToolManager {
       );
       sections.push('');
     }
+
+    sections.push('## Workspace & Cross-Artifact Tools');
+    sections.push(
+      '- **create_artifact**(title, artifactType, description?, content?, sheetNames?, collectionId?) — Creates and persists a new governed artifact (`"Excel Spreadsheet"`, `"Markdown Document"`, or `"Presentation"`), registers it in this session with its alpha ID (`A`, `B`, ...) so you can immediately call domain tools (`upsert_live_table`, `write_cells`, `insert_block_after`, `add_slide`, etc.), and streams live edits to connected viewers.',
+    );
+    sections.push(
+      '- **open_artifact**(artifactId) — Opens an existing governed artifact by UUID (checking Read permission and hydrating from any active live collaboration room), registers it in this session, and returns its alpha ID plus available domain tools.',
+    );
+    sections.push(
+      '- **list_workspace_artifacts**(collectionId?, typeFilter?, search?) — Lists readable artifacts in the current workspace (and optionally inside a Collection) along with summaries and Spreadsheet ChartID/range references.',
+    );
+    sections.push(
+      '- **create_synthesized_artifact**(title, targetKind, goal?, sourceArtifactIds?, content?, description?, collectionId?, linkChartsAndRanges?) — Creates and persists a new synthesized governed artifact (`targetKind`: `"presentation"` | `"document"` | `"spreadsheet"`) from multiple source artifacts while enforcing permissions and stripping unauthorized references.',
+    );
+    sections.push('');
 
     return sections.join('\n');
   }
@@ -833,6 +802,48 @@ export class ArtifactToolManager {
     }
   }
 
+  private sanitizeToolInput(input?: ArtifactToolArgs): ArtifactToolArgs {
+    if (!input) return {};
+    const sanitized: ArtifactToolArgs = {};
+    for (const [k, v] of Object.entries(input)) {
+      if (k === '_actorUserId' || k === '_ownerUserId' || k === '_isEditor') continue;
+      sanitized[k] = v;
+    }
+    return sanitized;
+  }
+
+  private async resolveEntryOwnerUserId(entry: ArtifactEntry): Promise<string | undefined> {
+    if (entry.ownerUserId !== undefined) {
+      return entry.ownerUserId;
+    }
+    if (!entry.artifactId || !this.provider || !this.contextUser || !IsValidUUID(entry.artifactId)) {
+      return undefined;
+    }
+    try {
+      const rv = RunView.FromMetadataProvider(this.provider);
+      const artRes = await rv.RunView<{ ID: string; UserID?: string | null }>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ID='${EscapeSQLString(entry.artifactId)}'`,
+          Fields: ['ID', 'UserID'],
+          MaxRows: 1,
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        },
+        this.contextUser,
+      );
+      if (artRes.Success && artRes.Results?.length) {
+        const owner = (artRes.Results[0].UserID ?? '').trim();
+        if (owner) {
+          entry.ownerUserId = owner;
+        }
+      }
+    } catch {
+      // Best-effort owner resolution; leave undefined if mock/provider omits UserID
+    }
+    return entry.ownerUserId;
+  }
+
   /**
    * Alias for {@link ExecuteSingleToolCall} supporting single-call dispatch.
    */
@@ -851,6 +862,20 @@ export class ArtifactToolManager {
    */
   async ExecuteSingleToolCall(call: ArtifactToolCall): Promise<StoredToolResult> {
     const startedAt = Date.now();
+
+    if (call.tool === 'create_artifact') {
+      return this.handleCreateArtifactTool(call, startedAt);
+    }
+    if (call.tool === 'open_artifact') {
+      return this.handleOpenArtifactTool(call, startedAt);
+    }
+    if (call.tool === 'list_workspace_artifacts') {
+      return this.handleListWorkspaceArtifactsTool(call, startedAt);
+    }
+    if (call.tool === 'create_synthesized_artifact') {
+      return this.handleCreateSynthesizedArtifactTool(call, startedAt);
+    }
+
     // Try exact alpha ID first, then fallback to name match
     let entry = this.artifacts.get(call.artifactId);
     if (!entry) {
@@ -888,19 +913,23 @@ export class ArtifactToolManager {
 
     return this.withArtifactLock(lockKey, async () => {
       const isMutatingTool = ArtifactToolManager.MUTATING_TOOL_NAMES.has(call.tool);
+      const sanitizedInput = this.sanitizeToolInput(call.input);
+      let resolvedPerms:
+        | Awaited<ReturnType<typeof ArtifactPermissionEngine.Instance.ResolvePermissions>>
+        | undefined;
 
       // 1. Permission check before any tool execution (Blocker 2)
       if (targetEntry.artifactId && this.contextUser && this.provider) {
-        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+        resolvedPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
           this.provider,
           targetEntry.artifactId,
           this.contextUser,
         );
-        if (isMutatingTool && !perms.CanEdit) {
+        if (isMutatingTool && !resolvedPerms.CanEdit) {
           const deniedStored: StoredToolResult = {
             artifactId: call.artifactId,
             tool: call.tool,
-            input: call.input,
+            input: sanitizedInput,
             result: {
               success: false,
               data: null,
@@ -912,11 +941,11 @@ export class ArtifactToolManager {
           this.toolResults.push(deniedStored);
           return deniedStored;
         }
-        if (!isMutatingTool && !perms.CanRead) {
+        if (!isMutatingTool && !resolvedPerms.CanRead) {
           const deniedStored: StoredToolResult = {
             artifactId: call.artifactId,
             tool: call.tool,
-            input: call.input,
+            input: sanitizedInput,
             result: {
               success: false,
               data: null,
@@ -978,7 +1007,7 @@ export class ArtifactToolManager {
           result: {
             success: false,
             data: null,
-            errorMessage: `Structural spreadsheet tool "${call.tool}" is not supported on File-mode .xlsx workbooks to preserve OpenXML fidelity. Only cell value/formula updates (e.g. write_cells) are allowed on uploaded .xlsx files.`,
+            errorMessage: FormatFileModeStructuralToolError(call.tool),
           },
           timestamp: new Date(),
           durationMs: Date.now() - startedAt,
@@ -987,11 +1016,47 @@ export class ArtifactToolManager {
         return refusedStored;
       }
 
+      const presenceArtifactId = targetEntry.artifactId;
+      const activeRunIdForCall = this.agentRunId ?? this.getAgentRun?.()?.ID;
+      const activeAgentNameForCall = this.agentName ?? this.getAgentRun?.()?.Agent ?? undefined;
+      const preLocation = ExtractAgentTargetLocation(call.tool, sanitizedInput, targetEntry.content, targetEntry.typeName);
+      let presenceEmittedWorking = false;
+      let settledContent: string | Buffer = targetEntry.content;
+      let settledData: ArtifactToolArgs | undefined;
+      if (presenceArtifactId && this.contextUser) {
+        this.enteredPresenceArtifactIds.add(presenceArtifactId);
+        presenceEmittedWorking = true;
+        await GovernedArtifactService.Instance.EmitAgentPresence({
+          artifactId: presenceArtifactId,
+          phase: 'working',
+          contextUser: this.contextUser,
+          agentRunId: activeRunIdForCall,
+          agentName: activeAgentNameForCall,
+          toolName: call.tool,
+          actionSummary: FormatAgentActionSummary(call.tool, sanitizedInput, preLocation),
+          location: preLocation ?? { Domain: ResolvePresenceDomain(targetEntry.typeName) },
+        });
+      }
+
+      try {
+      const ownerUserId = await this.resolveEntryOwnerUserId(targetEntry);
       // Wrap InvokeTool so any exception inside a handler becomes a structured
       // error result instead of propagating up to the agent loop.
+      const toolContext: ArtifactToolExecutionContext = {
+        contextUser: this.contextUser,
+        actorUserId: this.contextUser?.ID,
+        ownerUserId,
+        isEditor: resolvedPerms?.CanEdit,
+        provider: this.provider,
+        artifactId: targetEntry.artifactId,
+        agentRunId: activeRunIdForCall,
+        agentName: activeAgentNameForCall,
+        resolveArtifactId: (idOrAlpha: string) => this.ResolveArtifactUuid(idOrAlpha),
+        resolveVersionId: (idOrAlpha: string) => this.ResolveArtifactVersionUuid(idOrAlpha),
+      };
       let result: ArtifactToolResult;
       try {
-        result = await targetEntry.library.InvokeTool(call.tool, call.input, targetEntry.content);
+        result = await targetEntry.library.InvokeTool(call.tool, sanitizedInput, targetEntry.content, toolContext);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         result = {
@@ -1002,14 +1067,49 @@ export class ArtifactToolManager {
       }
 
       let storedResult: ArtifactToolResult = result;
-      if (
-        result.success &&
-        result.data !== null &&
-        typeof result.data === 'object' &&
-        !Array.isArray(result.data) &&
-        typeof (result.data as Record<string, unknown>).updatedContent === 'string'
-      ) {
-        const rawData = result.data as Record<string, unknown>;
+      const resultObj =
+        result.success && result.data !== null && typeof result.data === 'object' && !Array.isArray(result.data)
+          ? (result.data as ArtifactToolArgs)
+          : undefined;
+      if (resultObj && resultObj.updatedContent !== undefined) {
+        if (resolvedPerms && !resolvedPerms.CanEdit) {
+          const deniedMutation: StoredToolResult = {
+            artifactId: call.artifactId,
+            tool: call.tool,
+            input: sanitizedInput,
+            result: {
+              success: false,
+              data: null,
+              errorMessage: 'Permission denied: user does not have edit access to this artifact',
+            },
+            timestamp: new Date(),
+            durationMs: Date.now() - startedAt,
+          };
+          this.toolResults.push(deniedMutation);
+          return deniedMutation;
+        }
+        if (!isMutatingTool && targetEntry.artifactId && this.contextUser && this.provider) {
+          const lateConflict = await this.checkConcurrentDatabaseModification(targetEntry);
+          if (lateConflict) {
+            const conflictStored: StoredToolResult = {
+              artifactId: call.artifactId,
+              tool: call.tool,
+              input: sanitizedInput,
+              result: {
+                success: false,
+                data: null,
+                errorMessage: lateConflict,
+              },
+              timestamp: new Date(),
+              durationMs: Date.now() - startedAt,
+            };
+            this.toolResults.push(conflictStored);
+            return conflictStored;
+          }
+        }
+      }
+      if (resultObj && typeof resultObj.updatedContent === 'string') {
+        const rawData = resultObj;
         const updatedContent = rawData.updatedContent as string;
         let xlsxBase64 = typeof rawData.xlsxBase64 === 'string' ? rawData.xlsxBase64 : undefined;
 
@@ -1379,7 +1479,7 @@ export class ArtifactToolManager {
         }
 
         // 4. Sanitize the LLM-facing copy of result.data without mutating rawData returned by library.InvokeTool
-        const sanitizedData: Record<string, unknown> = {};
+        const sanitizedData: ArtifactToolArgs = {};
         for (const [k, v] of Object.entries(rawData)) {
           if (k === 'updatedContent' || k === 'xlsxBase64') continue;
           sanitizedData[k] = v;
@@ -1443,18 +1543,58 @@ export class ArtifactToolManager {
           ...result,
           data: sanitizedData,
         };
+
+        if (targetEntry.artifactId) {
+          const touchedSummary: GovernedRunArtifactSummary = {
+            ArtifactID: targetEntry.artifactId,
+            ArtifactVersionID: targetEntry.versionId ?? '',
+            VersionNumber: targetEntry.versionNumber ?? 1,
+            Name: targetEntry.name,
+            ArtifactTypeName: targetEntry.typeName,
+            DriverClass: targetEntry.driverClass,
+            Operation: 'mutated',
+          };
+          this.recordTouchedArtifactSummary(touchedSummary);
+          GovernedArtifactService.Instance.RecordTouchedArtifact(activeRunIdForCall, touchedSummary);
+        }
+
+        settledContent = effectiveContent;
+        settledData = rawData;
+      } else if (result.success) {
+        settledContent = targetEntry.content;
+        settledData =
+          result.data !== null && typeof result.data === 'object' && !Array.isArray(result.data)
+            ? (result.data as ArtifactToolArgs)
+            : undefined;
       }
 
       const stored: StoredToolResult = {
         artifactId: call.artifactId,
         tool: call.tool,
-        input: call.input,
+        input: sanitizedInput,
         result: storedResult,
         timestamp: new Date(),
         durationMs: Date.now() - startedAt,
       };
       this.toolResults.push(stored);
       return stored;
+      } finally {
+        if (presenceEmittedWorking && presenceArtifactId && this.contextUser) {
+          const postLocation =
+            ExtractAgentTargetLocation(call.tool, sanitizedInput, settledContent, targetEntry.typeName, settledData) ??
+            preLocation;
+          await GovernedArtifactService.Instance.EmitAgentPresence({
+            artifactId: presenceArtifactId,
+            phase: 'settled',
+            contextUser: this.contextUser,
+            agentRunId: activeRunIdForCall,
+            agentName: activeAgentNameForCall,
+            toolName: call.tool,
+            actionSummary: FormatAgentActionSummary(call.tool, sanitizedInput, postLocation),
+            location: postLocation ?? { Domain: ResolvePresenceDomain(targetEntry.typeName) },
+          }).catch(() => undefined);
+        }
+      }
     });
   }
 
@@ -1595,126 +1735,54 @@ export class ArtifactToolManager {
       };
     }
     try {
-      const rv = RunView.FromMetadataProvider(this.provider);
-      const latestRes = await rv.RunView<{
-        ID: string;
-        VersionNumber: number;
-        Name?: string | null;
-        Content?: string | null;
-        Configuration?: string | null;
-        ContentMode?: 'File' | 'Text' | null;
-        FileID?: string | null;
-        MimeType?: string | null;
-      }>(
-        {
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID='${EscapeSQLString(entry.artifactId)}'`,
-          OrderBy: 'VersionNumber DESC',
-          Fields: ['ID', 'VersionNumber', 'Name', 'Content', 'Configuration', 'ContentMode', 'FileID', 'MimeType'],
-          MaxRows: 1,
-          SkipTotalRowCount: true,
-          ResultType: 'simple',
-        },
+      const loaded = await GovernedArtifactService.Instance.LoadReadableArtifactState(
+        this.provider,
         this.contextUser,
+        entry.artifactId,
+        {
+          failOnMissingFileContent: true,
+          fallbackTypeName: entry.typeName,
+          skipTypeEntityResolution: true,
+        },
       );
-      if (!latestRes.Success || !latestRes.Results?.length) {
+      if (!loaded.state) {
         return {
           success: false,
           data: null,
-          errorMessage: latestRes.ErrorMessage || `No persisted versions found for artifact '${entry.artifactId}'.`,
+          errorMessage: loaded.errorMessage || `Failed to reload artifact '${entry.artifactId}'.`,
         };
       }
-      const latest = latestRes.Results[0];
-      const latestFileId = (latest.FileID ?? '').trim();
+      const state = loaded.state;
+      const libClassName = entry.library.constructor.name;
+      const isBinaryLibrary =
+        libClassName === 'DocxToolLibrary' ||
+        libClassName === 'PDFToolLibrary' ||
+        libClassName === 'ExcelToolLibrary' ||
+        libClassName === 'GenericBinaryToolLibrary';
 
-      let nextEntryContent: string | Buffer;
-      let nextOriginalXlsxBytes: Uint8Array | undefined;
-
-      if (latestFileId) {
-        const downloadedBytes = await this.downloadArtifactFileContent(latestFileId);
-        if (!downloadedBytes || downloadedBytes.byteLength === 0) {
-          return {
-            success: false,
-            data: null,
-            errorMessage: `Failed to download file content for FileID '${latestFileId}' while reloading artifact '${entry.artifactId}'.`,
-          };
-        }
-
-        const isZipArchive =
-          downloadedBytes.length > 4 && downloadedBytes[0] === 0x50 && downloadedBytes[1] === 0x4b;
-        const effectiveMime = (latest.MimeType ?? entry.mimeType ?? '').toLowerCase();
-        const libClassName = entry.library.constructor.name;
-        const isBinaryLibrary =
-          libClassName === 'DocxToolLibrary' ||
-          libClassName === 'PDFToolLibrary' ||
-          libClassName === 'ExcelToolLibrary' ||
-          libClassName === 'GenericBinaryToolLibrary';
-
-        if (libClassName === 'SpreadsheetToolLibrary' && isZipArchive) {
-          nextOriginalXlsxBytes = new Uint8Array(downloadedBytes);
-          const importedWorkbook = SpreadsheetEngine.Instance.ImportFromXlsxBytes(
-            nextOriginalXlsxBytes,
-            latest.Configuration ?? undefined,
-          );
-          SpreadsheetEngine.Instance.EvaluateWorkbook(importedWorkbook);
-          nextEntryContent = SpreadsheetEngine.Instance.SerializeWorkbook(importedWorkbook);
-        } else if (isBinaryLibrary || Buffer.isBuffer(entry.content)) {
-          if (isZipArchive && effectiveMime === XLSX_MIME_TYPE) {
-            nextOriginalXlsxBytes = new Uint8Array(downloadedBytes);
-          }
-          nextEntryContent = downloadedBytes;
-        } else {
-          if (isZipArchive && effectiveMime === XLSX_MIME_TYPE) {
-            nextOriginalXlsxBytes = new Uint8Array(downloadedBytes);
-            const importedWorkbook = SpreadsheetEngine.Instance.ImportFromXlsxBytes(
-              nextOriginalXlsxBytes,
-              latest.Configuration ?? undefined,
-            );
-            SpreadsheetEngine.Instance.EvaluateWorkbook(importedWorkbook);
-            nextEntryContent = SpreadsheetEngine.Instance.SerializeWorkbook(importedWorkbook);
-          } else {
-            nextEntryContent = downloadedBytes.toString('utf-8');
-          }
-        }
-      } else {
-        if (latest.ContentMode === 'File') {
-          return {
-            success: false,
-            data: null,
-            errorMessage: `Latest version v${latest.VersionNumber} of artifact '${entry.artifactId}' has ContentMode='File' without a FileID.`,
-          };
-        }
-        const textCandidate = latest.Content ?? latest.Configuration;
-        if (typeof textCandidate !== 'string') {
-          return {
-            success: false,
-            data: null,
-            errorMessage: `Latest version v${latest.VersionNumber} of artifact '${entry.artifactId}' has no loadable content.`,
-          };
-        }
-        nextEntryContent = textCandidate;
-        nextOriginalXlsxBytes = undefined;
+      let nextEntryContent: string | Buffer = state.content;
+      if (isBinaryLibrary && typeof state.content === 'string') {
+        nextEntryContent = Buffer.from(state.content, 'utf-8');
+      } else if (!isBinaryLibrary && !Buffer.isBuffer(entry.content) && Buffer.isBuffer(state.content)) {
+        nextEntryContent = state.content.toString('utf-8');
       }
 
       // Commit reloaded state only after storage download & parsing succeeded
-      entry.versionId = latest.ID;
-      entry.versionNumber = latest.VersionNumber;
-      entry.baseVersionNumber = latest.VersionNumber;
-      entry.currentVersionNumber = latest.VersionNumber;
+      entry.ownerUserId = state.ownerUserId ?? entry.ownerUserId;
+      entry.versionId = state.versionId;
+      entry.versionNumber = state.versionNumber;
+      entry.baseVersionNumber = state.versionNumber;
+      entry.currentVersionNumber = state.versionNumber;
       entry.agentRunVersionId = undefined;
       entry.agentRunVersionEntity = undefined;
-      if (latest.Name) {
-        entry.name = latest.Name;
+      if (state.name && state.name !== 'Untitled Artifact') {
+        entry.name = state.name;
       }
-      if (latest.MimeType) {
-        entry.mimeType = latest.MimeType;
+      if (state.mimeType) {
+        entry.mimeType = state.mimeType;
       }
-      if (latest.ContentMode === 'File' || latest.ContentMode === 'Text') {
-        entry.contentMode = latest.ContentMode;
-      } else if (latestFileId) {
-        entry.contentMode = 'File';
-      }
-      entry.originalXlsxBytes = nextOriginalXlsxBytes;
+      entry.contentMode = state.contentMode;
+      entry.originalXlsxBytes = state.originalXlsxBytes;
       entry.content = nextEntryContent;
 
       return {
@@ -1722,8 +1790,8 @@ export class ArtifactToolManager {
         data: {
           artifactId: entry.artifactId,
           alphaId: entry.alphaId,
-          versionId: latest.ID,
-          versionNumber: latest.VersionNumber,
+          versionId: state.versionId,
+          versionNumber: state.versionNumber,
           reloaded: true,
         },
       };
@@ -2272,9 +2340,13 @@ export class ArtifactToolManager {
    * only the first `maxRowsPerTable` rows per table and attaching truncation metadata.
    */
   static BuildInlinePreview(contentJson: string, maxRowsPerTable: number = 30): string {
-    let parsed: Record<string, unknown>;
+    let parsed: ArtifactToolArgs;
     try {
-      parsed = JSON.parse(contentJson);
+      const raw = JSON.parse(contentJson) as ArtifactJsonValue;
+      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+        return contentJson;
+      }
+      parsed = raw;
     } catch {
       return contentJson;
     }
@@ -2286,23 +2358,807 @@ export class ArtifactToolManager {
 
     let modified = false;
     for (const table of tables) {
-      const rows = (table as Record<string, unknown>)['rows'];
+      if (table === null || typeof table !== 'object' || Array.isArray(table)) {
+        continue;
+      }
+      const tbl = table as ArtifactToolArgs;
+      const rows = tbl['rows'];
       if (!Array.isArray(rows) || rows.length <= maxRowsPerTable) {
         continue;
       }
 
-      const tbl = table as Record<string, unknown>;
-      if (!tbl['metadata']) {
-        tbl['metadata'] = {};
-      }
-      const metadata = tbl['metadata'] as Record<string, unknown>;
+      const existingMeta = tbl['metadata'];
+      const metadata: ArtifactToolArgs =
+        existingMeta !== null && typeof existingMeta === 'object' && !Array.isArray(existingMeta)
+          ? (existingMeta as ArtifactToolArgs)
+          : {};
       metadata['totalRowCount'] = rows.length;
       metadata['truncatedForStorage'] = true;
+      tbl['metadata'] = metadata;
       tbl['rows'] = rows.slice(0, maxRowsPerTable);
       modified = true;
     }
 
     return modified ? JSON.stringify(parsed) : contentJson;
+  }
+
+  // ─── CROSS-ARTIFACT & SYNTHESIS TOOLS ───
+
+  private recordToolResult(
+    call: ArtifactToolCall,
+    startedAt: number,
+    result: ArtifactToolResult,
+  ): StoredToolResult {
+    const stored: StoredToolResult = {
+      artifactId: call.artifactId,
+      tool: call.tool,
+      input: call.input,
+      result,
+      timestamp: new Date(),
+      durationMs: Date.now() - startedAt,
+    };
+    this.toolResults.push(stored);
+    return stored;
+  }
+
+  private async handleCreateArtifactTool(
+    call: ArtifactToolCall,
+    startedAt: number,
+  ): Promise<StoredToolResult> {
+    const input = call.input ?? {};
+    const rawType =
+      typeof input['artifactType'] === 'string' && input['artifactType'].trim()
+        ? input['artifactType']
+        : typeof input['type'] === 'string' && input['type'].trim()
+          ? input['type']
+          : typeof input['targetKind'] === 'string' && input['targetKind'].trim()
+            ? input['targetKind']
+            : 'Markdown Document';
+    const normalizedTypeName = GovernedArtifactService.Instance.NormalizeArtifactTypeName(rawType);
+    const title =
+      typeof input['title'] === 'string' && input['title'].trim()
+        ? input['title'].trim()
+        : `Untitled ${normalizedTypeName}`;
+    const description =
+      typeof input['description'] === 'string' && input['description'].trim()
+        ? input['description'].trim()
+        : undefined;
+    const collectionId =
+      typeof input['collectionId'] === 'string' && input['collectionId'].trim()
+        ? input['collectionId'].trim()
+        : undefined;
+    const sheetNames = Array.isArray(input['sheetNames'])
+      ? input['sheetNames'].filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+      : undefined;
+    const rawContent = input['content'];
+    const providedContent =
+      typeof rawContent === 'string' || (rawContent !== null && typeof rawContent === 'object' && !Array.isArray(rawContent))
+        ? (rawContent as string | ArtifactToolArgs)
+        : undefined;
+
+    const activeRunId = this.agentRunId ?? this.getAgentRun?.()?.ID;
+    const activeAgentName = this.agentName ?? this.getAgentRun?.()?.Agent ?? undefined;
+
+    if (this.provider && this.contextUser) {
+      const outcome = await GovernedArtifactService.Instance.CreateGovernedArtifact({
+        provider: this.provider,
+        contextUser: this.contextUser,
+        title,
+        artifactType: rawType,
+        description,
+        content: providedContent,
+        sheetNames,
+        collectionId,
+        agentRunId: activeRunId,
+        agentName: activeAgentName,
+      });
+      if (!outcome.success || !outcome.artifactId) {
+        return this.recordToolResult(call, startedAt, {
+          success: false,
+          data: null,
+          errorMessage: outcome.errorMessage || 'Failed to create governed artifact.',
+        });
+      }
+
+      const alphaId = this.RegisterArtifact({
+        name: outcome.name ?? title,
+        typeName: outcome.typeName ?? normalizedTypeName,
+        artifactId: outcome.artifactId,
+        versionId: outcome.versionId,
+        versionNumber: outcome.versionNumber ?? 1,
+        description,
+        mimeType: outcome.mimeType,
+        toolLibraryClass: outcome.toolLibraryClass,
+        content: outcome.content ?? '',
+      });
+      const registeredEntry = this.artifacts.get(alphaId);
+      if (registeredEntry) {
+        registeredEntry.driverClass = outcome.driverClass;
+        registeredEntry.configuration = outcome.configuration;
+        registeredEntry.ownerUserId = this.contextUser.ID;
+      }
+
+      const touchedSummary: GovernedRunArtifactSummary = {
+        ArtifactID: outcome.artifactId,
+        ArtifactVersionID: outcome.versionId ?? '',
+        VersionNumber: outcome.versionNumber ?? 1,
+        Name: outcome.name ?? title,
+        ArtifactTypeName: outcome.typeName ?? normalizedTypeName,
+        DriverClass: outcome.driverClass,
+        Operation: 'created',
+      };
+      this.recordTouchedArtifactSummary(touchedSummary);
+      this.enteredPresenceArtifactIds.add(outcome.artifactId);
+
+      const availableTools = registeredEntry?.library.GetToolList().map((t) => t.name) ?? [];
+      return this.recordToolResult(call, startedAt, {
+        success: true,
+        data: {
+          alphaId,
+          artifactId: outcome.artifactId,
+          versionId: outcome.versionId,
+          versionNumber: outcome.versionNumber ?? 1,
+          title: outcome.name ?? title,
+          artifactTypeName: outcome.typeName ?? normalizedTypeName,
+          driverClass: outcome.driverClass,
+          persisted: true,
+          availableTools,
+        },
+      });
+    }
+
+    // In-memory test fallback when no database provider/user is bound
+    const built = GovernedArtifactService.Instance.BuildInitialContent(
+      normalizedTypeName,
+      title,
+      providedContent,
+      sheetNames,
+    );
+    const alphaId = this.RegisterArtifact({
+      name: title,
+      typeName: normalizedTypeName,
+      versionNumber: 1,
+      description,
+      mimeType: built.mimeType,
+      content: built.content,
+    });
+    const registeredEntry = this.artifacts.get(alphaId);
+    const availableTools = registeredEntry?.library.GetToolList().map((t) => t.name) ?? [];
+    return this.recordToolResult(call, startedAt, {
+      success: true,
+      data: {
+        alphaId,
+        artifactId: alphaId,
+        versionNumber: 1,
+        title,
+        artifactTypeName: normalizedTypeName,
+        persisted: false,
+        availableTools,
+      },
+    });
+  }
+
+  private async handleOpenArtifactTool(
+    call: ArtifactToolCall,
+    startedAt: number,
+  ): Promise<StoredToolResult> {
+    const input = call.input ?? {};
+    const requestedId =
+      typeof input['artifactId'] === 'string' && input['artifactId'].trim()
+        ? input['artifactId'].trim()
+        : (call.artifactId ?? '').trim();
+    if (!requestedId) {
+      return this.recordToolResult(call, startedAt, {
+        success: false,
+        data: null,
+        errorMessage: 'open_artifact requires an artifactId UUID.',
+      });
+    }
+
+    if (!this.provider || !this.contextUser) {
+      for (const entry of this.artifacts.values()) {
+        if (entry.artifactId && UUIDsEqual(entry.artifactId, requestedId)) {
+          return this.recordToolResult(call, startedAt, {
+            success: true,
+            data: {
+              alphaId: entry.alphaId,
+              artifactId: entry.artifactId,
+              versionId: entry.versionId,
+              versionNumber: entry.currentVersionNumber ?? entry.versionNumber,
+              name: entry.name,
+              typeName: entry.typeName,
+              availableTools: entry.library.GetToolList().map((t) => t.name),
+            },
+          });
+        }
+      }
+      return this.recordToolResult(call, startedAt, {
+        success: false,
+        data: null,
+        errorMessage: 'Cannot open external artifact without contextUser and provider.',
+      });
+    }
+
+    const loaded = await GovernedArtifactService.Instance.LoadReadableArtifactState(
+      this.provider,
+      this.contextUser,
+      requestedId,
+    );
+    if (!loaded.state) {
+      return this.recordToolResult(call, startedAt, {
+        success: false,
+        data: null,
+        errorMessage: loaded.errorMessage || `Failed to open artifact '${requestedId}'.`,
+      });
+    }
+    const state = loaded.state;
+
+    let matchedEntry: ArtifactEntry | undefined;
+    for (const entry of this.artifacts.values()) {
+      if (entry.artifactId && UUIDsEqual(entry.artifactId, state.artifactId)) {
+        matchedEntry = entry;
+        break;
+      }
+    }
+
+    if (matchedEntry) {
+      matchedEntry.ownerUserId = state.ownerUserId;
+      matchedEntry.versionId = state.versionId;
+      matchedEntry.versionNumber = state.versionNumber;
+      matchedEntry.baseVersionNumber = state.versionNumber;
+      matchedEntry.currentVersionNumber = state.versionNumber;
+      matchedEntry.contentMode = state.contentMode;
+      matchedEntry.originalXlsxBytes = state.originalXlsxBytes;
+      matchedEntry.content = state.content;
+      matchedEntry.configuration = state.configuration;
+      matchedEntry.driverClass = state.driverClass;
+      matchedEntry.toolLibraryClass = state.toolLibraryClass;
+    } else {
+      const alphaId = this.RegisterArtifact({
+        name: state.name,
+        typeName: state.typeName,
+        artifactId: state.artifactId,
+        versionId: state.versionId,
+        versionNumber: state.versionNumber,
+        description: state.description,
+        mimeType: state.mimeType,
+        toolLibraryClass: state.toolLibraryClass,
+        content: state.content,
+      });
+      matchedEntry = this.artifacts.get(alphaId);
+      if (matchedEntry) {
+        matchedEntry.ownerUserId = state.ownerUserId;
+        matchedEntry.contentMode = state.contentMode;
+        matchedEntry.originalXlsxBytes = state.originalXlsxBytes;
+        matchedEntry.configuration = state.configuration;
+        matchedEntry.driverClass = state.driverClass;
+      }
+    }
+
+    const activeRunId = this.agentRunId ?? this.getAgentRun?.()?.ID;
+    const activeAgentName = this.agentName ?? this.getAgentRun?.()?.Agent ?? undefined;
+    this.enteredPresenceArtifactIds.add(state.artifactId);
+    await GovernedArtifactService.Instance.EmitAgentPresence({
+      artifactId: state.artifactId,
+      phase: 'enter',
+      contextUser: this.contextUser,
+      agentRunId: activeRunId,
+      agentName: activeAgentName,
+      toolName: 'open_artifact',
+      actionSummary: `Opened "${state.name}"`,
+      location: { Domain: ResolvePresenceDomain(state.typeName) },
+    });
+
+    return this.recordToolResult(call, startedAt, {
+      success: true,
+      data: {
+        alphaId: matchedEntry?.alphaId,
+        artifactId: state.artifactId,
+        versionId: state.versionId,
+        versionNumber: state.versionNumber,
+        name: state.name,
+        typeName: state.typeName,
+        driverClass: state.driverClass,
+        canEdit: state.permissions.CanEdit,
+        liveRoomHydrated: state.liveRoomHydrated,
+        availableTools: matchedEntry?.library.GetToolList().map((t) => t.name) ?? [],
+      },
+    });
+  }
+
+  private async checkCollectionPermission(
+    collectionId: string,
+    required: 'read' | 'edit',
+  ): Promise<{ allowed: boolean; environmentId?: string | null; reason?: string }> {
+    if (!this.provider || !this.contextUser) {
+      return IsValidUUID(collectionId.trim())
+        ? { allowed: true }
+        : { allowed: false, reason: `Invalid collectionId UUID '${collectionId}'.` };
+    }
+    return GovernedArtifactService.Instance.CheckCollectionPermission(
+      this.provider,
+      this.contextUser,
+      collectionId,
+      required,
+    );
+  }
+
+  private entryToSynthesisSourceInput(entry: ArtifactEntry): ArtifactSynthesisSourceInput {
+    return {
+      ArtifactID: entry.artifactId || entry.alphaId,
+      Name: entry.name,
+      ArtifactType: entry.typeName,
+      VersionNumber: entry.currentVersionNumber ?? entry.versionNumber,
+      ContentMode: entry.contentMode,
+      Content: Buffer.isBuffer(entry.content) ? null : String(entry.content ?? ''),
+      Configuration: entry.configuration ?? null,
+      Description: entry.description ?? null,
+      MimeType: entry.mimeType ?? null,
+    };
+  }
+
+  private async loadExternalReadableArtifact(
+    artifactId: string,
+  ): Promise<{ source?: ArtifactSynthesisSourceInput; environmentId?: string | null; errorMessage?: string }> {
+    if (!this.provider || !this.contextUser) {
+      return { errorMessage: `Unknown source artifact '${artifactId}' (no database provider available).` };
+    }
+
+    const loaded = await GovernedArtifactService.Instance.LoadReadableArtifactState(
+      this.provider,
+      this.contextUser,
+      artifactId,
+    );
+    if (!loaded.state) {
+      return { errorMessage: loaded.errorMessage || `Source artifact '${artifactId}' was not found.` };
+    }
+
+    const state = loaded.state;
+    return {
+      environmentId: state.environmentId ?? null,
+      source: {
+        ArtifactID: state.artifactId,
+        Name: state.name,
+        ArtifactType: state.typeName,
+        VersionNumber: state.versionNumber,
+        ContentMode: state.contentMode,
+        Content: Buffer.isBuffer(state.content) ? null : state.content,
+        Configuration: state.configuration ?? null,
+        Description: state.description ?? null,
+        MimeType: state.mimeType ?? null,
+      },
+    };
+  }
+
+  private async resolveSynthesisArtifactType(typeName: string): Promise<MJArtifactTypeEntity | null> {
+    if (!this.provider || !this.contextUser) return null;
+    try {
+      await ArtifactMetadataEngine.Instance.Config(false, this.contextUser, this.provider);
+      const cached = ArtifactMetadataEngine.Instance.FindArtifactType(typeName);
+      if (cached) return cached;
+    } catch {
+      // Fall back to direct RunView below
+    }
+    const rv = RunView.FromMetadataProvider(this.provider);
+    const res = await rv.RunView<MJArtifactTypeEntity>(
+      {
+        EntityName: 'MJ: Artifact Types',
+        ExtraFilter: `Name='${EscapeSQLString(typeName)}' AND IsEnabled=1`,
+        MaxRows: 1,
+        ResultType: 'entity_object',
+      },
+      this.contextUser,
+    );
+    return res.Success && res.Results?.length ? res.Results[0] : null;
+  }
+
+  private async handleListWorkspaceArtifactsTool(
+    call: ArtifactToolCall,
+    startedAt: number,
+  ): Promise<StoredToolResult> {
+    const input = call.input ?? {};
+    const rawTypeFilter = typeof input['typeFilter'] === 'string' ? input['typeFilter'].trim() : '';
+    const typeFilter = rawTypeFilter.toLowerCase();
+    const normalizedTypeFilter = typeFilter
+      ? GovernedArtifactService.Instance.NormalizeArtifactTypeName(rawTypeFilter).toLowerCase()
+      : '';
+    const rawSearch = typeof input['search'] === 'string' ? input['search'].trim() : '';
+    const search = rawSearch.toLowerCase();
+    const collectionId = typeof input['collectionId'] === 'string' ? input['collectionId'].trim() : '';
+    const maxResults =
+      typeof input['maxResults'] === 'number' && Number.isFinite(input['maxResults'])
+        ? Math.min(Math.max(Math.trunc(input['maxResults']), 1), 100)
+        : 25;
+
+    const items: Array<{
+      alphaId?: string;
+      artifactId?: string;
+      name: string;
+      typeName: string;
+      versionNumber?: number;
+      sections: string[];
+      embeddedCharts: ArtifactSynthesisSourceDigest['EmbeddedCharts'];
+      summaryPreview: string;
+    }> = [];
+    const seenArtifactIds = new Set<string>();
+
+    for (const entry of this.artifacts.values()) {
+      if (entry.artifactId && this.contextUser && this.provider) {
+        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+          this.provider,
+          entry.artifactId,
+          this.contextUser,
+        );
+        if (!perms.CanRead) continue;
+      }
+      const entryTypeLower = entry.typeName.toLowerCase();
+      if (typeFilter && !entryTypeLower.includes(typeFilter) && entryTypeLower !== normalizedTypeFilter) continue;
+      if (search && !entry.name.toLowerCase().includes(search)) continue;
+
+      const digest = ArtifactSynthesisEngine.Instance.ExtractSourceDigest(
+        this.entryToSynthesisSourceInput(entry),
+        1200,
+      );
+      if (entry.artifactId) {
+        seenArtifactIds.add(NormalizeUUID(entry.artifactId));
+      }
+      items.push({
+        alphaId: entry.alphaId,
+        artifactId: entry.artifactId,
+        name: entry.name,
+        typeName: entry.typeName,
+        versionNumber: entry.currentVersionNumber ?? entry.versionNumber,
+        sections: digest.Sections,
+        embeddedCharts: digest.EmbeddedCharts,
+        summaryPreview: digest.SummaryText.slice(0, 400),
+      });
+    }
+
+    if (this.provider && this.contextUser) {
+      const dbResult = await GovernedArtifactService.Instance.ListWorkspaceArtifacts({
+        provider: this.provider,
+        contextUser: this.contextUser,
+        collectionId: collectionId || undefined,
+        typeFilter: rawTypeFilter || undefined,
+        search: rawSearch || undefined,
+        maxResults,
+      });
+      if (!dbResult.success) {
+        return this.recordToolResult(call, startedAt, {
+          success: false,
+          data: null,
+          errorMessage: dbResult.errorMessage || 'Permission denied reading workspace artifacts.',
+        });
+      }
+      for (const dbItem of dbResult.artifacts) {
+        if (items.length >= maxResults) break;
+        const normId = NormalizeUUID(dbItem.artifactId);
+        if (seenArtifactIds.has(normId)) continue;
+        seenArtifactIds.add(normId);
+        items.push({
+          artifactId: dbItem.artifactId,
+          name: dbItem.name,
+          typeName: dbItem.typeName,
+          versionNumber: dbItem.versionNumber,
+          sections: dbItem.sections,
+          embeddedCharts: dbItem.embeddedCharts,
+          summaryPreview: dbItem.summaryPreview,
+        });
+      }
+    }
+
+    return this.recordToolResult(call, startedAt, {
+      success: true,
+      data: {
+        count: items.length,
+        artifacts: items,
+      },
+    });
+  }
+
+  private async handleCreateSynthesizedArtifactTool(
+    call: ArtifactToolCall,
+    startedAt: number,
+  ): Promise<StoredToolResult> {
+    const input = call.input ?? {};
+    const targetKind = ArtifactSynthesisEngine.Instance.NormalizeTargetKind(
+      typeof input['targetKind'] === 'string' ? input['targetKind'] : 'presentation',
+    );
+    const title =
+      typeof input['title'] === 'string' && input['title'].trim()
+        ? input['title'].trim()
+        : `Synthesized ${targetKind === 'presentation' ? 'Presentation' : targetKind === 'spreadsheet' ? 'Spreadsheet' : 'Document'}`;
+    const goal = typeof input['goal'] === 'string' ? input['goal'].trim() : '';
+    const customDescription =
+      typeof input['description'] === 'string' && input['description'].trim()
+        ? input['description'].trim()
+        : '';
+    const linkChartsAndRanges = input['linkChartsAndRanges'] !== false;
+    const collectionId = typeof input['collectionId'] === 'string' ? input['collectionId'].trim() : '';
+
+    if (collectionId) {
+      const colCheck = await this.checkCollectionPermission(collectionId, 'edit');
+      if (!colCheck.allowed) {
+        return this.recordToolResult(call, startedAt, {
+          success: false,
+          data: null,
+          errorMessage: colCheck.reason || 'Permission denied: cannot link artifact into collection.',
+        });
+      }
+    }
+
+    const requestedIdsRaw = Array.isArray(input['sourceArtifactIds'])
+      ? input['sourceArtifactIds'].filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+      : typeof input['sourceArtifactIds'] === 'string' && input['sourceArtifactIds'].trim().length > 0
+        ? [input['sourceArtifactIds'].trim()]
+        : [];
+
+    const sourceInputs: ArtifactSynthesisSourceInput[] = [];
+    const seenIds = new Set<string>();
+    let resolvedEnvironmentId: string | null = null;
+
+    if (requestedIdsRaw.length > 0) {
+      const entriesByArtifactId = IndexByUUID(
+        Array.from(this.artifacts.values()).filter((e): e is ArtifactEntry & { artifactId: string } => Boolean(e.artifactId)),
+        (e) => e.artifactId,
+      );
+      for (const rawRef of requestedIdsRaw) {
+        const ref = rawRef.trim();
+        const byAlpha = this.artifacts.get(ref) ?? this.artifacts.get(ref.toUpperCase());
+        const matchedEntry = byAlpha ?? entriesByArtifactId.Get(ref);
+
+        if (matchedEntry) {
+          if (matchedEntry.artifactId && this.contextUser && this.provider) {
+            const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+              this.provider,
+              matchedEntry.artifactId,
+              this.contextUser,
+            );
+            if (!perms.CanRead) {
+              return this.recordToolResult(call, startedAt, {
+                success: false,
+                data: null,
+                errorMessage: `Permission denied: user lacks Read access to source artifact '${matchedEntry.name}'.`,
+              });
+            }
+          }
+          const srcInput = this.entryToSynthesisSourceInput(matchedEntry);
+          const dedupKey = srcInput.ArtifactID.toLowerCase();
+          if (!seenIds.has(dedupKey)) {
+            seenIds.add(dedupKey);
+            sourceInputs.push(srcInput);
+          }
+        } else {
+          const loaded = await this.loadExternalReadableArtifact(ref);
+          if (!loaded.source) {
+            return this.recordToolResult(call, startedAt, {
+              success: false,
+              data: null,
+              errorMessage: loaded.errorMessage || `Unable to access source artifact '${ref}'.`,
+            });
+          }
+          if (!resolvedEnvironmentId && loaded.environmentId) {
+            resolvedEnvironmentId = loaded.environmentId;
+          }
+          const dedupKey = loaded.source.ArtifactID.toLowerCase();
+          if (!seenIds.has(dedupKey)) {
+            seenIds.add(dedupKey);
+            sourceInputs.push(loaded.source);
+          }
+        }
+      }
+    } else {
+      for (const entry of this.artifacts.values()) {
+        if (entry.artifactId && this.contextUser && this.provider) {
+          const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            this.provider,
+            entry.artifactId,
+            this.contextUser,
+          );
+          if (!perms.CanRead) continue;
+        }
+        const srcInput = this.entryToSynthesisSourceInput(entry);
+        const dedupKey = srcInput.ArtifactID.toLowerCase();
+        if (!seenIds.has(dedupKey)) {
+          seenIds.add(dedupKey);
+          sourceInputs.push(srcInput);
+        }
+      }
+    }
+
+    const digests = sourceInputs.map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigest(s));
+    const allowedIds = digests.map((d) => d.ArtifactID);
+    const availableCharts = digests.flatMap((d) => d.EmbeddedCharts);
+
+    const rawContentInput = input['content'];
+    const rawContentStr =
+      typeof rawContentInput === 'string'
+        ? rawContentInput.trim()
+        : rawContentInput && typeof rawContentInput === 'object'
+          ? JSON.stringify(rawContentInput)
+          : '';
+
+    if (!rawContentStr && digests.length === 0) {
+      return this.recordToolResult(call, startedAt, {
+        success: false,
+        data: null,
+        errorMessage: 'No authorized source artifacts or content were provided for synthesis.',
+      });
+    }
+
+    const normalized = rawContentStr
+      ? ArtifactSynthesisEngine.Instance.NormalizeSynthesizedOutput({
+          TargetKind: targetKind,
+          RawOutput: rawContentStr,
+          FallbackTitle: title,
+          AllowedSourceArtifactIds: allowedIds,
+          AvailableChartRefs: availableCharts,
+        })
+      : ArtifactSynthesisEngine.Instance.BuildDeterministicFallbackSynthesis(
+          digests,
+          targetKind,
+          title,
+          goal,
+          linkChartsAndRanges,
+        );
+
+    const finalDescription = customDescription || normalized.Description;
+    let persistedArtifactId: string | undefined;
+    let persistedVersionId: string | undefined;
+    let persisted = false;
+
+    if (this.provider && this.contextUser) {
+      const artifactType = await this.resolveSynthesisArtifactType(normalized.ArtifactTypeName);
+      if (!artifactType) {
+        return this.recordToolResult(call, startedAt, {
+          success: false,
+          data: null,
+          errorMessage: `Artifact type '${normalized.ArtifactTypeName}' was not found or is disabled.`,
+        });
+      }
+
+      if (!resolvedEnvironmentId && digests[0]?.ArtifactID && IsValidUUID(digests[0].ArtifactID)) {
+        const srcCheck = await this.loadExternalReadableArtifact(digests[0].ArtifactID);
+        resolvedEnvironmentId = srcCheck.environmentId ?? null;
+      }
+      if (!resolvedEnvironmentId && collectionId) {
+        const colMeta = await this.checkCollectionPermission(collectionId, 'edit');
+        resolvedEnvironmentId = colMeta.environmentId ?? null;
+      }
+      const targetEnvId = resolvedEnvironmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID;
+
+      const artifactEntity = await this.provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.contextUser);
+      artifactEntity.NewRecord();
+      artifactEntity.Name = normalized.Title;
+      artifactEntity.Description = finalDescription;
+      artifactEntity.TypeID = artifactType.ID;
+      artifactEntity.EnvironmentID = targetEnvId;
+      artifactEntity.UserID = this.contextUser.ID;
+
+      const savedArtifact = await artifactEntity.Save();
+      if (!savedArtifact) {
+        return this.recordToolResult(call, startedAt, {
+          success: false,
+          data: null,
+          errorMessage: artifactEntity.LatestResult?.CompleteMessage || 'Failed to save synthesized artifact.',
+        });
+      }
+
+      const versionEntity = await this.provider.GetEntityObject<MJArtifactVersionEntity>(
+        'MJ: Artifact Versions',
+        this.contextUser,
+      );
+      versionEntity.NewRecord();
+      versionEntity.ArtifactID = artifactEntity.ID;
+      versionEntity.VersionNumber = 1;
+      versionEntity.Name = normalized.Title;
+      versionEntity.Description = finalDescription;
+      versionEntity.UserID = this.contextUser.ID;
+      versionEntity.ContentMode = 'Text';
+      versionEntity.Content = normalized.Content;
+      versionEntity.ContentHash = createHash('sha256').update(normalized.Content, 'utf8').digest('hex');
+      versionEntity.ContentSizeBytes = Buffer.byteLength(normalized.Content, 'utf8');
+      const activeRunId = this.agentRunId ?? this.getAgentRun?.()?.ID;
+      const activeAgentName = this.agentName ?? this.getAgentRun?.()?.Agent ?? undefined;
+      versionEntity.Comments = activeAgentName
+        ? `Synthesized by ${activeAgentName} from ${digests.length} artifact(s)`
+        : `Synthesized via create_synthesized_artifact from ${digests.length} artifact(s)`;
+
+      const attributionJson = JSON.stringify({
+        synthesizedFromArtifactIds: allowedIds,
+        agentRunId: activeRunId ?? null,
+        agentName: activeAgentName ?? null,
+      });
+      const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
+        attributionJson,
+        normalized.Content,
+        artifactType.DriverClass ?? null,
+        normalized.Title,
+        {
+          ArtifactType: artifactType,
+          AllArtifactTypes: ArtifactMetadataEngine.Instance.ArtifactTypes ?? [],
+        },
+      );
+      if (enrichedConfig) {
+        versionEntity.Configuration = enrichedConfig;
+      }
+
+      const savedVersion = await versionEntity.Save();
+      if (!savedVersion) {
+        await artifactEntity.Delete();
+        return this.recordToolResult(call, startedAt, {
+          success: false,
+          data: null,
+          errorMessage: versionEntity.LatestResult?.CompleteMessage || 'Failed to save synthesized artifact v1.',
+        });
+      }
+
+      if (collectionId) {
+        const link = await this.provider.GetEntityObject<MJCollectionArtifactEntity>(
+          'MJ: Collection Artifacts',
+          this.contextUser,
+        );
+        link.NewRecord();
+        link.CollectionID = collectionId;
+        link.ArtifactVersionID = versionEntity.ID;
+        const savedLink = await link.Save();
+        if (!savedLink) {
+          await versionEntity.Delete();
+          await artifactEntity.Delete();
+          return this.recordToolResult(call, startedAt, {
+            success: false,
+            data: null,
+            errorMessage: link.LatestResult?.CompleteMessage || 'Failed to link synthesized artifact to collection.',
+          });
+        }
+      }
+
+      persistedArtifactId = artifactEntity.ID;
+      persistedVersionId = versionEntity.ID;
+      persisted = true;
+    }
+
+    const newAlphaId = this.RegisterArtifact({
+      name: normalized.Title,
+      typeName: normalized.ArtifactTypeName,
+      artifactId: persistedArtifactId,
+      versionId: persistedVersionId,
+      versionNumber: 1,
+      description: finalDescription,
+      content: normalized.Content,
+    });
+    if (persistedArtifactId) {
+      const synthRunId = this.agentRunId ?? this.getAgentRun?.()?.ID;
+      const synthType = ArtifactMetadataEngine.Instance.FindArtifactType(normalized.ArtifactTypeName);
+      const summary: GovernedRunArtifactSummary = {
+        ArtifactID: persistedArtifactId,
+        ArtifactVersionID: persistedVersionId ?? '',
+        VersionNumber: 1,
+        Name: normalized.Title,
+        ArtifactTypeName: normalized.ArtifactTypeName,
+        DriverClass: synthType?.DriverClass ?? undefined,
+        Operation: 'synthesized',
+      };
+      this.recordTouchedArtifactSummary(summary);
+      GovernedArtifactService.Instance.RecordTouchedArtifact(synthRunId, summary);
+    }
+
+    return this.recordToolResult(call, startedAt, {
+      success: true,
+      data: {
+        alphaId: newAlphaId,
+        artifactId: persistedArtifactId ?? newAlphaId,
+        versionId: persistedVersionId,
+        versionNumber: 1,
+        title: normalized.Title,
+        artifactTypeName: normalized.ArtifactTypeName,
+        targetKind: normalized.TargetKind,
+        linkedChartCount: normalized.LinkedChartCount,
+        sourceCount: digests.length,
+        persisted,
+        warnings: normalized.Warnings,
+      },
+    });
   }
 
   // ─── PRIVATE ───
@@ -2319,89 +3175,7 @@ export class ArtifactToolManager {
     return String.fromCharCode(65 + first) + String.fromCharCode(65 + second);
   }
 
-  /**
-   * Resolve a tool library for an artifact type, walking the ParentID chain
-   * of `MJ: Artifact Types` to collect libraries from the leaf type and all
-   * ancestors. Child libraries override parent libraries for same-named tools.
-   *
-   * Resolution order:
-   *  1. If the metadata engine is loaded, walk `typeName → parent → ...` via
-   *     `ArtifactMetadataEngine`, instantiating each level's `ToolLibraryClass`
-   *     via ClassFactory. Returns a CompositeArtifactToolLibrary.
-   *  2. If the engine isn't loaded or the type isn't found, resolve the single
-   *     leaf library using the `toolLibraryClass` hint plus name-based fallback.
-   *
-   * The engine is expected to be configured by AgentRunner before Initialize
-   * is called, so path (1) is the normal case.
-   */
-  private resolveLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
-    const chain = this.resolveLibraryChain(typeName);
-    if (chain.length > 1) return new CompositeArtifactToolLibrary(chain);
-    if (chain.length === 1) return chain[0];
-    // Engine didn't yield anything — fall back to a single leaf library.
-    return this.resolveLeafLibrary(typeName, toolLibraryClass);
-  }
-
-  /**
-   * Walk the ParentID chain for `typeName` in ArtifactMetadataEngine,
-   * instantiating each level's ToolLibraryClass via ClassFactory.
-   * Returns the chain leaf-first. Levels without a ToolLibraryClass are
-   * skipped. Returns [] if the engine isn't loaded or the type isn't found.
-   */
-  private resolveLibraryChain(typeName: string): BaseArtifactToolLibrary[] {
-    const engine = ArtifactMetadataEngine.Instance;
-    if (!engine.ArtifactTypes?.length) return [];
-
-    const chain: BaseArtifactToolLibrary[] = [];
-    const visited = new Set<string>();
-    let current = engine.FindArtifactType(typeName);
-    while (current && !visited.has(current.ID)) {
-      visited.add(current.ID);
-      const className = current.ToolLibraryClass;
-      if (className) {
-        const lib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, className);
-        if (lib) chain.push(lib);
-      }
-      current = current.ParentID
-        ? engine.ArtifactTypes.find((t) => UUIDsEqual(t.ID, current!.ParentID!))
-        : undefined;
-    }
-    return chain;
-  }
-
-  /**
-   * Single-library fallback when the metadata engine isn't available.
-   * Uses the provided `toolLibraryClass` hint first, then name-based heuristics.
-   */
-  private resolveLeafLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
-    if (toolLibraryClass) {
-      const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, toolLibraryClass);
-      if (instance) return instance;
-    }
-
-    const lower = typeName.toLowerCase();
-    if (lower.includes('data') || lower.includes('snapshot')) {
-      return new DataSnapshotToolLibrary();
-    }
-    if (lower.includes('json')) {
-      return new JSONToolLibrary();
-    }
-    // File-based types: try ClassFactory for dynamically registered libraries
-    // (PDFToolLibrary, ExcelToolLibrary, DocxToolLibrary are registered by CoreActions)
-    if (lower.includes('pdf')) {
-      const lib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, 'PDFToolLibrary');
-      if (lib) return lib;
-    }
-    if (lower.includes('excel') || lower.includes('xlsx') || lower.includes('spreadsheet')) {
-      const sheetLib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, 'SpreadsheetToolLibrary');
-      if (sheetLib) return sheetLib;
-      const excelLib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, 'ExcelToolLibrary');
-      if (excelLib) return excelLib;
-    }
-    if (lower.includes('word') || lower.includes('docx') || lower.includes('document')) {
-      const lib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, 'DocxToolLibrary');
-      if (lib) return lib;
-    }
-    return new TextToolLibrary();
+  private resolveLibrary(typeName: string, toolLibraryClass?: string): ArtifactToolLibraryWithRevisionHash {
+    return GovernedArtifactService.Instance.ResolveLibrary(typeName, toolLibraryClass);
   }
 }

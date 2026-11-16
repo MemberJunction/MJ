@@ -1446,3 +1446,112 @@ describe('AgentRunner.ProcessAgentArtifacts — payload version MimeType', () =>
         expect(AgentRunner.PayloadVersionMimeType(undefined)).toBeNull();
     });
 });
+
+describe('AgentRunner.ProcessAgentArtifacts — touchedArtifacts clobber guard', () => {
+    beforeEach(() => {
+        engineAgents.length = 0;
+        engineAgents.push({ ID: 'agent-1', Name: 'Sage', ArtifactCreationMode: 'Always' });
+    });
+
+    it('skips versioning an artifact already persisted via governed artifact tools in touchedArtifacts', async () => {
+        const version = makeEntity('ver-should-not-save');
+        const { provider } = makeProvider(() => version, world({
+            owners: new Map([[SOURCE_UUID.toLowerCase(), 'user-1']]),
+        }));
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 5;
+
+        const info = await runner.ProcessAgentArtifacts(
+            makeResult({
+                payload: { D: { sheets: [] }, E: { blocks: [] } },
+                artifactDirective: {
+                    behavior: 'version-source',
+                    targetArtifactId: SOURCE_UUID,
+                    description: 'Re-added embed',
+                },
+                touchedArtifacts: [
+                    {
+                        ArtifactID: SOURCE_UUID,
+                        ArtifactVersionID: 'ver-5',
+                        VersionNumber: 5,
+                        Name: 'The Silk Road',
+                        ArtifactTypeName: 'Markdown Document',
+                        Operation: 'mutated',
+                    },
+                ],
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider,
+        );
+
+        expect(info).toBeUndefined();
+        expect(version.Save).not.toHaveBeenCalled();
+    });
+
+    it('skips creating a legacy payload artifact when governed artifact tools already persisted touchedArtifacts', async () => {
+        const artifact = makeEntity('art-should-not-create');
+        const version = makeEntity('ver-should-not-create');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        const info = await runner.ProcessAgentArtifacts(
+            makeResult({
+                payload: { D: { sheets: [] }, E: { blocks: [] } },
+                touchedArtifacts: [
+                    {
+                        ArtifactID: SOURCE_UUID,
+                        ArtifactVersionID: 'ver-5',
+                        VersionNumber: 5,
+                        Name: 'The Silk Road',
+                        ArtifactTypeName: 'Markdown Document',
+                        Operation: 'mutated',
+                    },
+                ],
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider,
+        );
+
+        expect(info).toBeUndefined();
+        expect(artifact.Save).not.toHaveBeenCalled();
+        expect(version.Save).not.toHaveBeenCalled();
+    });
+
+    it('still honors explicit create-new deliverable directive even when touchedArtifacts is non-empty', async () => {
+        const artifact = makeEntity('art-new-deliverable');
+        const version = makeEntity('ver-new-deliverable');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        const info = await runner.ProcessAgentArtifacts(
+            makeResult({
+                payload: { summary: 'Final analysis' },
+                artifactDirective: {
+                    behavior: 'create-new',
+                    name: 'Trade Summary',
+                },
+                touchedArtifacts: [
+                    {
+                        ArtifactID: SOURCE_UUID,
+                        ArtifactVersionID: 'ver-5',
+                        VersionNumber: 5,
+                        Name: 'The Silk Road',
+                        ArtifactTypeName: 'Markdown Document',
+                        Operation: 'mutated',
+                    },
+                ],
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider,
+        );
+
+        expect(info?.artifactId).toBe('art-new-deliverable');
+        expect(version.Save).toHaveBeenCalledTimes(1);
+    });
+});

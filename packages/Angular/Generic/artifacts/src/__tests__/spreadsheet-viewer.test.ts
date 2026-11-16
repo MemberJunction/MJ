@@ -584,5 +584,34 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
       expect(component.InlineEditingAddress).toBeNull();
       expect(component.ActiveSheet.Cells['B2']?.RawValue).toBe(42000);
     });
+
+    it('memoizes HasUnsavedChanges within a microtask and skips hover work when not dragging', async () => {
+      // Seed baseline saved state
+      component.Workbook = SpreadsheetEngine.Instance.CreateEmptyWorkbook('MemoTest');
+      const internal = component as unknown as {
+        lastSavedComparableJson: string;
+        getComparableWorkbookJson: (wb: typeof component.Workbook) => string;
+      };
+      internal.lastSavedComparableJson = internal.getComparableWorkbookJson(component.Workbook);
+
+      const stringifySpy = vi.spyOn(JSON, 'stringify');
+      expect(component.HasUnsavedChanges).toBe(false);
+      expect(component.HasUnsavedChanges).toBe(false);
+      expect(component.HasUnsavedChanges).toBe(false);
+      expect(stringifySpy).toHaveBeenCalledTimes(1);
+
+      // Next microtask invalidates the memoized value
+      await Promise.resolve();
+      component.Workbook.Title = 'Modified Title';
+      expect(component.HasUnsavedChanges).toBe(true);
+      expect(stringifySpy).toHaveBeenCalledTimes(2);
+      stringifySpy.mockRestore();
+
+      // OnCellMouseEnter does nothing when not dragging selection
+      component.IsDraggingSelection = false;
+      component.SelectedRange = 'A1';
+      component.OnCellMouseEnter(4, 4);
+      expect(component.SelectedRange).toBe('A1');
+    });
   });
 });
