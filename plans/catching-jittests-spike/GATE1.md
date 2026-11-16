@@ -386,3 +386,4 @@ Details and options are in [OVERNIGHT-DECISIONS.md](OVERNIGHT-DECISIONS.md) N29 
 
 **Open for the user.** Catches of behaviour that the PR text states on purpose (#5481, #4450, #5703) count as catches on known-bug PRs and as false alarms on clean PRs. The choice between reporting them, not reporting them, or a second lower class of report is in N34.
 
+**Round H and stop (N35).** With the merged code and the caller check on, 2 of the 15 held-out clean PRs get a report (not labelled), and 5 of the 10 known-bug PRs get a report (not matched). The work is stopped as incomplete; see [STATUS.md](STATUS.md).

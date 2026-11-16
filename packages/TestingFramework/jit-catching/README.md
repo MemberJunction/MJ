@@ -2,6 +2,8 @@
 
 Catching JiTTests for MJ. Design: [`plans/catching-jittests-design.md`](../../../plans/catching-jittests-design.md).
 
+**Status: incomplete. The work was timeboxed and stopped on 2026-11-16; gate 1 is not passed.** See [`plans/catching-jittests-spike/STATUS.md`](../../../plans/catching-jittests-spike/STATUS.md).
+
 Private, repo-local. `jit-catch run --pr <n>` runs the whole pipeline locally; `generate`, `execute` and `assess` are the three CI jobs.
 
 Requirements: Docker, `git`, `gh` (logged in), `ANTHROPIC_API_KEY`; for judges also `OPENAI_API_KEY` and `GEMINI_API_KEY`.

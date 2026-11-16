@@ -460,6 +460,26 @@ Decision: C, with prompt version 3 (v1 dropped 4 of 8 real-bug catches; v3 dropp
 
 Decision: open for the user. The code has B as the default and C as a setting.
 
+## N35. Round H: merged code with the caller check on; the work stops here
+
+Round H is the first run of the caller check on catches that its prompt was not tuned on. The user stopped the work after it, so the match step and the labels were not done.
+
+| Set | PRs | PRs the judges would report | PRs with a report after the caller check | Cost (USD) |
+|---|---|---|---|---|
+| Clean, held-out slice | 15 | 5 (#3892, #3872, #3895, #4470, #4517) | 2 (#3872 with 2 reports, #3895 with 1) | about 15 |
+| Known bugs (10 that a base test can find) | 10 | 6 (#5481, #4126, #4450, #4120, #4451, #5729) | 5 (all but #5481) | 14.56 |
+
+- The reports on #3872 and #3895 are not labelled. The false-alarm count for the held-out slice is therefore between 0 and 2 of 15 (0% to 13%). With the code of N28 it was 9 of 15.
+- The known-bug reports are not matched to the known bugs, so this round gives no catch rate.
+- The assess step ran out of memory (4 GB) on #3883: it kept the TypeScript program of every judged catch for the caller check. Fixed in `69415bc8ed`; the run then assessed with no report.
+
+| Option | For | Against |
+|---|---|---|
+| A. Run the match step and label the 3 clean reports | Completes the round (about 1 USD and 30 minutes) | The user stopped the work |
+| **B. Record the raw result and stop (chosen)** | Follows the instruction | The round has no catch rate and no final false-alarm rate |
+
+Decision: B. The state of the whole work is in [STATUS.md](STATUS.md).
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -492,3 +512,4 @@ Decision: open for the user. The code has B as the default and C as a setting.
 | CC | Caller check trials (v1, v2, v3, repeat) and match steps | about 17 | about 184 |
 | G | Known bugs 10 PRs + tuning clean 15 PRs, generator of N25 + p3 | 25.72 | about 210 |
 | GC | Caller check on round G (offline and real stage) | about 4 | about 214 |
+| H | Held-out clean 15 PRs + known bugs 10 PRs, merged code, caller check on | about 29.5 | about 244 |
