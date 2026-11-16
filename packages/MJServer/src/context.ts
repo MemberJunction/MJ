@@ -893,7 +893,7 @@ function stampAndTrackMaterializedProvider(
  * `LocalCacheManager`, and the shared PG pool(s) are warm in memory, deferring provider
  * instantiation until a resolver actually accesses a given provider type.
  */
-export function tryBuildLazyPostgresProviders(
+export function TryBuildLazyPostgresProviders(
   sessionId: string | undefined,
   materializedProviders: DatabaseProviderBase[],
 ): ProviderInfo[] | null {
@@ -1002,7 +1002,7 @@ function tryBuildLazySqlServerProviders(
   materializedProviders: DatabaseProviderBase[],
 ): ProviderInfo[] | null {
   if (resolveDbPlatformFromEnv() === 'postgresql') {
-    return tryBuildLazyPostgresProviders(sessionId, materializedProviders);
+    return TryBuildLazyPostgresProviders(sessionId, materializedProviders);
   }
 
   const buildRwSync = (): DatabaseProviderBase | null => {

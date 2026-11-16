@@ -1,6 +1,6 @@
 /**
  * Verifies lazy per-request PostgreSQL provider construction in `context.ts`
- * (`tryBuildLazyPostgresProviders`), including deferred instantiation and separate
+ * (`TryBuildLazyPostgresProviders`), including deferred instantiation and separate
  * `Read-Only` vs `Adhoc-Read-Only` provider routing.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -31,12 +31,12 @@ vi.mock('../config.js', () => ({
     mj_core_schema: '__mj',
 }));
 
-import { tryBuildLazyPostgresProviders } from '../context.js';
+import { TryBuildLazyPostgresProviders } from '../context.js';
 import { PostgreSQLReadOnlyPool } from '../postgresqlPoolSettings.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolveOriginSessionId } from '../requestSessionContext.js';
 
-describe('tryBuildLazyPostgresProviders', () => {
+describe('TryBuildLazyPostgresProviders', () => {
     let previousGlobalProvider: DatabaseProviderBase;
 
     beforeEach(async () => {
@@ -51,7 +51,7 @@ describe('tryBuildLazyPostgresProviders', () => {
     it('returns null when global metadata or pool is not ready', () => {
         SetProvider({ AllMetadata: { AllEntities: [] } } as unknown as DatabaseProviderBase);
         const materialized: DatabaseProviderBase[] = [];
-        expect(tryBuildLazyPostgresProviders('sess-1', materialized)).toBeNull();
+        expect(TryBuildLazyPostgresProviders('sess-1', materialized)).toBeNull();
         expect(materialized).toHaveLength(0);
     });
 
@@ -78,7 +78,7 @@ describe('tryBuildLazyPostgresProviders', () => {
             process.env.PG_READ_ONLY_PASSWORD = 'ro_password';
 
             const materialized: DatabaseProviderBase[] = [];
-            const providers = tryBuildLazyPostgresProviders('sess-pg-lazy', materialized);
+            const providers = TryBuildLazyPostgresProviders('sess-pg-lazy', materialized);
 
             expect(providers).not.toBeNull();
             expect(providers!.map((p) => p.type)).toEqual(['Read-Write', 'Read-Only', 'Adhoc-Read-Only']);

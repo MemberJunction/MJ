@@ -15,6 +15,7 @@ import type {
     ExecuteAgentResult,
 } from '@memberjunction/ai-core-plus';
 import type { EntityInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { UserPayload } from '../types.js';
 import { PublishStatusUpdate, StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
 import { ProjectEntityObjectForCaller, ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
@@ -91,7 +92,7 @@ export class AgentRunStatusPublisher {
         return (progress) => {
             const fromEvent = progress.metadata?.agentRun as StatusRun | undefined;
             if (fromEvent) {
-                if (this.streamBuffer && fromEvent.ID && fromEvent.ID !== this.streamBuffer.agentRunId) {
+                if (this.streamBuffer && fromEvent.ID && !UUIDsEqual(fromEvent.ID, this.streamBuffer.agentRunId)) {
                     this.Flush();
                 }
                 this.run = fromEvent;
@@ -278,7 +279,7 @@ export class AgentRunStatusPublisher {
         chunk: Parameters<AgentExecutionStreamingCallback>[0],
     ): boolean {
         return (
-            buffer.agentRunId === agentRunId &&
+            UUIDsEqual(buffer.agentRunId, agentRunId) &&
             buffer.stepType === chunk.stepType &&
             buffer.kind === chunk.kind &&
             buffer.modelName === chunk.modelName

@@ -11,7 +11,7 @@ export type RerankPipeline = (
     options?: Record<string, unknown>,
 ) => Promise<unknown>;
 
-export interface TransformersModule {
+interface TransformersModule {
     pipeline: (
         task: string,
         model: string,
