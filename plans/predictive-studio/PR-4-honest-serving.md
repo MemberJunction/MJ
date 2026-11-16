@@ -3042,7 +3042,7 @@ A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a m
 **The run/model cycle (M2.3).** From M2 every trainer-path model names its run (`MLModel.TrainingRunID`) and its run
 names the model (`MLTrainingRun.ResultingModelID`). The procedure breaks the cycle on both sides before either
 `DELETE`: it nulls `MLTrainingRun.ResultingModelID` for the doomed models
-(`V202611131725__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
+(`V202611150901__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
 then deletes the runs (`:754`) and the models (`:755`). The TruthSuite `HarnessCleanup` mirrors that order through the
 entity layer (`harness/cleanup.ts:225`: clear and save each run's `ResultingModelID` that names a model being deleted,
 then delete the models, then the runs), pinned by its two cleanup-order tests.
@@ -5390,7 +5390,7 @@ new surface, D-076's browser walk is M5b's and M7's; the DOM tests of Task M4.3 
   `git grep -c "@deprecated"` → 0
 - [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
-- [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M4` → exit 0, summary in the commit body
+- [x] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M4` → exit 0, summary in the commit body
 - [ ] one checkpoint commit on the working branch (`ps/pr-4-honest-serving`; `…--m4` only under D4-63's parallel option), each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
 - [ ] `git push` through the pre-push hook (D-072)
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
@@ -10183,11 +10183,11 @@ are monitored on real outcomes.
   automatically, and migrates their artifacts to durable storage or marks them unscorable.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611131725__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611150901__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->10<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->10<!-- /gen:checks -->
-- Head: <!-- gen:head -->18c5f13b0f<!-- /gen:head -->
+- Head: <!-- gen:head -->bf2429c8b9<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -11501,6 +11501,42 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   DSL3 (next's), PB18 (PB7 storage 84220 B) (`40B15AE2-…`); RD9, DSL4, DSLC3 ✓ in both; check:guards 0, check:ui 0,
   check:standards next's `V202611131724:11` only; milestone-exit `--mode pre-push --skip-commands` → `# checks 21 · failed 0`,
   full `--milestone M4` → `# checks 38 · failed 1` (only `cmd:check:standards`, next's COLLATE; benchmark-log writes reversed first).
+- **Merge-of-next pass (2026-11-16, `m4-merge-next-report.md`):** merged next @67e7255873 (90 commits past `4570337d37`;
+  merge commit `bf2429c8b9`), migration retimed V202611131725 → V202611150901 (after next's `V202611140845` and
+  `V202611150900`; neither touches `spDeleteEntityWithCoreDependencies`, `MLModel`, `MLOutputBinding` or `FeatureValue`, and
+  ours touches neither `spCreateRecordChange_Internal` nor `ArtifactType`; the TruthSuite references in
+  `governance.adversarial.db.test.ts:1140` and `serving-schema.adversarial.db.test.ts:928` follow the rename). Six conflicts:
+  the four `mj-class-registrations.ts` and `MJCoreEntities/src/generated/entities/__mj.ts` taken `--theirs` and regenerated
+  (next split the zod schemas into `generated/schemas/__mj.ts`; with next's file the Engine did not compile, so the regeneration
+  was bootstrapped from git's three-way merge of `__mj.ts` with the one conflicting hunk (the zod block) on next's side, the five
+  PR 4 `*EntityType` names added to its import, and our zod block as `schemas/__mj.ts`; full CodeGen on the fresh database and
+  `codegen --skipdb` then left `entities/__mj.ts` byte-identical and rewrote `schemas/__mj.ts` with blank-line changes only;
+  server manifests `MJMLOutputBindingEntityServer` 2 / `SignOffModel` 2 each), and `check-registry.test.ts` hand-merged
+  (ours 252 + next's `conversation-delete-client` (3, IT174) and `performance-benchmark` 19 → 20 → 253; `374 passed`). Both
+  databases rebuilt from clean (DROP/CREATE, `READ_COMMITTED_SNAPSHOT` 1, 0 sessions): `mj migrate` → 185 applied on each;
+  `codegen --skipfiles` before the metadata push → no `CodeGen_Run` on each (D4-89); `sync push --dir=metadata` →
+  `created 156 · updated 81 · unchanged 16698 · deleted 5 · errors 0` on each (32 write-backs restored from the index on each);
+  the next CodeGen wrote only OF4-9's two `SubtypeSelector` UPDATEs (10 lines, identical on the two databases, deleted);
+  `truth:provision` → `pstruth: 47 entities, direct SQL sanctioned on 47`; it-metadata → `created 746 · errors 0`; C1 corpus →
+  the same counts, `immutable fields declared: 279`. Identity: 508 entities, 7890 fields, 1018 relationships, 184 versioned
+  flyway rows, the nine `PredictiveStudio.*` remote operations, the four PR 4 gate rows and the suite's 9 members, 0 ML Models
+  name fields with the seven HAND EDIT (5) pins, the delete procedure's delegate branch + D4-73 + binding clears, the guarded
+  `trgUpdateMLModel`, next's `spCreateRecordChange_Internal` (`@SuppressReturn`) and guarded `trgUpdateArtifactType` — identical
+  on both; the `__mj` module-hash + column-shape + flyway listing (16912 lines) differs only in `R__RefreshMetadata.sql`'s
+  checksum (its `${flyway:timestamp}` line). Health on `MJ_PS_PR4_claude`: root build 351/351 + 322/322; Core 531 (39);
+  Engine 1584 (110); MJCoreEntitiesServer 1514 (101; +4 next's `MJConversationEntityServer.test.ts`); dashboards 3122 (255;
+  +13 next's `live-sheet-client-tools.test.ts`), PS 260 (25); TruthSuite 132 (22); integration-test-suite 1047 (71; +3
+  `check-registry` for IT174's bundle); DB lane 66 (6); check:guards 0; check:ui 0; check:standards `✓ No errors. 14662
+  warning(s)`; entityfield-sequence ✓; check:codegen-tail OK (803 migrations); check:changeset ✓. Registry and Gate
+  (`RUN_MUTATION_TESTS=1`) → `Completed (9/9 passed)`, run `00C290C9-130B-4145-B160-7F0E19735676`, 294,975 ms; census before =
+  after, PS columns 0. Deterministic PR lane → `Failed (124/151 passed, 26 SKIPPED — not executed)`, `Skip gate: PASSED`, run
+  `83DED30D-12A3-4AAD-8332-79EF821CB23E`; ✓ RD9, DSL4, DSLC3; the one ✗ PB18 (5 CPU metrics, `Aggregate Primitives Slowness
+  Factor 1.99x`; host load average 9.27–14.09 with three `Cursor Helper (Renderer)` processes at ~100% CPU and the SQL VM at
+  309%; PR 4 changes no MJCore, Global or provider source; next's own Integration Tier on `67e7255873` passed PB18, run
+  43814517120); IT128's benchmark-log writes reversed to HEAD. milestone-exit full `--milestone M4` → `# checks 38 · failed 0`,
+  EXIT=0 (the box above ticked). CI on `e0c3c8ca87`: no run started (PR #6517 `CONFLICTING`/`DIRTY` against next until this
+  merge). State left behind: both databases fresh at `V202611150901`; MJAPI :4041/:4049 stopped; sidecars `:64203` and `:64249`
+  up; the owner's 7 untracked files. Next step (exact): M4b Start.
 
 ## 12. Refresh log (append-only)
 
