@@ -31,7 +31,7 @@ beforeEach(() => {
 
 function aCatch(id: string, testID: string, over: Partial<Catch> = {}): Catch {
   return { ID: id, RunID: RUN_1, CandidateTestID: testID, Verdict: { Label: 'WeakCatch', Timeout: false, Reason: 'fails on head' }, DroppedByRule: null, Boosts: [],
-    TPProb: 0.4, JudgeBuckets: [], Median: 'High', Rank: 1, Reported: false, CommentID: null, ...over };
+    TPProb: 0.4, JudgeBuckets: [], Median: 'High', Rank: 1, Reported: false, CommentID: null, Check: null, ...over };
 }
 /** A reported weak catch on A, an unreported weak catch on B and a dropped catch on C. */
 const weakCatches = (): Catch[] => [aCatch(CATCH_A, ID_A, { Reported: true }), aCatch(CATCH_B, ID_B), aCatch(CATCH_C, ID_C, { DroppedByRule: 'ApiChanged' })];

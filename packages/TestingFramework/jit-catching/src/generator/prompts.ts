@@ -78,7 +78,7 @@ The mutant must edit base code that the diff changes (inside or next to a change
 }
 
 /** How the tests of one risk must differ. */
-const VARIANTS = 'The first test of a risk uses the exact trigger the risk names (the exact input, state or order of events). Each further test uses a different edge input of the same code path: empty, zero, one element, a repeated or removed element, a different letter case, a boundary value, or a second call after the state changed. Do not write two tests on the ordinary input. Use only inputs and states that the real callers of this code can produce: read a caller or the type before you choose one. Give a mock the same field types and values that the real object has (a date field holds a Date, an identifier has no added spaces). Do not write into private state, do not subclass the code under test, and do not assert on the exact text of a message unless the risk is about that text.';
+const VARIANTS = 'The first test of a risk uses the exact trigger the risk names (the exact input, state or order of events). Each further test uses a different edge input of the same code path: empty, zero, one element, a repeated or removed element, a different letter case, a boundary value, or a second call after the state changed. Do not write two tests on the ordinary input.';
 
 function intentAwareTask(change: string, r: GenerationRequest, c: PromptContext): string {
     const [risk, ...rest] = r.Risks;

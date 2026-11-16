@@ -9,7 +9,7 @@ export type PreflightStep = 'Generate' | 'Assess';
  * Checks the environment before a step spends anything. Throws when the process runs inside a Claude Code session
  * (the agent's login would replace the key) or when a key the step needs is not set: `ANTHROPIC_API_KEY` always,
  * for `Generate` the generator model's vendor key, and for `Assess` the TP Prob vendor's key (OpenAI) and the key of
- * every bucket judge vendor.
+ * every bucket judge vendor, plus the caller check vendor's key when the check is enabled.
  * The message names the variables only, never a value.
  */
 export function PreflightEnv(settings: Settings, env: NodeJS.ProcessEnv = process.env, step: PreflightStep = 'Assess'): void {
@@ -23,6 +23,7 @@ function requiredKeys(settings: Settings, step: PreflightStep): string[] {
     const vendors: Vendor[] = ['Anthropic'];
     if (step === 'Generate') vendors.push(GeneratorVendor(settings.GeneratorModel));
     if (step === 'Assess') vendors.push('OpenAI', ...settings.Judges.BucketModels.map((b) => b.Vendor));
+    if (step === 'Assess' && settings.Judges.CallerCheck.Enabled) vendors.push(settings.Judges.CallerCheck.Vendor);
     return [...new Set(vendors.map((v) => VENDOR_KEY_ENV[v]))];
 }
 

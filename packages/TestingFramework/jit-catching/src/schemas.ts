@@ -4,7 +4,7 @@ const sha = z.string().regex(/^[0-9a-f]{7,40}$/);
 const iso = z.iso.datetime();
 export const TriggerSchema = z.enum(['Nightly', 'Label', 'Recheck', 'Backtest', 'Local']);
 export const BucketSchema = z.enum(['High', 'Medium', 'Low']);
-export const TokenUsageSchema = z.object({ Model: z.string(), Role: z.enum(['Generator', 'Analyzer', 'Judge']).optional(), InputTokens: z.number().int().nonnegative(), OutputTokens: z.number().int().nonnegative(), CacheReadTokens: z.number().int().nonnegative(), CostUSD: z.number().nonnegative() });
+export const TokenUsageSchema = z.object({ Model: z.string(), Role: z.enum(['Generator', 'Analyzer', 'Judge', 'Check']).optional(), InputTokens: z.number().int().nonnegative(), OutputTokens: z.number().int().nonnegative(), CacheReadTokens: z.number().int().nonnegative(), CostUSD: z.number().nonnegative() });
 
 export const RunSchema = z.object({
     ID: z.string().min(1), Trigger: TriggerSchema, PRNumber: z.number().int().positive().nullable(), BaseSHA: sha, HeadSHA: sha,
@@ -44,6 +44,8 @@ export const JudgeBucketSchema = z.object({ Model: z.string(), Bucket: BucketSch
 export const CatchSchema = z.object({
     ID: z.string(), RunID: z.string(), CandidateTestID: z.string(), Verdict: VerdictSchema, DroppedByRule: z.string().nullable(), Boosts: z.array(z.string()),
     TPProb: z.number().min(-1).max(1).nullable(), JudgeBuckets: z.array(JudgeBucketSchema), Median: BucketSchema.nullable(), Rank: z.number().int().nullable(), Reported: z.boolean(), CommentID: z.string().nullable(),
+    /** Absent in files of runs from before the caller check; read as null. */
+    Check: z.object({ Label: z.enum(['Bug', 'Intended', 'TestFault']).nullable(), Confidence: BucketSchema.nullable(), Reason: z.string(), Model: z.string() }).nullable().default(null),
 });
 export const FeedbackSchema = z.object({ CatchID: z.string(), User: z.string(), Answer: z.enum(['Bug', 'Intended', 'TestFault', 'AuthorChangedPR']), Source: z.enum(['Comment', 'Label', 'Recheck']), At: iso });
 export const PromotionCandidateSchema = z.object({ CandidateTestID: z.string(), RunID: z.string(), NewlyCoveredLines: z.number().int().nonnegative(), State: z.enum(['Offered', 'Added']) });

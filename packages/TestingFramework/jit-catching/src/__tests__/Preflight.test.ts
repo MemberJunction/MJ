@@ -22,6 +22,14 @@ describe('PreflightEnv', () => {
     expect(() => PreflightEnv(DEFAULT_SETTINGS, env, 'Generate')).not.toThrow();
   });
 
+  it('needs the caller check vendor key for Assess when the check is enabled', () => {
+    const judges = { ...DEFAULT_SETTINGS.Judges, BucketModels: [{ Vendor: 'OpenAI' as const, Model: 'gpt-5.1' }] };
+    const env = { ...FULL_ENV }; delete env.GEMINI_API_KEY;
+    const settings = { ...DEFAULT_SETTINGS, Judges: { ...judges, CallerCheck: { Enabled: true, Vendor: 'Gemini' as const, Model: 'gemini-4-argon' } } };
+    expect(() => PreflightEnv(settings, env, 'Assess')).toThrow('missing environment variable: GEMINI_API_KEY');
+    expect(() => PreflightEnv({ ...settings, Judges: { ...settings.Judges, CallerCheck: { ...settings.Judges.CallerCheck, Enabled: false } } }, env, 'Assess')).not.toThrow();
+  });
+
   it('passes with every key present', () => {
     expect(() => PreflightEnv(DEFAULT_SETTINGS, FULL_ENV, 'Assess')).not.toThrow();
     expect(() => PreflightEnv(DEFAULT_SETTINGS, { ANTHROPIC_API_KEY: FULL_ENV.ANTHROPIC_API_KEY }, 'Generate')).not.toThrow();

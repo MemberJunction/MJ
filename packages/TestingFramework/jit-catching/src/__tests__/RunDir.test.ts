@@ -26,7 +26,7 @@ describe('RunDir', () => {
   it('WriteAssessment refuses a secret in a judge reason', () => {
     const d = dir();
     const c = { ID: 'c1', RunID: RUN_ID, CandidateTestID: ID_A, Verdict: { Label: 'WeakCatch' as const, Timeout: false, Reason: 'fails on head' }, DroppedByRule: null, Boosts: [], TPProb: 0.5,
-      JudgeBuckets: [{ Model: 'm', Bucket: 'High' as const, Reason: `the key ${FAKE_SECRET} leaked` }], Median: 'High' as const, Rank: 1, Reported: true, CommentID: null };
+      JudgeBuckets: [{ Model: 'm', Bucket: 'High' as const, Reason: `the key ${FAKE_SECRET} leaked` }], Median: 'High' as const, Rank: 1, Reported: true, CommentID: null, Check: null };
     expect(() => d.WriteAssessment({ RunID: RUN_ID, Catches: [c], Promotions: [] })).toThrow(RedactionError);
   });
   it('refuses a run ID that is not a plain name', () => {

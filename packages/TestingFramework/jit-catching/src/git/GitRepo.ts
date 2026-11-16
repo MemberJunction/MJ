@@ -11,6 +11,12 @@ const BASE_ARGS = ['-c', 'core.quotePath=false'];
 export type GitRunner = (args: string[], cwd: string) => Promise<string>;
 const DEFAULT_GIT_RUNNER: GitRunner = async (args, cwd) => (await run('git', args, { cwd, maxBuffer: 256 * 1024 * 1024 })).stdout;
 
+/** The text a read of a revision gives, or the git error message. */
+export type GitText = { Ok: true; Text: string } | { Ok: false; Error: string };
+
+/** Pathspecs that `GrepAt` leaves out: test files, generated code and build output. */
+const GREP_EXCLUDES = [':!*.test.ts', ':!**/generated/**', ':!**/dist/**'];
+
 /** Thin wrapper over the `git` CLI for one repository root. */
 export class GitRepo {
     constructor(public readonly Root: string, private readonly runner: GitRunner = DEFAULT_GIT_RUNNER) {}
@@ -54,6 +60,23 @@ export class GitRepo {
         if (!(await this.exists(sha, path))) return null;
         return this.git(['show', `${sha}:${path}`]);
     }
+    /** File content at `sha` without a checkout. A git failure (such as a missing path) is returned, not thrown. */
+    public async FileAt(sha: string, path: string): Promise<GitText> {
+        try { return { Ok: true, Text: await this.runner([...BASE_ARGS, 'show', `${sha}:${path}`], this.Root) }; }
+        catch (e) { return { Ok: false, Error: gitErrorText(e) }; }
+    }
+    /**
+     * `git grep` for the extended regular expression `pattern` at `sha` under `path` (default `packages`), without test files,
+     * generated code or build output. Lines read `<sha>:<path>:<line>:<text>`. No match gives empty text; any other git
+     * failure is returned, not thrown.
+     */
+    public async GrepAt(sha: string, pattern: string, path = 'packages'): Promise<GitText> {
+        try { return { Ok: true, Text: await this.runner([...BASE_ARGS, 'grep', '-n', '-I', '-E', '-e', pattern, sha, '--', path || 'packages', ...GREP_EXCLUDES], this.Root) }; }
+        catch (e) {
+            if (isExitError(e) && (e as { code: number }).code === 1 && !stderrOf(e)) return { Ok: true, Text: '' };
+            return { Ok: false, Error: gitErrorText(e) };
+        }
+    }
     private async exists(sha: string, path: string): Promise<boolean> {
         try { await this.runner([...BASE_ARGS, 'cat-file', '-e', `${sha}:${path}`], this.Root); return true; } catch { return false; }
     }
@@ -85,6 +108,16 @@ export class GitRepo {
             await this.RemoveWorktree(scratchDir);
         }
     }
+}
+
+/** The stderr text of a failed `execFile` call, trimmed; empty when there is none. */
+function stderrOf(e: unknown): string {
+    return typeof e === 'object' && e !== null && 'stderr' in e && typeof e.stderr === 'string' ? e.stderr.trim() : '';
+}
+
+/** A short message for a failed git call: its stderr when it has one, otherwise the error message. */
+function gitErrorText(e: unknown): string {
+    return (stderrOf(e) || (e instanceof Error ? e.message : String(e))).slice(0, 300);
 }
 
 /** True when the error is a process that ran and exited non-zero (a numeric exit `code`), not one that failed to start. */

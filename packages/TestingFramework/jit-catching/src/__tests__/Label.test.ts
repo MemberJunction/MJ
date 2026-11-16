@@ -18,7 +18,7 @@ const redaction = new RedactionCheck([FAKE_SECRET]);
 function aCatch(id: string, testID: string, over: Partial<Catch> = {}): Catch {
   return { ID: id, RunID: RUN_ID, CandidateTestID: testID, Verdict: { Label: 'WeakCatch', Timeout: false, Reason: 'fails on head' }, DroppedByRule: null, Boosts: [],
     TPProb: 0.4, JudgeBuckets: [{ Model: 'judge-one', Bucket: 'High', Reason: 'looks like a real break' }, { Model: 'judge-two', Bucket: null, Reason: 'provider error' }],
-    Median: 'High', Rank: 1, Reported: true, CommentID: null, ...over };
+    Median: 'High', Rank: 1, Reported: true, CommentID: null, Check: null, ...over };
 }
 
 const tempDirs: string[] = [];

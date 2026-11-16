@@ -35,7 +35,7 @@ function safeParse(text: string): unknown {
 }
 
 /** The first balanced `{...}` span in `text` (braces inside JSON strings do not count), or null. */
-function firstBalancedObject(text: string): string | null {
+export function FirstBalancedObject(text: string): string | null {
     const start = text.indexOf('{');
     if (start < 0) return null;
     let depth = 0;
@@ -54,7 +54,7 @@ function firstBalancedObject(text: string): string | null {
 
 /** Reads a reply: the first balanced JSON object, or else a reply that names exactly one bucket word. */
 function parseAnswer(text: string): { bucket: Bucket; reason: string } | null {
-    const json = firstBalancedObject(text);
+    const json = FirstBalancedObject(text);
     const parsed = json ? BucketAnswer.safeParse(safeParse(json)) : null;
     if (parsed?.success) return parsed.data;
     const words = new Set([...text.matchAll(BUCKET_WORD_RE)].map((m) => m[1].toLowerCase()));
