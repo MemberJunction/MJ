@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
-import type { Bucket, GenerationLimits, Vendor } from './types';
 
 export const SettingsSchema = z.object({
     GeneratorModel: z.string(),
@@ -45,7 +44,6 @@ export const SettingsSchema = z.object({
     RiskPaths: z.array(z.string()),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
-export type { GenerationLimits, Bucket, Vendor };
 
 export const DEFAULT_SETTINGS: Settings = {
     GeneratorModel: 'claude-opus-5-5',

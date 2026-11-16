@@ -8,6 +8,7 @@ import { AddUsage, NoUsage, UsageFromChat, type Price } from '../generator/Usage
 import { SafeChat } from './SafeChat';
 import { BuildJudgeInput } from './JudgePanel';
 import { FirstBalancedObject, MatchWord } from './BucketJudge';
+import { Capped, NumberedLines } from '../generator/ReadTools';
 
 /** The caller check's answer and the token usage of its session. */
 export interface CallerCheckResult extends CatchCheck { Usage: TokenUsage; }
@@ -19,7 +20,6 @@ const MAX_TURNS = 25;
 const MAX_USD = 1.5;
 const MAX_OUTPUT_TOKENS = 8192;
 const MAX_TOOL_RESULT_CHARS = 16_000;
-const TRUNCATED_TAIL = '… [truncated]';
 const DEFAULT_LINE_LIMIT = 400;
 const MAX_GREP_LINES = 120;
 const MAX_GREP_LINE_CHARS = 300;
@@ -69,21 +69,11 @@ function parseAnswer(text: string): z.infer<typeof Answer> | null {
     return null;
 }
 
-/** Numbered lines `offset` (1-based, default 1) to `offset + limit - 1` (default 400 lines). */
-function numberedLines(text: string, offset: number | undefined, limit: number | undefined): string {
-    const start = Math.max(1, offset ?? 1); const count = Math.max(1, limit ?? DEFAULT_LINE_LIMIT);
-    return text.split('\n').slice(start - 1, start - 1 + count).map((l, i) => `${start + i}\t${l}`).join('\n');
-}
-
 /** Grep output as `path:line:text` lines, at most 120 lines of at most 300 characters. */
 function grepLines(text: string, sha: string): string {
     const lines = text.split('\n').filter(Boolean).map((l) => (l.startsWith(`${sha}:`) ? l.slice(sha.length + 1) : l).slice(0, MAX_GREP_LINE_CHARS));
     if (lines.length === 0) return 'no matches';
     return lines.slice(0, MAX_GREP_LINES).join('\n') + (lines.length > MAX_GREP_LINES ? '\n… [more matches]' : '');
-}
-
-function capped(text: string): string {
-    return text.length > MAX_TOOL_RESULT_CHARS ? text.slice(0, MAX_TOOL_RESULT_CHARS - TRUNCATED_TAIL.length) + TRUNCATED_TAIL : text;
 }
 
 /**
@@ -119,7 +109,7 @@ export class CallerCheck {
             const blocks: ChatMessageContentBlock[] = [];
             for (const call of toolCalls) {
                 const out = await this.runTool(call, sha);
-                blocks.push({ type: 'tool_result', toolCallId: call.id, toolName: call.name, content: capped(out.Text), ...(out.IsError ? { isError: true } : {}) });
+                blocks.push({ type: 'tool_result', toolCallId: call.id, toolName: call.name, content: Capped(out.Text, MAX_TOOL_RESULT_CHARS), ...(out.IsError ? { isError: true } : {}) });
             }
             history.push({ role: 'tool', content: blocks });
         }
@@ -133,7 +123,7 @@ export class CallerCheck {
         if (call.name === 'read_file') {
             const a = ReadFileArgs.safeParse(call.arguments);
             if (!a.success) return failed(`invalid arguments: ${a.error.message}`);
-            return fromGit(await this.repo.FileAt(sha, a.data.path), (t) => numberedLines(t, a.data.offset, a.data.limit));
+            return fromGit(await this.repo.FileAt(sha, a.data.path), (t) => NumberedLines(t, a.data.offset, a.data.limit, DEFAULT_LINE_LIMIT));
         }
         if (call.name === 'grep') {
             const a = GrepArgs.safeParse(call.arguments);

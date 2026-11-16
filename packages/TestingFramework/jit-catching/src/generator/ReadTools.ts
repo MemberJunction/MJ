@@ -17,6 +17,18 @@ const SKIPPED_DIRS = new Set(['node_modules', 'dist', '.git', '.turbo', '.jit-ca
 
 function error(text: string): ReadToolResult { return { Text: text, IsError: true }; }
 
+/** Lines `offset` (1-based, default 1) to `offset + limit - 1` (default `defaultLimit` lines) of `text`, each prefixed `N\t`. */
+export function NumberedLines(text: string, offset: number | undefined, limit: number | undefined, defaultLimit: number): string {
+    const start = Math.max(1, offset ?? 1); const count = Math.max(1, limit ?? defaultLimit);
+    return text.split('\n').slice(start - 1, start - 1 + count).map((line, i) => `${start + i}\t${line}`).join('\n');
+}
+
+/** `text` cut to at most `max` characters, ending with a truncation mark when cut. */
+export function Capped(text: string, max: number): string {
+    const tail = '… [truncated]';
+    return text.length > max ? text.slice(0, max - tail.length) + tail : text;
+}
+
 /** Lines `offset` (1-based, default 1) to `offset + limit - 1` (default 2000 lines) of a UTF-8 file inside `root`, each prefixed `N\t`. */
 export function ReadFile(root: string, input: { path: string; offset?: number; limit?: number }): ReadToolResult {
     const abs = resolve(root, input.path);
@@ -24,9 +36,7 @@ export function ReadFile(root: string, input: { path: string; offset?: number; l
     const stat = statSync(abs, { throwIfNoEntry: false });
     if (!stat?.isFile()) return error(`not a file: ${input.path}`);
     if (stat.size > MAX_FILE_BYTES) return error(`file is over 2 MB: ${input.path}`);
-    const lines = readFileSync(abs, 'utf8').split('\n');
-    const start = Math.max(1, input.offset ?? 1); const limit = Math.max(1, input.limit ?? DEFAULT_LINE_LIMIT);
-    return { Text: lines.slice(start - 1, start - 1 + limit).map((line, i) => `${start + i}\t${line}`).join('\n'), IsError: false };
+    return { Text: NumberedLines(readFileSync(abs, 'utf8'), input.offset, input.limit, DEFAULT_LINE_LIMIT), IsError: false };
 }
 
 /**
