@@ -3,6 +3,7 @@ import {
   Directive,
   ElementRef,
   ViewEncapsulation,
+  afterNextRender,
   booleanAttribute,
   computed,
   inject,
@@ -10,6 +11,8 @@ import {
   output,
 } from '@angular/core';
 import { MJAfterEvent, MJBeforeEvent, dispatchMJElementEvent } from '../types/events';
+
+export type MJRowItemRole = 'option' | 'menuitem' | 'menuitemradio' | 'button';
 
 @Directive({
   selector: '[mjRowLeading]',
@@ -33,9 +36,12 @@ export class MJRowContentDirective {}
 export class MJRowTrailingDirective {}
 
 /**
- * Wave 0 horizontal row primitive for list items, nav items, menu items, and toolbar rows.
- * Maps open `tone` and `visualRole` axes to runtime CSS variables and leaves ARIA roles
- * to the host/container so trailing interactive controls are never nested inside a button.
+ * Wave 0 horizontal row primitive.
+ * - Non-interactive (`Interactive = false`, default): pure layout container for rows that hold
+ *   independent sibling controls (e.g. primary link/button + trailing action button).
+ * - Interactive (`Interactive = true`): composite item exposing an explicit ARIA `ItemRole`
+ *   (`option`, `menuitem`, `menuitemradio`, or `button`) and matching selection state (WCAG 4.1.2).
+ *   Interactive rows must never contain nested focusable controls.
  */
 @Component({
   selector: 'mj-row',
@@ -44,12 +50,12 @@ export class MJRowTrailingDirective {}
   template: `<ng-content />`,
   host: {
     class: 'mj-row',
-    '[attr.data-density]': 'density()',
-    '[attr.data-interactive]': 'interactive()',
-    '[attr.data-selected]': 'selected()',
-    '[attr.data-disabled]': 'disabled()',
-    '[attr.data-tone]': 'tone()',
-    '[attr.data-role]': 'visualRole()',
+    '[attr.data-density]': 'Density()',
+    '[attr.data-interactive]': 'Interactive()',
+    '[attr.data-selected]': 'Selected()',
+    '[attr.data-disabled]': 'Disabled()',
+    '[attr.data-tone]': 'Tone()',
+    '[attr.data-role]': 'VisualRole()',
     '[style.--_mj-tone-text]': 'toneTextVar()',
     '[style.--_mj-tone-border]': 'toneBorderVar()',
     '[style.--_mj-tone-bg]': 'toneBgVar()',
@@ -59,8 +65,12 @@ export class MJRowTrailingDirective {}
     '[style.--_mj-role-radius]': 'roleRadiusVar()',
     '[style.--_mj-role-padding-block]': 'rolePaddingBlockVar()',
     '[style.--_mj-role-padding-inline]': 'rolePaddingInlineVar()',
-    '[attr.tabindex]': 'interactive() && !disabled() ? 0 : null',
-    '[attr.aria-disabled]': 'disabled() ? true : null',
+    '[attr.role]': 'ariaRole()',
+    '[attr.tabindex]': 'Interactive() && !Disabled() ? 0 : null',
+    '[attr.aria-selected]': 'ariaSelected()',
+    '[attr.aria-checked]': 'ariaChecked()',
+    '[attr.aria-pressed]': 'ariaPressed()',
+    '[attr.aria-disabled]': 'Interactive() && Disabled() ? true : null',
     '(click)': 'onActivate($event)',
     '(keydown.enter)': 'onActivate($event)',
     '(keydown.space)': 'onActivate($event)',
@@ -69,83 +79,111 @@ export class MJRowTrailingDirective {}
 export class MJRowComponent {
   private readonly hostEl = inject(ElementRef<HTMLElement>);
 
-  public readonly density = input<string>('md');
-  public readonly interactive = input(false, { transform: booleanAttribute });
-  public readonly selected = input(false, { transform: booleanAttribute });
-  public readonly disabled = input(false, { transform: booleanAttribute });
-  public readonly tone = input<string>('neutral');
-  public readonly visualRole = input<string>('row');
+  public readonly Density = input<string>('md', { alias: 'density' });
+  public readonly Interactive = input(false, { alias: 'interactive', transform: booleanAttribute });
+  public readonly Selected = input(false, { alias: 'selected', transform: booleanAttribute });
+  public readonly Disabled = input(false, { alias: 'disabled', transform: booleanAttribute });
+  public readonly Tone = input<string>('neutral', { alias: 'tone' });
+  public readonly VisualRole = input<string>('row', { alias: 'visual-role' });
+  public readonly ItemRole = input<MJRowItemRole>('option', { alias: 'item-role' });
 
-  public readonly beforeSelect = output<MJBeforeEvent<'user'>>();
-  public readonly afterSelect = output<MJAfterEvent<'user'>>();
+  public readonly BeforeSelect = output<MJBeforeEvent<'user'>>();
+  public readonly AfterSelect = output<MJAfterEvent<'user'>>();
+
+  protected readonly ariaRole = computed(() =>
+    this.Interactive() ? this.ItemRole() : null
+  );
+
+  protected readonly ariaSelected = computed(() =>
+    this.Interactive() && this.ItemRole() === 'option' ? String(this.Selected()) : null
+  );
+
+  protected readonly ariaChecked = computed(() =>
+    this.Interactive() && this.ItemRole() === 'menuitemradio' ? String(this.Selected()) : null
+  );
+
+  protected readonly ariaPressed = computed(() =>
+    this.Interactive() && this.ItemRole() === 'button' ? String(this.Selected()) : null
+  );
 
   protected readonly toneTextVar = computed(() =>
-    this.tone() === 'neutral' ? null : `var(--mj-tone-${this.tone()}-text, var(--mj-row-text, var(--mj-text-primary)))`
+    this.Tone() === 'neutral'
+      ? null
+      : `var(--mj-tone-${this.Tone()}-text, var(--mj-row-text, var(--mj-text-primary)))`
   );
   protected readonly toneBorderVar = computed(() =>
-    this.tone() === 'neutral'
+    this.Tone() === 'neutral'
       ? null
-      : `var(--mj-tone-${this.tone()}-border, var(--mj-row-border, transparent))`
+      : `var(--mj-tone-${this.Tone()}-border, var(--mj-row-border, transparent))`
   );
   protected readonly toneBgVar = computed(() =>
-    this.tone() === 'neutral' ? null : `var(--mj-tone-${this.tone()}-bg, var(--mj-row-bg, transparent))`
+    this.Tone() === 'neutral' ? null : `var(--mj-tone-${this.Tone()}-bg, var(--mj-row-bg, transparent))`
   );
   protected readonly toneBgSelectedVar = computed(() =>
-    this.tone() === 'neutral'
+    this.Tone() === 'neutral'
       ? null
-      : `var(--mj-tone-${this.tone()}-bg-selected, var(--mj-row-bg-selected, var(--mj-surface-base-bg-selected)))`
+      : `var(--mj-tone-${this.Tone()}-bg-selected, var(--mj-row-bg-selected, var(--mj-surface-base-bg-selected)))`
   );
 
   protected readonly roleBgVar = computed(() =>
-    this.visualRole() === 'row'
+    this.VisualRole() === 'row'
       ? null
-      : `var(--mj-role-${this.visualRole()}-bg, var(--_mj-tone-bg, var(--mj-row-bg, transparent)))`
+      : `var(--mj-role-${this.VisualRole()}-bg, var(--_mj-tone-bg, var(--mj-row-bg, transparent)))`
   );
   protected readonly roleBorderVar = computed(() =>
-    this.visualRole() === 'row'
+    this.VisualRole() === 'row'
       ? null
-      : `var(--mj-role-${this.visualRole()}-border, var(--_mj-tone-border, var(--mj-row-border, transparent)))`
+      : `var(--mj-role-${this.VisualRole()}-border, var(--_mj-tone-border, var(--mj-row-border, transparent)))`
   );
   protected readonly roleRadiusVar = computed(() =>
-    this.visualRole() === 'row'
+    this.VisualRole() === 'row'
       ? null
-      : `var(--mj-role-${this.visualRole()}-radius, var(--mj-row-radius, var(--mj-radius-control)))`
+      : `var(--mj-role-${this.VisualRole()}-radius, var(--mj-row-radius, var(--mj-radius-control)))`
   );
   protected readonly rolePaddingBlockVar = computed(() =>
-    this.visualRole() === 'row'
+    this.VisualRole() === 'row'
       ? null
-      : `var(--mj-role-${this.visualRole()}-padding-block, var(--mj-row-padding-block, var(--mj-space-2)))`
+      : `var(--mj-role-${this.VisualRole()}-padding-block, var(--mj-row-padding-block, var(--mj-space-2-5)))`
   );
   protected readonly rolePaddingInlineVar = computed(() =>
-    this.visualRole() === 'row'
+    this.VisualRole() === 'row'
       ? null
-      : `var(--mj-role-${this.visualRole()}-padding-inline, var(--mj-row-padding-inline, var(--mj-space-3)))`
+      : `var(--mj-role-${this.VisualRole()}-padding-inline, var(--mj-row-padding-inline, var(--mj-space-3)))`
   );
 
-  protected onActivate(event?: Event): void {
-    if (!this.interactive() || this.disabled()) {
-      return;
-    }
-    // Do not hijack clicks originating from a nested interactive control (e.g. trailing button).
-    if (event?.target instanceof Element && event.target !== this.hostEl.nativeElement) {
-      const interactiveChild = event.target.closest('button, a[href], input, select, textarea');
-      if (interactiveChild && this.hostEl.nativeElement.contains(interactiveChild)) {
+  constructor() {
+    afterNextRender(() => {
+      if (!this.Interactive()) {
         return;
       }
+      const nestedControl = this.hostEl.nativeElement.querySelector(
+        'button, a[href], input, select, textarea'
+      );
+      if (nestedControl) {
+        console.error(
+          '[mj-row] WCAG 4.1.2 violation: interactive="true" mj-row must not contain nested interactive controls. Keep mj-row non-interactive and place sibling buttons/links inside mj-row-content and mj-row-trailing.'
+        );
+      }
+    });
+  }
+
+  protected onActivate(event?: Event): void {
+    if (!this.Interactive() || this.Disabled()) {
+      return;
     }
     if (event instanceof KeyboardEvent) {
       event.preventDefault();
     }
 
     const before: MJBeforeEvent<'user'> = { Cancel: false, Reason: 'user' };
-    this.beforeSelect.emit(before);
+    this.BeforeSelect.emit(before);
     dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-before-select', before);
     if (before.Cancel) {
       return;
     }
 
     const after: MJAfterEvent<'user'> = { Reason: 'user' };
-    this.afterSelect.emit(after);
+    this.AfterSelect.emit(after);
     dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-select', after);
   }
 }

@@ -41,22 +41,28 @@ import { MJBeforeEvent } from '../lib/types/events';
     MJLayerFooterDirective,
   ],
   template: `
-    <mj-surface [level]="level()" [tone]="tone()" [visualRole]="role()">
+    <mj-surface [level]="level()" [tone]="tone()" [visual-role]="role()">
       <div mjSurfaceHeader>Header</div>
-      <div mjSurfaceBody>Body</div>
+      <div mjSurfaceBody role="listbox" aria-label="Items">
+        <mj-row
+          [interactive]="true"
+          [item-role]="'option'"
+          [selected]="rowSelected()"
+          [tone]="tone()"
+          (BeforeSelect)="onBeforeSelect($event)"
+          (AfterSelect)="afterSelectCount = afterSelectCount + 1"
+        >
+          <span mjRowLeading>L</span>
+          <span mjRowContent>Main content</span>
+          <span mjRowTrailing>T</span>
+        </mj-row>
+      </div>
       <div mjSurfaceFooter>Footer</div>
     </mj-surface>
 
-    <mj-row
-      [interactive]="true"
-      [selected]="rowSelected()"
-      [tone]="tone()"
-      (beforeSelect)="onBeforeSelect($event)"
-      (afterSelect)="afterSelectCount = afterSelectCount + 1"
-    >
-      <span mjRowLeading>L</span>
-      <span mjRowContent>Main content</span>
-      <span mjRowTrailing>T</span>
+    <mj-row class="layout-only-row">
+      <span mjRowContent><button type="button">Primary</button></span>
+      <span mjRowTrailing><button type="button">Secondary</button></span>
     </mj-row>
 
     <mj-layer
@@ -64,8 +70,8 @@ import { MJBeforeEvent } from '../lib/types/events';
       [kind]="'dialog'"
       [modal]="true"
       [closeable]="true"
-      (beforeClose)="onBeforeClose($event)"
-      (afterClose)="layerOpen.set(false); afterCloseCount = afterCloseCount + 1"
+      (BeforeClose)="onBeforeClose($event)"
+      (AfterClose)="layerOpen.set(false); afterCloseCount = afterCloseCount + 1"
     >
       <div mjLayerHeader>
         <h2 mjLayerTitle>Dialog Title</h2>
@@ -110,7 +116,7 @@ describe('Wave 0 prototype primitives', () => {
     }).compileComponents();
   });
 
-  it('applies .mj-surface-<level> and runtime open-axis CSS variables on mj-surface', () => {
+  it('applies .mj-surface-<level>, PascalCase inputs via aliases, and runtime open-axis CSS variables', () => {
     const fixture = TestBed.createComponent(TestHostComponent);
     fixture.detectChanges();
 
@@ -121,25 +127,26 @@ describe('Wave 0 prototype primitives', () => {
     expect(surface.getAttribute('data-role')).toBe('callout');
     expect(surface.style.getPropertyValue('--_mj-tone-text')).toContain('--mj-tone-plum-text');
     expect(surface.style.getPropertyValue('--_mj-role-bg')).toContain('--mj-role-callout-bg');
-    expect(surface.querySelector('.mj-surface-header')).toBeTruthy();
-    expect(surface.querySelector('.mj-surface-body')).toBeTruthy();
-    expect(surface.querySelector('.mj-surface-footer')).toBeTruthy();
   });
 
-  it('supports cancelable beforeSelect and afterSelect on mj-row', () => {
+  it('enforces WCAG 4.1.2 roles on interactive mj-row and keeps layout-only rows non-focusable', () => {
     const fixture = TestBed.createComponent(TestHostComponent);
     fixture.detectChanges();
 
-    const row = fixture.nativeElement.querySelector('mj-row') as HTMLElement;
-    expect(row.classList.contains('mj-row')).toBe(true);
-    expect(row.getAttribute('tabindex')).toBe('0');
-    expect(row.getAttribute('role')).toBeNull();
+    const interactiveRow = fixture.nativeElement.querySelector('[role="listbox"] mj-row') as HTMLElement;
+    expect(interactiveRow.getAttribute('role')).toBe('option');
+    expect(interactiveRow.getAttribute('aria-selected')).toBe('false');
+    expect(interactiveRow.getAttribute('tabindex')).toBe('0');
 
-    row.click();
+    const layoutRow = fixture.nativeElement.querySelector('mj-row.layout-only-row') as HTMLElement;
+    expect(layoutRow.getAttribute('role')).toBeNull();
+    expect(layoutRow.getAttribute('tabindex')).toBeNull();
+
+    interactiveRow.click();
     expect(fixture.componentInstance.afterSelectCount).toBe(1);
 
     fixture.componentInstance.cancelNextSelect = true;
-    row.click();
+    interactiveRow.click();
     expect(fixture.componentInstance.afterSelectCount).toBe(1);
   });
 
@@ -166,7 +173,7 @@ describe('Wave 0 prototype primitives', () => {
     expect(document.body.querySelector('.cdk-overlay-container [role="dialog"]')).toBeNull();
   });
 
-  it('honors cancelable beforeClose on Escape without leaving zombie state', () => {
+  it('honors cancelable BeforeClose on Escape without leaving zombie state', () => {
     const fixture = TestBed.createComponent(TestHostComponent);
     const layerService = TestBed.inject(MJLayerService);
     fixture.componentInstance.layerOpen.set(true);

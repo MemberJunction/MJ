@@ -269,10 +269,11 @@
     animation: mj-sheet-in-end 220ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .mj-layer-panel[data-kind='popover'] {
+  .mj-layer-panel[data-kind='popover'],
+  .mj-layer-panel[data-kind='menu'] {
     --mj-layer-max-width: 280px;
-    --mj-layer-padding: var(--mj-space-3);
-    gap: var(--mj-space-2);
+    --mj-layer-padding: var(--mj-space-2-5);
+    gap: var(--mj-space-1-5);
     box-shadow: var(--mj-shadow-xl);
     animation: mj-popover-in 120ms ease-out;
   }

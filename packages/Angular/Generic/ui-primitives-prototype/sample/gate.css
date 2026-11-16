@@ -1,4 +1,4 @@
-/* Hostile reset in @layer reset + polished host shell + 3 divergent looks */
+/* Hostile reset in @layer reset + polished host shell + 3 genuinely distinct looks */
 @layer reset {
   * {
     box-sizing: content-box;
@@ -70,7 +70,7 @@ body {
   font-family: var(--mj-font-family-display, var(--mj-font-family));
   font-size: 1.875rem;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: var(--gate-heading-tracking, -0.025em);
   line-height: 1.15;
 }
 
@@ -171,9 +171,29 @@ body {
   background: var(--mj-brand-primary);
 }
 
-.host-btn:focus-visible {
+.host-btn:focus-visible,
+.gate-item-link:focus-visible {
   outline: none;
   box-shadow: var(--mj-focus-ring);
+}
+
+.gate-item-link {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font-family: var(--mj-font-family);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--mj-text-primary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.gate-item-link:hover {
+  text-decoration: underline;
 }
 
 .host-grid {
@@ -197,7 +217,7 @@ body {
 .gate-avatar {
   width: 34px;
   height: 34px;
-  border-radius: var(--mj-radius-pill, 9999px);
+  border-radius: var(--mj-radius-control, 8px);
   background: var(--mj-brand-primary);
   color: var(--mj-text-inverse);
   font-size: 0.75rem;
@@ -256,7 +276,7 @@ body {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--mj-text-secondary);
-  padding: 2px 8px 4px;
+  padding: 4px 10px 2px;
 }
 
 /* Unlayered host override: beats @layer primitives without !important */
@@ -266,7 +286,7 @@ body {
   border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-strong));
 }
 
-/* Look 1: MJ Default */
+/* Look 1: MJ Default — enterprise slate SaaS, 8px/12px radii, crisp 1px borders */
 [data-look='mj'] {
   --mj-brand-primary: #0076b6;
 }
@@ -275,67 +295,135 @@ body {
   --mj-brand-primary: var(--mj-color-brand-400);
 }
 
-/* Look 2: LXP (Sidecar Learning Hub — warm cream, sage, charcoal, Poppins/Inter, generous 16/24px radii) */
+/* Look 2: Sidecar LXP — warm organic learning hub: Avenir Next geometric sans, pill controls,
+   24px borderless shadow-elevated cards, warm oatmeal sunken wells, botanical sage + terracotta */
 [data-look='lxp'] {
-  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --mj-font-family-display: 'Poppins', 'Inter', sans-serif;
-  --mj-bg-canvas: #f8f5ed;
-  --mj-bg-page: #fef7eb;
-  --mj-brand-primary: #5c7a73;
-  --mj-text-primary: #35353d;
-  --mj-text-secondary: #525c60;
-  --mj-radius-control: 12px;
-  --mj-radius-surface: 16px;
-  --mj-radius-overlay: 24px;
-  --mj-surface-padding: var(--mj-space-5);
-  --mj-surface-gap: var(--mj-space-4);
+  --mj-font-family: 'Avenir Next', 'Gill Sans', 'Century Gothic', sans-serif;
+  --mj-font-family-display: 'Avenir Next', 'Gill Sans', 'Century Gothic', sans-serif;
+  --gate-heading-tracking: -0.01em;
+
+  --mj-bg-canvas: #f5ede0;
+  --mj-bg-page: #fbf6ec;
+  --mj-bg-surface: #fffdf9;
+  --mj-bg-surface-elevated: #ffffff;
+  --mj-bg-surface-sunken: #ede3d1;
+  --mj-bg-surface-hover: #f2e9d8;
+
+  --mj-brand-primary: #3b6259;
+  --mj-text-primary: #2d2a26;
+  --mj-text-secondary: #5c554c;
+  --mj-text-inverse: #ffffff;
+
+  --mj-border-default: #e4dac7;
+  --mj-border-subtle: #ede5d5;
+  --mj-border-strong: #c8bba3;
+
+  --mj-radius-control: var(--mj-radius-pill);
+  --mj-radius-surface: 24px;
+  --mj-radius-overlay: 28px;
+
+  --mj-shadow-sm: 0 2px 6px rgba(45, 42, 38, 0.06);
+  --mj-shadow-md: 0 14px 34px -10px rgba(45, 42, 38, 0.14), 0 4px 10px -4px rgba(45, 42, 38, 0.06);
+  --mj-shadow-xl: 0 24px 48px -12px rgba(45, 42, 38, 0.22);
+
+  --mj-surface-padding: var(--mj-space-6);
+  --mj-surface-gap: var(--mj-space-5);
   --mj-row-min-height: var(--mj-control-height-lg);
-  --mj-row-padding-inline: var(--mj-space-4);
-  --mj-surface-base-bg: #fef7eb;
+  --mj-row-padding-inline: var(--mj-space-5);
+
+  --mj-surface-base-bg: #fffcf6;
+  --mj-surface-base-border: transparent;
+  --mj-surface-base-shadow: var(--mj-shadow-md);
   --mj-surface-elevated-bg: #ffffff;
-  --mj-surface-base-border: #e8ebed;
-  --mj-surface-elevated-border: #99b3ac;
+  --mj-surface-elevated-border: #d9ceba;
+  --mj-surface-elevated-shadow: var(--mj-shadow-md);
+  --mj-surface-sunken-bg: #efe6d5;
+  --mj-surface-sunken-border: transparent;
+
+  --mj-tone-plum-text: #8c3b1f;
+  --mj-tone-plum-bg-selected: #fbeae2;
 }
 
 [data-theme='dark'][data-look='lxp'] {
-  --mj-bg-canvas: #1f1f24;
-  --mj-bg-page: #27272e;
-  --mj-brand-primary: #99b3ac;
-  --mj-text-primary: #f5f5f5;
-  --mj-text-secondary: #d1d5db;
-  --mj-text-inverse: #1f1f24;
-  --mj-surface-base-bg: #2a2a32;
-  --mj-surface-elevated-bg: #35353d;
-  --mj-surface-base-border: #4a4a54;
-  --mj-surface-elevated-border: #7a9992;
+  --mj-bg-canvas: #1c1a17;
+  --mj-bg-page: #24211d;
+  --mj-bg-surface: #2b2723;
+  --mj-bg-surface-elevated: #342f2a;
+  --mj-bg-surface-sunken: #211e1a;
+  --mj-bg-surface-hover: #3d3731;
+
+  --mj-brand-primary: #99b8b0;
+  --mj-text-primary: #f7f3eb;
+  --mj-text-secondary: #cfc6b8;
+  --mj-text-inverse: #1c1a17;
+
+  --mj-border-default: #463f38;
+  --mj-border-subtle: #38322c;
+  --mj-border-strong: #63594f;
+
+  --mj-surface-base-bg: #2b2723;
+  --mj-surface-base-border: #3d3731;
+  --mj-surface-elevated-bg: #342f2a;
+  --mj-surface-elevated-border: #5c5349;
+  --mj-surface-sunken-bg: #211e1a;
+
+  --mj-tone-plum-text: #f6b297;
+  --mj-tone-plum-bg-selected: #4d2618;
 }
 
-/* Look 3: Editorial (dense, flat, square corners, Georgia serif, sharp borders) */
+/* Look 3: Editorial — stark black-ink Georgia serif print monograph, 0px corners, zero shadows */
 [data-look='editorial'] {
   --mj-font-family: Georgia, 'Times New Roman', serif;
   --mj-font-family-display: Georgia, 'Times New Roman', serif;
+  --gate-heading-tracking: -0.015em;
+
+  --mj-bg-canvas: #ffffff;
+  --mj-bg-page: #ffffff;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-elevated: #ffffff;
+  --mj-bg-surface-sunken: #f4f4f0;
+  --mj-bg-surface-hover: #ededeb;
+
   --mj-radius-control: 0px;
   --mj-radius-surface: 0px;
   --mj-radius-overlay: 0px;
+  --mj-radius-pill: 0px;
+
   --mj-shadow-sm: none;
   --mj-shadow-md: none;
   --mj-shadow-lg: none;
   --mj-shadow-xl: none;
   --mj-surface-elevated-shadow: none;
   --mj-surface-overlay-shadow: none;
+
   --mj-surface-padding: var(--mj-space-3);
   --mj-surface-gap: var(--mj-space-3);
   --mj-row-min-height: var(--mj-control-height-sm);
   --mj-brand-primary: #111827;
+  --mj-border-default: #111827;
+  --mj-border-subtle: #d4d4d0;
+  --mj-border-strong: #111827;
   --mj-surface-base-border: #111827;
   --mj-surface-elevated-border: #111827;
+  --mj-surface-sunken-bg: #f4f4f0;
+  --mj-surface-sunken-border: #111827;
 }
 
 [data-theme='dark'][data-look='editorial'] {
+  --mj-bg-canvas: #0b0b0c;
+  --mj-bg-page: #0b0b0c;
+  --mj-bg-surface: #141416;
+  --mj-bg-surface-elevated: #1c1c1f;
+  --mj-bg-surface-sunken: #0b0b0c;
+  --mj-bg-surface-hover: #27272a;
   --mj-brand-primary: #f8fafc;
   --mj-text-inverse: #0f172a;
-  --mj-surface-base-border: #94a3b8;
-  --mj-surface-elevated-border: #94a3b8;
+  --mj-border-default: #a1a1aa;
+  --mj-border-strong: #e4e4e7;
+  --mj-surface-base-border: #a1a1aa;
+  --mj-surface-elevated-border: #e4e4e7;
+  --mj-surface-sunken-bg: #0b0b0c;
+  --mj-surface-sunken-border: #71717a;
 }
 
 /* Open-axis custom tone and role tokens defined purely as CSS custom properties */

@@ -22,13 +22,14 @@ interface ActiveOverlayEntry {
   Portal: DomPortal<HTMLElement>;
   FocusTrap: ConfigurableFocusTrap | null;
   PreviousFocus: HTMLElement | null;
+  AnchorElement: HTMLElement | null;
   Subscriptions: Subscription;
 }
 
 /**
  * Single CDK-backed overlay stack manager for Wave 0 layers.
- * Uses DomPortal so nested Angular Elements inside a closed <mj-layer> stay connected
- * in a hidden staging container rather than being destroyed on disconnect.
+ * Handles modal focus trapping, non-modal popover/menu focus entry + return,
+ * anchor `aria-expanded` synchronization, menu arrow-key navigation, and DomPortal lifecycle.
  */
 @Injectable({ providedIn: 'root' })
 export class MJLayerService {
@@ -42,10 +43,15 @@ export class MJLayerService {
   public Open(request: MJLayerOpenRequest): OverlayRef {
     this.Close(request.Id);
 
+    const anchorEl = this.resolveAnchor(request.Anchor);
     const previousFocus =
-      this.doc.activeElement instanceof HTMLElement ? this.doc.activeElement : null;
+      this.doc.activeElement instanceof HTMLElement ? this.doc.activeElement : anchorEl;
 
-    const config = this.buildOverlayConfig(request);
+    if (anchorEl) {
+      anchorEl.setAttribute('aria-expanded', 'true');
+    }
+
+    const config = this.buildOverlayConfig(request, anchorEl);
     const overlayRef = this.overlay.create(config);
     const portal = new DomPortal(request.PanelElement);
     overlayRef.attach(portal);
@@ -53,6 +59,10 @@ export class MJLayerService {
     let focusTrap: ConfigurableFocusTrap | null = null;
     if (request.Modal) {
       focusTrap = this.focusTrapFactory.create(overlayRef.overlayElement);
+    }
+
+    // Move focus into modal, popover, and menu layers so portaled content is immediately keyboard-reachable.
+    if (request.Modal || request.Kind === 'popover' || request.Kind === 'menu') {
       this.focusInitial(overlayRef.overlayElement);
     }
 
@@ -68,9 +78,17 @@ export class MJLayerService {
 
     subs.add(
       overlayRef.keydownEvents().subscribe((event) => {
-        if (event.key === 'Escape' && request.Closeable && this.IsTopmost(request.Id)) {
+        if (!this.IsTopmost(request.Id)) {
+          return;
+        }
+        if (event.key === 'Escape' && request.Closeable) {
+          event.preventDefault();
           event.stopPropagation();
           request.OnRequestClose('escape');
+          return;
+        }
+        if (request.Kind === 'menu') {
+          this.handleMenuKeydown(event, overlayRef.overlayElement);
         }
       })
     );
@@ -78,7 +96,6 @@ export class MJLayerService {
     if (!request.Modal && request.Closeable) {
       subs.add(
         overlayRef.outsidePointerEvents().subscribe((event) => {
-          const anchorEl = this.resolveAnchor(request.Anchor);
           if (anchorEl && event.target instanceof Node && anchorEl.contains(event.target)) {
             return;
           }
@@ -95,13 +112,14 @@ export class MJLayerService {
       Portal: portal,
       FocusTrap: focusTrap,
       PreviousFocus: previousFocus,
+      AnchorElement: anchorEl,
       Subscriptions: subs,
     });
 
     return overlayRef;
   }
 
-  /** Closes and disposes the CDK Overlay, returning the panel DOM back to its staging parent. */
+  /** Closes and disposes the CDK Overlay, syncing `aria-expanded` and restoring focus. */
   public Close(id: string): void {
     const index = this.stack.findIndex((entry) => entry.Id === id);
     if (index === -1) {
@@ -112,6 +130,9 @@ export class MJLayerService {
     removed.Subscriptions.unsubscribe();
     if (removed.FocusTrap) {
       removed.FocusTrap.destroy();
+    }
+    if (removed.AnchorElement) {
+      removed.AnchorElement.setAttribute('aria-expanded', 'false');
     }
     if (removed.OverlayRef.hasAttached()) {
       removed.OverlayRef.detach();
@@ -136,7 +157,10 @@ export class MJLayerService {
     return this.stack.length;
   }
 
-  private buildOverlayConfig(request: MJLayerOpenRequest): OverlayConfig {
+  private buildOverlayConfig(
+    request: MJLayerOpenRequest,
+    anchorEl: HTMLElement | null
+  ): OverlayConfig {
     let positionStrategy: PositionStrategy = this.overlay
       .position()
       .global()
@@ -151,8 +175,7 @@ export class MJLayerService {
       } else {
         positionStrategy = this.overlay.position().global().right('0').top('0');
       }
-    } else if (request.Kind === 'popover') {
-      const anchorEl = this.resolveAnchor(request.Anchor);
+    } else if (request.Kind === 'popover' || request.Kind === 'menu') {
       if (anchorEl) {
         positionStrategy = this.overlay
           .position()
@@ -194,6 +217,32 @@ export class MJLayerService {
     return this.doc.querySelector<HTMLElement>(anchor);
   }
 
+  private handleMenuKeydown(event: KeyboardEvent, container: HTMLElement): void {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      return;
+    }
+    const items = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'
+      )
+    ).filter((el) => el.getAttribute('aria-disabled') !== 'true');
+
+    if (items.length === 0) {
+      return;
+    }
+    event.preventDefault();
+    const currentIndex = items.indexOf(this.doc.activeElement as HTMLElement);
+    let nextIndex = 0;
+    if (event.key === 'ArrowDown') {
+      nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
+    } else if (event.key === 'ArrowUp') {
+      nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+    } else if (event.key === 'End') {
+      nextIndex = items.length - 1;
+    }
+    items[nextIndex]?.focus();
+  }
+
   private focusInitial(container: HTMLElement): void {
     queueMicrotask(() => {
       if (!container.isConnected) {
@@ -204,8 +253,15 @@ export class MJLayerService {
         autofocus.focus();
         return;
       }
+      const checkedMenuItem = container.querySelector<HTMLElement>(
+        '[role="menuitemradio"][aria-checked="true"]'
+      );
+      if (checkedMenuItem) {
+        checkedMenuItem.focus();
+        return;
+      }
       const firstTabbable = container.querySelector<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        '[role="menuitem"], [role="menuitemradio"], a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
       );
       if (firstTabbable) {
         firstTabbable.focus();
