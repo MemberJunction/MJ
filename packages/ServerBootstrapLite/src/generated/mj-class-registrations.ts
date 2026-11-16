@@ -1213,7 +1213,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (90 classes)
+// @memberjunction/core-entities-server (91 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1291,6 +1291,7 @@ import {
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScheduledJobEntityServer,
     MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -2566,6 +2567,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScheduledJobEntityServer,
     MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -2591,11 +2593,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
-    BusinessDaysCalculatorAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    BusinessDaysCalculatorAction,
     CSVParserAction,
     CalculateExpressionAction,
     CensusDataLookupAction,
@@ -2795,11 +2797,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ProduceVideoAction,
     RemoteRenderDriver,
     VideoStudioAgent,
-    VideoStudioArtDirectorAgent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    VideoStudioArtDirectorAgent,
     VideoStudioCriticAgent,
     VideoStudioMotionEngineerAgent,
     VideoStudioPreProductionAgent,
@@ -2837,7 +2839,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1220;
+export const CLASS_REGISTRATIONS_COUNT = 1221;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
