@@ -941,10 +941,11 @@ export class BaseAgent {
     private _deferredActionSpillovers: Map<string, () => string[]> = new Map();
 
     /**
-     * Monotonic sequence counter for generating run-local deferred spillover tokens.
+     * Process-wide monotonic sequence counter for deferred spillover tokens so tokens never collide
+     * even when callers pass in-memory `conversationMessages` across separate runs or `BaseAgent` instances.
      * @private
      */
-    private _deferredSpilloverSeq = 0;
+    private static _deferredSpilloverSeq = 0;
 
     /**
      * True when the current agent run has ingested at least one `'Untrusted'` or `'SemiTrusted'`
@@ -1794,7 +1795,7 @@ export class BaseAgent {
         if (!this.wouldActionOutputSpillOver(outputParams, message, expirationConfig)) {
             return undefined;
         }
-        const token = `spillover_${++this._deferredSpilloverSeq}`;
+        const token = `spillover_${++BaseAgent._deferredSpilloverSeq}_${Math.random().toString(36).slice(2, 10)}`;
         this._deferredActionSpillovers.set(token, () =>
             this.registerActionOutputArtifacts(
                 actionName,
@@ -3534,7 +3535,6 @@ export class BaseAgent {
             this._taintedSources = [];
             this._lastPipelineTaint = null;
             this._deferredActionSpillovers.clear();
-            this._deferredSpilloverSeq = 0;
             this.seedTaintFromSecurityEnvelope(params);
             this.seedTaintFromParentRun(params);
             this._messageLifecycleCallback = params.onMessageLifecycle;
@@ -4044,7 +4044,6 @@ export class BaseAgent {
         this._audienceReaders = undefined;
         this._audienceSource = undefined;
         this._deferredActionSpillovers.clear();
-        this._deferredSpilloverSeq = 0;
     }
 
     /**
@@ -15797,7 +15796,6 @@ The context is now within limits. Please retry your request with the recovered c
         this._taintedSources = [];
         this._lastPipelineTaint = null;
         this._deferredActionSpillovers.clear();
-        this._deferredSpilloverSeq = 0;
 
         // Resolve action-result compression config for this run (default on; opt out via
         // crushActionResults: false in the agent-type prompt params).
@@ -19954,7 +19952,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // artifact spillover until compaction, expiry/removal, or context recovery
                 // so `_ARTIFACT_MANIFEST` and provider KV cache stay stable while inline.
                 const expirationConfig = this.resolveActionExpirationConfig(result.actionEntity, params.agent.ID, params);
-                const pendingSpilloverId = isActionSuccess
+                const pendingSpilloverId = isActionSuccess && addConversationMessage
                     ? this.queueDeferredActionOutputSpillover(
                         result.action.name,
                         result.actionEntity,

@@ -135,6 +135,10 @@ class UnifiedActionPathwayProbeAgent extends BaseAgent {
         (this as unknown as { _deferredActionSpillovers: Map<string, () => string[]> })._deferredActionSpillovers.clear();
     }
 
+    public GetPendingSpilloverCount(): number {
+        return (this as unknown as { _deferredActionSpillovers: Map<string, () => string[]> })._deferredActionSpillovers.size;
+    }
+
     public PruneExpired(params: ExecuteAgentParams, currentTurn: number): Promise<void> {
         return this.pruneAndCompactExpiredMessages(params, currentTurn);
     }
@@ -857,6 +861,25 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
             );
             expect(postRunAgent.GetArtifactManager().HasArtifacts()).toBe(false);
             expect(postCompacted).not.toContain('Artifact ');
+
+            // Tokens are globally unique across separate runs/instances so stale messages carried across runs cannot collide
+            const run1Agent = new UnifiedActionPathwayProbeAgent();
+            const run2Agent = new UnifiedActionPathwayProbeAgent();
+            const run1Token = run1Agent.QueueSpillover('Run Ad-hoc Query', adhocQueryAction, outputParams, longText, 1, compactConfig)!;
+            const run2Token = run2Agent.QueueSpillover('Run Ad-hoc Query', adhocQueryAction, outputParams, longText, 1, compactConfig)!;
+            expect(run1Token).not.toBe(run2Token);
+            const run1StaleCompacted = await run2Agent.Compact(
+                {
+                    role: 'user',
+                    content: longText,
+                    metadata: { turnAdded: 1, messageType: 'action-result', pendingSpilloverIds: [run1Token] },
+                },
+                { compactMode: 'First N Chars', compactLength: 200, compactPromptId: '', originalLength: longText.length },
+                params
+            );
+            expect(run2Agent.GetPendingSpilloverCount()).toBe(1);
+            expect(run2Agent.GetArtifactManager().HasArtifacts()).toBe(false);
+            expect(run1StaleCompacted).not.toContain('Artifact ');
         });
 
         it('materializes deferred spillovers across emergency context recovery strategies (RemoveOldestToolResults, CompactOldToolResults, CompactAllToolResults)', async () => {
@@ -1010,8 +1033,22 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
             expect(resultMsg.metadata?.expirationTurns).toBe(2);
             expect(resultMsg.metadata?.compactLength).toBe(600);
             expect(resultMsg.metadata?.pendingSpilloverIds).toHaveLength(1);
+            expect(agent.GetPendingSpilloverCount()).toBe(1);
             // Lazy: ArtifactToolManager stays empty until expiration/compaction/recovery
             expect(agent.GetArtifactManager().HasArtifacts()).toBe(false);
+
+            // Internal ForEach/While steps (addConversationMessage = false) do not accumulate deferred spillover closures
+            await agent.ExecuteActions(
+                params,
+                {
+                    step: 'Actions',
+                    terminate: false,
+                    actions: [{ name: 'Run Ad-hoc Query', params: { Query: 'SELECT 2' } }],
+                } as BaseAgentNextStep,
+                'parent-step-id',
+                false
+            );
+            expect(agent.GetPendingSpilloverCount()).toBe(1);
         });
 
         it('preserves expiration and spillover metadata when merging adjacent native tool turns', () => {
