@@ -454,3 +454,85 @@ describe('RecordSetProcessor.Process — waits for the Action log rows its resul
         expect(done).toBe(true);
     });
 });
+
+describe('RecordSetProcessor.Process — the caller stop signal', () => {
+    it('starts no record after the signal fires, ends Paused, and keeps the cursor on the page it was on', async () => {
+        const controller = new AbortController();
+        const processor = new FunctionRecordProcessor((r) => {
+            if (r.RecordID === 'r1') controller.abort(new Error('lease lost'));
+            return ok();
+        });
+        const tracker = new SpyTracker();
+        const result = await engine.Process({
+            Source: new ArraySource(recs(5), 'E'), Processor: processor, Tracker: tracker,
+            ContextUser: USER, Provider: PROVIDER, BatchSize: 5, Signal: controller.signal,
+        });
+        expect(result.Status).toBe('Paused');
+        expect(result.ErrorMessage).toBe('Stopped: lease lost');
+        expect(tracker.details.map((d) => d.record.RecordID)).toEqual(['r0', 'r1']);
+        expect(result.Processed).toBe(2);
+        expect(result.Error).toBe(0);
+        expect(tracker.checkpoints).toBe(0); // the cursor never moved past the unreached records
+    });
+
+    it('processes nothing when stopped before it starts', async () => {
+        const controller = new AbortController();
+        controller.abort('shutting down');
+        const processor = new FunctionRecordProcessor(ok);
+        const result = await engine.Process({
+            Source: new ArraySource(recs(3), 'E'), Processor: processor, Tracker: new NoOpTracker(),
+            ContextUser: USER, Provider: PROVIDER, Signal: controller.signal,
+        });
+        expect(result.Status).toBe('Paused');
+        expect(result.ErrorMessage).toBe('Stopped: shutting down');
+        expect(result.Processed).toBe(0);
+    });
+
+    it('hands the signal to every record', async () => {
+        const controller = new AbortController();
+        const seen: Array<AbortSignal | undefined> = [];
+        const processor = {
+            ProcessRecord: async (_r: RecordRef, ctx: RecordProcessorContext) => { seen.push(ctx.Signal); return ok(); },
+        };
+        await engine.Process({
+            Source: new ArraySource(recs(2), 'E'), Processor: processor, Tracker: new NoOpTracker(),
+            ContextUser: USER, Provider: PROVIDER, Signal: controller.signal,
+        });
+        expect(seen).toEqual([controller.signal, controller.signal]);
+    });
+
+    it('does not count the records a batch processor left unreached as errors', async () => {
+        const controller = new AbortController();
+        const processor = {
+            ProcessRecord: async () => ok(),
+            ProcessBatch: async (records: RecordRef[]) => {
+                controller.abort('cancelled');
+                return new Map([[records[0].RecordID, ok()]]);
+            },
+        };
+        const tracker = new SpyTracker();
+        const result = await engine.Process({
+            Source: new ArraySource(recs(3), 'E'), Processor: processor, Tracker: tracker,
+            ContextUser: USER, Provider: PROVIDER, Signal: controller.signal,
+        });
+        expect(result.Status).toBe('Paused');
+        expect(result.Processed).toBe(1);
+        expect(result.Error).toBe(0);
+        expect(tracker.details.map((d) => d.record.RecordID)).toEqual(['r0']);
+    });
+
+    it('stops every concurrent worker from taking another record', async () => {
+        const controller = new AbortController();
+        const processor = new FunctionRecordProcessor((r) => {
+            if (r.RecordID === 'r0') controller.abort('cancelled');
+            return ok();
+        });
+        const tracker = new SpyTracker();
+        const result = await engine.Process({
+            Source: new ArraySource(recs(10), 'E'), Processor: processor, Tracker: tracker,
+            ContextUser: USER, Provider: PROVIDER, BatchSize: 10, MaxConcurrency: 3, Signal: controller.signal,
+        });
+        expect(result.Status).toBe('Paused');
+        expect(result.Processed).toBeLessThan(10);
+    });
+});

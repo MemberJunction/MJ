@@ -8,9 +8,14 @@
 import { BaseEntity, CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine, MJContentFileTypeEntity, MJContentSourceEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { FieldConfidenceMap, PipelineStageRequest, WellKnownField, WorkingRecord } from '@memberjunction/content-pipeline-base';
+import { FieldConfidenceMap, PipelineStageRequest, RetryBackoff, RetryDelayMs, WellKnownField, WorkingRecord } from '@memberjunction/content-pipeline-base';
 import { GetEntityFieldMap, GetEntityName, GetStatusFields } from './EntityFieldMap.js';
 import { WhereEqual } from './Filters.js';
+
+/** Retries in a row since a stage last settled the record. Content Items and Content Item Chunks carry it. */
+const RETRY_COUNT_FIELD = 'RetryCount';
+/** The earliest time a stage may pick the record up again; null means no wait. */
+const RETRY_AFTER_FIELD = 'RetryAfter';
 
 /** Columns a child record inherits from whatever produced it. */
 export type ChildCommitDefaults = Readonly<Record<string, unknown>>;
@@ -80,7 +85,21 @@ export class WorkingRecordCommitter {
      * Write a working record's changes and set `statusField` to `status`. Columns a stage set directly
      * (`Pipeline.columns`) are always written; `Pipeline.completionColumns` only when the stage succeeded.
      */
-    public async Commit(record: WorkingRecord, statusField: string | null, status: string, succeeded = true): Promise<CommitResult> {
+    /**
+     * Commit a record a stage worked on: its changed fields, then its status.
+     *
+     * `status` null leaves the status column as it is. That is how a record stays ready for its stage
+     * after a Retry: pass `retry` and the record's retry schedule (`RetryCount`, `RetryAfter`) moves on,
+     * so the stage's readiness filter skips it until the backoff has passed. Any commit without `retry`
+     * clears the schedule: the stage has settled the record one way or the other.
+     */
+    public async Commit(
+        record: WorkingRecord,
+        statusField: string | null,
+        status: string | null,
+        succeeded = true,
+        retry?: RetryBackoff,
+    ): Promise<CommitResult> {
         const entityObject = await this.load(record);
         const created = !record.Identity.IsPersisted;
         const storedChecksum = this.readString(entityObject, 'Checksum');
@@ -100,10 +119,11 @@ export class WorkingRecordCommitter {
             changedNonTextFields.length > 0 || customWritten.length > 0,
             written,
         );
-        if (statusField && this.hasField(entityObject, statusField)) {
+        if (statusField && status !== null && this.hasField(entityObject, statusField)) {
             this.writeColumn(entityObject, statusField, status);
             written.push(statusField);
         }
+        written.push(...(retry ? this.scheduleRetry(entityObject, retry) : this.clearRetrySchedule(entityObject)));
         this.applyConfidence(record, entityObject, written, resetConfidence, unresolved);
         this.applyCompletionSignal(record, entityObject, statusField, written);
         return this.save(record, entityObject, written, created);
@@ -332,7 +352,7 @@ export class WorkingRecordCommitter {
         record: WorkingRecord,
         entityObject: BaseEntity,
         statusField: string | null,
-        status: string,
+        status: string | null,
         storedChecksum: string | null,
         metadataChanged: boolean,
         written: string[],
@@ -444,7 +464,43 @@ export class WorkingRecordCommitter {
     private resetDownstream(child: WorkingRecord, entityObject: BaseEntity, statusField: string): string[] {
         const fields = GetStatusFields(child.Entity);
         const later = fields.slice(fields.indexOf(statusField) + 1);
-        return this.applyValues(entityObject, Object.fromEntries(later.map((f) => [f, 'Pending'])));
+        // New content is a fresh start: a wait left by an earlier Retry no longer applies.
+        return [...this.applyValues(entityObject, Object.fromEntries(later.map((f) => [f, 'Pending']))), ...this.clearRetrySchedule(entityObject)];
+    }
+
+    /**
+     * After a Retry: count it, and set the earliest time a stage may pick the record up again
+     * (the backoff doubles with each Retry in a row). Returns the columns written; none on an
+     * entity without a retry schedule.
+     */
+    private scheduleRetry(entityObject: BaseEntity, retry: RetryBackoff): string[] {
+        if (!this.hasRetrySchedule(entityObject)) {
+            return [];
+        }
+        const previous = this.readColumn(entityObject, RETRY_COUNT_FIELD);
+        const count = (typeof previous === 'number' && Number.isFinite(previous) ? previous : 0) + 1;
+        this.writeColumn(entityObject, RETRY_COUNT_FIELD, count);
+        this.writeColumn(entityObject, RETRY_AFTER_FIELD, new Date(Date.now() + RetryDelayMs(count, retry)));
+        return [RETRY_COUNT_FIELD, RETRY_AFTER_FIELD];
+    }
+
+    /** Forget a record's retry schedule. Writes nothing when there is none to forget. */
+    private clearRetrySchedule(entityObject: BaseEntity): string[] {
+        if (!this.hasRetrySchedule(entityObject)) {
+            return [];
+        }
+        const count = this.readColumn(entityObject, RETRY_COUNT_FIELD);
+        const after = this.readColumn(entityObject, RETRY_AFTER_FIELD);
+        if ((count === 0 || count == null) && after == null) {
+            return [];
+        }
+        this.writeColumn(entityObject, RETRY_COUNT_FIELD, 0);
+        this.writeColumn(entityObject, RETRY_AFTER_FIELD, null);
+        return [RETRY_COUNT_FIELD, RETRY_AFTER_FIELD];
+    }
+
+    private hasRetrySchedule(entityObject: BaseEntity): boolean {
+        return this.hasField(entityObject, RETRY_COUNT_FIELD) && this.hasField(entityObject, RETRY_AFTER_FIELD);
     }
 
     /** `LatestResult.Message` is often empty while `Errors` holds the per-field failures. */

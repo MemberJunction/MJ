@@ -15109,6 +15109,17 @@ export const MJContentItemChunkSchema = z.object({
         * * Display Name: Decorator
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk.`),
+    RetryCount: z.number().describe(`
+        * * Field Name: RetryCount
+        * * Display Name: Retry Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Retry outcomes in a row since a content pipeline stage last settled this chunk. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the chunk.`),
+    RetryAfter: z.date().nullable().describe(`
+        * * Field Name: RetryAfter
+        * * Display Name: Retry After
+        * * SQL Data Type: datetimeoffset
+        * * Description: The earliest time a content pipeline stage may pick this chunk up again, after a Retry outcome. Every pipeline Record Process skips the chunk until then. NULL means no wait.`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
         * * Display Name: Content Item Name
@@ -15508,6 +15519,17 @@ export const MJContentItemSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
         * * Description: The durable copy of the fetched artifact, held as an MJ File so the bytes live in whichever storage provider the source is configured for rather than in this database.`),
+    RetryCount: z.number().describe(`
+        * * Field Name: RetryCount
+        * * Display Name: Retry Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Retry outcomes in a row since a content pipeline stage last settled this item. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the item, or when its content changes.`),
+    RetryAfter: z.date().nullable().describe(`
+        * * Field Name: RetryAfter
+        * * Display Name: Retry After
+        * * SQL Data Type: datetimeoffset
+        * * Description: The earliest time a content pipeline stage may pick this item up again, after a Retry outcome. Every pipeline Record Process skips the item until then. NULL means no wait.`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source Name
@@ -87330,6 +87352,33 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     }
 
     /**
+    * * Field Name: RetryCount
+    * * Display Name: Retry Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Retry outcomes in a row since a content pipeline stage last settled this chunk. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the chunk.
+    */
+    get RetryCount(): number {
+        return this.Get('RetryCount');
+    }
+    set RetryCount(value: number) {
+        this.Set('RetryCount', value);
+    }
+
+    /**
+    * * Field Name: RetryAfter
+    * * Display Name: Retry After
+    * * SQL Data Type: datetimeoffset
+    * * Description: The earliest time a content pipeline stage may pick this chunk up again, after a Retry outcome. Every pipeline Record Process skips the chunk until then. NULL means no wait.
+    */
+    get RetryAfter(): Date | null {
+        return this.Get('RetryAfter');
+    }
+    set RetryAfter(value: Date | null) {
+        this.Set('RetryAfter', value);
+    }
+
+    /**
     * * Field Name: ContentItem
     * * Display Name: Content Item Name
     * * SQL Data Type: nvarchar(250)
@@ -88253,6 +88302,33 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     }
     set FileID(value: string | null) {
         this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: RetryCount
+    * * Display Name: Retry Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Retry outcomes in a row since a content pipeline stage last settled this item. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the item, or when its content changes.
+    */
+    get RetryCount(): number {
+        return this.Get('RetryCount');
+    }
+    set RetryCount(value: number) {
+        this.Set('RetryCount', value);
+    }
+
+    /**
+    * * Field Name: RetryAfter
+    * * Display Name: Retry After
+    * * SQL Data Type: datetimeoffset
+    * * Description: The earliest time a content pipeline stage may pick this item up again, after a Retry outcome. Every pipeline Record Process skips the item until then. NULL means no wait.
+    */
+    get RetryAfter(): Date | null {
+        return this.Get('RetryAfter');
+    }
+    set RetryAfter(value: Date | null) {
+        this.Set('RetryAfter', value);
     }
 
     /**

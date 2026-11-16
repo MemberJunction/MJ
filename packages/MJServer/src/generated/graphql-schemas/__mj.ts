@@ -37288,6 +37288,12 @@ export class MJContentItemChunk_ {
     @Field({nullable: true, description: "Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk."}) 
     Decorator?: string;
         
+    @Field(() => Int, {nullable: true, description: "Retry outcomes in a row since a content pipeline stage last settled this chunk. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the chunk."}) 
+    RetryCount?: number;
+        
+    @Field({nullable: true, description: "The earliest time a content pipeline stage may pick this chunk up again, after a Retry outcome. Every pipeline Record Process skips the chunk until then. NULL means no wait."}) 
+    RetryAfter?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     ContentItem?: string;
@@ -37394,6 +37400,12 @@ export class CreateMJContentItemChunkInput {
     @Field({ nullable: true })
     Decorator: string | null;
 
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -37475,6 +37487,12 @@ export class UpdateMJContentItemChunkInput {
 
     @Field({ nullable: true })
     Decorator?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -38117,6 +38135,12 @@ export class MJContentItem_ {
     @MaxLength(36)
     FileID?: string;
         
+    @Field(() => Int, {nullable: true, description: "Retry outcomes in a row since a content pipeline stage last settled this item. Each one doubles the wait before the next attempt (RetryAfter). Reset to 0 when a stage completes, skips or fails the item, or when its content changes."}) 
+    RetryCount?: number;
+        
+    @Field({nullable: true, description: "The earliest time a content pipeline stage may pick this item up again, after a Retry outcome. Every pipeline Record Process skips the item until then. NULL means no wait."}) 
+    RetryAfter?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     ContentSource?: string;
@@ -38262,6 +38286,12 @@ export class CreateMJContentItemInput {
     @Field({ nullable: true })
     FileID: string | null;
 
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -38358,6 +38388,12 @@ export class UpdateMJContentItemInput {
 
     @Field({ nullable: true })
     FileID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    RetryAfter?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
