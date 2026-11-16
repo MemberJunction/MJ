@@ -42,7 +42,13 @@ export interface QueryDefinitionRows {
 }
 
 /** A user view's material fields: what decides which rows it returns. */
-export type UserViewDefinitionFields = Pick<MJUserViewEntity, 'EntityID' | 'WhereClause' | 'CustomWhereClause' | 'SmartFilterWhereClause' | 'Properties'>;
+export type UserViewDefinitionFields = Pick<MJUserViewEntity, 'EntityID' | 'WhereClause' | 'CustomWhereClause' | 'SmartFilterWhereClause' | 'Properties'> & {
+    /**
+     * The alternate base view the view reads from (`MJUserViewEntityExtended.AlternateBaseView`).
+     * It decides which rows the view returns, so it is part of the definition when set.
+     */
+    AlternateBaseView?: string | null;
+};
 
 /** A dashboard's material fields: what it renders and runs. */
 export type DashboardDefinitionFields = Pick<MJDashboardEntity, 'Type' | 'UIConfigDetails' | 'Code' | 'DriverClass'>;
@@ -102,8 +108,16 @@ export async function ComputeUserViewFingerprintAsync(view: UserViewDefinitionFi
         WhereClause: text(view.WhereClause),
         CustomWhereClause: !!view.CustomWhereClause,
         SmartFilterWhereClause: text(view.SmartFilterWhereClause),
-        Properties: text(view.Properties)
+        Properties: text(view.Properties),
+        // Only when set, so a view without one keeps the fingerprint it already had.
+        ...alternateBaseViewPart(view.AlternateBaseView)
     });
+}
+
+/** Alternate base view names are case-insensitive, so the fingerprint uses the lowercased name. */
+function alternateBaseViewPart(name: string | null | undefined): { AlternateBaseView?: string } {
+    const trimmed = name?.trim();
+    return trimmed ? { AlternateBaseView: trimmed.toLowerCase() } : {};
 }
 
 /** The fingerprint of a dashboard's definition: its type, configuration (parts, mappings, wires) and code. */

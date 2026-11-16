@@ -72,7 +72,16 @@ vi.mock('@memberjunction/core-entities', () => ({
   MJListDetailEntity: class {},
   MJListEntity: class {},
   MJUserViewEntity: class {},
+  // A live-view refresh fingerprints its source view first; these lists have no stored
+  // fingerprint, so the value only needs to be stable. The fingerprint check has its own suite.
+  ComputeUserViewFingerprintAsync: async () => 'fp-view',
+  ComputeQueryFingerprintAsync: async () => 'fp-query',
 }));
+
+/** The source view a live refresh loads to fingerprint. */
+function makeMockSourceView() {
+  return { ID: 'view-1', Name: 'Active contacts', __mj_UpdatedAt: new Date('2026-11-01T00:00:00Z'), Load: vi.fn().mockResolvedValue(true) };
+}
 
 import { SetDeltaTokenSecret } from '../deltaToken';
 import { ListOperations } from '../ListOperations';
@@ -218,6 +227,7 @@ describe('ListOperations — Phase 1', () => {
       mockGetEntityObject.mockImplementation((name: string) => {
         if (name === 'MJ: Lists') return list;
         if (name === 'MJ: List Details') return makeMockListDetail();
+        if (name === 'MJ: User Views') return makeMockSourceView();
         throw new Error(`unexpected entity ${name}`);
       });
       // ResolveSource(view) → 2 records
@@ -252,6 +262,7 @@ describe('ListOperations — Phase 1', () => {
       mockGetEntityObject.mockImplementation((name: string) => {
         if (name === 'MJ: Lists') return list;
         if (name === 'MJ: List Details') return makeMockListDetail();
+        if (name === 'MJ: User Views') return makeMockSourceView();
         throw new Error(`unexpected entity ${name}`);
       });
       mockRunViewImpl.mockResolvedValue({ Success: true, Results: [{ ID: 'r1' }], RowCount: 1 });
@@ -281,6 +292,7 @@ describe('ListOperations — Phase 1', () => {
         if (name === 'MJ: Lists') return list;
         if (name === 'MJ: User Views') return view;
         if (name === 'MJ: List Details') return makeMockListDetail();
+        if (name === 'MJ: User Views') return makeMockSourceView();
         throw new Error(`unexpected entity ${name}`);
       });
       mockRunViewImpl.mockResolvedValue({ Success: true, Results: [{ ID: 'r1' }], RowCount: 1 });
@@ -379,6 +391,7 @@ describe('ListOperations — Phase 1', () => {
       mockGetEntityObject.mockImplementation((name: string) => {
         if (name === 'MJ: Lists') return list;
         if (name === 'MJ: List Details') return makeMockListDetail();
+        if (name === 'MJ: User Views') return makeMockSourceView();
         throw new Error(`unexpected entity ${name}`);
       });
 
@@ -392,10 +405,11 @@ describe('ListOperations — Phase 1', () => {
   });
 
   describe('RefreshFromSource', () => {
-    it('returns TARGET_NOT_FOUND when list has no SourceViewID', async () => {
+    it('returns TARGET_NOT_FOUND when the list has no source query or view', async () => {
       const list = makeMockList({ ID: 'list-orphan', SourceViewID: null });
       mockGetEntityObject.mockImplementation((name: string) => {
         if (name === 'MJ: Lists') return list;
+        if (name === 'MJ: User Views') return makeMockSourceView();
         throw new Error(`unexpected entity ${name}`);
       });
 
@@ -403,7 +417,7 @@ describe('ListOperations — Phase 1', () => {
       const result = await ops.RefreshFromSource('list-orphan', 'Additive', { ConfirmDrops: false });
       expect(result.Success).toBe(false);
       expect(result.ResultCode).toBe('TARGET_NOT_FOUND');
-      expect(result.Message).toMatch(/no SourceViewID/);
+      expect(result.Message).toMatch(/no source query or view/);
     });
 
     it('refuses Sync refresh without ConfirmDrops when drops would occur', async () => {
@@ -414,6 +428,7 @@ describe('ListOperations — Phase 1', () => {
       });
       mockGetEntityObject.mockImplementation((name: string) => {
         if (name === 'MJ: Lists') return list;
+        if (name === 'MJ: User Views') return makeMockSourceView();
         throw new Error(`unexpected entity ${name}`);
       });
       // Source view has {a}, list currently has {a, b}. Sync would drop {b}.
@@ -453,6 +468,7 @@ describe('ListOperations — Phase 1', () => {
       mockGetEntityObject.mockImplementation((name: string) => {
         if (name === 'MJ: Lists') return list;
         if (name === 'MJ: List Details') return makeMockListDetail();
+        if (name === 'MJ: User Views') return makeMockSourceView();
         throw new Error(`unexpected entity ${name}`);
       });
       mockRunViewImpl.mockImplementation(async (params: { EntityName?: string; ExtraFilter?: string; ViewID?: string }) => {
@@ -488,6 +504,7 @@ describe('ListOperations — Phase 1', () => {
       mockGetEntityObject.mockImplementation((name: string) => {
         if (name === 'MJ: Lists') return list;
         if (name === 'MJ: List Details') return makeMockListDetail();
+        if (name === 'MJ: User Views') return makeMockSourceView();
         throw new Error(`unexpected entity ${name}`);
       });
       mockRunViewImpl.mockImplementation(async (params: { EntityName?: string; ViewID?: string }) => {
@@ -519,6 +536,7 @@ describe('ListOperations — Phase 1', () => {
       });
       mockGetEntityObject.mockImplementation((name: string) => {
         if (name === 'MJ: Lists') return list;
+        if (name === 'MJ: User Views') return makeMockSourceView();
         throw new Error(`unexpected entity ${name}`);
       });
 
