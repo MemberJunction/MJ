@@ -130,6 +130,40 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
         expect(agentDetail.Persisted).toEqual({ Status: 'Complete', Message: 'All done' });
     });
 
+    it('calls originalOnProgress immediately while the detail.Save() is still in flight', async () => {
+        const events: string[] = [];
+        const agentDetail = makeRacyDetail('agent-detail');
+        const origSave = agentDetail.Save;
+        agentDetail.Save = async () => {
+            events.push('save:start');
+            await delay(10);
+            events.push('save:finish');
+            return origSave();
+        };
+
+        const runner = new AgentRunner(makeProvider([makeRacyDetail('user-detail'), agentDetail]));
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockImplementation(async (params: ExecuteAgentParams) => {
+            events.length = 0; // clear initial In-Progress detail creation save
+            await params.onProgress?.({ step: 'prompt_execution', percentage: 50, message: 'midway' } as never);
+            return { success: true, agentRun: { Message: 'done' } } as unknown as ExecuteAgentResult;
+        });
+
+        const onProgress = vi.fn(async () => {
+            events.push('onProgress:called');
+        });
+
+        await runner.RunAgentInConversation({
+            agent: { ID: 'agent-1', Name: 'IT: Progress Immediate' },
+            conversationMessages: [],
+            contextUser: USER,
+            onProgress,
+        } as unknown as ExecuteAgentParams, { conversationId: 'conv-1', userMessage: 'hi' });
+
+        expect(events[0]).toBe('onProgress:called');
+        expect(events[1]).toBe('save:start');
+        expect(events[2]).toBe('save:finish');
+    });
+
     it('runs generateConversationName in parallel with RunAgent and skips artifact queries on a brand-new conversation', async () => {
         const events: string[] = [];
         const convEntity = makeRacyDetail('conv-new');
@@ -141,15 +175,22 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
         const runner = new AgentRunner(makeProvider([convEntity, userDetail, agentDetail]));
         const gatherSpy = vi.spyOn(runner as unknown as RunAgentStub, 'gatherConversationArtifacts');
 
+        let markRunAgentStarted: () => void = () => {};
+        const runAgentStarted = new Promise<void>((resolve) => {
+            markRunAgentStarted = resolve;
+        });
+
         vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockImplementation(async () => {
             events.push('rename:start');
-            await delay(80);
+            await Promise.race([runAgentStarted, delay(500)]);
+            await delay(10);
             events.push('rename:done');
             return { name: 'Smart Title', description: 'Smart Description' };
         });
 
         vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockImplementation(async (params: ExecuteAgentParams) => {
             events.push('runAgent:start');
+            markRunAgentStarted();
             expect(params.inputArtifacts).toEqual([]);
             await delay(10);
             events.push('runAgent:done');

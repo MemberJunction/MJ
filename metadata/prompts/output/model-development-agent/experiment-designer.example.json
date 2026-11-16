@@ -34,8 +34,7 @@
       ],
       "ValidationStrategy": {
         "Strategy": "kfold",
-        "K": 5,
-        "LockedHoldoutFraction": 0.2
+        "K": 5
       },
       "ProposedBudget": {
         "MaxRuns": 10,

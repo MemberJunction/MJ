@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "token": {
+      "type": "string",
+      "title": "Personal Access Token",
+      "description": "GitHub Fine-Grained Personal Access Token (github_pat_...) or Classic PAT (ghp_...).",
+      "isSecret": true,
+      "order": 0
+    },
+    "defaultOwner": {
+      "type": "string",
+      "title": "Default Organization / Owner",
+      "description": "Optional default GitHub organization or user login (e.g., 'MemberJunction') used when a repository owner is not explicitly provided.",
+      "isSecret": false,
+      "order": 1
+    },
+    "allowedRepositories": {
+      "type": "string",
+      "title": "Allowed Repositories",
+      "description": "Optional comma-separated list of allowed 'owner/repo' or 'owner/*' patterns (e.g., 'MemberJunction/*,BlueCypress/Skip-Client-Open-App').",
+      "isSecret": false,
+      "order": 2
+    },
+    "allowMerge": {
+      "type": "boolean",
+      "title": "Allow Pull Request Merge",
+      "description": "Whether this credential is permitted to merge pull requests. Defaults to false.",
+      "isSecret": false,
+      "order": 3,
+      "default": false
+    },
+    "defaultPRMode": {
+      "type": "string",
+      "enum": ["draft", "ready"],
+      "title": "Default Pull Request Mode",
+      "description": "Whether pull requests created using this credential default to 'draft' or 'ready' for review.",
+      "isSecret": false,
+      "order": 4,
+      "default": "draft"
+    },
+    "apiBaseUrl": {
+      "type": "string",
+      "title": "GitHub API Base URL",
+      "description": "GitHub REST API base URL. Defaults to 'https://api.github.com' (use 'https://<hostname>/api/v3' for GitHub Enterprise Server).",
+      "isSecret": false,
+      "order": 5,
+      "default": "https://api.github.com"
+    }
+  },
+  "required": ["token"]
+}

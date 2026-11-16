@@ -132,15 +132,18 @@ describe('post-restart introspection sees the connection\'s own fields from a co
 });
 
 describe('index.ts wires the post-restart introspection through it', () => {
-    it('introspects through IntrospectInCatalogScope for the item\'s connection and objects', () => {
-        // Whitespace-tolerant: formatters may wrap the call.
+    it('introspects only through ResolvePostRestartFields, which falls back to IntrospectInCatalogScope', () => {
+        // Whitespace-tolerant: formatters may wrap the call. The resolver's own behaviour, including
+        // that it introspects through IntrospectInCatalogScope, is pinned in
+        // PostRestartMapsFromPersistedCatalog.test.ts.
         expect(SRC).toMatch(
-            /const schema = await IntrospectInCatalogScope\(\s*item\.CompanyIntegrationID\s*,\s*item\.SourceObjectNames\s*,\s*\(\)\s*=>\s*introspect\(\s*companyIntegration\s*,\s*systemUser\s*\)\s*,\s*systemUser\s*,?\s*\)/,
+            /await ResolvePostRestartFields\(\s*item\.CompanyIntegrationID\s*,\s*companyIntegration\.IntegrationID\s*,\s*item\.SourceObjectNames\s*,\s*\(\)\s*=>\s*introspect\(\s*companyIntegration\s*,\s*systemUser\s*\)\s*,\s*systemUser\s*,?\s*\)/,
         );
     });
 
     it('has no bare or synchronously scoped post-restart introspect call left', () => {
         expect(SRC).not.toMatch(/const schema = await introspect\(companyIntegration, systemUser\)/);
         expect(SRC).not.toMatch(/RunInCatalogScope\(\s*item\.CompanyIntegrationID/);
+        expect(SRC).not.toMatch(/IntrospectInCatalogScope\(/);
     });
 });

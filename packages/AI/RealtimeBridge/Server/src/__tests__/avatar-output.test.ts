@@ -452,6 +452,28 @@ describe('AIBridgeEngine — an avatar the bridge can no longer show', () => {
         expect(fresh.Heard).toHaveLength(1);
     });
 
+    it('tells the host every take-down, replaced or not, and a failing host handler changes nothing', async () => {
+        const told: string[] = [];
+        const fresh = new AvatarSession();
+        const active = await seat('told', new AvatarSession(), {
+            RecoverRealtimeSessionWithoutAvatar: async () => fresh,
+            OnAvatarUnavailable: (reason) => {
+                told.push(reason);
+            },
+        });
+        loopback(active).EmitAvatarUnavailable('decoder-failed');
+        await vi.waitFor(() => expect(active.RealtimeSession).toBe(fresh));
+        loopback(active).EmitAvatarUnavailable('decoder-failed'); // e.g. reported again after a room-client rejoin
+        await new Promise((r) => setTimeout(r, 0));
+        expect(told).toEqual(['decoder-failed', 'decoder-failed']);
+
+        const kept = new AvatarSession();
+        const throwing = await seat('throws', kept, { OnAvatarUnavailable: async () => { throw new Error('room service down'); } });
+        loopback(throwing).EmitAvatarUnavailable('publish-failed');
+        await new Promise((r) => setTimeout(r, 0));
+        expect(throwing.RealtimeSession).toBe(kept);
+    });
+
     it('goes on as it was when the host gave no replacement, or the replacement fails', async () => {
         const kept = new AvatarSession();
         const a = await seat('none', kept);

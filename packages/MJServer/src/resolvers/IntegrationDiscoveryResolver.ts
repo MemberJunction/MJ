@@ -2255,6 +2255,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 .filter(f => f.IsPrimaryKey)
                 .map(f => f.Name.replace(/[^A-Za-z0-9_]/g, '_'));
 
+            const organicKeyFields = sourceObj.Fields
+                .filter(f => f.IsUniqueKey && !f.IsPrimaryKey)
+                .map(f => [f.Name.replace(/[^A-Za-z0-9_]/g, '_')]);
+
             // If no columns were discovered, skip rather than generating a broken table
             // (DDL with UNIQUE ([ID]) on a non-existent column will always fail).
             if (columns.length === 0 && primaryKeyFields.length === 0) {
@@ -2283,7 +2287,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Description: sourceObj.Description ?? objDescriptions?.objectDescription,
                 Columns: columns,
                 PrimaryKeyFields: primaryKeyFields,
-                SoftForeignKeys: []
+                SoftForeignKeys: [],
+                ...(organicKeyFields.length > 0 ? { OrganicKeyFields: organicKeyFields } : {}),
             });
         }
 

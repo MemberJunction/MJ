@@ -89,7 +89,7 @@ describe('SchemaEvolution', () => {
             expect(diff.ModifiedColumns).toHaveLength(0);
         });
 
-        it('should detect modified columns (type change)', () => {
+        it('should detect modified columns (type change within same family)', () => {
             const target = MakeTargetConfig([
                 { SourceFieldName: 'email', TargetColumnName: 'Email', TargetSqlType: 'NVARCHAR(500)', IsNullable: true, MaxLength: 500, Precision: null, Scale: null, DefaultValue: null },
             ]);
@@ -101,6 +101,26 @@ describe('SchemaEvolution', () => {
             expect(diff.ModifiedColumns).toHaveLength(1);
             expect(diff.ModifiedColumns[0].OldType).toBe('NVARCHAR(255)');
             expect(diff.ModifiedColumns[0].NewType).toBe('NVARCHAR(500)');
+        });
+
+        it('should warn and skip cross-family type changes on existing columns (e.g. NVARCHAR to INT or DECIMAL)', () => {
+            const target = MakeTargetConfig([
+                { SourceFieldName: 'amount', TargetColumnName: 'Amount', TargetSqlType: 'DECIMAL(28,2)', IsNullable: true, MaxLength: null, Precision: 28, Scale: 2, DefaultValue: null },
+                { SourceFieldName: 'count', TargetColumnName: 'Count', TargetSqlType: 'INT', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
+                { SourceFieldName: 'created_at', TargetColumnName: 'CreatedAt', TargetSqlType: 'DATETIMEOFFSET', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
+            ]);
+            const existing = MakeExistingTable([
+                { Name: 'Amount', SqlType: 'NVARCHAR(255)', IsNullable: true },
+                { Name: 'Count', SqlType: 'NVARCHAR(255)', IsNullable: true },
+                { Name: 'CreatedAt', SqlType: 'NVARCHAR(255)', IsNullable: true },
+            ]);
+
+            const diff = evo.DiffSchema(MakeSourceObject(), target, existing, 'sqlserver');
+            expect(diff.ModifiedColumns).toHaveLength(0);
+            expect(diff.Warnings).toHaveLength(3);
+            expect(diff.Warnings[0]).toContain("Column 'Amount' type family changed from NVARCHAR(255) to DECIMAL(28,2)");
+            expect(diff.Warnings[1]).toContain("Column 'Count' type family changed from NVARCHAR(255) to INT");
+            expect(diff.Warnings[2]).toContain("Column 'CreatedAt' type family changed from NVARCHAR(255) to DATETIMEOFFSET");
         });
 
         it('should detect modified columns (nullability change)', () => {
@@ -174,6 +194,63 @@ describe('SchemaEvolution', () => {
             // Already-present standard columns are NOT re-added.
             expect(added).not.toContain('__mj_integration_SyncStatus');
             expect(added).not.toContain('__mj_integration_LastSyncedAt');
+        });
+
+        it('should add a key column that the existing table does not have, as nullable', () => {
+            // The key gained a parent column: `list_id` → `list_id + newsletter_id`.
+            const target: TargetTableConfig = {
+                ...MakeTargetConfig([
+                    { SourceFieldName: 'list_id', TargetColumnName: 'list_id', TargetSqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
+                    { SourceFieldName: 'newsletter_id', TargetColumnName: 'newsletter_id', TargetSqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
+                ]),
+                PrimaryKeyFields: ['list_id', 'newsletter_id'],
+            };
+            const existing = MakeExistingTable([
+                { Name: 'list_id', SqlType: 'NVARCHAR(100)', IsNullable: false },
+            ]);
+
+            const diff = evo.DiffSchema(MakeSourceObject(), target, existing, 'sqlserver');
+            expect(diff.AddedColumns.map(c => c.TargetColumnName)).toEqual(['newsletter_id']);
+            // Rows already in the table have no value for it, so it cannot be NOT NULL.
+            expect(diff.AddedColumns[0].IsNullable).toBe(true);
+        });
+
+        it('should warn that rows stored before an added key column must be cleared and fully re-synced', () => {
+            // Stored rows have NULL in the new key column, so a sync cannot match them to incoming records.
+            const target: TargetTableConfig = {
+                ...MakeTargetConfig([
+                    { SourceFieldName: 'list_id', TargetColumnName: 'list_id', TargetSqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
+                    { SourceFieldName: 'newsletter_id', TargetColumnName: 'newsletter_id', TargetSqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
+                ]),
+                PrimaryKeyFields: ['list_id', 'newsletter_id'],
+            };
+            const existing = MakeExistingTable([
+                { Name: 'list_id', SqlType: 'NVARCHAR(100)', IsNullable: false },
+            ]);
+
+            const diff = evo.DiffSchema(MakeSourceObject(), target, existing, 'sqlserver');
+            expect(diff.Warnings).toHaveLength(1);
+            expect(diff.Warnings[0]).toContain("'newsletter_id'");
+            expect(diff.Warnings[0]).toContain('hubspot.Contact');
+            expect(diff.Warnings[0]).toMatch(/clear .*record maps.*full sync/i);
+        });
+
+        it('should not warn about a key column that differs only in nullability', () => {
+            // The state a key column is left in once it was added as nullable.
+            const target: TargetTableConfig = {
+                ...MakeTargetConfig([
+                    { SourceFieldName: 'newsletter_id', TargetColumnName: 'newsletter_id', TargetSqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
+                ]),
+                PrimaryKeyFields: ['newsletter_id'],
+            };
+            const existing = MakeExistingTable([
+                { Name: 'newsletter_id', SqlType: 'NVARCHAR(100)', IsNullable: true },
+            ]);
+
+            const diff = evo.DiffSchema(MakeSourceObject(), target, existing, 'sqlserver');
+            expect(diff.Warnings).toEqual([]);
+            expect(diff.AddedColumns).toHaveLength(0);
+            expect(diff.ModifiedColumns).toHaveLength(0);
         });
     });
 

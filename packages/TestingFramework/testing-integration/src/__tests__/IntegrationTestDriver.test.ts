@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // so the D1 "can't run inside a live MJAPI" guard can be exercised both ways.
 /** Minimal shape of the active server bootstrap the driver reads (Provider type, pool, schema). */
 interface FakeServerBootstrap {
-    Provider: { ProviderType: string };
+    Provider: { ProviderType: string } | DatabaseProviderBase;
     Pool: undefined;
     Db: { Schema: string };
 }
@@ -26,11 +26,12 @@ vi.mock('../bootstrap', () => ({
     serverProcessAlreadyClaimed: () => mockServerClaimed()
 }));
 
-import { IntegrationTestDriver } from '../IntegrationTestDriver';
+import { IntegrationTestDriver, BUDGET_EXHAUSTED_SKIP_PREFIX } from '../IntegrationTestDriver';
 import { IntegrationCheckRegistry } from '../check-registry';
 import { SkipCheck, TestRunner } from '../test-runner';
 import type { DriverExecutionContext, IOracle } from '@memberjunction/testing-engine';
 import type { MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
+import { DatabaseProviderBase } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 
 /** Build a minimal DriverExecutionContext for the fields the driver actually reads. */
@@ -245,6 +246,52 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(['Failed', 'Timeout']).toContain(result.status);
     });
 
+    it('a check the run budget never started is a skip "not run: budget exhausted", never a failure (#3393)', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitbudget.A', Name: 'budgetA', Fn: () => new Promise<void>(() => { /* never resolves */ }) });
+        reg.Register({ Id: 'unitbudget.B', Name: 'budgetB', Fn: async () => { /* pass */ } });
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitbudget' }] }, 40));
+        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitbudget.A', 'unitbudget.B']);
+        // A started and hung: that stays a failure (C6).
+        expect(result.oracleResults[0].passed).toBe(false);
+        const notRun = result.oracleResults[1];
+        expect(notRun.message).toContain(BUDGET_EXHAUSTED_SKIP_PREFIX);
+        expect(notRun.message).toContain("'unitbudget.B'");
+        const details = notRun.details as Record<string, unknown>;
+        expect(details.Skipped).toBe(true);
+        // Lost coverage: not allowed, so the suite's skip gate still fails the run.
+        expect(details.SkipAllowed).toBe(false);
+        expect(result.failedChecks).toBe(1);
+        expect(result.skippedChecks).toBe(1);
+    });
+
+    it('a budget skip is not allowed even for a check on the skip allowlist', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitbudgetallow.A', Name: 'budgetAllowA', Fn: () => new Promise<void>(() => { /* never resolves */ }) });
+        reg.Register({ Id: 'unitbudgetallow.B', Name: 'budgetAllowB', Fn: async () => SkipCheck('no vendor key') });
+        reg.AllowSkip({ CheckId: 'unitbudgetallow.B', Gate: 'credentials', Reason: 'needs a vendor key' });
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitbudgetallow' }] }, 40));
+        const notRun = result.oracleResults.find(o => o.oracleType === 'unitbudgetallow.B');
+        expect(notRun?.message).toContain(BUDGET_EXHAUSTED_SKIP_PREFIX);
+        expect((notRun?.details as Record<string, unknown>).SkipAllowed).toBe(false);
+    });
+
+    it('every check of a bundle the loop never reached after the budget ran out is a budget skip', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitbudgethang.A', Name: 'budgetHangA', Fn: () => new Promise<void>(() => { /* never resolves */ }) });
+        reg.Register({ Id: 'unitbudgetlater.A', Name: 'laterA', Fn: async () => { /* pass */ } });
+        reg.Register({ Id: 'unitbudgetlater.B', Name: 'laterB', Fn: async () => { /* pass */ } });
+        const result = await new IntegrationTestDriver().Execute(
+            makeContext({ checks: [{ type: 'unitbudgethang' }, { type: 'unitbudgetlater' }] }, 40));
+        const later = result.oracleResults.filter(o => o.oracleType.startsWith('unitbudgetlater.'));
+        expect(later.map(o => o.oracleType)).toEqual(['unitbudgetlater.A', 'unitbudgetlater.B']);
+        for (const o of later) {
+            expect(o.message).toContain(BUDGET_EXHAUSTED_SKIP_PREFIX);
+            expect((o.details as Record<string, unknown>).Skipped).toBe(true);
+        }
+        expect(result.skippedChecks).toBe(2);
+    });
+
     it('a lifecycle Setup failure still runs Teardown (R4 guaranteed cleanup) and fails the bundle, never re-throws', async () => {
         const reg = IntegrationCheckRegistry.Instance;
         let teardownRan = false;
@@ -310,17 +357,6 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect((parked.oracleResults[0].details as Record<string, unknown>).SkipAllowed).toBe(false);
     });
 
-    it('checks a timed-out run never started are recorded as failed, not left out', async () => {
-        const reg = IntegrationCheckRegistry.Instance;
-        reg.Register({ Id: 'unitbudget.A', Name: 'budgetA', Fn: () => new Promise<void>(() => { /* never resolves */ }) });
-        reg.Register({ Id: 'unitbudget.B', Name: 'budgetB', Fn: async () => { /* pass */ } });
-        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitbudget' }] }, 40));
-        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitbudget.A', 'unitbudget.B']);
-        const notRun = result.oracleResults.find(o => o.oracleType === 'unitbudget.B');
-        // Either the per-check budget failed it or it never started; it can never be absent or passed.
-        expect(notRun?.passed).toBe(false);
-    });
-
     it('a requiresEnv-parked Test is allowed when every selected bundle has a bundle-level entry', async () => {
         const reg = IntegrationCheckRegistry.Instance;
         reg.Register({ Id: 'unitparked.A', Name: 'parkedA', Fn: async () => { /* pass */ } });
@@ -334,5 +370,91 @@ describe('IntegrationTestDriver bundle dispatch', () => {
 
         const mixed = await driver.Execute(makeContext({ checks: [{ type: 'unitparked' }, { type: 'unitpass' }], requiresEnv: 'UNIT_PARK_GATE' }));
         expect((mixed.oracleResults[0].details as Record<string, unknown>).SkipAllowed).toBe(false);
+    });
+});
+
+/**
+ * A fake database provider with a controllable transaction depth. Built on the real prototype so
+ * the driver's `instanceof DatabaseProviderBase` test sees it, without constructing a provider.
+ */
+interface FakeTxProvider {
+    Provider: DatabaseProviderBase;
+    Depth: { Value: number };
+    Rollback: ReturnType<typeof vi.fn>;
+    Reset: ReturnType<typeof vi.fn>;
+}
+function makeTxProvider(rollbackThrows = false): FakeTxProvider {
+    const depth = { Value: 0 };
+    const rollback = vi.fn(async () => {
+        if (rollbackThrows) {
+            throw new Error('connection lost');
+        }
+        depth.Value = Math.max(0, depth.Value - 1);
+    });
+    const reset = vi.fn(async () => { depth.Value = 0; });
+    const provider = Object.create(DatabaseProviderBase.prototype) as DatabaseProviderBase;
+    Object.defineProperty(provider, 'TransactionDepth', { get: () => depth.Value });
+    Object.defineProperty(provider, 'ProviderType', { get: () => 'Database' });
+    Object.defineProperty(provider, 'RollbackTransaction', { value: rollback });
+    Object.defineProperty(provider, 'ResetTransactionState', { value: reset });
+    return { Provider: provider, Depth: depth, Rollback: rollback, Reset: reset };
+}
+
+describe('IntegrationTestDriver: a transaction left open by a check (#5389)', () => {
+    let tx: FakeTxProvider;
+    beforeEach(() => {
+        delete process.env.RUN_MUTATION_TESTS;
+        mockServerClaimed.mockReturnValue(false);
+        tx = makeTxProvider();
+        mockActiveBootstrap.mockReturnValue({ Provider: tx.Provider, Pool: undefined, Db: { Schema: '__mj' } });
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unittx.Open', Name: 'txOpen', Fn: async () => { tx.Depth.Value = 1; } });
+        reg.Register({ Id: 'unittx.After', Name: 'txAfter', Fn: async () => {
+            if (tx.Depth.Value !== 0) {
+                throw new Error(`started at depth ${tx.Depth.Value}`);
+            }
+        } });
+        reg.Register({ Id: 'unittxclean.A', Name: 'clean', Fn: async () => { /* pass, no transaction */ } });
+        reg.Register({ Id: 'unittxhang.A', Name: 'txHang', Fn: () => {
+            tx.Depth.Value = 1;
+            return new Promise<void>(() => { /* never resolves */ });
+        } });
+    });
+
+    it('a passing check that leaves depth 1 is failed, the provider is back at depth 0, and the next check runs clean', async () => {
+        const result = await new IntegrationTestDriver().Execute(makeContext({ transport: 'server', checks: [{ type: 'unittx' }] }));
+        const open = result.oracleResults.find(o => o.oracleType === 'unittx.Open');
+        expect(open?.passed).toBe(false);
+        expect(open?.message).toContain('left a transaction open');
+        expect(tx.Depth.Value).toBe(0);
+        expect(tx.Rollback).toHaveBeenCalledTimes(1);
+        expect(result.oracleResults.find(o => o.oracleType === 'unittx.After')?.passed).toBe(true);
+    });
+
+    it('a check that times out with depth 1 is failed with both the timeout and the open-transaction message', async () => {
+        const result = await new IntegrationTestDriver().Execute(makeContext({ transport: 'server', checks: [{ type: 'unittxhang' }] }, 40));
+        const hung = result.oracleResults.find(o => o.oracleType === 'unittxhang.A');
+        expect(hung?.passed).toBe(false);
+        expect(hung?.message).toMatch(/remaining run budget/);
+        expect(hung?.message).toContain('left a transaction open');
+        expect(tx.Depth.Value).toBe(0);
+    });
+
+    it('a rollback that throws falls back to ResetTransactionState', async () => {
+        tx = makeTxProvider(true);
+        mockActiveBootstrap.mockReturnValue({ Provider: tx.Provider, Pool: undefined, Db: { Schema: '__mj' } });
+        const result = await new IntegrationTestDriver().Execute(makeContext({ transport: 'server', checks: [{ type: 'unittx' }] }));
+        expect(tx.Rollback).toHaveBeenCalled();
+        expect(tx.Reset).toHaveBeenCalledTimes(1);
+        expect(tx.Depth.Value).toBe(0);
+        expect(result.oracleResults.find(o => o.oracleType === 'unittx.Open')?.passed).toBe(false);
+        expect(result.oracleResults.find(o => o.oracleType === 'unittx.After')?.passed).toBe(true);
+    });
+
+    it('a check that leaves no transaction is unaffected', async () => {
+        const result = await new IntegrationTestDriver().Execute(makeContext({ transport: 'server', checks: [{ type: 'unittxclean' }] }));
+        expect(result.status).toBe('Passed');
+        expect(tx.Rollback).not.toHaveBeenCalled();
+        expect(tx.Reset).not.toHaveBeenCalled();
     });
 });

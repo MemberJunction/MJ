@@ -44,7 +44,13 @@
 
 import { IMetadataProvider, UserInfo, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
-import { MJConversationEntity, MJFileEntity } from '@memberjunction/core-entities';
+import {
+  BUILT_IN_CONVERSATION_TYPE_IDS,
+  CONVERSATION_TYPE_CODES,
+  ConversationEngine,
+  MJConversationEntity,
+  MJFileEntity,
+} from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 const CONVERSATION_ENTITY = 'MJ: Conversations';
@@ -303,7 +309,9 @@ async function createMeetingConversation(roomName: string, contextUser: UserInfo
   conversation.NewRecord();
   conversation.UserID = contextUser.ID;
   conversation.Name = `Meeting Room ${roomName}`;
-  conversation.Type = MEETING_ROOM_CONVERSATION_TYPE;
+  conversation.TypeID =
+    ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.MEETING_ROOM) ??
+    BUILT_IN_CONVERSATION_TYPE_IDS.MEETING_ROOM;
   conversation.ExternalID = roomName;
   conversation.ApplicationScope = 'Application';
   if (await conversation.Save()) {

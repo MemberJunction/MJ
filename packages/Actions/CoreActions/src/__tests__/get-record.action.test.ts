@@ -10,9 +10,13 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target,
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        RegisterClass: () => (target: unknown) => target,
+    };
+});
 
 vi.mock('@memberjunction/actions-base', () => ({}));
 
@@ -28,7 +32,8 @@ const { logErrorSpy, globalMetadataStub } = vi.hoisted(() => ({
     },
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
     class CompositeKeyMock {
         public KeyValuePairs: Array<{ FieldName: string; Value: unknown }> = [];
         public static FromObject(obj: Record<string, unknown>): CompositeKeyMock {
@@ -38,13 +43,13 @@ vi.mock('@memberjunction/core', () => {
         }
     }
     return {
+        ...actual,
         LogError: logErrorSpy,
         Metadata: class Metadata {
             public EntityByName = globalMetadataStub.EntityByName;
             public GetEntityObject = globalMetadataStub.GetEntityObject;
         },
         CompositeKey: CompositeKeyMock,
-        BaseEntity: class BaseEntity {},
     };
 });
 

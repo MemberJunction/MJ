@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S5.3",
+    "Description": "Gate G2.30 (phase 2, dataset W1, criterion S5.3): every candidate's inner-CV score is a mean over repeated folds with a 95% interval, 100% of candidates; 0 candidates are pruned while their upper bound is >= the leader's lower bound; the winner's inner-CV score is labelled optimistically biased. The pytest node tests/gates/test_trainer_contract_gates.py::test_W1_S5_3_inner_cv_means_with_intervals: 5x3 grouped folds, every candidate scored on all 15. The trainer prunes nothing, so the mutation is a substitute: it fails when one candidate is scored on fewer folds than the others (14 of 15).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.30\",\"owner:PR3\",\"phase:2\",\"dataset:W1\",\"criterion:S5.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every candidate's inner score is the mean over 15 grouped folds inside its interval; nothing pruned (1 of 1 pytest case)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s5-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "65C86593-7098-48A9-BAF8-0DB3150DADE6"
+  }
+}

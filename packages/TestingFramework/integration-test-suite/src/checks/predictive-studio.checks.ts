@@ -5,8 +5,8 @@
  * Predictive Studio Actions in real metadata + invoked through the real Action-execution path.
  * Graduated verbatim from integration-test-scripts/predictive-studio-tests.ts.
  *
- * Deterministic + sidecar-free by default (PS1–PS5 seams only). The only live-sidecar leg is an
- * internal PS5 leg gated on PS_INTEGRATION=1 (read inline, verbatim). The Predictive Studio engine is
+ * Deterministic + sidecar-free (PS1–PS5 seams only): PS5's train leg is refused before the sidecar is
+ * reached, because the fixture pipeline has no Prediction Unit. The Predictive Studio engine is
  * imported for its side effects (the @RegisterClass decorators on the scoring processor + the four
  * actions). The bundle lifecycle creates the Pipeline → Model → Binding lineage fixture once and tears
  * it down (child → parent) afterwards.
@@ -46,8 +46,6 @@ import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { PredictiveStudioFixture } from '@memberjunction/testing-integration';
 
-/** Whether the live-sidecar / trained-model legs run (mirrors RUN_AGENT_TESTS on the AI tier). */
-const PS_LIVE = process.env.PS_INTEGRATION === '1';
 const PREFIX = 'mj-predictive-studio-test';
 
 // Anchor the side-effect registrations so the bundler/transpiler can't drop the decorated modules.
@@ -80,7 +78,7 @@ function stubInferenceDeps(): MLInferenceDeps {
         modelLoader: { loadModel: async () => null },
         artifactLoader: { load: async () => null },
         sidecar: {
-            predict: async (_req: PredictRequest): Promise<PredictResponse> => ({ predictions: [] }),
+            predict: async (_req: PredictRequest): Promise<PredictResponse> => ({ predictions: [], classOrder: null }),
         },
     };
 }
@@ -206,7 +204,7 @@ export const PredictiveStudioChecks: NamedCheck[] = [
     },
     {
         Id: 'predictive-studio.PS5',
-        Name: 'PS5: invoking "Train ML Model" with a missing PipelineID fails cleanly (VALIDATION_ERROR, no throw)',
+        Name: 'PS5: "Train ML Model" fails cleanly with VALIDATION_ERROR for a missing PipelineID, and refuses a pipeline without a Prediction Unit with UNIT_REQUIRED before any run',
         Fn: async (ctx: IntegrationCheckContext) => {
             const { Pipeline } = fx(ctx);
             await ActionEngineServer.Instance.Config(false, ctx.User);
@@ -234,21 +232,23 @@ export const PredictiveStudioChecks: NamedCheck[] = [
             );
             console.log(`      → clean validation failure: code='${code}' message='${result.Message}'`);
 
-            if (PS_LIVE) {
-                // Gated: a real train invocation against the test pipeline. Needs the Python sidecar +
-                // model storage; we assert only that it returns a structured result (success OR a clean
-                // engine failure code), never that it throws.
-                const liveParams = new RunActionParams();
-                liveParams.Action = train!;
-                liveParams.ContextUser = ctx.User;
-                liveParams.Params = [{ Name: 'PipelineID', Type: 'Input', Value: Pipeline.ID }];
-                liveParams.SkipActionLog = true;
-                const live = await ActionEngineServer.Instance.RunAction(liveParams);
-                Assert(typeof live.Success === 'boolean', 'live train returned no structured result');
-                console.log(`      → [PS_INTEGRATION] live train returned Success=${live.Success} code='${live.Result?.ResultCode ?? ''}'`);
-            } else {
-                console.log('      → (skipping the live train invocation — set PS_INTEGRATION=1 to exercise the sidecar path)');
-            }
+            // A real train invocation against the fixture pipeline, which has no Prediction Unit: training refuses it
+            // with the typed UNIT_REQUIRED code before it writes a training run or reaches the sidecar.
+            const liveParams = new RunActionParams();
+            liveParams.Action = train!;
+            liveParams.ContextUser = ctx.User;
+            liveParams.Params = [{ Name: 'PipelineID', Type: 'Input', Value: Pipeline.ID }];
+            liveParams.SkipActionLog = true;
+            const live = await ActionEngineServer.Instance.RunAction(liveParams);
+            Assert(live != null, 'RunAction returned no result for the unit-less pipeline');
+            AssertEqual(live.Success, false, 'training a pipeline without a Prediction Unit reports failure');
+            AssertEqual(live.ResultCode, 'UNIT_REQUIRED', `training a pipeline without a Prediction Unit is refused as UNIT_REQUIRED (message='${live.Message}')`);
+            const runs = await new RunView().RunView<{ ID: string }>(
+                { EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${Pipeline.ID}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, ctx.User,
+            );
+            Assert(runs.Success, `reading the fixture pipeline's training runs failed: ${runs.ErrorMessage}`);
+            AssertEqual(runs.Results.length, 0, 'the refused training wrote no training run');
+            console.log(`      → unit-less pipeline refused: code='${live.ResultCode}' message='${live.Message}', 0 training runs`);
         }
     }
 ];

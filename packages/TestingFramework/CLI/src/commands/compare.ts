@@ -206,11 +206,11 @@ export class CompareCommand {
             // Normalize to SuiteRunSummary shape so we can share comparison logic with --from-json path
             const previousSummary: SuiteRunSummary = {
                 RunId: previousRunId,
-                SuiteName: previousRun.Suite,
+                SuiteName: previousRun.Suite ?? previousRun.SuiteID,
                 StartedAt: previousRun.StartedAt?.toISOString().split('T')[0] ?? 'unknown',
                 Tests: (prevTestsResult.Success ? prevTestsResult.Results : []).map(t => ({
                     TestID: t.TestID,
-                    TestName: t.Test,
+                    TestName: t.Test ?? t.TestID,
                     Status: t.Status,
                     Score: t.Score,
                     DurationSeconds: t.DurationSeconds,
@@ -218,11 +218,11 @@ export class CompareCommand {
             };
             const currentSummary: SuiteRunSummary = {
                 RunId: currentRunId,
-                SuiteName: currentRun.Suite,
+                SuiteName: currentRun.Suite ?? currentRun.SuiteID,
                 StartedAt: currentRun.StartedAt?.toISOString().split('T')[0] ?? 'unknown',
                 Tests: (currTestsResult.Success ? currTestsResult.Results : []).map(t => ({
                     TestID: t.TestID,
-                    TestName: t.Test,
+                    TestName: t.Test ?? t.TestID,
                     Status: t.Status,
                     Score: t.Score,
                     DurationSeconds: t.DurationSeconds,

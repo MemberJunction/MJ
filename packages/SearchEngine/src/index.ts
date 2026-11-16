@@ -8,6 +8,7 @@ export * from './generic/VectorSearchProvider';
 export * from './generic/FullTextSearchProvider';
 export * from './generic/StorageSearchProvider';
 export * from './generic/TagSearchProvider';
+export * from './generic/GraphSearchProvider';
 export * from './generic/SearchEngine';
 export * from './generic/BaseReRanker';
 export * from './generic/NoopReRanker';

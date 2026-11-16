@@ -14,7 +14,7 @@ import { IsInteractiveRun } from '../lib/interactive-guard.js';
 import { input, confirm, select, password } from '@inquirer/prompts';
 import { createRequire } from 'node:module';
 import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import { initializeProvider, cleanupProvider } from '@memberjunction/metadata-sync';
 import type { GitHubClientOptions, GitHubTokenSource } from '@memberjunction/open-app-engine';
 import { GetValidatedConfig } from '../config.js';
@@ -92,24 +92,13 @@ export async function closeConnectionPool(): Promise<void> {
 function getSystemUserInfo(): UserInfo {
   // UserCache is populated by initializeProvider on BOTH platforms (PG via its
   // vwUsers/vwUserRoles bootstrap), so the same lookup works regardless of backend.
-  const sysUser = UserCache.Instance.GetSystemUser();
-  if (sysUser) {
-    return sysUser;
+  // Active system user, else lowest-ID active Owner. Never an arbitrary user.
+  const principal = GetServerPrincipal();
+  if (principal) {
+    return principal;
   }
 
-  // Fallback: find first Owner user
-  const ownerUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
-  if (ownerUser) {
-    return ownerUser;
-  }
-
-  // Last resort: first active user
-  const firstUser = UserCache.Instance.Users.find(u => u.IsActive);
-  if (firstUser) {
-    return firstUser;
-  }
-
-  throw new Error('No users found in UserCache. Cannot determine system user for Open App operations.');
+  throw new Error('No active system user or Owner found in UserCache. Cannot determine a user for Open App operations.');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

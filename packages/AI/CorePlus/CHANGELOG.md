@@ -1,5 +1,71 @@
 # @memberjunction/ai-core-plus
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 63636e0: Semantic graph runtime review fixes: every graph node is checked as the caller and every audience reader at the hop it is reached (row-level security applies; no Owner bypass), query permission uses `UserCanRun().canRun`, edge approval requires `Graph: Approve Edges` and fails closed, unknown or inactive graphs return nothing, `GraphEngine` loads lazily and caches stored edges for Preload graphs only, per-step reads are bounded and ordered, and the graph search lane ranks by hop-attenuated RRF. Ships the "MJ Canon" graph and its metadata providers, the `Graph: Approve Edges` authorization, the `Semantic Graph` search provider and the `Get Graph Context` action metadata, and registers the graph expansion service at MJAPI startup. The Content Pipeline Graph stage keeps auto-approving the Inferred edges its content source's GraphOverlay policy approves, through a server operation scope API callers cannot enter; every other edge that starts Approved, of any origin, requires `Graph: Approve Edges`. Graph seeds pass the same caller-and-audience check as expanded nodes; only Approved concepts seed or appear unless proposed content is asked for; node labels, edge text and concept matches use only fields every principal may read; editing, demoting or deleting an Approved edge needs the authorization and the review stamp is server-written; Preload graph edges load lazily and reload per graph.
+- 31cc053: Add durable HITL feedback and agent tree budgets, `AgentContextAssembler`, `AgentStepDispatcher`, `DurableEntityA2ATaskStore`, `TaskSecurityEnvelope` least-privilege and taint enforcement, TaskGraph saga compensation with idempotent retries, `GraphEngine` and `CanonGraphEngine` semantic graph runtime with server entity validation, `GetGraphContextAction`, `GraphSearchProvider` RRF search lane, `graphExpand` pipeline stage, and Predictive Studio shadow scoring with PSI drift detection.
+- b9fda3f: Preserve conversation continuity across long-call realtime reconnects and xAI transport drops.
+  - Separate replaceable ambient state snapshots (`StateKey`, bounded by `MaxStateChars = 4,000`) and wire-only operational status notes (`Ephemeral: true`) from durable spoken turns and tool calls in `RealtimeConversationMemory`, and pin opening user/assistant turns (`MaxPinnedHeadChars = 2,400`) when middle conversation entries must be evicted on ultra-long calls.
+  - Coalesce and delta-diff live `AppContext$` updates in `ClientContextChannel` via `DiffAppContextSnapshot` (sending compact deltas on the wire while storing only the single latest full screen snapshot under `StateKey: 'app-context'`), and tag interactive channel state snapshots (`BaseRealtimeChannelClient`), video-source transitions (`VideoSourceArbiter`), media-kit summaries (`MediaChannelServer`), and delegation/drop narration (`RealtimeDelegationNarrator`, `RealtimeSessionRunner`) with replaceable `StateKey` or `Ephemeral: true`.
+  - Default xAI Grok Voice client, server, and model metadata (`Grok Voice`, `Grok Voice Think Fast 2.0`, `Grok Voice 3.0`) to `TrustNativeResumption: false` so every xAI reconnect replays full `RealtimeConversationMemory` instead of relying on lossy `?conversation_id=` resumption; make native-resumption lineage breaks sticky across the session in `RealtimeSessionResumption` and preserve native resumption handles across local offline outages (`IsNetworkOnline`).
+  - Propagate `RealtimeContextNoteOptions` across all client and server realtime drivers, fixing AssemblyAI mid-reconnect context loss and multi-reconnect `system_prompt` duplication.
+
+### Patch Changes
+
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/templates-base-types@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

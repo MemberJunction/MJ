@@ -299,24 +299,40 @@ describe('DatabaseProviderBase', () => {
         // a brand-new record's values outside the Create filter just as easily as it can move
         // an existing row outside the Update filter.
         describe('post-hook RLS gate (step 3b)', () => {
-            it('calls CheckCreateRLS twice for a new record — once before and once after OnBeforeSaveExecute', async () => {
+            it('skips redundant CheckCreateRLS for a new record when no before-save hook mutates field values', async () => {
                 sqlServer.checkCreateRLSResult = true;
                 const entity = createMockEntity(false);
 
-                // Mocked ExecuteSQL always returns [], so Save() proceeds past both RLS gates
+                // Mocked ExecuteSQL always returns [], so Save() proceeds past RLS gates
                 // and fails later at SQL execution — not with an RLS error. What's under test
-                // is that CheckCreateRLS ran twice and both calls passed.
+                // is that the redundant 2nd CheckCreateRLS is skipped when fields are unchanged.
+                await expect(
+                    sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow();
+                expect(sqlServer.checkCreateRLSCallCount).toBe(1);
+            });
+
+            it('calls CheckCreateRLS twice for a new record when a before-save hook mutates field values', async () => {
+                sqlServer.checkCreateRLSResult = true;
+                sqlServer.OnBeforeSaveExecute = async (ent: BaseEntity) => {
+                    ent.Fields = [{ Name: 'Name', Value: 'mutated', Dirty: true }] as unknown as typeof ent.Fields;
+                };
+                const entity = createMockEntity(false);
+
                 await expect(
                     sqlServer.Save(entity, mockUser, new EntitySaveOptions())
                 ).rejects.toThrow();
                 expect(sqlServer.checkCreateRLSCallCount).toBe(2);
             });
 
-            it('rejects a new record when only the SECOND (post-hook) CheckCreateRLS call fails', async () => {
+            it('rejects a new record when a before-save hook mutates fields and only the SECOND (post-hook) CheckCreateRLS call fails', async () => {
                 let call = 0;
                 sqlServer.CheckCreateRLS = async () => {
                     call++;
                     return call === 1; // pre-hook passes, post-hook (a hook mutated a field) fails
+                };
+                sqlServer.OnBeforeSaveExecute = async (ent: BaseEntity) => {
+                    ent.Fields = [{ Name: 'Name', Value: 'mutated', Dirty: true }] as unknown as typeof ent.Fields;
                 };
                 const entity = createMockEntity(false);
 

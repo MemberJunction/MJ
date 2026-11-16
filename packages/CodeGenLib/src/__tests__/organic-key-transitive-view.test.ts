@@ -193,17 +193,20 @@ class TestableOrganicKeys extends ManageMetadataBase {
   }
 }
 
+/** The tables the tests reference, as Entity rows. */
+const ENTITY_TABLES = ['Employee', 'EmployeeAttribute', 'MissingAttribute', 'Ghost'];
+
 /**
- * Answers the lookups the method makes: entities resolve (except tables named in `missingTables`),
- * the key already exists, the mapping is new.
+ * Answers the reads the method makes: every table in `ENTITY_TABLES` resolves except those named in
+ * `missingTables`, no key or mapping exists yet.
  */
 function createConnection(dialect: SQLDialect, missingTables: string[] = []): CodeGenConnection {
-  const answer = async (sql: string, params?: Record<string, unknown>): Promise<CodeGenQueryResult> => {
-    if (sql.includes('vwEntities')) {
-      return missingTables.includes(String(params?.TableName)) ? { recordset: [] } : { recordset: [{ ID: 'entity-id', Name: 'Employees' }] };
+  const answer = async (sql: string): Promise<CodeGenQueryResult> => {
+    if (/FROM \S*Entity\S*\s*$/.test(sql.trim()) && !sql.includes('EntityOrganicKey')) {
+      return {
+        recordset: ENTITY_TABLES.filter((t) => !missingTables.includes(t)).map((t) => ({ ID: `${t}-id`, Name: `${t}s`, SchemaName: 'hr', BaseTable: t })),
+      };
     }
-    if (sql.includes('EntityOrganicKeyRelatedEntity')) return { recordset: [] };
-    if (sql.includes('EntityOrganicKey')) return { recordset: [{ ID: 'organic-key-id' }] };
     return { recordset: [] };
   };
   return {

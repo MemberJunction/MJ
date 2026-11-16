@@ -22,8 +22,16 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
-import { ResolveActiveFileStorageProviderId, BuildArtifactStore } from '../training/artifact-store';
-import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../training/types';
+import { StorageProviderArtifactStore } from '../training/storage-provider-artifact-store';
+import { PredictiveStudioStorage } from '../storage/ps-storage-provider';
+import type { ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps } from '../training/types';
+import { RunViewDataAccess } from '../feature-assembly/data-access';
+import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
+import { StorageProviderSnapshotFileStore } from '../snapshot/snapshot-file-store';
+import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
+import { RunViewEvaluationProtocolStore } from '../training/evaluation-protocol-store';
+import { SnapshotRetrainer, type RetrainResult } from '../snapshot/snapshot-retrainer';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
@@ -31,7 +39,7 @@ import { ExperimentSessionsUnavailableError } from '../actions/run-experiment.de
 
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
-import { LocalArtifactLoader } from '../scoring/artifact-loader';
+import { StorageProviderArtifactLoader } from '../scoring/storage-provider-artifact-loader';
 import type { MLInferenceDeps } from '../scoring/types';
 import type {
   IScoreRecordSetRunner,
@@ -54,62 +62,94 @@ import type {
 // ----- Training ---------------------------------------------------------------
 
 /**
- * Build the {@link TrainingEngine}'s production dependency bundle from a per-call
- * `provider` + `user`. Resolves the active File Storage Provider once and chooses
- * the artifact-store family accordingly (MJ-Files when a provider is active, local
- * disk when none is — see {@link ResolveActiveFileStorageProviderId}). Async so the
- * provider lookup is part of the wiring; the scoring side keys off the SAME
- * decision (the composite loader routes by whether the artifact exists on local
- * disk) so a model never gets trained to one family and scored from another.
- *
- * @param provider the owning provider for data access / multi-provider correctness
- * @param user the acting user threaded through every entity op for isolation/audit
+ * The training delegation every in-process caller uses: one production deps builder, one train-by-pipeline entry
+ * point and one retrain-from-snapshot entry point, so the Train operation, the Train action, auto-train, the pipeline
+ * builder and the rigs train (and retrain) the same way.
  */
-export async function BuildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
-  const entityFactory = new MetadataEntityFactory(provider);
-  const providerId = await ResolveActiveFileStorageProviderId(user, provider);
-  return {
-    entityFactory,
-    recordLoader: new RunViewRecordLoader(),
-    sidecar: new MJSidecarTrainer(),
-    artifactStore: BuildArtifactStore(providerId, entityFactory),
-    contextUser: user,
-    provider,
-  };
-}
+export class TrainingDelegation {
+  /**
+   * Build the {@link TrainingEngine}'s production dependency bundle from a per-call
+   * `provider` + `user`. Trained model files and Training Snapshot files go to the one storage provider
+   * `PS_STORAGE_PROVIDER` names (default "Local File System"), each recorded as an `MJ: Files` row; the scoring side
+   * reads a model file through the provider its row names ({@link StorageProviderArtifactLoader}). The snapshot store and
+   * the artifact store share one {@link PredictiveStudioStorage}, and the engine has the artifact store resolve it before
+   * anything of the run is written, so a provider not configured on this server refuses the run before training.
+   *
+   * The Record Changes history the as-of assembly replays is left to the engine's default: a complete-read
+   * `RunViewRecordHistoryReader` over the same `dataAccess`. The locked holdout is always the one the bound protocol
+   * declares (date-carved, seeded-random or rolling-origin). Snapshots are found by content hash through the same provider and user. A unit pipeline reads the Evaluation Protocol it is bound to through the
+   * same provider and user and trains through the trainer (`MJSidecarTrainer` over the process-shared sidecar).
+   *
+   * @param provider the owning provider for data access / multi-provider correctness
+   * @param user the acting user threaded through every entity op for isolation/audit
+   */
+  public static async BuildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
+    const entityFactory = new MetadataEntityFactory(provider);
+    // One storage resolution for the run's snapshot files and its model files: one provider, resolved once.
+    const storage = new PredictiveStudioStorage(provider, user);
+    return {
+      entityFactory,
+      recordLoader: new RunViewRecordLoader(),
+      trainer: new MJSidecarTrainer(),
+      artifactStore: new StorageProviderArtifactStore(entityFactory, storage),
+      contextUser: user,
+      provider,
+      // The Prediction Unit seams read through the same provider and user as every other training read.
+      predictionUnits: new RunViewPredictionUnitStore(provider, user),
+      assemblyMetadata: new ProviderAssemblyMetadata(provider),
+      dataAccess: new RunViewDataAccess(user, provider),
+      snapshotFiles: new StorageProviderSnapshotFileStore(entityFactory, storage),
+      snapshots: new RunViewTrainingSnapshotStore(provider, user),
+      protocols: new RunViewEvaluationProtocolStore(provider, user),
+    };
+  }
 
-/** @deprecated Use {@link BuildTrainingDeps}. */
-export async function buildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
-  return BuildTrainingDeps(provider, user);
-}
+  /**
+   * Train a model by pipeline id, delegating to {@link TrainingEngine.trainModel}
+   * with production deps. The `engine` is injectable so unit tests substitute a mock
+   * with no live DB / sidecar (mirroring the Action's `createEngine` seam).
+   *
+   * A refused run throws `TrainingRefusedError` unchanged: the run row already records the
+   * refusal, and the operation surfaces its message as the operation's error.
+   *
+   * @param input the typed training input (pipeline id + optional overrides)
+   * @param provider the owning provider
+   * @param user the acting user
+   * @param engine optional engine override (defaults to a fresh {@link TrainingEngine})
+   */
+  public static async TrainModelViaEngine(
+    input: TrainModelInput,
+    provider: IMetadataProvider,
+    user: UserInfo,
+    engine: TrainingEngine = new TrainingEngine(),
+  ): Promise<TrainModelResult> {
+    return engine.trainModel(input, await TrainingDelegation.BuildTrainingDeps(provider, user));
+  }
 
-/**
- * Train a model by pipeline id, delegating to {@link TrainingEngine.trainModel}
- * with production deps. The `engine` is injectable so unit tests substitute a mock
- * with no live DB / sidecar (mirroring the Action's `createEngine` seam).
- *
- * @param input the typed training input (pipeline id + optional overrides)
- * @param provider the owning provider
- * @param user the acting user
- * @param engine optional engine override (defaults to a fresh {@link TrainingEngine})
- */
-export async function TrainModelViaEngine(
-  input: TrainModelInput,
-  provider: IMetadataProvider,
-  user: UserInfo,
-  engine: TrainingEngine = new TrainingEngine(),
-): Promise<TrainModelResult> {
-  return engine.trainModel(input, await BuildTrainingDeps(provider, user));
-}
-
-/** @deprecated Use {@link TrainModelViaEngine}. */
-export async function trainModelViaEngine(
-  input: TrainModelInput,
-  provider: IMetadataProvider,
-  user: UserInfo,
-  engine: TrainingEngine = new TrainingEngine(),
-): Promise<TrainModelResult> {
-  return TrainModelViaEngine(input, provider, user, engine);
+  /**
+   * Retrain a completed unit run from its Training Snapshot with production deps, delegating to
+   * {@link SnapshotRetrainer.Retrain}: the stored files are verified against the snapshot row, the logged request is
+   * sent again and the holdout metrics are compared.
+   *
+   * A retraining reproduces only on the trainer the run was trained on, so a caller outside the server that trained it
+   * passes that trainer as `trainer`. Without one, the production deps' trainer is used.
+   *
+   * @param trainingRunId the `MJ: ML Training Runs` row to retrain
+   * @param provider the owning provider
+   * @param user the acting user
+   * @param trainer optional trainer to retrain on (defaults to the production deps' trainer)
+   * @param retrainer optional retrainer override (defaults to a fresh {@link SnapshotRetrainer})
+   */
+  public static async RetrainFromSnapshotViaEngine(
+    trainingRunId: string,
+    provider: IMetadataProvider,
+    user: UserInfo,
+    trainer?: ITrainerEvaluator,
+    retrainer: SnapshotRetrainer = new SnapshotRetrainer(),
+  ): Promise<RetrainResult> {
+    const deps = await TrainingDelegation.BuildTrainingDeps(provider, user);
+    return retrainer.Retrain(trainingRunId, trainer ? { ...deps, trainer } : deps);
+  }
 }
 
 /**
@@ -121,32 +161,20 @@ export function WasTrainingLeakageFlagged(result: TrainModelResult): boolean {
   return (result.run.Notes ?? '').includes('LEAKAGE WARNING');
 }
 
-/** @deprecated Use {@link WasTrainingLeakageFlagged}. */
-export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
-  return WasTrainingLeakageFlagged(result);
-}
-
 // ----- Scoring ----------------------------------------------------------------
 
 /**
  * The production {@link MLInferenceDeps} bundle the scorer runs with — the
  * {@link RunViewMLModelLoader} (loads the `MJ: ML Models` row), the
  * {@link MJSidecarPredictor} (runs `/predict` against the Python sidecar) and the
- * {@link LocalArtifactLoader} (reads the model bytes back by their `MJ: Files` row id,
- * the read-side inverse of `MJFilesArtifactStore`). Shared by {@link BuildScoreRecordSetRunner}
+ * {@link StorageProviderArtifactLoader} (reads the model bytes through the storage provider
+ * their `MJ: Files` row names, the read-side inverse of `StorageProviderArtifactStore`; it takes
+ * the provider per call, so the bundle needs none). Shared by {@link BuildScoreRecordSetRunner}
  * (the Score action / Remote Op path) AND the startup work-type registration so a model
  * trained one way is always scored the same way — one source of truth (CLAUDE.md DRY).
- *
- * **Production follow-up**: swap `LocalArtifactLoader` for a provider `GetObject`
- * loader; the id contract (read by File id) is unchanged.
  */
 export function BuildProductionMLInferenceDeps(): MLInferenceDeps {
-  return { modelLoader: new RunViewMLModelLoader(), sidecar: new MJSidecarPredictor(), artifactLoader: new LocalArtifactLoader() };
-}
-
-/** @deprecated Use {@link BuildProductionMLInferenceDeps}. */
-export function buildProductionMLInferenceDeps(): MLInferenceDeps {
-  return BuildProductionMLInferenceDeps();
+  return { modelLoader: new RunViewMLModelLoader(), sidecar: new MJSidecarPredictor(), artifactLoader: new StorageProviderArtifactLoader() };
 }
 
 /**
@@ -158,16 +186,11 @@ export function BuildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
   return new ProductionScoreRecordSetRunner({ deps: BuildProductionMLInferenceDeps() });
 }
 
-/** @deprecated Use {@link BuildScoreRecordSetRunner}. */
-export function buildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
-  return BuildScoreRecordSetRunner();
-}
-
 /**
  * Score a record set, delegating to the SAME production runner the Score action
  * uses ({@link ProductionScoreRecordSetRunner} → `MLModelInferenceProcessor`). The
- * default runner is wired with the {@link LocalArtifactLoader} so the artifact is
- * read back by its `MJ: Files` row id. The `runner` is injectable for tests.
+ * default runner is wired with the {@link StorageProviderArtifactLoader} so the artifact is
+ * read through the storage provider its `MJ: Files` row names. The `runner` is injectable for tests.
  *
  * @param request the model id + resolved scope + write-back directive + user/provider
  * @param runner optional runner override (defaults to {@link BuildScoreRecordSetRunner})
@@ -177,14 +200,6 @@ export function ScoreRecordSetViaRunner(
   runner: IScoreRecordSetRunner = BuildScoreRecordSetRunner(),
 ): Promise<ScoreRecordSetResult> {
   return runner.run(request);
-}
-
-/** @deprecated Use {@link ScoreRecordSetViaRunner}. */
-export function scoreRecordSetViaRunner(
-  request: ScoreRecordSetRequest,
-  runner: IScoreRecordSetRunner = buildScoreRecordSetRunner(),
-): Promise<ScoreRecordSetResult> {
-  return ScoreRecordSetViaRunner(request, runner);
 }
 
 // ----- Experiment -------------------------------------------------------------
@@ -210,17 +225,6 @@ export async function RunExperimentSessionViaOrchestrator(
   throw new ExperimentSessionsUnavailableError();
 }
 
-/** @deprecated Use {@link RunExperimentSessionViaOrchestrator}. */
-export async function runExperimentSessionViaOrchestrator(
-  plan: ModelingPlanSpec,
-  options: ExperimentRunOptions,
-  provider: IMetadataProvider,
-  user: UserInfo,
-  orchestrator: ExperimentOrchestrator = new ExperimentOrchestrator(),
-): Promise<ExperimentSessionResult> {
-  return RunExperimentSessionViaOrchestrator(plan, options, provider, user, orchestrator);
-}
-
 // ----- Promotion --------------------------------------------------------------
 
 /**
@@ -236,14 +240,6 @@ export function PromoteModelViaGate(
   gate: IModelPromotionGate = new ProductionModelPromotionGate(),
 ): Promise<PromoteModelOutcome> {
   return gate.promote(request);
-}
-
-/** @deprecated Use {@link PromoteModelViaGate}. */
-export function promoteModelViaGate(
-  request: PromoteModelRequest,
-  gate: IModelPromotionGate = new ProductionModelPromotionGate(),
-): Promise<PromoteModelOutcome> {
-  return PromoteModelViaGate(request, gate);
 }
 
 /** Re-export the orchestrator budget type for the operations that map it. */

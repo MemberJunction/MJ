@@ -19,7 +19,7 @@ export interface FeedbackDialogOptions {
 }
 
 /**
- * Lightweight dialog reference replacing Kendo's DialogRef
+ * Lightweight dialog reference returned when a feedback dialog is opened
  */
 export class FeedbackDialogRef {
   private resultSubject = new Subject<{ success: boolean }>();

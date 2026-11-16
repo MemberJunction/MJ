@@ -15,6 +15,18 @@ import {
 } from '@memberjunction/scheduling-base-types';
 import { ActionParam } from '@memberjunction/actions-base';
 
+
+/**
+ * What a scheduled action receives in `RunActionParams.Context`: the job run that launched it and a heartbeat that
+ * renews the run's lease. Both are optional; an action that ignores them behaves as before.
+ */
+export interface ScheduledActionContext {
+    /** ID of the `MJ: Scheduled Job Runs` row this action runs under. */
+    ScheduledJobRunID?: string;
+    /** Renews the job run's lease; call it during long work. */
+    Heartbeat?: () => void;
+}
+
 /**
  * Driver for executing scheduled Action jobs
  *
@@ -61,11 +73,18 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         void context.heartbeat?.();
 
         // Execute the action
+        // The run ID and heartbeat travel in Context (#5938) so an action that does long work (a Feature
+        // Pipelines backfill, say) can link what it creates to this job run and keep the lease renewed.
+        const actionContext: ScheduledActionContext = {
+            ScheduledJobRunID: context.Run?.ID,
+            Heartbeat: context.heartbeat ? () => { void context.heartbeat?.(); } : undefined,
+        };
         const actionResult = await ActionEngineServer.Instance.RunAction({
             Action: action,
             ContextUser: context.ContextUser,
             Filters: [],
-            Params: params
+            Params: params,
+            Context: actionContext
         });
 
         return {

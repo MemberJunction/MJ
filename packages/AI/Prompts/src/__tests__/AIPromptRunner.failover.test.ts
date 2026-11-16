@@ -106,6 +106,7 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
 });
 
 import { AIPromptRunner } from '../AIPromptRunner';
+import { GetToolCallingMode } from '../nativeToolCallingGate';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
 import type { ChatResult, AIPromptConfiguration } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
@@ -392,7 +393,34 @@ describe('executeModelWithFailover — non-eligible errors do not fail over', ()
     expect(result.success).toBe(false);
     expect(result.errorMessage).toBe('Malformed JSON in request body');
     expect(testLLM.CalledModels).toEqual(['api-claude']); // no second attempt
-    expect(pr.FailoverAttempts).toBe(0);             // not even recorded as a failover attempt
+    // The failed call is an attempt like a thrown or eligible failure (#3789).
+    expect(pr.FailoverAttempts).toBe(1);
+    const errors = JSON.parse(pr.FailoverErrors ?? '[]') as RecordedFailoverError[];
+    expect(errors.map(e => e.errorType)).toEqual(['InvalidRequest']);
+    expect(pr.ModelID).toBe(c1.model.ID);
+    expect(pr.VendorID).toBe(c1.vendorId);
+  });
+
+  it('keeps the original ModelID / VendorID when an eligible failure is followed by a non-eligible returned failure', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    const c2 = candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90);
+    const c3 = candidate('m-deepseek', 'DeepSeekLLM', 'v-deepseek', 'DeepSeek', 'api-deepseek', 80);
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') }, // eligible → fail over
+      { kind: 'fail', error: new Error('Malformed JSON in request body') },            // not eligible → returned as-is
+    );
+    const pr = makePromptRunRecord(c1.model.ID, c1.vendorId);
+
+    const result = await runFailover(runner, [c1, c2, c3], {}, pr);
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels).toEqual(['api-claude', 'api-gpt']);
+    expect(pr.FailoverAttempts).toBe(2);
+    const errors = JSON.parse(pr.FailoverErrors ?? '[]') as RecordedFailoverError[];
+    expect(errors.map(e => e.errorType)).toEqual(['NetworkError', 'InvalidRequest']);
+    // A failed result is not a failover success: the run stays on the model it started with.
+    expect(pr.ModelID).toBe(c1.model.ID);
+    expect(pr.VendorID).toBe(c1.vendorId);
   });
 
   // The failure must still be SURFACED. It used to fall through to the success path and come
@@ -495,6 +523,37 @@ describe('executeModelWithFailover — candidate order and exhaustion', () => {
 });
 
 // ===========================================================================
+// (d1) The failover error result records the last attempt's tool-calling mode (#5963). The result is
+// built after the walk, so without carrying the decision over its prompt run records NULL.
+// ===========================================================================
+describe('executeModelWithFailover — tool-calling mode on the failover error result', () => {
+  it('records the mode of the last attempt when every candidate returns a failure', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    const c2 = candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90);
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'fail', error: new Error('Service temporarily unavailable') },
+    );
+
+    const result = await runFailover(runner, [c1, c2]);
+
+    expect(result.success).toBe(false);
+    expect(result.statusText).toBe('Failover failed after 2 attempts');
+    expect(GetToolCallingMode(result)).toBe('Envelope');
+  });
+
+  it('records the mode of the last attempt when it threw a non-tool error', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    testLLM.Script({ kind: 'throw', error: new Error('connect ECONNREFUSED 10.0.0.5:443') });
+
+    const result = await runFailover(runner, [c1]);
+
+    expect(result.success).toBe(false);
+    expect(GetToolCallingMode(result)).toBe('Envelope');
+  });
+});
+
+// ===========================================================================
 // (d2) Each attempt runs on THAT candidate's own fields. The failover loop hands executeModel the
 // candidate it is trying; nothing may fall back to the first candidate's (the call's) model,
 // vendor, effort level or prompt-model configuration, or credentials and settings would be
@@ -570,12 +629,44 @@ describe('executeModelWithFailover — vendor-level error filtering', () => {
     const result = await runFailover(runner, [a1, a2, b1, b2], {}, pr);
 
     expect(result.success).toBe(true);
-    expect(testLLM.CalledModels).toHaveLength(2);
-    expect(testLLM.CalledModels[0]).toBe('api-a1');
-    // The second (and only other) call must be a Beta candidate — Acme's other model was excluded.
-    expect(['api-b1', 'api-b2']).toContain(testLLM.CalledModels[1]);
-    expect(testLLM.CalledModels).not.toContain('api-a2');
+    // Acme's other model was excluded, and the first Beta candidate is the next one called.
+    expect(testLLM.CalledModels).toEqual(['api-a1', 'api-b1']);
     expect(pr.FailoverAttempts).toBe(1);
+  });
+
+  // #3789: the filter shifts the survivors left, so the candidate that slid into the failed slot is
+  // the next one to call, not the one after it.
+  it('calls the next surviving candidate after a VendorValidationError drops later candidates of the same vendor', async () => {
+    const a = candidate('m-a', 'OpenAILLM', 'v-x', 'X', 'api-a', 100);
+    const b = candidate('m-b', 'OpenAILLM', 'v-x', 'X', 'api-b', 95);
+    const c = candidate('m-c', 'AnthropicLLM', 'v-y', 'Y', 'api-c', 90);
+    const d = candidate('m-d', 'GroqLLM', 'v-z', 'Z', 'api-d', 85);
+    testLLM.Script(
+      { kind: 'fail', error: new Error('PartListUnion is required') },
+      { kind: 'succeed', content: 'answered by C' },
+    );
+    const pr = makePromptRunRecord(a.model.ID, a.vendorId);
+
+    const result = await runFailover(runner, [a, b, c, d], {}, pr);
+
+    expect(result.success).toBe(true);
+    expect(testLLM.CalledModels).toEqual(['api-a', 'api-c']);
+    expect(pr.ModelID).toBe(c.model.ID);
+    expect(pr.VendorID).toBe(c.vendorId);
+  });
+
+  it('still tries the one candidate left after a VendorValidationError, instead of treating the failed one as the last', async () => {
+    const a = candidate('m-a', 'OpenAILLM', 'v-x', 'X', 'api-a', 100);
+    const c = candidate('m-c', 'AnthropicLLM', 'v-y', 'Y', 'api-c', 90);
+    testLLM.Script(
+      { kind: 'fail', error: new Error('PartListUnion is required') },
+      { kind: 'succeed', content: 'answered by C' },
+    );
+
+    const result = await runFailover(runner, [a, c]);
+
+    expect(result.success).toBe(true);
+    expect(testLLM.CalledModels).toEqual(['api-a', 'api-c']);
   });
 });
 
@@ -702,8 +793,8 @@ describe('ExecutePrompt — failover through the full pipeline', () => {
 // (e) The configured failover budget is HONOURED.
 //
 // `FailoverMaxAttempts` (defaulted to 3 by getFailoverConfiguration) was read into
-// failoverConfig.maxAttempts and then consulted by nobody: its only readers were
-// shouldAttemptFailover and transitionToNextCandidate, neither of which has a caller. The live
+// failoverConfig.maxAttempts and then consulted by nobody: its only readers were two methods with
+// no caller (since removed). The live
 // walk below iterated the FULL priority-ordered candidate list instead — every active model of
 // the prompt's type crossed with every active inference vendor, 317 entries on a stock tenant —
 // so one stalling or 5xx-ing provider was retried candidate after candidate. On a 2-vCPU box

@@ -79,3 +79,31 @@ export function VerifyTimeLimitClaim(
         ? 'TimeLimit'
         : 'Explicit';
 }
+
+/**
+ * True when the session's stored `Config_.maxSessionDeadlineIso` has passed (`<= nowMs`).
+ * Returns false when no deadline is set or when the JSON/timestamp is malformed.
+ */
+export function IsMaxSessionDeadlineElapsed(
+    configJson: string | null | undefined,
+    nowMs: number = Date.now(),
+): boolean {
+    const deadlineMs = ParseSessionDeadlineMs(configJson);
+    return deadlineMs !== null && deadlineMs <= nowMs;
+}
+
+/**
+ * Computes the remaining seconds until the session's stored `Config_.maxSessionDeadlineIso`,
+ * or `undefined` when no deadline is configured. Only meaningful when the deadline has not yet elapsed.
+ */
+export function RemainingSessionSeconds(
+    configJson: string | null | undefined,
+    nowMs: number = Date.now(),
+): number | undefined {
+    const deadlineMs = ParseSessionDeadlineMs(configJson);
+    if (deadlineMs === null || deadlineMs <= nowMs) {
+        return undefined;
+    }
+    return Math.max(1, Math.floor((deadlineMs - nowMs) / 1000));
+}
+

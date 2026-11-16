@@ -7,6 +7,12 @@
  * actionable errors (no specifier / module absent).
  */
 import { describe, it, expect, vi } from 'vitest';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
+
+vi.mock('@memberjunction/dynamic-packages', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/dynamic-packages')>();
+    return { ...actual, ImportFromHost: vi.fn(actual.ImportFromHost) };
+});
 import {
     VonageNativeCallSdk,
     BindVonageNativeCall,
@@ -270,6 +276,13 @@ describe('VonageNativeCallSdk — config + errors + factory', () => {
         await expect(DefaultNativeLoader('@nonexistent/vonage-native-voice-xyz')).rejects.toThrow(
             /could not load the native Vonage Voice client module/,
         );
+    });
+
+    it('DefaultNativeLoader loads a bare specifier through ImportFromHost (#3741)', async () => {
+        const mod = { createClient: () => ({}) };
+        vi.mocked(ImportFromHost).mockResolvedValueOnce(mod);
+        await expect(DefaultNativeLoader('@host/native-addon')).resolves.toBe(mod);
+        expect(ImportFromHost).toHaveBeenCalledWith('@host/native-addon');
     });
 
     it('BindVonageNativeCall builds a working factory from a loose Configuration map', async () => {

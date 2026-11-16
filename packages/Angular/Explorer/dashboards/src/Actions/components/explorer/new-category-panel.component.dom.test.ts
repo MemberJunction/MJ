@@ -40,6 +40,12 @@ describe('NewCategoryPanelComponent (DOM)', () => {
     expect(query(fixture, '#categoryName')).not.toBeNull();
   });
 
+  it('names the Parent Category dropdown by its visible label', () => {
+    const { fixture } = render(true);
+    const labelId = query(fixture, '[role="combobox"]')?.getAttribute('aria-labelledby') ?? '';
+    expect(labelId === '' ? null : fixture.nativeElement.querySelector(`#${labelId}`)?.textContent?.trim()).toBe('Parent Category');
+  });
+
   it('closes via the state service and emits Close when the close button is clicked', () => {
     const { fixture, close } = render(true);
     const closed = capture(fixture.componentInstance.Close);

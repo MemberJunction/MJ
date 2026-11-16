@@ -121,6 +121,7 @@ export class RealtimeRelayTunnel {
     private upstreamTimer: ReturnType<typeof setTimeout> | null = null;
     private lifetimeTimer: ReturnType<typeof setTimeout> | null = null;
     private pingTimer: ReturnType<typeof setInterval> | null = null;
+    private unsubscribeExpiresAtExtended: (() => void) | null = null;
     private openedAtMs = 0;
     private browserCloseCode: number | null = null;
     private upstreamCloseNote = '';
@@ -186,15 +187,27 @@ export class RealtimeRelayTunnel {
         this.grant = result.Granted;
         this.openedAtMs = Date.now();
         this.host.OnGranted(this);
+        this.armLifetimeTimer(this.grant.ExpiresAtMs - this.openedAtMs);
+        if (this.grant.OnExpiresAtExtended) {
+            this.unsubscribeExpiresAtExtended = this.grant.OnExpiresAtExtended((newExpiresAtMs: number) => {
+                if (!this.closed) {
+                    this.armLifetimeTimer(newExpiresAtMs - Date.now());
+                }
+            });
+        }
+        this.logOpened(this.grant, intent);
+        void this.openUpstream(this.grant);
+    }
+
+    private armLifetimeTimer(delayMs: number): void {
+        RealtimeRelayTunnel.cancel(this.lifetimeTimer);
         // The browser gets the time-limit code, so the call ends with its own message rather than a resume attempt.
-        this.lifetimeTimer = RealtimeRelayTunnel.after(this.grant.ExpiresAtMs - this.openedAtMs, () =>
+        this.lifetimeTimer = RealtimeRelayTunnel.after(delayMs, () =>
             this.closeWith(
                 { Code: REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE, Reason: 'Call time limit reached' },
                 { Code: CLOSE_NORMAL, Reason: 'Relay session ended' },
             )
         );
-        this.logOpened(this.grant, intent);
-        void this.openUpstream(this.grant);
     }
 
     /** The policy's reading of the first frame; a policy that throws opens nothing (only the error's name is logged). */
@@ -555,6 +568,10 @@ export class RealtimeRelayTunnel {
         RealtimeRelayTunnel.cancel(this.lifetimeTimer);
         if (this.pingTimer) {
             clearInterval(this.pingTimer);
+        }
+        if (this.unsubscribeExpiresAtExtended) {
+            this.unsubscribeExpiresAtExtended();
+            this.unsubscribeExpiresAtExtended = null;
         }
         this.firstFrameTimer = this.upstreamTimer = this.lifetimeTimer = this.pingTimer = null;
     }

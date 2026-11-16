@@ -291,6 +291,58 @@ Three benign exceptions:
 - **Two child rows**, which break the disjoint rule: the discovery query's `UNION ALL` has no order, so it links either one; a hint links the one the rule names.
 - **A provider without `FindISAChildEntity`** links no child without a hint, and the hinted child with one.
 
+### Generic Type Extensions (`Entity.SubtypeSelector`)
+
+Every "type table plus extension entity" pattern in MemberJunction and Open Apps can be expressed declaratively on the parent entity via `MJ: Entities.SubtypeSelector` (`IEntitySubtypeSelectorConfig` on `EntityInfo.SubtypeSelectorObject`), eliminating hand-written child-row creation, subtype-change guards, behavior dispatch, and form-folding glue.
+
+```json
+{
+  "Path": "CommentTypeID.ExtensionEntity",
+  "UseForLoadedRecords": true,
+  "AutoEnsureOnSave": true,
+  "OnSubtypeChange": "Refuse",
+  "Driver": {
+    "Path": "CommentTypeID.DriverClass",
+    "BaseClass": "CommentTypeDriver"
+  },
+  "FoldIntoForm": false,
+  "UIDriver": {
+    "Path": "CommentTypeID.UIDriverClass"
+  }
+}
+```
+
+#### `IEntitySubtypeSelectorConfig` Settings Reference
+
+All fields beyond `Path` are optional, so existing selector declarations preserve their exact prior behavior:
+
+| Setting | Type & Default | Behavior |
+|---|---|---|
+| `Path` | `string` (required) | Dotted foreign-key path from the parent entity to the string column naming the IS-A child entity (e.g., `TypeID.ExtensionEntity` or `ProductID.ProductTypeID.OrderLineExtensionEntity`). |
+| `UseForLoadedRecords` | `boolean`, `false` | Uses in-memory `BaseEngine` caches to resolve load hints without running the `UNION ALL` discovery query (see [Knowing the Subtype on Load](#knowing-the-subtype-on-load)). |
+| `AutoEnsureOnSave` | `boolean`, `false` | During `BaseEntity.Save()`, automatically attaches and persists the declared IS-A child inside the same entity transaction whenever it is missing — callers never need to call `EnsureISAChild()` manually. Supports multi-level selector chains (e.g., `MJ: Conversations` → `MJ: Comments` → `MJ: Field Suggestions`) in one transaction. |
+| `OnSubtypeChange` | `'Refuse' \| 'Replace'`, `'Refuse'` | Governs what happens when a saved record's type changes to one naming a different IS-A child. Moving from a type with **no** extension (`null`) to one **with** an extension is always allowed. Moving between two non-null subtypes (or from an extension subtype to `null`) fails validation under `'Refuse'`, whereas `'Replace'` deletes the old child row and creates the new child row inside the same entity transaction (recording `MJ: Record Changes` entries when `TrackRecordChanges` is enabled). |
+| `Driver` | `{ Path: string; BaseClass: string }`, omitted | Resolves a behavior class named on the type row (e.g., `TypeID.DriverClass`) via `MJGlobal.Instance.ClassFactory`, cached per `(BaseClass, DriverClass)`. When present on the resolved driver (`EntitySubtypeDriverBase`), `BaseEntity` automatically invokes `Validate()`, `BeforeSave()`, `AfterSave()`, and `OnFieldChanged()`. Domain-specific hooks (such as `CommentTypeDriver.OnAccept` and `OnRecordChanged`) live on the family's base class. |
+| `FoldIntoForm` | `boolean`, `false` | Opt-in Angular form folding (`@memberjunction/ng-base-forms`): `<mj-record-form-container>` mounts `<mj-folded-subtype-section>` immediately when a user selects a type — **including on an unsaved new record before its first save** — participating in `BaseFormComponent` dirty tracking, validation, and `CancelEdit()` revert while `<mj-isa-related-panel>` suppresses duplicate subtype cards. |
+| `UIDriver` | `{ Path: string }`, omitted | Resolves an `EntitySubtypeUIDriverBase` Angular component class named on the type row (e.g., `CommentTypeID.UIDriverClass`) via `ClassFactory`. Used in place of generated child fields when `FoldIntoForm: true`, and reusable by specialized surfaces such as `<mj-record-comments>` (`FieldSuggestionCardComponent`). |
+
+#### Type-Row `ExtensionEntity` Save Validation
+
+Whenever a record in a type table is saved (for example `MJ: Conversation Types`, `MJ: Comment Types`, `MJ_BizApps_Tasks: Task Types`, or `MJ_BizApps_Orders: Product Types`), `BaseEntity` inspects any parent entity whose `SubtypeSelector.Path` terminates on that type entity's extension column and validates that:
+1. Any non-empty `ExtensionEntity` value resolves to a real `EntityInfo` in `Metadata.Entities`, and
+2. That target entity declares `ParentID === parentEntity.ID` (a direct IS-A child of the selector's parent entity).
+
+Invalid or misspelled entity names fail `Validate()` immediately before hitting the database, preventing metadata drift.
+
+#### Canonical Declarations Across MJ Core & BizApps
+
+| Parent Entity | `Path` | Configured Options |
+|---|---|---|
+| `MJ: Conversations` | `TypeID.ExtensionEntity` | `UseForLoadedRecords: true`, `AutoEnsureOnSave: true`, `Driver: { Path: "TypeID.DriverClass", BaseClass: "ConversationTypeDriver" }` |
+| `MJ: Comments` | `CommentTypeID.ExtensionEntity` | `UseForLoadedRecords: true`, `AutoEnsureOnSave: true`, `Driver: { Path: "CommentTypeID.DriverClass", BaseClass: "CommentTypeDriver" }`, `UIDriver: { Path: "CommentTypeID.UIDriverClass" }` |
+| `MJ_BizApps_Tasks: Tasks` | `TypeID.ExtensionEntity` | `AutoEnsureOnSave: true`, `OnSubtypeChange: "Refuse"`, `FoldIntoForm: true` |
+| `MJ_BizApps_Orders: Products` & `Order Lines` | `ProductTypeID.ProductExtensionEntity` / `ProductID.ProductTypeID.OrderLineExtensionEntity` | `UseForLoadedRecords: true`, `AutoEnsureOnSave: true` |
+
 ### ISAParent / ISAChild Accessors
 
 ```typescript
@@ -995,8 +1047,20 @@ class BaseEntity {
     // @deprecated — use ISAParent instead
     get ISAParentEntity(): BaseEntity | null;
 
-    // Transaction handle for IS-A operations
-    ProviderTransaction: unknown;
+    // Resolve the declared IS-A child entity name for the current record values
+    async ResolveSubtypeEntityName(): Promise<string | null>;
+
+    // Ensure the declared IS-A child instance is created and linked in memory
+    async EnsureISAChild(): Promise<BaseEntity | null>;
+
+    // Reconcile the in-memory IS-A child when a type FK changes (used by folded forms & Save())
+    async ReconcileISAChild(): Promise<BaseEntity | null>;
+
+    // Resolve the EntitySubtypeDriverBase subclass named by SubtypeSelector.Driver
+    async ResolveSubtypeDriver<T extends EntitySubtypeDriverBase = EntitySubtypeDriverBase>(): Promise<T | null>;
+
+    // Resolve the UI driver class name from SubtypeSelector.UIDriver
+    async ResolveSubtypeUIDriverName(): Promise<string | null>;
 
     // Static helper: resolve the leaf entity name for a given entity/PK
     static async ResolveLeafEntity(

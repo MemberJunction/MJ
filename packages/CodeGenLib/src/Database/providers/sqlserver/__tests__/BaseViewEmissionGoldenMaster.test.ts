@@ -112,7 +112,7 @@ function customerFK(over: Record<string, unknown> = {}): Record<string, unknown>
         Type: 'uniqueidentifier',
         Length: 16,
         IsPrimaryKey: false,
-        AllowsNull: false, // NOT NULL → INNER JOIN
+        AllowsNull: false, // NOT NULL — the display join is still LEFT OUTER (#4533)
         AllowUpdateAPI: true,
         IsVirtual: false,
         AutoIncrement: false,
@@ -304,7 +304,7 @@ GO`)).toBe(true);
 });
 
 describe('base view emission — related-entity display fields (the c31d487cb bug class, generated-view side)', () => {
-    it('GM-VIEW-03: FKs emit display aliases + joins in exact field order; nullability picks INNER vs LEFT OUTER', async () => {
+    it('GM-VIEW-03: FKs emit display aliases + joins in exact field order; every display join is LEFT OUTER', async () => {
         installMetadata([ordersEntity(), customersEntity(), statusesEntity()]);
 
         const full = await generator.generateBaseView(pool, ordersEntity());
@@ -328,7 +328,7 @@ SELECT
     OrderStatus_StatusID.[Name] AS [Status]
 FROM
     [sales].[Order] AS o
-INNER JOIN
+LEFT OUTER JOIN
     [sales].[Customer] AS Customer_CustomerID
   ON
     [o].[CustomerID] = Customer_CustomerID.[ID]
@@ -339,6 +339,22 @@ LEFT OUTER JOIN
 GO
 GRANT SELECT ON [sales].[vwOrders] TO [cdp_UI]`);
         expect(pool.Queries.length).toBe(0); // maps pre-known → zero metadata writes
+    });
+
+    it('GM-VIEW-03b: a NOT NULL FK display join is LEFT OUTER, so an unmatched related row cannot drop the row (#4533)', async () => {
+        const entity = ordersEntity({}, [pk(ORDERS_ID), customerFK({ AllowsNull: false })]);
+        installMetadata([entity, customersEntity()]);
+
+        const { viewSQL } = await generator.generateBaseViewPieces(pool, entity);
+
+        expect(viewSQL).toContain(`FROM
+    [sales].[Order] AS o
+LEFT OUTER JOIN
+    [sales].[Customer] AS Customer_CustomerID
+  ON
+    [o].[CustomerID] = Customer_CustomerID.[ID]
+GO`);
+        expect(viewSQL).not.toContain('INNER JOIN');
     });
 
     it('GM-VIEW-04: reversing entity field order reverses BOTH the alias order and the join order', async () => {
@@ -357,7 +373,7 @@ LEFT OUTER JOIN
     [sales].[OrderStatus] AS OrderStatus_StatusID
   ON
     [o].[StatusID] = OrderStatus_StatusID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [sales].[Customer] AS Customer_CustomerID
   ON
     [o].[CustomerID] = Customer_CustomerID.[ID]
@@ -528,7 +544,7 @@ describe('base view emission — geo virtual columns', () => {
         });
     }
 
-    it('GM-VIEW-10: geo entity without native lat/lng joins vwRecordGeoCodes and aliases __mj_Latitude/__mj_Longitude', async () => {
+    it('GM-VIEW-10: geo entity without native lat/lng joins RecordGeoCode and aliases __mj_Latitude/__mj_Longitude', async () => {
         // NOTE (cosmetic quirk, pinned as current behavior): when an entity has geo
         // columns but NO FK display fields, the geo select block is the first entry
         // in relatedFieldsSelect and carries no leading newline — so the first geo
@@ -546,7 +562,7 @@ describe('base view emission — geo virtual columns', () => {
 FROM
     [sales].[Site] AS s
 LEFT OUTER JOIN
-    [__mj].[vwRecordGeoCodes] AS __mj_rgc
+    [__mj].[RecordGeoCode] AS __mj_rgc
   ON
     __mj_rgc.[EntityID] = 'SITES-ENTITY-0006'
     AND __mj_rgc.[RecordID] = CAST([s].[ID] AS NVARCHAR(450))
@@ -554,10 +570,11 @@ LEFT OUTER JOIN
 GO`);
     });
 
-    it('GM-VIEW-10c: SupportsGeoCoding without a writable Geo field does NOT join vwRecordGeoCodes', async () => {
+    it('GM-VIEW-10c: SupportsGeoCoding without a writable Geo field does NOT join RecordGeoCode', async () => {
         // ShouldJoinRecordGeoCodes requires a writable Geo* field, not just the entity flag.
         const entity = sitesEntity([pk('SITES-ENTITY-0006')]);
         const { viewSQL } = await generator.generateBaseViewPieces(pool, entity);
+        expect(viewSQL).not.toContain('RecordGeoCode');
         expect(viewSQL).not.toContain('vwRecordGeoCodes');
         expect(viewSQL).not.toContain('__mj_Latitude');
     });
@@ -613,6 +630,53 @@ FROM
     [sales].[Site] AS s
 GO`);
         expect(viewSQL).not.toContain('vwRecordGeoCodes');
+    });
+
+    it('GM-VIEW-11b: a NOT NULL EmbeddedRecord FK joins its geo source LEFT OUTER, never INNER (#4533)', async () => {
+        const ADDRESSES_ID = 'ADDRESSES-ENTITY-0007';
+        const addresses = new EntityInfo({
+            ID: ADDRESSES_ID,
+            Name: 'Addresses',
+            SchemaName: 'sales',
+            BaseTable: 'Address',
+            BaseTableCodeName: 'Address',
+            BaseView: 'vwAddresses',
+            BaseViewGenerated: true,
+            DeleteType: 'Hard',
+            EntityFields: [
+                pk(ADDRESSES_ID),
+                {
+                    ID: 'a-lat', EntityID: ADDRESSES_ID, Name: 'Lat', Type: 'decimal', Length: 9,
+                    IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false,
+                    AutoIncrement: false, DefaultValue: '', ExtendedType: 'GeoLatitude',
+                },
+                {
+                    ID: 'a-lng', EntityID: ADDRESSES_ID, Name: 'Lng', Type: 'decimal', Length: 9,
+                    IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false,
+                    AutoIncrement: false, DefaultValue: '', ExtendedType: 'GeoLongitude',
+                },
+            ],
+            EntityPermissions: [],
+        });
+        const shipToFK: Record<string, unknown> = {
+            ID: 'fk-shipto', EntityID: ORDERS_ID, Name: 'ShipToAddressID', Type: 'uniqueidentifier', Length: 16,
+            IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false,
+            AutoIncrement: false, DefaultValue: '',
+            RelatedEntityID: ADDRESSES_ID, RelatedEntityFieldName: 'ID', IncludeRelatedEntityNameFieldInBaseView: false,
+            RelatedEntity: 'Addresses', RelatedEntitySchemaName: 'sales', RelatedEntityBaseTable: 'Address',
+            RelatedEntityBaseView: 'vwAddresses', EmbeddedRecord: '{}',
+        };
+        const entity = ordersEntity({}, [pk(ORDERS_ID), shipToFK]);
+        installMetadata([entity, addresses]);
+
+        const { viewSQL } = await generator.generateBaseViewPieces(pool, entity);
+
+        expect(viewSQL).toContain(`LEFT OUTER JOIN
+    [sales].[Address] AS __mj_emb_ShipToAddressID
+  ON
+    [o].[ShipToAddressID] = __mj_emb_ShipToAddressID.[ID]`);
+        expect(viewSQL).toContain('__mj_emb_ShipToAddressID.[Lat] AS [__mj_Latitude_ShipToAddressID]');
+        expect(viewSQL).not.toContain('INNER JOIN');
     });
 });
 

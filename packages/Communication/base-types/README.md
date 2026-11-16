@@ -250,6 +250,17 @@ All parameter and result types used across the framework:
 | `ProviderOperation` | Union type of all operation names |
 | `MessageFolder` / `MessageAttachment` | Data structures for folders and attachments |
 
+### Received messages: direction and Bcc
+
+`GetMessageMessage` has two optional fields a provider fills when it can tell:
+
+- `Direction` (`'Inbound' | 'Outbound'`): whether the mailbox being read received or sent the message. Mail sent on someone's behalf from that mailbox is `Outbound`, although its `From` is the other person.
+- `BCCRecipients`: blind-copy recipients, present only on the sending mailbox's copy.
+
+`undefined` means the provider does not say; it is not the same as `Inbound` or an empty list. MS Graph fills both; other providers leave them undefined.
+
+`ForwardMessageParams.ContextData` matches the other operations: MS Graph reads `ContextData.Email` as the mailbox to forward from, which a stored Azure Service Principal credential (no account email) needs.
+
 ## Dependencies
 
 | Package | Purpose |

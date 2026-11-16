@@ -1,3 +1,4 @@
+import { LogError } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 
 /** A secondary scope dimension's value, as on the AI layer's scoped prompt configs. */
@@ -36,6 +37,11 @@ export interface ScopedNotificationConfigRow {
   Email: ChannelAccess;
   SMS: ChannelAccess;
   IsLocked: boolean;
+  /**
+   * Reserved. Rows are sorted by it inside a specificity level, but `decide()` gives Deny the win over Allow at
+   * equal specificity whatever the order, so today it changes no outcome. Kept so a later rule can use it without a
+   * schema change.
+   */
   Priority: number;
   Status: string;
 }
@@ -74,8 +80,12 @@ const RESOLVABLE_STATUSES = new Set<string>(['Active', 'Provisional']);
  * In scope: a global row (no primary record, no secondary scopes); a row whose primary record is the caller's primary
  * scope, the recipient, or a role the recipient holds; and in every case a row whose secondary scopes all match the
  * notice's. Specificity is the primitive's score: secondary match +4, primary record +2, global +1, ties by `Priority`.
- * At equal specificity one `Deny` beats any `Allow`, MJ's permission rule. A `Deny` on a row with `IsLocked` is
- * absorbing for everything less specific and for the recipient's own preference.
+ * At equal specificity one `Deny` beats any `Allow`, MJ's permission rule. A `Deny` on a row with `IsLocked` turns the
+ * channel off regardless of specificity, and the recipient's own preference cannot turn it back on. `Priority` is
+ * reserved: it orders rows inside a level but decides nothing (see {@link ScopedNotificationConfigRow.Priority}).
+ *
+ * A row whose `SecondaryScopes` is not a JSON object is out of scope for every notice and is logged once: read as
+ * "no secondary scopes" it would apply to every caller.
  *
  * Pluggable through `ClassFactory`: `CreateScopedNotificationConfigResolver()` returns a host's
  * `@RegisterClass(ScopedNotificationConfigResolver)` subclass when one is registered, else this base. The base itself
@@ -119,6 +129,10 @@ export class ScopedNotificationConfigResolver {
       if (!matchesCaller && !matchesRecipient && !matchesRole) return false;
     }
     const rowScopes = this.parseScopes(c.SecondaryScopes);
+    if (rowScopes === null) {
+      this.logMalformedScopes(c);
+      return false;
+    }
     for (const key of Object.keys(rowScopes)) {
       const sent = scope?.secondaryScopes?.[key];
       if (sent === undefined || String(sent) !== String(rowScopes[key])) return false;
@@ -130,7 +144,7 @@ export class ScopedNotificationConfigResolver {
   protected score(c: ScopedNotificationConfigRow): number {
     let s = 1;
     if (c.PrimaryScopeRecordID) s += 2;
-    if (Object.keys(this.parseScopes(c.SecondaryScopes)).length > 0) s += 4;
+    if (Object.keys(this.parseScopes(c.SecondaryScopes) ?? {}).length > 0) s += 4;
     return s;
   }
 
@@ -150,14 +164,33 @@ export class ScopedNotificationConfigResolver {
     return { value: null, lockedOff: false };
   }
 
-  private parseScopes(json: string | null | undefined): Record<string, SecondaryScopeValue> {
-    if (!json) return {};
-    try {
-      const parsed = JSON.parse(json) as unknown;
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, SecondaryScopeValue>) : {};
-    } catch {
-      return {};
-    }
+  /** The row's secondary scopes; `{}` when it has none, `null` when the stored value is not a JSON object. */
+  protected parseScopes(json: string | null | undefined): Record<string, SecondaryScopeValue> | null {
+    return ParseSecondaryScopes(json);
+  }
+
+  /** Row IDs already reported as malformed, so a cached bad row is logged once per process, not per notice. */
+  private static readonly loggedMalformed = new Set<string>();
+
+  private logMalformedScopes(c: ScopedNotificationConfigRow): void {
+    const key = c.ID.toLowerCase();
+    if (ScopedNotificationConfigResolver.loggedMalformed.has(key)) return;
+    ScopedNotificationConfigResolver.loggedMalformed.add(key);
+    LogError(`Scoped notification config ${c.ID} is skipped: its SecondaryScopes is not a JSON object (${c.SecondaryScopes}).`);
+  }
+}
+
+/**
+ * Parses a scoped config's `SecondaryScopes`: `{}` for empty, the object when it is a JSON object, `null` for anything
+ * else (bad JSON, an array, a scalar). Shared with the entity's server-side validation.
+ */
+export function ParseSecondaryScopes(json: string | null | undefined): Record<string, SecondaryScopeValue> | null {
+  if (!json || !json.trim()) return {};
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, SecondaryScopeValue>) : null;
+  } catch {
+    return null;
   }
 }
 

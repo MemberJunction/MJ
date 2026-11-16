@@ -549,17 +549,20 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     // either source aborts the run.
     const key = handle.SessionID.toLowerCase();
     const controller = new AbortController();
+    const onCallerAbort = (): void => controller.abort();
     if (opts.Signal) {
       if (opts.Signal.aborted) {
         controller.abort();
       } else {
-        opts.Signal.addEventListener('abort', () => controller.abort(), { once: true });
+        opts.Signal.addEventListener('abort', onCallerAbort, { once: true });
       }
     }
     this.activeGoalAborts.set(key, controller);
     try {
       return await DispatchRemoteBrowserGoal(handle.Session, handle.Features, goal, { ...opts, Signal: controller.signal });
     } finally {
+      // Detach from the caller's (possibly session-lived) signal so listeners don't accumulate per goal.
+      opts.Signal?.removeEventListener('abort', onCallerAbort);
       if (this.activeGoalAborts.get(key) === controller) {
         this.activeGoalAborts.delete(key);
       }

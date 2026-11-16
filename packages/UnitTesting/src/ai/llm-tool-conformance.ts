@@ -40,7 +40,6 @@
  *     SupportsTools: true,
  *     ScriptToolCallResponse: (calls, text) => { ... },
  *     ScriptTextResponse: (text) => { ... },
- *     OrdinaryFinishReason: 'stop',
  * });
  * ```
  *
@@ -89,19 +88,6 @@ export interface LLMToolConformanceSuiteConfig {
     /** Program the vendor mock: the next call returns an ordinary text answer, no tool calls. */
     ScriptTextResponse?: (text: string) => void;
 
-    /**
-     * The `finish_reason` this driver reports on an ordinary (non-tool) turn — `'stop'` for the
-     * OpenAI family, `'completed'` for Anthropic, `'STOP'` for Gemini.
-     *
-     * That these differ at all is a known gap: `finish_reason` is typed as a bare `string` and has
-     * never been normalized across drivers. Native tool calling adds the FIRST normalized value
-     * (`'tool_calls'`); the rest is captured here rather than papered over, so the inconsistency is
-     * visible in one place.
-     *
-     * Tracked in MemberJunction/MJ#4335. When that lands, every driver reports the same value here
-     * and this knob should be deleted rather than updated.
-     */
-    OrdinaryFinishReason?: string;
 }
 
 /** The tool every scripted case declares — shape is irrelevant to the assertions, so keep it small. */
@@ -225,7 +211,7 @@ export function RunLLMToolCallingConformanceSuite(config: LLMToolConformanceSuit
                 expect(calls.map(c => c.arguments.city)).toEqual(['NYC', 'Boston']);
             });
 
-            it('leaves an ordinary turn untouched — no toolCalls, own finish reason preserved', async () => {
+            it("leaves an ordinary turn untouched — no toolCalls, normalized finish reason 'stop'", async () => {
                 config.ScriptTextResponse!('The weather is fine.');
 
                 const params = buildToolParams();
@@ -234,10 +220,8 @@ export function RunLLMToolCallingConformanceSuite(config: LLMToolConformanceSuit
 
                 const choice = firstChoice(result);
                 expect(choice.message.toolCalls).toBeUndefined();
-                if (config.OrdinaryFinishReason !== undefined) {
-                    expect(choice.finish_reason).toBe(config.OrdinaryFinishReason);
-                }
-                expect(choice.finish_reason).not.toBe('tool_calls');
+                // Every driver normalizes an ordinary end of turn to 'stop' (#4335).
+                expect(choice.finish_reason).toBe('stop');
             });
         });
 

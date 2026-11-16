@@ -245,7 +245,7 @@ const CORE: ExtractionFixture[] = [
         Fields: [f('ID', UID, false, 'e:MJ: Users.ID')] },
     { Id: 'EF39', Title: 'a count per role: computed, with the grouped column bound', Parameters: [], Entities: ['MJ: User Roles'],
         SQL: 'SELECT ur.[Role], COUNT(*) AS [Members] FROM __mj.[vwUserRoles] ur GROUP BY ur.[Role]',
-        Fields: [f('Role', U50, false, 'e:MJ: User Roles.Role'), calc('Members', COUNT)] },
+        Fields: [f('Role', U50, true, 'e:MJ: User Roles.Role'), calc('Members', COUNT)] },
     { Id: 'EF40', Title: 'a core query with a parameter, a doc comment and a mock-schema join', Entities: ['MJ: Users'],
         SQL: '{#\n @param Email Skip this address.\n#}\nSELECT u.[ID], a.[Score] FROM __mj.[vwUsers] u CROSS JOIN mjit_sqlpipe.[Account] a WHERE u.[Email] <> {{ Email | sqlString }} AND a.[ID] = 1',
         Parameters: [p('Email', 'string', true, { Description: 'Skip this address.' })],

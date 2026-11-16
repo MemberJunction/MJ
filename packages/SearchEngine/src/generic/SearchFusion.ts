@@ -254,7 +254,15 @@ export class SearchFusion {
             } as ScoredCandidate))
         );
 
-        const weights = lists.map(l => fusionWeights?.[l.Source] ?? 1);
+        const weights = lists.map(l => {
+            if (l.Source === 'SemanticGraph') {
+                return fusionWeights?.['SemanticGraph'] ?? fusionWeights?.['graph'] ?? 1;
+            }
+            if (l.Source === 'graph') {
+                return fusionWeights?.['graph'] ?? fusionWeights?.['SemanticGraph'] ?? 1;
+            }
+            return fusionWeights?.[l.Source] ?? 1;
+        });
         const fused = this.computeWeightedRRF(rankedLists, weights);
 
         // Build a lookup from the result key to the full item. When the same record appears in

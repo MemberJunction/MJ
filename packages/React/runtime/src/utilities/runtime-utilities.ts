@@ -271,7 +271,7 @@ export class RuntimeUtilities {
   private mapMLModel(m: MJMLModelEntity): SimpleMLModelInfo {
     return {
       id: m.ID,
-      pipeline: m.Pipeline,
+      pipeline: m.Pipeline ?? '',
       version: m.Version,
       targetVariable: m.TargetVariable,
       problemType: m.ProblemType,

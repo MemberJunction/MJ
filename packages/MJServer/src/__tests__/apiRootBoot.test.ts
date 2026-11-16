@@ -103,6 +103,7 @@ async function statusOf(app: Application, path: string): Promise<number> {
 
 const ROOT_MOUNTS_BEFORE_5674 = [
     '/healthcheck',
+    '/healthcheck/live', // liveness, added with the startup gate (#4432)
     '/oauth',
     '/esignature',
     '/media',
@@ -142,6 +143,7 @@ describe('core routes under MJAPI_BASE_PATH=/api', () => {
         const { app } = bootCoreRoutes();
         expect(await statusOf(app, '/api/healthcheck')).toBe(200);
         expect(await statusOf(app, '/healthcheck')).toBe(404);
+        expect(await statusOf(app, '/api/healthcheck/live')).toBe(200);
     });
 
     it('reserves every mounted prefix for extensions (relative to MJAPI_BASE_PATH)', () => {

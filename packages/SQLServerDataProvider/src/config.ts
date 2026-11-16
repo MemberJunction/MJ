@@ -1,8 +1,8 @@
-import { LogError, LogStatus, SetProvider, StartupManager, StartupOptions } from "@memberjunction/core";
+import { LocalCacheManager, LogError, LogStatus, SetProvider, StartupManager, StartupOptions } from "@memberjunction/core";
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
 import { SQLServerProviderConfigData } from "./types";
 import sql from 'mssql';
-import { UserCache } from "@memberjunction/generic-database-provider";
+import { UserCache, GetServerPrincipal } from "@memberjunction/generic-database-provider";
 
 
 /**
@@ -19,7 +19,13 @@ export async function SetupSQLServerClient(config: SQLServerProviderConfigData, 
         // Set the provider for all entities to be SQL Server in this project, can use a different provider in other situations....
         const pool: sql.ConnectionPool = config.ConnectionPool;
         if (pool.connected) {
-            const provider = new SQLServerDataProvider()
+            const provider = new SQLServerDataProvider();
+            if (config.LocalStorageProvider) {
+                provider.SetLocalStorageProvider(config.LocalStorageProvider);
+            }
+            if (startupOptions?.cacheManagerConfig) {
+                await LocalCacheManager.Instance.Initialize(provider.LocalStorageProvider, startupOptions.cacheManagerConfig);
+            }
             await provider.Config(config);
 
             // BaseEntity + Metadata share the same provider instance
@@ -41,9 +47,10 @@ export async function SetupSQLServerClient(config: SQLServerProviderConfigData, 
                 }, config.CheckRefreshIntervalSeconds * 1000)
             }
 
-            const sysUser = UserCache.Instance.GetSystemUser();
-            const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type==='Owner');
-            await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider, startupOptions);
+            // Active system user, else lowest-ID active Owner (User.Type is NCHAR-padded, so the
+            // shared ladder compares it trimmed).
+            const startupUser = GetServerPrincipal() ?? undefined;
+            await StartupManager.Instance.Startup(false, startupUser, provider, startupOptions);
     
             return provider;
         }

@@ -89,8 +89,8 @@ describe('ClientClauseScreen.AssertClauseUsesEntityBaseViews', () => {
         const leave = (clause: string) =>
             () => ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, 'Aggregate', ENTITIES, MSSQL, USER, { LeaveUnparseableToProvider: true });
 
-        expect(screen('COUNT_BIG(*)', 'Aggregate')).toThrow(/refusing under uncertainty/);
-        expect(leave('COUNT_BIG(*)')).not.toThrow();
+        expect(screen('SUM(Flags & 4)', 'Aggregate')).toThrow(/refusing under uncertainty/);
+        expect(leave('SUM(Flags & 4)')).not.toThrow();
         expect(leave('COUNT(*)')).not.toThrow();
         expect(leave("COUNT(*) AS [a'] ; SELECT 1 AS [b'], COUNT(*)")).toThrow(/multiple statements/);
         expect(leave('COUNT(*) + (SELECT COUNT(*) FROM __mj.[User])')).toThrow(/entity base view/);
@@ -284,6 +284,49 @@ describe('ClientClauseScreen — names reserved for the SQL parser', () => {
 
     it('refuses a reserved name when the clause also makes the parser rename brackets (SQL Server)', () => {
         expect(screen(`[a]]b] = 1 OR [vwAccounts] = 1 OR ID IN (SELECT ID FROM __mj._mjid_1)`)).toThrow(/reserved for the SQL parser/);
+    });
+});
+
+describe('ClientClauseScreen.AssertFullStatementUsesReadableEntityViews — set operations and WITHIN GROUP', () => {
+    const ORDERS = {
+        Name: 'Orders',
+        SchemaName: '__mj',
+        BaseView: 'vwOrders',
+        GetUserPermisions: () => ({ CanRead: true }),
+        GetEffectiveRowFilterWhereClause: () => "(OwnerID = 'u1')",
+        GetDeniedReadFields: () => new Set<string>(),
+    } as unknown as EntityInfo;
+    const WITH_ORDERS = [...ENTITIES, ORDERS];
+    const screenStatement = (sql: string, dialect: SQLParserDialect = MSSQL) =>
+        () => ClientClauseScreen.AssertFullStatementUsesReadableEntityViews(sql, WITH_ORDERS, dialect, USER, 'ad-hoc SQL');
+
+    it.each(['UNION', 'UNION ALL', 'INTERSECT', 'EXCEPT'])('allows a %s of readable entity views on SQL Server', (op) => {
+        expect(screenStatement(`SELECT ID FROM __mj.vwAccounts ${op} SELECT ID FROM a.vwNotes`)).not.toThrow();
+    });
+
+    it.each(['UNION ALL', 'INTERSECT', 'EXCEPT'])('allows a %s of readable entity views on PostgreSQL', (op) => {
+        expect(screenStatement(`SELECT "ID" FROM __mj."vwAccounts" ${op} SELECT "ID" FROM a."vwNotes"`, PG)).not.toThrow();
+    });
+
+    it('screens every branch of a set operation', () => {
+        expect(screenStatement('SELECT ID FROM __mj.vwAccounts UNION ALL SELECT ID FROM __mj.[User]')).toThrow(/entity base view/);
+        expect(screenStatement('SELECT ID FROM __mj.vwAccounts EXCEPT SELECT ID FROM __mj.vwOrders')).toThrow(/'Orders' is row-level-security filtered/);
+        expect(screenStatement('SELECT ID FROM __mj.vwAccounts INTERSECT SELECT ID FROM fin.vwLedger')).toThrow();
+    });
+
+    it('refuses a set operation with a SELECT … INTO branch', () => {
+        expect(screenStatement('SELECT ID FROM __mj.vwAccounts UNION SELECT ID INTO #t FROM a.vwNotes')).toThrow(/not a safe read-only statement/);
+    });
+
+    it('allows TRY_CAST and screens a subquery in its argument', () => {
+        expect(screenStatement('SELECT TRY_CAST(Name AS INT) AS n FROM __mj.vwAccounts')).not.toThrow();
+        expect(screenStatement('SELECT TRY_CAST((SELECT MAX(ID) FROM __mj.[User]) AS INT) AS n FROM __mj.vwAccounts')).toThrow(/entity base view/);
+    });
+
+    it('allows STRING_AGG … WITHIN GROUP and screens a subquery in its ORDER BY', () => {
+        const agg = (orderBy: string) => `SELECT STRING_AGG(Name, ', ') WITHIN GROUP (ORDER BY ${orderBy}) AS Names FROM __mj.vwAccounts`;
+        expect(screenStatement(agg('Name'))).not.toThrow();
+        expect(screenStatement(agg('(SELECT MAX(ID) FROM __mj.[User])'))).toThrow(/entity base view/);
     });
 });
 

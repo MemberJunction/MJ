@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
 import { UserDialogComponent, UserDialogData } from './user-dialog.component';
-import type { MJRoleEntity } from '@memberjunction/core-entities';
+import type { MJRoleEntity, MJUserEntity } from '@memberjunction/core-entities';
 
 /**
  * DOM coverage for <mj-user-dialog> — a standalone:false, default-CD reactive-form dialog
@@ -88,5 +88,70 @@ describe('UserDialogComponent (DOM)', () => {
     const results = capture(fixture.componentInstance.result);
     cancelBtn(fixture).click();
     expect(results).toEqual([{ action: 'cancel' }]);
+  });
+});
+
+/**
+ * Edit mode loads the user's current roles through `RunView` AFTER the dialog has rendered. Nothing
+ * in that load is a change Angular tracks (it adds to a Set), so the component must run change
+ * detection itself; before it did, every card stayed unchecked until the admin clicked one (#6590).
+ * These tests never call `fixture.detectChanges()` after the load, so they fail without that pass.
+ */
+describe('UserDialogComponent (DOM) — edit mode shows existing roles', () => {
+  const user = (id: string) => ({ ID: id, Name: `${id}@co.com`, Email: `${id}@co.com`, Type: 'User', IsActive: true }) as unknown as MJUserEntity;
+  const flush = () => new Promise(resolve => setTimeout(resolve));
+
+  /** Provider stub whose RunView resolves only when the test releases it, keyed by the filtered user. */
+  function deferredProvider() {
+    const pending = new Map<string, (roleIds: string[]) => void>();
+    const provider = {
+      RunView: vi.fn().mockImplementation((params: { ExtraFilter: string }) => {
+        const userId = /UserID='([^']+)'/.exec(params.ExtraFilter)![1];
+        return new Promise(resolve => pending.set(userId, (roleIds: string[]) =>
+          resolve({ Success: true, Results: roleIds.map(RoleID => ({ RoleID })) })));
+      }),
+    };
+    return { provider, release: (userId: string, roleIds: string[]) => pending.get(userId)!(roleIds) };
+  }
+
+  const selectedCards = (f: ReturnType<typeof render>) =>
+    queryAll(f, '.role-card.selected').map(c => c.textContent ?? '');
+
+  it('checks the user\'s current roles as soon as they load, without a click', async () => {
+    const { provider, release } = deferredProvider();
+    const fixture = renderComponentFixture(UserDialogComponent, {
+      imports: [CommonModule, FormsModule, ReactiveFormsModule, StubAlert],
+      declarations: [UserDialogComponent],
+      inputs: { Provider: provider, data: { mode: 'edit', user: user('u1'), availableRoles: ROLES }, visible: true },
+    });
+    expect(selectedCards(fixture)).toEqual([]);
+
+    release('u1', ['r2']);
+    await flush();
+
+    const selected = selectedCards(fixture);
+    expect(selected.length).toBe(1);
+    expect(selected[0]).toContain('User');
+    expect((query(fixture, '#role-r2') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('ignores a role load that finishes after the dialog moved to another user', async () => {
+    const { provider, release } = deferredProvider();
+    const fixture = renderComponentFixture(UserDialogComponent, {
+      imports: [CommonModule, FormsModule, ReactiveFormsModule, StubAlert],
+      declarations: [UserDialogComponent],
+      inputs: { Provider: provider, data: { mode: 'edit', user: user('u1'), availableRoles: ROLES }, visible: true },
+    });
+    fixture.componentRef.setInput('data', { mode: 'edit', user: user('u2'), availableRoles: ROLES });
+    fixture.detectChanges();
+
+    release('u1', ['r1']);
+    await flush();
+    expect(fixture.componentInstance.SelectedRoleIds.has('r1')).toBe(false);
+
+    release('u2', ['r2']);
+    await flush();
+    expect([...fixture.componentInstance.SelectedRoleIds]).toEqual(['r2']);
+    expect(selectedCards(fixture).length).toBe(1);
   });
 });

@@ -240,7 +240,7 @@ export class RecordCloneOperationsHandler {
                     AllowCreateAPI: child?.AllowCreateAPI,
                 },
                 RootEntityConfig: { Relationships: config.Relationships },
-                IsUniqueFK: joinField?.IsUnique,
+                IsUniqueFK: child && r.RelatedEntityJoinField ? EntityInfo.IsUniqueFieldSetOf(child, [r.RelatedEntityJoinField]) : false,
                 IsHierarchyField: joinField?.IsHierarchy === true,
                 CurrentDepth: 1,
                 MaxDepth: config.MaxDepth ?? 3,

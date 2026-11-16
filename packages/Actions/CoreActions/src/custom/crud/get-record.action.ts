@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
 import { BaseAction } from "@memberjunction/actions";
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * Generic action for retrieving entity records from the database.
@@ -76,6 +77,26 @@ export class GetRecordAction extends BaseRecordMutationAction {
             if (primaryKeyResult.error) return primaryKeyResult.error;
             const primaryKey = primaryKeyResult.value!;
 
+            const policyOutcome = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                params,
+                entityInfo: entityInfo!,
+                operation: 'Read',
+            });
+            if ('Blocked' in policyOutcome) {
+                return policyOutcome.Blocked;
+            }
+            if (policyOutcome.Allowed.Active && policyOutcome.Allowed.EffectiveWhereClause) {
+                const rlsError = await AgentDataPolicyGuard.VerifyPrimaryKeyPassesWhereClause({
+                    params,
+                    entityInfo: entityInfo!,
+                    primaryKey,
+                    effectiveWhereClause: policyOutcome.Allowed.EffectiveWhereClause,
+                });
+                if (rlsError) {
+                    return rlsError;
+                }
+            }
+
             // Load the record
             const loadResult = await this.loadRecord(entity!, entityInfo!, primaryKey, entityName);
 
@@ -85,7 +106,22 @@ export class GetRecordAction extends BaseRecordMutationAction {
 
             // Get all field values
             // fls-guard: loaded as params.ContextUser; width follows its user
-            const recordData = entity!.GetAll();
+            const rawRecordData = entity!.GetAll();
+            if (policyOutcome.Allowed.Active && policyOutcome.Allowed.HasRecordConditionRules) {
+                const conditionError = AgentDataPolicyGuard.CheckRecordCondition({
+                    params,
+                    policy: policyOutcome.Allowed.Policy,
+                    entityInfo: entityInfo!,
+                    operation: 'Read',
+                    record: rawRecordData,
+                });
+                if (conditionError) {
+                    return conditionError;
+                }
+            }
+            const recordData = policyOutcome.Allowed.Active
+                ? AgentDataPolicyGuard.MaskRecord(rawRecordData, policyOutcome.Allowed.EvalResult.deniedFieldPatterns)
+                : rawRecordData;
 
             // Add output parameter with the record data
             params.Params.push({

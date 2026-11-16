@@ -1,8 +1,14 @@
-import { Component, ViewEncapsulation, inject } from '@angular/core';
-import { CompositeKey, DataSnapshot, Metadata, UserInfo } from '@memberjunction/core';
+import { ChangeDetectorRef, Component, ViewEncapsulation, inject } from '@angular/core';
+import { CompositeKey, DataSnapshot, LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
+import {
+  ArtifactPermissionEngine,
+  MJArtifactEntity,
+  MJConversationArtifactEntity,
+  MJEnvironmentEntityExtended,
+  ResourceData,
+} from '@memberjunction/core-entities';
 import { AnalyzeArtifactService, InteractiveFormApplyService, NavigationRequest } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import type { FormAgentContext } from '@memberjunction/ng-base-forms';
@@ -25,8 +31,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
           [currentUser]="currentUser"
           [environmentId]="environmentId"
           [showSaveToCollection]="true"
-          [canShare]="true"
-          [canEdit]="true"
+          [canShare]="CanShare"
+          [canEdit]="CanEdit"
           (analyzeRequested)="onAnalyzeRequested($event)"
           (applyFormRequested)="onApplyFormRequested($event)"
           (openEntityRecord)="OnOpenEntityRecord($event)"
@@ -48,6 +54,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 export class ArtifactResource extends BaseResourceComponent {
   private readonly analyzeService = inject(AnalyzeArtifactService);
   private readonly applyService = inject(InteractiveFormApplyService);
+  private readonly cdr = inject(ChangeDetectorRef, { optional: true });
+  private permissionRequestSeq = 0;
 
   /**
    * Apply-to-my-form handler — see InteractiveFormApplyService. Routes a whole form to
@@ -84,7 +92,42 @@ export class ArtifactResource extends BaseResourceComponent {
   public set currentUser(value: UserInfo | null) {
     this.CurrentUser = value;
   }
-  public artifactId: string = '';
+  private _artifactId = '';
+  public get artifactId(): string {
+    return this._artifactId;
+  }
+  public set artifactId(value: string) {
+    const next = value ?? '';
+    if (next !== this._artifactId) {
+      this._artifactId = next;
+      this.CanEdit = false;
+      this.CanShare = false;
+      if (this.CurrentUser && this._artifactId) {
+        void this.ResolveArtifactPermissions();
+      }
+    }
+  }
+
+  public CanEdit = false;
+  /** @deprecated Use {@link CanEdit}. */
+  public get canEdit(): boolean {
+    return this.CanEdit;
+  }
+  /** @deprecated Use {@link CanEdit}. */
+  public set canEdit(value: boolean) {
+    this.CanEdit = value;
+  }
+
+  public CanShare = false;
+  /** @deprecated Use {@link CanShare}. */
+  public get canShare(): boolean {
+    return this.CanShare;
+  }
+  /** @deprecated Use {@link CanShare}. */
+  public set canShare(value: boolean) {
+    this.CanShare = value;
+  }
+
   public EnvironmentId: string = '';
 
   /** @deprecated Use {@link EnvironmentId}. */
@@ -101,11 +144,6 @@ export class ArtifactResource extends BaseResourceComponent {
     const md = this.ProviderToUse;
     this.CurrentUser = md.CurrentUser;
 
-    // Get artifact ID from resource data
-    if (this.Data && this.Data.ResourceRecordID) {
-      this.artifactId = this.Data.ResourceRecordID;
-    }
-
     // Environment ID — use the configured environment if present, otherwise
     // fall back to the default environment. Must be a valid UUID since
     // downstream saves (e.g. AnalyzeArtifactService creating artifacts)
@@ -113,7 +151,101 @@ export class ArtifactResource extends BaseResourceComponent {
     this.EnvironmentId = (this.Data?.Configuration?.['environmentId'] as string | undefined)
         || MJEnvironmentEntityExtended.DefaultEnvironmentID;
 
+    // Get artifact ID from resource data (setter triggers ResolveArtifactPermissions)
+    if (this.Data && this.Data.ResourceRecordID) {
+      this.artifactId = this.Data.ResourceRecordID;
+    } else {
+      this.CanEdit = false;
+      this.CanShare = false;
+    }
+
     setTimeout(() => this.NotifyLoadComplete(), 100);
+  }
+
+  /**
+   * Resolves viewer-scoped `CanEdit` and `CanShare` permissions for the active `artifactId`,
+   * consulting the server's `ResolveArtifactUserPermissions` GraphQL query first (so server-only
+   * `IArtifactPermissionDelegate` registrations are evaluated) with fallback to
+   * `ArtifactPermissionEngine.Instance.ResolvePermissions`.
+   */
+  public async ResolveArtifactPermissions(): Promise<void> {
+    const targetArtifactId = this._artifactId;
+    const user = this.CurrentUser;
+    this.CanEdit = false;
+    this.CanShare = false;
+
+    if (!targetArtifactId || !user) {
+      this.cdr?.markForCheck();
+      return;
+    }
+
+    const reqId = ++this.permissionRequestSeq;
+    try {
+      const perms = await this.fetchPermissionsFromServerOrFallback(targetArtifactId, user);
+      if (reqId !== this.permissionRequestSeq || this._artifactId !== targetArtifactId) {
+        return;
+      }
+      this.CanEdit = perms.CanEdit === true;
+      this.CanShare = perms.CanShare === true;
+    } catch {
+      if (reqId === this.permissionRequestSeq) {
+        this.CanEdit = false;
+        this.CanShare = false;
+      }
+    } finally {
+      if (reqId === this.permissionRequestSeq) {
+        this.cdr?.markForCheck();
+      }
+    }
+  }
+
+  private async fetchPermissionsFromServerOrFallback(
+    targetArtifactId: string,
+    user: UserInfo,
+  ): Promise<{ CanEdit?: boolean; CanShare?: boolean }> {
+    const providerWithGql = this.ProviderToUse as unknown as {
+      ExecuteGQL?: (
+        query: string,
+        variables?: Record<string, unknown>,
+      ) => Promise<{
+        ResolveArtifactUserPermissions?: { CanEdit?: boolean; CanShare?: boolean };
+        ResolveArtifactPermissions?: { CanEdit?: boolean; CanShare?: boolean };
+      }>;
+    };
+
+    if (typeof providerWithGql?.ExecuteGQL === 'function') {
+      try {
+        const query = `
+          query ResolveArtifactUserPermissions($artifactId: String!) {
+            ResolveArtifactUserPermissions(artifactId: $artifactId) {
+              ArtifactID
+              CanRead
+              CanEdit
+              CanDelete
+              CanShare
+              Source
+              Reason
+            }
+          }
+        `;
+        const gqlResult = await providerWithGql.ExecuteGQL(query, { artifactId: targetArtifactId });
+        const resolved =
+          gqlResult?.ResolveArtifactUserPermissions ?? gqlResult?.ResolveArtifactPermissions;
+        if (resolved && typeof resolved.CanEdit === 'boolean') {
+          return resolved;
+        }
+      } catch (err) {
+        LogError(
+          `ArtifactResourceComponent: ResolveArtifactPermissions GraphQL query failed for '${targetArtifactId}', falling back to ArtifactPermissionEngine: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+
+    return ArtifactPermissionEngine.Instance.ResolvePermissions(
+      this.ProviderToUse,
+      targetArtifactId,
+      user,
+    );
   }
 
   /**
@@ -175,9 +307,14 @@ export class ArtifactResource extends BaseResourceComponent {
     if (data.ResourceRecordID) {
       try {
         const md = this.ProviderToUse;
-        const artifact = await md.GetEntityObject<any>('MJ: Conversation Artifacts');
-        await artifact.Load(data.ResourceRecordID);
-        return artifact.Name || `Artifact - ${data.ResourceRecordID}`;
+        const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', md.CurrentUser);
+        if (await artifact.Load(data.ResourceRecordID)) {
+          return artifact.Name || `Artifact - ${data.ResourceRecordID}`;
+        }
+        const legacy = await md.GetEntityObject<MJConversationArtifactEntity>('MJ: Conversation Artifacts', md.CurrentUser);
+        if (await legacy.Load(data.ResourceRecordID)) {
+          return legacy.Name || `Artifact - ${data.ResourceRecordID}`;
+        }
       } catch (error) {
         console.error('Error loading artifact name:', error);
       }

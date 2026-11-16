@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { RefreshCatalogScope, RunInWarmedCatalogScope, UnpinCatalogObjects, WarmCatalogObject } from './CatalogScope.js';
 import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
-import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
     MJCompanyIntegrationEntity,
@@ -178,18 +178,32 @@ const FULL_PUSH_MAX_RECORDS = (() => {
 export class SchemaNotGeneratedError extends Error {
     public readonly EntityName: string;
     public readonly StoredProcedureName: string;
+    /**
+     * `Missing` — the CRUD routine does not exist (CodeGen never ran for this entity).
+     * `Stale` — it exists but its signature no longer matches the entity's fields (columns were
+     * added or removed after the last CodeGen), so every write fails the same way (#4433).
+     */
+    public readonly Reason: SchemaNotGeneratedReason;
 
-    constructor(entityName: string, storedProcedureName: string) {
+    constructor(entityName: string, storedProcedureName: string, reason: SchemaNotGeneratedReason = 'Missing') {
         super(
-            `Schema not generated for entity '${entityName}': stored procedure ` +
-            `'${storedProcedureName}' does not exist in the database. ` +
-            `Run CodeGen for this entity to create the destination tables/views/procs, then re-sync.`
+            reason === 'Stale'
+                ? `Schema out of date for entity '${entityName}': the signature of stored procedure ` +
+                  `'${storedProcedureName}' does not match the entity's fields. ` +
+                  `Run CodeGen for this entity to regenerate its procedures, then re-sync.`
+                : `Schema not generated for entity '${entityName}': stored procedure ` +
+                  `'${storedProcedureName}' does not exist in the database. ` +
+                  `Run CodeGen for this entity to create the destination tables/views/procs, then re-sync.`
         );
         this.name = 'SchemaNotGeneratedError';
         this.EntityName = entityName;
         this.StoredProcedureName = storedProcedureName;
+        this.Reason = reason;
     }
 }
+
+/** Why a destination entity's CRUD routines cannot be used — see {@link SchemaNotGeneratedError.Reason}. */
+export type SchemaNotGeneratedReason = 'Missing' | 'Stale';
 
 /**
  * Thrown by a connector when the vendor says THIS account cannot serve an object it nonetheless
@@ -279,17 +293,6 @@ const INTEGER_SQL_BOUNDS: Record<string, { min: number; max: number }> = {
 };
 
 /**
- * Returns a SchemaNotGeneratedError if the given Save() failure message matches the
- * "CRUD routine doesn't exist yet" pattern for either dialect, otherwise null. When
- * CodeGen hasn't created the spCreate/spUpdate/spDelete for an entity, BaseEntity.Save()
- * returns false and the routine-not-found error lands in LatestResult.CompleteMessage:
- *   - SQL Server: `Could not find stored procedure '<schema>.<name>'`
- *   - PostgreSQL: `function <schema>.<name>(<args>) does not exist` (SQLSTATE 42883)
- * The PG form is what a connector entity in a custom schema hits before its CRUD
- * functions are generated, so it must be classified too (else the run produces
- * per-record errors instead of one fail-fast SchemaNotGeneratedError).
- */
-/**
  * The one primary-key shape a TransactionGroup cannot carry: a SINGLE auto-increment column.
  *
  * An enrolled `Save()` returns true immediately and the row lands at `Submit()`, so the caller
@@ -308,9 +311,28 @@ function IsIdentityOnlyPrimaryKey(primaryKeys: ReadonlyArray<{ AutoIncrement?: b
     return pks.length === 1 && pks[0]?.AutoIncrement === true;
 }
 
-function detectSchemaNotGenerated(entityName: string, errorMessage: string): SchemaNotGeneratedError | null {
+/**
+ * Returns a SchemaNotGeneratedError if the given Save() failure message shows the entity's CRUD
+ * routine is missing or stale for either dialect, otherwise null. When CodeGen hasn't created the
+ * spCreate/spUpdate/spDelete for an entity, BaseEntity.Save() returns false and the
+ * routine-not-found error lands in LatestResult.CompleteMessage:
+ *   - SQL Server: `Could not find stored procedure '<schema>.<name>'`
+ *   - PostgreSQL: `function <schema>.<name>(<args>) does not exist` (SQLSTATE 42883)
+ * The PG form is what a connector entity in a custom schema hits before its CRUD
+ * functions are generated, so it must be classified too (else the run produces
+ * per-record errors instead of one fail-fast SchemaNotGeneratedError).
+ *
+ * A STALE routine (#4433) — one generated before columns were added to or removed from the entity —
+ * fails every write identically too, so it is classified the same way (Reason 'Stale'):
+ *   - SQL Server: `Procedure or function '<name>' has too many arguments specified`
+ *   - SQL Server: `Procedure or function '<name>' expects parameter '@x', which was not supplied`
+ *   - PostgreSQL: a wrong-arity call already surfaces as `function ... does not exist` above.
+ */
+export function DetectSchemaNotGenerated(entityName: string, errorMessage: string): SchemaNotGeneratedError | null {
     const sqlServer = errorMessage.match(/Could not find stored procedure '([^']+)'/i);
     if (sqlServer) return new SchemaNotGeneratedError(entityName, sqlServer[1]);
+    const staleArity = errorMessage.match(/Procedure or function '([^']+)' (?:has too many arguments specified|expects parameter '[^']+', which was not supplied)/i);
+    if (staleArity) return new SchemaNotGeneratedError(entityName, staleArity[1], 'Stale');
     const postgres = errorMessage.match(/function\s+([^(\s]+)\s*\([^)]*\)\s+does not exist/i);
     if (postgres) return new SchemaNotGeneratedError(entityName, postgres[1]);
     return null;
@@ -333,6 +355,68 @@ function detectSchemaNotGenerated(entityName: string, errorMessage: string): Sch
  */
 export function PositiveInt(v: unknown): number | undefined {
     return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined;
+}
+
+/** A record-map row as the sweep and full push read it. */
+interface RecordMapRow {
+    ID: string;
+    EntityRecordID: string;
+    ExternalSystemRecordID: string;
+    /** 'Created' when the sync inserted the MJ row, 'Adopted' when it matched one that already existed (#3528). */
+    Origin?: string | null;
+}
+
+/** How a record map came to point at its MJ row (#3528). */
+export type RecordMapOrigin = 'Created' | 'Adopted';
+
+/** Engine-side keys read from an entity map's Configuration JSON. */
+interface EntityMapEngineConfig {
+    partitionReconcile?: boolean;
+    partitionCount?: number;
+    /** #5202 — source field whose value marks a record deleted. */
+    sourceDeleteField?: string;
+    /** #5202 — the value of {@link sourceDeleteField} that means deleted (compared as a trimmed string). */
+    sourceDeleteValue?: string | number | boolean;
+}
+
+/** The integration tombstone columns; an entity with neither cannot be archived (#3528). */
+export const TOMBSTONE_COLUMNS: ReadonlyArray<string> = ['__mj_integration_IsTombstoned', '__mj_integration_SyncStatus'];
+
+/** True when an entity has at least one integration tombstone column, so SoftDelete can actually archive it. */
+export function CanArchive(fields: ReadonlyArray<{ Name: string }> | undefined): boolean {
+    return (fields ?? []).some(f => TOMBSTONE_COLUMNS.includes(f.Name));
+}
+
+/** Default safety cap on pages fetched per object per run; Configuration `maxBatchesPerMap` overrides it. */
+export const DEFAULT_MAX_BATCHES_PER_MAP = 5000;
+
+/** Operator message for an object that hit the per-run page cap (#4823). Names the two settings that fix it. */
+export function BuildBatchCapMessage(objectName: string, cap: number, batchSize: number): string {
+    return `Safety limit reached: ${cap} batches of ${batchSize} for '${objectName}'. The object was not fully ` +
+        `fetched, so the run is marked failed; the watermark advances only past the batches that finished. Raise 'batchSize' or 'maxBatchesPerMap' ` +
+        `in this connection's Configuration if the object really holds more than ${cap * batchSize} rows.`;
+}
+
+/**
+ * A run failed when any record errored OR any Critical error was recorded. The second half matters
+ * for errors that stop a whole object without failing a record — a missing or stale CRUD routine
+ * (#4433), or the page cap (#4823) — which previously let the run end `Success`.
+ */
+export function RunFailed(result: Pick<SyncResult, 'RecordsErrored' | 'Errors'>): boolean {
+    return result.RecordsErrored > 0 || result.Errors.some(e => e.Severity === 'Critical');
+}
+
+/**
+ * Moves an ISO timestamp watermark back by `seconds` (#3085). An unparseable value is returned unchanged:
+ * the overlap is an optimisation for late commits, never a reason to fail or widen to a full fetch.
+ */
+export function SubtractWatermarkSeconds(watermark: string, seconds: number): string {
+    // A zoneless ISO date-time means UTC, as in the external-data-source connectors (ParseIso8601AsUtc):
+    // Date.parse would read it as server-local time and move the filter by the server's offset.
+    const zoneless = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(watermark);
+    const ms = Date.parse(zoneless ? `${watermark}Z` : watermark);
+    if (Number.isNaN(ms)) return watermark;
+    return new Date(ms - seconds * 1000).toISOString();
 }
 
 /**
@@ -2045,7 +2129,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         { reason: plan.Reason, levers: plan.Levers.map(l => l.Code), exhausted: plan.Exhausted }
                     )
             },
-            this.MaxBatchSize
+            // Configuration `batchSize` (#4823) wins over the engine-wide default.
+            this.getConfigOverrides(config).batchSize ?? this.MaxBatchSize
         );
 
         // Second-layer silent-empty detection state (see checkSecondLayerEmpty): a per-IO running
@@ -2632,6 +2717,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private getConfigOverrides(config: RunConfiguration): {
         maxConcurrency?: number; rateLimitTokensPerSec?: number; rateLimitBurst?: number; discoveryTimeBudgetMs?: number;
         fetchTimeoutMs?: number; fetchConcurrency?: number;
+        batchSize?: number; maxBatchesPerMap?: number; watermarkLookbackSeconds?: number;
     } {
         try {
             const raw = config.companyIntegration.Configuration;
@@ -2645,8 +2731,45 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 fetchTimeoutMs: PositiveInt(p.fetchTimeoutMs),
                 // Ceiling on SIMULTANEOUS vendor fetches for this connection (see getFetchGate).
                 fetchConcurrency: PositiveInt(p.fetchConcurrency),
+                // Page size asked of the connector for this connection (#4823). Starts the run's
+                // governor here instead of at the engine-wide MaxBatchSize.
+                batchSize: PositiveInt(p.batchSize),
+                // Safety cap on pages per object per run (#4823). Reaching it FAILS the run.
+                maxBatchesPerMap: PositiveInt(p.maxBatchesPerMap),
+                // Overlap for monotonic timestamp watermarks (#3085). 0 is a real value (no overlap).
+                watermarkLookbackSeconds: p.watermarkLookbackSeconds === 0 ? 0 : PositiveInt(p.watermarkLookbackSeconds),
             };
         } catch { return {}; }
+    }
+
+    /**
+     * #3085 — the watermark the FETCH filter uses, moved back by the lookback window for a connector
+     * whose watermark is a monotonic max timestamp. Such a connector narrows the next incremental to
+     * exactly the last max seen, so a row that commits late with a LOWER timestamp than that max is
+     * never fetched. Re-reading a short overlap is cheap (the upsert is idempotent and content-hash
+     * skips unchanged rows).
+     *
+     * Source order: Configuration `watermarkLookbackSeconds` → connector `WatermarkLookbackSeconds`.
+     * Non-monotonic connectors and non-timestamp watermarks are returned unchanged.
+     */
+    private applyWatermarkLookback(
+        config: RunConfiguration,
+        entityMap: ICompanyIntegrationEntityMap,
+        watermarkType: string,
+        watermark: string | null
+    ): string | null {
+        if (!watermark || !config.connector.MonotonicWatermark) return watermark;
+        const lookbackSeconds = this.getConfigOverrides(config).watermarkLookbackSeconds
+            ?? config.connector.WatermarkLookbackSeconds;
+        if (!lookbackSeconds || lookbackSeconds <= 0) return watermark;
+        if (watermarkType !== 'Timestamp') {
+            console.debug(
+                `[IntegrationEngine] ${entityMap.ExternalObjectName}: watermark lookback skipped — ` +
+                `watermark type '${watermarkType}' is not a timestamp.`
+            );
+            return watermark;
+        }
+        return SubtractWatermarkSeconds(watermark, lookbackSeconds);
     }
 
     private getRateLimiter(config: RunConfiguration): RateLimiter {
@@ -2811,6 +2934,43 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
+     * The result for a pull map that has no active field maps, returned BEFORE anything is fetched.
+     *
+     * Such a map cannot write a single column, so everything fetched for it is wasted: a soft-key
+     * table refuses every record (`KEYLESS_RECORD_REFUSED`, because the key is the first field the
+     * engine finds unmapped) and any other table gets rows with nothing in them. Observed on a
+     * per-connection NetForum catalog: 292 maps were created with no field maps, and the first sync
+     * that reached them fetched and refused 307,843 records until the refusals ran the API out of heap.
+     *
+     * The skip is reported where the run keeps its history, not only on the event stream: one
+     * Critical `CONFIGURATION_ERROR` (the run's ErrorLog is written from `Errors`) and the object on
+     * the incomplete list. No record is counted, because none was read.
+     */
+    private skipMapWithoutFieldMaps(entityMap: ICompanyIntegrationEntityMap, logger?: SyncLogger): SyncResult {
+        const objectName = entityMap.ExternalObjectName ?? entityMap.ID;
+        const message =
+            `'${objectName}' has no active field maps, so nothing fetched for it could be written. It was ` +
+            `skipped without fetching. Apply this object again for the connection to create its field maps.`;
+        logger?.Emit('sync.entity-map.skipped', {
+            externalObjectName: entityMap.ExternalObjectName,
+            skippedReason: 'ENTITY_MAP_HAS_NO_FIELD_MAPS',
+            message,
+        });
+        logger?.Warning(objectName, 'ENTITY_MAP_HAS_NO_FIELD_MAPS', message, { entityMapID: entityMap.ID });
+        console.error(`[IntegrationEngine] ENTITY_MAP_HAS_NO_FIELD_MAPS: ${message}`);
+        const result = this.emptyResult();
+        result.Errors.push({
+            ExternalID: '',
+            ChangeType: 'Skip',
+            ErrorMessage: message,
+            ErrorCode: 'CONFIGURATION_ERROR',
+            Severity: 'Critical',
+        });
+        this.markIncomplete(result, objectName);
+        return result;
+    }
+
+    /**
      * Pull sync: fetch from external → map → match → validate → apply to MJ.
      */
     private async processPullSync(
@@ -2824,12 +2984,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         abortSignal?: AbortSignal,
         logger?: SyncLogger
     ): Promise<SyncResult> {
+        this.softDeleteUnsupportedWarned.delete(entityMap.ID); // SOFT_DELETE_UNSUPPORTED warns once per map per run
         const entityMapID = entityMap.ID;
         // An object this ACCOUNT cannot serve costs a request, an error event and a retry ladder
         // every run, forever, and says nothing new after the first time. While the marker is fresh
         // we spend nothing on it; once it ages out the next attempt IS the recheck, so an object
         // the account later enables heals itself with no operator action.
         const fieldMaps = await this.loadFieldMaps(entityMapID, contextUser);
+        if (fieldMaps.length === 0) return this.skipMapWithoutFieldMaps(entityMap, logger);
         // Field-level exclusions declared by the connector (SourceFieldInfo.SyncDirective
         // -> IntegrationObjectField.Configuration). Resolved once per map, applied to every
         // batch below. Empty set on any lookup miss - exclusion can only ever narrow.
@@ -2943,6 +3105,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         let hasMore = true;
         let currentWatermark = initialWatermark;
+        // #3085: the FETCH filter may start a little before the saved watermark so a row that
+        // committed late with a lower timestamp is still picked up. Only the filter moves; the
+        // value compared and persisted below is still `initialWatermark` / `currentWatermark`.
+        const fetchWatermark = this.applyWatermarkLookback(config, entityMap, watermark?.WatermarkType ?? 'Timestamp', initialWatermark);
         // §10 — the watermark ALWAYS advances to the max value seen on a clean fetch; it is NEVER held back
         // by a per-record failure. A failed record is classified: a PROVABLY-TRANSIENT save error is retried
         // inline within the batch (ApplyRecords); a PERMANENT (or retry-exhausted) failure is dead-lettered —
@@ -2994,7 +3160,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
          * governor moved it would skip or re-read a page.
          */
         const askedBatchSize = (): number => config.memoryControl?.BatchSize ?? this.MaxBatchSize;
-        const MAX_BATCHES_PER_MAP = 5000;
+        const MAX_BATCHES_PER_MAP = this.getConfigOverrides(config).maxBatchesPerMap ?? DEFAULT_MAX_BATCHES_PER_MAP;
         const EMPTY_BATCH_WARN_THRESHOLD = 5; // warn once after this many empty-but-HasMore batches in a row
         const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
         let orphanTrackingOverflowed = false; // set if the ID set exceeds ORPHAN_DETECTION_MAX_IDS → skip the sweep, don't OOM
@@ -3032,10 +3198,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             batchCount++;
             if (batchCount > MAX_BATCHES_PER_MAP) {
-                console.error(
-                    `[IntegrationEngine] Safety limit reached: ${MAX_BATCHES_PER_MAP} batches for ` +
-                    `${entityMap.ExternalObjectName}. Stopping to prevent infinite loop.`
-                );
+                // #4823: this used to log and stop, and the run reported success — a snapshot
+                // connector then restarted from the top every run and never finished the object.
+                // It is now a Critical error, so the run ends Failed; the watermark covers only finished batches.
+                const capMessage = BuildBatchCapMessage(entityMap.ExternalObjectName, MAX_BATCHES_PER_MAP, askedBatchSize());
+                console.error(`[IntegrationEngine] ${capMessage}`);
+                result.Errors.push({
+                    ExternalID: entityMap.ExternalObjectName,
+                    ChangeType: 'Skip',
+                    ErrorMessage: capMessage,
+                    ErrorCode: 'BATCH_CAP_REACHED',
+                    Severity: 'Critical',
+                });
+                this.markIncomplete(result, entityMap.ExternalObjectName ?? entityMap.ID);
                 fetchCompletedCleanly = false;
                 break;
             }
@@ -3055,7 +3230,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // visited it. Observed live (ACR dev, 2026-09-07): a Vendor Bill full scan collapsed
                 // to 707 of 23,558 rows — an id-ascending-AND-modstamp-ascending subsequence — with
                 // the run still reporting success. `currentWatermark` remains persistence bookkeeping.
-                WatermarkValue: initialWatermark,
+                WatermarkValue: fetchWatermark,
                 BatchSize: requestedThisBatch,
                 ContextUser: contextUser,
                 CurrentPage: currentPage,
@@ -4272,7 +4447,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     createResult.ExternalID,
                     entityMap.EntityID,
                     change.RecordID,
-                    contextUser
+                    contextUser,
+                    'Adopted' // the MJ row existed before this push mapped it
                 );
                 result.RecordsCreated++;
             } else {
@@ -4490,7 +4666,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Streamed: the orphan test is per row and needs nothing from the rows that pass it, so each
         // page is filtered and dropped. What stays resident is the ORPHANS — normally a handful —
         // instead of every mapping the entity has (see loadAllRecordMaps' STREAMING note).
-        const orphans: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }> = [];
+        const orphans: Array<RecordMapRow> = [];
         const allMaps = await this.loadAllRecordMaps(
             companyIntegration.ID, entityMap.EntityID, contextUser,
             page => {
@@ -4566,21 +4742,29 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     await this.deleteRecordMapRow(orphan.ID, contextUser);
                     continue;
                 }
-                if (entityMap.DeleteBehavior === 'SoftDelete') {
-                    // Same archive shape as DeleteRecord's SoftDelete branch: the row stays,
-                    // marked Archived/tombstoned. The MAP row goes either way — the mapping's
-                    // job is done, and keeping it would re-detect this orphan forever.
-                    const fields = entity.Fields ?? [];
-                    const hasField = (n: string) => fields.some(f => f.Name === n);
-                    if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
-                    if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', new Date().toISOString());
-                    if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
-                    if (hasField('__mj_integration_DeletedDetectedAt')) entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
-                    const archived = await entity.Save(this.syncSaveOptions);
-                    if (archived) {
+                // #3528 — a row the integration ADOPTED (it existed before the sync matched it) is never
+                // hard-deleted: a source deletion is no proof it may go. It is archived when the entity can
+                // be archived, else left alone with a warning.
+                const adopted = orphan.Origin === 'Adopted';
+                if (entityMap.DeleteBehavior === 'SoftDelete' || adopted) {
+                    // The MAP row goes once archived — the mapping's job is done, and keeping it would
+                    // re-detect this orphan forever. A refused archive keeps both row and map.
+                    const outcome = await this.archiveRecord(entity, entityMap, logger);
+                    if (outcome === 'archived') {
                         result.RecordsDeleted++;
                         await this.deleteRecordMapRow(orphan.ID, contextUser);
                         console.log(`[IntegrationEngine] Archived orphan ${entityMap.Entity} ${orphan.EntityRecordID} (external ${orphan.ExternalSystemRecordID} no longer exists)`);
+                    } else if (outcome === 'refused') {
+                        result.RecordsSkipped++;
+                        if (adopted && entityMap.DeleteBehavior === 'HardDelete') {
+                            logger?.warning(
+                                entityMap.ExternalObjectName ?? entityMap.ID,
+                                'ADOPTED_ROW_KEPT',
+                                `${entityMap.Entity} ${orphan.EntityRecordID} was not created by this integration (it was matched to an existing row), ` +
+                                `so it is not hard-deleted, and the entity has no tombstone columns to archive it.`,
+                                { entityRecordID: orphan.EntityRecordID, externalID: orphan.ExternalSystemRecordID },
+                            );
+                        }
                     } else {
                         const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
                         console.warn(`[IntegrationEngine] Orphan archive blocked for ${entityMap.Entity} ${orphan.EntityRecordID} — ${reason}`);
@@ -4609,12 +4793,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * swallowed: the orphan itself was handled, and the worst consequence of a surviving map
      * row is one redundant re-detection on the next full sync.
      */
-    private async deleteRecordMapRow(mapRowID: string, contextUser: UserInfo): Promise<void> {
+    private async deleteRecordMapRow(mapRowID: string, contextUser: UserInfo, inWriteGroup = false): Promise<void> {
         try {
             const md = this.ProviderToUse;
             const mapRow = await md.GetEntityObject('MJ: Company Integration Record Maps', contextUser);
             const loaded = await mapRow.InnerLoad(CompositeKey.FromID(mapRowID));
             if (!loaded) return;
+            // From the apply pass, the prune commits or rolls back with the row delete it follows.
+            if (inWriteGroup) this.enrolInWriteGroup(mapRow);
             const ok = await mapRow.Delete();
             if (!ok) {
                 console.warn(`[IntegrationEngine] Record-map prune blocked for ${mapRowID} — ${mapRow.LatestResult?.CompleteMessage ?? 'unknown reason'}`);
@@ -4671,6 +4857,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     /**
      * Loads active field maps for a given entity map.
+     *
+     * @throws FIELD_MAPS_UNREADABLE when the read fails. An empty answer would read as a map that
+     *   HAS no field maps, which the pull path skips as a configuration error and the push path
+     *   skips as having nothing to push: a transient read failure must not be reported as either.
      */
     private async loadFieldMaps(
         entityMapID: string,
@@ -4679,13 +4869,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const rv = new RunView();
         const result = await rv.RunView<ICompanyIntegrationFieldMap>({
             EntityName: 'MJ: Company Integration Field Maps',
-            ExtraFilter: `EntityMapID='${entityMapID}' AND Status='Active'`,
+            ExtraFilter: `EntityMapID='${EscapeSQLString(entityMapID)}' AND Status='Active'`,
             OrderBy: 'Priority ASC',
             ResultType: 'entity_object',
             BypassCache: true, // field maps drive value mapping; a sync must see freshly-applied maps
         }, contextUser);
 
-        return result.Success ? result.Results : [];
+        if (!result.Success) {
+            throw new Error(
+                `FIELD_MAPS_UNREADABLE: could not read the field maps of entity map ${entityMapID}: ` +
+                `${result.ErrorMessage ?? 'unknown error'}`
+            );
+        }
+        return result.Results;
     }
 
     /** Parses the entity map's Configuration JSON (best-effort) for engine-side feature toggles. */
@@ -4785,6 +4981,125 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             });
         }
         return resolution.Resolved;
+    }
+
+    /**
+     * #5202 — true when the source marks this record deleted: the entity map's Configuration names a
+     * `sourceDeleteField` and the record's value for it equals `sourceDeleteValue` (both compared as
+     * trimmed strings). Sources like NetForum flag deletions on a live row instead of dropping it.
+     */
+    private isSourceFlaggedDeleted(record: MappedRecord, entityMap: ICompanyIntegrationEntityMap): boolean {
+        const flag = this.sourceDeleteFlag(entityMap);
+        if (!flag) return false;
+        const value = record.ExternalRecord.Fields?.[flag.Field];
+        if (value === undefined || value === null) return false;
+        return String(value).trim() === flag.Value;
+    }
+
+    /** The entity map's source delete flag (#5202), or null when its Configuration does not name one. */
+    private sourceDeleteFlag(entityMap: ICompanyIntegrationEntityMap): { Field: string; Value: string } | null {
+        const cfg = this.parseEntityMapConfig(entityMap);
+        const field = typeof cfg?.sourceDeleteField === 'string' ? cfg.sourceDeleteField.trim() : '';
+        if (!field || cfg?.sourceDeleteValue === undefined || cfg.sourceDeleteValue === null) return null;
+        return { Field: field, Value: String(cfg.sourceDeleteValue).trim() };
+    }
+
+    /** True when the entity map's Configuration names a source delete flag (#5202). */
+    private hasSourceDeleteFlag(entityMap: ICompanyIntegrationEntityMap): boolean {
+        return this.sourceDeleteFlag(entityMap) !== null;
+    }
+
+    /** True when a loaded row already carries the tombstone: IsTombstoned, or SyncStatus 'Archived' without it. */
+    private isArchived(entity: { Get(fieldName: string): unknown }, has: (name: string) => boolean): boolean {
+        if (has('__mj_integration_IsTombstoned')) return entity.Get('__mj_integration_IsTombstoned') === true;
+        if (has('__mj_integration_SyncStatus')) return entity.Get('__mj_integration_SyncStatus') === 'Archived';
+        return true; // nothing to tombstone with — no write can change that
+    }
+
+    /**
+     * #5202 under HardDelete — the source flags a matched record deleted. The record map's `Origin` decides,
+     * the same way the orphan sweep does (#3528):
+     * - `Created` (the sync inserted the row): delete it and prune its map, so later syncs that still see
+     *   the flagged row skip it instead of matching a row that is gone. A row already gone counts as
+     *   skipped and its map is pruned too.
+     * - `Adopted`, or no map row (matched by key fields, so it existed before the sync): never hard-deleted.
+     *   It is archived, or kept with `ADOPTED_ROW_KEPT` when the entity has no tombstone columns. Its map is
+     *   kept, so a row already archived is skipped without a write and a cleared flag brings it back.
+     */
+    private async applySourceFlaggedHardDelete(
+        record: MappedRecord,
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        result: SyncResult,
+        contextUser: UserInfo,
+        logger?: SyncLogger
+    ): Promise<void> {
+        if (!record.MatchedMJRecordID) {
+            result.RecordsSkipped++;
+            return;
+        }
+        const mapRow = await this.findRecordMapRow(companyIntegration.ID, entityMap.EntityID, record.ExternalRecord.ExternalID, contextUser);
+        if (mapRow && mapRow.Origin !== 'Adopted') {
+            const outcome = await this.deleteRecord(record, entityMap, contextUser, logger);
+            if (outcome === 'deleted' || outcome === 'gone') {
+                await this.deleteRecordMapRow(mapRow.ID, contextUser, true);
+            }
+            if (outcome === 'deleted') result.RecordsDeleted++;
+            else if (outcome === 'gone' || outcome === 'refused') result.RecordsSkipped++;
+            else result.RecordsErrored++;
+            return;
+        }
+
+        const md = this.ProviderToUse;
+        const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        this.enrolInWriteGroup(entity);
+        const pkFields = md.EntityByName(record.MJEntityName)?.PrimaryKeys ?? [];
+        const loaded = await entity.InnerLoad(this.buildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
+        const fields = entity.Fields ?? [];
+        if (!loaded || (CanArchive(fields) && this.isArchived(entity, n => fields.some(f => f.Name === n)))) {
+            result.RecordsSkipped++;
+            return;
+        }
+        const outcome = await this.archiveRecord(entity, entityMap, logger);
+        if (outcome === 'archived') {
+            result.RecordsDeleted++;
+        } else if (outcome === 'refused') {
+            result.RecordsSkipped++;
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.ID,
+                'ADOPTED_ROW_KEPT',
+                `${record.MJEntityName} ${record.MatchedMJRecordID} was not created by this integration (it was matched to an existing row), ` +
+                `so it is not hard-deleted, and the entity has no tombstone columns to archive it.`,
+                { entityRecordID: record.MatchedMJRecordID, externalID: record.ExternalRecord.ExternalID },
+            );
+        } else {
+            result.RecordsErrored++;
+            console.warn(`[IntegrationEngine] Archive of adopted ${record.MJEntityName} ${record.MatchedMJRecordID} failed — ${entity.LatestResult?.CompleteMessage ?? 'unknown reason'}`);
+        }
+    }
+
+    /** The record map row for one external record, or null when there is none (or the read failed). */
+    private async findRecordMapRow(
+        companyIntegrationID: string,
+        entityID: string,
+        externalID: string,
+        contextUser: UserInfo
+    ): Promise<{ ID: string; Origin: string | null } | null> {
+        const md = this.ProviderToUse;
+        const quotedExternalID = md instanceof DatabaseProviderBase
+            ? QuoteTextLiteral(externalID, md.Dialect)
+            : `'${externalID.replace(/'/g, "''")}'`;
+        const rv = new RunView();
+        const existing = await rv.RunView<{ ID: string; Origin: string | null }>({
+            EntityName: 'MJ: Company Integration Record Maps',
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID=${quotedExternalID}`,
+            Fields: ['ID', 'Origin'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+            BypassCache: true,
+        }, contextUser);
+        return existing.Success && existing.Results.length > 0 ? existing.Results[0] : null;
     }
 
     /** Opt-in partition (Merkle) reconcile flag from the entity map Configuration (GQL-managed). */
@@ -4944,7 +5259,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             this.ProviderToUse,
             companyIntegration.ID,
             contextUser,
-            (ciID, extID, entID, recID, user) => this.saveRecordMap(ciID, extID, entID, recID, user),
+            (ciID, extID, entID, recID, user, origin) => this.saveRecordMap(ciID, extID, entID, recID, user, origin),
         );
 
         for (let i = 0; i < records.length; i += APPLY_BATCH_SIZE) {
@@ -5481,6 +5796,25 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             d: result.RecordsDeleted, s: result.RecordsSkipped,
         };
 
+        // #5202 — the source flags this record deleted. DoNothing writes it as before; SoftDelete writes it
+        // tombstoned (inserting it tombstoned when MJ has no row yet, so history stays queryable); HardDelete
+        // removes an existing row the sync created, archives an adopted one, and skips the insert of a new one.
+        if (record.ChangeType !== 'Delete' && record.ChangeType !== 'Skip' && this.isSourceFlaggedDeleted(record, entityMap)) {
+            if (entityMap.DeleteBehavior === 'HardDelete') {
+                await this.applySourceFlaggedHardDelete(record, companyIntegration, entityMap, result, contextUser, logger);
+                return;
+            }
+            if (entityMap.DeleteBehavior === 'SoftDelete') {
+                // Same rule as the orphan sweep: an entity with no tombstone columns cannot be archived, so
+                // the row is written live and the map warns once per run instead of failing silently.
+                if (CanArchive(this.ProviderToUse.EntityByName(record.MJEntityName)?.Fields)) {
+                    record.SourceDeleted = true;
+                } else {
+                    this.warnSoftDeleteUnsupported(entityMap, logger);
+                }
+            }
+        }
+
         try {
             switch (record.ChangeType) {
                 case 'Create': {
@@ -5494,8 +5828,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     await this.updateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds, recordMaps, logger);
                     break;
                 case 'Delete': {
-                    const didDelete = await this.deleteRecord(record, entityMap, contextUser);
-                    if (didDelete) result.RecordsDeleted++;
+                    const outcome = await this.deleteRecord(record, entityMap, contextUser, logger);
+                    if (outcome === 'deleted') result.RecordsDeleted++;
+                    else if (outcome === 'refused' || outcome === 'gone') result.RecordsSkipped++;
                     else result.RecordsErrored++;
                     break;
                 }
@@ -5632,13 +5967,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // integration column is the sanctioned access here — these runtime-created tables have no
             // generated entity type (the engine already .Set()s the same __mj_integration_* columns).
             const hasHashColumn = entityInfo?.Fields.some(f => f.Name === CONTENT_HASH_COLUMN) ?? false;
-            if (hasHashColumn) {
+            // The hash covers mapped fields only, so it cannot see a source delete flag change (#5202).
+            if (hasHashColumn && !this.hasSourceDeleteFlag(entityMap)) {
                 const storedHash = entity.Get(CONTENT_HASH_COLUMN);
                 if (typeof storedHash === 'string' && storedHash.length > 0
                     && storedHash === ComputeContentHash(record.MappedFields ?? {})) {
                     await this.queueRecordMap(
                         recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
-                        entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
+                        entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser, 'Adopted',
                     );
                     return 'skipped';
                 }
@@ -5651,7 +5987,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo, record)) {
                 await this.queueRecordMap(
                     recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
-                    entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
+                    entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser, 'Adopted',
                 );
                 return 'skipped';
             }
@@ -5667,7 +6003,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const saved = await entity.Save(this.syncSaveOptions);
         if (!saved) {
             const errMsg = entity.LatestResult?.CompleteMessage ?? 'unknown error';
-            const schemaErr = detectSchemaNotGenerated(record.MJEntityName, errMsg);
+            const schemaErr = DetectSchemaNotGenerated(record.MJEntityName, errMsg);
             if (schemaErr) throw schemaErr;
             throw new Error(`Failed to ${existed ? 'update' : 'create'} ${record.MJEntityName} record: ${errMsg}`);
         }
@@ -5695,7 +6031,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
             entityRecordID,
-            contextUser
+            contextUser,
+            existed ? 'Adopted' : 'Created'
         );
         return existed ? 'updated' : 'created';
     }
@@ -5774,7 +6111,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // computed hash of the incoming mapped fields, the record is provably
         // unchanged — skip the per-record DB load AND the write. The dirty-flag check
         // below is the fallback for entities without the hash column.
-        if (precheckHashes) {
+        // Not when the map has a source delete flag (#5202): the hash covers mapped fields only, so a flag
+        // that was set or cleared with no mapped field changing would be skipped here.
+        if (precheckHashes && !this.hasSourceDeleteFlag(entityMap)) {
             const stored = precheckHashes.Hashes.get(record.MatchedMJRecordID);
             if (stored && stored === ComputeContentHash(record.MappedFields ?? {})) {
                 result.RecordsSkipped++;
@@ -5791,7 +6130,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // (PrimaryKeys order, '|'-joined), which is the EntityRecordID the map stores.
                 await this.queueRecordMap(
                     recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
-                    record.MatchedMJRecordID, contextUser,
+                    record.MatchedMJRecordID, contextUser, 'Adopted',
                 );
                 // The record IS still present and confirmed-unchanged on the source — but skipping
                 // the write here means SetStandardIntegrationFields never runs, so __mj_integration_
@@ -5841,7 +6180,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // The entity is loaded here, so use its actual PK as the EntityRecordID. Idempotent upsert.
             await this.queueRecordMap(
                 recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
-                entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
+                entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser, 'Adopted',
             );
             // Same reasoning as the content-hash skip: the record IS confirmed present on the
             // source, so let the batch refresh LastReconciledAt in one set-based touch rather
@@ -5858,7 +6197,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const saved = await entity.Save(this.syncSaveOptions);
         if (!saved) {
             const errMsg = entity.LatestResult?.CompleteMessage ?? 'unknown error';
-            const schemaErr = detectSchemaNotGenerated(record.MJEntityName, errMsg);
+            const schemaErr = DetectSchemaNotGenerated(record.MJEntityName, errMsg);
             if (schemaErr) throw schemaErr;
             throw new Error(`Failed to update ${record.MJEntityName} record ${record.MatchedMJRecordID}: ${errMsg}`);
         }
@@ -5875,7 +6214,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
             entityRecordID,
-            contextUser
+            contextUser,
+            'Adopted'
         );
         result.RecordsUpdated++;
     }
@@ -6003,18 +6343,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     /**
      * Deletes (or soft-deletes) an MJ record based on the entity map's DeleteBehavior.
+     *
+     * @returns `deleted` when the row was removed or archived; `refused` when SoftDelete cannot archive
+     * because the entity has no tombstone columns (#3528 — reported once per map per run, not counted as a
+     * delete); `gone` when the matched row no longer exists in MJ (already deleted — nothing to do, not an
+     * error); `failed` otherwise (no map entry, DoNothing, or the write failed).
      */
     private async deleteRecord(
         record: MappedRecord,
         entityMap: ICompanyIntegrationEntityMap,
-        contextUser: UserInfo
-    ): Promise<boolean> {
+        contextUser: UserInfo,
+        logger?: SyncLogger
+    ): Promise<'deleted' | 'refused' | 'gone' | 'failed'> {
         if (!record.MatchedMJRecordID) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.ExternalRecord.ObjectType} ExternalID=${record.ExternalRecord.ExternalID} — no MJ record map entry (record was never synced)`);
-            return false;
+            return 'failed';
         }
 
-        if (entityMap.DeleteBehavior === 'DoNothing') return false;
+        if (entityMap.DeleteBehavior === 'DoNothing') return 'failed';
 
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
@@ -6024,27 +6370,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const loaded = await entity.InnerLoad(this.buildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.MJEntityName} ${record.MatchedMJRecordID} — record not found in MJ DB (may have been deleted already)`);
-            return false;
+            return 'gone';
         }
 
-        // SoftDelete = mark the mirror row Archived (the standard sync-status for records
-        // removed upstream) and keep it; HardDelete physically removes it. (DoNothing
-        // already returned above.) Previously both behaviors hit entity.Delete() — so
-        // SoftDelete was indistinguishable from HardDelete.
+        // SoftDelete = mark the mirror row Archived and keep it; HardDelete physically removes it.
         if (entityMap.DeleteBehavior === 'SoftDelete') {
-            const fields = entity.Fields ?? [];
-            const hasField = (n: string) => fields.some(f => f.Name === n);
-            if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
-            if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', new Date().toISOString());
-            // Explicit, queryable tombstone (plan §2.5) — distinct from parsing SyncStatus='Archived'.
-            if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
-            if (hasField('__mj_integration_DeletedDetectedAt')) entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
-            const archived = await entity.Save(this.syncSaveOptions);
-            if (!archived) {
+            const outcome = await this.archiveRecord(entity, entityMap, logger);
+            if (outcome === 'failed') {
                 const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
                 console.warn(`[IntegrationEngine] Soft-delete (archive) failed for ${record.MJEntityName} ${record.MatchedMJRecordID} — ${reason}`);
             }
-            return archived;
+            return outcome === 'archived' ? 'deleted' : outcome;
         }
 
         const deleted = await entity.Delete(this.syncDeleteOptions);
@@ -6052,7 +6388,51 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
             console.warn(`[IntegrationEngine] Delete blocked for ${record.MJEntityName} ${record.MatchedMJRecordID} — ${reason}`);
         }
-        return deleted;
+        return deleted ? 'deleted' : 'failed';
+    }
+
+    /** Entity maps already warned this run that SoftDelete cannot archive (#3528). Reset per map at each pull. */
+    private _softDeleteUnsupportedWarned?: Set<string>;
+    private get softDeleteUnsupportedWarned(): Set<string> {
+        return (this._softDeleteUnsupportedWarned ??= new Set<string>());
+    }
+
+    /**
+     * Archives a loaded row: SyncStatus 'Archived', IsTombstoned, and DeletedDetectedAt stamped once (#3528).
+     *
+     * An entity with none of the tombstone columns cannot be archived — setting nothing and saving a clean
+     * entity used to "succeed" and count a delete that never happened. Such a row is refused: no save, no
+     * count, no record-map prune, and one `SOFT_DELETE_UNSUPPORTED` warning per map per run.
+     */
+    private async archiveRecord(
+        entity: BaseEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        logger?: SyncLogger
+    ): Promise<'archived' | 'refused' | 'failed'> {
+        const fields = entity.Fields ?? [];
+        if (!CanArchive(fields)) {
+            this.warnSoftDeleteUnsupported(entityMap, logger);
+            return 'refused';
+        }
+        const hasField = (n: string) => fields.some(f => f.Name === n);
+        const now = new Date().toISOString();
+        if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
+        if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', now);
+        if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
+        if (hasField('__mj_integration_DeletedDetectedAt') && !entity.Get('__mj_integration_DeletedDetectedAt')) {
+            entity.Set('__mj_integration_DeletedDetectedAt', now);
+        }
+        return (await entity.Save(this.syncSaveOptions)) ? 'archived' : 'failed';
+    }
+
+    private warnSoftDeleteUnsupported(entityMap: ICompanyIntegrationEntityMap, logger?: SyncLogger): void {
+        if (this.softDeleteUnsupportedWarned.has(entityMap.ID)) return;
+        this.softDeleteUnsupportedWarned.add(entityMap.ID);
+        const message =
+            `${entityMap.Entity} has no integration tombstone columns, so SoftDelete cannot archive its rows; ` +
+            `nothing was deleted. Set DeleteBehavior to DoNothing or HardDelete, or add the columns.`;
+        console.warn(`[IntegrationEngine] ${message}`);
+        logger?.warning(entityMap.ExternalObjectName ?? entityMap.ID, 'SOFT_DELETE_UNSUPPORTED', message, { entity: entityMap.Entity });
     }
 
     /**
@@ -6225,8 +6605,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             if (this.isBooleanSqlType(targetType)) {
                 const lower = trimmed.toLowerCase();
-                if (lower === 'true' || lower === '1' || lower === 'yes') return true;
-                if (lower === 'false' || lower === '0' || lower === 'no') return false;
+                if (lower === 'true' || lower === '1' || lower === 'yes' || lower === 't') return true;
+                if (lower === 'false' || lower === '0' || lower === 'no' || lower === 'f') return false;
                 return null;
             }
             if (this.isDateSqlType(targetType)) {
@@ -6297,6 +6677,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): boolean {
         if (!entityInfo) return false;
         const has = (name: string) => entityInfo.Fields.some(f => f.Name === name);
+        // #5202 — a source-flagged row needs a write until it is tombstoned, and none once it is. This comes
+        // first: the tombstone and SyncStatus checks below would otherwise rewrite it on every sync.
+        if (record?.SourceDeleted) return !this.isArchived(entity, has);
         if (has('__mj_integration_IsTombstoned') && entity.Get('__mj_integration_IsTombstoned') === true) return true;
         if (has('__mj_integration_SyncMessage') && entity.Get('__mj_integration_SyncMessage') != null) return true;
         if (has('__mj_integration_SyncStatus') && entity.Get('__mj_integration_SyncStatus') !== 'Active') return true;
@@ -6329,7 +6712,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * Silently skips if the entity doesn't have these columns (e.g., __mj targets).
      */
     private setStandardIntegrationFields(
-        entity: { Set(fieldName: string, value: unknown): void; Fields?: Array<{ Name: string }> },
+        entity: { Set(fieldName: string, value: unknown): void; Get(fieldName: string): unknown; Fields?: Array<{ Name: string }> },
         record: MappedRecord
     ): void {
         const fieldNames = entity.Fields?.map(f => f.Name) ?? [];
@@ -6404,10 +6787,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (hasField('__mj_integration_LastWriterDirection')) {
             entity.Set('__mj_integration_LastWriterDirection', 'Pull');
         }
+        // #5202 — the source flags this record deleted under SoftDelete: write it tombstoned, keeping the
+        // first DeletedDetectedAt across syncs that still see the flag.
+        if (record.SourceDeleted) {
+            if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
+            if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
+            if (hasField('__mj_integration_DeletedDetectedAt') && !entity.Get('__mj_integration_DeletedDetectedAt')) {
+                entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
+            }
+            return;
+        }
         // A live (non-deleted) record. The soft-delete path flips this to true + stamps
         // DeletedDetectedAt — an explicit, queryable tombstone instead of parsing SyncStatus text.
+        // A row coming back to life also clears DeletedDetectedAt, so the tombstone reads as one fact.
         if (hasField('__mj_integration_IsTombstoned')) {
             entity.Set('__mj_integration_IsTombstoned', false);
+        }
+        if (hasField('__mj_integration_DeletedDetectedAt') && entity.Get('__mj_integration_DeletedDetectedAt')) {
+            entity.Set('__mj_integration_DeletedDetectedAt', null);
         }
     }
 
@@ -6452,9 +6849,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegrationID: string,
         entityID: string,
         contextUser: UserInfo,
-        onPage?: (rows: ReadonlyArray<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>) => void,
+        onPage?: (rows: ReadonlyArray<RecordMapRow>) => void,
     ): Promise<{
-        Rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>;
+        Rows: Array<RecordMapRow>;
         /** Rows READ, whether or not they were accumulated — the only row count a streaming caller has. */
         RowsRead: number;
         Complete: boolean;
@@ -6468,7 +6865,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const filter = `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}'`;
 
         const rv = new RunView();
-        const rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }> = [];
+        const rows: Array<RecordMapRow> = [];
         let rowsRead = 0;
         let afterID: string | undefined;
 
@@ -6476,7 +6873,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const page = await rv.RunView<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>({
                 EntityName: 'MJ: Company Integration Record Maps',
                 ExtraFilter: filter,
-                Fields: ['ID', 'EntityRecordID', 'ExternalSystemRecordID'],
+                Fields: ['ID', 'EntityRecordID', 'ExternalSystemRecordID', 'Origin'],
                 // Keyset requires the sort to be on the PK alone; it is also what makes the seek
                 // below well-defined.
                 OrderBy: 'ID ASC',
@@ -6528,16 +6925,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         externalID: string,
         entityID: string,
         entityRecordID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        origin: RecordMapOrigin
     ): Promise<void> {
         if (recordMaps) {
             // Queue only — the apply loop flushes after the batch transaction commits. Writing here
             // (or auto-flushing on a full chunk) would put map rows inside a transaction that
             // Discard() can no longer take back on rollback.
-            recordMaps.Queue({ EntityID: entityID, ExternalID: externalID, EntityRecordID: entityRecordID });
+            recordMaps.Queue({ EntityID: entityID, ExternalID: externalID, EntityRecordID: entityRecordID, Origin: origin });
             return;
         }
-        await this.saveRecordMap(companyIntegrationID, externalID, entityID, entityRecordID, contextUser);
+        await this.saveRecordMap(companyIntegrationID, externalID, entityID, entityRecordID, contextUser, origin);
     }
 
     /**
@@ -6548,7 +6946,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         externalID: string,
         entityID: string,
         entityRecordID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        origin: RecordMapOrigin
     ): Promise<void> {
         const md = this.ProviderToUse;
         const recordMap = await md.GetEntityObject<MJCompanyIntegrationRecordMapEntity>(
@@ -6585,9 +6984,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // this case; the per-record fallback now agrees with it.
             if (existing.Results[0].EntityRecordID === entityRecordID) return;
             const loaded = await recordMap.Load(existing.Results[0].ID);
-            if (!loaded) recordMap.NewRecord();
+            if (!loaded) {
+                recordMap.NewRecord();
+                recordMap.Origin = origin;
+            }
         } else {
             recordMap.NewRecord();
+            // An existing mapping keeps the origin it was written with (#3528).
+            recordMap.Origin = origin;
         }
 
         recordMap.CompanyIntegrationID = companyIntegrationID;
@@ -6825,7 +7229,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             terminalStatus = 'Cancelled';
             run.ErrorLog = result.ErrorMessage ?? 'Sync cancelled by user';
         } else {
-            terminalStatus = result.RecordsErrored > 0 ? 'Failed' : 'Success';
+            terminalStatus = RunFailed(result) ? 'Failed' : 'Success';
             if (result.Errors.length > 0) {
                 run.ErrorLog = JSON.stringify(result.Errors.slice(0, 100));
             }
@@ -7232,7 +7636,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
  * An entity map's `Configuration` JSON. The engine reads the keys it knows; the rest belong to
  * connectors and to the record filter / reference resolution parsers, which validate their own.
  */
-type EntityMapConfig = Record<string, unknown> & { partitionReconcile?: boolean; partitionCount?: number };
+type EntityMapConfig = Record<string, unknown> & EntityMapEngineConfig;
 
 /**
  * The message a finished sync run is finalized with.

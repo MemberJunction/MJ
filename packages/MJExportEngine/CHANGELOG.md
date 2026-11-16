@@ -1,5 +1,7 @@
 # @memberjunction/export-engine
 
+## 6.3.0-edge.0
+
 ## 6.2.0
 
 ### Patch Changes

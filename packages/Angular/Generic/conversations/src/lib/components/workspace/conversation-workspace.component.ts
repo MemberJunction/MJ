@@ -45,7 +45,11 @@ import { UICommandHandlerService } from '../../services/ui-command-handler.servi
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
-import { BuildConversationTasksFilter, OwnTasksFilter } from '../../services/conversation-tasks-filter';
+import {
+  BuildConversationTasksFilter,
+  InvalidateAgentActivityScopeCache,
+  OwnTasksFilter,
+} from '../../services/conversation-tasks-filter';
 import { ConversationChatAreaComponent } from '../conversation/conversation-chat-area.component';
 import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -785,6 +789,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    */
   async OnRealtimeConversationReady(event: { conversationId: string; select: boolean }): Promise<void> {
     try {
+      InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
       await ConversationEngine.Instance.LoadConversations(this.EnvironmentId, this.CurrentUser, true);
       if (event.select && this.IsSidebarVisible) {
         const conversation = ConversationEngine.Instance.Conversations.find(
@@ -822,6 +827,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.SelectedConversationId = event.conversation.ID;
       this.SelectedConversation = event.conversation;
       this.IsNewUnsavedConversation = false;
+      InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
       // The conversation is already added to ConversationEngine by the chat area
     } catch (error) {
       console.error('onConversationCreated ERROR:', error);
@@ -845,6 +851,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.PendingMessageToSend = event.text;
     this.PendingAttachmentsToSend = event.attachments;
     this.PendingMessageConversationId = this.SelectedConversationId;
+    InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
   }
 
   async ngOnInit() {
@@ -858,6 +865,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // This establishes the single PubSub connection for all conversations
     this.streamingService.initialize();
     console.log('✅ Global streaming service initialized');
+
+    this.streamingService.CompletionEvents$
+      ?.pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
+      });
 
     // Subscribe to command events from UI Command Handler service
     // These will be bubbled up to the host application
@@ -1054,6 +1067,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
 
     // Clear any pending save timeout
     if (this.saveSettingsTimeout) {
@@ -1293,6 +1307,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         }
       }
     } else if (tab === 'tasks') {
+      if (wasOnDifferentTab) {
+        InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
+      }
       navEvent.taskId = this.ActiveTaskId || undefined;
     }
 
@@ -1704,6 +1721,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   OnTaskClicked(task: MJTaskEntity): void {
+    InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
     // Switch to Tasks tab and set active task ID
     this.ActiveTab = 'tasks';
     this._activeTaskId = task.ID;

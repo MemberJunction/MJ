@@ -1,0 +1,132 @@
+{
+  "C1": {
+    "selected": "glm",
+    "score": "logLoss",
+    "value": 0.365239432,
+    "ci": [
+      0.327995351,
+      0.4080320562
+    ],
+    "nTest": 1205,
+    "outcome": "keep-simple-baseline",
+    "branch": "b:keep-simple-baseline",
+    "sha256": "3729e51a5ec8591ee588d45ae3aefe5fd75d1ac4891ce7de7f0c1b20b0eb7e51"
+  },
+  "C2": {
+    "selected": "glm",
+    "score": "logLoss",
+    "value": 0.08660054445,
+    "ci": [
+      0.0768464522,
+      0.09774005997
+    ],
+    "nTest": 7500,
+    "outcome": "keep-simple-baseline",
+    "branch": "b:keep-simple-baseline",
+    "sha256": "979408ec8f980b785d632a85a723ff2f2f2a85e281a6fb2ecf9aa7f870db8080"
+  },
+  "C2-shuffled": {
+    "selected": "glm",
+    "score": "logLoss",
+    "value": 0.1014005118,
+    "ci": [
+      0.08900518993,
+      0.1142376472
+    ],
+    "nTest": 7500,
+    "outcome": "no-signal",
+    "branch": "c:no-signal",
+    "sha256": "979408ec8f980b785d632a85a723ff2f2f2a85e281a6fb2ecf9aa7f870db8080"
+  },
+  "C3": {
+    "selected": "glm",
+    "score": "multiclassLogLoss",
+    "value": 0.7174426684,
+    "ci": [
+      0.6899352703,
+      0.7426981742
+    ],
+    "nTest": 3000,
+    "outcome": "keep-simple-baseline",
+    "branch": "b:keep-simple-baseline",
+    "sha256": "4172e642ca316dda07e37fc3d8869d3d3740689f12c15fa0a8cf0a6141c9be6d"
+  },
+  "C4": {
+    "selected": "glm",
+    "score": "logLoss",
+    "value": 0.4481357304,
+    "ci": [
+      0.4303626301,
+      0.4673115428
+    ],
+    "nTest": 3000,
+    "outcome": "keep-simple-baseline",
+    "branch": "b:keep-simple-baseline",
+    "sha256": "ede07ca3808f88a9b9398ad2bac2b1ae2e9704ef73101c15964d512151c21509"
+  },
+  "R1": {
+    "selected": "glm",
+    "score": "rmse",
+    "value": 4.971000452,
+    "ci": [
+      4.797989229,
+      5.139717894
+    ],
+    "nTest": 1500,
+    "outcome": "keep-simple-baseline",
+    "branch": "b:keep-simple-baseline",
+    "sha256": "6725254f568f9cd36ea800452f3ff6dcad3dc674c206a2bdc86c77db8c1f2f51"
+  },
+  "R2-real": {
+    "selected": "glm",
+    "score": "tweedieDeviance(power=1.5)",
+    "value": 27.76775776,
+    "ci": [
+      26.14390739,
+      29.32313042
+    ],
+    "nTest": 1205,
+    "outcome": "keep-simple-baseline",
+    "branch": "b:keep-simple-baseline",
+    "sha256": "e265ea02f919c808b7b3e7690b78b73a3137ae1eb6e8654b2b8390dfa74150da"
+  },
+  "R2p": {
+    "selected": "glm",
+    "score": "tweedieDeviance(power=1.5)",
+    "value": 21.73642712,
+    "ci": [
+      20.92127048,
+      22.75292697
+    ],
+    "nTest": 6250,
+    "outcome": "keep-simple-baseline",
+    "branch": "b:keep-simple-baseline",
+    "sha256": "3838dc9e965c19c67cdb2e4bb3e4c443d401e52559e55d8e722e800279174f1f"
+  },
+  "R3": {
+    "selected": "glm",
+    "score": "poissonDeviance",
+    "value": 1.118965468,
+    "ci": [
+      1.066981239,
+      1.171340619
+    ],
+    "nTest": 3000,
+    "outcome": "keep-simple-baseline",
+    "branch": "b:keep-simple-baseline",
+    "sha256": "995ba1d1d52b53097a646620b1bd3f5de7fb0f5ef49901b3d10e67a9035bf3fa"
+  },
+  "T2p": {
+    "selected": "glm",
+    "score": "rmse",
+    "value": 1.559098962,
+    "ci": [
+      1.512303196,
+      1.608225373
+    ],
+    "nTest": 2000,
+    "outcome": "keep-simple-baseline",
+    "branch": "b:keep-simple-baseline",
+    "sha256": "e9e1428f8df2b62e5d90e50ac06852b0d0544aa28e70c71da1ceb98f3f7dc313"
+  }
+}

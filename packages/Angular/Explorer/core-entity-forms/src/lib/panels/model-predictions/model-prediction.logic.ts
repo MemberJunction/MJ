@@ -291,7 +291,7 @@ export interface RawProcessRunDetail {
 /** Model metadata lookup contract for decorating history items. */
 export interface HistoryModelMetadata {
     Name?: string;
-    Pipeline?: string;
+    Pipeline?: string | null;
     Version?: number;
     ProblemType?: string;
     TargetVariable?: string;

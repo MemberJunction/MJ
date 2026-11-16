@@ -1,14 +1,11 @@
 import { spawn } from 'node:child_process';
-import { existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-/** Process-unique sequence for temp bit-column registry files (no Date/random needed). */
-let bitColsFileSeq = 0;
 
 /** One statement the MJ dialect refused to emit — a reported conversion gap. */
 export interface MJUnhandledStatement {
@@ -128,11 +125,14 @@ export class MJPostgresTranspiler {
       this.bitColsFile = null;
       return null;
     }
-    const file = path.join(os.tmpdir(), `mj-extra-bitcols-${process.pid}-${bitColsFileSeq++}.json`);
+    // A fresh private directory (mode 0700): a predictable name in the shared temp dir could be
+    // pre-created or symlinked by another local user.
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'mj-extra-bitcols-'));
+    const file = path.join(dir, 'bitcols.json');
     writeFileSync(file, JSON.stringify(this.extraBitColumns), 'utf8');
     process.once('exit', () => {
       try {
-        unlinkSync(file);
+        rmSync(dir, { recursive: true, force: true });
       } catch {
         /* best-effort cleanup */
       }

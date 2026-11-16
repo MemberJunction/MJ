@@ -39,11 +39,11 @@
  */
 
 import { LogError } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID } from '@memberjunction/global';
+import { MetricDirections } from '@memberjunction/predictive-studio-core';
 import type {
   ModelingPlanSpec,
   Budget,
-  LeaderboardEntry,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJExperimentEntity,
@@ -53,18 +53,22 @@ import type {
 } from '@memberjunction/core-entities';
 
 import {
+  type ExperimentLeaderboardEntry,
   type ExperimentDeps,
   type ExperimentRunOptions,
   type ExperimentSessionResult,
   type ProposedExperiment,
   type SessionStopReason,
   type IWaveStrategist,
+  type TrainExperimentResult,
   type WaveStrategistContext,
   DEFAULT_WAVE_CONCURRENCY,
 } from './types';
 import { RankLeaderboard, BestEntry, SelectPrunedIterationIds } from './leaderboard';
 import { RunBounded } from './concurrency';
 import { PlanOrderWaveStrategist } from './wave-strategist';
+import { ExperimentBudget, TrainingAttemptFailedError } from './budget';
+import { ExperimentScores } from './scores';
 
 /**
  * A budget check result — whether the session may continue and, if not, why.
@@ -74,12 +78,42 @@ interface BudgetGateResult {
   reason?: SessionStopReason;
 }
 
+/** One trained (or failed) iteration, folded into the leaderboard and the budget. */
+interface IterationOutcome {
+  iterationId: string;
+  /** The normalized holdout score; null when the train failed or its holdout gave no score (never on the leaderboard). */
+  score: number | null;
+  /** The holdout metric `score` was read from; null exactly when `score` is null. */
+  scoreMetric: string | null;
+  /** USD the attempt spent. */
+  computeCost: number;
+  /** Compute seconds the attempt spent, failed or completed. */
+  computeSeconds: number;
+  /** The model the train produced; null when it failed. */
+  model: MJMLModelEntity | null;
+}
+
 /** Running budget accounting carried across waves. */
 interface BudgetState {
+  /** Attempts so far, failed or completed. */
   runs: number;
+  /** USD every attempt so far spent. */
   computeCost: number;
+  /** Compute seconds every settled attempt spent. */
+  computeSeconds: number;
+  /**
+   * Compute seconds held by attempts still in flight: each attempt started under a seconds bound reserves the timeout
+   * it was handed until it settles, when the reservation is replaced by what it actually spent.
+   */
+  reservedSeconds: number;
   startedAtMs: number;
 }
+
+/**
+ * Whether an attempt may start, the timeout it is handed (null when the session has no seconds bound), and how it
+ * gives its reservation back when it settles.
+ */
+type SecondsClaim = { readonly Started: true; readonly TimeoutSeconds: number | null; readonly Release: () => void } | { readonly Started: false };
 
 /**
  * The deterministic experiment orchestrator. Stateless across calls; construct
@@ -110,10 +144,10 @@ export class ExperimentOrchestrator {
     const strategist = deps.waveStrategist ?? new PlanOrderWaveStrategist();
 
     const iterations: MJExperimentSessionIterationEntity[] = [];
-    const leaderboard: LeaderboardEntry[] = [];
+    const leaderboard: ExperimentLeaderboardEntry[] = [];
     const modelsByIteration = new Map<string, MJMLModelEntity>();
     const remaining = [...plan.ProposedExperiments];
-    const budgetState: BudgetState = { runs: 0, computeCost: 0, startedAtMs: deps.clock.now() };
+    const budgetState: BudgetState = { runs: 0, computeCost: 0, computeSeconds: 0, reservedSeconds: 0, startedAtMs: deps.clock.now() };
 
     let stopReason: SessionStopReason = 'completed';
     let sequence = 0;
@@ -202,16 +236,17 @@ export class ExperimentOrchestrator {
     return experiment;
   }
 
-  /** Budget = explicit override, else the plan's `ProposedBudget` (both optional). */
+  /**
+   * Budget = explicit override, else the plan's `ProposedBudget` (both optional), tightened by the bound protocol's
+   * trainer budgets when the session runs under one.
+   */
   private resolveBudget(plan: ModelingPlanSpec, options: ExperimentRunOptions): Budget {
-    if (options.budget) {
-      return options.budget;
-    }
-    return {
+    const planBudget: Budget = options.budget || {
       MaxComputeCost: plan.ProposedBudget?.MaxComputeCost,
       MaxRuns: plan.ProposedBudget?.MaxRuns,
       MaxWallclockMinutes: plan.ProposedBudget?.MaxWallclockMinutes,
     };
+    return ExperimentBudget.EffectiveBudget(planBudget, options.protocolBudgets || null);
   }
 
   /**
@@ -252,7 +287,10 @@ export class ExperimentOrchestrator {
    * Run a single wave: create + train its iterations with bounded concurrency,
    * link each run to its iteration, score the iteration, and fold results into
    * the leaderboard. Budget is re-checked per-iteration so the session pauses at
-   * the exact bound (no overrun).
+   * the bound. Under a compute-seconds bound each attempt reserves the seconds it is handed, so attempts in flight
+   * together never hold more than the bound; an attempt that finds every remaining second reserved waits for one to
+   * settle, and one that finds the bound spent never starts (its iteration stays `Pending`). A single attempt can
+   * still overrun the seconds it was handed by as much as the trainer overruns its own timeout.
    */
   private async runWave(
     wave: ProposedExperiment[],
@@ -264,7 +302,7 @@ export class ExperimentOrchestrator {
     budgetState: BudgetState,
     concurrency: number,
     iterations: MJExperimentSessionIterationEntity[],
-    leaderboard: LeaderboardEntry[],
+    leaderboard: ExperimentLeaderboardEntry[],
     modelsByIteration: Map<string, MJMLModelEntity>,
   ): Promise<{ stopReason: SessionStopReason }> {
     // Create all iteration rows up front (Pending) so sequence numbers are stable
@@ -279,22 +317,22 @@ export class ExperimentOrchestrator {
     // Fold each completed train into the leaderboard + budget IMMEDIATELY as it
     // finishes (not after the whole wave) so the `shouldStop` predicate below sees
     // up-to-date budget state and can halt further dispatch the instant a bound
-    // trips — no in-flight overrun (plan §8.4).
+    // trips; seconds in flight are bounded by the reservations.
     let stopReason: SessionStopReason = 'completed';
-    const foldOutcome = (outcome: {
-      iterationId: string;
-      scored: boolean;
-      score: number;
-      computeCost: number;
-      model: MJMLModelEntity | null;
-    }): void => {
+    const foldOutcome = (outcome: IterationOutcome): void => {
       if (outcome.model) {
         modelsByIteration.set(outcome.iterationId, outcome.model);
       }
-      if (outcome.scored) {
-        leaderboard.push({ IterationID: outcome.iterationId, Metric: outcome.score, ModelID: outcome.model?.ID });
-        budgetState.runs += 1;
-        budgetState.computeCost += outcome.computeCost;
+      // Every attempt counts against the budget: a failed one, and a completed one whether or not its holdout measured
+      // the success metric. A failed attempt spends the compute its run recorded.
+      budgetState.runs += 1;
+      budgetState.computeCost += outcome.computeCost;
+      budgetState.computeSeconds += outcome.computeSeconds;
+      if (outcome.score !== null && outcome.scoreMetric !== null) {
+        leaderboard.push({
+          IterationID: outcome.iterationId, Metric: outcome.score, ModelID: outcome.model?.ID,
+          ScoreMetric: outcome.scoreMetric, OnSuccessMetric: ExperimentScores.IsSuccessMetric(outcome.scoreMetric, plan.TargetDefinition.SuccessMetric),
+        });
       }
       const gate = this.checkBudget(budget, budgetState, deps);
       if (gate.exceeded) {
@@ -302,16 +340,54 @@ export class ExperimentOrchestrator {
       }
     };
 
-    const tasks = created.map(({ iteration, experiment }) => async () => {
-      const outcome = await this.trainIteration(iteration, experiment, plan, session, deps);
-      foldOutcome(outcome);
-      return outcome;
+    const inFlight = new Set<Promise<void>>();
+    const tasks = created.map(({ iteration, experiment }) => async (): Promise<void> => {
+      const claim = await this.claimSeconds(budget, budgetState, inFlight);
+      if (claim.Started === false) return;
+      try {
+        foldOutcome(await this.trainIteration(iteration, experiment, plan, session, deps, claim.TimeoutSeconds));
+      } finally {
+        // Released in the same turn the actual spend is folded, before any waiting attempt looks again.
+        claim.Release();
+      }
     });
 
     // Stop pulling new iterations the moment a budget bound has tripped — workers
     // consult this before claiming their next task, so no extra train is dispatched.
     await RunBounded(tasks, concurrency, { shouldStop: () => stopReason !== 'completed' });
     return { stopReason };
+  }
+
+  /**
+   * Claim compute seconds for one attempt: every second neither spent nor reserved by an attempt in flight, reserved
+   * for this one. When none is left but attempts are in flight, wait for one to settle and look again; when none is
+   * left and nothing is in flight, the bound is spent and the attempt does not start. Without a seconds bound every
+   * attempt starts with no timeout.
+   */
+  private async claimSeconds(budget: Budget, state: BudgetState, inFlight: Set<Promise<void>>): Promise<SecondsClaim> {
+    for (;;) {
+      const remaining = ExperimentBudget.RemainingComputeSeconds(budget, state.computeSeconds + state.reservedSeconds);
+      if (remaining === null || remaining > 0) return this.reserve(state, inFlight, remaining);
+      if (inFlight.size === 0) return { Started: false };
+      await Promise.race(inFlight);
+    }
+  }
+
+  /**
+   * Reserve `seconds` (none when null) and register the attempt as in flight, in the same turn as the claim's check, so
+   * an attempt claiming right after sees both.
+   */
+  private reserve(state: BudgetState, inFlight: Set<Promise<void>>, seconds: number | null): SecondsClaim {
+    let settle: () => void = () => undefined;
+    const settled = new Promise<void>((resolve) => { settle = resolve; });
+    inFlight.add(settled);
+    state.reservedSeconds += seconds || 0;
+    const release = (): void => {
+      state.reservedSeconds -= seconds || 0;
+      inFlight.delete(settled);
+      settle();
+    };
+    return { Started: true, TimeoutSeconds: seconds, Release: release };
   }
 
   /** Create a `Pending` iteration row for an experiment, then mark it `Running`. */
@@ -335,9 +411,10 @@ export class ExperimentOrchestrator {
   }
 
   /**
-   * Train one iteration: mark it `Running`, call the trainer, link the run to the
-   * iteration, set the normalized Score + costs, and mark it `Completed` (or
-   * `Failed`). Returns a small outcome record for leaderboard/budget folding.
+   * Train one iteration: mark it `Running`, call the trainer with the compute seconds claimed for it as its timeout,
+   * link the run to the iteration, set the normalized Score + costs, and mark it `Completed` (or `Failed`). Returns a
+   * small outcome record for leaderboard/budget folding; a failed attempt carries the seconds and USD its run recorded
+   * ({@link TrainingAttemptFailedError}), a failure before any run existed none.
    */
   private async trainIteration(
     iteration: MJExperimentSessionIterationEntity,
@@ -345,7 +422,8 @@ export class ExperimentOrchestrator {
     plan: ModelingPlanSpec,
     session: MJExperimentSessionEntity,
     deps: ExperimentDeps,
-  ): Promise<{ iterationId: string; scored: boolean; score: number; computeCost: number; model: MJMLModelEntity | null }> {
+    timeoutSeconds: number | null,
+  ): Promise<IterationOutcome> {
     iteration.Status = 'Running';
     await this.saveOrThrow(iteration, 'mark iteration Running');
 
@@ -357,19 +435,44 @@ export class ExperimentOrchestrator {
         sessionId: session.ID,
         contextUser: deps.contextUser,
         provider: deps.provider,
+        timeoutSeconds,
       });
 
       const computeCost = result.ComputeCost ?? 0;
+      const scoreMetric = ExperimentOrchestrator.requireScoreMetric(result);
       iteration.Score = result.Score;
+      iteration.Rationale = ExperimentOrchestrator.withScoreMetricNote(iteration.Rationale, scoreMetric, plan.TargetDefinition.SuccessMetric);
       iteration.ComputeCost = computeCost;
       iteration.TokensUsed = result.TokensUsed ?? 0;
       iteration.Status = 'Completed';
       await this.saveOrThrow(iteration, 'finalize iteration');
-      return { iterationId: iteration.ID, scored: true, score: result.Score, computeCost, model: result.model };
+      return { iterationId: iteration.ID, score: result.Score, scoreMetric, computeCost, computeSeconds: result.ComputeSeconds || 0, model: result.model };
     } catch (err) {
+      const spent = err instanceof TrainingAttemptFailedError ? { Seconds: err.ComputeSeconds, Cost: err.ComputeCost } : { Seconds: 0, Cost: 0 };
+      iteration.ComputeCost = spent.Cost;
       await this.failIteration(iteration, err);
-      return { iterationId: iteration.ID, scored: false, score: 0, computeCost: 0, model: null };
+      return { iterationId: iteration.ID, score: null, scoreMetric: null, computeCost: spent.Cost, computeSeconds: spent.Seconds, model: null };
     }
+  }
+
+  /**
+   * The metric a trainer's score was read from. A score without its metric breaks the trainer contract
+   * ({@link TrainExperimentResult.ScoreMetric}): it could not be ranked against the others, so the iteration fails.
+   */
+  private static requireScoreMetric(result: TrainExperimentResult): string | null {
+    if (result.Score === null) return null;
+    if (!result.ScoreMetric) throw new Error('the trainer returned a score without the holdout metric it was read from');
+    return result.ScoreMetric;
+  }
+
+  /**
+   * The iteration's rationale, saying which metric its Score is on when that is not the plan's success metric (a kept
+   * simple baseline is scored on its primary proper score), so a reader of the iteration row never takes the number for
+   * the success metric.
+   */
+  private static withScoreMetricNote(rationale: string | null, scoreMetric: string | null, successMetric: string): string | null {
+    if (scoreMetric === null || ExperimentScores.IsSuccessMetric(scoreMetric, successMetric)) return rationale;
+    return `${rationale || ''}\nScored on ${scoreMetric}: its holdout gave no ${successMetric} score.`.trim();
   }
 
   /** Record a failed iteration (best-effort — never masks the loop's progress). */
@@ -397,7 +500,7 @@ export class ExperimentOrchestrator {
    * surfaced as winners.
    */
   private async applyPruning(
-    leaderboard: LeaderboardEntry[],
+    leaderboard: ExperimentLeaderboardEntry[],
     iterations: MJExperimentSessionIterationEntity[],
     options: ExperimentRunOptions,
     deps: ExperimentDeps,
@@ -414,10 +517,13 @@ export class ExperimentOrchestrator {
     // leaderboard. If a save fails, the entry stays so the iteration isn't silently
     // lost (it remains a candidate winner with its DB Status still `Completed`).
     const persisted = new Set<string>();
+    const iterationsById = IndexByUUID(iterations);
+    const entriesByIteration = IndexByUUID(leaderboard, (e) => e.IterationID);
     for (const id of prunedIds) {
-      const iteration = iterations.find((it) => UUIDsEqual(it.ID, id));
+      const iteration = iterationsById.Get(id);
       if (iteration && iteration.Status === 'Completed') {
-        const saved = await this.markPruned(iteration, best, deps);
+        const entry = entriesByIteration.Get(id) ?? null;
+        const saved = await this.markPruned(iteration, entry, best, deps);
         if (saved) {
           persisted.add(id);
         }
@@ -440,12 +546,16 @@ export class ExperimentOrchestrator {
    */
   private async markPruned(
     iteration: MJExperimentSessionIterationEntity,
-    best: LeaderboardEntry | null,
+    entry: ExperimentLeaderboardEntry | null,
+    best: ExperimentLeaderboardEntry | null,
     _deps: ExperimentDeps,
   ): Promise<boolean> {
     iteration.Status = 'Pruned';
-    const bestNote = best ? ` (best so far scored ${best.Metric})` : '';
-    iteration.Rationale = `${iteration.Rationale ?? ''}\nPruned: dominated branch, scored ${iteration.Score ?? 'n/a'}${bestNote}.`.trim();
+    // Each score on its own metric's scale and labelled with it: the leaderboard holds normalized (higher-is-better)
+    // numbers, which read as a negated loss if written raw.
+    const scored = entry ? ExperimentOrchestrator.onMetricScale(entry) : 'n/a';
+    const topNote = best ? ` (top-ranked so far: ${ExperimentOrchestrator.onMetricScale(best)})` : '';
+    iteration.Rationale = `${iteration.Rationale ?? ''}\nPruned: dominated branch, scored ${scored}${topNote}.`.trim();
     const ok = await iteration.Save();
     if (!ok) {
       LogError(
@@ -453,6 +563,14 @@ export class ExperimentOrchestrator {
       );
     }
     return ok;
+  }
+
+  /**
+   * A leaderboard entry's normalized score written on its metric's own scale (Core's one inverse), after its label, to
+   * three decimals as the Studio surfaces show it: a raw float would persist as `rmse 0.30000000000000004`.
+   */
+  private static onMetricScale(entry: ExperimentLeaderboardEntry): string {
+    return `${MetricDirections.MetricScaleLabel(entry.ScoreMetric)} ${MetricDirections.OnMetricScale(entry.Metric, entry.ScoreMetric).toFixed(3)}`;
   }
 
   // region: budget gate ---------------------------------------------------------
@@ -468,7 +586,7 @@ export class ExperimentOrchestrator {
    * overrun, §8.4).
    */
   private trimWaveToBudget(wave: ProposedExperiment[], budget: Budget, state: BudgetState): ProposedExperiment[] {
-    if (budget.MaxRuns == null) {
+    if ((budget.MaxRuns === null || budget.MaxRuns === undefined)) {
       return wave;
     }
     const remainingRuns = Math.max(0, budget.MaxRuns - state.runs);
@@ -476,17 +594,21 @@ export class ExperimentOrchestrator {
   }
 
   /**
-   * Evaluate the session budget (§8.4): MaxRuns, MaxComputeCost, and
-   * MaxWallclockMinutes (via the injected clock). Returns the first bound hit.
+   * Evaluate the session budget: MaxRuns, MaxComputeCost (USD), MaxComputeSeconds and
+   * MaxWallclockMinutes (via the injected clock). Returns the first bound hit; either compute bound stops the session
+   * as `budget-maxComputeCost`.
    */
   private checkBudget(budget: Budget, state: BudgetState, deps: ExperimentDeps): BudgetGateResult {
-    if (budget.MaxRuns != null && state.runs >= budget.MaxRuns) {
+    if ((budget.MaxRuns !== null && budget.MaxRuns !== undefined) && state.runs >= budget.MaxRuns) {
       return { exceeded: true, reason: 'budget-maxRuns' };
     }
-    if (budget.MaxComputeCost != null && state.computeCost >= budget.MaxComputeCost) {
+    if ((budget.MaxComputeCost !== null && budget.MaxComputeCost !== undefined) && state.computeCost >= budget.MaxComputeCost) {
       return { exceeded: true, reason: 'budget-maxComputeCost' };
     }
-    if (budget.MaxWallclockMinutes != null) {
+    if (budget.MaxComputeSeconds !== undefined && state.computeSeconds >= budget.MaxComputeSeconds) {
+      return { exceeded: true, reason: 'budget-maxComputeCost' };
+    }
+    if ((budget.MaxWallclockMinutes !== null && budget.MaxWallclockMinutes !== undefined)) {
       const elapsedMin = (deps.clock.now() - state.startedAtMs) / 60000;
       if (elapsedMin >= budget.MaxWallclockMinutes) {
         return { exceeded: true, reason: 'budget-maxWallclock' };
@@ -500,7 +622,7 @@ export class ExperimentOrchestrator {
   /** Persist the ranked leaderboard JSON snapshot onto the session (§9.2). */
   private async snapshotLeaderboard(
     session: MJExperimentSessionEntity,
-    leaderboard: LeaderboardEntry[],
+    leaderboard: ExperimentLeaderboardEntry[],
     _deps: ExperimentDeps,
   ): Promise<void> {
     session.Leaderboard = JSON.stringify(RankLeaderboard(leaderboard));
@@ -517,7 +639,7 @@ export class ExperimentOrchestrator {
    */
   private async finalizeSession(
     session: MJExperimentSessionEntity,
-    leaderboard: LeaderboardEntry[],
+    leaderboard: ExperimentLeaderboardEntry[],
     modelsByIteration: Map<string, MJMLModelEntity>,
     stopReason: SessionStopReason,
     deps: ExperimentDeps,

@@ -54,6 +54,36 @@ function allJsFiles(): string[] {
   return out;
 }
 
+interface BundleOutput {
+  imports?: Array<{ path: string; kind: string }>;
+}
+
+/** The call build's output files from esbuild's metafile, keyed by their path under `dist/element`. */
+function sessionOutputs(): Map<string, BundleOutput> {
+  const meta = JSON.parse(readFileSync(join(dist, 'meta.json'), 'utf8')) as { session: { outputs: Record<string, BundleOutput> } };
+  const prefix = 'dist/element/';
+  return new Map(Object.entries(meta.session.outputs).filter(([path]) => !path.endsWith('.map')).map(([path, output]) => [path.replace(prefix, ''), output]));
+}
+
+/**
+ * The files that load with the ones `isRoot` selects: those files plus everything they import statically.
+ * A dynamic `import()` is not followed, because that file downloads only when the code asks for it.
+ */
+function staticClosure(outputs: Map<string, BundleOutput>, isRoot: (name: string) => boolean): string[] {
+  const pending = [...outputs.keys()].filter(isRoot);
+  const seen = new Set<string>(pending);
+  while (pending.length > 0) {
+    for (const imported of outputs.get(pending.pop() ?? '')?.imports ?? []) {
+      const name = imported.path.replace('dist/element/', '');
+      if (imported.kind === 'import-statement' && outputs.has(name) && !seen.has(name)) {
+        seen.add(name);
+        pending.push(name);
+      }
+    }
+  }
+  return [...seen];
+}
+
 describe('mj-realtime-widget element bundle', () => {
   beforeAll(() => {
     if (!existsSync(shellPath) || !existsSync(sessionPath)) {
@@ -165,11 +195,16 @@ describe('mj-realtime-widget element bundle', () => {
   });
 
   describe('the DOM rasterizer chunk', () => {
-    it('is its own file: html-to-image is in no other file, so neither the shell nor an ordinary call pays for it', () => {
-      const withRasterizer = allJsFiles().filter((f) => readFileSync(f, 'utf8').includes('data:image/svg+xml;charset=utf-8,') && readFileSync(f, 'utf8').includes('foreignObject'));
-      const names = withRasterizer.map((f) => f.replace(dist + '/', ''));
-      expect(names.some((n) => n.includes('frame-capture-chunk-entry'))).toBe(true);
-      expect(names.some((n) => n === 'mj-realtime-widget.js' || n === 'mj-realtime-widget-session.js' || n.includes('interactive-chunk-entry'))).toBe(false);
+    it('is lazy: html-to-image is in no file the shell, an ordinary call or the Interactive Component channel loads up front', () => {
+      const withRasterizer = allJsFiles()
+        .filter((f) => readFileSync(f, 'utf8').includes('data:image/svg+xml;charset=utf-8,') && readFileSync(f, 'utf8').includes('foreignObject'))
+        .map((f) => f.replace(dist + '/', ''));
+      expect(withRasterizer.length).toBeGreaterThan(0);
+      expect(staticClosure(sessionOutputs(), (n) => n.includes('frame-capture-chunk-entry')).some((n) => withRasterizer.includes(n))).toBe(true);
+      for (const isEager of [(n: string) => n === 'mj-realtime-widget-session.js', (n: string) => n.includes('interactive-chunk-entry')]) {
+        expect(staticClosure(sessionOutputs(), isEager).filter((n) => withRasterizer.includes(n))).toEqual([]);
+      }
+      expect(withRasterizer).not.toContain('mj-realtime-widget.js');
     });
   });
 

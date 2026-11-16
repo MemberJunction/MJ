@@ -1,7 +1,8 @@
-import { Component, ViewChild, AfterViewInit, OnInit, OnChanges, SimpleChanges, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, OnInit, OnChanges, SimpleChanges, Output, EventEmitter, ChangeDetectorRef, Type } from '@angular/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
-import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
-import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
+import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { ComponentVersionDiffComponent } from '../version-diff/component-version-diff.component';
+import { MJReactComponent, AngularAdapterService, PdfOrientation } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
   isFormRole, IsFormPanelRole, getDeclaredFormEntityName, GetDeclaredFormContribution, StripJoinFieldBrackets,
@@ -598,6 +599,27 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   public override AskUserForFeedback(): void {
     this.ShowFeedbackPanel = !this.ShowFeedbackPanel;
+  }
+
+  /**
+   * Component artifacts export as a PDF once the component has rendered on the default path.
+   * Form-role components (record pickers, apply flows) are left out.
+   */
+  public override get SupportsPDFExport(): boolean {
+    return !!this.ReactComponent && !!this.ResolvedComponentSpec;
+  }
+
+  /** Download the rendered component as a PDF. Called from the artifact viewer header button. */
+  public override async ExportPDF(orientation: PdfOrientation = 'portrait'): Promise<void> {
+    await this.ReactComponent?.CapturePDF(orientation);
+  }
+
+  public override get SupportsVersionDiff(): boolean {
+    return true;
+  }
+
+  public override GetVersionDiffComponentType(): Type<IArtifactVersionDiffViewer> {
+    return ComponentVersionDiffComponent;
   }
 
   // ════════════════════════════════════════════════════════════════════

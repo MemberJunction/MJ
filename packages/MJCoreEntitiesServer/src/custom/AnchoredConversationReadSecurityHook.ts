@@ -92,6 +92,34 @@ function hasOwnOrEntityField(row: unknown, fieldName: string): boolean {
  * Never mutates `results.Results` in place (safe with frozen cache entries); returns a replacement
  * `RunViewResult` whenever rows are filtered out.
  */
+function isConversationOrISADescendant(
+    provider: IMetadataProvider | null,
+    entityName: string
+): boolean {
+    if (
+        entityName === 'MJ: Conversations' ||
+        entityName === 'MJ: Comments' ||
+        entityName === 'MJ: Field Suggestions'
+    ) {
+        return true;
+    }
+    if (!provider) {
+        return false;
+    }
+    const entityInfo =
+        (typeof provider.EntityByName === 'function'
+            ? provider.EntityByName(entityName)
+            : undefined) ?? provider.Entities?.find((e) => e.Name === entityName);
+    let cur = entityInfo?.ParentEntityInfo ?? null;
+    while (cur) {
+        if (cur.Name === 'MJ: Conversations') {
+            return true;
+        }
+        cur = cur.ParentEntityInfo;
+    }
+    return false;
+}
+
 export const AnchoredConversationPostRunViewHook: PostRunViewHook = async (
     params: RunViewParams,
     results: RunViewResult,
@@ -108,11 +136,16 @@ export const AnchoredConversationPostRunViewHook: PostRunViewHook = async (
     }
 
     const entityName = resolveTargetEntityName(params);
-    if (entityName !== 'MJ: Conversations' && entityName !== 'MJ: Conversation Details') {
+    if (!entityName) {
         return results;
     }
 
     const provider = resolveProviderForUser(contextUser);
+    const isConvFamily = isConversationOrISADescendant(provider, entityName);
+    if (!isConvFamily && entityName !== 'MJ: Conversation Details') {
+        return results;
+    }
+
     if (!provider || provider.ProviderType !== 'Database') {
         return results;
     }
@@ -122,7 +155,7 @@ export const AnchoredConversationPostRunViewHook: PostRunViewHook = async (
     }
 
     try {
-        if (entityName === 'MJ: Conversations') {
+        if (isConvFamily) {
             return await filterConversationsRunViewResult(provider, contextUser, results);
         }
         return await filterConversationDetailsRunViewResult(provider, contextUser, results);

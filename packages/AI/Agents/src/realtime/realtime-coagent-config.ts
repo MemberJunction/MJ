@@ -46,12 +46,13 @@
 // import is the dependency-free turn-detection normalizer, so the module keeps its framework-free /
 // pure-transformation contract.
 import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
-import { NormalizeTurnDetectionSettings } from '@memberjunction/ai';
+import { ExtractRealtimeTimingConfig, NormalizeTurnDetectionSettings } from '@memberjunction/ai';
 import {
     AccumulateRealtimeChannelsConfig,
     type RealtimeChannelDisplayPolicy,
     type RealtimeChannelsConfig,
 } from '@memberjunction/ai-core-plus';
+import { SafeDeepMerge } from '@memberjunction/global';
 
 /**
  * The MJ Authorization name that gates RUNTIME overrides on realtime session start:
@@ -473,17 +474,34 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
  */
 export function GetModelCatalogSessionSettings(config: AIModelConfiguration | null | undefined): JSONObjectLike | null {
     const bag: JSONObjectLike = {};
-    const turnDetection = config?.Realtime?.TurnDetection;
+    const rt = config?.Realtime;
+    const turnDetection = rt?.TurnDetection;
     if (isPlainObject(turnDetection)) {
         bag['turnDetection'] = { ...turnDetection } as JSONObjectLike;
     }
-    const reasoning = config?.Realtime?.Reasoning;
+    const reasoning = rt?.Reasoning;
     if (isPlainObject(reasoning)) {
         bag['reasoning'] = { ...reasoning } as JSONObjectLike;
     }
-    const tooling = config?.Realtime?.Tooling;
+    const tooling = rt?.Tooling;
     if (isPlainObject(tooling)) {
         bag['tooling'] = { ...tooling } as JSONObjectLike;
+    }
+    const timing = ExtractRealtimeTimingConfig(rt ? (rt as Record<string, unknown>) : undefined);
+    if (timing.ConnectionMaxSeconds !== undefined) {
+        bag['connectionMaxSeconds'] = timing.ConnectionMaxSeconds;
+    }
+    if (timing.SessionMaxSeconds !== undefined) {
+        bag['sessionMaxSeconds'] = timing.SessionMaxSeconds;
+    }
+    if (timing.ReconnectBufferSeconds !== undefined) {
+        bag['reconnectBufferSeconds'] = timing.ReconnectBufferSeconds;
+    }
+    if (timing.TrustNativeResumption !== undefined) {
+        bag['trustNativeResumption'] = timing.TrustNativeResumption;
+    }
+    if (config?.Privacy?.ZeroDataRetention === true) {
+        bag['zeroDataRetention'] = true;
     }
     return Object.keys(bag).length > 0 ? bag : null;
 }
@@ -540,45 +558,18 @@ function idsEqual(a: string | null | undefined, b: string | null | undefined): b
  * - plain object vs plain object → recursive deep merge;
  * - anything else (arrays, strings, numbers, booleans, `null`) → the later value REPLACES;
  * - `null` is a real JSON value and replaces like any primitive;
- * - `undefined` values in a later layer are skipped (they cannot exist in parsed JSON anyway).
+ * - `undefined` values in a later layer are skipped (they cannot exist in parsed JSON anyway);
+ * - `__proto__`, `constructor` and `prototype` keys are skipped at every depth (the runtime-override
+ *   layer is client-supplied JSON, so it must not reach `Object.prototype`).
  *
  * `null`/`undefined` LAYERS are skipped entirely. The inputs are never mutated; the result is a
- * fresh object graph.
+ * fresh object graph. Delegates to `SafeDeepMerge` in `@memberjunction/global`.
  *
  * @param layers The configuration layers, base first, most-specific last.
  * @returns The merged configuration object (empty object when every layer is absent).
  */
 export function DeepMergeConfigs(...layers: Array<JSONObjectLike | null | undefined>): JSONObjectLike {
-    const result: JSONObjectLike = {};
-    for (const layer of layers) {
-        if (!isPlainObject(layer)) {
-            continue;
-        }
-        mergeInto(result, layer);
-    }
-    return result;
-}
-
-/** Recursive worker for {@link DeepMergeConfigs} — merges `source` into `target` in place. */
-function mergeInto(target: JSONObjectLike, source: JSONObjectLike): void {
-    for (const key of Object.keys(source)) {
-        const incoming = source[key];
-        if (incoming === undefined) {
-            continue;
-        }
-        const existing = target[key];
-        if (isPlainObject(existing) && isPlainObject(incoming)) {
-            mergeInto(existing, incoming);
-        } else if (isPlainObject(incoming)) {
-            const copy: JSONObjectLike = {};
-            mergeInto(copy, incoming);
-            target[key] = copy;
-        } else if (Array.isArray(incoming)) {
-            target[key] = incoming.slice();
-        } else {
-            target[key] = incoming;
-        }
-    }
+    return SafeDeepMerge(...layers);
 }
 
 /**

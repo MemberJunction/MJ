@@ -5,6 +5,7 @@ import { EncodeRecordingShard } from '@memberjunction/ai-core-plus';
 // The runtime exports only the window's type; the real class lets SendRecordingTerminal run for real.
 import { RecordingShardWindow } from '@memberjunction/realtime-runtime/dist/session/RecordingShardWindow';
 import type { IRecordingTransport, RecordingTerminalInput } from '@memberjunction/realtime-runtime';
+import type { IMetadataProvider } from '@memberjunction/core';
 import {
     PageHideEventTarget,
     RealtimeSessionService,
@@ -23,12 +24,13 @@ class TestableSessionService extends RealtimeSessionService {
 /** A fake event target that records every listener and can fire them. */
 class FakeTarget {
     public visibilityState: DocumentVisibilityState = 'visible';
-    public Listeners = new Map<string, Array<() => void>>();
-    public addEventListener(type: string, listener: () => void): void {
+    public Listeners = new Map<string, Array<(event: { persisted: boolean }) => void>>();
+    public addEventListener(type: string, listener: (event: { persisted: boolean }) => void): void {
         this.Listeners.set(type, [...(this.Listeners.get(type) ?? []), listener]);
     }
-    public Fire(type: string): void {
-        for (const listener of this.Listeners.get(type) ?? []) listener();
+    /** `event` is what a `pagehide` carries; a terminal (non-bfcache) hide by default. */
+    public Fire(type: string, event: { persisted: boolean } = { persisted: false }): void {
+        for (const listener of this.Listeners.get(type) ?? []) listener(event);
     }
 }
 
@@ -147,6 +149,45 @@ describe('RealtimeSessionService — recording terminal on pagehide / visibility
         expect(open).not.toHaveBeenCalled();
         expect(encoder.Encode).not.toHaveBeenCalled();
         expect(encoder.Flush).not.toHaveBeenCalled();
+    });
+
+    it('a terminal pagehide with a live call closes the server session with a keepalive CloseAgentSession (F15)', () => {
+        // Without it, a closed tab left the session `Active` until the janitor's 15-minute idle sweep.
+        const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: { CloseAgentSession: true } }), { status: 200 }));
+        vi.stubGlobal('fetch', fetchMock);
+        const service = new TestableSessionService();
+        service.Provider = { ConfigData: { URL: 'https://api.example/graphql', Token: 'jwt-1' } } as unknown as IMetadataProvider;
+        (service as unknown as { agentSessionId: string | null }).agentSessionId = 'session-9';
+        const page = new FakeTarget();
+        service.Wire(page, new FakeTarget());
+
+        page.Fire('pagehide', { persisted: false });
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toBe('https://api.example/graphql');
+        expect(init.keepalive).toBe(true);
+        expect((init.headers as Record<string, string>).authorization).toBe('Bearer jwt-1');
+        const body = JSON.parse(String(init.body)) as { query: string; variables: Record<string, string> };
+        expect(body.query).toContain('CloseAgentSession');
+        expect(body.variables).toEqual({ agentSessionId: 'session-9', closeReason: 'Explicit' });
+    });
+
+    it('a pagehide into the back/forward cache (persisted) does not close the session: the page may come back', () => {
+        const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+        vi.stubGlobal('fetch', fetchMock);
+        const service = new TestableSessionService();
+        service.Provider = { ConfigData: { URL: 'https://api.example/graphql', Token: 'jwt-1' } } as unknown as IMetadataProvider;
+        (service as unknown as { agentSessionId: string | null }).agentSessionId = 'session-9';
+        const page = new FakeTarget();
+        const doc = new FakeTarget();
+        service.Wire(page, doc);
+
+        page.Fire('pagehide', { persisted: true });
+        doc.visibilityState = 'hidden';
+        doc.Fire('visibilitychange');
+
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('BrowserRecordingUnloadGuard no longer exists', () => {

@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { IsWhiteboardHexColor, WHITEBOARD_FONT_SIZES, WhiteboardFontFamily, WhiteboardShapeKind } from './whiteboard-state';
+import { IsWhiteboardHexColor, WHITEBOARD_FONT_SIZES, WHITEBOARD_PEN_COLORS, WhiteboardFontFamily, WhiteboardShapeKind } from './whiteboard-state';
 // WhiteboardTool is imported, never re-exported: public-api.ts `export *`s this file and the
 // roster module, and two modules exporting the same name that way is a TS2308 ambiguity.
 import { WhiteboardTool, WhiteboardToolRoster, VisibleToolbarEntries } from './whiteboard-tool-roster';
@@ -12,12 +12,6 @@ interface ToolbarEntry {
   Title: string;
   Kbd: string;
 }
-
-/**
- * USER pen palette — categorical ink colors. Violet is deliberately EXCLUDED:
- * violet is the reserved ownership hue of the agent's marks.
- */
-export const WHITEBOARD_PEN_COLORS: readonly string[] = ['#cbd5e1', '#fbbf24', '#5cc0ed', '#4ade80', '#f87171'];
 
 /**
  * A host-supplied pen palette as the toolbar/host will use it: a frozen copy holding only the
