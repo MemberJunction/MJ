@@ -5,10 +5,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const popover = document.getElementById('proto-popover');
   const statusEl = document.getElementById('gate-status');
 
-  document.querySelectorAll('[data-set-look]').forEach((btn) => {
+  const lookButtons = document.querySelectorAll('[data-set-look]');
+  lookButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       const look = btn.getAttribute('data-set-look') || 'mj';
       root.setAttribute('data-look', look);
+      lookButtons.forEach((b) => b.classList.toggle('is-active', b === btn));
       if (statusEl) statusEl.textContent = `Look: ${look}`;
     });
   });
@@ -34,6 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   wireLayer('open-dialog', dialog, 'close-dialog');
+  document.addEventListener('click', (event) => {
+    if (event.target instanceof Element && event.target.closest('#cancel-dialog')) {
+      dialog?.setAttribute('open', 'false');
+    }
+  });
   wireLayer('open-sheet', sheet, 'close-sheet');
   wireLayer('open-popover', popover, 'close-popover');
 

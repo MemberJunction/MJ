@@ -14,50 +14,80 @@
     <script defer src="./gate.js"></script>
   </head>
   <body>
-    <main>
-      <h1>Project Lego: Wave 0 Prototype Gate</h1>
+    <main class="gate-shell">
+      <header class="gate-topbar">
+        <div class="gate-heading">
+          <span class="gate-eyebrow">Project Lego · Wave 0 Gate</span>
+          <h1 class="gate-title">Surface, Layer &amp; Row</h1>
+          <p class="gate-subtitle">
+            Same Angular Element markup rendered across three token themes under strict CSP and hostile host CSS.
+          </p>
+        </div>
 
-      <div class="host-controls" role="toolbar" aria-label="Look and layer controls">
-        <button type="button" class="host-btn" data-set-look="mj">Look: MJ Default</button>
-        <button type="button" class="host-btn" data-set-look="lxp">Look: LXP</button>
-        <button type="button" class="host-btn" data-set-look="editorial">Look: Editorial</button>
-        <button type="button" class="host-btn" id="toggle-theme">Toggle Dark</button>
-        <button type="button" class="host-btn" id="open-dialog">Open Dialog</button>
-        <button type="button" class="host-btn" id="open-sheet">Open Sheet</button>
-        <button type="button" class="host-btn" id="open-popover">Open Popover</button>
-        <span id="gate-status">Look: mj</span>
-      </div>
+        <div class="host-controls" role="toolbar" aria-label="Look and layer controls">
+          <div class="gate-segmented" role="group" aria-label="Theme look">
+            <button type="button" class="host-btn is-active" data-set-look="mj">Look: MJ Default</button>
+            <button type="button" class="host-btn" data-set-look="lxp">Look: LXP</button>
+            <button type="button" class="host-btn" data-set-look="editorial">Look: Editorial</button>
+          </div>
+          <div class="gate-actions">
+            <button type="button" class="host-btn" id="toggle-theme">Toggle Dark</button>
+            <button type="button" class="host-btn host-btn-primary" id="open-dialog">Open Dialog</button>
+            <button type="button" class="host-btn" id="open-sheet">Open Sheet</button>
+            <button type="button" class="host-btn" id="open-popover">Open Popover</button>
+          </div>
+          <span id="gate-status" class="gate-status-pill">Look: mj</span>
+        </div>
+      </header>
 
       <div class="host-grid">
         <mj-surface level="base" elevation="sm">
-          <div class="mj-surface-header">Base Surface</div>
+          <div class="mj-surface-header">
+            <span>Active Modules</span>
+            <span class="gate-badge">3 items</span>
+          </div>
           <div class="mj-surface-body">
             <mj-row interactive="true" selected="true">
-              <span class="mj-row-leading" aria-hidden="true">★</span>
-              <span class="mj-row-content">Selected Row (follows brand primary)</span>
-              <span class="mj-row-trailing">12</span>
+              <span class="mj-row-leading gate-avatar" aria-hidden="true">MJ</span>
+              <span class="mj-row-content">
+                <span class="gate-row-title">Foundation Tokens &amp; Cascade</span>
+                <span class="gate-row-meta">Brand-derived selection state</span>
+              </span>
+              <span class="mj-row-trailing">
+                <span class="gate-badge">Active</span>
+              </span>
             </mj-row>
             <mj-row interactive="true" tone="plum" visual-role="nav-item">
-              <span class="mj-row-leading" aria-hidden="true">◆</span>
-              <span class="mj-row-content">Open-Axis Tone (plum) + Role (nav-item)</span>
+              <span class="mj-row-leading gate-avatar gate-avatar-accent" aria-hidden="true">OA</span>
+              <span class="mj-row-content">
+                <span class="gate-row-title">Open-Axis Custom Tone</span>
+                <span class="gate-row-meta">Plum tone + nav-item role via :root tokens</span>
+              </span>
               <span class="mj-row-trailing">
-                <button type="button" class="host-btn">Action</button>
+                <button type="button" class="host-btn host-btn-sm">Configure</button>
               </span>
             </mj-row>
           </div>
           <div class="mj-surface-footer">
-            <span>Footer part</span>
+            <span class="gate-row-meta">Updated just now</span>
           </div>
         </mj-surface>
 
         <mj-surface level="elevated" elevation="md" class="host-override-surface">
           <div class="mj-surface-footer">
-            <span>Reordered footer first</span>
+            <span class="gate-badge">Parts reordered · footer first</span>
           </div>
           <div class="mj-surface-body">
-            <span>Headerless elevated surface with unlayered host dashed border</span>
+            <span class="gate-row-title">Elevated Host Override Zone</span>
+            <span class="gate-row-meta">
+              Headerless surface with footer projected first and an unlayered host dashed border (no !important).
+            </span>
             <mj-row density="sm" interactive="true">
-              <span class="mj-row-content">Compact sm row (44px on coarse pointer)</span>
+              <span class="mj-row-content">
+                <span class="gate-row-title">Compact density row</span>
+                <span class="gate-row-meta">32px desktop · 44px on coarse pointer</span>
+              </span>
+              <span class="mj-row-trailing">→</span>
             </mj-row>
           </div>
         </mj-surface>
@@ -65,32 +95,56 @@
 
       <mj-layer id="proto-dialog" kind="dialog" modal="true" closeable="true" label="Prototype Dialog">
         <div class="mj-layer-header">
-          <h2 class="mj-layer-title">Dialog on CDK Overlay</h2>
+          <h2 class="mj-layer-title">Publish Wave 0 Tokens?</h2>
         </div>
         <div class="mj-layer-body">
-          <p>Focus is trapped here, Escape closes it, and it collapses to a bottom sheet on phones.</p>
+          <p class="gate-dialog-copy">
+            Focus is trapped inside this CDK Overlay, Escape dismisses it and returns focus to the trigger, and on phone widths it collapses into a bottom sheet.
+          </p>
         </div>
         <div class="mj-layer-footer">
-          <button type="button" class="host-btn" id="close-dialog" data-autofocus>Confirm</button>
+          <button type="button" class="host-btn host-btn-primary" id="close-dialog" data-autofocus>Confirm</button>
+          <button type="button" class="host-btn" id="cancel-dialog">Cancel</button>
         </div>
       </mj-layer>
 
       <mj-layer id="proto-sheet" kind="sheet" placement="end" modal="true" closeable="true" label="Prototype Sheet">
         <div class="mj-layer-header">
-          <h2 class="mj-layer-title">Slide Sheet on CDK Overlay</h2>
+          <h2 class="mj-layer-title">Layer Inspector</h2>
         </div>
         <div class="mj-layer-body">
-          <p>Shares the same CDK Overlay base, Escape handling, and scroll block.</p>
+          <p class="gate-dialog-copy">
+            Slide-out sheet sharing the same CDK Overlay stack, focus trap, and ref-counted scroll lock.
+          </p>
+          <mj-surface level="sunken" padding="sm">
+            <div class="mj-surface-body">
+              <mj-row density="sm">
+                <span class="mj-row-content">
+                  <span class="gate-row-title">Encapsulation</span>
+                  <span class="gate-row-meta">ViewEncapsulation.None + @layer primitives</span>
+                </span>
+              </mj-row>
+              <mj-row density="sm">
+                <span class="mj-row-content">
+                  <span class="gate-row-title">CSP Mode</span>
+                  <span class="gate-row-meta">style-src 'self' (no unsafe-inline)</span>
+                </span>
+              </mj-row>
+            </div>
+          </mj-surface>
         </div>
         <div class="mj-layer-footer">
-          <button type="button" class="host-btn" id="close-sheet" data-autofocus>Done</button>
+          <button type="button" class="host-btn host-btn-primary" id="close-sheet" data-autofocus>Done</button>
         </div>
       </mj-layer>
 
-      <mj-layer id="proto-popover" kind="popover" modal="false" closeable="true" label="Prototype Popover">
+      <mj-layer id="proto-popover" kind="popover" modal="false" closeable="true" anchor="#open-popover" label="Prototype Popover">
         <div class="mj-layer-body">
-          <p>Non-modal popover on CDK Overlay.</p>
-          <button type="button" class="host-btn" id="close-popover">Dismiss</button>
+          <p class="gate-popover-title">Quick Actions</p>
+          <p class="gate-dialog-copy">Anchored to the trigger via CDK FlexibleConnectedPositionStrategy.</p>
+        </div>
+        <div class="mj-layer-footer">
+          <button type="button" class="host-btn host-btn-sm" id="close-popover">Dismiss</button>
         </div>
       </mj-layer>
     </main>

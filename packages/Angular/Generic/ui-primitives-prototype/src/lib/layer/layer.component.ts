@@ -92,6 +92,7 @@ export class MJLayerComponent implements OnDestroy {
   public readonly size = input<string>('md');
   public readonly open = input(false, { transform: booleanAttribute });
   public readonly allowPhoneSheet = input(true, { transform: booleanAttribute });
+  public readonly anchor = input<string | HTMLElement | null>(null);
   public readonly label = input<string>('');
   public readonly announceOnOpen = input<string>('');
 
@@ -134,6 +135,7 @@ export class MJLayerComponent implements OnDestroy {
             Modal: this.modal(),
             Closeable: this.closeable(),
             AllowPhoneSheet: this.allowPhoneSheet(),
+            Anchor: this.anchor(),
             OnRequestClose: (reason) => this.RequestClose(reason),
           });
           const announcement = this.announceOnOpen();

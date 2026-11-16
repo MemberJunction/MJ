@@ -90,7 +90,7 @@ const wave0FoundationCss = `
 .mj-surface-base {
   --mj-surface-bg: var(--mj-surface-base-bg);
   --mj-surface-bg-hover: var(--mj-surface-base-bg-hover);
-  --mj-surface-bg-selected: var(--mj-surface-base-bg-selected);
+  --mj-surface-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-surface-base-bg));
   --mj-surface-border: var(--mj-surface-base-border);
   --mj-surface-border-selected: var(--mj-surface-base-border-selected);
   --mj-surface-shadow: var(--mj-surface-base-shadow);
@@ -99,7 +99,7 @@ const wave0FoundationCss = `
 .mj-surface-elevated {
   --mj-surface-bg: var(--mj-surface-elevated-bg);
   --mj-surface-bg-hover: var(--mj-surface-elevated-bg-hover);
-  --mj-surface-bg-selected: var(--mj-surface-elevated-bg-selected);
+  --mj-surface-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-surface-elevated-bg));
   --mj-surface-border: var(--mj-surface-elevated-border);
   --mj-surface-border-selected: var(--mj-surface-elevated-border-selected);
   --mj-surface-shadow: var(--mj-surface-elevated-shadow);

@@ -1,9 +1,13 @@
-/* Hostile host CSS + 3 radically different looks + runtime open-axis tokens */
-
-/* Hostile reset in @layer reset + unlayered hostile rules */
+/* Hostile reset in @layer reset + polished host shell + 3 divergent looks */
 @layer reset {
   * {
     box-sizing: content-box;
+  }
+
+  h1,
+  h2 {
+    margin: 20px 0;
+    font-family: 'Comic Sans MS', cursive;
   }
 }
 
@@ -11,49 +15,201 @@ div {
   border-radius: 0;
 }
 
-h1,
-h2 {
-  margin: 20px 0;
-  font-family: 'Comic Sans MS', cursive;
-}
-
 body {
   margin: 0;
-  padding: 24px;
+  padding: 32px 24px;
   min-height: 120vh;
-  font-family: system-ui, sans-serif;
-  background: var(--mj-bg-canvas, #f1f5f9);
+  font-family: var(--mj-font-family);
+  background: var(--mj-bg-canvas, var(--mj-bg-page));
   color: var(--mj-text-primary, #1e293b);
+  -webkit-font-smoothing: antialiased;
+}
+
+.gate-shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.gate-topbar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.gate-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gate-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mj-text-secondary);
+}
+
+.gate-title {
+  margin: 0;
+  font-family: var(--mj-font-family-display, var(--mj-font-family));
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.gate-subtitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--mj-text-secondary);
 }
 
 .host-controls {
   display: flex;
   flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gate-segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--mj-bg-surface-sunken, #e2e8f0);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-control, 8px);
+}
+
+.gate-segmented .host-btn {
+  border-color: transparent;
+  background: transparent;
+  min-height: 32px;
+}
+
+.gate-segmented .host-btn.is-active {
+  background: var(--mj-bg-surface, #ffffff);
+  border-color: var(--mj-border-default);
+  box-shadow: var(--mj-shadow-sm);
+}
+
+.gate-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 20px;
   align-items: center;
 }
 
 .host-btn {
-  min-height: 36px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--mj-control-height-md, 40px);
+  padding: 0 14px;
+  border-radius: var(--mj-radius-control, 8px);
+  border: 1px solid var(--mj-border-strong, #cbd5e1);
+  background: var(--mj-bg-surface, #ffffff);
+  color: var(--mj-text-primary, #0f172a);
   cursor: pointer;
-  font: inherit;
+  font-family: var(--mj-font-family);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.host-btn:hover {
+  background: var(--mj-bg-surface-hover, #f1f5f9);
+}
+
+.host-btn-sm {
+  min-height: var(--mj-control-height-sm, 32px);
+  padding: 0 10px;
+  font-size: 0.8125rem;
+}
+
+.host-btn-primary {
+  background: var(--mj-brand-primary, #0076b6);
+  border-color: var(--mj-brand-primary, #0076b6);
+  color: var(--mj-text-inverse, #ffffff);
+}
+
+.host-btn-primary:hover {
+  filter: brightness(0.92);
+  background: var(--mj-brand-primary, #0076b6);
 }
 
 .host-btn:focus-visible {
-  outline: 2px solid var(--mj-brand-primary, #0076b6);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+.gate-status-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--mj-radius-pill, 9999px);
+  background: var(--mj-bg-surface-sunken, #e2e8f0);
+  color: var(--mj-text-secondary);
 }
 
 .host-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.gate-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--mj-radius-pill, 9999px);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.gate-avatar-accent {
+  background: var(--mj-tone-plum-text, #701a75);
+  color: var(--mj-text-inverse);
+}
+
+.gate-row-title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.gate-row-meta {
+  font-size: 0.8125rem;
+  color: var(--mj-text-secondary);
+}
+
+.gate-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-pill, 9999px);
+  background: var(--mj-bg-surface-sunken, #f1f5f9);
+  color: var(--mj-text-secondary);
+}
+
+.gate-dialog-copy {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--mj-text-secondary);
+  line-height: 1.5;
+}
+
+.gate-popover-title {
+  margin: 0 0 4px;
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
 /* Unlayered host override: beats @layer primitives without !important */
@@ -62,9 +218,13 @@ body {
   border-width: 2px;
 }
 
-/* Look 1: MJ Default (uses foundation defaults) */
+/* Look 1: MJ Default */
 [data-look='mj'] {
   --mj-brand-primary: #0076b6;
+}
+
+[data-theme='dark'][data-look='mj'] {
+  --mj-brand-primary: var(--mj-color-brand-400);
 }
 
 /* Look 2: LXP (Sidecar Learning Hub — warm cream, sage, charcoal, Poppins/Inter, generous 16/24px radii) */
@@ -75,7 +235,7 @@ body {
   --mj-bg-page: #fef7eb;
   --mj-brand-primary: #5c7a73;
   --mj-text-primary: #35353d;
-  --mj-text-secondary: #636e72;
+  --mj-text-secondary: #525c60;
   --mj-radius-control: 12px;
   --mj-radius-surface: 16px;
   --mj-radius-overlay: 24px;
@@ -95,6 +255,7 @@ body {
   --mj-brand-primary: #99b3ac;
   --mj-text-primary: #f5f5f5;
   --mj-text-secondary: #d1d5db;
+  --mj-text-inverse: #1f1f24;
   --mj-surface-base-bg: #2a2a32;
   --mj-surface-elevated-bg: #35353d;
   --mj-surface-base-border: #4a4a54;
@@ -124,11 +285,12 @@ body {
 
 [data-theme='dark'][data-look='editorial'] {
   --mj-brand-primary: #f8fafc;
+  --mj-text-inverse: #0f172a;
   --mj-surface-base-border: #94a3b8;
   --mj-surface-elevated-border: #94a3b8;
 }
 
-/* Open-axis custom tone and role tokens defined purely as CSS custom properties (no .mj-row selectors) */
+/* Open-axis custom tone and role tokens defined purely as CSS custom properties */
 :root {
   --mj-tone-plum-text: #701a75;
   --mj-tone-plum-bg-selected: #fae8ff;

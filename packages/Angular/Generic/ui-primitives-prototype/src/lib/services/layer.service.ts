@@ -1,5 +1,5 @@
 import { Injectable, TemplateRef, ViewContainerRef, inject, DOCUMENT } from '@angular/core';
-import { Overlay, OverlayConfig, OverlayRef } from '@angular/cdk/overlay';
+import { Overlay, OverlayConfig, OverlayRef, PositionStrategy } from '@angular/cdk/overlay';
 import { TemplatePortal } from '@angular/cdk/portal';
 import { ConfigurableFocusTrap, ConfigurableFocusTrapFactory } from '@angular/cdk/a11y';
 import { Subscription } from 'rxjs';
@@ -13,6 +13,7 @@ export interface MJLayerOpenRequest {
   Modal: boolean;
   Closeable: boolean;
   AllowPhoneSheet: boolean;
+  Anchor: string | HTMLElement | null;
   OnRequestClose: (reason: 'escape' | 'backdrop' | 'programmatic') => void;
 }
 
@@ -75,6 +76,20 @@ export class MJLayerService {
       })
     );
 
+    if (!request.Modal && request.Closeable) {
+      subs.add(
+        overlayRef.outsidePointerEvents().subscribe((event) => {
+          const anchorEl = this.resolveAnchor(request.Anchor);
+          if (anchorEl && event.target instanceof Node && anchorEl.contains(event.target)) {
+            return;
+          }
+          if (this.IsTopmost(request.Id)) {
+            request.OnRequestClose('backdrop');
+          }
+        })
+      );
+    }
+
     this.stack.push({
       Id: request.Id,
       OverlayRef: overlayRef,
@@ -120,7 +135,7 @@ export class MJLayerService {
   }
 
   private buildOverlayConfig(request: MJLayerOpenRequest): OverlayConfig {
-    let positionStrategy = this.overlay.position().global().centerHorizontally().centerVertically();
+    let positionStrategy: PositionStrategy = this.overlay.position().global().centerHorizontally().centerVertically();
 
     if (request.Kind === 'sheet') {
       if (request.Placement === 'bottom') {
@@ -131,7 +146,19 @@ export class MJLayerService {
         positionStrategy = this.overlay.position().global().right('0').top('0');
       }
     } else if (request.Kind === 'popover') {
-      positionStrategy = this.overlay.position().global().left('24px').top('72px');
+      const anchorEl = this.resolveAnchor(request.Anchor);
+      if (anchorEl) {
+        positionStrategy = this.overlay
+          .position()
+          .flexibleConnectedTo(anchorEl)
+          .withPositions([
+            { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 8 },
+            { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 8 },
+            { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -8 },
+          ]);
+      } else {
+        positionStrategy = this.overlay.position().global().left('24px').top('72px');
+      }
     }
 
     const panelClasses: string[] = [];
@@ -146,9 +173,19 @@ export class MJLayerService {
       positionStrategy,
       scrollStrategy: request.Modal
         ? this.overlay.scrollStrategies.block()
-        : this.overlay.scrollStrategies.noop(),
+        : this.overlay.scrollStrategies.reposition(),
       disposeOnNavigation: true,
     });
+  }
+
+  private resolveAnchor(anchor: string | HTMLElement | null): HTMLElement | null {
+    if (!anchor) {
+      return null;
+    }
+    if (anchor instanceof HTMLElement) {
+      return anchor;
+    }
+    return this.doc.querySelector<HTMLElement>(anchor);
   }
 
   private focusInitial(container: HTMLElement): void {

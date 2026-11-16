@@ -255,9 +255,19 @@
 
   .mj-layer-panel[data-kind='sheet'] {
     border-radius: 0;
+    border-top: none;
+    border-bottom: none;
+    border-right: none;
     max-height: 100vh;
     height: 100vh;
     width: min(92vw, 440px);
+  }
+
+  .mj-layer-panel[data-kind='popover'] {
+    --mj-layer-max-width: 320px;
+    --mj-layer-padding: var(--mj-space-4);
+    gap: var(--mj-space-3);
+    box-shadow: var(--mj-shadow-lg);
   }
 
   .mj-layer-panel[data-kind='sheet'][data-placement='bottom'] {
@@ -285,6 +295,8 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--mj-space-3);
+    padding-bottom: var(--mj-space-3);
+    border-bottom: 1px solid var(--mj-border-subtle);
   }
 
   .mj-layer-title {
