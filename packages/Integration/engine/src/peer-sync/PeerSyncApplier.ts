@@ -765,7 +765,7 @@ export class PeerSyncApplier {
         const relatedEntityIDs = new Set<string>();
         for (const f of entityInfo.Fields) {
             if (f.RelatedEntityID && !UUIDsEqual(f.RelatedEntityID, entityInfo.ID)) {
-                if (knownEntityIDs.has(f.RelatedEntityID)) {
+                if (knownEntityIDs.Has(f.RelatedEntityID)) {
                     relatedEntityIDs.add(f.RelatedEntityID);
                 }
             }

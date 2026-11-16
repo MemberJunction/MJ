@@ -264,8 +264,8 @@ export function PlanPeerEntityOrder(
     const seenIDs = new UUIDSet();
     const uniqueIDs: string[] = [];
     for (const id of entityIDs) {
-        if (!seenIDs.has(id)) {
-            seenIDs.add(id);
+        if (!seenIDs.Has(id)) {
+            seenIDs.Add(id);
             uniqueIDs.push(id);
         }
     }
@@ -285,7 +285,7 @@ export function PlanPeerEntityOrder(
     for (const id of uniqueIDs) {
         const norm = NormalizeUUID(id);
         normToCanonical.set(norm, id);
-        const info = entitiesByID.get(id);
+        const info = entitiesByID.Get(id);
         if (info) {
             entityByNorm.set(norm, info);
         }

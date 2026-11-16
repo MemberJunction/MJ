@@ -146,7 +146,7 @@ export function FindTrueCycles(
         if (scc.length > 1) return true;
         if (scc.length === 1) {
             const node = scc[0];
-            return new UUIDSet(getDependencies(node)).has(node);
+            return new UUIDSet(getDependencies(node)).Has(node);
         }
         return false;
     });

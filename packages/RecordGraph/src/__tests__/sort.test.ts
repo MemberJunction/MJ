@@ -222,6 +222,7 @@ describe('PlanEntityDependencyOrder', () => {
                 ID: 'ent-c-sub',
                 Name: 'EntityCSubtype',
                 ParentID: 'ent-c',
+                FirstPrimaryKey: { Name: 'ID' } as EntityFieldInfo,
                 Fields: [],
             },
         };
