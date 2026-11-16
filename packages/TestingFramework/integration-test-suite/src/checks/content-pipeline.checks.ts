@@ -278,6 +278,7 @@ const URL_B = 'it-pipeline://docs/b.txt';
 const URL_C = 'it-pipeline://docs/c.txt';
 const URL_OLD = 'it-pipeline://docs/old.txt';
 const URL_ARCHIVE = 'it-pipeline://docs/nested.txt.gz.gz';
+const URL_PAGE = 'it-pipeline://docs/page.html';
 
 /** Skips the running check (SkipCheck) when bundle Setup could not provision its fixtures. */
 function guardSkip(): void {
@@ -811,6 +812,51 @@ export const ContentPipelineChecks: NamedCheck[] = [
                 }
             }
             console.log('      → CP13: nested archive exceeding MaxArchiveDepth refused');
+        },
+    },
+    {
+        Id: 'content-pipeline.CP17',
+        Name: "CP17: Extract stores an HTML page as served, and Segment cleans it with the configured selectors before splitting, so chunks hold the article and none of the page's chrome",
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const page =
+                '<!doctype html><html><head><title>Quarterly report</title></head><body>' +
+                '<nav>Home | Members | Events</nav><div class="promo">Join today and save</div>' +
+                `<div class="article-body"><p>${SENTENCE.trim()}</p><p>Revenue rose this quarter.</p></div>` +
+                '<footer>Copyright Example Association</footer></body></html>';
+            Documents.set(URL_PAGE, { Text: page, ModifiedAt: new Date() });
+
+            let pageItemID: string | undefined;
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                pageItemID = (await itemByURL(ctx, URL_PAGE)).ID;
+                await run(ctx, ['Extract'], [pageItemID]);
+                const extracted = await itemByURL(ctx, URL_PAGE);
+                AssertEqual(extracted.ExtractorKey, 'Html', 'the page was read by the Html extractor');
+                Assert((extracted.Text ?? '').includes('<div class="article-body">'), 'Extract stores the page with its markup');
+
+                await run(ctx, ['Segment'], [pageItemID], { CleaningOptions: { IncludeSelectors: ['.article-body'] } });
+                const text = (await liveChunks(ctx, pageItemID)).map((c) => c.Text ?? '').join(' ');
+                Assert(text.includes('Revenue rose this quarter.'), 'the article reaches the chunks');
+                Assert(!text.includes('<'), 'no markup reaches the chunks');
+                for (const chrome of ['Home | Members', 'Join today', 'Copyright']) {
+                    Assert(!text.includes(chrome), `'${chrome}' (outside the article) is cleaned away`);
+                }
+                AssertEqual((await itemByURL(ctx, URL_PAGE)).Text, extracted.Text, 'cleaning does not change what Extract stored');
+                console.log('      → CP17: page stored with markup, chunks hold only the article');
+            } finally {
+                Documents.delete(URL_PAGE);
+                if (pageItemID) {
+                    for (const chunk of await chunksOf(ctx, pageItemID)) {
+                        await chunk.Delete();
+                    }
+                    const reloaded = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${pageItemID}'`))[0];
+                    if (reloaded) {
+                        await reloaded.Delete();
+                    }
+                }
+            }
         },
     },
     {
