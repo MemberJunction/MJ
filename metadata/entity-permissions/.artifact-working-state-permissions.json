@@ -1,0 +1,16 @@
+[
+  {
+    "_comments": [
+      "Collaborative Yjs CRDT working state: server-internal only; general UI roles may not read or mutate working states"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.Entity=MJ: Artifact Working States&RoleName=UI"
+    },
+    "fields": {
+      "CanRead": false,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    }
+  }
+]

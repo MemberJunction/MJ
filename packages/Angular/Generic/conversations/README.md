@@ -41,20 +41,20 @@ graph TD
     C --> C4[ConversationListComponent]
     C --> C5[ConversationChatAreaComponent]
 
-    D --> D1[CollectionTreeComponent]
-    D --> D2[CollectionViewComponent]
-    D --> D3[LibraryFullViewComponent]
-    D --> D4[ArtifactCreateModalComponent]
+    D --> D1[LibraryWorkspaceComponent — Hub / Navigator / Studio]
+    D --> D2[LibraryRemoteDrivePaneComponent — Stateless Cloud Drives]
+    D --> D3[CollectionTreeComponent & CollectionViewComponent]
+    D --> D4[LibraryCreateDialogComponent & LibraryCreationService]
 
     E --> E1[AgentProcessPanelComponent]
     E --> E2[ActiveAgentIndicatorComponent]
-    E --> E3[TasksFullViewComponent]
+    E --> E3[TasksFullViewComponent — Agent Activity]
     E --> E4[GlobalTasksPanelComponent]
 
     F --> F1[ShareModalComponent]
     F --> F2[MembersModalComponent]
     F --> F3[ExportModalComponent]
-    F --> F4[SearchPanelComponent]
+    F --> F4[WhiteboardArtifactViewerComponent — OLE Canvas]
 
     style A fill:#2d6a9f,stroke:#1a4971,color:#fff
     style B fill:#7c5295,stroke:#563a6b,color:#fff
@@ -309,22 +309,37 @@ The overlay is generic — it raises events for navigation and tool execution. T
 </mj-mention-editor>
 ```
 
-### Collections and Library
+### Collections, Unified Library Workspace & Stateless Connected Drives
+
+`<mj-library-workspace>` powers MemberJunction's top-level **`Library`** application (`LibraryResource`, pinned beside `Chat` in the global header bar) and any embedded collection/artifact browser (`ChatCollectionsResource`):
 
 ```html
-<!-- Collection tree for organizing artifacts -->
+<mj-library-workspace
+  [CurrentUser]="currentUser"
+  [InitialMode]="'hub'"
+  [ExternalRouteParams]="routeParams"
+  (StateChanged)="onLibraryStateChanged($event)"
+  (HostNavigationRequested)="onLibraryNavigate($event)">
+</mj-library-workspace>
+```
+
+- **3 Progressive Workspace Modes**:
+  1. **`hub`** *(default landing)*: *Create New* quick-launch cards (`Blank Document`, `Blank Spreadsheet`, `Blank Presentation`, `New Collection`, `Upload File` via `LibraryCreationService`), *Continue Working* recents, *Collections* overview cards, and *Connected Cloud Drives* tiles.
+  2. **`navigator`** *(Power Navigator)*: Split-pane hierarchy with nested `MJ: Collections` + Connected Cloud Drives on the left, faceted `MJFilterPanelComponent` search & list/grid toggle in the center, and slide-over preview inspector on the right. User preferences (`Library.SurfaceMode`, `Library.ListStyle`, `Library.StarredArtifactIDs`) persist server-side via `UserInfoEngine.Instance`.
+  3. **`studio`** *(Full-Canvas Studio)*: Distraction-free collaborative editor hosting `<mj-artifact-viewer-panel>` with breadcrumb navigation, **Save to Collection**, **Export to Connected Drive** (`<mj-library-export-drive-dialog>`), **Share**, and **Compare Versions**.
+- **Stateless Connected Cloud Drives (`<mj-library-remote-drive-pane>`) — Zero `MJ: Files` Invariant**:
+  - Dynamically browses, searches (`GraphQLFileStorageClient.SearchFiles`), previews, uploads (`CreatePreAuthUploadUrl`), creates folders, moves, copies, renames, and deletes files across external `MJStorage` accounts (Google Drive, SharePoint/OneDrive, Dropbox, Box, S3, Azure Blob) **without creating `MJ: Files` database rows**.
+  - Supports one-click **Import to MJ Library** (converting remote `.md`, `.docx`, `.xlsx`, and `.csv` files into governed, versioned `MJ: Artifacts` records) and **Export to Drive** (`.docx`/`.md`, `.xlsx`/`.csv`, `.pptx`).
+
+```html
+<!-- Standalone collection tree or legacy library subviews -->
 <mj-collection-tree
   [projectId]="currentProjectId"
   (collectionSelected)="onCollectionSelected($event)">
 </mj-collection-tree>
-
-<!-- Full library view -->
-<mj-library-full-view
-  [projectId]="currentProjectId">
-</mj-library-full-view>
 ```
 
-### Project and Task Management
+### Project and Agent Activity Management
 
 ```html
 <!-- Project selector -->
@@ -333,7 +348,7 @@ The overlay is generic — it raises events for navigation and tool execution. T
   (projectChanged)="onProjectChanged($event)">
 </mj-project-selector>
 
-<!-- Tasks view -->
+<!-- Agent Activity view (scoped in Chat to conversation/agent-originated runs) -->
 <mj-tasks-full-view
   [projectId]="currentProjectId">
 </mj-tasks-full-view>
@@ -436,8 +451,13 @@ Folder sharing controls which conversations are listed, not who can read them. C
 
 ### Collection and Library Components
 
-| Component | Selector | Description |
+| Component / Service | Selector | Description |
 |-----------|----------|-------------|
+| `LibraryWorkspaceComponent` | `mj-library-workspace` | Unified 3-mode Library workspace (`Hub`, `Power Navigator`, and `Full-Canvas Studio`) for Docs, Sheets, Slides, Collections, and Connected Cloud Drives |
+| `LibraryRemoteDrivePaneComponent` | `mj-library-remote-drive-pane` | Stateless live cloud drive browser, cross-drive search, upload, file ops, and governed import/export via `GraphQLFileStorageClient` (zero `MJ: Files` rows) |
+| `LibraryCreateDialogComponent` | `mj-library-create-dialog` | Modal launcher for creating blank Docs/Sheets/Slides, new Collections, or uploading files |
+| `LibraryExportDriveDialogComponent` | `mj-library-export-drive-dialog` | Modal picker for exporting MJ Docs, Sheets, and Slides directly to a Connected Cloud Drive folder |
+| `LibraryCreationService` | *(Injectable)* | Creates governed starter `Markdown Document`, `Excel Spreadsheet`, and `Presentation` artifacts and imports `.md`/`.docx`/`.xlsx`/`.csv` files |
 | `CollectionTreeComponent` | `mj-collection-tree` | Hierarchical collection browser |
 | `CollectionViewComponent` | `mj-collection-view` | Collection detail view |
 | `CollectionArtifactCardComponent` | `mj-collection-artifact-card` | Artifact card within collections |
@@ -446,13 +466,13 @@ Folder sharing controls which conversations are listed, not who can read them. C
 | `ArtifactCreateModalComponent` | `mj-artifact-create-modal` | Create new artifact |
 | `CollectionsFullViewComponent` | `mj-collections-full-view` | All collections browser |
 
-### Project and Task Components
+### Project and Agent Activity Components
 
 | Component | Selector | Description |
 |-----------|----------|-------------|
 | `ProjectSelectorComponent` | `mj-project-selector` | Project selection dropdown |
 | `ProjectFormModalComponent` | `mj-project-form-modal` | Create/edit project |
-| `TasksFullViewComponent` | `mj-tasks-full-view` | Full tasks management view (standalone) |
+| `TasksFullViewComponent` | `mj-tasks-full-view` | Agent Activity & multi-step workflow command center (standalone; scoped in `ChatTasksResource` to conversation/agent-originated tasks so human `bizapps-tasks` deliverables remain separate) |
 | `TasksDropdownComponent` | `mj-tasks-dropdown` | Task quick-access dropdown |
 | `TaskWidgetComponent` | `mj-task-widget` | Compact task widget |
 | `GlobalTasksPanelComponent` | `mj-global-tasks-panel` | Global tasks panel |
@@ -477,7 +497,7 @@ Folder sharing controls which conversations are listed, not who can read them. C
 | `RealtimeChannelStripComponent` | `mj-realtime-channel-strip` | Chip-per-channel strip |
 | `RealtimeComposerComponent` | `mj-realtime-composer` | The bottom dock: phone-call strip (levels 0–1: mute / captions / Details peek / End) ⇄ fused minis + typed composer (level 2+) |
 | `RealtimeSurfaceTabsComponent` | `mj-realtime-surface-tabs` | Tabbed surface panel: channel tabs first, glowing unfocused artifact tabs, Activity pinned last (backed by the framework-free, unit-tested `RealtimeSurfaceTabsModel`) |
-| `WhiteboardArtifactViewerComponent` | `mj-whiteboard-artifact-viewer` | Saved-board artifact viewer (registered as `WhiteboardArtifactViewerPlugin`); renders via `@memberjunction/ng-whiteboard`'s snapshot component |
+| `WhiteboardArtifactViewerComponent` | `mj-whiteboard-artifact-viewer` | Saved-board & inline MS OLE artifact viewer (`WhiteboardArtifactViewerPlugin`, `SupportsInlineEdit = true`); renders `<mj-whiteboard-snapshot>` in read-only mode and interactive `<mj-realtime-whiteboard-host>` in inline edit mode |
 
 > The live whiteboard surface itself (`mj-realtime-whiteboard-host`, board, toolbar, zoom, "What the agent sees" popover) ships in [`@memberjunction/ng-whiteboard`](../whiteboard/README.md); the `RealtimeWhiteboardChannel` plugin here creates it dynamically in a channel tab.
 

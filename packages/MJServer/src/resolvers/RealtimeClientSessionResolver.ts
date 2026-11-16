@@ -54,6 +54,7 @@ import { AIAgentPermissionHelper, AIEngineBase, HasRealtimeUsage, ParseRealtimeU
 import {
     RealtimeClientSessionService,
     RealtimeMintSnapshotRegistry,
+    type ConversationArtifactSummary,
     type PersistedRealtimeMintSnapshot,
     DelegatedRunArtifact,
     RealtimeChannelServerHost,
@@ -739,13 +740,14 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // mid-thread knows what was already typed. The legs above are excluded: they are already
         // framed as the resumed transcript, and injecting the same turns twice puts two accounts of
         // the same exchange in one prompt.
-        const conversationMessages = await this.loadConversationHistory(
-            conversationId, prior?.LegIDs ?? [], contextUser, provider, sessionBranchId,
-        );
+        const { Messages: conversationMessages, Artifacts: conversationArtifacts } =
+            await this.loadConversationHistoryAndArtifacts(
+                conversationId, prior?.LegIDs ?? [], contextUser, provider, sessionBranchId,
+            );
         const result = await this.prepareClientSessionOrClose(
             session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, prior?.Text,
             configOverridesJson, maxSessionSeconds, applicationId, this.parseAppContext(appContextJson), conversationMessages,
-            channelCandidates, showsAgentVideo,
+            channelCandidates, showsAgentVideo, conversationArtifacts,
         );
         await this.stampVerificationPolicy(session, result.EffectiveConfigJson, lastSessionId, contextUser, provider);
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
@@ -2091,6 +2093,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         conversationMessages?: ChatMessage[],
         channelCandidates?: RealtimeChannelCandidate[],
         showsAgentVideo?: boolean,
+        conversationArtifacts?: ConversationArtifactSummary[],
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -2103,8 +2106,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 MaxSessionSeconds: maxSessionSeconds,
                 // The TEXT conversation this call was started from, so the co-agent opens knowing
                 // what the user already typed rather than asking them to say it again. Hydrated by
-                // `loadConversationHistory`; empty when there is no conversation or the read failed.
+                // `loadConversationHistoryAndArtifacts`; empty when there is no conversation or the read failed.
                 ConversationMessages: conversationMessages ?? [],
+                ConversationArtifacts: conversationArtifacts ?? [],
                 UserID: contextUser.ID,
                 PreferredModelID: preferredModelId,
                 // Client-declared, CLIENT-EXECUTED UI tools (see the mutation's SECURITY NOTE) —
@@ -2516,8 +2520,30 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         provider: IMetadataProvider,
         branchId: string | null,
     ): Promise<ChatMessage[]> {
+        const { Messages } = await this.loadConversationHistoryAndArtifacts(
+            conversationId,
+            coveredSessionIDs,
+            contextUser,
+            provider,
+            branchId,
+        );
+        return Messages;
+    }
+
+    /**
+     * Loads both the branch-scoped conversation turn history AND deduplicated artifact summaries
+     * linked to details on that branch path (`MJ: Conversation Detail Artifacts`), so a voice call
+     * started mid-thread knows what messages were typed and what Docs/Sheets/Slides/Components already exist.
+     */
+    private async loadConversationHistoryAndArtifacts(
+        conversationId: string | undefined,
+        coveredSessionIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        branchId: string | null,
+    ): Promise<{ Messages: ChatMessage[]; Artifacts: ConversationArtifactSummary[] }> {
         if (!conversationId) {
-            return [];
+            return { Messages: [], Artifacts: [] };
         }
         const rv = RunView.FromMetadataProvider(provider);
         let pathFilter: string;
@@ -2527,10 +2553,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             LogError(
                 `StartRealtimeClientSession: could not build the path of the session's view for conversation ${conversationId}: ${(error as Error).message}`,
             );
-            return [];
+            return { Messages: [], Artifacts: [] };
         }
         try {
             const result = await rv.RunView<{
+                ID: string;
                 Role: string;
                 Message: string | null;
                 HiddenToUser: boolean;
@@ -2547,21 +2574,138 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
             if (!result.Success) {
                 LogError(`StartRealtimeClientSession: conversation-history query failed: ${result.ErrorMessage}`);
-                return [];
+                return { Messages: [], Artifacts: [] };
             }
+            const visibleRows = (result.Results ?? []).filter((row) => !row.HiddenToUser);
             const covered = new Set(coveredSessionIDs.map((id) => id.trim().toLowerCase()));
-            const turns = (result.Results ?? []).filter(
+            const turns = visibleRows.filter(
                 (row) =>
-                    !row.HiddenToUser &&
                     (row.Role === 'User' || row.Role === 'AI') &&
                     typeof row.Message === 'string' &&
                     row.Message.trim().length > 0 &&
                     !covered.has((row.AgentSessionID ?? '').trim().toLowerCase()),
             );
-            return this.capConversationHistory(turns);
+            const visibleDetailIDs = visibleRows.map((row) => row.ID).filter((id) => typeof id === 'string' && id.length > 0);
+            const artifacts = await this.loadConversationArtifacts(rv, visibleDetailIDs, contextUser);
+            return { Messages: this.capConversationHistory(turns), Artifacts: artifacts };
         } catch (error) {
             LogError(
                 `StartRealtimeClientSession: conversation-history hydration failed for conversation ${conversationId}: ${(error as Error).message}`,
+            );
+            return { Messages: [], Artifacts: [] };
+        }
+    }
+
+    /**
+     * Loads deduplicated, permission-respecting artifact summaries attached to the conversation's
+     * visible detail rows, ordered most recently referenced first and capped at 15 entries.
+     */
+    private async loadConversationArtifacts(
+        rv: RunView,
+        detailIDs: string[],
+        contextUser: UserInfo,
+    ): Promise<ConversationArtifactSummary[]> {
+        if (detailIDs.length === 0) {
+            return [];
+        }
+        try {
+            const recentDetailIDs = detailIDs.slice(-200);
+            const detailIdList = recentDetailIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const junctionRes = await rv.RunView<{
+                ConversationDetailID: string;
+                ArtifactVersionID: string;
+            }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ARTIFACT_ENTITY,
+                    ExtraFilter: `ConversationDetailID IN (${detailIdList})`,
+                    Fields: ['ConversationDetailID', 'ArtifactVersionID', '__mj_CreatedAt'],
+                    OrderBy: '__mj_CreatedAt ASC',
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            const junctionRows = junctionRes.Success ? (junctionRes.Results ?? []) : [];
+            const versionIDs = Array.from(
+                new Set(junctionRows.map((r) => r.ArtifactVersionID).filter((id) => typeof id === 'string' && id.length > 0)),
+            );
+            if (versionIDs.length === 0) {
+                return [];
+            }
+
+            const versionIdList = versionIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const verRes = await rv.RunView<{
+                ID: string;
+                ArtifactID: string;
+                VersionNumber: number;
+                Name: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ID IN (${versionIdList})`,
+                    Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name'],
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            const versionMap = new Map<string, { ID: string; ArtifactID: string; VersionNumber: number; Name: string | null }>();
+            for (const ver of verRes.Success ? (verRes.Results ?? []) : []) {
+                versionMap.set(ver.ID.toLowerCase(), ver);
+            }
+
+            const artifactIDs = Array.from(
+                new Set(Array.from(versionMap.values()).map((v) => v.ArtifactID).filter((id) => typeof id === 'string' && id.length > 0)),
+            );
+            if (artifactIDs.length === 0) {
+                return [];
+            }
+
+            const artifactIdList = artifactIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            const artRes = await rv.RunView<{
+                ID: string;
+                Name: string;
+                Type: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID IN (${artifactIdList})`,
+                    Fields: ['ID', 'Name', 'Type'],
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            const artifactMap = new Map<string, { ID: string; Name: string; Type: string | null }>();
+            for (const art of artRes.Success ? (artRes.Results ?? []) : []) {
+                artifactMap.set(art.ID.toLowerCase(), art);
+            }
+
+            const byArtifact = new Map<string, ConversationArtifactSummary>();
+            for (const row of junctionRows) {
+                const ver = versionMap.get(row.ArtifactVersionID.toLowerCase());
+                if (!ver) {
+                    continue;
+                }
+                const art = artifactMap.get(ver.ArtifactID.toLowerCase());
+                if (!art) {
+                    continue;
+                }
+                const key = art.ID.toLowerCase();
+                const existing = byArtifact.get(key);
+                if (!existing || (existing.LatestVersionNumber ?? 0) <= ver.VersionNumber) {
+                    // Delete and re-insert so iteration order reflects the most recently touched artifacts.
+                    byArtifact.delete(key);
+                    byArtifact.set(key, {
+                        ArtifactID: art.ID,
+                        Name: art.Name || ver.Name || 'Artifact',
+                        Type: art.Type || undefined,
+                        LatestVersionID: ver.ID,
+                        LatestVersionNumber: ver.VersionNumber,
+                    });
+                }
+            }
+            return Array.from(byArtifact.values()).slice(-15);
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: conversation-artifact hydration failed: ${(error as Error).message}`,
             );
             return [];
         }

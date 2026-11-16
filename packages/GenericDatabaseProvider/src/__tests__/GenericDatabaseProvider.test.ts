@@ -1248,6 +1248,7 @@ describe('GenericDatabaseProvider', () => {
                     AllowCreateAPI: true,
                     TrackRecordChanges: false,
                     Fields: entityInfoFields,
+                    BinaryFields: [],
                     FieldByName: (name: string) => entityInfoFields.find(f => f.Name === name),
                     GetEffectiveRowFilterWhereClause: () => "OrganizationID = 'org-A'",
                 } as unknown as EntityInfo;
@@ -1260,7 +1261,7 @@ describe('GenericDatabaseProvider', () => {
                     EntityInfo: entityInfo,
                     IsSaved: false,
                     Dirty: true,
-                    Fields: entityInfoFields.map(f => ({ Name: f.Name, Dirty: false })),
+                    Fields: entityInfoFields.map(f => ({ Name: f.Name, Dirty: false, get Value() { return state[f.Name]; } })),
                     ResultHistory: [],
                     RegisterResultHistoryEntry: vi.fn(),
                     PrimaryKeys: [{ Name: 'ID', Value: 'rec-1' }],
@@ -1289,24 +1290,26 @@ describe('GenericDatabaseProvider', () => {
                 expect(hookProvider.executeSQLCalls.length).toBe(2);
                 // The post-hook synthetic row reflects the HOOK'S value, not the original — this
                 // is the assertion that matters: the mutation was actually seen by the SECOND call.
-                expect(hookProvider.executeSQLCalls[1].sql).toContain("'org-B-not-mine' AS \"OrganizationID\"");
-                expect(hookProvider.executeSQLCalls[1].sql).not.toContain("'org-A' AS \"OrganizationID\"");
+                const call1Params = (hookProvider.executeSQLCalls[1].params as NamedQueryParameter[] | undefined) ?? [];
+                expect(call1Params.some(p => p.Value === 'org-B-not-mine')).toBe(true);
+                expect(call1Params.some(p => p.Value === 'org-A')).toBe(false);
             });
 
             it('allows the save when the hook leaves a new record inside the Create RLS filter', async () => {
                 const hookProvider = new NonMutatingHookProvider();
                 const entity = makeCreateEntity();
-                hookProvider.executeSQLResults = [[{ pass: 1 }], [{ pass: 1 }]];
+                hookProvider.executeSQLResults = [[{ pass: 1 }], []];
 
-                // No RLS rejection — Save() proceeds past both RLS gates to the actual (stubbed,
-                // empty-SQL) insert attempt and fails there instead — a 3rd SQL call, proving
-                // both RLS gates passed rather than short-circuiting.
+                // No RLS rejection — Save() proceeds past RLS gate to the actual (stubbed,
+                // empty-SQL) insert attempt and fails there instead. Since no hook mutated fields,
+                // the redundant second CheckCreateRLS is skipped, resulting in 2 SQL calls (RLS check + insert attempt).
                 await expect(
                     hookProvider.Save(entity, mockUser, new EntitySaveOptions())
                 ).rejects.toThrow();
 
-                expect(hookProvider.executeSQLCalls.length).toBe(3);
-                expect(hookProvider.executeSQLCalls[1].sql).toContain("'org-A' AS \"OrganizationID\"");
+                expect(hookProvider.executeSQLCalls.length).toBe(2);
+                const call0Params = (hookProvider.executeSQLCalls[0].params as NamedQueryParameter[] | undefined) ?? [];
+                expect(call0Params.some(p => p.Value === 'org-A')).toBe(true);
             });
         });
     });

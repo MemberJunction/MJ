@@ -43,6 +43,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 vi.mock('@memberjunction/ai-prompts', () => ({
+    EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' },
     AIEmbeddingRunner: class {
         async RunEmbedding(params: { Texts: string[] }) {
             return {

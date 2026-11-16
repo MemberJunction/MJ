@@ -2,7 +2,7 @@ import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { IsTransportError } from './transportError';
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityError, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { GetEffectiveAlternateBaseViewName, IsExplicitBaseViewOverride } from "./alternateBaseViews";
-import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, GetRecordDependenciesOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, GetEntityObjectOptions, GetRecordDependenciesOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
@@ -452,6 +452,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public static CoalesceWindowMs: number = 10;
 
     /**
+     * Controls whether `RunViews` coalescing drains via microtasks (`queueMicrotask`) instead
+     * of a wall-clock `setTimeout(..., CoalesceWindowMs)` timer when `CoalesceWindowMs > 0`.
+     *
+     * When `true` (default), concurrent calls in the same synchronous turn or immediate
+     * `Promise` / `BaseEngine.Load` microtask hops coalesce into one mega-batch and flush as
+     * soon as the microtask queue stabilizes (bounded at 8 hops), eliminating the 10–16ms timer
+     * floor (and ~1,000ms background-tab timer throttling) on isolated queries. Set to `false`
+     * to use the fixed `setTimeout(..., CoalesceWindowMs)` timer window.
+     */
+    public static CoalesceUseMicrotask: boolean = true;
+
+    /**
      * Pending coalesced requests waiting to be flushed.
      * Each entry tracks the original params, contextUser, and a resolver
      * so the caller's promise resolves with only their slice of results.
@@ -463,8 +475,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         reject: (err: unknown) => void;
     }> = [];
 
-    /** Timer handle for the coalesce flush */
+    /** Timer handle for the coalesce flush (when `CoalesceUseMicrotask === false`) */
     private _coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** True while a microtask-drain coalesce flush is scheduled */
+    private _coalesceMicrotaskScheduled: boolean = false;
 
     // ── Request Deduplication + Linger Window ──────────────────────────
     /**
@@ -651,7 +666,32 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * data; the original caller still gets its own result, and the orphaned promise's stash
      * step no-ops safely.
      */
-    private ensureInflightViewInvalidation(): void {
+    private _invalidationTargetRef: WeakRef<ProviderBase> | null = null;
+
+    /**
+     * Number of live/uncollected `ProviderBase` instances currently registered for in-flight
+     * view invalidation callbacks.
+     */
+    public static get ActiveInvalidationTargetCount(): number {
+        return ProviderBase._invalidationTargets.size;
+    }
+
+    /**
+     * Immediately removes this provider instance from the global in-flight invalidation target set
+     * and clears per-instance mutation state. Call on short-lived per-request server providers
+     * when the HTTP response closes so `_invalidationTargets` does not accumulate thousands of
+     * `WeakRef`s between major garbage collections.
+     */
+    public DetachInvalidationListeners(): void {
+        if (this._invalidationTargetRef) {
+            ProviderBase._invalidationTargets.delete(this._invalidationTargetRef);
+            this._invalidationTargetRef = null;
+        }
+        this._lingerInvalidationWired = false;
+        this._entityMutationVersions.clear();
+    }
+
+    protected ensureInflightViewInvalidation(): void {
         // Deliberately ABOVE the per-instance guard: the static wiring is re-checked on every call,
         // not just the first. A long-lived provider (Explorer's client provider, MJServer's system
         // provider) that registered before a bus swap would otherwise stay wired to the dead Subject
@@ -663,7 +703,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return;
         }
         this._lingerInvalidationWired = true;
-        ProviderBase._invalidationTargets.add(new WeakRef(this));
+        const ref = new WeakRef(this);
+        this._invalidationTargetRef = ref;
+        ProviderBase._invalidationTargets.add(ref);
     }
 
     /**
@@ -1948,10 +1990,37 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 reject
             });
 
-            // Start the coalesce timer if not already running
-            if (!this._coalesceTimer) {
+            if (ProviderBase.CoalesceUseMicrotask) {
+                if (!this._coalesceMicrotaskScheduled && !this._coalesceTimer) {
+                    this._coalesceMicrotaskScheduled = true;
+                    this.scheduleMicrotaskCoalesceDrain(this._coalesceQueue.length, 0);
+                }
+            } else if (!this._coalesceTimer && !this._coalesceMicrotaskScheduled) {
+                // Start the coalesce timer if not already running
                 this._coalesceTimer = setTimeout(() => this.flushCoalesceQueue(), ProviderBase.CoalesceWindowMs);
             }
+        });
+    }
+
+    /**
+     * Drains the coalesce queue via `queueMicrotask`. Yields a minimum of 6 microtask hops
+     * (~4µs) so sibling `StartupManager` engines finishing their initial `ResolveContextUser`
+     * and `PreRunViews` awaits reach the queue, and continues yielding (bounded at 16 hops)
+     * while queue length is still growing; flushes immediately once queue growth settles.
+     */
+    private scheduleMicrotaskCoalesceDrain(seenLength: number, hop: number): void {
+        queueMicrotask(() => {
+            const currentLength = this._coalesceQueue.length;
+            if (currentLength === 0) {
+                this._coalesceMicrotaskScheduled = false;
+                return;
+            }
+            if (hop < 6 || (currentLength > seenLength && hop < 16)) {
+                this.scheduleMicrotaskCoalesceDrain(currentLength, hop + 1);
+                return;
+            }
+            this._coalesceMicrotaskScheduled = false;
+            void this.flushCoalesceQueue();
         });
     }
 
@@ -1961,6 +2030,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     private async flushCoalesceQueue(): Promise<void> {
         this._coalesceTimer = null;
+        this._coalesceMicrotaskScheduled = false;
 
         // Grab and clear the queue atomically
         const queue = this._coalesceQueue.splice(0);
@@ -2288,7 +2358,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * widens and caches.
      */
     protected shouldWidenAndPopulateCache(param: RunViewParams): boolean {
-        return this.runViewCacheEligible(param);
+        if (!this.runViewCacheEligible(param)) {
+            return false;
+        }
+        // On the server, when the caller requested a narrow `Fields` projection without
+        // explicitly asking for `CacheLocal: true`, do not widen to `SELECT *` when:
+        // 1. `UserSearchString` is populated (ad-hoc search-as-you-type queries would otherwise
+        //    pull every wide NVARCHAR(MAX) column and allocate per-keystroke cache slots), or
+        // 2. `LocalCacheManager` is currently batching writes for this provider (`SetRunViewResult`
+        //    drops cache writes while a write batch is open, so widening would be pure waste).
+        if (this.TrustLocalCacheCompletely && param.CacheLocal !== true && this.hasNarrowFieldsOverride(param)) {
+            if ((param.UserSearchString ?? '').trim().length > 0) {
+                return false;
+            }
+            if (LocalCacheManager.Instance.IsInitialized && LocalCacheManager.Instance.IsBatchingEntityEvents(this)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -5182,7 +5269,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
         const hooks = GetDataHooks<PreRunViewHook>('PreRunView');
         for (const hook of hooks) {
-            params = await hook(params, contextUser);
+            params = await hook(params, contextUser, this);
         }
         return params;
     }
@@ -5201,7 +5288,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async RunPostRunViewHooks(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<RunViewResult> {
         const hooks = GetDataHooks<PostRunViewHook>('PostRunView');
         for (const hook of hooks) {
-            result = await hook(params, result, contextUser);
+            result = await hook(params, result, contextUser, this);
         }
         return result;
     }
@@ -5358,6 +5445,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // (Base-view materializations reuse the SOURCE entity and are handled by the DataSource:'Materialized'
         // bypass in runViewCacheEligible; this covers the query-materialization Live-read path.)
         if (entity.VirtualEntity && entity.BaseView && entity.BaseView.toLowerCase().startsWith('materialized_vw')) return false;
+
+        // External data-source entities (federated REST/SQL connectors) are never event-invalidated
+        // and `LocalCacheManager.SetRunViewResult` skips them unless an explicit `ttlMs` is passed
+        // (`PostRunView` never passes `ttlMs`), so treating them as server-cacheable only forces
+        // wasted `Fields` widening and futile cache lookups.
+        if (entity.ExternalDataSourceID) return false;
 
         return entity.TrustServerCacheCompletely !== false;
     }
@@ -5963,6 +6056,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param data - Configuration including schema filters and connection info
      * @returns True if configuration was successful
      */
+    /**
+     * Synchronously configures this provider from an already-initialized global `Metadata.Provider`
+     * without allocating promises or awaiting async cache initialization. Returns `false` if global
+     * metadata or `LocalCacheManager` has not finished initializing yet.
+     */
+    protected ConfigureFromGlobalMetadataSync(data: ProviderConfigDataBase): boolean {
+        if (!Metadata.Provider || data.IgnoreExistingMetadata || this._refresh || !LocalCacheManager.Instance.IsInitialized) { // global-provider-ok: bootstrap checks for an existing global registration
+            return false;
+        }
+        this._ConfigData = data;
+        this._configLoadedFromServer = false;
+        return this.CopyMetadataFromGlobalProvider();
+    }
+
     public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
         // Describes THIS Config only: a flag left by an earlier Refresh() must not make the
@@ -6944,7 +7051,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // SaveLocalMetadataToStorage avoids a multi-MB JSON.stringify + gzip + IDB
                 // write pass on the main thread during startup.
                 if (previousUserJson !== JSON.stringify(user)) {
-                    void this.SaveLocalMetadataToStorage();
+                    if (Object.prototype.hasOwnProperty.call(this, 'SaveLocalMetadataToStorage')) {
+                        void this.SaveLocalMetadataToStorage();
+                    } else {
+                        this.ScheduleSaveLocalMetadataToStorage();
+                    }
                 }
                 return user;
             }
@@ -7449,6 +7560,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
 
+    private static isGetEntityObjectOptions(
+        value: CompositeKey | GetEntityObjectOptions | UserInfo | undefined
+    ): value is GetEntityObjectOptions {
+        return (
+            typeof value === 'object' &&
+            value !== null &&
+            !(value instanceof CompositeKey) &&
+            !(value instanceof UserInfo) &&
+            'SkipNewRecord' in value
+        );
+    }
+
     /**
      * Creates a new instance of a BaseEntity subclass for the specified entity and automatically calls NewRecord() to initialize it.
      * This method serves as the core implementation for entity instantiation in the MemberJunction framework.
@@ -7470,29 +7593,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Promise resolving to the entity instance with the specified record loaded
      * @throws Error if entity name is not found, instantiation fails, or record cannot be loaded
      */
+    public async GetEntityObject<T extends BaseEntity>(entityName: string, options: GetEntityObjectOptions, contextUser?: UserInfo): Promise<T>;
     public async GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>;
     
     public async GetEntityObject<T extends BaseEntity>(
         entityName: string, 
-        loadKeyOrContextUser?: CompositeKey | UserInfo,
+        loadKeyOrOptionsOrContextUser?: CompositeKey | GetEntityObjectOptions | UserInfo,
         contextUser?: UserInfo
     ): Promise<T> {
         try {
             // Determine which overload was called
             let actualLoadKey: CompositeKey | undefined;
+            let actualOptions: GetEntityObjectOptions | undefined;
             let actualContextUser: UserInfo | undefined;
             
-            if (loadKeyOrContextUser instanceof CompositeKey) {
-                // Second overload: entityName, loadKey, contextUser
-                actualLoadKey = loadKeyOrContextUser;
+            if (loadKeyOrOptionsOrContextUser instanceof CompositeKey) {
+                // Overload: entityName, loadKey, contextUser
+                actualLoadKey = loadKeyOrOptionsOrContextUser;
+                actualContextUser = contextUser;
+            } else if (ProviderBase.isGetEntityObjectOptions(loadKeyOrOptionsOrContextUser)) {
+                // Overload: entityName, options, contextUser
+                actualOptions = loadKeyOrOptionsOrContextUser;
                 actualContextUser = contextUser;
             } else if (contextUser !== undefined) {
-                // Second overload with null/undefined loadKey: entityName, null/undefined, contextUser
+                // Overload with null/undefined loadKey: entityName, null/undefined, contextUser
                 actualLoadKey = undefined;
                 actualContextUser = contextUser;
             } else {
                 // First overload: entityName, contextUser
-                actualContextUser = loadKeyOrContextUser as UserInfo;
+                actualContextUser = loadKeyOrOptionsOrContextUser;
             }
 
             const entity: EntityInfo = this.EntityByName(entityName);
@@ -7541,7 +7670,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         if (!loadResult) {
                             throw new Error(`Failed to load ${entityName} with key: ${actualLoadKey.ToString()}`);
                         }
-                    } else {
+                    } else if (!actualOptions?.SkipNewRecord) {
                         // whenever we create a new object we want it to start
                         // out as a new record, so we call NewRecord() on it
                         newObject.NewRecord();
@@ -7560,6 +7689,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LogError(ex);
             return null;
           }
+    }
+
+    /**
+     * Instantiates a `BaseEntity` subclass using explicit {@link GetEntityObjectOptions}
+     * (for example `{ SkipNewRecord: true }` prior to `LoadFromData`).
+     */
+    public GetEntityObjectWithOptions<T extends BaseEntity>(
+        entityName: string,
+        options: GetEntityObjectOptions,
+        contextUser?: UserInfo
+    ): Promise<T> {
+        return this.GetEntityObject<T>(entityName, options, contextUser);
     }
 
     /**
@@ -8248,14 +8389,51 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const itemsKey = this.LocalStoragePrefix + ProviderBase.localStorageDatasetItemsKey;
 
             const readStart = Date.now();
-            const all = await ls.GetItems<string>([tsKey, fmtKey, dataKey, membershipKey, itemsKey]);
-            const readMs = Date.now() - readStart;
+            let raw: unknown = null;
+            let tsRaw: string | null = null;
+            let format: string | null = null;
+            let membershipRaw: string | null = null;
+            let itemsRaw: string | null = null;
 
-            const tsRaw = all.get(tsKey) ?? null;
-            const format = all.get(fmtKey) ?? null;
-            const raw = all.get(dataKey) ?? null;
-            const membershipRaw = all.get(membershipKey) ?? null;
-            const itemsRaw = all.get(itemsKey) ?? null;
+            if (typeof ls.GetObject === 'function') {
+                const otherKeys = [tsKey, fmtKey, membershipKey, itemsKey];
+                const [metadataObj, otherItems] = await Promise.all([
+                    ls.GetObject(dataKey),
+                    typeof ls.GetItems === 'function' ? ls.GetItems<string>(otherKeys) : null
+                ]);
+                raw = metadataObj !== null && metadataObj !== undefined
+                    ? metadataObj
+                    : await ls.GetItem<string>(dataKey);
+                if (otherItems) {
+                    tsRaw = otherItems.get(tsKey) ?? null;
+                    format = otherItems.get(fmtKey) ?? null;
+                    membershipRaw = otherItems.get(membershipKey) ?? null;
+                    itemsRaw = otherItems.get(itemsKey) ?? null;
+                } else {
+                    tsRaw = await ls.GetItem<string>(tsKey);
+                    format = await ls.GetItem<string>(fmtKey);
+                    membershipRaw = await ls.GetItem<string>(membershipKey);
+                    itemsRaw = await ls.GetItem<string>(itemsKey);
+                }
+            } else {
+                const all = typeof ls.GetItems === 'function'
+                    ? await ls.GetItems<string>([tsKey, fmtKey, dataKey, membershipKey, itemsKey])
+                    : null;
+                if (all) {
+                    tsRaw = all.get(tsKey) ?? null;
+                    format = all.get(fmtKey) ?? null;
+                    raw = all.get(dataKey) ?? null;
+                    membershipRaw = all.get(membershipKey) ?? null;
+                    itemsRaw = all.get(itemsKey) ?? null;
+                } else {
+                    tsRaw = await ls.GetItem<string>(tsKey);
+                    format = await ls.GetItem<string>(fmtKey);
+                    raw = await ls.GetItem<string>(dataKey);
+                    membershipRaw = await ls.GetItem<string>(membershipKey);
+                    itemsRaw = await ls.GetItem<string>(itemsKey);
+                }
+            }
+            const readMs = Date.now() - readStart;
 
             // The timestamps are a freshness claim FOR THE PAYLOAD, so they are only adopted when the
             // payload is there to adopt with them. Timestamps without a payload happen whenever the
@@ -8303,7 +8481,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             if (!raw) return;
 
-            // Decompress if stored in compressed format, otherwise parse directly
+            // Decompress if stored in compressed format, otherwise parse directly or adopt object directly
             const parseStart = Date.now();
             let temp: any;
             if (format === 'gzip' && typeof raw === 'string') {
@@ -8314,9 +8492,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const decompressedStream = blob.stream().pipeThrough(ds);
                 const jsonString = await new Response(decompressedStream).text();
                 temp = JSON.parse(jsonString);
-            } else {
-                // Legacy uncompressed path
-                temp = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } else if (typeof raw === 'string') {
+                // Legacy uncompressed string path
+                temp = JSON.parse(raw);
+            } else if (typeof raw === 'object' && raw !== null) {
+                // Structured clone object path: directly adopt the cloned object
+                temp = raw;
             }
             const parseMs = Date.now() - parseStart;
 
@@ -8483,6 +8664,130 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /** Guard for {@link logMetadataSnapshotDisabledOnce}. */
     private _metadataSnapshotSkipLogged = false;
 
+    /** Default debounce duration in milliseconds for coalesced metadata snapshot writes to local storage. */
+    public static MetadataSnapshotSaveDebounceMs: number = 250;
+    private _metadataSaveTimer: ReturnType<typeof setTimeout> | null = null;
+    private _inFlightMetadataSave: Promise<void> | null = null;
+    private _hasPendingMetadataSaveWhileInFlight: boolean = false;
+
+    /**
+     * Schedules a trailing-edge coalesced background call to `SaveLocalMetadataToStorage()`,
+     * deduplicating rapid back-to-back calls within the window and serializing execution if an
+     * in-flight save is already running.
+     *
+     * @param delayMs - Debounce window duration in milliseconds (defaults to `ProviderBase.MetadataSnapshotSaveDebounceMs`)
+     */
+    public ScheduleSaveLocalMetadataToStorage(delayMs: number = ProviderBase.MetadataSnapshotSaveDebounceMs): void {
+        if (!this.LocalStorageProvider) return;
+
+        if (!this.MetadataSnapshotPersistenceEnabled) {
+            this.logMetadataSnapshotDisabledOnce();
+            return;
+        }
+
+        if (this._inFlightMetadataSave) {
+            this._hasPendingMetadataSaveWhileInFlight = true;
+            return;
+        }
+
+        if (this._metadataSaveTimer) {
+            clearTimeout(this._metadataSaveTimer);
+        }
+
+        this._metadataSaveTimer = setTimeout(() => {
+            this._metadataSaveTimer = null;
+            void this.triggerSerializedMetadataSave();
+        }, delayMs);
+
+        if (typeof this._metadataSaveTimer?.unref === 'function') {
+            this._metadataSaveTimer.unref();
+        }
+    }
+
+    /**
+     * Cancels any pending debounce timer and awaits `SaveLocalMetadataToStorage()` immediately
+     * (or awaits any in-flight save plus trailing save), so tests and shutdown hooks can
+     * deterministically flush pending writes.
+     */
+    public async FlushPendingMetadataStorageSave(): Promise<void> {
+        if (this._metadataSaveTimer) {
+            clearTimeout(this._metadataSaveTimer);
+            this._metadataSaveTimer = null;
+            this._hasPendingMetadataSaveWhileInFlight = true;
+        }
+
+        if (this._inFlightMetadataSave) {
+            await this._inFlightMetadataSave;
+            return;
+        }
+
+        if (this._hasPendingMetadataSaveWhileInFlight) {
+            await this.triggerSerializedMetadataSave();
+        }
+    }
+
+    /**
+     * Clears any pending metadata snapshot save timer without saving.
+     */
+    public CancelPendingMetadataStorageSave(): void {
+        if (this._metadataSaveTimer) {
+            clearTimeout(this._metadataSaveTimer);
+            this._metadataSaveTimer = null;
+        }
+        this._hasPendingMetadataSaveWhileInFlight = false;
+    }
+
+    private triggerSerializedMetadataSave(): Promise<void> {
+        if (!this._inFlightMetadataSave) {
+            this._inFlightMetadataSave = this.executeSerializedMetadataSave().finally(() => {
+                this._inFlightMetadataSave = null;
+            });
+        }
+        return this._inFlightMetadataSave;
+    }
+
+    private async executeSerializedMetadataSave(): Promise<void> {
+        do {
+            this._hasPendingMetadataSaveWhileInFlight = false;
+            try {
+                await this.SaveLocalMetadataToStorage();
+            } catch {
+                // SaveLocalMetadataToStorage catches its own errors; guard here as well
+            }
+        } while (this._hasPendingMetadataSaveWhileInFlight);
+    }
+
+    /**
+     * Converts BaseInfo instances and nested objects into plain structured-cloneable
+     * objects without JSON.stringify/JSON.parse, stripping functions and WeakRefs.
+     */
+    private static toCloneableValue(val: unknown): unknown {
+        if (val == null || typeof val !== 'object') {
+            return val;
+        }
+        if (val instanceof Date || val instanceof RegExp || val instanceof ArrayBuffer || ArrayBuffer.isView(val)) {
+            return val;
+        }
+        if (Array.isArray(val)) {
+            const out = new Array(val.length);
+            for (let i = 0; i < val.length; i++) {
+                out[i] = ProviderBase.toCloneableValue(val[i]);
+            }
+            return out;
+        }
+        const maybeToJson = val as { toJSON?: () => unknown };
+        if (typeof maybeToJson.toJSON === 'function') {
+            return ProviderBase.toCloneableValue(maybeToJson.toJSON());
+        }
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(val)) {
+            if (typeof v !== 'function' && !(typeof WeakRef !== 'undefined' && v instanceof WeakRef)) {
+                out[k] = ProviderBase.toCloneableValue(v);
+            }
+        }
+        return out;
+    }
+
     /**
      * Saves current metadata to local storage for caching.
      * Serializes both timestamps and full metadata collections.
@@ -8500,15 +8805,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             const start = Date.now();
+            const dataKey = this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey;
+            const formatKey = this.LocalStoragePrefix + ProviderBase.localStorageFormatKey;
 
-            // Serialize the AllMetadata object FIRST. If this throws (or the payload write below
-            // fails), nothing else has been written yet, so the previously stored timestamps still
-            // describe the previously stored payload and LocalMetadataObsolete() will report
-            // obsolete on the next boot — which is what makes the save retry. Writing timestamps
-            // before the payload left the cache claiming freshness with no payload behind it, and
-            // that state was never retried.
-            const jsonString = JSON.stringify(this._localMetadata);
-            const snapshot = await this.writeMetadataSnapshot(ls, jsonString);
+            let snapshot: { compressed: boolean; storedLength: number };
+            if (typeof ls.SetObject === 'function') {
+                // Structured-clone path: convert BaseInfo instances to plain cloneable objects (stripping
+                // WeakRef/provider back-references without JSON.stringify/gzip/JSON.parse or lazy field hydration)
+                const cloneableMetadata = ProviderBase.toCloneableValue(this._localMetadata) as AllMetadata;
+                await ls.SetObject<AllMetadata>(dataKey, cloneableMetadata);
+                await ls.SetItem<string>(formatKey, 'structured-clone');
+                snapshot = { compressed: false, storedLength: 0 };
+            } else {
+                // Serialized string path (JSON.stringify + gzip/base64 when CompressionStream is available)
+                const jsonString = JSON.stringify(this._localMetadata);
+                snapshot = await this.writeMetadataSnapshot(ls, jsonString);
+            }
 
             // Persist the metadata-member entity set beside the snapshot it belongs to, so the
             // event-driven refresh survives a warm boot (see LoadLocalMetadataFromStorage).
@@ -8526,7 +8838,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, timestampsRaw);
             this._storedTimestampsRaw = timestampsRaw;
 
-            this.logMetadataSaveComplete(Date.now() - start, jsonString.length, snapshot);
+            this.logMetadataSaveComplete(Date.now() - start, snapshot.storedLength, snapshot);
         }
         catch (e) {
             LogError(`[Metadata Cache] SaveLocalMetadataToStorage failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -8575,6 +8887,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const ratio = rawLength > 0 ? (snapshot.storedLength / rawLength * 100).toFixed(1) : '?';
             LogStatusEx({
                 message: `[Metadata Cache] Save complete: ${elapsedMs}ms, raw=${mb(rawLength)}MB, compressed=${mb(snapshot.storedLength)}MB (${ratio}%)`,
+                verboseOnly: true
+            });
+        }
+        else if (snapshot.storedLength === 0) {
+            LogStatusEx({
+                message: `[Metadata Cache] Save complete (structured-clone): ${elapsedMs}ms`,
                 verboseOnly: true
             });
         }

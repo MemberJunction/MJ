@@ -44,7 +44,7 @@ describe('every connector gets a schema with no connector code', () => {
             'crossLayerPipeline', 'partitionReconcile', 'fetchTimeoutMs', 'writeMode',
             'discoveryMaxRecords', 'discoveryTimeBudgetMs', 'discoveryBatchSize',
             'discoverySampleMaxDepth', 'discoveryParentKeySampleRows', 'deactivateAbsent',
-            'autoPromoteCustomColumns',
+            'autoPromoteCustomColumns', 'batchSize', 'maxBatchesPerMap', 'watermarkLookbackSeconds',
         ]) {
             expect(keys, `missing ${k}`).toContain(k);
         }

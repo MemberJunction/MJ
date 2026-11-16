@@ -86,6 +86,7 @@ interface Internals {
     _promptRunner: { RenderChildPromptTemplates: (children: unknown[], params: AIPromptParams) => Promise<{ renderedTemplates: Record<string, string> }> };
     logStatus: (msg: string) => void;
     logError: (e: unknown) => void;
+    finalizePromptParams<P>(promptParams: AIPromptParams, config: { childPrompt?: MJAIPromptEntityExtended; agentType?: MJAIAgentTypeEntity }, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams>;
     buildVolatileStateMessage<P>(params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P, childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, systemPrompt?: MJAIPromptEntityExtended): Promise<VolatileMessage | null>;
     assembleOutgoingMessages(history: ChatMessage[], fragment: VolatileMessage, isAppendOnly?: boolean): ChatMessage[];
     shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean;
@@ -913,3 +914,92 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState — replayed reasoning boun
         expect(BaseLLM.ReplayedReasoningRequiresStablePrefix).toBe(false);
     });
 });
+
+describe('finalizePromptParams — a relocated specialization follows the native flags the runner sets', () => {
+    /** Renders the child as the native or the envelope wording, from the data it is given. */
+    function flagAwareAgent(): Internals {
+        const a = agentUnderTest();
+        a._promptRunner = {
+            RenderChildPromptTemplates: vi.fn(async (_children: unknown[], p: AIPromptParams) => ({
+                renderedTemplates: { agentSpecificPrompt: p.data?._NATIVE_TOOL_CALLING === true ? 'Call the tools.' : 'Return JSON.' },
+            })),
+        };
+        return a;
+    }
+    const lastContent = (pp: AIPromptParams) => String(pp.conversationMessages![pp.conversationMessages!.length - 1].content);
+
+    it('re-renders the trailing message with the final flags, before the prompt renders', async () => {
+        templates.byId.set('tmpl-sage', '# Sage\n\nToday is {{ _CURRENT_DATE_AND_TIME }}.');
+        const a = flagAwareAgent();
+        const { params, promptParams } = makeInputs(TRAILING);
+
+        const prepared = await a.finalizePromptParams(promptParams, { childPrompt: CHILD, agentType: AGENT_TYPE }, {}, params);
+        expect(lastContent(prepared)).toContain('Return JSON.');
+
+        // What the prompt runner does once the selected model's gate has decided on native tools.
+        prepared.data = { ...prepared.data, _NATIVE_TOOL_CALLING: true, _NATIVE_CONTROL_FLOW: 'implicit' };
+        await prepared.OnTemplateDataFinalized!(prepared);
+
+        expect(lastContent(prepared)).toContain('Call the tools.');
+        expect(lastContent(prepared)).not.toContain('Return JSON.');
+        expect(prepared.PreRenderedChildTemplates).toEqual({ agentSpecificPrompt: 'Call the tools.' });
+        // The stored history never held the fragment (replace-in-place), and still does not.
+        expect(params.conversationMessages).toHaveLength(2);
+    });
+
+    it('registers nothing when the specialization stays in the system prompt', async () => {
+        templates.byId.set('tmpl-sage', '# Sage\n\n## Role\n- static');
+        const a = flagAwareAgent();
+        const { params, promptParams } = makeInputs(TRAILING);
+
+        const prepared = await a.finalizePromptParams(promptParams, { childPrompt: CHILD, agentType: AGENT_TYPE }, {}, params);
+
+        expect(prepared.OnTemplateDataFinalized).toBeUndefined();
+    });
+
+    it('keeps the message it built when the re-render fails', async () => {
+        templates.byId.set('tmpl-sage', '# Sage\n\nToday is {{ _CURRENT_DATE_AND_TIME }}.');
+        const a = flagAwareAgent();
+        const { params, promptParams } = makeInputs(TRAILING);
+        const prepared = await a.finalizePromptParams(promptParams, { childPrompt: CHILD, agentType: AGENT_TYPE }, {}, params);
+        const before = prepared.conversationMessages![prepared.conversationMessages!.length - 1];
+        a._promptRunner.RenderChildPromptTemplates = vi.fn().mockRejectedValue(new Error('template error'));
+
+        await expect(prepared.OnTemplateDataFinalized!(prepared)).resolves.toBeUndefined();
+
+        expect(prepared.conversationMessages![prepared.conversationMessages!.length - 1]).toBe(before);
+    });
+
+    it('a re-rendered message kept in the history does not count as a changed message on the next turn', async () => {
+        templates.byId.set('tmpl-sage', '# Sage\n\nToday is {{ _CURRENT_DATE_AND_TIME }}.');
+        catalog.reset();
+        catalog.models.set('m-binding', { ID: 'm-binding', Name: 'Claude' });
+        catalog.vendors.set('v-binding', { ID: 'v-binding', Name: 'Anthropic' });
+        catalog.modelVendors.set('m-binding', [{ ID: 'm-binding:inference', VendorID: 'v-binding', TypeID: 'inference', DriverClass: 'ITBindingTestLLM' } as CatalogModelVendor]);
+        const a = flagAwareAgent() as Internals & { _nativeToolBindings?: Map<string, unknown> };
+        a._lastModelSelectionInfo = { ModelSelected: catalog.models.get('m-binding'), vendorSelected: catalog.vendors.get('v-binding') };
+        a._nativeToolBindings = new Map();
+        const { params, promptParams } = makeInputs(TRAILING);
+
+        // Turn 1: the fragment is kept in the history (append-only) and re-rendered with the native flags.
+        const turn1 = await a.finalizePromptParams(promptParams, { childPrompt: CHILD, agentType: AGENT_TYPE }, {}, params);
+        turn1.data = { ...turn1.data, _NATIVE_TOOL_CALLING: true, _NATIVE_CONTROL_FLOW: 'implicit' };
+        await turn1.OnTemplateDataFinalized!(turn1);
+        expect(lastContent(turn1)).toContain('Call the tools.');
+
+        // The model's reply with its reasoning, and the result of its call.
+        const reply: ChatMessage = {
+            role: 'assistant', content: '',
+            toolCalls: [{ id: 'call-1', name: 'search', arguments: {} }],
+            reasoning: [{ provider: 'anthropic', kind: 'thinking', text: 'Search first.', signature: 'sig' }],
+        };
+        params.conversationMessages.push(reply, { role: 'user', content: '[Tool result] found' });
+
+        const turn2 = await a.finalizePromptParams({ ...makeInputs(TRAILING).promptParams, conversationMessages: params.conversationMessages }, { childPrompt: CHILD, agentType: AGENT_TYPE }, {}, params);
+
+        expect(turn2.conversationMessages!.find((m) => m.toolCalls?.[0]?.id === 'call-1')?.reasoning).toHaveLength(1);
+        expect(params.conversationMessages.find((m) => m.toolCalls?.[0]?.id === 'call-1')?.reasoning).toHaveLength(1);
+        expect(a.logStatus).not.toHaveBeenCalledWith(expect.stringContaining('Dropped replayed reasoning'), expect.anything(), expect.anything());
+    });
+});
+

@@ -184,6 +184,51 @@ export const DECISION_ANSWER_FIELDS: Readonly<Record<AgentDecisionQuestion['kind
 };
 
 /**
+ * Policy when a saga compensation action itself fails after retries exhaust.
+ *
+ * - `'EscalateToHumanTask'` (default) — raises an `MJ: AI Agent Requests` human escalation with the
+ *   forward execution context, record changes snapshot, and compensation failure details.
+ * - `'HaltSaga'` — stops downstream compensation steps immediately.
+ * - `'ContinueCompensation'` — logs the failure and continues running remaining upstream compensation steps.
+ */
+export type ActionCompensationFailurePolicy = 'EscalateToHumanTask' | 'HaltSaga' | 'ContinueCompensation';
+
+/**
+ * Saga compensation contract for an `Action` step.
+ */
+export interface ActionCompensationSpec {
+    /** Overrides `Action.CompensationActionID` when specified on the workflow node (UUID). */
+    readonly compensationActionId?: string;
+    /** Optional action name of the compensation action (resolved to `compensationActionId` at submit time). */
+    readonly compensationActionName?: string;
+    /**
+     * Explicit mapping from forward `{ input, output, actionLogId, recordChanges }` -> compensation params.
+     * Accepts either a parameter-name -> path dictionary or a serialized JSON mapping string.
+     */
+    readonly inputMapping?: Readonly<Record<string, string>> | string;
+    /** Alias for `inputMapping` matching `CompensationInputMapping` metadata column naming. */
+    readonly compensationInputMapping?: Readonly<Record<string, string>> | string;
+    /** Policy if compensation itself fails after maxRetries. Default `'EscalateToHumanTask'`. */
+    readonly onCompensationFailure?: ActionCompensationFailurePolicy;
+    /**
+     * `false` turns off automatic retry of this node's action. It can only narrow the action's own
+     * `IsIdempotent` column, never widen it: `true` on an action not marked idempotent changes nothing.
+     */
+    readonly isIdempotent?: boolean;
+    /** Optional automatic retry count when `isIdempotent === true` or on the compensation step. */
+    readonly retryCount?: number;
+}
+
+/**
+ * Workflow-level saga failure policy when an unhandled step fails.
+ *
+ * - `'Halt'` (default) — halts dependents without materializing compensation tasks.
+ * - `'CompensateCompleted'` — materializes and dispatches reverse-topological compensation tasks for
+ *   completed compensatable `Action` steps.
+ */
+export type TaskGraphFailurePolicy = 'Halt' | 'CompensateCompleted';
+
+/**
  * Per-kind configuration.
  *
  * `ForEach`/`While` reuse {@link ForEachOperation} / {@link WhileOperation} **verbatim**. Those types
@@ -197,7 +242,7 @@ export const DECISION_ANSWER_FIELDS: Readonly<Record<AgentDecisionQuestion['kind
  */
 export type TaskGraphNodeConfigMap = {
     Agent: { agentName: string; message?: string; templateParameters?: Record<string, string>; presetName?: string };
-    Action: { actionName: string; inputMapping?: string; outputMapping?: string };
+    Action: { actionName: string; inputMapping?: string; outputMapping?: string; compensation?: ActionCompensationSpec };
     Human: { assignToUserID?: string; instructions?: string; expiresInHours?: number };
     Prompt: { promptName: string; templateParameters?: Record<string, string> };
     ForEach: ForEachOperation;
@@ -369,6 +414,15 @@ export type TaskGraphSpec = {
      * downstream work the producer intended to be gated on success.
      */
     failureSemantics?: 'block' | 'edges';
+
+    /**
+     * Saga rollback policy when an unhandled step fails. Default `'Halt'`.
+     *
+     * - `'Halt'` (default) — halts dependents without materializing compensation tasks.
+     * - `'CompensateCompleted'` — materializes and dispatches reverse-topological compensation tasks for
+     *   completed compensatable `Action` steps.
+     */
+    failurePolicy?: TaskGraphFailurePolicy;
 };
 
 /**

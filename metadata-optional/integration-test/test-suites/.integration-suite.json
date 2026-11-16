@@ -1506,6 +1506,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT173 - Transaction Group Concurrency over GraphQL",
+            "Sequence": 84,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "48e68478-dd3b-4be1-ab4f-7e5f974372e0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT146 - SQL Pipeline Scenario Cross Products",
             "Sequence": 49,
             "Status": "Active"
@@ -1561,6 +1572,61 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT174 - Conversation Delete Guard (client transport)",
+            "Sequence": 83,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "02D61BD5-5BE3-4648-A4EE-C2673E136547"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT167 - Graph Runtime Permissions",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "703E84E3-C790-46D7-A694-728E7DA35618"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT168 - Task Graph Security and Saga",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2B6D709B-FD12-41C3-BDB2-3737A9E16195"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT169 - Record Change Snapshots Record the Stored Row",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D3B0B7D3-CE23-4B86-82D2-7F963D217DD2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT166 - Predictive Shadow Scoring and Drift",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B37FAE4E-A419-489E-9669-916DF3776436"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT164 - Work Bus Core Layers",
             "Sequence": 49,
             "Status": "Active"
@@ -1578,6 +1644,39 @@
           },
           "primaryKey": {
             "ID": "6C49D2E1-8B37-4A52-9E14-7F08A3C5D9B2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT170 - Collaborative Docs, Slides, Sheets, Working States, and Library Workspace",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "04C2379C-4736-4932-BAEE-0F3E4FCC200C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT171 - Collaborative Docs, Slides, Sheets and Working States over GraphQL and WebSocket",
+            "Sequence": 83,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "78E3D9A1-2C4B-4F6A-9E15-3B8D4C5E6F70"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT172 - Gemini Decision 1 Decision Model",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "260A41E9-9367-4D7D-AABE-754921CBF6E3"
           }
         }
       ]

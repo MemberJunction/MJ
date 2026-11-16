@@ -28,6 +28,7 @@ export * from './checks/metadata-consistency.checks';
 export * from './checks/open-app-teardown.checks';
 export * from './checks/permission-engine.checks';
 export * from './checks/predictive-studio.checks';
+export * from './checks/predictive-shadow-drift.checks';
 export * from './checks/prompt-eval-harness.checks';
 export * from './checks/agent-decisions-switch.checks';
 export * from './checks/agent-prompt-cancellation.checks';
@@ -55,6 +56,7 @@ export * from './checks/fls-closeout-client.checks';
 export * from './checks/self-avatar-client.checks';
 export * from './checks/view-properties-client.checks';
 export * from './checks/conversation-authorship-client.checks';
+export * from './checks/conversation-delete-client.checks';
 export * from './checks/keyrowfilter.checks'; // KF1–KF6: registers into the 'rls-isolation' bundle AFTER RLS1–RLS10 (order matters for GetBundle parity)
 export * from './checks/rolerowfilter.checks'; // RF1–RF3: registers into the 'rls-isolation' bundle AFTER KF1–KF6
 export * from './checks/runquery-cache.checks';
@@ -240,7 +242,13 @@ export * from './checks/entity-status-fanout-client.checks';
 export * from './checks/encrypted-read-client.checks';
 export * from './checks/diagnostics.checks';
 export * from './checks/semantic-graph.checks';
+export * from './checks/graph-runtime.checks';
+export * from './checks/task-graph-security.checks';
 export * from './checks/work-bus-core.checks';
 export * from './checks/integration-schema-pipeline.checks';
+export * from './checks/docs-slides-sheets-library.checks';
+export * from './checks/record-change-snapshot.checks';
+export * from './checks/transaction-group-concurrency-client.checks';
+export * from './checks/gemini-decisions.checks';
 // The skip allowlist registers on the same registry; a skip of any check not listed fails the run.
 export * from './skip-allowlist';

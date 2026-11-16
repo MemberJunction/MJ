@@ -263,6 +263,39 @@ describe('TagEngine uses one embedding model for tags, queries and new tags', ()
         expect(h.state.persisted.map(([, modelID]) => modelID)).toEqual([SMALLEST_MODEL_ID, SMALLEST_MODEL_ID]);
     });
 
+    it('EmbedTagText embeds a saved tag with the index model under the Tag Semantic Matching prompt (#4922)', async () => {
+        loadCatalog(true);
+        await engine.Config(true, user);
+        h.embedCalls.length = 0;
+
+        const embedded = await engine.EmbedTagText('Quantum Computing: qubits', user);
+
+        expect(embedded?.ModelID).toBe(PROMPT_MODEL_ID);
+        expect(embedded?.Vector).toEqual([0.1, 0.2, 0.3]);
+        expect(h.embedCalls).toHaveLength(1);
+        expect(h.embedCalls[0]).toMatchObject({ Texts: ['Quantum Computing: qubits'], ModelID: PROMPT_MODEL_ID, PromptID: TAG_PROMPT_ID });
+        await expect(engine.ResolveTagEmbeddingModelID(user)).resolves.toBe(PROMPT_MODEL_ID);
+    });
+
+    it('EmbedTagText resolves the model before the index is built, the same way the index will', async () => {
+        loadCatalog(false);
+
+        const embedded = await engine.EmbedTagText('Robotics', user);
+
+        expect(embedded?.ModelID).toBe(SMALLEST_MODEL_ID);
+        await expect(engine.ResolveTagEmbeddingModelID(user)).resolves.toBe(SMALLEST_MODEL_ID);
+    });
+
+    it('EmbedTagText returns null when no embedding model exists', async () => {
+        h.state.models = [];
+        h.state.prompts = [];
+        h.state.promptModels = [];
+
+        await expect(engine.EmbedTagText('Robotics', user)).resolves.toBeNull();
+        await expect(engine.ResolveTagEmbeddingModelID(user)).resolves.toBeNull();
+        expect(h.embedCalls).toHaveLength(0);
+    });
+
     it('embeds the text being resolved as a query, and tags as documents', async () => {
         loadCatalog(true);
 

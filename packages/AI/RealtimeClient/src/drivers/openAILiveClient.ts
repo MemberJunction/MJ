@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeToolBatchBarrier, RenderLateToolResultNote, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeContextNoteOptions, RealtimeToolBatchBarrier, RenderLateToolResultNote, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import {
     BaseRealtimeClient,
@@ -414,8 +414,8 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * Injects background context without triggering model speech.
      * Uses `session.thinking.append` with `content` parameter and `delegation_id: null`.
      */
-    public SendContextNote(text: string): void {
-        this.ConversationMemory.Record({ Kind: 'note', Text: text });
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
+        this.ConversationMemory.Record({ Kind: 'note', Text: text, ...options });
         this.sendDataChannelFrame({
             type: 'session.thinking.append',
             content: text,

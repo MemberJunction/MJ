@@ -1,5 +1,62 @@
 # @memberjunction/react-linter
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 8bd2fab: Fix false positives in the runtime and type rules found in Skip's audits of AI-generated components. `required-queries-not-called` recognizes RunQuery through any reference to the rq service (`utilitiesRef.current.rq`, an alias of it, a destructured or renamed `rq`) and optional calls. `query-result-field-access-validation` tracks query result variables by binding, so a same-named variable in another function no longer inherits the query's fields. `noisy-settings-updates` flags a save only when its handler is wired to a per-keystroke event (onInput, or onChange on a text input, textarea or Input-like component), so a save on Enter from a key handler is no longer flagged. It recognizes `onSaveUserSettings?.(...)` and `useCallback` handlers, skips a save inside a `setTimeout` or `debounce` callback, and its debounce check now works (it compared against `"[object Object]"`). `component-usage-without-destructuring` accepts `components || {}`, `components ?? {}` and `props.components`.
+
+  Fix type-inference false positives in `type-mismatch-operation` and `type-compatibility`. A variable is now typed where it is read (its enclosing functions) instead of taking the type of any same-named variable elsewhere, so `m - 1` in `for (let m = 1; ...)` is no longer "arithmetic on object" because a helper declared `const m = ... || {}`. String-method checks respect `typeof` guards like the arithmetic checks do, and a guard in a ternary's test now narrows its consequent (`typeof a === 'string' ? a.localeCompare(b) : a - b`). A state setter called with a functional updater (`setPage(p => p + 1)`) no longer types the state as a function, and a later write of another type (an assignment, or `setTier(null)`) widens the variable's type instead of replacing it. `for...of` / `for...in` variables are unknown, not undefined.
+
+### Patch Changes
+
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/react-runtime@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+  - @memberjunction/sql-parser@6.3.0-edge.0
+  - @memberjunction/interactive-component-types@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

@@ -26,7 +26,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-robot",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=AI"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -327,8 +330,8 @@
       "ID": "C277927C-DD97-48C9-B411-E897E519F62C"
     },
     "sync": {
-      "lastModified": "2026-04-23T13:09:35.108Z",
-      "checksum": "187bc2457f787f539a32154fe705bd03b605b5fbb6017439fb6d59366204f8ab"
+      "lastModified": "2026-11-10T23:41:29.226Z",
+      "checksum": "ea75878068280a1b5f9193c74eb9a1bf2d10bacedacde814ab1af67f74635925"
     }
   }
 ]

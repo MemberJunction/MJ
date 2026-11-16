@@ -372,9 +372,9 @@ export class MLSidecar {
    * Score 1..N rows by POSTing the artifact + frozen preprocessing to `/predict`.
    * @throws {SidecarError} when the sidecar responds with a non-2xx status
    */
-  async Predict(req: PredictRequest): Promise<PredictResponse> {
+  async Predict(req: PredictRequest, signal?: AbortSignal): Promise<PredictResponse> {
     this.assertRunning();
-    return this.httpPost<PredictRequest, PredictResponse>('/predict', req);
+    return this.httpPost<PredictRequest, PredictResponse>('/predict', req, undefined, signal);
   }
 
   /**
@@ -448,7 +448,7 @@ export class MLSidecar {
     return { protocol: 'http:', hostname: this.host, port: this.port! };
   }
 
-  private httpPost<TBody, TResult>(reqPath: string, body: TBody, timeoutMs: number = this.requestTimeoutMs): Promise<TResult> {
+  private httpPost<TBody, TResult>(reqPath: string, body: TBody, timeoutMs: number = this.requestTimeoutMs, signal?: AbortSignal): Promise<TResult> {
     const data = JSON.stringify(body);
     const target = this.requestTarget();
     return new Promise<TResult>((resolve, reject) => {
@@ -464,6 +464,7 @@ export class MLSidecar {
             'Content-Length': Buffer.byteLength(data),
           },
           timeout: timeoutMs,
+          signal,
         },
         (res) => this.collectResponse<TResult>(res, reqPath, resolve, reject)
       );

@@ -970,7 +970,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         return this.errorResult(`Table "${tableName}" not found in snapshot.`);
     }
 
-    private successResult(data: unknown): ArtifactToolResult {
+    private successResult(data: ArtifactToolResult['data']): ArtifactToolResult {
         return { success: true, data };
     }
 

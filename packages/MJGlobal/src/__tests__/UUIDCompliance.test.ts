@@ -287,9 +287,8 @@ export function FindNestedUUIDScans(fileName: string, text: string): number[] {
 /** Nested-scan sites per file (relative to packages/) that predate the check. Lower these as sites are fixed. */
 const NESTED_SCAN_BASELINE: Record<string, number> = {
     'AI/AgentManager/core/src/agent-spec-sync.ts': 6,
-    'AI/Agents/src/ArtifactToolManager.ts': 1,
     'AI/Agents/src/SkillImportExportService.ts': 1,
-    'AI/Agents/src/base-agent.ts': 25,
+    'AI/Agents/src/base-agent.ts': 24,
     'AI/Agents/src/decision-discovery.ts': 1,
     'AI/Agents/src/memory-note-gate.ts': 1,
     'AI/Agents/src/realtime/realtime-client-session-service.ts': 1,

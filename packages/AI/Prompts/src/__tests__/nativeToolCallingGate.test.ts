@@ -15,6 +15,8 @@ import {
     RecordToolCallingDecision,
     GetToolCallingDecision,
     GetToolCallingMode,
+    RecoveredToolCallingDecision,
+    NativeToolCallingDecision,
     ToolCallingMode
 } from '../nativeToolCallingGate';
 
@@ -293,5 +295,33 @@ describe('ResolveNativeToolCalling — native tool results', () => {
         expect(GetToolCallingMode(target)).toBe('NativeImplicit');
         RecordToolCallingMode(target, 'NativeFallback');
         expect(GetToolCallingDecision(target)).toMatchObject({ mode: 'NativeFallback', controlFlow: 'implicit', toolResults: true });
+    });
+});
+
+describe('RecoveredToolCallingDecision — a tool call read back out of a provider rejection (#5847)', () => {
+    const decision = (mode: ToolCallingMode): NativeToolCallingDecision => ({
+        useNativeTools: mode !== 'Envelope',
+        mode,
+        controlFlow: mode === 'NativeImplicit' ? 'implicit' : 'envelope',
+        toolResults: true
+    });
+    const result = (recovered?: boolean): ChatResult => {
+        const r = new ChatResult(true, new Date(), new Date());
+        if (recovered !== undefined) r.ToolCallsRecovered = recovered;
+        return r;
+    };
+
+    it('turns a recovered hybrid Native turn into NativeRecovered and keeps the other terms', () => {
+        expect(RecoveredToolCallingDecision(decision('Native'), result(true))).toEqual({ ...decision('Native'), mode: 'NativeRecovered' });
+    });
+
+    it('keeps NativeImplicit, because the loop reads that mode to dispatch control tools', () => {
+        expect(RecoveredToolCallingDecision(decision('NativeImplicit'), result(true)).mode).toBe('NativeImplicit');
+    });
+
+    it('leaves an ordinary result alone', () => {
+        const d = decision('Native');
+        expect(RecoveredToolCallingDecision(d, result())).toBe(d);
+        expect(RecoveredToolCallingDecision(d, result(false))).toBe(d);
     });
 });

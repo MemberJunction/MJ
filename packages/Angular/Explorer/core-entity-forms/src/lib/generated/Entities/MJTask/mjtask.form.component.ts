@@ -25,7 +25,8 @@ export class MJTaskFormComponent extends BaseFormComponent {
             { sectionKey: 'mJTaskDependenciesTaskID', sectionName: 'Task Dependencies (Task)', isExpanded: false },
             { sectionKey: 'mJTaskDependenciesDependsOnTaskID', sectionName: 'Task Dependencies (Depends On Task ID)', isExpanded: false },
             { sectionKey: 'mJAIAgentRequests', sectionName: 'AI Agent Requests', isExpanded: false },
-            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false }
+            { sectionKey: 'mJTasksCompensatesTaskID', sectionName: 'Tasks (Compensates Task ID)', isExpanded: false },
+            { sectionKey: 'mJTasksParentID', sectionName: 'Tasks (Parent Task)', isExpanded: false }
         ]);
     }
 }

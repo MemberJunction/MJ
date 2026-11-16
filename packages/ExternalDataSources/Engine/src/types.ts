@@ -108,7 +108,50 @@ export interface ExternalQueryResult<TRow extends ExternalRow = ExternalRow> {
  * every external-read error surface redacts identically.
  */
 export function RedactConnectionSecrets(message: string): string {
-  return message.replace(/([a-z][a-z0-9+.-]*:\/\/)[^@/\s]+@/gi, '$1***@');
+  // Same result as `message.replace(/([a-z][a-z0-9+.-]*:\/\/)[^@/\s]+@/gi, '$1***@')`, scanned once:
+  // that regex retries from every letter of a long scheme-like run with no `://` after it, which is
+  // quadratic (CodeQL js/polynomial-redos). A scheme can only end where its run of scheme characters
+  // ends, so each run is tried once; it starts at the run's first letter.
+  let out = '';
+  let copied = 0;
+  let i = 0;
+  while (i < message.length) {
+    if (!isSchemeChar(message[i])) {
+      i++;
+      continue;
+    }
+    const runStart = i;
+    while (i < message.length && isSchemeChar(message[i])) {
+      i++;
+    }
+    if (!message.startsWith('://', i)) {
+      continue;
+    }
+    let schemeStart = runStart;
+    while (schemeStart < i && !isAsciiLetter(message[schemeStart])) {
+      schemeStart++;
+    }
+    const userStart = i + 3;
+    let userEnd = userStart;
+    while (userEnd < message.length && message[userEnd] !== '@' && message[userEnd] !== '/' && !/\s/.test(message[userEnd])) {
+      userEnd++;
+    }
+    if (schemeStart < i && userEnd > userStart && message[userEnd] === '@') {
+      out += message.slice(copied, userStart) + '***@';
+      copied = userEnd + 1;
+      i = userEnd + 1;
+    }
+  }
+  return out + message.slice(copied);
+}
+
+function isAsciiLetter(c: string): boolean {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+/** A character of a URI scheme, `[a-z0-9+.-]` in any case. */
+function isSchemeChar(c: string): boolean {
+  return isAsciiLetter(c) || (c >= '0' && c <= '9') || c === '+' || c === '.' || c === '-';
 }
 
 /** @deprecated Use {@link RedactConnectionSecrets}. */

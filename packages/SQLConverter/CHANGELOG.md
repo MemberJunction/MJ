@@ -1,5 +1,28 @@
 # @memberjunction/sql-converter
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 9eb002d: Record unique keys as column sets and narrow `EntityField.IsUnique` (#4536). A new `EntityUniqueKey` table, kept in step with the catalog by CodeGen, holds every unique index or constraint as its key columns in order; `EntityInfo.UniqueKeySets` and `EntityInfo.IsUniqueFieldSet` expose them. `IsUnique` is now set only when a column alone is the key of an unfiltered unique index or is the sole primary key column; composite members, INCLUDE columns, filtered or partial indexes and composite primary key columns no longer count. Record cloning reads the key sets for collision checks, unique foreign keys and renames.
+
+### Patch Changes
+
+- fcc8668: PostgreSQL converter: an `EXEC` inside a converted procedure body (such as CodeGen's spDelete cascade updates) now emits a call that works whether the callee takes typed parameters or a single `p_data JSONB` argument, and passes `0`/`1` to `_Clear` flags and known boolean columns as `FALSE`/`TRUE`. Before, these calls used typed arguments and integer literals, so deleting a record with dependents failed at run time with `function ... does not exist` (for example, deleting a conversation). The call logic is now shared with the top-level EXEC conversion.
+
+  Converted procedure bodies also handle three more T-SQL forms: `SELECT @a = x, @b = y ...` becomes `SELECT x, y INTO p_a, p_b ...` (before, it became a comparison with no destination); `OUTPUT` parameters become `INOUT` when the procedure returns no rows (before, they were `IN` with `RETURNS VOID`, so the caller got nothing back); and `0`/`1` compared with a known boolean column, such as `ci.IsActive = 1`, becomes `FALSE`/`TRUE`.
+
+  `mj migrate convert` without `--split` now warns when a migration contains CodeGen CRUD procedures, and names `--split --bake-codegen` as the way to write them natively for PostgreSQL.
+
+- 1e73a8d: Legacy `mj migrate convert` no longer drops nearly all of a Metadata_Sync whose last save is followed by the session footer. A create-or-update block now converts when comments trail its closing `END`; a guarded block that cannot convert is skipped instead of emitted as raw T-SQL; the `IF EXISTS` pre-flight removal reads its condition to the matching paren, so it can't run across statements; and a skipped EXEC block counts as a conversion gap, so the run reports it.
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- Updated dependencies [9cd37bd]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [66fcfde]
+- Updated dependencies [d87bb40]
+  - @memberjunction/sqlglot-ts@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Patch Changes

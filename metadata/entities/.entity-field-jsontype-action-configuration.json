@@ -4,9 +4,10 @@
       "Sets JSONType metadata on Action.Config (Config_ in TypeScript) so CodeGen emits a typed",
       "Config_Object accessor with IActionConfiguration. The interface is authored in",
       "JSONType-interfaces/IActionConfiguration.ts and inlined into the generated entity by CodeGen.",
-      "It carries the integration routing keys IntegrationActionGenerator already writes, plus",
-      "outputTrustLevel (PR #6268) and action-level result expiration/compaction/execution-limit",
-      "defaults read across both direct and skill-bundled action invocations (#6395)."
+      "It carries the integration routing keys IntegrationActionGenerator already writes,",
+      "outputTrustLevel (PR #6268), disallowWhenTainted, and action-level result",
+      "expiration/compaction/execution-limit defaults read across both direct and",
+      "skill-bundled action invocations (#6395)."
     ],
     "fields": {
       "Name": "MJ: Actions"
@@ -23,8 +24,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&Name=Config"
           },
           "sync": {
-            "lastModified": "2026-11-03T23:45:43.224Z",
-            "checksum": "6ed497eb53a7fd7fee51d6de1aecf3251260263e98f170cce4382feb180dec4d"
+            "lastModified": "2026-11-10T23:41:05.424Z",
+            "checksum": "2aed26e853656af6a461cc074333e6a2026c22f7bb15cc5f06f9726320d5a4e8"
           }
         }
       ]

@@ -1,25 +1,43 @@
-import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { AIPromptParams, AIPromptRunResult, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
+import {
+    AIPromptParams,
+    AIPromptRunResult,
+    BaseAgentNextStep,
+    ChildPromptParam,
+    ExecuteAgentParams,
+    MJAIPromptRunEntityExtended,
+    ResolvePromptRunUserID,
+} from '@memberjunction/ai-core-plus';
 import { ChatResult, ModelUsage } from '@memberjunction/ai';
 import {
+    MJAIAgentTypeEntity,
     MJAIAgentHarnessEntity,
     MJAIAgentCredentialEntity,
     MJCredentialEntity,
 } from '@memberjunction/core-entities';
 import { BaseHarnessAdapter } from './adapters/BaseHarnessAdapter.js';
-import { ApplyGitHubEnvironmentConventions, ExtractHarnessCredentialSecret } from './HarnessCredentialResolver.js';
-import { ISandboxProvider, SandboxHandle, WorkspaceKey } from './sandbox/ISandboxProvider.js';
+import {
+    ApplyGitHubEnvironmentConventions,
+    ExtractHarnessCredentialSecret,
+    NormalizeAntigravityEnvironment,
+    ResolveDriverVendorFallbackEnvironment,
+    ScrubHarnessSecrets,
+} from './HarnessCredentialResolver.js';
+import { ISandboxProvider, SandboxHandle, SandboxWorkspaceOptions, WorkspaceKey } from './sandbox/ISandboxProvider.js';
 import { LocalDirectorySandboxProvider } from './sandbox/LocalDirectorySandboxProvider.js';
 import { DockerSandboxProvider } from './sandbox/DockerSandboxProvider.js';
+import { CloudSandboxProvider } from './sandbox/CloudSandboxProvider.js';
 import {
+    CloudSandboxOptions,
     HarnessTurnResult,
     HarnessWorkspaceScope,
     HarnessNetworkPolicy,
     HarnessPosture,
     HarnessPermissionPolicy,
+    HarnessSandboxProviderType,
 } from './types.js';
 
 /**
@@ -31,8 +49,12 @@ import {
  */
 const HARNESS_CREDENTIAL_ENV_VARS: Record<string, string> = {
     ClaudeCodeCliAdapter: 'ANTHROPIC_API_KEY',
+    ClaudeCodeCloudAdapter: 'ANTHROPIC_API_KEY',
     CodexAdapter: 'OPENAI_API_KEY',
+    CodexCloudAdapter: 'OPENAI_API_KEY',
     GeminiCliAdapter: 'GEMINI_API_KEY',
+    AntigravityCliAdapter: 'GEMINI_API_KEY',
+    AntigravityCloudAdapter: 'GEMINI_API_KEY',
 };
 
 /**
@@ -52,18 +74,36 @@ const TURN_END_CONTRACT = [
 ].join('\n');
 
 /** Shape of the harness block inside `AIAgent.TypeConfiguration`. */
-interface HarnessAgentConfig {
+export interface HarnessAgentConfig {
     harnessName?: string;
     sandbox?: {
-        provider?: 'local' | 'docker';
+        provider?: HarnessSandboxProviderType;
         image?: string;
         workspaceScope?: HarnessWorkspaceScope;
         networkPolicy?: HarnessNetworkPolicy;
+        cloud?: CloudSandboxOptions;
+        workspace?: SandboxWorkspaceOptions;
     };
+    mcpServerUrl?: string;
+    mcpCredential?: string;
     posture?: HarnessPosture;
     permissions?: { allowedTools?: string[]; disallowedTools?: string[] };
     limits?: { maxWallClockSeconds?: number };
+    cloudSandboxDefaults?: Record<string, unknown>;
+    cloudHarnessTargets?: unknown[];
 }
+
+const KNOWN_HARNESS_CONFIG_KEYS: ReadonlySet<string> = new Set([
+    'harnessName',
+    'sandbox',
+    'mcpServerUrl',
+    'mcpCredential',
+    'posture',
+    'permissions',
+    'limits',
+    'cloudSandboxDefaults',
+    'cloudHarnessTargets',
+]);
 
 /**
  * Executes an MJ agent whose reasoning substrate is an external harness.
@@ -92,11 +132,12 @@ interface HarnessAgentConfig {
  */
 @RegisterClass(BaseAgent, 'HarnessAgentType')
 export class HarnessAgentBase extends BaseAgent {
-    private adapter: BaseHarnessAdapter | null = null;
-    private sandboxProvider: ISandboxProvider | null = null;
-    private sandboxHandle: SandboxHandle | null = null;
-    private harnessRow: MJAIAgentHarnessEntity | null = null;
-    private turnIndex = 0;
+    protected adapter: BaseHarnessAdapter | null = null;
+    protected sandboxProvider: ISandboxProvider | null = null;
+    protected sandboxHandle: SandboxHandle | null = null;
+    protected harnessRow: MJAIAgentHarnessEntity | null = null;
+    protected sessionEnvironment: Record<string, string> = {};
+    protected turnIndex = 0;
 
     /**
      * Substitutes a harness turn for the prompt call a Loop agent would make.
@@ -108,16 +149,20 @@ export class HarnessAgentBase extends BaseAgent {
     protected override async executePrompt(promptParams: AIPromptParams): Promise<AIPromptRunResult> {
         const startTime = new Date();
         try {
-            if (this.turnIndex === 0) {
+            const config = this.readHarnessConfig();
+            if (this.turnIndex === 0 || !this.adapter) {
                 await this.startHarnessSession(promptParams);
             }
             this.turnIndex++;
 
             const isFirstTurn = this.turnIndex === 1;
             const input = await this.buildTurnInput(promptParams, isFirstTurn);
-            const turn = await this.runTurn(input);
+            const turn = await this.runTurn(input, config.limits?.maxWallClockSeconds);
             const promptRun = await this.recordPromptRun(promptParams, turn, startTime, input);
             this.persistExternalSessionId(turn.SessionId);
+            if (turn.TimedOut) {
+                await this.EndHarnessSession('failure');
+            }
 
             return this.buildPromptResult(turn, promptRun, startTime);
         } catch (e) {
@@ -138,9 +183,18 @@ export class HarnessAgentBase extends BaseAgent {
         const harness = await this.loadHarnessRow(config.harnessName, contextUser);
         this.harnessRow = harness;
 
+        const networkPolicy = config.sandbox?.networkPolicy ?? 'mcp-only';
+        if (config.sandbox?.provider === 'docker' && networkPolicy === 'none' && isOutboundNetworkRequiredDriver(harness.DriverClass)) {
+            throw new Error(
+                `Harness '${harness.Name}' (${harness.DriverClass}) requires outbound API/network access and cannot run ` +
+                    `with sandbox.provider='docker' and networkPolicy='none'.`,
+            );
+        }
+
         this.adapter = this.resolveAdapter(harness);
         this.sandboxProvider = this.createSandboxProvider(config);
 
+        const resolvedWorkspacePath = this.resolveWorkspacePathFromConfig(config, promptParams);
         const key: WorkspaceKey = {
             Scope: config.sandbox?.workspaceScope ?? 'agent-user',
             AgentId: this._agentRunAgentId(),
@@ -148,11 +202,17 @@ export class HarnessAgentBase extends BaseAgent {
             RunId: this._agentRunId(),
         };
         this.sandboxHandle = await this.sandboxProvider.Provision(key, {
-            NetworkPolicy: config.sandbox?.networkPolicy ?? 'mcp-only',
+            provider: config.sandbox?.provider,
+            NetworkPolicy: networkPolicy,
             Image: config.sandbox?.image,
+            cloud: config.sandbox?.cloud,
+            workspace: config.sandbox?.workspace,
+            resolvedWorkspacePath,
+            resolvedAdditionalDirectories: config.sandbox?.workspace?.additionalDirectories,
         });
 
         const environment = await this.resolveGrantedEnvironment(contextUser);
+        this.sessionEnvironment = environment;
 
         // Permissions are declared in agent metadata and applied BEFORE the session starts, so
         // adapters can fold them into launch flags. Runtime overrides arrive through the same
@@ -163,15 +223,22 @@ export class HarnessAgentBase extends BaseAgent {
         this.warnOnUnenforceablePolicy(harness.Name, policy);
 
         const resumeSessionId = await this.findResumableSession(harness, key.Scope, contextUser);
+        const mcpBinding = this.resolveMcpSessionEndpoint(config);
 
         await this.adapter.StartSession({
             ResumeSessionId: resumeSessionId,
             PermissionPolicy: policy,
             Executor: this.sandboxHandle.Executor,
             WorkspacePath: this.sandboxHandle.WorkspacePath,
+            AdditionalDirectories:
+                this.sandboxHandle.AdditionalDirectories ?? config.sandbox?.workspace?.additionalDirectories,
             Environment: environment,
+            McpServerUrl: mcpBinding.mcpServerUrl,
+            McpCredential: mcpBinding.mcpCredential,
             Model: harness.DefaultModel ?? undefined,
             CancellationToken: promptParams.cancellationToken,
+            CloudOptions: config.sandbox?.cloud,
+            SandboxMetadata: this.sandboxHandle.Metadata,
         });
 
         LogStatus(`Harness session started for '${harness.Name}' (${harness.DriverClass})`);
@@ -265,7 +332,16 @@ export class HarnessAgentBase extends BaseAgent {
         if (!this.adapter?.Capabilities?.SessionResume) {
             return undefined;
         }
-        if (scope === 'run') {
+        // When AgentWake resumes an existing run with ExternalSessionID already populated on _agentRun,
+        // prefer that exact session ID directly before querying conversation history.
+        const currentRunSessionId = this._agentRunExternalSessionId();
+        if (currentRunSessionId) {
+            LogStatus(`Resuming in-flight harness session ${currentRunSessionId} for '${harness.Name}'.`);
+            return currentRunSessionId;
+        }
+        // Local CLI harnesses key their session store by directory path, so 'run' scope cannot resume;
+        // cloud harnesses store sessions remotely by ID and can resume regardless of workspace scope.
+        if (scope === 'run' && !this.adapter.Capabilities.SupportsCloudExecution) {
             return undefined;
         }
         const conversationId = this._agentRunConversationId();
@@ -303,34 +379,73 @@ export class HarnessAgentBase extends BaseAgent {
         }
     }
 
-    /** Accumulates one turn's event stream into a single result. */
-    private async runTurn(input: string): Promise<HarnessTurnResult> {
+    /** Accumulates one turn's event stream into a single result, enforcing optional wall-clock bounds. */
+    private async runTurn(input: string, maxWallClockSeconds?: number): Promise<HarnessTurnResult> {
         const adapter = this.adapter!;
         const turn: HarnessTurnResult = { RawText: '', InputTokens: 0, OutputTokens: 0 };
 
-        for await (const event of adapter.RunTurn(input)) {
-            switch (event.Type) {
-                case 'usage':
-                    // Summed rather than replaced: a harness may report usage more than once per
-                    // turn, and undercounting here silently weakens the cost guardrail.
-                    turn.InputTokens += event.InputTokens;
-                    turn.OutputTokens += event.OutputTokens;
-                    turn.CostUsd = (turn.CostUsd ?? 0) + (event.CostUsd ?? 0);
-                    break;
-                case 'turn-complete':
-                    turn.RawText = event.RawText;
-                    break;
-                case 'session-error':
-                    turn.ErrorMessage = event.Error;
-                    break;
-                default:
-                    // assistant-text and sandbox-activity are live-view only. They are deliberately
-                    // NOT persisted as run steps — the audit boundary is the turn, and widening it
-                    // to in-sandbox activity is a documented non-goal, not an oversight.
-                    break;
+        let timedOut = false;
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+        let endSessionPromise: Promise<void> | undefined;
+        if (typeof maxWallClockSeconds === 'number' && Number.isFinite(maxWallClockSeconds) && maxWallClockSeconds > 0) {
+            timeoutHandle = setTimeout(() => {
+                timedOut = true;
+                endSessionPromise = adapter.EndSession().catch((err) => {
+                    LogError(`Failed terminating timed-out harness session: ${describeError(err)}`);
+                });
+            }, maxWallClockSeconds * 1000);
+        }
+
+        try {
+            for await (const event of adapter.RunTurn(input)) {
+                switch (event.Type) {
+                    case 'usage':
+                        // Summed rather than replaced: a harness may report usage more than once per
+                        // turn, and undercounting here silently weakens the cost guardrail.
+                        turn.InputTokens += event.InputTokens;
+                        turn.OutputTokens += event.OutputTokens;
+                        if (event.ThinkingTokens !== undefined) {
+                            turn.ThinkingTokens = (turn.ThinkingTokens ?? 0) + event.ThinkingTokens;
+                        }
+                        turn.CostUsd = (turn.CostUsd ?? 0) + (event.CostUsd ?? 0);
+                        break;
+                    case 'turn-complete':
+                        turn.RawText = event.RawText;
+                        turn.CloudExecutionState = event.CloudExecutionState;
+                        turn.AsyncWakePending = event.AsyncWakePending;
+                        turn.ArtifactUrls = event.ArtifactUrls;
+                        turn.PullRequestUrl = event.PullRequestUrl;
+                        break;
+                    case 'session-error':
+                        turn.ErrorMessage = event.Error;
+                        turn.CloudExecutionState = event.CloudExecutionState;
+                        break;
+                    default:
+                        // assistant-text and sandbox-activity are live-view only. They are deliberately
+                        // NOT persisted as run steps — the audit boundary is the turn, and widening it
+                        // to in-sandbox activity is a documented non-goal, not an oversight.
+                        break;
+                }
+            }
+        } finally {
+            if (timeoutHandle !== undefined) {
+                clearTimeout(timeoutHandle);
+            }
+            if (endSessionPromise) {
+                await endSessionPromise;
             }
         }
 
+        if (timedOut) {
+            const timeoutMsg = `Harness turn exceeded configured limits.maxWallClockSeconds (${maxWallClockSeconds}s).`;
+            turn.ErrorMessage = turn.ErrorMessage ? `${timeoutMsg} (${turn.ErrorMessage})` : timeoutMsg;
+            turn.TimedOut = true;
+        }
+
+        turn.RawText = ScrubHarnessSecrets(turn.RawText, this.sessionEnvironment);
+        if (turn.ErrorMessage) {
+            turn.ErrorMessage = ScrubHarnessSecrets(turn.ErrorMessage, this.sessionEnvironment);
+        }
         turn.SessionId = adapter.SessionId;
         turn.ReportedModel = adapter.ReportedModel;
         return turn;
@@ -509,7 +624,7 @@ export class HarnessAgentBase extends BaseAgent {
      */
     private persistExternalSessionId(sessionId: string | undefined): void {
         const run = (this as unknown as { _agentRun?: { ExternalSessionID?: string | null } })._agentRun;
-        if (run && sessionId && !run.ExternalSessionID) {
+        if (run && sessionId && run.ExternalSessionID !== sessionId) {
             run.ExternalSessionID = sessionId;
         }
     }
@@ -586,6 +701,11 @@ export class HarnessAgentBase extends BaseAgent {
 
             if (Object.keys(environment).length === 0) {
                 this.applyVendorKeyFallback(environment);
+            } else if (
+                this.harnessRow?.DriverClass === 'AntigravityCliAdapter' ||
+                this.harnessRow?.DriverClass === 'AntigravityCloudAdapter'
+            ) {
+                NormalizeAntigravityEnvironment(environment);
             }
 
             // If no explicit GitHub credential grant resolved, check if the calling user has an active
@@ -663,25 +783,23 @@ export class HarnessAgentBase extends BaseAgent {
         if (!harness?.DriverClass) {
             return;
         }
-        const envKey = `AI_VENDOR_API_KEY__${harness.DriverClass.toUpperCase()}`;
-        const value = process.env[envKey];
-        if (!value) {
+        const matchedSourceKey = ResolveDriverVendorFallbackEnvironment(
+            harness.DriverClass,
+            environment,
+        );
+        if (matchedSourceKey) {
+            LogStatus(
+                `Harness '${harness.Name}' using vendor key fallback from ${matchedSourceKey}.`,
+            );
             return;
         }
-        // The variable the harness itself expects. Kept as an explicit map rather than guessed,
-        // because writing a key into the wrong variable name is a silent no-op the harness reports
-        // only as an auth failure. A harness not listed here must be granted explicitly through
-        // MJ: AI Agent Credentials.
         const target = HARNESS_CREDENTIAL_ENV_VARS[harness.DriverClass];
         if (!target) {
             LogStatus(
                 `Harness '${harness.Name}' has no credential grants and no known env-var convention for ` +
                     `driver '${harness.DriverClass}'. Grant one via MJ: AI Agent Credentials.`,
             );
-            return;
         }
-        environment[target] = value;
-        LogStatus(`Harness '${harness.Name}' using vendor key fallback from ${envKey}.`);
     }
 
     /**
@@ -768,9 +886,61 @@ export class HarnessAgentBase extends BaseAgent {
 
     /** Chooses a sandbox provider from the agent's configuration. */
     private createSandboxProvider(config: HarnessAgentConfig): ISandboxProvider {
-        return config.sandbox?.provider === 'docker'
-            ? new DockerSandboxProvider({ defaultImage: config.sandbox?.image })
-            : new LocalDirectorySandboxProvider();
+        switch (config.sandbox?.provider) {
+            case 'cloud':
+                return new CloudSandboxProvider(config.sandbox.cloud);
+            case 'docker':
+                return new DockerSandboxProvider({ defaultImage: config.sandbox?.image });
+            case 'local':
+            default:
+                return new LocalDirectorySandboxProvider();
+        }
+    }
+
+    /**
+     * Resolves the MCP endpoint URL and credential handed to `StartSession`.
+     *
+     * When `sandbox.provider === 'cloud'` (or the adapter executes in a remote cloud), an external
+     * reachability URL (`sandbox.cloud.mcpExternalServerUrl` or a non-loopback `mcpServerUrl`) is
+     * required. A localhost ephemeral binding cannot be reached from a remote vendor cloud without a
+     * tunnel, so it is omitted cleanly with a status log rather than failing or passing a dead URL.
+     */
+    private resolveMcpSessionEndpoint(
+        config: HarnessAgentConfig,
+    ): { mcpServerUrl?: string; mcpCredential?: string } {
+        if (!this.adapter?.Capabilities?.McpClient) {
+            return {};
+        }
+
+        const isCloudRemote =
+            config.sandbox?.provider === 'cloud' ||
+            this.adapter.Capabilities.SupportsCloudExecution === true;
+
+        const externalTunnelUrl = config.sandbox?.cloud?.mcpExternalServerUrl?.trim();
+        if (externalTunnelUrl) {
+            return {
+                mcpServerUrl: externalTunnelUrl,
+                mcpCredential: config.mcpCredential,
+            };
+        }
+
+        const configuredUrl = config.mcpServerUrl?.trim();
+        if (!configuredUrl) {
+            return {};
+        }
+
+        if (isCloudRemote && isLoopbackMcpUrl(configuredUrl)) {
+            LogStatus(
+                `Harness MCP endpoint '${configuredUrl}' is a localhost loopback binding and ` +
+                    `sandbox.cloud.mcpExternalServerUrl is not set; skipping MCP binding for remote cloud session.`,
+            );
+            return {};
+        }
+
+        return {
+            mcpServerUrl: configuredUrl,
+            mcpCredential: config.mcpCredential,
+        };
     }
 
     /** Reads and parses the harness block from the agent's TypeConfiguration. */
@@ -780,11 +950,39 @@ export class HarnessAgentBase extends BaseAgent {
             return {};
         }
         try {
-            return JSON.parse(raw) as HarnessAgentConfig;
+            const parsed = JSON.parse(raw) as HarnessAgentConfig & Record<string, unknown>;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const unknownKeys = Object.keys(parsed).filter((k) => !KNOWN_HARNESS_CONFIG_KEYS.has(k));
+                if (unknownKeys.length > 0) {
+                    LogError(
+                        `AIAgent.TypeConfiguration contains unrecognized top-level key(s) [${unknownKeys.join(', ')}]; they are ignored.`,
+                    );
+                }
+            }
+            return parsed;
         } catch (e) {
             LogError(`AIAgent.TypeConfiguration is not valid JSON: ${describeError(e)}`);
             return {};
         }
+    }
+
+    /** Resolves an attached workspace directory path from payload/data/context or explicit config. */
+    private resolveWorkspacePathFromConfig(config: HarnessAgentConfig, promptParams: AIPromptParams): string | undefined {
+        const ws = config.sandbox?.workspace;
+        if (!ws || ws.mode !== 'attach') {
+            return undefined;
+        }
+        if (ws.pathFromPayload?.trim()) {
+            const execParams = this._executeAgentParams();
+            const candidates: unknown[] = [promptParams.data, execParams?.payload, execParams?.data, execParams?.context];
+            for (const root of candidates) {
+                const resolved = readDottedStringPath(root, ws.pathFromPayload.trim());
+                if (resolved) {
+                    return resolved;
+                }
+            }
+        }
+        return ws.path?.trim() || undefined;
     }
 
     /**
@@ -807,7 +1005,7 @@ export class HarnessAgentBase extends BaseAgent {
      * Later turns send only the conversation: the harness has the contract from turn 1 and, where
      * `SessionResume` is true, still has it in session context.
      */
-    private async buildTurnInput(promptParams: AIPromptParams, isFirstTurn: boolean): Promise<string> {
+    protected async buildTurnInput(promptParams: AIPromptParams, isFirstTurn: boolean): Promise<string> {
         // When the adapter genuinely resumed, the harness already holds the conversation — send only
         // the newest message, exactly as a user typing the next line would. Replaying history on top
         // of a resumed session hands it everything twice. Keyed off DidResumeSession (what happened)
@@ -872,6 +1070,86 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /**
+     * Renders each child prompt's template and collects non-empty outputs keyed by parentPlaceholder.
+     *
+     * Missing templates or render failures log a warning via LogError without throwing, so a failed
+     * child prompt does not abort parent prompt rendering.
+     */
+    protected async renderChildPrompts(
+        childPrompts: ChildPromptParam[],
+        fallbackContextUser?: UserInfo,
+    ): Promise<Record<string, string>> {
+        const renderedMap: Record<string, string> = {};
+        const templatesById = IndexByUUID(TemplateEngineServer.Instance.Templates ?? [], (t) => t.ID);
+        for (const childParam of childPrompts) {
+            if (!childParam) {
+                continue;
+            }
+            const placeholder = childParam.parentPlaceholder;
+            if (!placeholder) {
+                continue;
+            }
+            const childParams = childParam.childPrompt;
+            const childPrompt = childParams?.prompt;
+            if (!childPrompt) {
+                LogError(`Child prompt is missing for placeholder '${placeholder}'`);
+                continue;
+            }
+            if (!childPrompt.TemplateID) {
+                LogError(
+                    `Child prompt '${childPrompt.Name ?? 'unnamed'}' has no TemplateID for placeholder '${placeholder}'`,
+                );
+                continue;
+            }
+            try {
+                const childTemplate = templatesById.Get(childPrompt.TemplateID);
+                const childContent = childTemplate?.GetHighestPriorityContent();
+                if (childTemplate && childContent) {
+                    const nestedChildren =
+                        childParams.childPrompts && childParams.childPrompts.length > 0
+                            ? await this.renderChildPrompts(
+                                  childParams.childPrompts,
+                                  childParams.contextUser ?? fallbackContextUser,
+                              )
+                            : {};
+                    const childData = {
+                        ...(childParams.data ?? {}),
+                        ...(childParams.templateData ?? {}),
+                        ...nestedChildren,
+                    };
+                    const childRendered = await TemplateEngineServer.Instance.RenderTemplate(
+                        childTemplate,
+                        childContent,
+                        childData,
+                        true,
+                        true,
+                        { ContextUser: childParams.contextUser ?? fallbackContextUser },
+                    );
+                    if (childRendered.Success && childRendered.Output?.trim()) {
+                        renderedMap[placeholder] = childRendered.Output;
+                    } else {
+                        LogError(
+                            `Failed to render child prompt template for '${childPrompt.Name ?? 'unnamed'}' ` +
+                                `(placeholder '${placeholder}'): ${childRendered.Message ?? 'no output'}`,
+                        );
+                    }
+                } else {
+                    LogError(
+                        `Child prompt template not found for TemplateID '${childPrompt.TemplateID}' ` +
+                            `(prompt '${childPrompt.Name ?? 'unnamed'}', placeholder '${placeholder}').`,
+                    );
+                }
+            } catch (e) {
+                LogError(
+                    `Failed to render child prompt template for '${childPrompt.Name ?? 'unnamed'}' ` +
+                        `(placeholder '${placeholder}'): ${describeError(e)}`,
+                );
+            }
+        }
+        return renderedMap;
+    }
+
+    /**
      * Renders the agent type's system prompt through the same template engine AIPromptRunner uses,
      * so the harness receives exactly what a Loop model would — including the output example.
      *
@@ -879,25 +1157,34 @@ export class HarnessAgentBase extends BaseAgent {
      * carries the envelope shape and lets the run proceed; throwing here would fail a run over a
      * template warning, which is the worse trade.
      */
-    private async renderSystemPrompt(promptParams: AIPromptParams): Promise<string> {
+    protected async renderSystemPrompt(promptParams: AIPromptParams): Promise<string> {
         const prompt = promptParams.prompt;
         if (!prompt) {
             return '';
         }
         try {
             await TemplateEngineServer.Instance.Config(false, promptParams.contextUser);
+
+            const renderedChildPrompts: Record<string, string> = {
+                ...(promptParams.PreRenderedChildTemplates ?? {}),
+            };
+            if (promptParams.childPrompts && promptParams.childPrompts.length > 0) {
+                const childOutputs = await this.renderChildPrompts(promptParams.childPrompts, promptParams.contextUser);
+                Object.assign(renderedChildPrompts, childOutputs);
+            }
+
             // Look the template up by ID, not name. TemplateEngineBase.FindTemplate takes a NAME —
             // passing prompt.TemplateID matched nothing on every call, so every render fell through
             // to the fallback and the harness never received the agent's own instructions. It failed
             // quietly because a fallback existed, which is exactly what made it survive two rounds of
             // fixing this same symptom.
-            const template = TemplateEngineServer.Instance.Templates.find((t) => UUIDsEqual(t.ID, prompt.TemplateID));
+            const template = TemplateEngineServer.Instance.Templates?.find((t) => UUIDsEqual(t.ID, prompt.TemplateID));
             const content = template?.GetHighestPriorityContent();
             if (template && content) {
                 const rendered = await TemplateEngineServer.Instance.RenderTemplate(
                     template,
                     content,
-                    { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}) },
+                    { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}), ...renderedChildPrompts },
                     true,
                     true,
                     { ContextUser: promptParams.contextUser },
@@ -962,6 +1249,33 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /**
+     * Terminates immediately when a harness turn hits its wall-clock cap instead of letting
+     * `BaseAgent` burn retries against an ended session, allowing the parent orchestrator to
+     * inspect committed progress and re-slice work cleanly.
+     */
+    protected override async determineNextStep<P>(
+        params: ExecuteAgentParams,
+        agentType: MJAIAgentTypeEntity,
+        promptResult: AIPromptRunResult,
+        currentPayload: P,
+    ): Promise<BaseAgentNextStep<P>> {
+        const nextStep = await super.determineNextStep(params, agentType, promptResult, currentPayload);
+        if (
+            promptResult &&
+            !promptResult.success &&
+            promptResult.errorMessage?.includes('limits.maxWallClockSeconds')
+        ) {
+            return {
+                ...nextStep,
+                step: 'Failed',
+                terminate: true,
+                errorMessage: promptResult.errorMessage,
+            };
+        }
+        return nextStep;
+    }
+
+    /**
      * Wires {@link EndHarnessSession} into `BaseAgent.Execute()`'s per-run teardown. `Execute()`
      * calls this exactly once per call, from its top-level `finally` block, regardless of outcome —
      * without it, `startHarnessSession()`'s provisioned sandbox (a live Docker container or a
@@ -1015,17 +1329,80 @@ export class HarnessAgentBase extends BaseAgent {
         return (this as unknown as { _agentRun?: { ConversationID?: string | null } })._agentRun?.ConversationID ?? null;
     }
 
+    private _agentRunExternalSessionId(): string | undefined {
+        const current = this.AgentRun?.ExternalSessionID?.trim();
+        return current && current.length > 0 ? current : undefined;
+    }
+
     private _agentTypeConfiguration(): string | null {
         return this._executeAgentParams()?.agent?.TypeConfiguration ?? null;
     }
 
-    private _executeAgentParams(): { agent?: { ID?: string; TypeConfiguration?: string | null } } | undefined {
-        return (this as unknown as {
-            _executeParams?: { agent?: { ID?: string; TypeConfiguration?: string | null } };
-        })._executeParams;
+    private _executeAgentParams():
+        | {
+              agent?: { ID?: string; TypeConfiguration?: string | null };
+              payload?: unknown;
+              data?: Record<string, unknown>;
+              context?: Record<string, unknown>;
+          }
+        | undefined {
+        return (
+            this as unknown as {
+                _executeParams?: {
+                    agent?: { ID?: string; TypeConfiguration?: string | null };
+                    payload?: unknown;
+                    data?: Record<string, unknown>;
+                    context?: Record<string, unknown>;
+                };
+            }
+        )._executeParams;
+    }
+}
+
+function readDottedStringPath(root: unknown, dottedPath: string): string | undefined {
+    let cursor: unknown = root;
+    for (const segment of dottedPath.split('.')) {
+        if (cursor === null || typeof cursor !== 'object' || Array.isArray(cursor)) {
+            return undefined;
+        }
+        cursor = (cursor as Record<string, unknown>)[segment];
+    }
+    return typeof cursor === 'string' && cursor.trim().length > 0 ? cursor.trim() : undefined;
+}
+
+function isOutboundNetworkRequiredDriver(driverClass: string | null | undefined): boolean {
+    switch (driverClass) {
+        case 'ClaudeCodeCliAdapter':
+        case 'ClaudeCodeCloudAdapter':
+        case 'CodexAdapter':
+        case 'CodexCloudAdapter':
+        case 'AntigravityCliAdapter':
+        case 'AntigravityCloudAdapter':
+        case 'GeminiCliAdapter':
+        case 'OpenCodeAdapter':
+        case 'PiAdapter':
+            return true;
+        default:
+            return false;
     }
 }
 
 function describeError(e: unknown): string {
     return e instanceof Error ? e.message : String(e);
+}
+
+function isLoopbackMcpUrl(rawUrl: string): boolean {
+    try {
+        const parsed = new URL(rawUrl);
+        const host = parsed.hostname.toLowerCase();
+        return (
+            host === 'localhost' ||
+            host === '127.0.0.1' ||
+            host === '0.0.0.0' ||
+            host === '::1' ||
+            host === '[::1]'
+        );
+    } catch {
+        return false;
+    }
 }

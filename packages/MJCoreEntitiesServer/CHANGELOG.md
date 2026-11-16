@@ -1,5 +1,250 @@
 # @memberjunction/core-entities-server
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 18bb8fa: Add Work Bus & Software Factory MJ Core layers: generalized always-on agent policies, inter-agent requests, and coalesced workstream wake scheduling (`TriggerWakeForWorkstream` + `Trigger Agent Wake`), action-level RLS/FLS enforcement, declarative `SubtypeSelector` extensions (`AutoEnsureOnSave`, `OnSubtypeChange: 'Refuse' | 'Replace'`, `Driver`, `UIDriver`, `FoldIntoForm`, `EntitySubtypeDriverBase`, `<mj-folded-subtype-section>`), `MJ: Conversation Types`, `MJ: Comments` (IS-A `Conversation`), `MJ: Comment Types`, and `MJ: Field Suggestions` (IS-A `Comment`) with server-side accept/reject/supersede drivers, `PostSave` hooks, RLS/FLS anchored-view filtering, and generated-form Notes & Suggestions UI.
+- 63636e0: Semantic graph runtime review fixes: every graph node is checked as the caller and every audience reader at the hop it is reached (row-level security applies; no Owner bypass), query permission uses `UserCanRun().canRun`, edge approval requires `Graph: Approve Edges` and fails closed, unknown or inactive graphs return nothing, `GraphEngine` loads lazily and caches stored edges for Preload graphs only, per-step reads are bounded and ordered, and the graph search lane ranks by hop-attenuated RRF. Ships the "MJ Canon" graph and its metadata providers, the `Graph: Approve Edges` authorization, the `Semantic Graph` search provider and the `Get Graph Context` action metadata, and registers the graph expansion service at MJAPI startup. The Content Pipeline Graph stage keeps auto-approving the Inferred edges its content source's GraphOverlay policy approves, through a server operation scope API callers cannot enter; every other edge that starts Approved, of any origin, requires `Graph: Approve Edges`. Graph seeds pass the same caller-and-audience check as expanded nodes; only Approved concepts seed or appear unless proposed content is asked for; node labels, edge text and concept matches use only fields every principal may read; editing, demoting or deleting an Approved edge needs the authorization and the review stamp is server-written; Preload graph edges load lazily and reload per graph.
+- 31cc053: Add durable HITL feedback and agent tree budgets, `AgentContextAssembler`, `AgentStepDispatcher`, `DurableEntityA2ATaskStore`, `TaskSecurityEnvelope` least-privilege and taint enforcement, TaskGraph saga compensation with idempotent retries, `GraphEngine` and `CanonGraphEngine` semantic graph runtime with server entity validation, `GetGraphContextAction`, `GraphSearchProvider` RRF search lane, `graphExpand` pipeline stage, and Predictive Studio shadow scoring with PSI drift detection.
+- b332459: Implement ORM improvements across three workstreams:
+  1. Server-side concurrency and delta-only `spUpdate*` / `fn_update*` bindings (`DeltaUpdates` / `databaseSettings.deltaUpdates`, default `true` with `false` kill-switch), `UPDLOCK, ROWLOCK` (SQL Server) / `FOR UPDATE` (PostgreSQL) row locking, shared `DetectFieldConcurrencyConflicts` detector, `ConcurrencyCheckMode` (`'off' | 'log' | 'enforce'`, default `'off'` server-wide and `'enforce'` on GraphQL `UpdateRecord` mutations supplying `OldValues___`), subclass-setter-routed `@JSONType` `JSONFieldBinding` flushes, and multi-level IS-A chain concurrency rollback & baseline propagation.
+  2. First-class structured `CompositeFilter` support in `RunView`, `BaseEngine` (`Where()` and in-memory/local-cache slot maintenance), `FilterOf<T>()` fluent builder, parameterized `CompositeFilterSQLCompiler` (with literal compilation and FLS enforcement for `MJUserViewEntityExtended.GenerateWhereClauseFromFilterState`), and GraphQL `RunView` inputs.
+  3. CodeGen-generated `TypedQuerySpec<TParams, TRow>` descriptors (`typed_query_codegen.ts`) and `RunQuery(spec, params, options)` overloads with SHA-256 signature drift detection (`typedQueryDrift: 'off' | 'warn' | 'throw'`).
+- 6fd9fb7: Predictive Studio training under a declared unit and protocol: Prediction Units (immutable versions with outcome window, censoring and task type),
+  as-of feature assembly over dated history with typed columns, fingerprinted Training Snapshots, Evaluation Protocols
+  saved before search, a trainer that reports proper scores, baselines and intervals, and a three-outcome gate
+  (model, keep-simple-baseline, no-signal). Adds a Local File System storage driver.
+
+  Predictive Studio decides what a training run ships with a three-outcome gate (the model, a simple baseline, or no
+  signal), stores that decision with its reason on the run, and renders the trust verdict from it.
+
+  The seeded-random holdout hashes the unit row's group key (lower-cased; the entity key when the unit declares no group),
+  not its row id, so every row of one group lands on the same side of the holdout. No released version stored a
+  seeded-random holdout, so nothing deployed re-carves.
+
+  An incumbent-heuristic baseline is refused for multiclass units (the protocol rules and the sidecar both refuse it, and the default protocol leaves it out): it scores one number per row, which a multiclass log loss cannot judge.
+  An incumbent rule with no value on a training-snapshot row (a column it reads is missing there) refuses the run before training (`incumbent-score-missing`, naming the count and the first row ids) instead of failing at the holdout stage.
+  - `@memberjunction/predictive-studio-core`: `GateRules` (the gate decision table, proven equal to the reference
+    pipeline's and to the sidecar's on seeded cases, plus two guards: a holdout minority class below
+    `MinMinorityClassRows` and a binary AUC interval that contains 0.5 never ship) and `GateRecords` (the stored gate
+    record, the `gate` member of the `ps-run-results/v2` envelope). `TrustVerdicts.DeriveTrustVerdict` takes
+    `{ ValidationResults, Lineage }` and renders the stored gate decision; `TrustGrade`, `TrustModelInput`,
+    `MajorityBaselineFinding`, `TrustVerdicts.TrustDots` and the free functions `DeriveTrustVerdict`,
+    `deriveTrustVerdict`, `TrustEvidenceLine`, `trustEvidenceLine`, `TrustDots`, `trustDots` are removed.
+  - `@memberjunction/predictive-studio`: a unit training run refuses a sidecar gate that differs from the TypeScript
+    decision (`sidecar-gate-mismatch`), creates the model row from the shipped artifact only (none under `no-signal`),
+    and `TrainModelResult.model` is nullable. `IRecordLoader.resolveAlgorithmIDForDriver` and
+    `IArtifactStore.AssertWritable` are new required members (see the storage paragraph below for `save` / `delete`). `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
+    renamed `trustTitle` / `headline`;
+    `GenerateMarkdownReport` takes `trustTitle` / `headline`; `SingleModelLeaderboard` takes a `TrustComparison | null`.
+    The free functions `ExtractNormalizedScore` / `extractNormalizedScore` are removed; use
+    `ExperimentScores.ExtractNormalizedScore(holdoutMetricsJson, successMetric)` (holdout metrics only, null when unmeasured).
+  - `@memberjunction/ng-dashboards`: the business catalog opens only predictions the gate shipped;
+    `toBusinessPredictionCard` / `buildBusinessCatalog` (and the PascalCase free functions) → `BusinessPredictions.*`;
+    `BusinessPredictionInput.modelId` / `name` are renamed `ModelID` / `Name`;
+    `ImprovePromptInput.TrustGrade` is renamed `TrustTitle`;
+    the deprecated lowercase helpers of the Predictive Studio agent context, models and studio resources and
+    `buildImprovePrompt` are removed.
+  - `@memberjunction/predictive-studio-sidecar`, `@memberjunction/predictive-studio-truth-suite`: the gate parity tests
+    (`test:gate-parity`, `test:gate-parity-refpipe`).
+  - `@memberjunction/integration-test-suite`: the Predictive Studio gate checks over the planted-truth datasets, for
+    Prediction Units (unit rows and reference keys, censored rows excluded, label versions, task-type refusals, as-of
+    values equal to history, training/scoring parity, value provenance, the snapshot manifest and reproducible retrains)
+    and for training (date-carved, new-entity and rolling-origin holdouts, proper-score ranking per task family,
+    baselines and intervals, calibration, slices, leakage flags, inner-fold selection and optimism, protocols created
+    before their runs, determinism, and the gate decision: how often a planted null publishes, the AUC-interval and
+    minority-class guards, the kept simple baseline, the incumbent heuristic as a named comparator).
+  - `@memberjunction/ng-artifacts`: the ML Experiment Results leaderboard shows each candidate's inner-fold mean with its
+    interval and tags the winner's score optimistic, from rows built by the new `LeaderboardRows`
+    (`ml-leaderboard-rows.ts`, PascalCase `NormalizedLeaderboardRow` members); the deprecated `formatImportance` /
+    `formatScore` aliases of `MLExperimentResultsViewerComponent` are removed.
+  - `@memberjunction/core`: listed for the Predictive Studio prompt and agent metadata corrected on this branch.
+
+  Prediction Units and Evaluation Protocols are authored and viewed in Explorer, every existing pipeline migrates to
+  version 1 of each, and the training path without them is removed.
+  - `@memberjunction/predictive-studio-core`: `ProtocolRows`, `ProtocolEdits`, `UnitEdits` (one owner of the unit and
+    protocol row writes, the next-version rules and the label version bump) and `LegacyPipelines` (the migration's
+    mapping from a pipeline's columns to a unit and a protocol, or the archive or hold reason). Stored rows whose date is
+    not a calendar day fail parse (`UtcDay.IsIsoDay`). `TrainRequest` and the `/train` contract are removed. New refusal
+    code `TIME_HOLDOUT_REQUIRED`.
+  - `@memberjunction/predictive-studio`: the `Migrate Pipelines to Prediction Units and Evaluation Protocols` Action (dry run by default) binds
+    each pipeline to a version-1 unit and protocol, archives one that cannot be expressed, or holds one with its reason
+    (an undetermined adverse class, a declared time index, a date column with a value that is not a date). A pipeline without a unit is refused `UNIT_REQUIRED`; the
+    legacy training path and `MLSidecar.Train` are deleted. A time-indexed pipeline under a holdout that does not respect
+    time is refused (`time-index-needs-time-holdout`). An advancing fixed decision date mints the next unit version only
+    after every pre-run refusal passes, and removes it if the run then fails to bind. A model is scored on the unit path
+    only when its own Lineage names a unit. The as-of assembler reads a stored value for a row decided on or after the
+    assembly day only when no change history covers that day. A parent record hard-deleted after the decision date
+    is read from its Record Changes (its stored fields from its Delete row) and is uncovered from its Delete on; a
+    missing record with no Delete still refuses `truncated-read`. `PredictiveStudio.TrainModel` refuses `asOf` (including
+    `{ Mode: 'none' }`), `labelEventDates`, `maxRows` and `primaryKeyField` by presence; its output carries the stored
+    gate decision, the snapshot and the protocol version, `modelId`/`version` are absent when no model ships (status
+    `NoSignal` or `KeptExistingRule`), and an unreadable stored result fails. The Train ML Model Action loses its `MaxRows`
+    input and gains `GateOutcome`, `GateReason`, `TrainingSnapshotID` and `EvaluationProtocolID` outputs.
+  - `@memberjunction/core-entities`: the regenerated TrainModel remote-operation types and the `MJ: ML Prediction Units`,
+    `MJ: ML Evaluation Protocols` and `MJ: ML Training Snapshots` entities.
+  - `@memberjunction/core-entities-server`: server subclasses that keep a saved Prediction Unit, Evaluation Protocol or
+    Training Snapshot row from ever being updated (`VersionedRowGuard`, shared by the three), check a new unit or
+    protocol version against version n−1, and check that a pipeline agrees with the unit and protocol it binds.
+  - `@memberjunction/storage`: `LocalFileSystemStorage` (`Local File System Storage` driver, root `STORAGE_LOCAL_ROOT`;
+    its pre-authorised downloads are `file://` URLs, readable only on the same host). The `Local File System` provider
+    row ships inactive; Predictive Studio names it through `PS_STORAGE_PROVIDER` (default `Local File System`), the one
+    setting for Training Snapshot files and trained model files alike, and a cloud or multi-host install points that at
+    a cloud provider.
+  - `@memberjunction/predictive-studio`: trained model files are stored through the `PS_STORAGE_PROVIDER` storage
+    provider (`StorageProviderArtifactStore`, keys `predictive-studio/model-artifacts/<uuid>/<name>`) and read through
+    the provider their `MJ: Files` row names (`StorageProviderArtifactLoader`); `PredictiveStudioStorage` resolves the
+    provider for snapshots and models. Model files trained before 6.3 (`MJ: Files.ProviderKey` empty) are still read
+    from `PS_ARTIFACT_DIR`. `IArtifactStore.save` / `delete` are `save(bytes, name)` / `delete(fileId)` (no
+    `contextUser`: the store writes as the user of the `PredictiveStudioStorage` it is built over), and
+    `IArtifactLoader.load` is `load(fileId, contextUser, provider)` with a required `UserInfo` and `provider`.
+    `IArtifactStore.AssertWritable` is a new required member the engine calls before a run is written: it puts and
+    deletes a probe object under `predictive-studio/model-artifacts/`, so a provider that is unconfigured or cannot write
+    (wrong credentials, an unwritable root) refuses the run before training. A run that fails after storing its
+    artifacts deletes its model row and artifacts. `StorageProviderSnapshotFileStore` takes `(entityFactory, storage)`;
+    `StorageProviderSnapshotFileStore.ForProviderName(entityFactory, provider, contextUser, providerName?)` builds one
+    over its own storage. The local-disk model
+    artifact store and loader, and their active-provider lookup, are removed.
+  - `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`,
+    `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`, `@memberjunction/ng-core-entity-forms`: the
+    generated GraphQL schema, class registrations and record forms for the three new entities.
+  - `@memberjunction/ng-explorer-core`: the generated lazy-load keys of the Studio record panels on `MJ: ML Prediction Units` and
+    `MJ: ML Evaluation Protocols` forms.
+  - `@memberjunction/ng-dashboards`: the Studio's Prediction Units and Evaluation Protocols sections, the unit and
+    protocol editors and version lists, the pipeline bindings panel and the model form's protocol results panel; the
+    pipeline wizard binds a new pipeline to version 1 of its unit and the default protocol. The deprecated lowercase
+    aliases of `PSPipelinesComponent`, `PSPipelineWizardComponent` and the Predictive Studio nav helpers are removed:
+    bind `[CurrentUser]`, `[CloneFrom]`, `[InitialAlgorithmId]`, `(Saved)`, `(TrainRequested)`, `(Closed)` and the other
+    PascalCase members. `PSPredictionsResourceComponent.applicationId` is `ApplicationID`, inherited with `CurrentUser` and
+    `ChatEnvironmentId` from `PSResourceBase`.
+  - `@memberjunction/predictive-studio-sidecar`: the `/train` route and its legacy helpers (`build_estimator`, `fit_transform`,
+    `serialize_envelope`) are removed; `/predict` still loads legacy envelopes. The `ps-predictor/v2` envelope's payload
+    key is `payloadB64`. A snapshot header's `capacityPerPeriod` must be a positive integer or null.
+  - `@memberjunction/predictive-studio-truth-suite`, `@memberjunction/integration-test-suite`: the harness trains every
+    pipeline through its unit; six containment checks are re-pinned to the unit path; the pipeline-migration rig.
+    `RunRecords.PipelineIDs` / `ModelIDs` are `RecordIDSet`s (iteration yields IDs as recorded, not lower-cased).
+    `HarnessFileStorage` (and the rigs' `RigStorage`) is removed: training stores files through the provider
+    `PS_STORAGE_PROVIDER` names whatever its `IsActive` flag, so the harness and rigs no longer switch a File Storage
+    Provider on.
+  - `@memberjunction/core`: listed for the Migrate Pipelines Action and the Train ML Model parameter metadata.
+
+  Holds no sign-off overrides: a binary or multiclass model whose holdout calibration slope is outside 0.8–1.2, or could
+  not be measured, is held in Draft (Lineage `calibrationHold`, a `CALIBRATION HOLD` run note) and the Promote ML Model
+  action refuses it with `CALIBRATION_HOLD`; a forecast's series forecaster, which `/predict` does not serve, is refused
+  with `MODEL_NOT_SERVABLE` and never scored. A kept simple baseline carries its run's leakage audit
+  (`trainingLeakageAudit`), so it needs the same leakage sign-off as the finalist. The Pipeline Builder agent publishes
+  through the promotion gate. Binding a binary or multiclass unit to a protocol whose calibration is `not-applicable` is
+  refused.
+  - Round 3 (2026-11-07): a Delete in force reads as deleted whatever the record's history start, and a hard-deleted record's Delete row is continuity-checked (`@memberjunction/predictive-studio`); a grouped unit refuses `repeated-stratified-kfold` inner folds (`inner-validation-ungrouped`), a grouped non-forecast unit accepts only `cluster-bootstrap` intervals (`intervals-not-clustered`), and a migrated legacy pipeline bound to a grouped unit gets grouped folds (`@memberjunction/predictive-studio-core`, `@memberjunction/core-entities-server`); the sidecar refuses a snapshot whose reference score is missing on any row (`reference-score-missing`, `@memberjunction/predictive-studio-sidecar`); an undated scenario fixture keeps its group key (`@memberjunction/predictive-studio-truth-suite`); a throwing artifact cleanup no longer masks the `MJ: Files` save error (`@memberjunction/predictive-studio`).
+  - Round 4 (2026-11-08): a grouped unit refuses any inner validation without its group key, `blocked-time` without a key included (`@memberjunction/predictive-studio-core`); the as-of history covers only the requested keys, a Delete in force wins on both readers before the created-after check, the not-updatable path included, an unreached history excludes under exclude-and-count on the stored-value reader as it already did on the replay reader, and a stored `__mj_CreatedAt` later than an earlier change row other than the history's opening Create dates a re-creation and is ignored (`@memberjunction/predictive-studio`); two standing matrix tests pin reader agreement on existence and which sidecar fold builders keep a group together (`@memberjunction/predictive-studio`, `@memberjunction/predictive-studio-sidecar`); a member × period unit naming no group key is grouped by its grain record, so it gets grouped folds and clustered intervals by default and refuses stratified folds (`@memberjunction/predictive-studio-core`), and a windowed aggregate counts a child hard-deleted after the decision day as its Delete row recorded it (`@memberjunction/predictive-studio`); change rows of one record at one instant are ordered by whether the record continues after that instant, which the next change row proves unless it is a Create and, at its last instant, a current row (a Delete ends the instant of a record that is gone, and precedes the Create of one that was re-created, so a record re-created at one instant and hard-deleted later reads its second incarnation between the two, and one created and deleted at one instant and re-created later reads deleted between the two), a windowed aggregate's child history is loaded once so coverage counts each child record once, and a child row or a join-key unit row deleted and re-created after the decision day is read from the Delete row that ended the incarnation standing then (`@memberjunction/predictive-studio`).
+
+- 70b5e38: Price a realtime run's audio tokens at their own rates. `Realtime.Pricing.AudioInput` / `AudioOutput` (per 1M tokens) in the model configuration price each direction's audio tokens on an `Audio` cost line, taken out of the default line; without an audio price the default line keeps today's figure and is marked `Blended`. The OpenAI-protocol and OpenAI Live browser clients now report the per-modality token split, through a shared `MapRealtimeUsageModalityDetail` in `@memberjunction/ai`. Cached input is priced at the cost row's cache-read rate: the record keeps `CachedAudioTokens` (OpenAI's `cached_tokens_details.audio_tokens`), the audio input line prices only the uncached audio, and an audio line never prices more tokens than left the default line.
+- 755b210: Realtime long-call reconnect fixes from the final review of #6462.
+  - Security: a relay session (Vertex, HuggingFace) now persists only routing fields on its `MJ: AI Agent Sessions` row, so its owner, including a `Widget Guest`, can no longer read the system prompt, tools or initial context the relay keeps from the browser. A relay refresh that reaches an MJAPI instance without the in-memory snapshot is refused with a clear error instead of minting from the persisted copy. A direct session's persisted copy drops the duplicate provider config.
+  - A credential refresh re-authorizes the agent the session was minted for, from server-written state, not from the editable `Config.targetAgentID`.
+  - A failed planned move that goes back to the old connection now mints at most one credential per reconnect cycle, so a provider outage during the soft window no longer exhausts the per-session mint limit.
+  - A loss of the old connection while the call waits on it, or while an attempt is in flight, goes to the running reconnect at once: input is held from that moment, Gemini no longer ends the call, and OpenAI-protocol drivers no longer go back to a dead transport.
+  - The wait on the old connection follows a goAway, a shrinking connection limit and early timers; a host state handler that throws while the call goes back no longer wedges the cycle.
+  - A credential that a refresh replaced after the attempt connected still gets its move before it expires (Gemini).
+  - OpenAI Live reports `listening` again after a move; HuggingFace keeps the call when its old socket closes during a move; Gemini holds a reply owed to speech held during a failed attempt.
+  - Server sessions (OpenAI family, OpenAI Live, ElevenLabs, AssemblyAI, Inworld) hold a tool result sent during a reconnect and deliver it once on the new connection. The server OpenAI session keeps user turns in order and no longer merges two utterances, keeps frames that arrive with `session.created` on a reconnect, and no longer leaves an unhandled rejection when it discards a connecting socket.
+  - Overlapping `CloseSession` calls are shared on the normalized session ID, and the runtime skips its page-close beacon only after its own close succeeded.
+
+- 28cec7d: Generic long-call reconnects, token refresh, and conversation continuity across all realtime voice/video providers (#6460):
+  - **4-Layer ModelConfiguration & Timing Cascade (`@memberjunction/ai`, `@memberjunction/ai-engine-base`, `@memberjunction/ai-agents`):** Add `ConnectionMaxSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, and `TrustNativeResumption` to `RealtimeConfigurationSettings` (`IAIConfiguration.ts` and `modelConfiguration.ts`), propagate them through `REALTIME_SHARED_CONFIG_KEYS`, `ScrubRealtimeSharedConfigKeys`, `ExtractRealtimeTimingConfig`, `ResolveRealtimeTiming`, and `GetModelCatalogSessionSettings`, and seed realtime models (`Gemini 3.8 Live`, `Gemini 3.8 Live Extended Thinking`, `Gemini 3.1 Flash Live`, `Grok Voice` family, `GPT Realtime` family, `GPT-Live 1`, `ElevenLabs Agents`, `Eleven Realtime`) in `.ai-models.json`.
+  - **Shared Conversation Memory & Reconnect Controller (`@memberjunction/ai`):** Promote `RealtimeConversationMemory`, `RenderRealtimeMemorySeed`, `RenderRealtimeMemorySeedAsContextNote`, `RenderLateToolResultNote`, `ResumePreamble`, and the unified I/O-free `RealtimeReconnectController` into `@memberjunction/ai` so every server and browser realtime driver shares bounded FIFO turn/tool memory (`MaxSeedChars = 24,000`), soft/hard connection-duration timers, credential refresh scheduling, per-attempt abort signals, native-to-seed fallback, and rapid-reconnect circuit-breaking (`reconnect-loop-breaker`).
+  - **Server-Side Orchestration, Protected Session Snapshot & Relay Continuity (`@memberjunction/ai`, `@memberjunction/core-entities-server`, `@memberjunction/ai-agents`, `@memberjunction/server`):** Add `CallDurationSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, `TrustsNativeResumption`, proactive timer orchestration, and `ReconnectSession` on `BaseRealtimeModel` / `BaseRealtimeSession`; persist `realtimeMintSnapshot` on `MJ: AI Agent Sessions.Config_` behind `RunWithTrustedSessionConfigWrites` (`PROTECTED_SESSION_CONFIG_KEYS`); add `RealtimeProxyRegistry.Instance.ExtendRelaySession` and timer rescheduling in `RealtimeRelayTunnel` so relayed calls survive past the 30-minute relay lease; seed `RealtimeSessionRunner`'s re-opened session from `RealtimeConversationMemory` (`InitialContext`); clear Gemini's uncompressed-video connection limit when the last bridged video source ends (`@memberjunction/ai-bridge-server`); add rate-limited `RefreshRealtimeClientSessionToken` in `RealtimeClientSessionResolver`.
+  - **Browser Runtime, Client Drivers & Continuous Recording (`@memberjunction/ai-realtime-client`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`):** Add `ApplySessionConfigTiming`, proactive timer arming on `'listening'`, `ScheduleCredentialRefresh`, and `Reconnect(context)` across `BaseRealtimeClient` and all client/server drivers (`Gemini`, `Vertex`, `OpenAI`, `OpenAI Live`, `xAI`, `ElevenLabs`, `Eleven`, `AssemblyAI`, `Inworld`, `HuggingFace`); wire `SetTokenRefreshCallback` in `RealtimeSessionRuntime`; update `RealtimeAudioRecorder.AttachRemoteStream` so WebRTC reconnects rebind replacement remote audio streams into a single continuous recording file without gaps.
+
+### Patch Changes
+
+- 2aa1c10: The query description pass no longer undoes changes made while it waits for the LLM. It read its rows before the call and saved them after, and a save sends every loaded column, so a parameter marked server-set during the wait lost the mark and a description written meanwhile was replaced. It now re-reads the rows after the call.
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [2bf6237]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [7edd599]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [3615622]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [d693139]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [fcc8668]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [1ef6a72]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [1e73a8d]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/generic-database-provider@6.3.0-edge.0
+  - @memberjunction/ai-vector-dupe@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/sql-converter@6.3.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.0
+  - @memberjunction/scheduling-engine@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/integration-engine@6.3.0-edge.0
+  - @memberjunction/feature-pipelines@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+  - @memberjunction/predictive-studio-core@6.3.0-edge.0
+  - @memberjunction/ai-engine-base@6.3.0-edge.0
+  - @memberjunction/sql-parser@6.3.0-edge.0
+  - @memberjunction/tag-engine@6.3.0-edge.0
+  - @memberjunction/ai-prompts@6.3.0-edge.0
+  - @memberjunction/ai-vectordb@6.3.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/communication-types@6.3.0-edge.0
+  - @memberjunction/communication-engine@6.3.0-edge.0
+  - @memberjunction/doc-utils@6.3.0-edge.0
+  - @memberjunction/integration-pk-classifier@6.3.0-edge.0
+  - @memberjunction/rubrics-base@6.3.0-edge.0
+  - @memberjunction/templates@6.3.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes
