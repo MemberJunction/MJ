@@ -60,7 +60,7 @@ A channel declares the most it can expose (`MaxExposure`: `'none' | 'state' | 'p
 
 ### Delegated artifacts
 
-When a delegated run (the agent asked Skip or Sage to build something) produces artifacts, the runtime asks each channel in the session, mounted or merely advertised, whether it wants them: `AcceptsDelegationArtifacts(artifacts, resolvedConfig)` (synchronous, answered before an advertised channel is initialized, so it reads its resolved config from the argument, not from `Context`). A channel that says yes is mounted if needed and handed them with `OnDelegationArtifacts(artifacts)`; its tab is revealed. Default: no. A channel that throws is logged and never disturbs the delegation or the other channels.
+When a delegated run (the agent asked Skip or Sage to build something) produces artifacts, the runtime asks each channel in the session, mounted or merely advertised, whether it wants them: `AcceptsDelegationArtifacts(artifacts, resolvedConfig)` (synchronous, answered before an advertised channel is initialized, so it reads its resolved config from the argument, not from `Context`). `ParsedDelegationArtifact` preserves `ArtifactTypeName` and `DriverClass` so built-in channels partition cleanly (`ArtifactWorkspaceChannel` claims collaborative `Markdown Document`, `Presentation`, and `Excel Spreadsheet` artifacts, while `InteractiveComponentChannel` claims React component specs). A channel that says yes is mounted if needed and handed them with `OnDelegationArtifacts(artifacts)`; its tab is revealed. Default: no. A channel that throws is logged and never disturbs the delegation or the other channels.
 
 ### App client tools
 

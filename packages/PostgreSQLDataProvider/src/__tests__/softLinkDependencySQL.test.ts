@@ -293,4 +293,30 @@ describe('PostgreSQLDataProvider.BuildHardLinkDependencySQL', () => {
         expect(sql).toContain('\'Tasks\' AS "RelatedEntityName"');
         expect(sql).not.toContain('MJ: Audit Logs');
     });
+
+    it('escapes embedded quotes in a text primary key and validates numeric primary keys', () => {
+        const textTarget = mockEntity({ Name: 'Persons', ID: TARGET_ENTITY_ID, BaseView: 'vwPersons', BaseTable: 'Person', pk: [{ Name: 'ID', NeedsQuotes: true }] });
+        const numTarget = mockEntity({ Name: 'Orders', ID: '11111111-1111-1111-1111-111111111111', BaseView: 'vwOrders', BaseTable: 'Order', pk: [{ Name: 'OrderID', NeedsQuotes: false }] });
+        const tasks = mockEntity({
+            Name: 'Tasks',
+            ID: HOLDER_ENTITY_ID,
+            BaseView: 'vwTasks',
+            BaseTable: 'Task',
+            Fields: [
+                { Name: 'PersonID', EntityIDFieldName: null, RelatedEntity: 'Persons', RelatedEntityFieldName: 'ID' },
+                { Name: 'OrderID', EntityIDFieldName: null, RelatedEntity: 'Orders', RelatedEntityFieldName: 'OrderID' },
+            ],
+        });
+
+        const provider = new TestProvider([textTarget, numTarget, tasks]);
+        const quotedSQL = provider.buildHardLinkSQL('Persons', CompositeKey.FromID("O'Brien"));
+        expect(quotedSQL).toContain(`WHERE "PersonID" = 'O''Brien'`);
+
+        const numericSQL = provider.buildHardLinkSQL('Orders', new CompositeKey([new KeyValuePair('OrderID', 42)]));
+        expect(numericSQL).toContain('WHERE "OrderID" = 42');
+
+        expect(() => provider.buildHardLinkSQL('Orders', new CompositeKey([new KeyValuePair('OrderID', '42 OR 1=1')]))).toThrow(
+            'Invalid non-numeric value provided for numeric key field OrderID on entity Orders',
+        );
+    });
 });

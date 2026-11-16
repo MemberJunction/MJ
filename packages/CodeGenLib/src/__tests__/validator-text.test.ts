@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import * as StatusLogging from '../Misc/status_logging';
 import { NormalizeGeneratedValidatorText, RewriteUUIDComparisons } from '../Misc/validator-text';
 
 describe('NormalizeGeneratedValidatorText', () => {
@@ -32,6 +33,40 @@ describe('NormalizeGeneratedValidatorText', () => {
             '}',
         ].join('\n');
         expect(NormalizeGeneratedValidatorText(source)).toBe(source);
+    });
+
+    it('unescapes quotes in source with real line breaks when only the unescaped form parses (#6510)', () => {
+        const stored = [
+            'public ValidateNumMonthsGreaterThanZero(result: ValidationResult) {',
+            '    if (this.NumMonths <= 0) {',
+            '        result.Errors.push(new ValidationErrorInfo(',
+            '            \\"NumMonths\\",',
+            '            \\"Number of months must be greater than zero.\\",',
+            '            this.NumMonths,',
+            '            ValidationErrorType.Failure',
+            '        ));',
+            '    }',
+            '}',
+        ].join('\n');
+        expect(NormalizeGeneratedValidatorText(stored)).toBe(stored.replace(/\\"/g, '"'));
+    });
+
+    it('keeps a literal \\n inside a string of multi-line source that parses', () => {
+        const source = [
+            'public ValidateNotes(result: ValidationResult) {',
+            '\tif (this.Notes?.includes("\\n\\n")) { result.Errors.push(null); }',
+            '}',
+        ].join('\n');
+        expect(NormalizeGeneratedValidatorText(source)).toBe(source);
+    });
+
+    it('returns multi-line text that parses neither way unchanged and warns with its source', () => {
+        const warn = vi.spyOn(StatusLogging, 'LogWarning').mockImplementation(() => undefined);
+        const broken = 'public ValidateX(result: ValidationResult) {\n\tif (this.X == null) {\n}';
+        expect(NormalizeGeneratedValidatorText(broken, "ValidateX on entity 'Orders'")).toBe(broken);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(String(warn.mock.calls[0][0])).toContain("ValidateX on entity 'Orders'");
+        warn.mockRestore();
     });
 });
 

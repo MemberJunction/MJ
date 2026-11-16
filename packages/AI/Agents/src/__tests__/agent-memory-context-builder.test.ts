@@ -228,6 +228,25 @@ describe('AgentMemoryContextBuilder', () => {
             expect(getExamples.mock.calls[0][0].observability).toBeUndefined();
         });
 
+        it('runs notes and examples retrieval concurrently when observability is omitted', async () => {
+            let examplesStarted = false;
+            let resolveNotes!: (rows: Array<{ ID: string }>) => void;
+            getNotes.mockImplementationOnce(() => new Promise(resolve => { resolveNotes = resolve; }));
+            getExamples.mockImplementationOnce(async () => {
+                examplesStarted = true;
+                resolveNotes([{ ID: 'n-concurrent' }]);
+                return [{ ID: 'e-concurrent' }];
+            });
+
+            const result = await new AgentMemoryContextBuilder().InjectContextMemory(
+                'hi', makeAgent({ InjectNotes: true, InjectExamples: true }), undefined, undefined, fakeUser, []
+            );
+
+            expect(examplesStarted).toBe(true);
+            expect(result.notes).toEqual([{ ID: 'n-concurrent' }]);
+            expect(result.examples).toEqual([{ ID: 'e-concurrent' }]);
+        });
+
         it('forwards SharedOnly to both retrieval calls when the run has an audience', async () => {
             await new AgentMemoryContextBuilder().InjectContextMemory(
                 'hi', makeAgent({ InjectNotes: true, InjectExamples: true }), 'u1', undefined, fakeUser, [],
