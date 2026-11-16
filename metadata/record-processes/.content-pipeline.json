@@ -194,6 +194,32 @@
   },
   {
     "fields": {
+      "Name": "Content Pipeline — Settle Item Embedding",
+      "Description": "Sets a Content Item's EmbeddingStatus from its chunks for an item the Embed run did not settle (the process stopped between committing the chunks and settling the item). Selects items that were cut into chunks, are not yet settled and whose live chunks have all settled; the item becomes Failed if any chunk failed, Skipped if every chunk was skipped, and Complete otherwise. Items waiting on a retry are left until the wait is over and the retrying stage has settled them.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "(EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly','Processing')) AND (SegmentationStatus = 'Complete') AND (DeleteStatus IS NULL) AND (RetryAfter IS NULL) AND ID IN (SELECT ContentItemID FROM [__mj].[ContentItemChunk] WHERE DeleteStatus IS NULL) AND ID NOT IN (SELECT ContentItemID FROM [__mj].[ContentItemChunk] WHERE DeleteStatus IS NULL AND (EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly','Processing')))",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": false,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 50,
+      "MaxConcurrency": 1,
+      "Configuration": {
+        "Stages": [
+          "SettleItemEmbedding"
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "01E943AE-970A-4E00-AF08-BBF5AA6B560D"
+    }
+  },
+  {
+    "fields": {
       "Name": "Content Pipeline — Graph",
       "Description": "Clusters embedded Content Item Chunks into governed MJ: Graph Concepts and emits typed MJ: Graph Edges (SourcedFrom, Mentions, Broader Than, Contradicts) into the target Graph configured on each Content Source.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",

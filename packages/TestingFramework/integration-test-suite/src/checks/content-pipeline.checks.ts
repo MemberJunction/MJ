@@ -78,6 +78,7 @@ import {
     type MJContentSourceEntity,
     type MJContentSourceTypeEntity,
     type MJContentTypeEntity,
+    type MJRecordProcessEntity,
     type MJVectorDatabaseEntity,
     type MJVectorIndexEntity,
 } from '@memberjunction/core-entities';
@@ -454,6 +455,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             const chunks = await liveChunks(ctx, a.ID);
             Assert(chunks.length > 2, `a long document segments into several chunks, got ${chunks.length}`);
             S.FirstChunkIDs = chunks.map((c) => c.ID);
+            AssertEqual(a.EmbeddingStatus, 'Pending', 'the item waits for its chunks to be embedded');
             console.log(`      → CP2: item A extracted and segmented into ${chunks.length} chunks`);
         },
     },
@@ -477,6 +479,10 @@ export const ContentPipelineChecks: NamedCheck[] = [
             const stored = (await Promise.all(S.ItemIDs.map((id) => liveChunks(ctx, id)))).flat();
             Assert(stored.every((c) => c.EmbeddingStatus === 'Complete' && UUIDsEqual(c.VectorRecordID ?? '', c.ID)),
                 'every chunk is Complete with its receipt = its own id');
+            for (const item of await items(ctx)) {
+                AssertEqual(item.EmbeddingStatus, 'Complete', `item ${item.URL} is Complete once its chunks are embedded`);
+                Assert(item.LastEmbeddedAt != null, `item ${item.URL} records when it was embedded`);
+            }
             console.log(`      → CP3: ${Store.Upserts.length} vectors, all namespaced to the source`);
         },
     },
@@ -640,6 +646,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             const cChunks = await liveChunks(ctx, c.ID);
             Assert(cChunks.length > 0, 'item C segmented into chunks');
             await run(ctx, ['Embed'], cChunks.map((ch) => ch.ID));
+            AssertEqual((await itemByURL(ctx, URL_C)).EmbeddingStatus, 'Complete', 'item C is Complete once its chunks are embedded');
             console.log(`      → CP9: incremental Since skipped older item and ingested item C (${cChunks.length} chunks)`);
         },
     },
@@ -695,6 +702,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             AssertEqual(c.Name, 'Updated C Title', 'Discover updated Title (Name)');
             AssertEqual(c.Description, 'Updated C Description via Columns', 'Discover persisted custom Columns (Description)');
             AssertEqual(c.SegmentationStatus, 'Complete', 'metadata-only change does not reset SegmentationStatus');
+            AssertEqual(c.EmbeddingStatus, 'MetadataOnly', 'the embedded item is promoted to MetadataOnly with its chunks');
 
             const chunks = await liveChunks(ctx, c.ID);
             AssertSameList(chunks.map((ch) => ch.ID).sort(), [...beforeChunkIDs].sort(), 'same chunk rows kept');
@@ -709,7 +717,36 @@ export const ContentPipelineChecks: NamedCheck[] = [
                 AssertEqual(u.metadata['Title'], 'Updated C Title', 'updated Title rides in vector metadata');
                 AssertEqual(u.metadata['Description'], 'Updated C Description via Columns', 'updated Description from Columns rides in vector metadata');
             }
+            AssertEqual((await itemByURL(ctx, URL_C)).EmbeddingStatus, 'Complete', 'the item is Complete again once its chunks are refreshed');
             console.log(`      → CP11: Title + Columns updated ${Store.Updates.length} vectors in place`);
+        },
+    },
+    {
+        Id: 'content-pipeline.CP16',
+        Name: 'CP16: the Settle Item Embedding process selects an item whose settle was missed (and not one still embedding), and its stage settles it',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const c = await itemByURL(ctx, URL_C);
+            AssertEqual(c.EmbeddingStatus, 'Complete', 'precondition: item C is settled');
+            // What a process stopped between committing the last chunks and settling the item leaves behind.
+            c.EmbeddingStatus = 'Pending';
+            await save(c, 'item');
+
+            const [process] = await rows<MJRecordProcessEntity>(ctx, 'MJ: Record Processes', `Name LIKE '%Settle Item Embedding'`);
+            Assert(!!process?.ScopeFilter, 'the Settle Item Embedding Record Process is installed');
+            const selected = async () =>
+                (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `(${process.ScopeFilter}) AND ContentSourceID='${S.SourceID}'`)).map((i) => i.ID);
+            const before = await selected();
+            Assert(before.some((id) => UUIDsEqual(id, c.ID)), 'its filter selects the unsettled item');
+            const a = await itemByURL(ctx, URL_A);
+            Assert((await liveChunks(ctx, a.ID)).some((ch) => ch.EmbeddingStatus === 'Pending'), 'precondition: item A has chunks still to embed');
+            Assert(!before.some((id) => UUIDsEqual(id, a.ID)), 'its filter leaves an item whose chunks are still to embed');
+
+            await run(ctx, ['SettleItemEmbedding'], before);
+            AssertEqual((await itemByURL(ctx, URL_C)).EmbeddingStatus, 'Complete', 'the stage settles the item from its chunks');
+            Assert(!(await selected()).some((id) => UUIDsEqual(id, c.ID)), 'and the filter no longer selects it');
+            console.log(`      → CP16: the sweep selected ${before.length} item(s) and settled item C`);
         },
     },
     {

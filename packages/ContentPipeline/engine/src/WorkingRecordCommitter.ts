@@ -122,6 +122,7 @@ export class WorkingRecordCommitter {
         if (statusField && status !== null && this.hasField(entityObject, statusField)) {
             this.writeColumn(entityObject, statusField, status);
             written.push(statusField);
+            written.push(...this.settleEmbeddingAfterSegment(entityObject, statusField, status));
         }
         written.push(...(retry ? this.scheduleRetry(entityObject, retry) : this.clearRetrySchedule(entityObject)));
         this.applyConfidence(record, entityObject, written, resetConfidence, unresolved);
@@ -414,6 +415,22 @@ export class WorkingRecordCommitter {
             ? { SegmentationStatus: 'Pending', EmbeddingStatus: 'Pending' }
             : { EmbeddingStatus: 'Pending' };
         written.push(...this.applyValues(entityObject, reset), ...this.clearRetrySchedule(entityObject));
+    }
+
+    /**
+     * Segment ended the item without chunks to embed: it failed, or the item held nothing to cut. An item's
+     * `EmbeddingStatus` otherwise follows its chunks once they are embedded ({@link ItemEmbeddingRollup}), and
+     * no chunk is coming here, so the item takes Segment's verdict now. A Skipped Segment also retires the
+     * item's earlier chunks, so the item really has nothing in the index.
+     */
+    private settleEmbeddingAfterSegment(entityObject: BaseEntity, statusField: string, status: string): string[] {
+        if (statusField !== 'SegmentationStatus' || (status !== 'Failed' && status !== 'Skipped')) {
+            return [];
+        }
+        if (!this.hasField(entityObject, 'EmbeddingStatus') || this.readColumn(entityObject, 'EmbeddingStatus') === status) {
+            return [];
+        }
+        return this.applyValues(entityObject, { EmbeddingStatus: status });
     }
 
     /** Whether this commit wrote a new `Decorator` (the columns written hold only values that changed). */

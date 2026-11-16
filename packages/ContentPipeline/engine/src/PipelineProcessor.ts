@@ -32,6 +32,8 @@ import { ContentPipelineDeleteMarker } from './ContentPipelineDeleteMarker.js';
 import { ContentSourceConfigurationResolver } from './ContentSourceConfigurationResolver.js';
 import { DISCOVER_STAGE, IsSyncMode } from './stages/DiscoverStage.js';
 import { WhereEqual } from './Filters.js';
+import { ItemEmbeddingRollup } from './ItemEmbeddingRollup.js';
+import { OwningItemID } from './VectorRouting.js';
 
 /** How a {@link PipelineProcessor} is configured for one run. */
 export interface PipelineProcessorConfig {
@@ -152,6 +154,7 @@ export class PipelineProcessor implements IRecordProcessor {
                 await this.sweepOrphans(working, context);
             }
             const committed = await this.persist(working, outcome, context);
+            await this.settleOwningItems([working], context);
             return this.toRecordResult(outcome, started, committed, children, working.Children.length);
         } catch (error) {
             return this.toRecordResult(this.classify(error), started, null);
@@ -163,6 +166,7 @@ export class PipelineProcessor implements IRecordProcessor {
         const results = new Map<string, RecordResult>();
         const ready = new UUIDMap<{ RecordID: string; Working: WorkingRecord }>();
         const hydrator = this.storage.Hydrator(context.Provider, context.ContextUser);
+        const worked: WorkingRecord[] = [];
         for (const record of records) {
             if (context.Signal?.aborted) {
                 break; // the rest are left out of the results, unreached and still ready
@@ -175,6 +179,7 @@ export class PipelineProcessor implements IRecordProcessor {
                     continue;
                 }
                 const outcome = await this.runStages(working, context, record.RecordID);
+                worked.push(working);
                 if (outcome.Status === 'Complete') {
                     ready.Set(record.RecordID, { RecordID: record.RecordID, Working: working });
                 } else {
@@ -190,6 +195,7 @@ export class PipelineProcessor implements IRecordProcessor {
         if (ready.Size > 0 && !context.Signal?.aborted) {
             await this.finalizeBatch(ready, results, context);
         }
+        await this.settleOwningItems(worked, context);
         return results;
     }
 
@@ -347,6 +353,28 @@ export class PipelineProcessor implements IRecordProcessor {
         const committer = this.storage.Committer(context.Provider, context.ContextUser);
         const result = await committer.Commit(working, this.lastStage.StatusField, status, outcome.Status === 'Complete', retry);
         return [...result.ColumnsWritten];
+    }
+
+    /**
+     * After an Embed run over chunks has committed them, bring each owning item's `EmbeddingStatus` in line with
+     * its chunks ({@link ItemEmbeddingRollup}). Best effort: the chunks are committed whatever happens here, and
+     * the Settle Item Embedding process picks up an item this misses.
+     */
+    private async settleOwningItems(worked: readonly WorkingRecord[], context: RecordProcessorContext): Promise<void> {
+        if (this.config.IsTest || !this.rollsUpItems || worked.length === 0) {
+            return;
+        }
+        const itemIDs = worked.map(OwningItemID).filter((id): id is string => !!id);
+        try {
+            await new ItemEmbeddingRollup(context.Provider, context.ContextUser).Settle(itemIDs);
+        } catch (error) {
+            LogError(`PipelineProcessor: could not settle the items of ${worked.length} chunk(s): ${messageOf(error)}`);
+        }
+    }
+
+    /** Whether this run embeds chunks, whose items take their status from them. */
+    private get rollsUpItems(): boolean {
+        return this.lastStage.Entity === 'Content Item Chunk' && this.lastStage.StatusField === 'EmbeddingStatus';
     }
 
     /** Commit what the stage produced and report one outcome per child. A test reports children by URL. */
