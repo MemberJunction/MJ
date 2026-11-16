@@ -69,7 +69,7 @@ export async function AssessStep(o: AssessOptions): Promise<{ Catches: Catch[]; 
 
 /**
  * Verdict for one test; for a weak catch also the rule outcome and, when no drop rule fired, the panel's scores.
- * The rules read the sources under `rulesRoot`. The panel's token usage is appended to `judgeUsage`, and the context of a judged catch is kept in `contexts` by catch ID.
+ * The rules read the sources under `rulesRoot`. The panel's token usage is appended to `judgeUsage`, and the context of a judged catch is kept in `contexts` by catch ID, without its TypeScript program.
  */
 async function assessTest(gen: GenerationFile, exec: ExecutionFile, t: CandidateTest, d: AssessDeps, judgeUsage: TokenUsage[], rulesRoot: string, contexts: Map<string, CatchContext>): Promise<Catch> {
     const mine = exec.Results.filter((r) => UUIDsEqual(r.CandidateTestID, t.ID)).sort((a, b) => a.RunIndex - b.RunIndex);
@@ -82,7 +82,7 @@ async function assessTest(gen: GenerationFile, exec: ExecutionFile, t: Candidate
     ctx.Boosts = filter.Boosts;
     if (filter.DroppedBy !== null) return { ...c, DroppedByRule: filter.DroppedBy, Boosts: filter.Boosts };
     const panel: PanelResult = await d.JudgePanel.Judge(ctx);
-    contexts.set(c.ID, ctx);
+    contexts.set(c.ID, { ...ctx, Ast: undefined });
     judgeUsage.push(...panel.Usage.map((u) => ({ ...u, Role: 'Judge' as const })));
     return { ...c, Boosts: filter.Boosts, TPProb: panel.TPProb, JudgeBuckets: panel.Buckets, Median: panel.Median };
 }

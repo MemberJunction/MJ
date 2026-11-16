@@ -136,6 +136,11 @@ describe('AssessStep', () => {
       expect(a).toMatchObject({ Reported: true, Check: { Label: 'Bug', Confidence: 'High', Reason: 'a real caller passes an empty list', Model: 'check-model' } });
       expect((await store.GetRun(RUN_ID))?.TokensByModel).toContainEqual({ Model: 'check-model', Role: 'Check', InputTokens: 30, OutputTokens: 4, CacheReadTokens: 0, CostUSD: 0.5 });
     });
+    it('gives the check a context without the compiled test program', async () => {
+      const check = checkSays({});
+      await assess('High', check);
+      expect(check.mock.calls[0][0].Ast).toBeUndefined();
+    });
     it('does not report a catch that the check calls Intended with High confidence', async () => {
       const { a } = await assess('High', checkSays({ Label: 'Intended', Confidence: 'High' }));
       expect(a).toMatchObject({ Reported: false, Check: { Label: 'Intended' } });
