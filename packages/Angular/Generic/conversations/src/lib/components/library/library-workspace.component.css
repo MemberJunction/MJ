@@ -1670,3 +1670,61 @@
   font-weight: 600;
   color: var(--mj-text-muted);
 }
+
+/* External Frozen Guest Share Link View */
+.library-guest-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--mj-bg-page);
+}
+
+.library-guest-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.library-guest-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.library-guest-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+
+.library-guest-title {
+  font-size: 14px;
+  color: var(--mj-text-primary);
+}
+
+.library-guest-meta {
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}
+
+.library-guest-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}

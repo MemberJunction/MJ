@@ -326,7 +326,7 @@ describe('CanonGraphEngine', () => {
                 Candidates: [],
             });
             const byId = await canon.ResolveGraphEndpoint({ Concept: IDS.ConceptRevenue.toLowerCase() }, 'MJ Canon', analyst);
-            expect(byId.Node).toEqual({ EntityName: 'MJ: Graph Concepts', RecordID: IDS.ConceptRevenue });
+            expect(byId.Node).toMatchObject({ EntityName: 'MJ: Graph Concepts', RecordID: IDS.ConceptRevenue });
             const byName = await canon.ResolveGraphEndpoint({ Concept: 'Unpaid Invoices' }, 'MJ Canon', analyst);
             expect(byName.Node?.RecordID).toBe(IDS.ConceptOpenAr);
             const ambiguous = await canon.ResolveGraphEndpoint({ Concept: 'open' }, 'MJ Canon', analyst);
@@ -334,6 +334,26 @@ describe('CanonGraphEngine', () => {
             expect(ambiguous.Candidates).toHaveLength(2);
             expect((await canon.ResolveGraphEndpoint({ Concept: 'zebra' }, 'MJ Canon', analyst)).Status).toBe('NotFound');
             expect((await canon.ResolveGraphEndpoint({}, 'MJ Canon', analyst)).Status).toBe('NotFound');
+        });
+
+        it('reports NotFound for a concept ID that is hidden by RLS or in a non-visible status', async () => {
+            const rows = CanonMetadataRows()['MJ: Graph Concepts'];
+            const hiddenId = '77777777-7777-4777-8777-777777777792';
+            const proposedId = '77777777-7777-4777-8777-777777777794';
+            await setup({
+                'MJ: Graph Concepts': [
+                    { ...rows[1], ID: hiddenId, Name: 'Open Secrets', Synonyms: null },
+                    { ...rows[1], ID: proposedId, Name: 'Draft Metric', Synonyms: null, Status: 'Proposed' },
+                ],
+            });
+            provider.HiddenFor[analyst.ID] = [`MJ: Graph Concepts|${hiddenId}`];
+            const canon = CanonGraphEngine.Instance;
+
+            expect((await canon.ResolveGraphEndpoint({ Concept: hiddenId }, 'MJ Canon', analyst)).Status).toBe('NotFound');
+            expect((await canon.ResolveGraphEndpoint({ Concept: proposedId }, 'MJ Canon', analyst)).Status).toBe('NotFound');
+            expect(
+                (await canon.ResolveGraphEndpoint({ Concept: proposedId }, 'MJ Canon', analyst, { IncludeProposed: true })).Node?.RecordID,
+            ).toBe(proposedId);
         });
     });
 

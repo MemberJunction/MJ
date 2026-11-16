@@ -172,7 +172,7 @@ export class DocxToolLibrary extends BaseArtifactToolLibrary {
     return import('mammoth') as Promise<MammothModule>;
   }
 
-  private successResult(data: unknown): ArtifactToolResult {
+  private successResult(data: ArtifactToolResult['data']): ArtifactToolResult {
     return { success: true, data };
   }
 

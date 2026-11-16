@@ -23,6 +23,7 @@ export * from './checks/conversation-compaction.checks';
 export * from './checks/dataset-cache.checks';
 export * from './checks/entity-writes.checks';
 export * from './checks/field-rules-bulk-update.checks';
+export * from './checks/list-refresh.checks';
 export * from './checks/lists.checks';
 export * from './checks/metadata-consistency.checks';
 export * from './checks/open-app-teardown.checks';
@@ -56,6 +57,7 @@ export * from './checks/fls-closeout-client.checks';
 export * from './checks/self-avatar-client.checks';
 export * from './checks/view-properties-client.checks';
 export * from './checks/conversation-authorship-client.checks';
+export * from './checks/conversation-delete-client.checks';
 export * from './checks/keyrowfilter.checks'; // KF1–KF6: registers into the 'rls-isolation' bundle AFTER RLS1–RLS10 (order matters for GetBundle parity)
 export * from './checks/rolerowfilter.checks'; // RF1–RF3: registers into the 'rls-isolation' bundle AFTER KF1–KF6
 export * from './checks/runquery-cache.checks';

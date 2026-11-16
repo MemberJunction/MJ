@@ -280,7 +280,19 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         const graph = GraphEngine.Instance.GetGraph(graphName);
         const byId = graph ? GraphEngine.Instance.Concepts.find((c) => UUIDsEqual(c.ID, concept) && UUIDsEqual(c.GraphID, graph.ID)) : undefined;
         if (byId) {
-            return { Status: 'Resolved', Node: { EntityName: CONCEPT_ENTITY, RecordID: byId.ID }, Candidates: [] };
+            if (!IsGraphConceptStatusVisible(byId.Status, options.IncludeProposed === true)) {
+                return { Status: 'NotFound', Candidates: [] };
+            }
+            const ref: GraphNodeRef = { EntityName: CONCEPT_ENTITY, RecordID: byId.ID };
+            const visible = await GraphEngine.Instance.FilterNodesForUser([ref], user, options.AudienceReaders, {
+                IncludeProposed: options.IncludeProposed === true,
+                Provider: options.provider,
+            });
+            const view = visible.get(GraphEngine.Instance.GetNodeKey(ref));
+            if (!view) {
+                return { Status: 'NotFound', Candidates: [] };
+            }
+            return { Status: 'Resolved', Node: { EntityName: view.EntityName, EntityID: view.EntityID, RecordID: view.RecordID }, Candidates: [] };
         }
         const resolution = await this.ResolveConcepts(concept, user, { ...options, GraphNames: [graphName] });
         if (resolution.Status === 'Ambiguous') {

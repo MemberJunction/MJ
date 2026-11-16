@@ -88,6 +88,17 @@ describe('GetGraphContextAction', () => {
         expect(subgraphSpy.mock.calls[0][1]).toEqual([{ EntityName: 'Accounts', EntityID: undefined, RecordID: 'a-1' }]);
     });
 
+    it('resolves string concept seeds through ResolveConcepts scoped to the requested graph rather than picking a same-named concept from another graph', async () => {
+        vi.spyOn(GraphEngine.Instance, 'Concepts', 'get').mockReturnValue([
+            { ID: '11111111-1111-4111-8111-111111111111', GraphID: 'g-other', Name: 'Open AR', Status: 'Deprecated' },
+            { ID: '22222222-2222-4222-8222-222222222222', GraphID: 'g-canon', Name: 'Open AR', Status: 'Approved' },
+        ] as unknown as typeof GraphEngine.Instance.Concepts);
+        const result = await run([{ Name: 'Seeds', Value: ['Open AR', '11111111-1111-4111-8111-111111111111'] }]);
+        expect(result.Success).toBe(true);
+        expect(resolveSpy).toHaveBeenCalledTimes(2);
+        expect(subgraphSpy.mock.calls[0][1]).toEqual([{ EntityName: 'MJ: Graph Concepts', EntityID: undefined, RecordID: 'c-open-ar' }]);
+    });
+
     it('reports AMBIGUOUS_CONCEPT with the candidates when the question fits several concepts equally well, and still returns their context', async () => {
         const candidates = [match(concept, 0.9, 'Partial'), match(openOrders, 0.9, 'Partial')];
         resolveSpy.mockResolvedValue({ Status: 'Ambiguous', Matches: candidates, Candidates: candidates });

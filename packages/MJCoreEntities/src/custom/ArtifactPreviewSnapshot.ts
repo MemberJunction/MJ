@@ -237,11 +237,77 @@ export type ArtifactPreviewSnapshot =
     };
 
 /**
+ * Persistent link between an MJ Artifact version and a remote Connected Drive file (§6.1).
+ * Stored inside `MJ: Artifact Versions.Configuration` without creating redundant `MJ: Files` rows.
+ */
+export interface ConnectedDriveLinkMetadata {
+  /** Remote file / document identifier (SharePoint/OneDrive ItemID or Google Drive FileID). */
+  ExternalFileID: string;
+  /** Connected provider key (`'OneDrive' | 'SharePoint' | 'GoogleDrive' | string`). */
+  ProviderType: string;
+  /** Optional provider integration ID. */
+  ProviderIntegrationID?: string;
+  /** Optional remote parent folder / library identifier. */
+  FolderID?: string;
+  /** Display filename on the connected drive. */
+  FileName?: string;
+  /** Remote web URL to inspect or edit on the provider. */
+  WebUrl?: string;
+  /** MIME type synced with the connected drive. */
+  MimeType?: string;
+  /** Last observed remote ETag / version tag for optimistic concurrency checks. */
+  ETag?: string;
+  /** Remote last-modified timestamp (ISO 8601) if reported by the provider. */
+  RemoteModifiedAt?: string;
+  /** Artifact `VersionNumber` associated with the latest sync. */
+  SyncedVersionNumber?: number;
+  /** ISO 8601 timestamp of the most recent push or pull sync. */
+  LastSyncedAt: string;
+  /** Direction of the most recent sync operation. */
+  LastSyncDirection: 'push' | 'pull';
+  /** User ID that executed the most recent sync. */
+  LastSyncedByUserID?: string;
+}
+
+/**
+ * Frozen-only expiring read-only external guest share link entry stored inside
+ * `MJ: Artifact Versions.Configuration.guestShareLinks` (§6.3).
+ */
+export interface GuestShareLinkRecord {
+  /** Unique link / token identifier (`jti`). */
+  LinkID: string;
+  /** Target `MJ: Artifacts.ID`. */
+  ArtifactID: string;
+  /** Target pinned `MJ: Artifact Versions.ID`. */
+  VersionID: string;
+  /** Target artifact version number. */
+  VersionNumber: number;
+  /** External guest links strictly permit only `'Frozen'` mode so no live RLS/FLS queries run externally. */
+  ShareMode: 'Frozen';
+  /** ISO 8601 creation timestamp. */
+  CreatedAt: string;
+  /** Creator `UserInfo.ID`. */
+  CreatedByUserID: string;
+  /** Optional human-readable label for audit & management UI. */
+  Label?: string;
+  /** ISO 8601 expiration timestamp. */
+  ExpiresAt: string;
+  /** True when explicitly revoked prior to expiration. */
+  Revoked?: boolean;
+  /** ISO 8601 revocation timestamp. */
+  RevokedAt?: string;
+  /** User ID that revoked this link. */
+  RevokedByUserID?: string;
+}
+
+/**
  * Typed JSON shape for `MJArtifactVersionEntity.Configuration`.
  */
 export interface ArtifactVersionConfiguration {
   previewSnapshot?: ArtifactPreviewSnapshot;
   thumbnailDataUrl?: string;
+  connectedDriveLink?: ConnectedDriveLinkMetadata;
+  guestShareLinks?: GuestShareLinkRecord[];
   [key: string]: unknown;
 }
 
@@ -267,6 +333,107 @@ export function ParseArtifactVersionConfiguration(
   } catch {
     return null;
   }
+}
+
+/**
+ * Extracts {@link ConnectedDriveLinkMetadata} from raw `Configuration` JSON if valid.
+ */
+export function GetConnectedDriveLinkFromConfig(
+  rawConfig: string | null | undefined,
+): ConnectedDriveLinkMetadata | null {
+  const parsed = ParseArtifactVersionConfiguration(rawConfig);
+  const link = parsed?.connectedDriveLink;
+  if (!link || typeof link !== 'object' || typeof link.ExternalFileID !== 'string' || !link.ExternalFileID.trim()) {
+    return null;
+  }
+  return link;
+}
+
+/**
+ * Non-destructively merges a {@link ConnectedDriveLinkMetadata} entry into existing `Configuration` JSON.
+ */
+export function MergeConnectedDriveLinkIntoConfig(
+  rawConfig: string | null | undefined,
+  link: ConnectedDriveLinkMetadata | null,
+): string {
+  const base: ArtifactVersionConfiguration = ParseArtifactVersionConfiguration(rawConfig) ?? {};
+  const next: ArtifactVersionConfiguration = { ...base };
+  if (link) {
+    next.connectedDriveLink = { ...link };
+  } else {
+    delete next.connectedDriveLink;
+  }
+  return JSON.stringify(next);
+}
+
+/**
+ * Returns all {@link GuestShareLinkRecord} entries stored in a version's `Configuration` JSON.
+ */
+export function GetGuestShareLinksFromConfig(
+  rawConfig: string | null | undefined,
+): GuestShareLinkRecord[] {
+  const parsed = ParseArtifactVersionConfiguration(rawConfig);
+  if (!parsed || !Array.isArray(parsed.guestShareLinks)) {
+    return [];
+  }
+  return parsed.guestShareLinks.filter(
+    (entry): entry is GuestShareLinkRecord =>
+      Boolean(entry) &&
+      typeof entry === 'object' &&
+      typeof entry.LinkID === 'string' &&
+      entry.ShareMode === 'Frozen',
+  );
+}
+
+/**
+ * Adds or updates a {@link GuestShareLinkRecord} in `Configuration` JSON without clobbering other metadata.
+ */
+export function UpsertGuestShareLinkInConfig(
+  rawConfig: string | null | undefined,
+  record: GuestShareLinkRecord,
+): string {
+  const base: ArtifactVersionConfiguration = ParseArtifactVersionConfiguration(rawConfig) ?? {};
+  const existing = GetGuestShareLinksFromConfig(rawConfig);
+  const filtered = existing.filter((r) => r.LinkID !== record.LinkID);
+  const next: ArtifactVersionConfiguration = {
+    ...base,
+    guestShareLinks: [...filtered, { ...record }],
+  };
+  return JSON.stringify(next);
+}
+
+/**
+ * Marks a {@link GuestShareLinkRecord} as revoked inside `Configuration` JSON.
+ */
+export function MarkGuestShareLinkRevokedInConfig(
+  rawConfig: string | null | undefined,
+  linkId: string,
+  revokedByUserId: string,
+  revokedAtIso = new Date().toISOString(),
+): { UpdatedConfigJson: string; Found: boolean } {
+  const base: ArtifactVersionConfiguration = ParseArtifactVersionConfiguration(rawConfig) ?? {};
+  const existing = GetGuestShareLinksFromConfig(rawConfig);
+  let found = false;
+  const updated = existing.map((entry) => {
+    if (entry.LinkID !== linkId) {
+      return entry;
+    }
+    found = true;
+    return {
+      ...entry,
+      Revoked: true,
+      RevokedAt: revokedAtIso,
+      RevokedByUserID: revokedByUserId,
+    };
+  });
+  const next: ArtifactVersionConfiguration = {
+    ...base,
+    guestShareLinks: updated,
+  };
+  return {
+    UpdatedConfigJson: JSON.stringify(next),
+    Found: found,
+  };
 }
 
 /**

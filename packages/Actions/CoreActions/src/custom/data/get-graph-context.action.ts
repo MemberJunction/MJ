@@ -10,7 +10,7 @@ import {
     type GraphSubgraph,
     type GraphTraversalOptions,
 } from '@memberjunction/core-entities';
-import { IndexByUUID, RegisterClass } from '@memberjunction/global';
+import { IndexByUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     DescribeConceptCandidates,
     GetGraphActionBoolean,
@@ -88,7 +88,7 @@ export class GetGraphContextAction extends BaseAction {
 
             const options = this.buildTraversalOptions(params);
             const conceptSearch: FindConceptsOptions = { GraphNames: [graph.Name], IncludeProposed: options.IncludeProposed === true, provider: params.Provider };
-            const resolved = await this.resolveSeeds(question, rawSeeds, conceptSearch, params);
+            const resolved = await this.resolveSeeds(graph.ID, question, rawSeeds, conceptSearch, params);
             const subgraph: GraphSubgraph =
                 resolved.Seeds.length > 0
                     ? await GraphEngine.Instance.Subgraph(graph.Name, resolved.Seeds, options, params.ContextUser, params.Provider)
@@ -165,6 +165,7 @@ export class GetGraphContextAction extends BaseAction {
      * reported as ambiguous.
      */
     private async resolveSeeds(
+        graphId: string,
         question: string | undefined,
         rawSeeds: unknown,
         conceptSearch: FindConceptsOptions,
@@ -182,17 +183,16 @@ export class GetGraphContextAction extends BaseAction {
         if (question) {
             await this.addTextSeeds(question, GetGraphContextAction.QUESTION_SEEDS, conceptSearch, params, result, pushSeed);
         }
-        const conceptsById = IndexByUUID(GraphEngine.Instance.Concepts);
-        const conceptsByName = new Map(GraphEngine.Instance.Concepts.map((c) => [c.Name.trim().toLowerCase(), c]));
+        const conceptsById = IndexByUUID(GraphEngine.Instance.Concepts.filter((c) => UUIDsEqual(c.GraphID, graphId)));
         for (const item of ParseGraphActionItemList(rawSeeds)) {
             const record = ParseGraphRecordRef(item);
             if (record) {
                 pushSeed(record);
             } else if (typeof item === 'string' && item.trim()) {
                 const text = item.trim();
-                const exact = conceptsByName.get(text.toLowerCase()) ?? conceptsById.Get(text);
-                if (exact) {
-                    pushSeed({ EntityName: 'MJ: Graph Concepts', RecordID: exact.ID });
+                const byId = conceptsById.Get(text);
+                if (byId) {
+                    pushSeed({ EntityName: 'MJ: Graph Concepts', RecordID: byId.ID });
                 } else {
                     await this.addTextSeeds(text, GetGraphContextAction.SEED_TEXT_MATCHES, conceptSearch, params, result, pushSeed);
                 }
