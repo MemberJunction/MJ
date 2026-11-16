@@ -1,6 +1,7 @@
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
+    BuildBlockIdentityBinding,
     ComputeFrozenSnapshotHash,
     DocumentBlockExecutionResult,
     DocumentBlockSpec,
@@ -1764,7 +1765,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         deck: SlideDeckSpec,
         blockResultsByBlockId: ReadonlyMap<string, DocumentBlockExecutionResult>,
         user?: Pick<UserInfo, 'ID' | 'Name'> | null,
-        options?: { SigningSecret?: string; RequireSignature?: boolean }
+        options?: { SigningSecret?: string; RequireSignature?: boolean; ForceRefreshFrozen?: boolean; ArtifactID?: string }
     ): SlideDeckSpec {
         const frozenAt = new Date().toISOString();
         const frozenByUserId = user?.ID ?? 'presenter';
@@ -1774,6 +1775,10 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             const nextRegions = slide.Regions.map((region) => {
                 const block = this.ExtractRegionBlockSpec(region);
                 if (!block) {
+                    return { ...region };
+                }
+                // Preserve existing Frozen snapshots verbatim; never silently resign already-frozen blocks (`S3`).
+                if (block.Mode === 'Frozen' && !options?.ForceRefreshFrozen) {
                     return { ...region };
                 }
                 const result = blockResultsByBlockId.get(block.BlockID);
@@ -1789,7 +1794,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     TotalRowCount: result.TotalRowCount,
                     ...(result.ArtifactContent !== undefined ? { ArtifactContentSnapshot: result.ArtifactContent } : {}),
                     ...(result.ArtifactType !== undefined ? { ArtifactTypeSnapshot: result.ArtifactType } : {}),
-                    SecurityWarningAcknowledged: true
+                    SecurityWarningAcknowledged: true,
+                    Binding: BuildBlockIdentityBinding(block, options?.ArtifactID)
                 };
                 let snapshotContentHash: string | undefined;
                 try {

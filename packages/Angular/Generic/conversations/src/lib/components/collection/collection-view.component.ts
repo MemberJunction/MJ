@@ -269,14 +269,31 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const md = this.ProviderToUse;
 
+      // Resolve version IDs from Collection Artifacts first (no protected subquery)
+      const colArtifactsRes = await rv.RunView<{ ArtifactVersionID?: string | null }>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID='${this.Collection.ID}'`,
+        Fields: ['ArtifactVersionID'],
+        ResultType: 'simple'
+      }, this.CurrentUser);
+
+      const versionIds = Array.from(
+        new Set(
+          (colArtifactsRes.Success && colArtifactsRes.Results ? colArtifactsRes.Results : [])
+            .map((row) => (row.ArtifactVersionID ?? '').trim())
+            .filter((id) => id.length > 0)
+        )
+      );
+      if (versionIds.length === 0) {
+        this.ArtifactVersions = [];
+        return;
+      }
+
+      const quotedVersionIds = versionIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
       // Load ALL VERSIONS in this collection (no DISTINCT - each version is separate)
       const versionResult = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ID IN (
-          SELECT ca.ArtifactVersionID
-          FROM [__mj].[vwCollectionArtifacts] ca
-          WHERE ca.CollectionID='${this.Collection.ID}'
-        )`,
+        ExtraFilter: `ID IN (${quotedVersionIds})`,
         OrderBy: this.getVersionOrderBy(),
         ResultType: 'entity_object'
       }, this.CurrentUser);

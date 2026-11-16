@@ -26,18 +26,20 @@ import {
     EmptyPostRunViewResult,
     EnsureHooksRegistered,
     ExtractSingleUuidFieldFromFilter,
+    FinalizePostRunViewResult,
     GetGlobalOriginalFieldsMap,
     GetGlobalWeakSet,
     IsServerSystemUser,
-    PrepareRequiredFieldsPreRunView,
+    PrepareScopedPreRunView,
     ResolveMetadataProvider,
-    ShouldBypassPostRunView,
+    ShouldBypassPostRunViewAsync,
     StripSyntheticFieldsFromRow
 } from './ArtifactSecurityHookHelpers';
 
 const ENTITY_NAME = 'MJ: Artifact Permissions';
 const GLOBAL_KEY_INTERNAL_PARAMS = '__MJ_INTERNAL_ARTIFACT_PERMISSION_PARAMS__';
 const GLOBAL_KEY_ORIGINAL_FIELDS = '__MJ_ORIGINAL_ARTIFACT_PERMISSION_FIELDS_BY_PARAMS__';
+const GLOBAL_KEY_SQL_SCOPED_PARAMS = '__MJ_SQL_SCOPED_ARTIFACT_PERMISSION_PARAMS__';
 const IN_CLAUSE_CHUNK = 100;
 
 interface ArtifactPermissionRowProjection {
@@ -95,17 +97,23 @@ async function batchHydrateArtifactIdsByPermIds(
     return out;
 }
 
-export const ArtifactPermissionPreRunViewHook: PreRunViewHook = (
+export const ArtifactPermissionPreRunViewHook: PreRunViewHook = async (
     params: RunViewParams,
     contextUser?: UserInfo,
     provider?: IMetadataProvider
-): RunViewParams => {
-    return PrepareRequiredFieldsPreRunView(
+): Promise<RunViewParams> => {
+    return PrepareScopedPreRunView(
         params,
-        ENTITY_NAME,
-        ['ID', 'ArtifactID'],
-        GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS),
-        GetGlobalOriginalFieldsMap(GLOBAL_KEY_ORIGINAL_FIELDS),
+        {
+            TargetEntityName: ENTITY_NAME,
+            RequiredFields: ['ID', 'ArtifactID'],
+            IdColumnName: 'ArtifactID',
+            InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS),
+            OriginalFieldsMap: GetGlobalOriginalFieldsMap(GLOBAL_KEY_ORIGINAL_FIELDS),
+            SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_PARAMS),
+            ResolveReadableIds: (prov, user) =>
+                ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(prov, user)
+        },
         contextUser,
         provider
     );
@@ -118,7 +126,8 @@ export const ArtifactPermissionPostRunViewHook: PostRunViewHook = async (
     hookProvider?: IMetadataProvider
 ): Promise<RunViewResult> => {
     const provider = ResolveMetadataProvider(hookProvider, contextUser);
-    const { bypass, originalFields } = ShouldBypassPostRunView(
+    const sqlScopedSet = GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_PARAMS);
+    const { bypass, originalFields } = await ShouldBypassPostRunViewAsync(
         params,
         ENTITY_NAME,
         GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS),
@@ -127,13 +136,19 @@ export const ArtifactPermissionPostRunViewHook: PostRunViewHook = async (
         provider
     );
     if (bypass) {
+        sqlScopedSet.delete(params);
         return results;
     }
     if (!contextUser || !provider) {
+        sqlScopedSet.delete(params);
         return EmptyPostRunViewResult(results);
     }
 
     if (params.ResultType === 'count_only') {
+        if (sqlScopedSet.has(params)) {
+            sqlScopedSet.delete(params);
+            return results;
+        }
         const filterArtifactId = ExtractSingleUuidFieldFromFilter(params.ExtraFilter, 'ArtifactID');
         if (filterArtifactId && (results.TotalRowCount ?? 0) > 0) {
             try {
@@ -157,7 +172,7 @@ export const ArtifactPermissionPostRunViewHook: PostRunViewHook = async (
     }
 
     if (!Array.isArray(results.Results) || results.Results.length === 0) {
-        return results;
+        return FinalizePostRunViewResult(params, results, [], 0, sqlScopedSet);
     }
 
     const rawRows = results.Results as ArtifactPermissionViewRow[];
@@ -213,20 +228,7 @@ export const ArtifactPermissionPostRunViewHook: PostRunViewHook = async (
         }
     }
 
-    const removedCount = rawRows.length - keptRows.length;
-    const isPaged = (results.TotalRowCount ?? rawRows.length) > rawRows.length;
-    if (removedCount === 0 && !originalFields && !isPaged) {
-        return results;
-    }
-
-    return {
-        ...results,
-        Results: keptRows,
-        RowCount: keptRows.length,
-        TotalRowCount: isPaged
-            ? keptRows.length
-            : Math.max(0, (results.TotalRowCount ?? rawRows.length) - removedCount)
-    };
+    return FinalizePostRunViewResult(params, results, keptRows, rawRows.length, sqlScopedSet);
 };
 
 export function EnsureArtifactPermissionReadHookRegistered(): void {

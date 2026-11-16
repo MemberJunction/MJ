@@ -13,6 +13,7 @@ import {
     type IMetadataProvider,
     type RemoteOpInvokeOptions,
     type RemoteOpResult,
+    UserInfo,
     type RemoteOpServerContext,
     type UserInfo,
 } from '@memberjunction/core';
@@ -209,5 +210,32 @@ describe('ExecuteRemoteOperationResolver', () => {
         expect(res.success).toBe(false);
         expect(res.resultCode).toBe('CUSTOM_DOMAIN_CODE');
         expect(res.errorMessage).toBe('Structured domain validation rejected request');
+    });
+
+    it('S10: rejects Magic Link anonymous and scoped sessions on ExecuteRemoteOperation', async () => {
+        const resolver = new ExecuteRemoteOperationResolver();
+        const { ctx, capturedOptions } = buildContext();
+        const magicUser = new UserInfo(undefined, {
+            ID: '11111111-1111-4111-8111-111111111111',
+            Name: 'Guest',
+            Email: 'guest@magic-link.local',
+            IsActive: true,
+        });
+        magicUser.IsMagicLinkAnonymous = true;
+        ctx.userPayload = { ...ctx.userPayload!, userRecord: magicUser };
+
+        const res = await resolver.ExecuteRemoteOperation(
+            {
+                operationKey: 'TestServer.ContextEcho',
+                inputJSON: JSON.stringify({ message: 'hi' }),
+                invokeMode: 'attached',
+            },
+            ctx,
+            pubSub,
+        );
+        expect(res.success).toBe(false);
+        expect(res.resultCode).toBe('FORBIDDEN');
+        expect(res.errorMessage).toContain('Magic Link');
+        expect(capturedOptions).toHaveLength(0);
     });
 });

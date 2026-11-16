@@ -435,6 +435,7 @@ describe('SlideDeckEngine (Wave 2 Slides Schema, Layouts, Theme Seeds, Freeze & 
                         FrozenByUserID: 'u-1',
                         FrozenByUserName: 'Alice',
                         SecurityWarningAcknowledged: true,
+                        Binding: { BlockID: 'blk-pptx-chart', Kind: 'SavedQuery', SourceTargetID: 'QRev' },
                         Columns: [
                             { Name: 'Quarter', DisplayName: 'Quarter', Type: 'string' },
                             { Name: 'Revenue', DisplayName: 'Revenue', Type: 'number' }
@@ -496,5 +497,61 @@ describe('SlideDeckEngine (Wave 2 Slides Schema, Layouts, Theme Seeds, Freeze & 
         expect(reimported.Slides[0].Title).toBe('Executive Overview');
         expect(reimported.Slides[0].SpeakerNotes).toContain('Discuss revenue mix');
         expect(reimported.Slides[2].Hidden).toBe(true);
+    });
+
+    it('S3: FreezeDeckLiveBlocksForPresentation does not re-sign already-Frozen blocks unless ForceRefreshFrozen is true', () => {
+        const engine = SlideDeckEngine.Instance;
+        const secret = 'test-frozen-block-hmac-secret-at-least-32-bytes!!';
+        let deck = engine.CreateDefaultDeck('Frozen Preservation');
+        const originalSnap = {
+            FrozenAt: '2026-01-01T00:00:00.000Z',
+            FrozenByUserID: 'orig-user',
+            FrozenByUserName: 'Orig User',
+            SecurityWarningAcknowledged: true,
+            Binding: { BlockID: 'blk-already-frozen', Kind: 'SavedQuery', SourceTargetID: 'Q-orig' },
+            Columns: [{ Name: 'C', DisplayName: 'C', Type: 'string' }],
+            Rows: [{ C: 'original-frozen-row' }],
+            TotalRowCount: 1,
+        };
+        const signedOrigSnap = {
+            ...originalSnap,
+            SnapshotContentHash: ComputeFrozenSnapshotHash(originalSnap, secret),
+        };
+        deck = engine.UpsertSlideRegion(deck, deck.Slides[0].SlideID, {
+            RegionID: 'reg-frozen',
+            Kind: 'mj-block',
+            Label: 'Frozen Block',
+            MarkdownContent: '',
+            BlockSpec: {
+                BlockID: 'blk-already-frozen',
+                Kind: 'SavedQuery',
+                QueryID: 'Q-orig',
+                Mode: 'Frozen',
+                FrozenSnapshot: signedOrigSnap,
+            },
+        }).Deck;
+
+        const spoofedResult = new Map([
+            [
+                'blk-already-frozen',
+                {
+                    BlockID: 'blk-already-frozen',
+                    Kind: 'SavedQuery' as const,
+                    Mode: 'Live' as const,
+                    Success: true,
+                    Columns: [{ Name: 'C', DisplayName: 'C', Type: 'string' }],
+                    Rows: [{ C: 'spoofed-overwrite-row' }],
+                    TotalRowCount: 1,
+                },
+            ],
+        ]);
+        const updatedDeck = engine.FreezeDeckLiveBlocksForPresentation(
+            deck,
+            spoofedResult,
+            { ID: 'presenter-1', Name: 'Presenter' },
+            { SigningSecret: secret }
+        );
+        const preservedRegion = updatedDeck.Slides[0].Regions.find((r) => r.RegionID === 'reg-frozen');
+        expect(preservedRegion?.BlockSpec?.FrozenSnapshot).toEqual(signedOrigSnap);
     });
 });

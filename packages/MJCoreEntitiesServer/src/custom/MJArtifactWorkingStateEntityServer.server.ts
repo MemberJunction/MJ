@@ -34,8 +34,19 @@ import {
     UUIDsEqual
 } from '@memberjunction/global';
 import { randomUUID } from 'crypto';
+import {
+    EmptyPostRunViewResult,
+    FinalizePostRunViewResult,
+    GetGlobalWeakSet,
+    PrepareScopedPreRunView,
+    ShouldBypassPostRunViewAsync,
+    StripSyntheticFieldsFromRow
+} from './ArtifactSecurityHookHelpers';
 
+const WORKING_STATE_ENTITY_NAME = 'MJ: Artifact Working States';
+const GLOBAL_KEY_INTERNAL_WS_PARAMS = '__MJ_INTERNAL_WORKING_STATE_PARAMS__';
 const GLOBAL_KEY_ORIGINAL_WS_FIELDS = '__MJ_ORIGINAL_WORKING_STATE_FIELDS_BY_PARAMS__';
+const GLOBAL_KEY_SQL_SCOPED_WS_PARAMS = '__MJ_SQL_SCOPED_WORKING_STATE_PARAMS__';
 
 function getOriginalWorkingStateFieldsMap(): WeakMap<RunViewParams, string[]> {
     const store = GetGlobalObjectStore();
@@ -135,30 +146,26 @@ function stripSyntheticWorkingStateArtifactId(row: WorkingStateViewRow): Working
     return copy;
 }
 
-export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = (
+export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = async (
     params: RunViewParams,
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
-): RunViewParams => {
-    const provider = resolveMetadataProvider(hookProvider, contextUser);
-    if (
-        !params ||
-        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
-        resolveTargetEntityName(params) !== 'MJ: Artifact Working States' ||
-        isServerSystemUser(contextUser) ||
-        (!contextUser && provider !== null && provider.ProviderType !== 'Database')
-    ) {
-        return params;
-    }
-    if (
-        Array.isArray(params.Fields) &&
-        params.Fields.length > 0 &&
-        !params.Fields.some((f) => typeof f === 'string' && f.trim().toLowerCase() === 'artifactid')
-    ) {
-        getOriginalWorkingStateFieldsMap().set(params, [...params.Fields]);
-        params.Fields = [...params.Fields, 'ArtifactID'];
-    }
-    return params;
+): Promise<RunViewParams> => {
+    return PrepareScopedPreRunView(
+        params,
+        {
+            TargetEntityName: WORKING_STATE_ENTITY_NAME,
+            RequiredFields: ['ArtifactID'],
+            IdColumnName: 'ArtifactID',
+            InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_WS_PARAMS),
+            OriginalFieldsMap: getOriginalWorkingStateFieldsMap(),
+            SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_WS_PARAMS),
+            ResolveReadableIds: (prov, user) =>
+                ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(prov, user)
+        },
+        contextUser,
+        hookProvider
+    );
 };
 
 /**
@@ -176,68 +183,47 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
 ): Promise<RunViewResult> => {
-    if (
-        !results?.Success ||
-        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
-        resolveTargetEntityName(params) !== 'MJ: Artifact Working States'
-    ) {
-        return results;
-    }
-
-    const shouldStripSyntheticArtifactId = getOriginalWorkingStateFieldsMap().has(params);
-
-    if (isServerSystemUser(contextUser)) {
+    if (!results?.Success) {
         return results;
     }
 
     const provider = resolveMetadataProvider(hookProvider, contextUser);
+    const sqlScopedSet = GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_WS_PARAMS);
+    const { bypass, originalFields } = await ShouldBypassPostRunViewAsync(
+        params,
+        WORKING_STATE_ENTITY_NAME,
+        GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_WS_PARAMS),
+        getOriginalWorkingStateFieldsMap(),
+        contextUser,
+        provider
+    );
+    if (bypass) {
+        sqlScopedSet.delete(params);
+        if (originalFields && Array.isArray(results.Results)) {
+            return {
+                ...results,
+                Results: (results.Results as WorkingStateViewRow[]).map((r) => StripSyntheticFieldsFromRow(r, originalFields))
+            };
+        }
+        return results;
+    }
 
-    if (!contextUser) {
+    if (!contextUser || !provider || provider.ProviderType !== 'Database') {
+        sqlScopedSet.delete(params);
         if (provider !== null && provider.ProviderType !== 'Database') {
-            if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
+            if (originalFields && Array.isArray(results.Results)) {
                 return {
                     ...results,
-                    Results: (results.Results as WorkingStateViewRow[]).map(stripSyntheticWorkingStateArtifactId)
+                    Results: (results.Results as WorkingStateViewRow[]).map((r) => StripSyntheticFieldsFromRow(r, originalFields))
                 };
             }
             return results;
         }
-        return {
-            ...results,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0
-        };
-    }
-
-    if (!provider) {
-        return {
-            ...results,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0
-        };
-    }
-
-    if (provider.ProviderType !== 'Database') {
-        if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
-            return {
-                ...results,
-                Results: (results.Results as WorkingStateViewRow[]).map(stripSyntheticWorkingStateArtifactId)
-            };
-        }
-        return results;
+        return EmptyPostRunViewResult(results);
     }
 
     if (!Array.isArray(results.Results) || results.Results.length === 0) {
-        if (params.ResultType === 'count_only' && (results.TotalRowCount ?? 0) > 0) {
-            return {
-                ...results,
-                RowCount: 0,
-                TotalRowCount: 0
-            };
-        }
-        return results;
+        return FinalizePostRunViewResult(params, results, [], 0, sqlScopedSet);
     }
 
     const rawRows = results.Results as WorkingStateViewRow[];
@@ -270,26 +256,11 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
             readAllowedByArtifact.set(normId, allowed);
         }
         if (allowed) {
-            keptRows.push(
-                shouldStripSyntheticArtifactId ? stripSyntheticWorkingStateArtifactId(row) : row
-            );
+            keptRows.push(StripSyntheticFieldsFromRow(row, originalFields));
         }
     }
 
-    const removedCount = rawRows.length - keptRows.length;
-    const isPaged = (results.TotalRowCount ?? rawRows.length) > rawRows.length;
-    if (removedCount === 0 && !shouldStripSyntheticArtifactId && !isPaged) {
-        return results;
-    }
-
-    return {
-        ...results,
-        Results: keptRows,
-        RowCount: keptRows.length,
-        TotalRowCount: isPaged
-            ? keptRows.length
-            : Math.max(0, (results.TotalRowCount ?? rawRows.length) - removedCount)
-    };
+    return FinalizePostRunViewResult(params, results, keptRows, rawRows.length, sqlScopedSet);
 };
 
 /**

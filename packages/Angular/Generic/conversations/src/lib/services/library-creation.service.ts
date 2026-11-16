@@ -390,8 +390,9 @@ export class LibraryCreationService {
           '-- Author your analytical SQL query below',
           'SELECT TOP 25',
           '    Name,',
+          '    SchemaName,',
           '    __mj_UpdatedAt',
-          'FROM [__mj].[vwArtifacts]',
+          'FROM [__mj].[vwEntities]',
           'ORDER BY __mj_UpdatedAt DESC;',
         ].join('\n');
 

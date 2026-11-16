@@ -64,6 +64,26 @@ function getSynthesisScopeCache(): WeakMap<object, CachedSynthesisScopeEntry> {
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY)
 export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArtifactFromSourcesOperation {
+    public override async GetScopeResourceIds(
+        input: SynthesizeArtifactFromSourcesInput,
+        context?: { provider?: IMetadataProvider; user?: UserInfo },
+    ): Promise<string[]> {
+        if (context?.provider && context?.user) {
+            const scope = await this.resolveCombinedSourceScope(input, context.provider, context.user);
+            return scope.CombinedSourceIds;
+        }
+        const ids = new Set<string>();
+        for (const srcId of input?.SourceArtifactIds ?? []) {
+            if (typeof srcId === 'string' && IsValidUUID(srcId)) {
+                ids.add(srcId.trim());
+            }
+        }
+        if (input?.CollectionId && IsValidUUID(input.CollectionId)) {
+            ids.add(input.CollectionId.trim());
+        }
+        return Array.from(ids);
+    }
+
     protected override async Authorize(
         input: SynthesizeArtifactFromSourcesInput,
         user: UserInfo,

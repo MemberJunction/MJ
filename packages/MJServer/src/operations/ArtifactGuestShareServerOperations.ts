@@ -7,19 +7,23 @@ import {
     RemoteOperationError,
     type RemoteOpServerContext,
     RunView,
-    type UserInfo,
+    UserInfo,
 } from '@memberjunction/core';
 import {
     ARTIFACT_CREATE_GUEST_SHARE_LINK_KEY,
     ARTIFACT_REVOKE_GUEST_SHARE_LINK_KEY,
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
+    BuildBlockIdentityBinding,
+    BuildLiveTableIdentityBinding,
     type CreateGuestShareLinkInput,
     CreateGuestShareLinkOperation,
     type CreateGuestShareLinkOutput,
     type DocumentBlockSpec,
     DocumentLiveBlockEngine,
+    EvaluateAuthorizationChecks,
     type FrozenBlockSnapshot,
+    type FrozenSnapshotIdentityBinding,
     type GuestFrozenProvenanceItem,
     type MJArtifactEntity,
     type MJArtifactGuestShareLinkEntity,
@@ -31,11 +35,13 @@ import {
     RevokeGuestShareLinkOperation,
     type RevokeGuestShareLinkOutput,
     SlideDeckEngine,
+    type SpreadsheetLiveTableSpec,
     ValidateFrozenBlockSnapshot,
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { IsMagicLinkRedirectUrlAllowed, MagicLinkService, RegisterMagicLinkAuthProvider } from '../auth/magicLink/index.js';
+import { IsMagicLinkLocalDevEnvironment, MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { configInfo } from '../config.js';
 import type { UserPayload } from '../types.js';
 import { WriteArtifactComplianceAudit } from './ArtifactComplianceAuditHelper.js';
@@ -340,7 +346,8 @@ function validateFrozenBlockSpec(
         BlockID?: string;
         SlideID?: string;
         RegionID?: string;
-    }
+    },
+    hostArtifactId?: string
 ): string | null {
     if (!spec || typeof spec !== 'object') {
         return `${contextLabel} is missing a valid block specification.`;
@@ -348,7 +355,15 @@ function validateFrozenBlockSpec(
     if (spec.Mode !== 'Frozen') {
         return `${contextLabel} ('${spec.Title ?? spec.BlockID ?? 'block'}') must use Mode='Frozen' for guest sharing (found Mode='${String(spec.Mode ?? 'undefined')}').`;
     }
-    const validation = ValidateFrozenBlockSnapshot(spec.FrozenSnapshot ?? null);
+    const expectedBinding = BuildBlockIdentityBinding(
+        {
+            ...spec,
+            BlockID: spec.BlockID ?? '',
+            Kind: spec.Kind ?? 'EntityView',
+        },
+        hostArtifactId
+    );
+    const validation = ValidateFrozenBlockSnapshot(spec.FrozenSnapshot ?? null, undefined, expectedBinding);
     if (!validation.Valid || !spec.FrozenSnapshot) {
         return `${contextLabel} ('${spec.Title ?? spec.BlockID ?? 'block'}') failed frozen snapshot verification: ${validation.ErrorMessage ?? 'invalid snapshot'}.`;
     }
@@ -377,7 +392,8 @@ function checkMarkdownSegmentsFrozen(
     markdown: string,
     contextPrefix: string,
     provenanceOut?: GuestFrozenProvenanceItem[],
-    slideContext?: { SlideID?: string; RegionID?: string }
+    slideContext?: { SlideID?: string; RegionID?: string },
+    hostArtifactId?: string
 ): string | null {
     const segments: ParsedDocumentSegment[] = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(markdown);
     for (const seg of segments) {
@@ -387,7 +403,8 @@ function checkMarkdownSegmentsFrozen(
                 `${contextPrefix} embedded block`,
                 provenanceOut,
                 'DocumentBlock',
-                slideContext
+                slideContext,
+                hostArtifactId
             );
             if (err) {
                 return err;
@@ -414,6 +431,12 @@ interface ParsedWorkbookCellShape {
 
 interface ParsedWorkbookLiveTableShape {
     TableID?: string;
+    SourceType?: SpreadsheetLiveTableSpec['SourceType'];
+    EntityName?: string;
+    ViewID?: string;
+    ViewName?: string;
+    QueryID?: string;
+    QueryName?: string;
     Title?: string;
     Mode?: string;
     FrozenSnapshot?: FrozenBlockSnapshot | null;
@@ -450,7 +473,8 @@ function inspectFrozenGuestShareContentInternal(
     configuration: string | null | undefined,
     contentMode: string | null | undefined,
     depth: number,
-    provenanceOut: GuestFrozenProvenanceItem[]
+    provenanceOut: GuestFrozenProvenanceItem[],
+    hostArtifactId?: string
 ): string | null {
     if (depth > 4) {
         return 'Nested embedded artifact inspection depth exceeded.';
@@ -462,7 +486,7 @@ function inspectFrozenGuestShareContentInternal(
     const text = content ?? '';
 
     // 1. Markdown directives (respects code fences)
-    const mdError = checkMarkdownSegmentsFrozen(text, 'Document', provenanceOut);
+    const mdError = checkMarkdownSegmentsFrozen(text, 'Document', provenanceOut, undefined, hostArtifactId);
     if (mdError) {
         return mdError;
     }
@@ -492,7 +516,8 @@ function inspectFrozenGuestShareContentInternal(
                                     `Slide ${slide.SlideNumber} region '${region.RegionID}'`,
                                     provenanceOut,
                                     'SlideRegion',
-                                    { SlideID: slide.SlideID, RegionID: region.RegionID }
+                                    { SlideID: slide.SlideID, RegionID: region.RegionID },
+                                    hostArtifactId
                                 );
                                 if (err) {
                                     return err;
@@ -503,7 +528,8 @@ function inspectFrozenGuestShareContentInternal(
                                     region.MarkdownContent,
                                     `Slide ${slide.SlideNumber} region '${region.RegionID}'`,
                                     provenanceOut,
-                                    { SlideID: slide.SlideID, RegionID: region.RegionID }
+                                    { SlideID: slide.SlideID, RegionID: region.RegionID },
+                                    hostArtifactId
                                 );
                                 if (regionMdErr) {
                                     return regionMdErr;
@@ -524,7 +550,19 @@ function inspectFrozenGuestShareContentInternal(
                         if (table.Mode !== 'Frozen') {
                             return `Spreadsheet '${sheetName}' live table '${table.Title ?? table.TableID ?? 'table'}' must be Frozen for guest sharing (found Mode='${String(table.Mode ?? 'undefined')}').`;
                         }
-                        const snapValidation = ValidateFrozenBlockSnapshot(table.FrozenSnapshot ?? null);
+                        const expectedTableBinding = BuildLiveTableIdentityBinding(
+                            {
+                                ...table,
+                                TableID: table.TableID ?? '',
+                                SourceType: table.SourceType ?? 'EntityView',
+                            },
+                            hostArtifactId
+                        );
+                        const snapValidation = ValidateFrozenBlockSnapshot(
+                            table.FrozenSnapshot ?? null,
+                            undefined,
+                            expectedTableBinding
+                        );
                         if (!snapValidation.Valid || !table.FrozenSnapshot) {
                             return `Spreadsheet '${sheetName}' live table '${table.Title ?? table.TableID ?? 'table'}' failed frozen snapshot verification: ${snapValidation.ErrorMessage ?? 'invalid snapshot'}.`;
                         }
@@ -555,7 +593,14 @@ function inspectFrozenGuestShareContentInternal(
                             return `Spreadsheet '${sheetName}' embedded artifact '${emb.Title ?? emb.EmbedID ?? 'embed'}' is missing a verified frozen snapshot.`;
                         }
                         if (emb.FrozenSnapshot) {
-                            const snapValidation = ValidateFrozenBlockSnapshot(emb.FrozenSnapshot);
+                            const embTargetId = emb.ArtifactID ? NormalizeUUID(emb.ArtifactID) : '';
+                            const embBinding: FrozenSnapshotIdentityBinding = {
+                                ...(hostArtifactId ? { ArtifactID: NormalizeUUID(hostArtifactId) } : {}),
+                                ...(emb.EmbedID ? { BlockID: emb.EmbedID.trim() } : {}),
+                                Kind: 'EmbeddedArtifact',
+                                ...(embTargetId ? { SourceTargetID: embTargetId } : {}),
+                            };
+                            const snapValidation = ValidateFrozenBlockSnapshot(emb.FrozenSnapshot, undefined, embBinding);
                             if (!snapValidation.Valid) {
                                 return `Spreadsheet '${sheetName}' embedded artifact '${emb.Title ?? emb.EmbedID ?? 'embed'}' failed frozen snapshot verification: ${snapValidation.ErrorMessage ?? 'invalid snapshot'}.`;
                             }
@@ -576,7 +621,8 @@ function inspectFrozenGuestShareContentInternal(
                                 null,
                                 null,
                                 depth + 1,
-                                provenanceOut
+                                provenanceOut,
+                                emb.ArtifactID ?? hostArtifactId
                             );
                             if (nestedErr) {
                                 return nestedErr;
@@ -598,7 +644,14 @@ function inspectFrozenGuestShareContentInternal(
                     return `Live data source '${liveDs.Title ?? liveDs.Name ?? 'source'}' is not frozen.`;
                 }
                 for (const ds of parsedCfg.LiveDataSources) {
-                    const snapValidation = ValidateFrozenBlockSnapshot(ds?.FrozenSnapshot ?? null);
+                    const dsTarget = (ds.SourceID ?? ds.Name ?? '').trim();
+                    const dsBinding: FrozenSnapshotIdentityBinding = {
+                        ...(hostArtifactId ? { ArtifactID: NormalizeUUID(hostArtifactId) } : {}),
+                        ...(ds.SourceID ? { BlockID: ds.SourceID.trim() } : {}),
+                        Kind: 'LiveDataSource',
+                        ...(dsTarget ? { SourceTargetID: NormalizeUUID(dsTarget) } : {}),
+                    };
+                    const snapValidation = ValidateFrozenBlockSnapshot(ds?.FrozenSnapshot ?? null, undefined, dsBinding);
                     if (!snapValidation.Valid || !ds?.FrozenSnapshot) {
                         return `Frozen data source '${ds.Title ?? ds.Name ?? 'source'}' failed snapshot verification: ${snapValidation.ErrorMessage ?? 'invalid snapshot'}.`;
                     }
@@ -615,7 +668,14 @@ function inspectFrozenGuestShareContentInternal(
             }
             if (Array.isArray(parsedCfg.liveBlocks)) {
                 for (const blk of parsedCfg.liveBlocks) {
-                    const err = validateFrozenBlockSpec(blk, 'Configuration liveBlock', provenanceOut);
+                    const err = validateFrozenBlockSpec(
+                        blk,
+                        'Configuration liveBlock',
+                        provenanceOut,
+                        undefined,
+                        undefined,
+                        hostArtifactId
+                    );
                     if (err) {
                         return err;
                     }
@@ -638,7 +698,8 @@ function inspectFrozenGuestShareContentInternal(
 export function InspectFrozenGuestShareContent(
     content: string | null | undefined,
     configuration: string | null | undefined,
-    contentMode?: string | null
+    contentMode?: string | null,
+    hostArtifactId?: string
 ): GuestShareFrozenInspectionResult {
     const provenance: GuestFrozenProvenanceItem[] = [];
     const reason = inspectFrozenGuestShareContentInternal(
@@ -646,7 +707,8 @@ export function InspectFrozenGuestShareContent(
         configuration,
         contentMode,
         0,
-        provenance
+        provenance,
+        hostArtifactId
     );
     return {
         UnfrozenReason: reason,
@@ -664,8 +726,9 @@ export function FindUnfrozenLiveContentReason(
     configuration: string | null | undefined,
     contentMode?: string | null,
     depth = 0,
+    hostArtifactId?: string
 ): string | null {
-    return inspectFrozenGuestShareContentInternal(content, configuration, contentMode, depth, []);
+    return inspectFrozenGuestShareContentInternal(content, configuration, contentMode, depth, [], hostArtifactId);
 }
 
 function buildFailedPublicResolution(
@@ -700,9 +763,6 @@ export const SAFE_GUEST_SHARE_DRIVER_CLASSES: ReadonlySet<string> = new Set([
     'DataArtifactViewerPlugin',
     'WhiteboardArtifactViewerPlugin',
 ]);
-
-const ARTIFACTS_RESOURCE_TYPE_FALLBACK_ID = '6BA617C4-0CBA-4C79-B037-456DF4B03D3D';
-const MAGIC_LINK_BASELINE_ROLE_FALLBACK_ID = '611283EE-C8AB-4A2D-A378-53BEED1E0D89';
 
 /**
  * Verifies that an artifact's type, viewer plugin driver class, and content mode are permitted for
@@ -851,50 +911,76 @@ function resolveGuestShareMagicLinkService(): MagicLinkService {
     return service;
 }
 
+function isArtifactGuestSharingEnabled(): boolean {
+    return configInfo.magicLink?.artifactGuestSharing?.enabled === true;
+}
+
+function assertArtifactGuestSharingEnabled(): void {
+    if (!isArtifactGuestSharingEnabled()) {
+        throw new RemoteOperationError(
+            'GUEST_SHARING_DISABLED',
+            'External artifact guest sharing is disabled on this server (magicLink.artifactGuestSharing.enabled must be true).',
+        );
+    }
+    if (
+        !IsMagicLinkLocalDevEnvironment(process.env) &&
+        MagicLinkKeyManager.Instance.IsInitialized &&
+        MagicLinkKeyManager.Instance.IsEphemeral
+    ) {
+        throw new RemoteOperationError(
+            'CONFIG_ERROR',
+            'Refusing to mint external guest share tokens with an ephemeral RSA key in production.',
+        );
+    }
+}
+
 async function resolveResourceShareScopeTargets(
     provider: IMetadataProvider,
     systemUser: UserInfo,
 ): Promise<{ applicationId: string; roleId: string; resourceTypeId: string }> {
-    const baselineName = (configInfo.magicLink?.restrictedRoleName || 'Magic Link Baseline').trim().toLowerCase();
-    const roleMatch = provider.Roles.find((r) => r.Name.trim().toLowerCase() === baselineName);
-    const roleId = roleMatch?.ID ?? MAGIC_LINK_BASELINE_ROLE_FALLBACK_ID;
-
-    const appMatch =
-        provider.Applications.find((a) => a.Name.trim().toLowerCase() === 'chat') ??
-        provider.Applications.find((a) => a.Name.trim().toLowerCase() === 'library') ??
-        provider.Applications[0];
-    if (!appMatch?.ID) {
+    const guestCfg = configInfo.magicLink?.artifactGuestSharing;
+    const roleName = (guestCfg?.roleName || configInfo.magicLink?.restrictedRoleName || 'Magic Link Baseline').trim();
+    const roleMatch = provider.Roles.find((r) => r.Name.trim().toLowerCase() === roleName.toLowerCase());
+    if (!roleMatch?.ID || !IsValidUUID(roleMatch.ID)) {
         throw new RemoteOperationError(
             'CONFIG_ERROR',
-            'No MJ Application metadata is available to bind Magic Link resource-share invite scope.',
+            `Configured guest share role '${roleName}' was not found in MJ Roles metadata.`,
         );
     }
 
-    let resourceTypeId = ARTIFACTS_RESOURCE_TYPE_FALLBACK_ID;
-    try {
-        const rv = RunView.FromMetadataProvider(provider);
-        const rtRes = await rv.RunView<{ ID?: string }>(
-            {
-                EntityName: 'MJ: Resource Types',
-                ExtraFilter: "Name='Artifacts'",
-                Fields: ['ID'],
-                MaxRows: 1,
-                ResultType: 'simple',
-            },
-            systemUser,
+    const applicationName = (guestCfg?.applicationName || 'Chat').trim();
+    const appMatch = provider.Applications.find((a) => a.Name.trim().toLowerCase() === applicationName.toLowerCase());
+    if (!appMatch?.ID || !IsValidUUID(appMatch.ID)) {
+        throw new RemoteOperationError(
+            'CONFIG_ERROR',
+            `Configured guest share application '${applicationName}' was not found in MJ Applications metadata.`,
         );
-        const foundId = rtRes.Success ? rtRes.Results?.[0]?.ID : undefined;
-        if (foundId && IsValidUUID(foundId)) {
-            resourceTypeId = foundId;
-        }
-    } catch {
-        // Fall back to canonical seed Artifacts ResourceType ID when tests mock RunView without Resource Types
+    }
+
+    const resourceTypeName = (guestCfg?.resourceTypeName || 'Artifacts').trim();
+    const rv = RunView.FromMetadataProvider(provider);
+    const rtRes = await rv.RunView<{ ID?: string }>(
+        {
+            EntityName: 'MJ: Resource Types',
+            ExtraFilter: `Name='${EscapeSQLString(resourceTypeName)}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        },
+        systemUser,
+    );
+    const foundRtId = rtRes.Success ? rtRes.Results?.[0]?.ID : undefined;
+    if (!foundRtId || !IsValidUUID(foundRtId)) {
+        throw new RemoteOperationError(
+            'CONFIG_ERROR',
+            `Configured guest share resource type '${resourceTypeName}' was not found in MJ Resource Types metadata.`,
+        );
     }
 
     return {
         applicationId: appMatch.ID,
-        roleId,
-        resourceTypeId,
+        roleId: roleMatch.ID,
+        resourceTypeId: foundRtId,
     };
 }
 
@@ -909,6 +995,22 @@ export async function ResolveGuestArtifactSnapshotForSession(
     provider: IMetadataProvider,
     clientIp?: string,
 ): Promise<PublicArtifactGuestShareResolution> {
+    if (!isArtifactGuestSharingEnabled()) {
+        return buildFailedPublicResolution(
+            'ACCESS_DENIED',
+            'External artifact guest sharing is disabled on this server.',
+        );
+    }
+    if (
+        !IsMagicLinkLocalDevEnvironment(process.env) &&
+        MagicLinkKeyManager.Instance.IsInitialized &&
+        MagicLinkKeyManager.Instance.IsEphemeral
+    ) {
+        return buildFailedPublicResolution(
+            'ACCESS_DENIED',
+            'External guest share tokens signed by an ephemeral key cannot be redeemed in production.',
+        );
+    }
     const sessionUser = userPayload?.userRecord as UserInfo | undefined;
     if (!userPayload || !sessionUser) {
         return buildFailedPublicResolution('ACCESS_DENIED', 'Authentication is required to view a guest artifact share.');
@@ -989,22 +1091,57 @@ export async function ResolveGuestArtifactSnapshotForSession(
         if (status === 'Expired') {
             return buildFailedPublicResolution('EXPIRED', 'Guest share link has expired.');
         }
-
-        const dbExpiresRaw = inviteRow['ExpiresAt'];
-        let dbExpiresMs = Number.NaN;
-        if (dbExpiresRaw != null) {
-            dbExpiresMs = dbExpiresRaw instanceof Date ? dbExpiresRaw.getTime() : Date.parse(String(dbExpiresRaw));
-            if (Number.isFinite(dbExpiresMs) && dbExpiresMs <= Date.now()) {
-                return buildFailedPublicResolution('EXPIRED', 'Guest share link has expired.');
-            }
+        if (status !== 'Active') {
+            return buildFailedPublicResolution('ACCESS_DENIED', `Guest share invite status '${status}' is not active.`);
         }
 
-        const inviterId = String(inviteRow['CreatedByUserID'] ?? '');
-        if (UserCache.Instance.Users.length > 0 && IsValidUUID(inviterId)) {
-            const inviter = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, inviterId));
-            if (!inviter || !inviter.IsActive) {
-                return buildFailedPublicResolution('REVOKED', 'The user who issued this share link is no longer active.');
+        const dbExpiresRaw = inviteRow['ExpiresAt'];
+        if (dbExpiresRaw == null) {
+            return buildFailedPublicResolution('EXPIRED', 'Guest share link is missing an expiration timestamp.');
+        }
+        const dbExpiresMs = dbExpiresRaw instanceof Date ? dbExpiresRaw.getTime() : Date.parse(String(dbExpiresRaw));
+        if (!Number.isFinite(dbExpiresMs) || dbExpiresMs <= Date.now()) {
+            return buildFailedPublicResolution('EXPIRED', 'Guest share link has expired.');
+        }
+
+        const inviterId = String(inviteRow['CreatedByUserID'] ?? '').trim();
+        if (!IsValidUUID(inviterId)) {
+            return buildFailedPublicResolution('REVOKED', 'Guest share invite creator metadata is invalid.');
+        }
+        let inviterUser: UserInfo | undefined = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, inviterId));
+        if (!inviterUser && UserCache.Instance.Users.length === 0) {
+            const inviterRes = await rv.RunView<{ ID?: string; Name?: string; Email?: string; IsActive?: boolean; Type?: string }>(
+                {
+                    EntityName: 'MJ: Users',
+                    ExtraFilter: `ID='${EscapeSQLString(inviterId)}'`,
+                    Fields: ['ID', 'Name', 'Email', 'IsActive', 'Type'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+                systemUser,
+            );
+            const inviterRow = inviterRes.Success ? inviterRes.Results?.[0] : undefined;
+            if (inviterRow && inviterRow.ID) {
+                inviterUser = new UserInfo(provider, {
+                    ID: String(inviterRow.ID),
+                    Name: inviterRow.Name ?? undefined,
+                    Email: inviterRow.Email ?? undefined,
+                    IsActive: Boolean(inviterRow.IsActive),
+                    Type: inviterRow.Type ?? undefined,
+                });
             }
+        }
+        if (!inviterUser || !inviterUser.IsActive) {
+            return buildFailedPublicResolution('REVOKED', 'The user who issued this share link is no longer active.');
+        }
+
+        const inviterPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            artifactId,
+            inviterUser,
+        );
+        if (!inviterPerms.CanShare) {
+            return buildFailedPublicResolution('REVOKED', 'The creator no longer holds permission to share this artifact.');
         }
 
         const linkRow = linkRes.Success ? linkRes.Results?.[0] : undefined;
@@ -1058,7 +1195,7 @@ export async function ResolveGuestArtifactSnapshotForSession(
             return buildFailedPublicResolution('FROZEN_REQUIRED', typeRejection);
         }
 
-        const inspection = InspectFrozenGuestShareContent(content, configuration, contentMode);
+        const inspection = InspectFrozenGuestShareContent(content, configuration, contentMode, artifactId);
         if (inspection.UnfrozenReason) {
             return buildFailedPublicResolution(
                 'FROZEN_REQUIRED',
@@ -1110,17 +1247,32 @@ export async function ResolveGuestArtifactSnapshotForSession(
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_CREATE_GUEST_SHARE_LINK_KEY)
 export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOperation {
+    public override GetScopeResourceIds(input: CreateGuestShareLinkInput): string[] {
+        return input?.ArtifactID ? [input.ArtifactID] : [];
+    }
+
     protected override async Authorize(
         input: CreateGuestShareLinkInput,
         user: UserInfo,
         context?: RemoteOpServerContext,
     ): Promise<boolean> {
+        assertArtifactGuestSharingEnabled();
         const provider = context?.provider ?? Metadata.Provider;
         if (!IsValidUUID(input.ArtifactID)) {
             throw new RemoteOperationError('INVALID_INPUT', 'ArtifactID must be a valid UUID.');
         }
         if (input.VersionID && !IsValidUUID(input.VersionID)) {
             throw new RemoteOperationError('INVALID_INPUT', 'VersionID must be a valid UUID.');
+        }
+        const requiredAuth = configInfo.magicLink?.artifactGuestSharing?.requiredAuthorizationName?.trim();
+        if (requiredAuth) {
+            const authRows = EvaluateAuthorizationChecks([requiredAuth], user, provider.Authorizations ?? []);
+            if (!authRows[0]?.Allowed) {
+                throw new RemoteOperationError(
+                    'ACCESS_DENIED',
+                    `Creating a guest share link requires authorization '${requiredAuth}'.`,
+                );
+            }
         }
         const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
             provider,
@@ -1196,6 +1348,8 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
             version.Content,
             version.Configuration,
             version.ContentMode,
+            0,
+            artifactId,
         );
         if (unfrozenReason) {
             throw new RemoteOperationError(
@@ -1204,8 +1358,11 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
             );
         }
 
-        const rawHours = Number.isFinite(input.ExpiresInHours) ? Number(input.ExpiresInHours) : 168;
-        const expiresInHours = Math.max(MIN_GUEST_SHARE_HOURS, Math.min(MAX_GUEST_SHARE_HOURS, rawHours));
+        const guestCfg = configInfo.magicLink?.artifactGuestSharing;
+        const maxHours = Math.max(MIN_GUEST_SHARE_HOURS, guestCfg?.maxExpiresInHours ?? MAX_GUEST_SHARE_HOURS);
+        const rawHours = Number.isFinite(input.ExpiresInHours) ? Number(input.ExpiresInHours) : Math.min(168, maxHours);
+        const expiresInHours = Math.max(MIN_GUEST_SHARE_HOURS, Math.min(maxHours, rawHours));
+        const configuredMaxUses = guestCfg?.maxUses ?? 100;
         const sanitizedLabel = input.Label ? input.Label.trim().slice(0, MAX_LABEL_LENGTH) : null;
 
         const mlService = resolveGuestShareMagicLinkService();
@@ -1224,7 +1381,7 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
                 ResourceTypeID: resourceTypeId,
                 ResourceID: normalizedArtifactId,
                 ExpiresInHours: expiresInHours,
-                MaxUses: 1000,
+                MaxUses: configuredMaxUses,
                 SendEmail: false,
                 RedirectUrl: redirectUrl,
             },
@@ -1263,7 +1420,7 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
         const expiresAtIso =
             inviteRes.expiresAt ?? new Date(Date.now() + expiresInHours * 3600_000).toISOString();
 
-        await WriteArtifactComplianceAudit(provider, user, {
+        const auditRes = await WriteArtifactComplianceAudit(provider, user, {
             AuditLogTypeName: 'Artifact Guest Share Link',
             ArtifactID: input.ArtifactID,
             ArtifactVersionID: version.ID,
@@ -1277,6 +1434,14 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
                 shareMode: 'Frozen',
             },
         });
+        if (!auditRes.Recorded) {
+            await linkEntity.Delete().catch(() => undefined);
+            await mlService.RevokeResourceShareInvite(inviteRes.inviteId, user, provider).catch(() => undefined);
+            throw new RemoteOperationError(
+                'AUDIT_FAILED',
+                'Required compliance audit logging failed for external guest share link creation.',
+            );
+        }
 
         return {
             LinkID: linkId,
@@ -1298,6 +1463,10 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_REVOKE_GUEST_SHARE_LINK_KEY)
 export class RevokeGuestShareLinkServerOperation extends RevokeGuestShareLinkOperation {
+    public override GetScopeResourceIds(input: RevokeGuestShareLinkInput): string[] {
+        return input?.ArtifactID ? [input.ArtifactID] : [];
+    }
+
     protected override async Authorize(
         input: RevokeGuestShareLinkInput,
         user: UserInfo,

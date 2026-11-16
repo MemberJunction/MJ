@@ -44,10 +44,6 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=ArtifactID"
-          },
-          "sync": {
-            "lastModified": "2026-11-16T18:13:57.566Z",
-            "checksum": "1c7da65e84981d09a839496a681e6536417994d223c638146a16fe0ad67c3087"
           }
         }
       ]
@@ -69,10 +65,6 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Artifact Versions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=ArtifactVersionID"
-          },
-          "sync": {
-            "lastModified": "2026-11-16T18:13:57.588Z",
-            "checksum": "1c7da65e84981d09a839496a681e6536417994d223c638146a16fe0ad67c3087"
           }
         }
       ]
@@ -103,10 +95,6 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Users&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=CreatedByUserID"
-          },
-          "sync": {
-            "lastModified": "2026-11-16T18:13:57.627Z",
-            "checksum": "1c7da65e84981d09a839496a681e6536417994d223c638146a16fe0ad67c3087"
           }
         }
       ]
@@ -128,10 +116,6 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Magic Link Invites&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links&RelatedEntityJoinField=MagicLinkInviteID"
-          },
-          "sync": {
-            "lastModified": "2026-11-16T18:13:57.664Z",
-            "checksum": "1c7da65e84981d09a839496a681e6536417994d223c638146a16fe0ad67c3087"
           }
         }
       ]
@@ -158,10 +142,6 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Guest Share Links"
-    },
-    "sync": {
-      "lastModified": "2026-11-16T18:13:57.418Z",
-      "checksum": "eda0fb93227081b0881a5202663b59b808d890c01ca5e0da39cc1b24e002856c"
     }
   }
 ]

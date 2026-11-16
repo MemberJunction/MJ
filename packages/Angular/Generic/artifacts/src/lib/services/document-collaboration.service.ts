@@ -646,17 +646,9 @@ export interface CollaborationResetConflictDraft {
 
 const FROZEN_VERIFICATION_CACHE_MAX_SIZE = 200;
 
-function hashVerificationPayload(raw: string): string {
-  let h1 = 0x811c9dc5;
-  let h2 = 0x9e3779b9;
-  for (let i = 0; i < raw.length; i++) {
-    const code = raw.charCodeAt(i);
-    h1 ^= code;
-    h1 = Math.imul(h1, 0x01000193) >>> 0;
-    h2 ^= (code + i) & 0xffff;
-    h2 = Math.imul(h2, 0x85ebca6b) >>> 0;
-  }
-  return `fnv:${h1.toString(16)}:${h2.toString(16)}:${raw.length}`;
+function canonicalVerificationKey(blockId: string | undefined, payload: string): string {
+  // Exact canonical key (bounded by LRU size 200) eliminates lossy 32-bit hash collisions cleanly.
+  return `${blockId ?? ''}:${payload}`;
 }
 
 /**
@@ -3513,7 +3505,7 @@ export class DocumentCollaborationService implements OnDestroy {
       SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged,
       SnapshotContentHash: snap.SnapshotContentHash ?? '',
     });
-    return `${block.BlockID ?? ''}:${hashVerificationPayload(payload)}`;
+    return canonicalVerificationKey(block.BlockID, payload);
   }
 
   private getCachedFrozenVerification(key: string): boolean | undefined {

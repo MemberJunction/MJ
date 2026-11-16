@@ -28,8 +28,18 @@ import {
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { randomUUID } from 'crypto';
+import {
+    EmptyPostRunViewResult,
+    FinalizePostRunViewResult,
+    GetGlobalWeakSet,
+    PrepareScopedPreRunView,
+    ShouldBypassPostRunViewAsync
+} from './ArtifactSecurityHookHelpers';
 
+const GUEST_LINK_ENTITY_NAME = 'MJ: Artifact Guest Share Links';
+const GLOBAL_KEY_INTERNAL_GUEST_LINK_PARAMS = '__MJ_INTERNAL_GUEST_SHARE_LINK_PARAMS__';
 const GLOBAL_KEY_ORIGINAL_GUEST_LINK_FIELDS = '__MJ_ORIGINAL_GUEST_SHARE_LINK_FIELDS_BY_PARAMS__';
+const GLOBAL_KEY_SQL_SCOPED_GUEST_LINK_PARAMS = '__MJ_SQL_SCOPED_GUEST_SHARE_LINK_PARAMS__';
 
 function getOriginalGuestLinkFieldsMap(): WeakMap<RunViewParams, string[]> {
     const store = GetGlobalObjectStore();
@@ -148,30 +158,30 @@ function normalizeOptionalString(val: string | null | undefined): string | null 
  * Server-side `PreRunView` hook ensuring `ArtifactID` is selected when a non-system caller
  * queries `MJ: Artifact Guest Share Links` with a partial `Fields` list.
  */
-export const ArtifactGuestShareLinkPreRunViewHook: PreRunViewHook = (
+export const ArtifactGuestShareLinkPreRunViewHook: PreRunViewHook = async (
     params: RunViewParams,
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
-): RunViewParams => {
-    const provider = resolveMetadataProvider(hookProvider, contextUser);
-    if (
-        !params ||
-        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
-        resolveTargetEntityName(params) !== 'MJ: Artifact Guest Share Links' ||
-        isServerSystemUser(contextUser) ||
-        (!contextUser && provider !== null && provider.ProviderType !== 'Database')
-    ) {
-        return params;
-    }
-    if (
-        Array.isArray(params.Fields) &&
-        params.Fields.length > 0 &&
-        !hasFieldIgnoreCase(params.Fields, 'ArtifactID')
-    ) {
-        getOriginalGuestLinkFieldsMap().set(params, [...params.Fields]);
-        params.Fields = [...params.Fields, 'ArtifactID'];
-    }
-    return params;
+): Promise<RunViewParams> => {
+    return PrepareScopedPreRunView(
+        params,
+        {
+            TargetEntityName: GUEST_LINK_ENTITY_NAME,
+            RequiredFields: ['ArtifactID'],
+            IdColumnName: 'ArtifactID',
+            InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_GUEST_LINK_PARAMS),
+            OriginalFieldsMap: getOriginalGuestLinkFieldsMap(),
+            SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_GUEST_LINK_PARAMS),
+            ResolveReadableIds: (prov, user) =>
+                ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
+                    prov,
+                    user,
+                    (perms) => perms.CanShare || perms.CanDelete
+                )
+        },
+        contextUser,
+        hookProvider
+    );
 };
 
 /**
@@ -184,49 +194,44 @@ export const ArtifactGuestShareLinkPostRunViewHook: PostRunViewHook = async (
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
 ): Promise<RunViewResult> => {
-    if (
-        !results?.Success ||
-        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
-        resolveTargetEntityName(params) !== 'MJ: Artifact Guest Share Links'
-    ) {
+    if (!results?.Success) {
         return results;
-    }
-
-    const originalFieldsMap = getOriginalGuestLinkFieldsMap();
-    const originalFields = originalFieldsMap.get(params);
-    if (originalFields) {
-        originalFieldsMap.delete(params);
     }
 
     const provider = resolveMetadataProvider(hookProvider, contextUser);
-    if (isServerSystemUser(contextUser)) {
+    const sqlScopedSet = GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_GUEST_LINK_PARAMS);
+    const { bypass, originalFields } = await ShouldBypassPostRunViewAsync(
+        params,
+        GUEST_LINK_ENTITY_NAME,
+        GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_GUEST_LINK_PARAMS),
+        getOriginalGuestLinkFieldsMap(),
+        contextUser,
+        provider
+    );
+    if (bypass) {
+        sqlScopedSet.delete(params);
         return results;
     }
     if (!contextUser && provider !== null && provider.ProviderType !== 'Database') {
+        sqlScopedSet.delete(params);
         return results;
     }
     if (!contextUser || !provider) {
-        results.Results = [];
-        results.RowCount = 0;
-        results.TotalRowCount = 0;
-        return results;
+        sqlScopedSet.delete(params);
+        return EmptyPostRunViewResult(results);
     }
 
     if (params.ResultType === 'count_only') {
-        // Fail closed on unscoped count_only queries so total link counts never leak across unauthorized artifacts.
-        results.Results = [];
-        results.RowCount = 0;
-        results.TotalRowCount = 0;
-        return results;
+        if (sqlScopedSet.has(params)) {
+            sqlScopedSet.delete(params);
+            return results;
+        }
+        return EmptyPostRunViewResult(results);
     }
 
     const rows = (results.Results ?? []) as GuestLinkViewRow[];
     if (rows.length === 0) {
-        results.RowCount = 0;
-        if (typeof params.MaxRows === 'number' && params.MaxRows > 0) {
-            results.TotalRowCount = 0;
-        }
-        return results;
+        return FinalizePostRunViewResult(params, results, [], 0, sqlScopedSet);
     }
 
     const permCache = new Map<string, boolean>();
@@ -253,14 +258,7 @@ export const ArtifactGuestShareLinkPostRunViewHook: PostRunViewHook = async (
         }
     }
 
-    const removedCount = rows.length - filtered.length;
-    const isPaged = (results.TotalRowCount ?? rows.length) > rows.length;
-    results.Results = filtered;
-    results.RowCount = filtered.length;
-    results.TotalRowCount = isPaged
-        ? filtered.length
-        : Math.max(0, (results.TotalRowCount ?? rows.length) - removedCount);
-    return results;
+    return FinalizePostRunViewResult(params, results, filtered, rows.length, sqlScopedSet);
 };
 
 export function EnsureArtifactGuestShareLinkReadHookRegistered(): void {

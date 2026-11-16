@@ -1,9 +1,8 @@
 import {
-    ComputeFrozenSnapshotHash,
+    BuildBlockIdentityBinding,
     DocumentBlockColumn,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
-    FrozenBlockSnapshot,
     ValidateFrozenBlockSnapshot
 } from './DocumentLiveBlockEngine.js';
 import type {
@@ -730,8 +729,14 @@ export function ExportDeckToPptxBytesInternal(
                 ? availH
                 : Math.max(640080, Math.floor(availH / regionCount) - 91440);
 
-            if (region.Kind === 'mj-block' || region.BlockSpec) {
-                const block = region.BlockSpec;
+            const parsedDirectiveBlock = !region.BlockSpec && region.MarkdownContent
+                ? DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(region.MarkdownContent).find(
+                      (seg) => seg.Type === 'mj-block'
+                  )?.BlockSpec
+                : undefined;
+            const block = region.BlockSpec ?? parsedDirectiveBlock;
+
+            if (region.Kind === 'mj-block' || block) {
                 const verifiedIds = options?.VerifiedBlockIds;
                 const isPreVerified = Boolean(
                     block?.FrozenSnapshot &&
@@ -743,7 +748,7 @@ export function ExportDeckToPptxBytesInternal(
                 const snapValidation = block?.FrozenSnapshot
                     ? isPreVerified
                         ? { Valid: true, SnapshotVerified: true }
-                        : ValidateFrozenBlockSnapshot(block.FrozenSnapshot)
+                        : ValidateFrozenBlockSnapshot(block.FrozenSnapshot, undefined, BuildBlockIdentityBinding(block))
                     : { Valid: false, SnapshotVerified: false, ErrorMessage: 'FrozenSnapshot missing.' };
                 const canRenderFrozenData = Boolean(block && snapValidation.Valid);
                 const chartData = block && canRenderFrozenData ? tryExtractChartDataFromSnapshot(block, region.Label) : null;
@@ -1252,48 +1257,18 @@ function parseChartXmlToRegion(chartXml: string, regionId: string): SlideRegionS
         rows.push(row);
     }
 
-    const frozenSnapshot: FrozenBlockSnapshot = {
-        FrozenAt: new Date().toISOString(),
-        FrozenByUserID: 'pptx-import',
-        FrozenByUserName: 'PPTX Import',
-        Columns: columns,
-        Rows: rows,
-        TotalRowCount: rows.length,
-        SecurityWarningAcknowledged: true
-    };
-    const signingSecret = DocumentLiveBlockEngine.Instance.ResolveSigningSecret();
-    if (!signingSecret) {
-        const headerLine = `| ${columns.map((c) => c.DisplayName).join(' | ')} |`;
-        const sepLine = `| ${columns.map(() => '---').join(' | ')} |`;
-        const dataLines = rows.map(
-            (r) => `| ${columns.map((c) => String(r[c.Name] ?? '')).join(' | ')} |`
-        );
-        return {
-            RegionID: regionId,
-            Label: title,
-            Kind: 'rich-text',
-            MarkdownContent: [`### ${title}`, '', headerLine, sepLine, ...dataLines].join('\n')
-        };
-    }
-
-    frozenSnapshot.SnapshotContentHash = ComputeFrozenSnapshotHash(frozenSnapshot, signingSecret);
-
-    const blockSpec: DocumentBlockSpec = {
-        BlockID: `imported-chart-${regionId}`,
-        Kind: 'SavedQuery',
-        Title: title,
-        Mode: 'Frozen',
-        DisplayMode: 'chart',
-        ChartType: chartType,
-        FrozenSnapshot: frozenSnapshot
-    };
-
+    // Never forge HMAC-signed FrozenSnapshot blocks from untrusted PPTX chart XML (`S3`);
+    // always materialize imported chart data as static rich-text markdown.
+    const headerLine = `| ${columns.map((c) => c.DisplayName).join(' | ')} |`;
+    const sepLine = `| ${columns.map(() => '---').join(' | ')} |`;
+    const dataLines = rows.map(
+        (r) => `| ${columns.map((c) => String(r[c.Name] ?? '')).join(' | ')} |`
+    );
     return {
         RegionID: regionId,
         Label: title,
-        Kind: 'mj-block',
-        MarkdownContent: '',
-        BlockSpec: blockSpec
+        Kind: 'rich-text',
+        MarkdownContent: [`### ${title}`, '', headerLine, sepLine, ...dataLines].join('\n')
     };
 }
 

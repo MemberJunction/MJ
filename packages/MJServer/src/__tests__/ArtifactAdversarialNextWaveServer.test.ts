@@ -26,6 +26,7 @@ import {
 import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
+    BuildBlockIdentityBinding,
     ComputeFrozenSnapshotHash,
     DocumentLiveBlockEngine,
     type FrozenBlockSnapshot,
@@ -47,6 +48,7 @@ import {
     RegisterServerArtifactFileBytesLoader,
 } from '../resolvers/ArtifactFileResolver.js';
 import { ListArtifactGuestShareLinksForOwner } from '../operations/ArtifactGuestShareServerOperations.js';
+import { configInfo } from '../config.js';
 
 vi.mock('../config.js', () => ({
     configInfo: {
@@ -61,6 +63,13 @@ vi.mock('../config.js', () => ({
             sessionTokenTtlHours: 8,
             defaultExpiresInHours: 72,
             explorerUrl: 'http://localhost:4200',
+            artifactGuestSharing: {
+                enabled: true,
+                maxExpiresInHours: 720,
+                maxUses: 100,
+                applicationName: 'Chat',
+                resourceTypeName: 'Artifacts',
+            },
         },
     },
 }));
@@ -397,6 +406,10 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             Rows: frozenRows,
             TotalRowCount: 1,
             SecurityWarningAcknowledged: true,
+            Binding: BuildBlockIdentityBinding(
+                { BlockID: 'blk-frozen-1', Kind: 'EntityView', EntityName: 'MJ: Users' },
+                artifactId,
+            ),
         };
         const snapshot: FrozenBlockSnapshot = {
             ...snapPayload,
@@ -423,7 +436,24 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
 
         const provider: IMetadataProvider & IRunViewProvider = {
             Entities: [],
-            RunView: vi.fn(async () => ({ Success: true, Results: [], TotalRowCount: 0 })),
+            RunView: vi.fn(async (req: RunViewParams) => {
+                if (req.EntityName === 'MJ: Artifacts') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: artifactId,
+                                Name: 'Q4 Report',
+                                UserID: ownerUser.ID,
+                                TypeID: 'type-doc',
+                                Type: 'Markdown Document',
+                            },
+                        ],
+                        TotalRowCount: 1,
+                    };
+                }
+                return { Success: true, Results: [], TotalRowCount: 0 };
+            }),
             RunViews: vi.fn(async (requests: RunViewParams[]) =>
                 requests.map((req) => {
                     if (req.EntityName === 'MJ: Magic Link Invites') {
@@ -472,7 +502,15 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                     if (req.EntityName === 'MJ: Artifacts') {
                         return {
                             Success: true,
-                            Results: [{ ID: artifactId, Name: 'Q4 Report', TypeID: 'type-doc', Type: 'Markdown Document' }],
+                            Results: [
+                                {
+                                    ID: artifactId,
+                                    Name: 'Q4 Report',
+                                    UserID: ownerUser.ID,
+                                    TypeID: 'type-doc',
+                                    Type: 'Markdown Document',
+                                },
+                            ],
                             TotalRowCount: 1,
                         };
                     }
@@ -1508,5 +1546,73 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             providers: [{ type: 'Read-Only', provider: mockProvider }],
         } as AppContext);
         expect(scopeSpy).toHaveBeenCalledWith('artifact:read', artifactId, expect.anything());
+    });
+
+    it('B8, Lower #1, B4 & S6: shares rooms across differing TenantContext on same provider, omits ApiKeyHash from URL ticket, and enforces guest share opt-in + status/expiry/CanShare checks', async () => {
+        const prevSecret = process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+        process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = '0123456789abcdef0123456789abcdef';
+        const collabServer = new ArtifactCollaborationServer();
+        const sharedArtifactId = 'abab1111-2222-4333-8444-555566667777';
+        const userTenant1 = {
+            ID: '11111111-1111-4111-8111-111111111111',
+            Name: 'Tenant 1 User',
+            Email: 'u1@example.com',
+            IsActive: true,
+            TenantContext: { TenantID: 'aaaa0000-0000-4000-8000-000000000001' },
+        } as UserInfo;
+        const userTenant2 = {
+            ID: '22222222-2222-4222-8222-222222222222',
+            Name: 'Tenant 2 User',
+            Email: 'u2@example.com',
+            IsActive: true,
+            TenantContext: { TenantID: 'aaaa0000-0000-4000-8000-000000000002' },
+        } as UserInfo;
+
+        const sameProvider = {
+            Entities: [],
+            ProviderKey: 'shared-db-schema',
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const prevEnabled = configInfo.magicLink.artifactGuestSharing.enabled;
+        try {
+            const t1 = collabServer.IssueTicket({
+                ArtifactID: sharedArtifactId,
+                User: userTenant1,
+                Provider: sameProvider,
+                ApiKeyHash: 'sensitive-api-key-hash-should-stay-server-side',
+            });
+            const t2 = collabServer.IssueTicket({
+                ArtifactID: sharedArtifactId,
+                User: userTenant2,
+                Provider: sameProvider,
+            });
+            const payloadB64 = t1.Ticket.split('.')[0]!;
+            const decodedJson = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as Record<string, string>;
+            expect(decodedJson['pk']).toBe('shared-db-schema');
+            expect(decodedJson['k']).toBeUndefined();
+
+            const consumed1 = await collabServer.ConsumeTicket(t1.Ticket, sharedArtifactId, sameProvider);
+            const consumed2 = await collabServer.ConsumeTicket(t2.Ticket, sharedArtifactId, sameProvider);
+            expect(consumed1?.ProviderKey).toBe('shared-db-schema');
+            expect(consumed2?.ProviderKey).toBe('shared-db-schema');
+            expect(consumed1?.ApiKeyHash).toBe('sensitive-api-key-hash-should-stay-server-side');
+
+            // B4: When artifactGuestSharing.enabled === false, ResolveGuestArtifactSnapshotForSession fails closed
+            configInfo.magicLink.artifactGuestSharing.enabled = false;
+            const disabledRes = await ResolveGuestArtifactSnapshotForSession(
+                undefined,
+                sameProvider,
+                '198.51.100.99',
+            );
+            expect(disabledRes.Valid).toBe(false);
+            expect(disabledRes.ErrorCode).toBe('ACCESS_DENIED');
+        } finally {
+            configInfo.magicLink.artifactGuestSharing.enabled = prevEnabled;
+            if (prevSecret === undefined) {
+                delete process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+            } else {
+                process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = prevSecret;
+            }
+        }
     });
 });

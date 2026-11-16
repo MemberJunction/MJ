@@ -180,12 +180,12 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Ctx() context: AppContext
     ): Promise<CollaborationTicketResult> {
         const user = this.GetUserFromPayload(context.userPayload);
-        if (!user) {
+        if (!user || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
             return {
                 Success: false,
                 CanRead: false,
                 CanEdit: false,
-                ErrorMessage: 'Authentication required.'
+                ErrorMessage: user ? 'Magic Link sessions cannot access collaboration rooms.' : 'Authentication required.'
             };
         }
 
@@ -291,7 +291,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Ctx() context: AppContext
     ): Promise<ArtifactPermissionsOutput> {
         const user = this.GetUserFromPayload(context.userPayload);
-        if (!user) {
+        if (!user || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
             return {
                 ArtifactID: artifactId,
                 CanRead: false,
@@ -299,7 +299,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 CanDelete: false,
                 CanShare: false,
                 Source: 'Denied',
-                Reason: 'Authentication required.'
+                Reason: user ? 'Magic Link sessions cannot access artifact permissions.' : 'Authentication required.'
             };
         }
 
@@ -315,11 +315,11 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Ctx() context?: AppContext
     ): Promise<VerifyFrozenBlockSnapshotOutput> {
         const user = this.GetUserFromPayload(context?.userPayload);
-        if (!user) {
+        if (!user || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
             return {
                 Valid: false,
                 SnapshotVerified: false,
-                ErrorMessage: 'Authentication required.'
+                ErrorMessage: user ? 'Magic Link sessions cannot verify snapshots directly.' : 'Authentication required.'
             };
         }
         await this.CheckAPIKeyScopeAuthorization('artifact:read', '*', context?.userPayload);
@@ -361,11 +361,11 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Arg('hostArtifactId', () => String, { nullable: true }) hostArtifactId?: string
     ): Promise<DocumentLiveBlockResultOutput> {
         const user = this.GetUserFromPayload(context.userPayload);
-        if (!user) {
+        if (!user || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
             return {
                 Success: false,
                 AccessDenied: true,
-                ErrorMessage: 'Authentication required.',
+                ErrorMessage: user ? 'Magic Link sessions cannot execute live document blocks.' : 'Authentication required.',
                 ResultJSON: '{}'
             };
         }
@@ -423,8 +423,11 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Arg('hostArtifactId', () => String, { nullable: true }) hostArtifactId?: string
     ): Promise<FreezeDocumentBlockResultOutput> {
         const user = this.GetUserFromPayload(context.userPayload);
-        if (!user) {
-            return { Success: false, ErrorMessage: 'Authentication required.' };
+        if (!user || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            return {
+                Success: false,
+                ErrorMessage: user ? 'Magic Link sessions cannot mutate artifacts.' : 'Authentication required.'
+            };
         }
 
         const normalizedHostId = (hostArtifactId ?? '').trim();
@@ -493,8 +496,11 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Arg('thumbnailDataUrl', { nullable: true }) thumbnailDataUrl?: string
     ): Promise<CommitArtifactInlineEditResultOutput> {
         const user = this.GetUserFromPayload(context.userPayload);
-        if (!user) {
-            return { Success: false, ErrorMessage: 'Authentication required.' };
+        if (!user || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            return {
+                Success: false,
+                ErrorMessage: user ? 'Magic Link sessions cannot mutate artifacts.' : 'Authentication required.'
+            };
         }
 
         await this.CheckAPIKeyScopeAuthorization('artifact:edit', artifactId, context.userPayload);
@@ -534,8 +540,11 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Ctx() context: AppContext
     ): Promise<CreateInlineDelegatedArtifactResultOutput> {
         const user = this.GetUserFromPayload(context.userPayload);
-        if (!user) {
-            return { Success: false, ErrorMessage: 'Authentication required.' };
+        if (!user || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            return {
+                Success: false,
+                ErrorMessage: user ? 'Magic Link sessions cannot mutate artifacts.' : 'Authentication required.'
+            };
         }
 
         const normalizedHostId = (hostArtifactId ?? '').trim();
@@ -714,6 +723,14 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 AgentHandle: normalizedHandle,
                 AgentMode: normalizedMode,
                 ErrorMessage: 'Authenticated user, artifactId, and agentHandle are required.'
+            };
+        }
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            return {
+                Success: false,
+                AgentHandle: normalizedHandle,
+                AgentMode: normalizedMode,
+                ErrorMessage: 'Magic Link sessions cannot invoke anchored comment agent mentions.'
             };
         }
 
@@ -1520,6 +1537,12 @@ export class DocumentCollaborationResolver extends ResolverBase {
             return {
                 Success: false,
                 ErrorMessage: 'Authenticated user, artifactId, and sourceVersionId are required.'
+            };
+        }
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            return {
+                Success: false,
+                ErrorMessage: 'Magic Link sessions cannot restore artifact versions.'
             };
         }
 

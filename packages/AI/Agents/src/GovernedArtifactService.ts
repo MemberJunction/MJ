@@ -26,12 +26,16 @@ import {
   MJArtifactTypeEntity,
   MJArtifactVersionEntity,
   MJCollectionArtifactEntity,
+  MJConversationDetailEntity,
+  MJConversationEntity,
   MJEnvironmentEntityExtended,
   MJFileEntity,
   ParseArtifactVersionConfiguration,
+  ParseRangeAddress,
   SlideDeckEngine,
   SlideDeckSpec,
   SpreadsheetEngine,
+  ValidateArtifactContentMutationAgainstLocks,
   WorkbookSpec,
   XlsxOpenXmlAdapter,
 } from '@memberjunction/core-entities';
@@ -1018,6 +1022,13 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     let initialConfigPatch: ArtifactToolArgs | undefined;
     const initialResults: Array<{ tool: string; data: ArtifactToolResult['data'] }> = [];
 
+    if (params.initialOperations && params.initialOperations.length > 100) {
+      return {
+        success: false,
+        errorMessage: `initialOperations exceeds the maximum allowed 100 operations per request (received ${params.initialOperations.length}).`,
+      };
+    }
+
     if (params.initialOperations && params.initialOperations.length > 0) {
       const lib = this.ResolveLibrary(artifactType.Name, artifactType.ToolLibraryClass ?? undefined);
       const execOutcome = await this.executeToolOperations({
@@ -1583,6 +1594,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         lastToolInput,
         latestConfigurationPatch,
         stepResults,
+        appliedComments,
       } = execOutcome;
       let latestXlsxBase64 = execXlsxBase64;
 
@@ -1635,6 +1647,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         agentName: params.agentName,
       });
       if (!persisted.success) {
+        await this.rollbackAppliedCommentOps(params.provider, params.contextUser, appliedComments);
         return {
           success: false,
           artifactId: state.artifactId,
@@ -1672,6 +1685,42 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     }
   }
 
+  private async rollbackAppliedCommentOps(
+    provider: IMetadataProvider,
+    contextUser: UserInfo,
+    appliedComments: ReadonlyArray<{ kind: 'thread' | 'reply'; threadId?: string; commentId?: string }>
+  ): Promise<void> {
+    for (let i = appliedComments.length - 1; i >= 0; i--) {
+      const entry = appliedComments[i];
+      try {
+        if (entry.commentId && IsValidUUID(entry.commentId)) {
+          const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+            'MJ: Conversation Details',
+            contextUser
+          );
+          if (detail && (await detail.Load(entry.commentId))) {
+            await detail.Delete();
+          }
+        }
+        if (entry.kind === 'thread' && entry.threadId && IsValidUUID(entry.threadId)) {
+          const conv = await provider.GetEntityObject<MJConversationEntity>(
+            'MJ: Conversations',
+            contextUser
+          );
+          if (conv && (await conv.Load(entry.threadId))) {
+            await conv.Delete();
+          }
+        }
+      } catch (rollbackErr) {
+        LogError(
+          `GovernedArtifactService: comment rollback error: ${
+            rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)
+          }`
+        );
+      }
+    }
+  }
+
   private async executeToolOperations(input: {
     ops: ArtifactMutationOperation[];
     initialContent: string | Buffer;
@@ -1690,6 +1739,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         lastToolInput: ArtifactToolArgs;
         latestConfigurationPatch?: ArtifactToolArgs;
         stepResults: Array<{ tool: string; data: ArtifactToolResult['data'] }>;
+        appliedComments: Array<{ kind: 'thread' | 'reply'; threadId?: string; commentId?: string }>;
       }
     | { success: false; errorMessage: string }
   > {
@@ -1700,10 +1750,12 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     let lastToolInput: ArtifactToolArgs = this.sanitizeToolInput(input.ops[input.ops.length - 1]?.input);
     let latestConfigurationPatch: ArtifactToolArgs | undefined;
     const stepResults: Array<{ tool: string; data: ArtifactToolResult['data'] }> = [];
+    const appliedComments: Array<{ kind: 'thread' | 'reply'; threadId?: string; commentId?: string }> = [];
 
     for (const op of input.ops) {
       const toolName = (op.tool ?? '').trim();
       if (!toolName) {
+        await this.rollbackAppliedCommentOps(input.toolContext.provider!, input.toolContext.contextUser!, appliedComments);
         return { success: false, errorMessage: 'Each operation requires a non-empty tool name.' };
       }
       const toolInput = this.sanitizeToolInput(op.input);
@@ -1726,6 +1778,9 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
 
       const res = await input.lib.InvokeTool(toolName, toolInput, workingContent, input.toolContext);
       if (!res.success) {
+        if (input.toolContext.provider && input.toolContext.contextUser) {
+          await this.rollbackAppliedCommentOps(input.toolContext.provider, input.toolContext.contextUser, appliedComments);
+        }
         return {
           success: false,
           errorMessage: res.errorMessage || `Tool '${toolName}' failed.`,
@@ -1736,6 +1791,18 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         res.data !== null && typeof res.data === 'object' && !Array.isArray(res.data)
           ? (res.data as ArtifactToolArgs)
           : {};
+      if (toolName === 'add_comment' && typeof rawData.threadId === 'string') {
+        appliedComments.push({
+          kind: 'thread',
+          threadId: rawData.threadId,
+          commentId: typeof rawData.commentId === 'string' ? rawData.commentId : undefined,
+        });
+      } else if (toolName === 'reply_comment' && typeof rawData.commentId === 'string') {
+        appliedComments.push({
+          kind: 'reply',
+          commentId: rawData.commentId,
+        });
+      }
       if (typeof rawData.updatedContent === 'string') {
         workingContent = rawData.updatedContent;
         if (typeof rawData.xlsxBase64 === 'string') {
@@ -1772,6 +1839,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       lastToolInput,
       latestConfigurationPatch,
       stepResults,
+      appliedComments,
     };
   }
 
@@ -2149,6 +2217,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       workingEmitted = true;
 
       const refreshResult = await this.computeRefreshedArtifactPayload({
+        artifactId: state.artifactId,
         rawContent,
         rawConfiguration: state.configuration ?? null,
         driverClass,
@@ -2158,6 +2227,29 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         contextUser: params.contextUser,
         provider: params.provider,
       });
+
+      if (refreshResult.updatedContent !== rawContent) {
+        const isArtifactOwner =
+          state.permissions.Source === 'Owner' ||
+          Boolean(state.ownerUserId && UUIDsEqual(state.ownerUserId, params.contextUser.ID));
+        const lockCheck = ValidateArtifactContentMutationAgainstLocks(
+          rawContent,
+          refreshResult.updatedContent,
+          params.contextUser.ID,
+          isArtifactOwner
+        );
+        if (!lockCheck.Allowed) {
+          const deniedMsg = lockCheck.Reason ?? 'Write rejected: refreshed content modifies a locked region.';
+          return {
+            success: false,
+            resultCode: 'PERMISSION_DENIED',
+            message: deniedMsg,
+            changed: false,
+            artifactId: state.artifactId,
+            errorMessage: deniedMsg,
+          };
+        }
+      }
 
       const prevDigestHash =
         typeof prevConfig['livingReportDigest'] === 'string'
@@ -2455,12 +2547,9 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     }
     if (liveResults) {
       for (const [blockId, res] of Object.entries(liveResults).sort(([a], [b]) => a.localeCompare(b))) {
-        // fls-guard: hashed internally for digest calculation only; never returned to caller
+        // fls-guard: hashed internally for digest calculation only; never emitted to highlightLines or callers (`B7`).
         const rowsJson = JSON.stringify(res.Rows);
         fullDeckDigestParts.push(`Block[${blockId}]: rows=${res.TotalRowCount}, all=${rowsJson}`);
-        highlightLines.push(
-          `Block[${blockId}]: rows=${res.TotalRowCount}, top=${JSON.stringify(res.Rows[0] ?? {})}`,
-        );
       }
     }
     return { fullDeckDigestParts, highlightLines };
@@ -2526,6 +2615,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
   }
 
   private async computeRefreshedArtifactPayload(input: {
+    artifactId?: string;
     rawContent: string;
     rawConfiguration: string | null;
     driverClass: string;
@@ -2560,16 +2650,48 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
           for (const tbl of ws.LiveTables) {
             const tblRes = tableResults[tbl.TableID];
             if (tblRes && tblRes.Success && !tblRes.AccessDenied) {
-              engine.FreezeLiveTable(wb, ws.Name, tbl.TableID, tblRes, input.contextUser, true);
+              engine.FreezeLiveTable(
+                wb,
+                ws.Name,
+                tbl.TableID,
+                tblRes,
+                input.contextUser,
+                true,
+                undefined,
+                input.artifactId
+              );
               signedFrozenBlocksCount++;
             }
           }
         }
       }
 
-      // Hash FULL sorted cell map across ALL worksheets (never `.slice(0, 40)`), keeping readable highlight lines
+      // fls-guard: fullCellEntries hashed for digest ONLY; highlightLines use persisted sheet structure & static non-=MJ cells (`B7`).
       const fullCellEntries = this.buildSpreadsheetCellDigestEntries(wb);
-      const highlightLines = fullCellEntries.slice(0, 80);
+      const highlightLines: string[] = [];
+      for (const ws of wb.Worksheets) {
+        highlightLines.push(`Sheet[${ws.Name}]: liveTables=${ws.LiveTables.length}`);
+        const liveCellCoords = new Set<string>();
+        for (const tbl of ws.LiveTables) {
+          const anchor = ParseRangeAddress(tbl.AnchorCell || 'A1', 10_000, 512);
+          if (!anchor) continue;
+          const rowCount = (tbl.LastRowCount ?? 0) + (tbl.IncludeHeaders !== false ? 1 : 0);
+          const colCount = Math.max(tbl.LastColumnCount ?? 0, 1);
+          for (let r = anchor.startRow; r < anchor.startRow + rowCount; r++) {
+            for (let c = anchor.startCol; c < anchor.startCol + colCount; c++) {
+              liveCellCoords.add(`${r}:${c}`);
+            }
+          }
+        }
+        const sortedCells = Object.values(ws.Cells).sort((a, b) => a.Address.localeCompare(b.Address));
+        for (const cell of sortedCells) {
+          if (highlightLines.length >= 80) break;
+          if (cell.Formula && /^\s*=\s*MJ\./i.test(cell.Formula)) continue;
+          const pos = ParseRangeAddress(cell.Address, 10_000, 512);
+          if (pos && liveCellCoords.has(`${pos.startRow}:${pos.startCol}`)) continue;
+          highlightLines.push(`${ws.Name}!${cell.Address}=${String(cell.RawValue ?? '')}`);
+        }
+      }
       const updatedContent = engine.SerializeWorkbook(wb, { preserveTimestamps: true });
       const canonicalContent = this.canonicalizeWorkbookForDigest(wb);
       return {
@@ -2577,7 +2699,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         digestHash: this.computeFullPayloadDigestHash(
           JSON.stringify({ updatedContent: canonicalContent, fullCellEntries }),
         ),
-        highlightLines,
+        highlightLines: highlightLines.slice(0, 80),
         signedFrozenBlocksCount,
       };
     }
@@ -2595,6 +2717,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         const secret = DocumentLiveBlockEngine.Instance.ResolveSigningSecret() ?? undefined;
         deck = slideEngine.FreezeDeckLiveBlocksForPresentation(deck, resultsMap, input.contextUser, {
           SigningSecret: secret,
+          ArtifactID: input.artifactId,
         });
         signedFrozenBlocksCount = resultsMap.size;
       }
@@ -2635,25 +2758,32 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         const isFrozen = seg.BlockSpec.Mode === 'Frozen';
         if (isFrozen && !input.freezeBlocks && !input.forceRefreshFrozen && seg.BlockSpec.FrozenSnapshot) {
           const snap = seg.BlockSpec.FrozenSnapshot;
-          // fls-guard: hashed internally for digest calculation only; never returned to caller
+          // fls-guard: hashed internally for digest calculation only; never emitted to highlightLines or callers (`B7`).
           const snapRowsJson = JSON.stringify(snap.Rows);
           fullDigestParts.push(`FrozenBlock[${seg.BlockSpec.BlockID}]: rows=${snap.TotalRowCount}, all=${snapRowsJson}`);
           highlightLines.push(
-            `Block[${seg.BlockSpec.Title || seg.BlockSpec.BlockID}]: rows=${snap.TotalRowCount}, top=${JSON.stringify(snap.Rows[0] ?? {})}`,
+            `Block[${seg.BlockSpec.Title || seg.BlockSpec.BlockID}]: mode=${seg.BlockSpec.Mode}`,
           );
           rebuiltParts.push(seg.RawText);
           continue;
         }
 
         const res = await docEngine.ExecuteBlock(seg.BlockSpec, input.contextUser, input.provider);
-        // fls-guard: hashed internally for digest calculation only; never returned to caller
+        // fls-guard: hashed internally for digest calculation only; never emitted to highlightLines or callers (`B7`).
         const resRowsJson = JSON.stringify(res.Rows);
         fullDigestParts.push(`Block[${seg.BlockSpec.BlockID}]: rows=${res.TotalRowCount}, all=${resRowsJson}`);
         highlightLines.push(
-          `Block[${seg.BlockSpec.Title || seg.BlockSpec.BlockID}]: rows=${res.TotalRowCount}, top=${JSON.stringify(res.Rows[0] ?? {})}`,
+          `Block[${seg.BlockSpec.Title || seg.BlockSpec.BlockID}]: mode=${seg.BlockSpec.Mode}`,
         );
         if (input.freezeBlocks) {
-          const frozen = await docEngine.FreezeBlock(seg.BlockSpec, input.contextUser, true, input.provider);
+          const frozen = await docEngine.FreezeBlock(
+            seg.BlockSpec,
+            input.contextUser,
+            true,
+            input.provider,
+            undefined,
+            input.artifactId
+          );
           if (frozen.Success && frozen.UpdatedSpec) {
             signedFrozenBlocksCount++;
             rebuiltParts.push(docEngine.SerializeBlockToMarkdownDirective(frozen.UpdatedSpec));

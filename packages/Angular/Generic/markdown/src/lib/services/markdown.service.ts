@@ -416,7 +416,7 @@ export class MarkdownService {
     mermaid.initialize({
       startOnLoad: false,
       theme: effectiveTheme,
-      securityLevel: 'loose',
+      securityLevel: 'strict',
       fontFamily: 'inherit',
       suppressErrorRendering: true // Suppress visual error diagrams - errors go to console only
     });
@@ -466,10 +466,20 @@ export class MarkdownService {
         // Render the diagram
         const { svg } = await mermaid.render(id, code);
 
-        // Replace the code block with the rendered SVG
+        // Sanitize rendered SVG with DOMPurify even under securityLevel: 'strict' (defense-in-depth)
+        const purifierInstance = getPurifier();
+        if (!purifierInstance) {
+          this.markMermaidBlocksFailed([block], 'Diagram sanitization unavailable');
+          continue;
+        }
+        const sanitizedSvg = purifierInstance.sanitize(svg, {
+          USE_PROFILES: { svg: true, svgFilters: true },
+        });
+
+        // Replace the code block with the sanitized SVG
         const wrapper = document.createElement('div');
         wrapper.className = 'mermaid-diagram';
-        wrapper.innerHTML = svg;
+        wrapper.innerHTML = sanitizedSvg;
 
         // Replace the pre element (parent of code) or the mermaid element itself
         const elementToReplace = block.tagName === 'CODE' ? block.parentElement : block;

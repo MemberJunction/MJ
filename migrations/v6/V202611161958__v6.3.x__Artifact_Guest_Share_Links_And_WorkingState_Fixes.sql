@@ -31,14 +31,6 @@ CREATE TABLE [${flyway:defaultSchema}].[ArtifactGuestShareLink] (
 );
 GO
 
-CREATE NONCLUSTERED INDEX [IX_ArtifactGuestShareLink_ArtifactID]
-    ON [${flyway:defaultSchema}].[ArtifactGuestShareLink] ([ArtifactID] ASC);
-GO
-
-CREATE NONCLUSTERED INDEX [IX_ArtifactGuestShareLink_ArtifactVersionID]
-    ON [${flyway:defaultSchema}].[ArtifactGuestShareLink] ([ArtifactVersionID] ASC);
-GO
-
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Links an anonymous resource-share MagicLinkInvite to an immutable Frozen ArtifactVersion and optional recipient label for external guest sharing.',

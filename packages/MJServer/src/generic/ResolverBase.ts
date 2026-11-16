@@ -1081,12 +1081,15 @@ export class ResolverBase {
       }
 
       const md = provider;
-      const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
+      const entity =
+        typeof md.EntityByName === 'function'
+          ? md.EntityByName(viewInput.EntityName)
+          : md.Entities?.find((e) => e.Name.trim().toLowerCase() === viewInput.EntityName.trim().toLowerCase());
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
       const viewInfo: MJUserViewEntityExtended = {
         ID: '',
-        Entity: viewInput.EntityName,
+        Entity: entity.Name,
         EntityID: entity.ID,
         EntityBaseView: entity.BaseView as string,
       } as MJUserViewEntityExtended; // only providing a few bits of data here, but it's enough to get the view to run
@@ -1140,27 +1143,39 @@ export class ResolverBase {
 
         if (viewInput.ViewName) {
           viewInfo = await this.resolveUserViewByName(viewInput.ViewName, provider, userPayload.userRecord);
-          // Populate EntityName on the input so callers (e.g. RunViews resolver) can
-          // look up the entity without re-querying the view
-          if (viewInfo && !viewInput.EntityName) {
+          if (viewInfo) {
+            if (viewInput.EntityName && viewInput.EntityName.trim().toLowerCase() !== (viewInfo.Entity ?? '').trim().toLowerCase()) {
+              throw new Error(
+                `EntityName '${viewInput.EntityName}' does not match resolved User View entity '${viewInfo.Entity}'`
+              );
+            }
             viewInput.EntityName = viewInfo.Entity;
           }
         } else if (viewInput.ViewID) {
           viewInfo = await this.resolveUserViewByID(viewInput.ViewID, provider, contextUser);
-          // Populate EntityName on the input so callers can look up the entity
-          if (viewInfo && !viewInput.EntityName) {
+          if (viewInfo) {
+            if (viewInput.EntityName && viewInput.EntityName.trim().toLowerCase() !== (viewInfo.Entity ?? '').trim().toLowerCase()) {
+              throw new Error(
+                `EntityName '${viewInput.EntityName}' does not match resolved User View entity '${viewInfo.Entity}'`
+              );
+            }
             viewInput.EntityName = viewInfo.Entity;
           }
         } else if (viewInput.EntityName) {
-          const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
+          const requestedEntityName = viewInput.EntityName;
+          const entity =
+            typeof md.EntityByName === 'function'
+              ? md.EntityByName(requestedEntityName)
+              : md.Entities?.find((e) => e.Name.trim().toLowerCase() === requestedEntityName.trim().toLowerCase());
           if (!entity) {
-            throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
+            throw new Error(`Entity ${requestedEntityName} not found in metadata`);
           }
+          viewInput.EntityName = entity.Name;
 
           // only providing a few bits of data here, but it's enough to get the view to run
           viewInfo = {
             ID: '',
-            Entity: viewInput.EntityName,
+            Entity: entity.Name,
             EntityID: entity.ID,
             EntityBaseView: entity.BaseView,
           } as MJUserViewEntityExtended;

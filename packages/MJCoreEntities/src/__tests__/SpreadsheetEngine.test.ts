@@ -1059,6 +1059,11 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         };
 
         // Pre-compute a server-signed snapshot while secret is available
+        const binding = {
+            BlockID: table.TableID,
+            Kind: table.SourceType,
+            SourceTargetID: table.EntityName
+        };
         const serverSignedHash = ComputeFrozenSnapshotHash({
             FrozenAt: '2026-11-10T20:00:00.000Z',
             FrozenByUserID: 'user-1',
@@ -1066,7 +1071,8 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             Columns: execResult.Columns,
             Rows: execResult.Rows,
             TotalRowCount: 2,
-            SecurityWarningAcknowledged: true
+            SecurityWarningAcknowledged: true,
+            Binding: binding
         });
         const preSigned: DocumentFrozenSnapshot = {
             FrozenAt: '2026-11-10T20:00:00.000Z',
@@ -1076,6 +1082,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             Rows: execResult.Rows,
             TotalRowCount: 2,
             SecurityWarningAcknowledged: true,
+            Binding: binding,
             SnapshotContentHash: serverSignedHash
         };
 
@@ -3881,5 +3888,35 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         });
         expect(locker1Check.Allowed).toBe(false);
         expect(locker1Check.ProtectedRange?.RangeID).toBe('prot-deny-editors');
+    });
+
+    it('B5: enforces AST/LAMBDA EvalBudget (#CALC!), caps string growth (>32767 -> #VALUE!), and rejects huge sparse CSV grids', () => {
+        // 1. Exponential branching LAMBDA hits EvalBudget and returns #CALC! quickly
+        const budgetWb = engine.CreateEmptyWorkbook('DoS Budget', ['Guard'], 10, 5);
+        const budgetWs = budgetWb.Worksheets[0];
+        engine.SetCell(budgetWb, budgetWs.SheetID, 'A1', {
+            Formula: '=LET(f, LAMBDA(f, n, IF(n<=0, 1, f(f, n-1)+f(f, n-1))), f(f, 22))',
+        });
+        engine.EvaluateWorkbook(budgetWb);
+        expect(budgetWs.Cells['A1']?.ComputedValue).toBe('#CALC!');
+
+        // 2. String growth past MAX_CELL_STRING_LENGTH (32,767) via &, CONCAT, TEXTJOIN returns #VALUE!
+        const strWb = engine.CreateEmptyWorkbook('String Caps', ['Strings'], 10, 5);
+        const strWs = strWb.Worksheets[0];
+        const longSeed = 'x'.repeat(20_000);
+        engine.SetCell(strWb, strWs.SheetID, 'A2', { Value: longSeed });
+        engine.SetCell(strWb, strWs.SheetID, 'B2', { Formula: '=A2 & A2' });
+        engine.SetCell(strWb, strWs.SheetID, 'C2', { Formula: '=CONCAT(A2, A2)' });
+        engine.SetCell(strWb, strWs.SheetID, 'D2', { Formula: '=TEXTJOIN(",", TRUE, A2, A2)' });
+        engine.EvaluateWorkbook(strWb);
+        expect(strWs.Cells['B2']?.ComputedValue).toBe('#VALUE!');
+        expect(strWs.Cells['C2']?.ComputedValue).toBe('#VALUE!');
+        expect(strWs.Cells['D2']?.ComputedValue).toBe('#VALUE!');
+
+        // 3. Huge sparse dense coordinate in ExportToCsv (row 5000 x col 200 = 1,000,000 > 500,000) throws bounded error
+        const sparseWb = engine.CreateEmptyWorkbook('Sparse CSV', ['Sheet1'], 5, 5);
+        const sparseWs = sparseWb.Worksheets[0];
+        sparseWs.Cells['GR5000'] = { Address: 'GR5000', RowID: 'r-5000', ColumnID: 'c-gr', RawValue: 'edge' };
+        expect(() => engine.ExportToCsv(sparseWb)).toThrow(/exceeds maximum allowed/);
     });
 });

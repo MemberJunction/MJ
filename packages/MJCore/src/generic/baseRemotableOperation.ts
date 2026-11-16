@@ -209,6 +209,19 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
     public readonly ToolInputSchema?: Record<string, RemoteOpToolSchemaValue>;
 
     /**
+     * Returns the resource identifiers checked against API-key scope authorization when
+     * {@link RequiredScope} is set (default: `[this.OperationKey]`). Operations that target
+     * specific resources (artifacts, collections, etc.) override this to declare all authoritative
+     * scope resource IDs from the validated input rather than relying on heuristic field guessing.
+     */
+    public GetScopeResourceIds(
+        _input: TInput,
+        _context?: { provider?: IMetadataProvider; user?: UserInfo },
+    ): string[] | Promise<string[]> {
+        return [this.OperationKey];
+    }
+
+    /**
      * Discovers all ClassFactory-registered {@link BaseRemotableOperation} subclasses that opt into
      * AI Agent (`ExposeAsAgentTool`) and/or MCP (`ExposeAsMCPTool`) tool exposure.
      */

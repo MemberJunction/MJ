@@ -12,7 +12,7 @@ import {
     StripServerOnlyRunQueryParams,
     UserInfo
 } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, IndexByUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, IndexByUUID, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
 
 /**
@@ -145,6 +145,93 @@ export interface DocumentBlockColumn {
 }
 
 /**
+ * Identity binding stored inside a {@link FrozenBlockSnapshot} and covered by its HMAC-SHA256
+ * signature so a signed snapshot from one block/query/artifact cannot be transplanted into another (`S3`).
+ */
+export interface FrozenSnapshotIdentityBinding {
+    /** Normalized host `MJ: Artifacts.ID` when bound to a persisted artifact. */
+    ArtifactID?: string;
+    /** Block ID or Spreadsheet live table ID that owns this snapshot. */
+    BlockID?: string;
+    /** Block or live table kind (`SavedQuery`, `EntityView`, `DashboardPart`, `InteractiveComponent`, `Artifact`, etc.). */
+    Kind?: string;
+    /** Canonical target identifier (`QueryID`/`QueryName`, `ViewID`/`EntityName`, `DashboardID`, `ComponentID`, or `ArtifactID`). */
+    SourceTargetID?: string;
+}
+
+/**
+ * Normalizes a {@link FrozenSnapshotIdentityBinding} for deterministic HMAC hashing and comparison.
+ */
+export function NormalizeFrozenSnapshotIdentityBinding(
+    binding: FrozenSnapshotIdentityBinding | null | undefined
+): FrozenSnapshotIdentityBinding | undefined {
+    if (!binding || typeof binding !== 'object') {
+        return undefined;
+    }
+    const out: FrozenSnapshotIdentityBinding = {};
+    if (typeof binding.ArtifactID === 'string' && binding.ArtifactID.trim().length > 0) {
+        out.ArtifactID = NormalizeUUID(binding.ArtifactID);
+    }
+    if (typeof binding.BlockID === 'string' && binding.BlockID.trim().length > 0) {
+        out.BlockID = binding.BlockID.trim();
+    }
+    if (typeof binding.Kind === 'string' && binding.Kind.trim().length > 0) {
+        out.Kind = binding.Kind.trim();
+    }
+    if (typeof binding.SourceTargetID === 'string' && binding.SourceTargetID.trim().length > 0) {
+        out.SourceTargetID = NormalizeUUID(binding.SourceTargetID);
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Builds the canonical {@link FrozenSnapshotIdentityBinding} for a {@link DocumentBlockSpec} (`S3`).
+ */
+export function BuildBlockIdentityBinding(
+    spec: Pick<
+        DocumentBlockSpec,
+        | 'BlockID'
+        | 'Kind'
+        | 'QueryID'
+        | 'QueryName'
+        | 'ViewID'
+        | 'ViewName'
+        | 'EntityName'
+        | 'DashboardID'
+        | 'DashboardName'
+        | 'ComponentID'
+        | 'ComponentName'
+        | 'ArtifactID'
+    >,
+    hostArtifactId?: string | null
+): FrozenSnapshotIdentityBinding {
+    let sourceTargetId: string | undefined;
+    switch (spec.Kind) {
+        case 'SavedQuery':
+            sourceTargetId = spec.QueryID?.trim() || spec.QueryName?.trim() || undefined;
+            break;
+        case 'EntityView':
+            sourceTargetId = spec.ViewID?.trim() || spec.EntityName?.trim() || spec.ViewName?.trim() || undefined;
+            break;
+        case 'DashboardPart':
+            sourceTargetId = spec.DashboardID?.trim() || spec.DashboardName?.trim() || undefined;
+            break;
+        case 'InteractiveComponent':
+            sourceTargetId = spec.ComponentID?.trim() || spec.ComponentName?.trim() || undefined;
+            break;
+        case 'Artifact':
+            sourceTargetId = spec.ArtifactID?.trim() || undefined;
+            break;
+    }
+    return NormalizeFrozenSnapshotIdentityBinding({
+        ...(hostArtifactId && hostArtifactId.trim().length > 0 ? { ArtifactID: hostArtifactId } : {}),
+        BlockID: spec.BlockID,
+        Kind: spec.Kind,
+        ...(sourceTargetId ? { SourceTargetID: sourceTargetId } : {})
+    }) ?? {};
+}
+
+/**
  * Static snapshot stored inside a block when `Mode === 'Frozen'` (`O5`).
  *
  * Freezing bakes the freezing user's visible rows into the artifact payload so any user
@@ -170,7 +257,9 @@ export interface FrozenBlockSnapshot {
     ArtifactTypeSnapshot?: string;
     /** Must be `true` to confirm the user accepted the RLS/FLS visibility warning modal (`O5`). */
     SecurityWarningAcknowledged: boolean;
-    /** Deterministic SHA-256 content hash over the snapshot payload computed at freeze time (`B7`). */
+    /** Optional identity binding covered by `SnapshotContentHash` to stop snapshot transplants (`S3`). */
+    Binding?: FrozenSnapshotIdentityBinding;
+    /** Deterministic HMAC-SHA256 content hash over the snapshot payload computed at freeze time (`B7`). */
     SnapshotContentHash?: string;
 }
 
@@ -1430,7 +1519,8 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
         user: UserInfo,
         acknowledgeSecurityWarning: boolean,
         provider?: IMetadataProvider | null,
-        signingSecret?: string
+        signingSecret?: string,
+        hostArtifactId?: string | null
     ): Promise<{ Success: boolean; UpdatedSpec?: DocumentBlockSpec; ErrorMessage?: string }> {
         if (!acknowledgeSecurityWarning) {
             return {
@@ -1449,6 +1539,7 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             };
         }
 
+        const binding = BuildBlockIdentityBinding(spec, hostArtifactId);
         const snapshotBase: FrozenBlockSnapshot = {
             FrozenAt: new Date().toISOString(),
             FrozenByUserID: user.ID,
@@ -1458,7 +1549,8 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             TotalRowCount: result.TotalRowCount,
             ArtifactContentSnapshot: result.ArtifactContent,
             ArtifactTypeSnapshot: result.ArtifactType,
-            SecurityWarningAcknowledged: true
+            SecurityWarningAcknowledged: true,
+            Binding: binding
         };
         const snapshot: FrozenBlockSnapshot = {
             ...snapshotBase,
@@ -2025,7 +2117,8 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
  */
 export function ValidateFrozenBlockSnapshot(
     snap: FrozenBlockSnapshot | null | undefined,
-    signingSecret?: string
+    signingSecret?: string,
+    expectedBinding?: FrozenSnapshotIdentityBinding
 ): {
     Valid: boolean;
     SnapshotVerified: boolean;
@@ -2102,6 +2195,49 @@ export function ValidateFrozenBlockSnapshot(
             ErrorMessage: 'FrozenSnapshot HMAC verification failed: snapshot payload may have been tampered.'
         };
     }
+
+    if (expectedBinding) {
+        const normExpected = NormalizeFrozenSnapshotIdentityBinding(expectedBinding);
+        const normActual = NormalizeFrozenSnapshotIdentityBinding(snap.Binding);
+        if (normExpected) {
+            if (!normActual) {
+                return {
+                    Valid: false,
+                    SnapshotVerified: false,
+                    ErrorMessage: 'FrozenSnapshot is missing required identity Binding metadata.'
+                };
+            }
+            if (normExpected.ArtifactID && normActual.ArtifactID && !UUIDsEqual(normExpected.ArtifactID, normActual.ArtifactID)) {
+                return {
+                    Valid: false,
+                    SnapshotVerified: false,
+                    ErrorMessage: 'FrozenSnapshot ArtifactID binding mismatch.'
+                };
+            }
+            if (normExpected.BlockID && normActual.BlockID !== normExpected.BlockID) {
+                return {
+                    Valid: false,
+                    SnapshotVerified: false,
+                    ErrorMessage: 'FrozenSnapshot BlockID binding mismatch.'
+                };
+            }
+            if (normExpected.Kind && normActual.Kind !== normExpected.Kind) {
+                return {
+                    Valid: false,
+                    SnapshotVerified: false,
+                    ErrorMessage: 'FrozenSnapshot Kind binding mismatch.'
+                };
+            }
+            if (normExpected.SourceTargetID !== normActual.SourceTargetID) {
+                return {
+                    Valid: false,
+                    SnapshotVerified: false,
+                    ErrorMessage: 'FrozenSnapshot SourceTargetID binding mismatch.'
+                };
+            }
+        }
+    }
+
     return {
         Valid: true,
         SnapshotVerified: true
@@ -2110,7 +2246,7 @@ export function ValidateFrozenBlockSnapshot(
 
 /**
  * Computes an HMAC-SHA256 signature (`'hmac-sha256:<hex>'`) over the canonical payload of a
- * {@link FrozenBlockSnapshot}, including `FrozenByUserName` (`B7`).
+ * {@link FrozenBlockSnapshot}, including `FrozenByUserName` (`B7`) and optional identity `Binding` (`S3`).
  */
 export function ComputeFrozenSnapshotHash(
     snap: Pick<
@@ -2124,6 +2260,7 @@ export function ComputeFrozenSnapshotHash(
         | 'ArtifactContentSnapshot'
         | 'ArtifactTypeSnapshot'
         | 'SecurityWarningAcknowledged'
+        | 'Binding'
     >,
     signingSecret?: string
 ): string {
@@ -2133,6 +2270,7 @@ export function ComputeFrozenSnapshotHash(
             'MJ_FROZEN_BLOCK_HMAC_SECRET (>= 32 bytes) must be configured on the server before signing or verifying frozen block snapshots.'
         );
     }
+    const normalizedBinding = NormalizeFrozenSnapshotIdentityBinding(snap.Binding);
     const payload = canonicalizeForHash({
         FrozenAt: snap.FrozenAt,
         FrozenByUserID: snap.FrozenByUserID,
@@ -2142,7 +2280,8 @@ export function ComputeFrozenSnapshotHash(
         TotalRowCount: snap.TotalRowCount,
         ArtifactContentSnapshot: snap.ArtifactContentSnapshot ?? null,
         ArtifactTypeSnapshot: snap.ArtifactTypeSnapshot ?? null,
-        SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged === true
+        SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged === true,
+        ...(normalizedBinding ? { Binding: normalizedBinding } : {})
     });
     return `hmac-sha256:${hmacSha256HexUtf8(secret, payload)}`;
 }
@@ -2728,7 +2867,11 @@ function validateEntityViewExtraFilter(
 }
 
 function buildFrozenExecutionResult(spec: DocumentBlockSpec): DocumentBlockExecutionResult {
-    const validation = ValidateFrozenBlockSnapshot(spec.FrozenSnapshot);
+    const validation = ValidateFrozenBlockSnapshot(
+        spec.FrozenSnapshot,
+        undefined,
+        BuildBlockIdentityBinding(spec)
+    );
     if (!validation.Valid || !spec.FrozenSnapshot) {
         return {
             BlockID: spec.BlockID,

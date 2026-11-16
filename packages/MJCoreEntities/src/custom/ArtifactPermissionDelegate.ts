@@ -490,6 +490,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         if (!normalizedArtifactId || !user) {
             return this.buildDenied(normalizedArtifactId, 'Artifact ID and authenticated user context are required.');
         }
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            return this.buildDenied(normalizedArtifactId, 'Scope-limited or anonymous magic-link principals cannot access governed artifact permissions.');
+        }
         if (!IsValidUUID(normalizedArtifactId) || !IsValidUUID(user.ID)) {
             return this.buildDenied(normalizedArtifactId, 'Artifact ID and user ID must be valid UUIDs.');
         }
@@ -845,6 +848,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         if (!provider || !targetId || !user?.ID) {
             return this.buildDeniedCollection(targetId, 'Missing provider, collectionId, or user context.');
         }
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            return this.buildDeniedCollection(targetId, 'Scope-limited or anonymous magic-link principals cannot access governed collection permissions.');
+        }
         if (!IsValidUUID(targetId) || !IsValidUUID(user.ID)) {
             return this.buildDeniedCollection(targetId, 'Collection ID and user ID must be valid UUIDs.');
         }
@@ -976,16 +982,137 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     }
 
     /**
+     * Builds the normalized (`NormalizeUUID`) set of all `CollectionID`s readable by `user`,
+     * combining collection ownership, direct shares, and descendant collections (depth 16, cycle-guarded).
+     */
+    public async BuildReadableCollectionIdSet(
+        provider: IMetadataProvider | null | undefined,
+        user: UserInfo | null | undefined
+    ): Promise<Set<string>> {
+        const readable = new Set<string>();
+        if (!provider || !user?.ID || !IsValidUUID(user.ID)) {
+            return readable;
+        }
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            return readable;
+        }
+        try {
+            const queryActor = await this.resolvePermissionQueryActor(provider, user, 'BuildReadableCollectionIdSet');
+            if (!queryActor) {
+                return readable;
+            }
+            const rv = RunView.FromMetadataProvider(provider);
+            const collectionIds = await this.collectReadableCollectionIds(rv, queryActor, user.ID);
+            for (const cid of collectionIds) {
+                const norm = NormalizeUUID(cid);
+                if (norm) {
+                    readable.add(norm);
+                }
+            }
+            return readable;
+        } catch (err) {
+            LogError(
+                `ArtifactPermissionEngine.BuildReadableCollectionIdSet error for user '${user.ID}': ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
+            return readable;
+        }
+    }
+
+    private async collectReadableCollectionIds(
+        rv: RunView,
+        queryActor: UserInfo,
+        userId: string
+    ): Promise<string[]> {
+        const safeUserId = EscapeSQLString(userId);
+        const seedCollectionIds: string[] = [];
+        const seenCollections = new Set<string>();
+        const addCollectionSeed = (id: string | null | undefined): void => {
+            if (!id || !IsValidUUID(id)) return;
+            const norm = NormalizeUUID(id);
+            if (norm && !seenCollections.has(norm)) {
+                seenCollections.add(norm);
+                seedCollectionIds.push(id);
+            }
+        };
+
+        const ownedColsParams: RunViewParams = {
+            EntityName: 'MJ: Collections',
+            ExtraFilter: `OwnerID='${safeUserId}'`,
+            Fields: ['ID'],
+            SkipTotalRowCount: true,
+            ResultType: 'simple'
+        };
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(ownedColsParams);
+        const ownedColsRes = await rv.RunView<CollectionRowProjection>(ownedColsParams, queryActor);
+        if (ownedColsRes.Success && ownedColsRes.Results) {
+            for (const row of ownedColsRes.Results) {
+                addCollectionSeed(row.ID);
+            }
+        }
+
+        const sharedColsParams: RunViewParams = {
+            EntityName: 'MJ: Collection Permissions',
+            ExtraFilter: `UserID='${safeUserId}' AND (CanRead=1 OR CanEdit=1 OR CanDelete=1 OR CanShare=1)`,
+            Fields: ['CollectionID'],
+            SkipTotalRowCount: true,
+            ResultType: 'simple'
+        };
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(sharedColsParams);
+        const sharedColsRes = await rv.RunView<CollectionPermissionRowProjection>(sharedColsParams, queryActor);
+        if (sharedColsRes.Success && sharedColsRes.Results) {
+            for (const row of sharedColsRes.Results) {
+                addCollectionSeed(row.CollectionID);
+            }
+        }
+
+        let frontier = [...seedCollectionIds];
+        for (let depth = 0; depth < MAX_COLLECTION_ANCESTRY_DEPTH && frontier.length > 0; depth++) {
+            const nextFrontier: string[] = [];
+            for (const chunk of chunkArray(frontier, IN_CLAUSE_CHUNK_SIZE)) {
+                const childParams: RunViewParams = {
+                    EntityName: 'MJ: Collections',
+                    ExtraFilter: `ParentID IN (${buildQuotedInList(chunk)})`,
+                    Fields: ['ID'],
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                };
+                ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(childParams);
+                const childRes = await rv.RunView<CollectionRowProjection>(childParams, queryActor);
+                if (childRes.Success && childRes.Results) {
+                    for (const child of childRes.Results) {
+                        if (!child.ID || !IsValidUUID(child.ID)) continue;
+                        const norm = NormalizeUUID(child.ID);
+                        if (norm && !seenCollections.has(norm)) {
+                            seenCollections.add(norm);
+                            seedCollectionIds.push(child.ID);
+                            nextFrontier.push(child.ID);
+                        }
+                    }
+                }
+            }
+            frontier = nextFrontier;
+        }
+
+        return seedCollectionIds;
+    }
+
+    /**
      * Builds the normalized (`NormalizeUUID`) set of all `ArtifactID`s readable by `user`,
      * combining artifact ownership, direct shares, and collection hierarchy grants (with full
      * delegate `'Deny'` enforcement via {@link ResolvePermissions}).
      */
     public async BuildReadableArtifactIdSet(
         provider: IMetadataProvider | null | undefined,
-        user: UserInfo | null | undefined
+        user: UserInfo | null | undefined,
+        predicate?: (perms: ResolvedArtifactPermissions) => boolean
     ): Promise<Set<string>> {
         const readable = new Set<string>();
         if (!provider || !user?.ID || !IsValidUUID(user.ID)) {
+            return readable;
+        }
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
             return readable;
         }
 
@@ -1040,73 +1167,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             }
 
             // 3. Owned collections + shared collections + descendant collections (depth 16, cycle-guarded)
-            const seedCollectionIds: string[] = [];
-            const seenCollections = new Set<string>();
-            const addCollectionSeed = (id: string | null | undefined): void => {
-                if (!id) return;
-                const norm = NormalizeUUID(id);
-                if (norm && !seenCollections.has(norm)) {
-                    seenCollections.add(norm);
-                    seedCollectionIds.push(id);
-                }
-            };
-
-            const ownedColsParams: RunViewParams = {
-                EntityName: 'MJ: Collections',
-                ExtraFilter: `OwnerID='${safeUserId}'`,
-                Fields: ['ID'],
-                SkipTotalRowCount: true,
-                ResultType: 'simple'
-            };
-            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(ownedColsParams);
-            const ownedColsRes = await rv.RunView<CollectionRowProjection>(ownedColsParams, queryActor);
-            if (ownedColsRes.Success && ownedColsRes.Results) {
-                for (const row of ownedColsRes.Results) {
-                    addCollectionSeed(row.ID);
-                }
-            }
-
-            const sharedColsParams: RunViewParams = {
-                EntityName: 'MJ: Collection Permissions',
-                ExtraFilter: `UserID='${safeUserId}' AND (CanRead=1 OR CanEdit=1 OR CanDelete=1 OR CanShare=1)`,
-                Fields: ['CollectionID'],
-                SkipTotalRowCount: true,
-                ResultType: 'simple'
-            };
-            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(sharedColsParams);
-            const sharedColsRes = await rv.RunView<CollectionPermissionRowProjection>(sharedColsParams, queryActor);
-            if (sharedColsRes.Success && sharedColsRes.Results) {
-                for (const row of sharedColsRes.Results) {
-                    addCollectionSeed(row.CollectionID);
-                }
-            }
-
-            let frontier = [...seedCollectionIds];
-            for (let depth = 0; depth < MAX_COLLECTION_ANCESTRY_DEPTH && frontier.length > 0; depth++) {
-                const nextFrontier: string[] = [];
-                for (const chunk of chunkArray(frontier, IN_CLAUSE_CHUNK_SIZE)) {
-                    const childParams: RunViewParams = {
-                        EntityName: 'MJ: Collections',
-                        ExtraFilter: `ParentID IN (${buildQuotedInList(chunk)})`,
-                        Fields: ['ID'],
-                        SkipTotalRowCount: true,
-                        ResultType: 'simple'
-                    };
-                    ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(childParams);
-                    const childRes = await rv.RunView<CollectionRowProjection>(childParams, queryActor);
-                    if (childRes.Success && childRes.Results) {
-                        for (const child of childRes.Results) {
-                            const norm = NormalizeUUID(child.ID);
-                            if (norm && !seenCollections.has(norm)) {
-                                seenCollections.add(norm);
-                                seedCollectionIds.push(child.ID);
-                                nextFrontier.push(child.ID);
-                            }
-                        }
-                    }
-                }
-                frontier = nextFrontier;
-            }
+            const seedCollectionIds = await this.collectReadableCollectionIds(rv, queryActor, user.ID);
 
             if (seedCollectionIds.length > 0) {
                 const versionIdSet = new Set<string>();
@@ -1186,6 +1247,28 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 }
             }
 
+            // 3c. Include artifacts delegated to non-'MJ: Artifacts' parent entities (e.g. custom entity delegates or Conversations)
+            // so custom BaseArtifactPermissionDelegate grants remain visible in SQL-scoped RunView queries (`B2`).
+            const delegFilter =
+                artifactsEntityId && IsValidUUID(artifactsEntityId)
+                    ? `DelegateEntityID IS NOT NULL AND DelegateEntityID <> '${EscapeSQLString(artifactsEntityId)}'`
+                    : 'DelegateEntityID IS NOT NULL';
+            const customDelegParams: RunViewParams = {
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: delegFilter,
+                Fields: ['ID'],
+                MaxRows: 2000,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            };
+            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(customDelegParams);
+            const customDelegRes = await rv.RunView<ArtifactOwnerRowProjection>(customDelegParams, queryActor);
+            if (customDelegRes.Success && customDelegRes.Results) {
+                for (const row of customDelegRes.Results) {
+                    addCandidate(row.ID);
+                }
+            }
+
             // 4. Verify each candidate through ResolvePermissions so delegate 'Deny' overrides are honored
             const candidateValues = Array.from(candidates.entries());
             for (const batch of chunkArray(candidateValues, 20)) {
@@ -1196,7 +1279,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     }))
                 );
                 for (const entry of resolvedBatch) {
-                    if (entry.perms.CanRead) {
+                    const matches = predicate ? predicate(entry.perms) : entry.perms.CanRead;
+                    if (entry.perms.CanRead && matches) {
                         readable.add(entry.normId);
                     }
                 }

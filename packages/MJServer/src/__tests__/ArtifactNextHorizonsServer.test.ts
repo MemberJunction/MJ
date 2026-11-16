@@ -22,6 +22,7 @@ import {
     type ArtifactEvaluateAiFormulaOutput,
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
+    BuildBlockIdentityBinding,
     ComputeFrozenSnapshotHash,
     DocumentLiveBlockEngine,
     type CreateGuestShareLinkInput,
@@ -37,6 +38,7 @@ import {
     type MJAuditLogEntity,
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { NormalizeUUID } from '@memberjunction/global';
 import { ArtifactCollaborationServer } from '../collaboration/ArtifactCollaborationServer.js';
 import {
     LoadArtifactComplianceAuditOperation,
@@ -75,6 +77,13 @@ vi.mock('../config.js', () => ({
             sessionTokenTtlHours: 8,
             defaultExpiresInHours: 72,
             explorerUrl: 'http://localhost:4200',
+            artifactGuestSharing: {
+                enabled: true,
+                maxExpiresInHours: 720,
+                maxUses: 100,
+                applicationName: 'Chat',
+                resourceTypeName: 'Artifacts',
+            },
         },
     },
 }));
@@ -591,6 +600,10 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
             Rows: [{ Name: 'Alice' }],
             TotalRowCount: 1,
             SecurityWarningAcknowledged: true,
+            Binding: BuildBlockIdentityBinding(
+                { BlockID: 'b1', Kind: 'EntityView', EntityName: 'MJ: Users' },
+                ARTIFACT_ID,
+            ),
         };
         const frozenSnapshot: FrozenBlockSnapshot = {
             ...snapPayload,
@@ -707,7 +720,8 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
         expect(afterRevokeRes.Valid).toBe(false);
         expect(afterRevokeRes.ErrorCode).toBe('REVOKED');
 
-        // DocumentCollaborationResolver forwards upstream JWT tokenExpiresAtMs into IssueTicket
+        // S10: Magic Link guest sessions are blocked from DocumentCollaborationResolver,
+        // while internal authenticated callers forward upstream JWT tokenExpiresAtMs into IssueTicket
         const collabResolver = new DocumentCollaborationResolver();
         const shortExpMs = Date.now() + 15_000;
         const issueTicketSpy = vi.spyOn(ArtifactCollaborationServer.Instance, 'IssueTicket').mockReturnValue({
@@ -715,8 +729,21 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
             ExpiresAt: new Date(shortExpMs).toISOString(),
         });
         const guestTicketCtx = makeMagicLinkGuestCtx(issued.MagicLinkInviteID!);
-        guestTicketCtx.userPayload!.tokenExpiresAtMs = shortExpMs;
-        const ticketRes = await collabResolver.MintArtifactCollaborationTicket(ARTIFACT_ID, guestTicketCtx);
+        const blockedGuestTicketRes = await collabResolver.MintArtifactCollaborationTicket(ARTIFACT_ID, guestTicketCtx);
+        expect(blockedGuestTicketRes.Success).toBe(false);
+        expect(blockedGuestTicketRes.ErrorMessage).toContain('Magic Link');
+        expect(issueTicketSpy).not.toHaveBeenCalled();
+
+        const internalUserCtx = {
+            providers: [{ provider: currentProvider, type: 'Read-Write' }],
+            userPayload: {
+                email: OWNER_USER.Email,
+                userRecord: OWNER_USER,
+                sessionId: 'sess-owner-1',
+                tokenExpiresAtMs: shortExpMs,
+            },
+        } as Partial<AppContext> as AppContext;
+        const ticketRes = await collabResolver.MintArtifactCollaborationTicket(ARTIFACT_ID, internalUserCtx);
         expect(ticketRes.Success).toBe(true);
         expect(issueTicketSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -901,6 +928,10 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
             Rows: [{ Name: 'Alice' }],
             TotalRowCount: 1,
             SecurityWarningAcknowledged: true,
+            Binding: BuildBlockIdentityBinding(
+                { BlockID: 'b-frozen', Kind: 'EntityView', EntityName: 'MJ: Users' },
+                ARTIFACT_ID,
+            ),
         };
         const validSnap: FrozenBlockSnapshot = {
             ...snapPayload,
@@ -1031,6 +1062,12 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
             Rows: [{ A: 1 }],
             TotalRowCount: 1,
             SecurityWarningAcknowledged: true,
+            Binding: {
+                ArtifactID: NormalizeUUID(ARTIFACT_ID),
+                BlockID: 'emb-dual',
+                Kind: 'EmbeddedArtifact',
+                SourceTargetID: NormalizeUUID(ARTIFACT_ID),
+            },
         };
         versionsById.set(VERSION_ID, {
             ID: VERSION_ID,

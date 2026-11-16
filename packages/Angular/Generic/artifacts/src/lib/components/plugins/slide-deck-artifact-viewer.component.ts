@@ -965,14 +965,14 @@ export interface ResolvedSlidesToolbarItem {
                   [attr.data-aspect-ratio]="ActiveDeckForDisplay.AspectRatio"
                   [style.aspect-ratio]="ActiveDeckForDisplay.AspectRatio === '4:3' ? '4 / 3' : '16 / 9'"
                   [attr.data-theme-id]="ActiveDeckForDisplay.Theme.ThemeID"
-                  [style.--deck-bg]="ActiveDeckForDisplay.Theme.BackgroundColor"
-                  [style.--deck-surface]="ActiveDeckForDisplay.Theme.SurfaceColor"
-                  [style.--deck-primary]="ActiveDeckForDisplay.Theme.PrimaryColor"
-                  [style.--deck-accent]="ActiveDeckForDisplay.Theme.AccentColor"
-                  [style.--deck-text]="ActiveDeckForDisplay.Theme.TextColor"
-                  [style.--deck-muted]="ActiveDeckForDisplay.Theme.MutedTextColor"
-                  [style.--deck-heading-font]="ActiveDeckForDisplay.Theme.HeadingFont || 'Inter, system-ui, sans-serif'"
-                  [style.--deck-body-font]="ActiveDeckForDisplay.Theme.BodyFont || 'Inter, system-ui, sans-serif'"
+                  [style.--deck-bg]="SafeTheme.BackgroundColor"
+                  [style.--deck-surface]="SafeTheme.SurfaceColor"
+                  [style.--deck-primary]="SafeTheme.PrimaryColor"
+                  [style.--deck-accent]="SafeTheme.AccentColor"
+                  [style.--deck-text]="SafeTheme.TextColor"
+                  [style.--deck-muted]="SafeTheme.MutedTextColor"
+                  [style.--deck-heading-font]="SafeTheme.HeadingFont"
+                  [style.--deck-body-font]="SafeTheme.BodyFont"
                   (contextmenu)="OnSlideStageContextMenu($event)"
                   data-testid="slide-canvas-stage"
                 >
@@ -3662,6 +3662,30 @@ export class SlideDeckArtifactViewerComponent
       return this.PresentationFrozenDeck;
     }
     return this.Deck;
+  }
+
+  public get SafeTheme(): {
+    BackgroundColor: string;
+    SurfaceColor: string;
+    PrimaryColor: string;
+    AccentColor: string;
+    TextColor: string;
+    MutedTextColor: string;
+    HeadingFont: string;
+    BodyFont: string;
+  } {
+    const raw = this.ActiveDeckForDisplay.Theme;
+    const engine = SlideDeckEngine.Instance;
+    return {
+      BackgroundColor: engine.SanitizeCssValue(raw?.BackgroundColor, '#ffffff'),
+      SurfaceColor: engine.SanitizeCssValue(raw?.SurfaceColor, '#f8fafc'),
+      PrimaryColor: engine.SanitizeCssValue(raw?.PrimaryColor, '#4f46e5'),
+      AccentColor: engine.SanitizeCssValue(raw?.AccentColor, '#0ea5e9'),
+      TextColor: engine.SanitizeCssValue(raw?.TextColor, '#0f172a'),
+      MutedTextColor: engine.SanitizeCssValue(raw?.MutedTextColor, '#475569'),
+      HeadingFont: engine.SanitizeCssValue(raw?.HeadingFont, 'Inter, system-ui, sans-serif'),
+      BodyFont: engine.SanitizeCssValue(raw?.BodyFont, 'Inter, system-ui, sans-serif'),
+    };
   }
 
   public get ActiveSlideIndex(): number {

@@ -339,7 +339,9 @@ describe('RefreshAndSnapshotArtifactAction (H3 §5.3 + P0-16)', () => {
         expect(res.ResultCode).toBe('SUCCESS');
         expect(savedVersions).toHaveLength(1);
         expect(savedVersions[0].VersionNumber).toBe(2);
-        expect(savedVersions[0].Comments).toContain('KPIs!B1=142');
+        // B7: Live =MJ.VIEW() values (KPIs!B1=142) MUST NOT leak into persisted Version.Comments or highlightLines
+        expect(savedVersions[0].Comments).not.toContain('KPIs!B1=142');
+        expect(savedVersions[0].Comments).toContain('Sheet[KPIs]: liveTables=0');
         expect(savedMessages).toHaveLength(1);
         expect(savedMessages[0].ConversationID).toBe(conversationId);
         expect(savedMessages[0].Role).toBe('AI');

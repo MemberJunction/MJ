@@ -549,11 +549,11 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             ResultType: 'simple' as const
         };
         const provider = makeMockProvider();
-        ArtifactPreRunViewHook(params, sharedEditorUser, provider);
-        expect(params.Fields).toEqual(['Name', 'ID']);
+        const hookedParams = await ArtifactPreRunViewHook(params, sharedEditorUser, provider);
+        expect(hookedParams.Fields).toEqual(['Name', 'ID']);
 
         const postRes = await ArtifactPostRunViewHook(
-            params,
+            hookedParams,
             {
                 Success: true,
                 Results: [
@@ -590,5 +590,53 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
         );
         expect(countOnlyRes.TotalRowCount).toBe(0);
         expect(countOnlyRes.RowCount).toBe(0);
+    });
+
+    it('B1 / B2: matches mixed-case EntityName and preserves paged TotalRowCount when SQL-scoped', async () => {
+        const scopedProvider = {
+            ProviderType: 'Database',
+            Entities: [{ ID: 'ent-art', Name: 'MJ: Artifacts' }],
+            EntityByName: (name: string) =>
+                name.trim().toLowerCase() === 'mj: artifacts'
+                    ? ({ ID: 'ent-art', Name: 'MJ: Artifacts' } as never)
+                    : undefined,
+            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] })
+        } as unknown as IMetadataProvider;
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet').mockResolvedValue(
+            new Set([ARTIFACT_ID])
+        );
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: ARTIFACT_ID,
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'ArtifactPermission',
+            Reason: 'Reader'
+        });
+
+        const hooked = await ArtifactPreRunViewHook(
+            { EntityName: 'mj: artifacts', Fields: ['Name'], MaxRows: 1, ResultType: 'simple' },
+            sharedEditorUser,
+            scopedProvider
+        );
+        expect(String(hooked.ExtraFilter)).toContain(`ID IN ('${ARTIFACT_ID}')`);
+        expect(hooked.Fields).toEqual(['Name', 'ID']);
+
+        const post = await ArtifactPostRunViewHook(
+            hooked,
+            {
+                Success: true,
+                Results: [{ ID: ARTIFACT_ID, Name: 'Paged Item' }],
+                RowCount: 1,
+                TotalRowCount: 42,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            sharedEditorUser,
+            scopedProvider
+        );
+        expect(post.Results).toEqual([{ Name: 'Paged Item' }]);
+        expect(post.TotalRowCount).toBe(42);
     });
 });

@@ -14,6 +14,7 @@
 "@memberjunction/ng-dashboards": minor
 "@memberjunction/ng-explorer-app": minor
 "@memberjunction/ng-explorer-core": minor
+"@memberjunction/ng-markdown": minor
 "@memberjunction/ng-shared": minor
 "@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor

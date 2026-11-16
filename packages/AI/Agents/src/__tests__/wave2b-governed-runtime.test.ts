@@ -4,6 +4,7 @@ import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
     ConversationEngine,
+    DocumentLiveBlockEngine,
     MJArtifactEntity,
     MJArtifactTypeEntity,
     SpreadsheetEngine,
@@ -53,16 +54,28 @@ describe('Wave 2B Governed Artifact Runtime Verification', () => {
     });
 
     it('P0-17: rejects explicit non-matching artifactId ("B") when artifacts.size === 1 without mutating "A"', async () => {
+        const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: 'aaaa1111-1111-4111-8111-111111111111',
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+            Reason: 'Owner',
+        });
         const manager = new ArtifactToolManager();
-        manager.Initialize([
-            {
-                artifactId: 'aaaa1111-1111-4111-8111-111111111111',
-                name: 'Only Doc.md',
-                typeName: 'Markdown Document',
-                toolLibraryClass: 'DocumentToolLibrary',
-                content: '# Title\n\nOriginal paragraph.\n',
-            },
-        ]);
+        manager.Initialize(
+            [
+                {
+                    artifactId: 'aaaa1111-1111-4111-8111-111111111111',
+                    name: 'Only Doc.md',
+                    typeName: 'Markdown Document',
+                    toolLibraryClass: 'DocumentToolLibrary',
+                    content: '# Title\n\nOriginal paragraph.\n',
+                },
+            ],
+            { contextUser: makeTestUser('u-p017'), provider: {} as IMetadataProvider },
+        );
 
         const result = await manager.ExecuteSingleToolCall({
             artifactId: 'B',
@@ -84,6 +97,10 @@ describe('Wave 2B Governed Artifact Runtime Verification', () => {
         const readGate = new Promise<void>((resolve) => {
             releaseRead = resolve;
         });
+        let markStarted!: () => void;
+        const startedGate = new Promise<void>((resolve) => {
+            markStarted = resolve;
+        });
 
         const fakeLib = {
             GetToolList: () => [
@@ -95,6 +112,7 @@ describe('Wave 2B Governed Artifact Runtime Verification', () => {
             ],
             InvokeTool: async () => {
                 timeline.push('atm-start');
+                markStarted();
                 await readGate;
                 timeline.push('atm-end');
                 return { success: true, data: { ok: true } };
@@ -104,23 +122,34 @@ describe('Wave 2B Governed Artifact Runtime Verification', () => {
             fakeLib as object as ReturnType<typeof GovernedArtifactService.Instance.ResolveLibrary>,
         );
 
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: artifactUuid,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+            Reason: 'Owner',
+        });
         const manager = new ArtifactToolManager();
-        manager.Initialize([
-            {
-                artifactId: artifactUuid,
-                name: 'Locked Sheet',
-                typeName: 'Excel Spreadsheet',
-                content: '{}',
-            },
-        ]);
+        manager.Initialize(
+            [
+                {
+                    artifactId: artifactUuid,
+                    name: 'Locked Sheet',
+                    typeName: 'Excel Spreadsheet',
+                    content: '{}',
+                },
+            ],
+            { contextUser: makeTestUser('u-lock'), provider: {} as IMetadataProvider },
+        );
 
         const atmPromise = manager.ExecuteSingleToolCall({
             artifactId: 'A',
             tool: 'slow_inspect',
             input: {},
         });
-        await Promise.resolve();
-        await Promise.resolve();
+        await startedGate;
 
         const svcPromise = GovernedArtifactService.Instance.WithArtifactLock(artifactUuid.toUpperCase(), async () => {
             timeline.push('svc-ran');
@@ -594,7 +623,37 @@ describe('Wave 2B Governed Artifact Runtime Verification', () => {
         expect(synthData.artifactId).toBe(synthId);
         expect(synthData.persisted).toBe(true);
 
-        const refreshCall = await manager.ExecuteSingleToolCall({
+        // B7: By default (without explicit out-of-band allowFreezeFromUserConfirmation), agents cannot invoke freeze_all_blocks
+        const deniedFreezeCall = await manager.ExecuteSingleToolCall({
+            artifactId: 'A',
+            tool: 'refresh_and_snapshot_artifact',
+            input: { targetArtifactId: 'A', mode: 'freeze_all_blocks', forceRefreshFrozen: true },
+        });
+        expect(deniedFreezeCall.result.success).toBe(false);
+        expect(deniedFreezeCall.result.errorMessage).toContain('out-of-band user confirmation');
+
+        // With allowFreezeFromUserConfirmation: true, freeze_all_blocks succeeds cleanly
+        const freezeAllowedManager = new ArtifactToolManager();
+        freezeAllowedManager.Initialize(
+            [
+                {
+                    artifactId: sourceId,
+                    name: 'Source Notes',
+                    typeName: 'Markdown Document',
+                    toolLibraryClass: 'DocumentToolLibrary',
+                    versionId: 'ver-src-1',
+                    versionNumber: 1,
+                    content: '# Source Notes\n\nInitial content',
+                },
+            ],
+            {
+                contextUser: user,
+                provider: provider as IMetadataProvider,
+                agentRunId: 'run-tools-1',
+                allowFreezeFromUserConfirmation: true,
+            },
+        );
+        const refreshCall = await freezeAllowedManager.ExecuteSingleToolCall({
             artifactId: 'A',
             tool: 'refresh_and_snapshot_artifact',
             input: { targetArtifactId: 'A', mode: 'freeze_all_blocks', forceRefreshFrozen: true },
@@ -637,5 +696,73 @@ describe('Wave 2B Governed Artifact Runtime Verification', () => {
         });
         const artifactComplete = artifactSet.byToolName.get('complete_task');
         expect(artifactComplete?.tool.inputSchema.properties).toHaveProperty('artifactDirective');
+    });
+
+    it('B7: RefreshArtifactPayloadInMemory never puts live query rows in highlightLines', async () => {
+        const execSpy = vi.spyOn(DocumentLiveBlockEngine.Instance, 'ExecuteBlock').mockResolvedValue({
+            BlockID: 'blk-secret',
+            Kind: 'SavedQuery',
+            Mode: 'Live',
+            Success: true,
+            Columns: [{ Name: 'SSN', DisplayName: 'SSN', Type: 'string' }],
+            Rows: [{ SSN: '999-88-7777-CONFIDENTIAL' }],
+            TotalRowCount: 1,
+        });
+        try {
+            const doc = [
+                '# Executive Summary',
+                '',
+                ':::mj-block',
+                '{"BlockID":"blk-secret","Kind":"SavedQuery","QueryID":"q-1","Mode":"Live"}',
+                ':::',
+            ].join('\n');
+            const user = new UserInfo(undefined, { ID: 'u-1', Name: 'Alice' });
+            const provider = {} as IMetadataProvider;
+            const res = await GovernedArtifactService.Instance.RefreshArtifactPayloadInMemory({
+                content: doc,
+                artifactTypeName: 'Markdown Document',
+                title: 'Executive Brief',
+                contextUser: user,
+                provider,
+            });
+            const combined = res.highlightLines.join('\n') + '\n' + res.diffSummary;
+            expect(combined).not.toContain('999-88-7777-CONFIDENTIAL');
+            expect(combined).toContain('Block[blk-secret]: mode=Live');
+        } finally {
+            execSpy.mockRestore();
+        }
+    });
+
+    it('Lower #4 / #5: ArtifactToolManager fails closed when persisted artifactId lacks contextUser/provider, and rejects InitialOperations > 100', async () => {
+        const manager = new ArtifactToolManager();
+        manager.Initialize([
+            {
+                artifactId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                name: 'Persisted Doc',
+                typeName: 'Markdown Document',
+                toolLibraryClass: 'DocumentToolLibrary',
+                content: '# Title\nBody',
+            },
+        ]);
+        const readWithoutCtx = await manager.ExecuteSingleToolCall({
+            artifactId: 'A',
+            tool: 'read_section',
+            input: {},
+        });
+        expect(readWithoutCtx.result.success).toBe(false);
+        expect(readWithoutCtx.result.errorMessage).toContain('contextUser and provider');
+
+        const overLimitOps = Array.from({ length: 101 }, () => ({ tool: 'append_markdown', input: { markdown: 'x' } }));
+        const createTooMany = await manager.ExecuteSingleToolCall({
+            artifactId: '__workspace__',
+            tool: 'create_artifact',
+            input: {
+                title: 'Too many ops',
+                artifactType: 'Markdown Document',
+                InitialOperations: overLimitOps,
+            },
+        });
+        expect(createTooMany.result.success).toBe(false);
+        expect(createTooMany.result.errorMessage).toContain('maximum allowed 100');
     });
 });

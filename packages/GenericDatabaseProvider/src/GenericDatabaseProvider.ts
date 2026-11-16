@@ -3893,6 +3893,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             } else {
                 entityInfo = this.EntityByID(viewEntity!.EntityID) ?? null;
                 if (!entityInfo) throw new Error(`Entity ID: ${viewEntity.EntityID} not found in metadata`);
+                if (typeof params.EntityName === 'string' && params.EntityName.trim().length > 0) {
+                    const requestedEntity = this.EntityByName(params.EntityName.trim());
+                    if (!requestedEntity || !UUIDsEqual(requestedEntity.ID, entityInfo.ID)) {
+                        throw new Error(
+                            `EntityName '${params.EntityName}' does not match view '${viewEntity.Name ?? viewEntity.ID}' target entity '${entityInfo.Name}'.`
+                        );
+                    }
+                }
             }
 
             this.CheckUserReadPermissions(entityInfo.Name, user);

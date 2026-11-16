@@ -539,12 +539,13 @@ ${parts.bodyHtml}
   }
 
   /**
-   * Keeps valid single/double quotes for CSS font-family declarations intact inside `<style>`
-   * (where HTML entities like `&#39;` are not decoded) while guaranteeing `<`, `>`, and `</style`
-   * can never appear.
+   * Sanitizes CSS declaration values emitted into printable HTML `<style>` blocks so
+   * `<style>` breakout and `url(...)`/`expression(...)`/statement-injection payloads are rejected.
    */
   private sanitizeStyleDeclarationValue(value: string): string {
-    return (value || '').replace(/<\/style/gi, '').replace(/[<>]/g, '');
+    return SlideDeckEngine.Instance.SanitizeCssValue(value, '')
+      .replace(/<\/style/gi, '')
+      .replace(/[<>;{}]/g, '');
   }
 
   /**

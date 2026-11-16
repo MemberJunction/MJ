@@ -18,9 +18,8 @@ const MAX_AUDIT_DETAILS_BYTES = 16_384;
 export type AuditDetailPrimitive = string | number | boolean | null | undefined;
 export type AuditDetailsRecord = Record<string, AuditDetailPrimitive | AuditDetailPrimitive[] | Record<string, AuditDetailPrimitive>>;
 
-const CLIENT_CALLABLE_AUDIT_PERMISSION_MAP: ReadonlyMap<string, 'Read' | 'Edit' | 'Share'> = new Map([
+const CLIENT_CALLABLE_AUDIT_PERMISSION_MAP: ReadonlyMap<string, 'Read' | 'Edit'> = new Map([
     ['artifact exported', 'Read'],
-    ['artifact guest share link', 'Share'],
     ['artifact connected drive sync', 'Edit'],
 ]);
 
@@ -112,6 +111,10 @@ export async function WriteArtifactComplianceAudit(
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_LOG_COMPLIANCE_AUDIT_KEY)
 export class ArtifactComplianceAuditServerOperation extends ArtifactComplianceAuditOperation {
+    public override GetScopeResourceIds(input: ArtifactComplianceAuditInput): string[] {
+        return input?.ArtifactID ? [input.ArtifactID] : [];
+    }
+
     protected override async Authorize(
         input: ArtifactComplianceAuditInput,
         user: UserInfo,
@@ -159,12 +162,7 @@ export class ArtifactComplianceAuditServerOperation extends ArtifactComplianceAu
         }
 
         const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user);
-        const allowed =
-            requiredPermission === 'Share'
-                ? perms.CanShare
-                : requiredPermission === 'Edit'
-                  ? perms.CanEdit
-                  : perms.CanRead;
+        const allowed = requiredPermission === 'Edit' ? perms.CanEdit : perms.CanRead;
         if (!allowed) {
             throw new RemoteOperationError(
                 'ACCESS_DENIED',

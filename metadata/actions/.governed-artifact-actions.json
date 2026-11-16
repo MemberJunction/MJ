@@ -125,11 +125,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "4D8B9B8E-3C2A-4F7E-9A1B-8C7D6E5F4A01"
-          },
-          "sync": {
-            "lastModified": "2026-11-15T22:21:14.405Z",
-            "checksum": "b6a6b193e01c8979ed0da0f891abe74b73255465515029aa0b1a6b2533fc14d7"
+            "ID": "D98F4738-CF2E-4281-BEB2-E37426252AA0"
           }
         },
         {

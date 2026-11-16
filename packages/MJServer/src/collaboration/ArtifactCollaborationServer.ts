@@ -29,15 +29,14 @@ import {
     ArtifactPermissionEngine,
     BuildArtifactVersionConfigurationWithPreview,
     DocumentLiveBlockEngine,
-    FormatCellAddress,
     IsValidThumbnailDataUrl,
     MJArtifactTypeEntity,
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
-    ParseRangeAddress,
     ResolveArtifactTypeThumbnailPolicy,
     SlideDeckEngine,
     SpreadsheetEngine,
+    ValidateArtifactContentMutationAgainstLocks,
     type ArtifactTypeThumbnailPolicy,
     type SlideDeckSpec,
     type SlideSpec,
@@ -145,6 +144,13 @@ export const DEFAULT_COLLABORATION_HEARTBEAT_MS = 30_000;
 
 const WORKING_STATE_FLUSH_DEBOUNCE_MS = 2500;
 const MAX_COLLAB_FRAME_BYTES = 16 * 1024 * 1024; // 16 MB
+const MAX_AWARENESS_FRAME_BYTES = 16_384; // 16 KB
+const MAX_ACTIVE_COLLAB_ROOMS = 2_000;
+const MAX_ROOM_DOC_BYTES = 8 * 1024 * 1024; // 8 MB
+const MAX_RETAINED_DIRTY_ROOMS = 250;
+const RETAINED_DIRTY_ROOM_TTL_MS = 15 * 60_000; // 15 minutes
+const CLIENT_FRAME_RATE_WINDOW_MS = 10_000;
+const MAX_CLIENT_FRAMES_PER_WINDOW = 500;
 const MAX_VERSION_SAVE_ATTEMPTS = 3;
 const MAX_IDLE_FLUSH_RETRIES = 3;
 const COLLABORATION_ALLOWED_ORIGINS_ENV = 'MJ_COLLABORATION_ALLOWED_ORIGINS';
@@ -180,7 +186,6 @@ interface AgentAwarenessUserPayload {
     agentName: string;
     actingForUserId: string;
     actingForUserName: string;
-    actingForUserEmail?: string;
     agentPhase: ArtifactAgentPresenceEvent['Phase'];
     toolName?: string;
     actionSummary?: string;
@@ -319,6 +324,10 @@ export interface CollaborationClientConnection {
     Alive: boolean;
     /** Whether initial post-REST-save deduplication check has completed for this connection. */
     InitialSyncDedupeChecked?: boolean;
+    /** Start epoch ms of the active per-connection frame rate window. */
+    FrameWindowStartMs?: number;
+    /** Incoming frame count within the active per-connection rate window. */
+    FrameCountInWindow?: number;
 }
 
 /**
@@ -351,6 +360,8 @@ export interface CollaborationRoom {
     HasActiveLocks: boolean;
     /** Consecutive failed flush/compaction attempts during idle room disposal (capped at `MAX_IDLE_FLUSH_RETRIES`). */
     CompactionRetryCount: number;
+    /** Timestamp when an idle dirty room first entered failed-compaction retention (bounded TTL eviction). */
+    RetainedDirtySinceMs?: number;
     /** User who most recently applied an edit in this room. */
     LastModifiedByUser: UserInfo | null;
     /** Latest `MJ: Artifact Versions.ID` reconciled into this room. */
@@ -832,10 +843,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
     }
 
-    private resolveProviderKey(provider?: IMetadataProvider | null, user?: UserInfo | null): string {
-        if (user?.TenantContext?.TenantID) {
-            return `tenant:${NormalizeUUID(user.TenantContext.TenantID)}`;
-        }
+    private resolveProviderKey(provider?: IMetadataProvider | null, _user?: UserInfo | null): string {
         const effectiveProvider = provider ?? this.activeProvider();
         if (effectiveProvider) {
             const candidate = effectiveProvider as IMetadataProvider & {
@@ -1138,7 +1146,6 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             a: artifactId,
             pk: providerKey,
             u: params.User.ID,
-            k: params.ApiKeyHash ?? undefined,
             i: issuedAtMs,
             e: expiresAtMs,
             ...(typeof params.TokenExpiresAtMs === 'number' && Number.isFinite(params.TokenExpiresAtMs)
@@ -1299,7 +1306,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
             return {
                 User: user,
-                ApiKeyHash: entry?.ApiKeyHash ?? parsed.k,
+                ApiKeyHash: entry?.ApiKeyHash,
                 TokenExpiresAtMs: tokenExpiresAtMs,
                 ProviderKey: ticketProviderKey ?? currentProviderKey,
                 Provider: resolvedTicketProvider
@@ -3898,7 +3905,6 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 agentName: evt.AgentName,
                 actingForUserId: evt.ActingForUserID,
                 actingForUserName: evt.ActingForUserName,
-                actingForUserEmail: evt.ActingForUserEmail ?? undefined,
                 agentPhase: evt.Phase,
                 toolName: evt.ToolName ?? undefined,
                 actionSummary: evt.ActionSummary ?? undefined,
@@ -5085,7 +5091,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         // (a) Unit test override
         if (this._authOverride) {
             const user = await this._authOverride(req);
-            if (!user || user.IsActive === false) {
+            if (!user || user.IsActive === false || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
                 return null;
             }
             return { User: user };
@@ -5094,7 +5100,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         // (b) Primary browser path: single-use short-TTL `?ticket=<nonce>`
         if (parsedUrl.searchParams.has('ticket')) {
             const rawTicket = parsedUrl.searchParams.get('ticket') ?? '';
-            return await this.ConsumeTicket(rawTicket, artifactId);
+            const consumed = await this.ConsumeTicket(rawTicket, artifactId);
+            if (!consumed || consumed.User.IsMagicLinkAnonymous || consumed.User.MagicLinkScope) {
+                return null;
+            }
+            return consumed;
         }
 
         // (c) Non-browser / server-to-server HTTP headers ONLY
@@ -5145,7 +5155,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 },
                 req
             );
-            if (!payload?.userRecord || payload.userRecord.IsActive !== true) {
+            if (
+                !payload?.userRecord ||
+                payload.userRecord.IsActive !== true ||
+                payload.userRecord.IsMagicLinkAnonymous ||
+                payload.userRecord.MagicLinkScope
+            ) {
                 return null;
             }
             let tokenExpiresAtMs: number | undefined = payload.tokenExpiresAtMs;
@@ -5366,6 +5381,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         contextUser: UserInfo,
         provider?: IMetadataProvider | null
     ): Promise<CollaborationRoom> {
+        if (this._rooms.size >= MAX_ACTIVE_COLLAB_ROOMS) {
+            this.pruneExcessIdleRooms();
+        }
+        if (this._rooms.size >= MAX_ACTIVE_COLLAB_ROOMS) {
+            throw new Error(`Collaboration server active room limit (${MAX_ACTIVE_COLLAB_ROOMS}) reached.`);
+        }
         const resolvedProvider = provider ?? this.activeProvider();
         const providerKey = this.resolveProviderKey(resolvedProvider, contextUser);
         if (resolvedProvider) {
@@ -6153,132 +6174,6 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         );
     }
 
-    private findDuplicateNonEmptyId(ids: Array<string | undefined | null>): string | null {
-        const seen = new Set<string>();
-        for (const raw of ids) {
-            const trimmed = (raw ?? '').trim();
-            if (!trimmed) {
-                continue;
-            }
-            if (seen.has(trimmed)) {
-                return trimmed;
-            }
-            seen.add(trimmed);
-        }
-        return null;
-    }
-
-    private doParsedRangesOverlap(
-        a: { startRow: number; endRow: number; startCol: number; endCol: number },
-        b: { startRow: number; endRow: number; startCol: number; endCol: number }
-    ): boolean {
-        return a.startRow <= b.endRow && b.startRow <= a.endRow && a.startCol <= b.endCol && b.startCol <= a.endCol;
-    }
-
-    private checkSheetCellMostRestrictive(
-        sheet: WorksheetSpec,
-        cellAddress: string,
-        editCtx: { UserID?: string; OwnerUserID: string; IsEditor: boolean }
-    ): { Allowed: boolean; Reason?: string } {
-        const rules = sheet.ProtectedRanges ?? [];
-        for (const rule of rules) {
-            const singleRuleRes = SpreadsheetEngine.Instance.CheckCellWritePermission(
-                { ...sheet, ProtectedRanges: [rule] },
-                cellAddress,
-                editCtx
-            );
-            if (!singleRuleRes.Allowed) {
-                return singleRuleRes;
-            }
-        }
-        return { Allowed: true };
-    }
-
-    private validateNewLocksOnEmptyContent(
-        nextContent: string,
-        actorUserId: string | null | undefined,
-        isOwner: boolean
-    ): { Allowed: boolean; Reason?: string } | null {
-        const trimmedNext = nextContent.trim();
-        if (!trimmedNext.startsWith('{')) {
-            return null;
-        }
-        const normActor = actorUserId ? NormalizeUUID(actorUserId) : '';
-        let parsedType: 'slides' | 'workbook' | null = null;
-        try {
-            const parsedNext = JSON.parse(trimmedNext) as {
-                Slides?: Array<object>;
-                Worksheets?: Array<object>;
-            };
-            if (Array.isArray(parsedNext.Slides)) {
-                parsedType = 'slides';
-                const nextDeck = SlideDeckEngine.Instance.ParseDeckSpec(nextContent);
-                const dupSlideId = this.findDuplicateNonEmptyId(nextDeck.Slides.map((s) => s.SlideID));
-                if (dupSlideId) {
-                    return { Allowed: false, Reason: `Duplicate SlideID '${dupSlideId}' is not allowed.` };
-                }
-                for (const nextSlide of nextDeck.Slides) {
-                    const dupRegionId = this.findDuplicateNonEmptyId(nextSlide.Regions.map((r) => r.RegionID));
-                    if (dupRegionId) {
-                        return { Allowed: false, Reason: `Duplicate RegionID '${dupRegionId}' is not allowed.` };
-                    }
-                    if (!isOwner) {
-                        if (nextSlide.Locked && (!normActor || NormalizeUUID(nextSlide.LockedByUserID ?? '') !== normActor)) {
-                            return {
-                                Allowed: false,
-                                Reason: 'Cannot create locked slide with another user as LockedByUserID.'
-                            };
-                        }
-                        for (const reg of nextSlide.Regions) {
-                            if (reg.Locked && (!normActor || NormalizeUUID(reg.LockedByUserID ?? '') !== normActor)) {
-                                return {
-                                    Allowed: false,
-                                    Reason: 'Cannot create locked region with another user as LockedByUserID.'
-                                };
-                            }
-                        }
-                    }
-                }
-                return { Allowed: true };
-            }
-            if (Array.isArray(parsedNext.Worksheets)) {
-                parsedType = 'workbook';
-                const nextWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
-                const dupSheetId = this.findDuplicateNonEmptyId(nextWb.Worksheets.map((w) => w.SheetID));
-                if (dupSheetId) {
-                    return { Allowed: false, Reason: `Duplicate SheetID '${dupSheetId}' is not allowed.` };
-                }
-                for (const nextSheet of nextWb.Worksheets) {
-                    const dupRangeId = this.findDuplicateNonEmptyId(
-                        (nextSheet.ProtectedRanges ?? []).map((r) => r.RangeID)
-                    );
-                    if (dupRangeId) {
-                        return { Allowed: false, Reason: `Duplicate RangeID '${dupRangeId}' is not allowed.` };
-                    }
-                    if (!isOwner) {
-                        for (const rule of nextSheet.ProtectedRanges ?? []) {
-                            if (!normActor || NormalizeUUID(rule.LockedByUserID) !== normActor) {
-                                return {
-                                    Allowed: false,
-                                    Reason: `Cannot create protected range '${rule.Range}' with spoofed LockedByUserID.`
-                                };
-                            }
-                        }
-                    }
-                }
-                return { Allowed: true };
-            }
-        } catch {
-            if (parsedType !== null) {
-                return {
-                    Allowed: false,
-                    Reason: 'Write rejected: malformed update to structured document.'
-                };
-            }
-        }
-        return null;
-    }
-
     /**
      * Validates an incoming Yjs write update against client `meta` immutability, Markdown heading locks,
      * Slide Deck locks, and Spreadsheet ProtectedRanges by simulating the update against a cloned doc snapshot.
@@ -6315,6 +6210,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
             Y.applyUpdate(probeDoc, Y.encodeStateAsUpdate(room.Doc));
             Y.applyUpdate(probeDoc, incomingUpdateBytes);
+            const probeStore = probeDoc.store as { pendingStructs?: object | null; pendingDs?: object | null };
+            if (probeStore.pendingStructs != null || probeStore.pendingDs != null) {
+                return {
+                    Allowed: false,
+                    Reason: 'Write rejected: incomplete out-of-order Yjs update cannot be lock-verified.'
+                };
+            }
             const afterMetaJson = JSON.stringify(probeDoc.getMap('meta').toJSON());
             if (afterMetaJson !== beforeMetaJson) {
                 return {
@@ -6350,422 +6252,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         actorUserId?: string | null,
         isOwner: boolean = false
     ): { Allowed: boolean; Reason?: string } {
-        if (currentContent === nextContent) {
-            return { Allowed: true };
-        }
-        const effectiveOwnerId = isOwner && actorUserId ? actorUserId : '__artifact_owner__';
-        const normActor = actorUserId ? NormalizeUUID(actorUserId) : '';
-        const trimmedCurrent = currentContent.trim();
-
-        if (!trimmedCurrent) {
-            const emptyStructCheck = this.validateNewLocksOnEmptyContent(nextContent, actorUserId, isOwner);
-            if (emptyStructCheck !== null) {
-                return emptyStructCheck;
-            }
-        }
-
-        if (trimmedCurrent.startsWith('{')) {
-            let parsedCurrentType: 'slides' | 'workbook' | null = null;
-            try {
-                const parsedCurrent = JSON.parse(trimmedCurrent) as { Slides?: Array<object>; Worksheets?: Array<object> };
-                if (Array.isArray(parsedCurrent.Slides)) {
-                    parsedCurrentType = 'slides';
-                    const prevDeck = SlideDeckEngine.Instance.ParseDeckSpec(currentContent);
-                    const nextDeck = SlideDeckEngine.Instance.ParseDeckSpec(nextContent);
-                    const dupSlideId = this.findDuplicateNonEmptyId(nextDeck.Slides.map((s) => s.SlideID));
-                    if (dupSlideId) {
-                        return { Allowed: false, Reason: `Duplicate SlideID '${dupSlideId}' is not allowed.` };
-                    }
-                    const nextSlidesById = new Map(nextDeck.Slides.map((s) => [s.SlideID, s]));
-                    for (const nextSlide of nextDeck.Slides) {
-                        const dupRegionId = this.findDuplicateNonEmptyId(nextSlide.Regions.map((r) => r.RegionID));
-                        if (dupRegionId) {
-                            return {
-                                Allowed: false,
-                                Reason: `Duplicate RegionID '${dupRegionId}' on slide '${nextSlide.SlideID}' is not allowed.`
-                            };
-                        }
-                    }
-                    for (const prevSlide of prevDeck.Slides) {
-                        const nextSlide = nextSlidesById.get(prevSlide.SlideID);
-                        const slideCheck = SlideDeckEngine.Instance.CanActorEditSlide(
-                            prevSlide,
-                            actorUserId,
-                            effectiveOwnerId,
-                            true
-                        );
-                        if (!slideCheck.Allowed) {
-                            if (!nextSlide || JSON.stringify(prevSlide) !== JSON.stringify(nextSlide)) {
-                                return { Allowed: false, Reason: slideCheck.Reason };
-                            }
-                            continue;
-                        }
-                        if (!isOwner && nextSlide && !this.isSlideLockConfigEqual(prevSlide, nextSlide)) {
-                            const canSelfLockSlide =
-                                !prevSlide.Locked &&
-                                Boolean(nextSlide.Locked) &&
-                                normActor !== '' &&
-                                NormalizeUUID(nextSlide.LockedByUserID ?? '') === normActor &&
-                                !nextSlide.AllowEditors;
-                            const isSelfLockOwner =
-                                Boolean(prevSlide.Locked) &&
-                                normActor !== '' &&
-                                NormalizeUUID(prevSlide.LockedByUserID ?? '') === normActor &&
-                                (!nextSlide.Locked || NormalizeUUID(nextSlide.LockedByUserID ?? '') === normActor);
-                            if (!canSelfLockSlide && !isSelfLockOwner) {
-                                return {
-                                    Allowed: false,
-                                    Reason: 'Cannot modify slide lock metadata without owner permission.'
-                                };
-                            }
-                        }
-                        if (prevSlide.Regions.length > 0) {
-                            const nextRegionsById = nextSlide
-                                ? new Map(nextSlide.Regions.map((r) => [r.RegionID, r]))
-                                : null;
-                            for (const prevRegion of prevSlide.Regions) {
-                                const regionCheck = SlideDeckEngine.Instance.CanActorEditRegion(
-                                    prevSlide,
-                                    prevRegion,
-                                    actorUserId,
-                                    effectiveOwnerId,
-                                    true
-                                );
-                                const nextRegion = nextRegionsById?.get(prevRegion.RegionID);
-                                if (!regionCheck.Allowed) {
-                                    if (!nextSlide || !nextRegion || JSON.stringify(prevRegion) !== JSON.stringify(nextRegion)) {
-                                        return { Allowed: false, Reason: regionCheck.Reason };
-                                    }
-                                } else if (
-                                    !isOwner &&
-                                    nextRegion &&
-                                    !this.isSlideLockConfigEqual(prevRegion, nextRegion)
-                                ) {
-                                    const canSelfLockRegion =
-                                        !prevRegion.Locked &&
-                                        Boolean(nextRegion.Locked) &&
-                                        normActor !== '' &&
-                                        NormalizeUUID(nextRegion.LockedByUserID ?? '') === normActor &&
-                                        !nextRegion.AllowEditors;
-                                    const isSelfLockOwner =
-                                        Boolean(prevRegion.Locked) &&
-                                        normActor !== '' &&
-                                        NormalizeUUID(prevRegion.LockedByUserID ?? '') === normActor &&
-                                        (!nextRegion.Locked ||
-                                            NormalizeUUID(nextRegion.LockedByUserID ?? '') === normActor);
-                                    if (!canSelfLockRegion && !isSelfLockOwner) {
-                                        return {
-                                            Allowed: false,
-                                            Reason: 'Cannot modify slide region lock metadata without owner permission.'
-                                        };
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Block spoofing LockedByUserID on any newly added slides/regions (`P0-12`).
-                    if (!isOwner) {
-                        const prevSlidesById = new Map(prevDeck.Slides.map((s) => [s.SlideID, s]));
-                        for (const nextSlide of nextDeck.Slides) {
-                            const prevSlide = prevSlidesById.get(nextSlide.SlideID);
-                            if (!prevSlide && nextSlide.Locked) {
-                                if (!normActor || NormalizeUUID(nextSlide.LockedByUserID ?? '') !== normActor) {
-                                    return {
-                                        Allowed: false,
-                                        Reason: 'Cannot create locked slide with another user as LockedByUserID.'
-                                    };
-                                }
-                            }
-                            const prevRegIds = new Set(prevSlide ? prevSlide.Regions.map((r) => r.RegionID) : []);
-                            for (const nextReg of nextSlide.Regions) {
-                                if (!prevRegIds.has(nextReg.RegionID) && nextReg.Locked) {
-                                    if (!normActor || NormalizeUUID(nextReg.LockedByUserID ?? '') !== normActor) {
-                                        return {
-                                            Allowed: false,
-                                            Reason: 'Cannot create locked region with another user as LockedByUserID.'
-                                        };
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    return { Allowed: true };
-                }
-
-                if (Array.isArray(parsedCurrent.Worksheets)) {
-                    parsedCurrentType = 'workbook';
-                    const prevWb = SpreadsheetEngine.Instance.ParseWorkbook(currentContent);
-                    const nextWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
-                    const dupSheetId = this.findDuplicateNonEmptyId(nextWb.Worksheets.map((s) => s.SheetID));
-                    if (dupSheetId) {
-                        return { Allowed: false, Reason: `Duplicate SheetID '${dupSheetId}' is not allowed.` };
-                    }
-                    const nextSheetsById = new Map<string, WorksheetSpec>(
-                        nextWb.Worksheets.map((s) => [s.SheetID, s])
-                    );
-                    const prevSheetsById = new Map<string, WorksheetSpec>(
-                        prevWb.Worksheets.map((s) => [s.SheetID, s])
-                    );
-                    const editCtx = {
-                        UserID: actorUserId ?? undefined,
-                        OwnerUserID: effectiveOwnerId,
-                        IsEditor: true
-                    };
-                    for (const prevSheet of prevWb.Worksheets) {
-                        const rules = prevSheet.ProtectedRanges ?? [];
-                        const nextSheet = nextSheetsById.get(prevSheet.SheetID);
-                        if (!nextSheet) {
-                            if (rules.length > 0 && !isOwner) {
-                                return {
-                                    Allowed: false,
-                                    Reason: `Cannot delete worksheet '${prevSheet.Name}' containing protected ranges.`
-                                };
-                            }
-                            continue;
-                        }
-
-                        const dupRangeId = this.findDuplicateNonEmptyId(
-                            (nextSheet.ProtectedRanges ?? []).map((r) => r.RangeID)
-                        );
-                        if (dupRangeId) {
-                            return {
-                                Allowed: false,
-                                Reason: `Duplicate RangeID '${dupRangeId}' on worksheet '${prevSheet.Name}' is not allowed.`
-                            };
-                        }
-
-                        const prevRulesById = new Map(rules.map((r) => [r.RangeID, r]));
-                        const nextRulesById = new Map((nextSheet.ProtectedRanges ?? []).map((r) => [r.RangeID, r]));
-
-                        // Block non-owners/non-creators from modifying, removing, or spoofing ProtectedRanges rules.
-                        for (const rule of rules) {
-                            const matchingNextRule = nextRulesById.get(rule.RangeID);
-                            const isRuleOwner =
-                                isOwner || (normActor !== '' && NormalizeUUID(rule.LockedByUserID) === normActor);
-                            const ruleModified =
-                                !matchingNextRule ||
-                                matchingNextRule.Range !== rule.Range ||
-                                Boolean(matchingNextRule.AllowEditors) !== Boolean(rule.AllowEditors) ||
-                                NormalizeUUID(matchingNextRule.LockedByUserID) !== NormalizeUUID(rule.LockedByUserID) ||
-                                (matchingNextRule.Description ?? '') !== (rule.Description ?? '') ||
-                                (matchingNextRule.LockedAt ?? '') !== (rule.LockedAt ?? '');
-                            if (ruleModified && !isRuleOwner) {
-                                return {
-                                    Allowed: false,
-                                    Reason: `Cannot alter or remove protected range '${rule.Range}' without owner permission.`
-                                };
-                            }
-                        }
-                        const maxRows = Math.max(prevSheet.Rows?.length ?? 0, nextSheet.Rows?.length ?? 0, 1000);
-                        const maxCols = Math.max(prevSheet.Columns?.length ?? 0, nextSheet.Columns?.length ?? 0, 260);
-                        if (!isOwner) {
-                            for (const nextRule of nextSheet.ProtectedRanges ?? []) {
-                                if (!prevRulesById.has(nextRule.RangeID)) {
-                                    if (!normActor || NormalizeUUID(nextRule.LockedByUserID) !== normActor) {
-                                        return {
-                                            Allowed: false,
-                                            Reason: `Cannot create protected range '${nextRule.Range}' with spoofed LockedByUserID.`
-                                        };
-                                    }
-                                    // Prevent inserting a permissive/shadowing ProtectedRange overlapping another user's restrictive rule (`P0-12`).
-                                    const nextParsed = ParseRangeAddress(nextRule.Range, maxRows, maxCols);
-                                    if (!nextParsed) {
-                                        return {
-                                            Allowed: false,
-                                            Reason: `Invalid protected range address '${nextRule.Range}'.`
-                                        };
-                                    }
-                                    for (const prevRule of rules) {
-                                        const isPrevRuleCreator =
-                                            normActor !== '' && NormalizeUUID(prevRule.LockedByUserID) === normActor;
-                                        if (isPrevRuleCreator || prevRule.AllowEditors) {
-                                            continue;
-                                        }
-                                        const prevParsed = ParseRangeAddress(prevRule.Range, maxRows, maxCols);
-                                        if (!prevParsed || this.doParsedRangesOverlap(nextParsed, prevParsed)) {
-                                            return {
-                                                Allowed: false,
-                                                Reason: `Cannot add protected range '${nextRule.Range}' overlapping locked range '${prevRule.Range}'.`
-                                            };
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if (rules.length === 0) {
-                            continue;
-                        }
-
-                        // Enforce structural protection (rows, columns, sorting, merges) overlapping ANY non-editable rule.
-                        for (const rule of rules) {
-                            const parsedRange = ParseRangeAddress(rule.Range, maxRows, maxCols);
-                            if (!parsedRange) {
-                                if (!isOwner) {
-                                    return {
-                                        Allowed: false,
-                                        Reason: `Blocked structural edit: invalid protected range '${rule.Range}'.`
-                                    };
-                                }
-                                continue;
-                            }
-                            const sampleAddr = FormatCellAddress(parsedRange.startRow, parsedRange.startCol);
-                            const samplePerm = SpreadsheetEngine.Instance.CheckCellWritePermission(
-                                { ...prevSheet, ProtectedRanges: [rule] },
-                                sampleAddr,
-                                editCtx
-                            );
-                            if (samplePerm.Allowed) {
-                                continue;
-                            }
-
-                            const prevRowsPrefix = (prevSheet.Rows ?? [])
-                                .slice(0, parsedRange.endRow)
-                                .map((r) => r.RowID);
-                            const nextRowsPrefix = (nextSheet.Rows ?? [])
-                                .slice(0, parsedRange.endRow)
-                                .map((r) => r.RowID);
-                            if (
-                                prevRowsPrefix.length !== nextRowsPrefix.length ||
-                                prevRowsPrefix.some((id, idx) => id !== nextRowsPrefix[idx])
-                            ) {
-                                return {
-                                    Allowed: false,
-                                    Reason:
-                                        samplePerm.Reason ??
-                                        `Cannot insert, delete, or reorder rows intersecting protected range '${rule.Range}'.`
-                                };
-                            }
-
-                            const prevColsPrefix = (prevSheet.Columns ?? [])
-                                .slice(0, parsedRange.endCol)
-                                .map((c) => c.ColumnID);
-                            const nextColsPrefix = (nextSheet.Columns ?? [])
-                                .slice(0, parsedRange.endCol)
-                                .map((c) => c.ColumnID);
-                            if (
-                                prevColsPrefix.length !== nextColsPrefix.length ||
-                                prevColsPrefix.some((id, idx) => id !== nextColsPrefix[idx])
-                            ) {
-                                return {
-                                    Allowed: false,
-                                    Reason:
-                                        samplePerm.Reason ??
-                                        `Cannot insert, delete, or reorder columns intersecting protected range '${rule.Range}'.`
-                                };
-                            }
-
-                            if (
-                                JSON.stringify(prevSheet.SortSpec ?? null) !==
-                                JSON.stringify(nextSheet.SortSpec ?? null)
-                            ) {
-                                return {
-                                    Allowed: false,
-                                    Reason: `Cannot alter sort specification on worksheet with protected range '${rule.Range}'.`
-                                };
-                            }
-                            if (
-                                JSON.stringify(prevSheet.MergeRanges ?? []) !==
-                                JSON.stringify(nextSheet.MergeRanges ?? [])
-                            ) {
-                                return {
-                                    Allowed: false,
-                                    Reason: `Cannot alter merged ranges on worksheet with protected range '${rule.Range}'.`
-                                };
-                            }
-                        }
-
-                        const allAddresses = new Set<string>([
-                            ...Object.keys(prevSheet.Cells ?? {}),
-                            ...Object.keys(nextSheet.Cells ?? {})
-                        ]);
-                        for (const addr of allAddresses) {
-                            const prevCell = prevSheet.Cells?.[addr];
-                            const nextCell = nextSheet.Cells?.[addr];
-                            if (JSON.stringify(prevCell ?? null) === JSON.stringify(nextCell ?? null)) {
-                                continue;
-                            }
-                            const perm = this.checkSheetCellMostRestrictive(prevSheet, addr, editCtx);
-                            if (!perm.Allowed) {
-                                return { Allowed: false, Reason: perm.Reason };
-                            }
-                        }
-                    }
-
-                    // Also block spoofing LockedByUserID on brand-new worksheets added in the same update.
-                    if (!isOwner) {
-                        for (const nextSheet of nextWb.Worksheets) {
-                            if (prevSheetsById.has(nextSheet.SheetID)) {
-                                continue;
-                            }
-                            const dupRangeId = this.findDuplicateNonEmptyId(
-                                (nextSheet.ProtectedRanges ?? []).map((r) => r.RangeID)
-                            );
-                            if (dupRangeId) {
-                                return {
-                                    Allowed: false,
-                                    Reason: `Duplicate RangeID '${dupRangeId}' on worksheet '${nextSheet.Name}' is not allowed.`
-                                };
-                            }
-                            for (const nextRule of nextSheet.ProtectedRanges ?? []) {
-                                if (!normActor || NormalizeUUID(nextRule.LockedByUserID) !== normActor) {
-                                    return {
-                                        Allowed: false,
-                                        Reason: `Cannot create protected range '${nextRule.Range}' with spoofed LockedByUserID.`
-                                    };
-                                }
-                            }
-                        }
-                    }
-                    return { Allowed: true };
-                }
-            } catch {
-                // If structured JSON already identified Slides or Worksheets, fail closed (`P0-12`);
-                // only non-structured content starting with `{` falls through to markdown validation.
-                if (parsedCurrentType !== null) {
-                    return {
-                        Allowed: false,
-                        Reason: 'Write rejected: malformed update to structured document with protected regions.'
-                    };
-                }
-            }
-        }
-
-        const docCheck = DocumentLiveBlockEngine.Instance.ValidateDocumentEditAgainstLocks(
-            currentContent,
-            nextContent,
-            actorUserId,
-            effectiveOwnerId,
-            true
-        );
-        if (!docCheck.Allowed) {
-            return { Allowed: false, Reason: docCheck.ViolationReason };
-        }
-        if (!isOwner) {
-            const prevLocks = DocumentLiveBlockEngine.Instance.ParseDocumentLocks(currentContent);
-            const nextLocks = DocumentLiveBlockEngine.Instance.ParseDocumentLocks(nextContent);
-            if (nextLocks.length > prevLocks.length) {
-                const prevKeys = prevLocks.map(
-                    (l) => `${l.Kind}|${l.Scope}|${l.LockedByUserID ? NormalizeUUID(l.LockedByUserID) : ''}|${l.Label}`
-                );
-                for (const nl of nextLocks) {
-                    const nlKey = `${nl.Kind}|${nl.Scope}|${nl.LockedByUserID ? NormalizeUUID(nl.LockedByUserID) : ''}|${nl.Label}`;
-                    const existingIdx = prevKeys.indexOf(nlKey);
-                    if (existingIdx >= 0) {
-                        prevKeys.splice(existingIdx, 1);
-                        continue;
-                    }
-                    const lockedByNorm = nl.LockedByUserID ? NormalizeUUID(nl.LockedByUserID) : '';
-                    if (nl.Scope === 'owner-only' || !normActor || lockedByNorm !== normActor) {
-                        return {
-                            Allowed: false,
-                            Reason: `Cannot add document lock '${nl.Label}' without owner permission.`
-                        };
-                    }
-                }
-            }
-        }
-        return { Allowed: true };
+        return ValidateArtifactContentMutationAgainstLocks(currentContent, nextContent, actorUserId, isOwner);
     }
 
     private onClientMessage(
@@ -6774,6 +6261,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         rawData: RawData
     ): void {
         try {
+            const nowMs = Date.now();
+            if (!conn.FrameWindowStartMs || nowMs - conn.FrameWindowStartMs >= CLIENT_FRAME_RATE_WINDOW_MS) {
+                conn.FrameWindowStartMs = nowMs;
+                conn.FrameCountInWindow = 1;
+            } else {
+                conn.FrameCountInWindow = (conn.FrameCountInWindow ?? 0) + 1;
+                if (conn.FrameCountInWindow > MAX_CLIENT_FRAMES_PER_WINDOW) {
+                    this.sendControlFrame(conn.Socket, {
+                        action: 'readonly-rejected',
+                        message: 'Rate limit exceeded: too many collaboration frames in window.'
+                    });
+                    return;
+                }
+            }
+
             const bytes = this.rawDataToUint8Array(rawData);
             if (bytes.byteLength === 0) {
                 return;
@@ -6800,6 +6302,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
                     if (isWriteFrame) {
                         const incomingUpdateBytes = decoding.readVarUint8Array(subDecoder);
+                        const currentDocBytes = Y.encodeStateAsUpdate(room.Doc).byteLength;
+                        if (currentDocBytes + incomingUpdateBytes.byteLength > MAX_ROOM_DOC_BYTES) {
+                            this.sendControlFrame(conn.Socket, {
+                                action: 'readonly-rejected',
+                                message: `Write rejected: collaboration document size limit (${MAX_ROOM_DOC_BYTES} bytes) exceeded.`
+                            });
+                            return;
+                        }
                         if (this.shouldSuppressDuplicateReconnectUpdate(room, conn, incomingUpdateBytes)) {
                             return;
                         }
@@ -6834,6 +6344,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
                 case YJS_MESSAGE_AWARENESS: {
                     const updateBytes = decoding.readVarUint8Array(decoder);
+                    if (updateBytes.byteLength > MAX_AWARENESS_FRAME_BYTES) {
+                        this.sendControlFrame(conn.Socket, {
+                            action: 'readonly-rejected',
+                            message: `Awareness payload exceeds maximum size (${MAX_AWARENESS_FRAME_BYTES} bytes).`
+                        });
+                        return;
+                    }
                     this.applyAuthenticatedAwarenessUpdate(room, conn, updateBytes);
                     break;
                 }
@@ -6925,6 +6442,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     actingForUserId: _ignoredTopActingForId,
                     actingForUserName: _ignoredTopActingForName,
                     actingForUserEmail: _ignoredTopActingForEmail,
+                    email: _ignoredTopEmail,
                     agentPhase: _ignoredTopPhase,
                     toolName: _ignoredTopTool,
                     actionSummary: _ignoredTopSummary,
@@ -6941,6 +6459,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     actingForUserId: _ignoredUserActingForId,
                     actingForUserName: _ignoredUserActingForName,
                     actingForUserEmail: _ignoredUserActingForEmail,
+                    email: _ignoredUserEmail,
                     agentPhase: _ignoredUserPhase,
                     toolName: _ignoredUserTool,
                     actionSummary: _ignoredUserSummary,
@@ -6957,7 +6476,6 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         userId: conn.User.ID,
                         userName: conn.User.Name,
                         name: conn.User.Name,
-                        email: conn.User.Email || undefined,
                         canEdit: conn.CanEdit,
                         isAgent: false
                     }
@@ -7371,7 +6889,23 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
     }
 
-    private scheduleIdleRoomDisposal(room: CollaborationRoom): void {
+    private pruneExcessIdleRooms(): void {
+        const nowMs = Date.now();
+        for (const [roomKey, room] of Array.from(this._rooms.entries())) {
+            if (room.Connections.size > 0 || (this._pendingUpgradesByArtifact.get(roomKey) ?? 0) > 0) {
+                continue;
+            }
+            const isClean = !room.DirtyWorkingState && !room.DirtyVersion;
+            const isExpiredDirty =
+                room.RetainedDirtySinceMs != null && nowMs - room.RetainedDirtySinceMs >= RETAINED_DIRTY_ROOM_TTL_MS;
+            if (isClean || isExpiredDirty) {
+                this._rooms.delete(roomKey);
+                this.teardownRoomResources(room);
+            }
+        }
+    }
+
+    private scheduleIdleRoomDisposal(room: CollaborationRoom, delayMs?: number): void {
         if (room.IdleDisposeTimer) {
             clearTimeout(room.IdleDisposeTimer);
             room.IdleDisposeTimer = null;
@@ -7379,7 +6913,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         room.IdleDisposeTimer = setTimeout(() => {
             room.IdleDisposeTimer = null;
             void this.disposeRoomIfIdle(room);
-        }, this._idleRoomTtlMs);
+        }, delayMs ?? this._idleRoomTtlMs);
         (room.IdleDisposeTimer as { unref?: () => void }).unref?.();
     }
 
@@ -7414,12 +6948,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     this.scheduleIdleRoomDisposal(room);
                     return;
                 }
-                // Retain the dirty room in memory rather than evicting unpersisted user edits (Item 8),
-                // while stopping background retry timers until the next connection or shutdown.
+                const nowMs = Date.now();
+                room.RetainedDirtySinceMs = room.RetainedDirtySinceMs ?? nowMs;
+                const retainedDirtyCount = Array.from(this._rooms.values()).filter(
+                    (r) => r.Connections.size === 0 && (r.DirtyWorkingState || r.DirtyVersion) && r.RetainedDirtySinceMs != null
+                ).length;
+                const ttlExpired = nowMs - room.RetainedDirtySinceMs >= RETAINED_DIRTY_ROOM_TTL_MS;
+                if (!ttlExpired && retainedDirtyCount <= MAX_RETAINED_DIRTY_ROOMS && !this._shuttingDown) {
+                    LogError(
+                        `ArtifactCollaborationServer.disposeRoomIfIdle retaining dirty room '${room.ArtifactID}' in memory after ${room.CompactionRetryCount} failed flush/compaction attempts.`
+                    );
+                    this.scheduleIdleRoomDisposal(room, RETAINED_DIRTY_ROOM_TTL_MS);
+                    return;
+                }
                 LogError(
-                    `ArtifactCollaborationServer.disposeRoomIfIdle retaining dirty room '${room.ArtifactID}' in memory after ${room.CompactionRetryCount} failed flush/compaction attempts.`
+                    `ArtifactCollaborationServer.disposeRoomIfIdle evicting dirty room '${room.ArtifactID}' after retention cap/TTL (${retainedDirtyCount} retained, ttlExpired=${ttlExpired}).`
                 );
-                return;
             }
         }
 

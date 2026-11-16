@@ -1387,9 +1387,13 @@ export class RunViewResolver extends ResolverBase {
       }
 
       // Convert GraphQL input types to core types
-      const coreParams: RunViewWithCacheCheckParams[] = input.map(item => ({
+      const coreParams: RunViewWithCacheCheckParams[] = input.map(item => {
+        const canonicalEntityName = item.params.EntityName && typeof provider.EntityByName === 'function'
+          ? (provider.EntityByName(item.params.EntityName)?.Name ?? item.params.EntityName)
+          : item.params.EntityName;
+        return ({
         params: {
-          EntityName: item.params.EntityName,
+          EntityName: canonicalEntityName,
           ExtraFilter: item.params.ExtraFilter,
           OrderBy: item.params.OrderBy,
           Fields: item.params.Fields,
@@ -1432,7 +1436,8 @@ export class RunViewResolver extends ResolverBase {
           rowCount: item.cacheStatus.rowCount,
           fieldSecurityKey: item.cacheStatus.fieldSecurityKey ?? undefined,
         } : undefined,
-      }));
+      });
+      });
 
       const response = await sqlProvider.RunViewsWithCacheCheck(coreParams, userPayload.userRecord);
 

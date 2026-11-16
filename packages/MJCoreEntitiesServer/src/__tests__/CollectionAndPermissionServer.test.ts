@@ -203,7 +203,7 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
             MaxRows: 1,
             ResultType: 'simple'
         };
-        const preParams = CollectionPreRunViewHook(partialParams, ownerUser, provider);
+        const preParams = await CollectionPreRunViewHook(partialParams, ownerUser, provider);
         expect(preParams.Fields).toEqual(['Name', 'ID']);
 
         const rawPaged: RunViewResult = {
@@ -505,7 +505,7 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
             })
         );
 
-        const artPre = ArtifactPermissionPreRunViewHook(
+        const artPre = await ArtifactPermissionPreRunViewHook(
             { EntityName: 'MJ: Artifact Permissions', Fields: ['CanShare'], MaxRows: 1, ResultType: 'simple' },
             ownerUser,
             provider
@@ -530,7 +530,7 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
         expect(artFiltered.Results).toEqual([{ CanShare: true }]);
         expect(artFiltered.TotalRowCount).toBe(1);
 
-        const colPre = CollectionPermissionPreRunViewHook(
+        const colPre = await CollectionPermissionPreRunViewHook(
             { EntityName: 'MJ: Collection Permissions', Fields: ['CanEdit'], ResultType: 'simple' },
             ownerUser,
             provider
@@ -625,7 +625,7 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
             })
         );
 
-        const attrPre = ArtifactVersionAttributePreRunViewHook(
+        const attrPre = await ArtifactVersionAttributePreRunViewHook(
             { EntityName: 'MJ: Artifact Version Attributes', Fields: ['Name'], ResultType: 'simple' },
             ownerUser,
             provider
@@ -742,9 +742,9 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
             MaxRows: 1,
             ResultType: 'simple'
         };
-        CollectionArtifactPreRunViewHook(caParams, ownerUser, provider);
+        const hookedCaParams = await CollectionArtifactPreRunViewHook(caParams, ownerUser, provider);
         const caResult = await CollectionArtifactPostRunViewHook(
-            caParams,
+            hookedCaParams,
             {
                 Success: true,
                 Results: [{ ID: 'ca-1', CollectionID: COL_DENIED_ID, ArtifactVersionID: VER_DENIED_ID }],
@@ -765,9 +765,9 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
             MaxRows: 1,
             ResultType: 'simple'
         };
-        ArtifactGuestShareLinkPreRunViewHook(gslParams, ownerUser, provider);
+        const hookedGslParams = await ArtifactGuestShareLinkPreRunViewHook(gslParams, ownerUser, provider);
         const gslResult = await ArtifactGuestShareLinkPostRunViewHook(
-            gslParams,
+            hookedGslParams,
             {
                 Success: true,
                 Results: [
@@ -959,7 +959,7 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
             isSaved: true
         });
         expect(await reparentAttempt.entity.Save()).toBe(false);
-        expect(reparentAttempt.history[0]?.Message).toContain('Delete permission');
+        expect(reparentAttempt.history[0]?.Message).toContain('direct owner');
         expect(superSaveSpy).not.toHaveBeenCalled();
 
         // 3. Even with CanDelete=1 on Child, CanEdit=0 on oldParentId still blocks detach/reparent

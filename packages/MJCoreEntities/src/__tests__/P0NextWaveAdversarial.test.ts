@@ -432,6 +432,7 @@ describe('P0 Next-Wave Adversarial Regression Suite (NW-2, P0-R5, P0-R6)', () =>
             FrozenByUserID: UUID_OWNER,
             FrozenByUserName: 'Alice',
             SecurityWarningAcknowledged: true,
+            Binding: { BlockID: 'blk-valid', Kind: 'SavedQuery', SourceTargetID: 'Q' },
             Columns: [
                 { Name: 'Label', DisplayName: 'Label', Type: 'string' },
                 { Name: 'Val', DisplayName: 'Val', Type: 'number' },
@@ -460,13 +461,14 @@ describe('P0 Next-Wave Adversarial Regression Suite (NW-2, P0-R5, P0-R6)', () =>
         }).Deck;
         const validBytes = ExportDeckToPptxBytesInternal(validDeck);
 
-        // With secret configured, imported chart region retains verified Mode:'Frozen'
+        // Even with a signing secret configured, imported PPTX charts MUST NOT be forged into
+        // HMAC-signed Mode:'Frozen' SavedQuery snapshots (`S3`) — always materialize static rich-text.
         const importedSigned = ImportDeckFromPptxBytesInternal(validBytes);
-        const signedChartRegion = importedSigned.Slides.flatMap((s) => s.Regions).find((r) => r.BlockSpec);
-        expect(signedChartRegion?.BlockSpec?.Mode).toBe('Frozen');
-        expect(ValidateFrozenBlockSnapshot(signedChartRegion?.BlockSpec?.FrozenSnapshot).SnapshotVerified).toBe(true);
+        const signedRegions = importedSigned.Slides.flatMap((s) => s.Regions);
+        expect(signedRegions.some((r) => r.BlockSpec?.Mode === 'Frozen')).toBe(false);
+        expect(signedRegions.some((r) => r.Kind === 'rich-text' && r.MarkdownContent.includes('| Q1 | 42 |'))).toBe(true);
 
-        // With secret unset, imported chart downgrades to rich-text markdown (never unsigned Mode:'Frozen')
+        // With secret unset, imported chart likewise materializes static rich-text markdown
         const origEnv = process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
         delete process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
         DocumentLiveBlockEngine.Instance.SetSigningSecret(null);

@@ -215,7 +215,8 @@ describe('ArtifactVersionPreRunViewHook & ArtifactVersionPostRunViewHook narrow 
             ResultType: 'simple'
         };
         const hookedParams = await ArtifactVersionPreRunViewHook(callerParams, readerUser);
-        expect(hookedParams).toBe(callerParams);
+        expect(hookedParams).not.toBe(callerParams);
+        expect(callerParams.Fields).toEqual(['ID', 'VersionNumber']);
         expect(hookedParams.Fields).toEqual(['ID', 'VersionNumber', 'ArtifactID']);
         expect(origFields).toEqual(['ID', 'VersionNumber']);
 
@@ -628,6 +629,13 @@ class TestServerVersionProvider extends DatabaseProviderBase {
                 'Collection',
                 'vwCollections',
                 ['OwnerID', 'ParentID']
+            ),
+            buildSupportEntityInfo(
+                '88888888-8888-4888-8888-888888888888',
+                'MJ: Artifact Guest Share Links',
+                'ArtifactGuestShareLink',
+                'vwArtifactGuestShareLinks',
+                ['ArtifactID', 'ArtifactVersionID', 'MagicLinkInviteID']
             )
         ];
     }
@@ -977,7 +985,7 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
         expect(fullRes.Results).toHaveLength(1);
         expect(fullRes.Results[0]?.Content).toBe(fullDbRow.Content);
 
-        // 3. Unauthorized user with the SAME role hitting the warm cache is still denied (0 rows)!
+        // 3. Unauthorized user with the SAME role hitting the warm cache is denied at SQL PreRunView (1 = 0) AND PostRunView (0 rows)!
         const deniedCacheHit = await provider.RunView<MockVersionRow>(
             {
                 EntityName: 'MJ: Artifact Versions',
@@ -986,7 +994,8 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             },
             intruderUser
         );
-        expect(provider.internalRunViewCalls).toHaveLength(1);
+        expect(provider.internalRunViewCalls).toHaveLength(2);
+        expect(String(provider.internalRunViewCalls[1]?.ExtraFilter)).toContain('1 = 0');
         expect(deniedCacheHit.Results).toEqual([]);
         expect(deniedCacheHit.RowCount).toBe(0);
 
@@ -1320,11 +1329,15 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             Fields: ['ID'],
             ResultType: 'simple'
         };
-        ArtifactVersionPreRunViewHook(dbParams, undefined, databaseProviderPartial as IMetadataProvider);
-        expect(dbParams.Fields).toEqual(['ID', 'ArtifactID']);
+        const hookedDbParams = await ArtifactVersionPreRunViewHook(
+            dbParams,
+            undefined,
+            databaseProviderPartial as IMetadataProvider
+        );
+        expect(hookedDbParams.Fields).toEqual(['ID', 'ArtifactID']);
 
         const dbHookResult = await ArtifactVersionPostRunViewHook(
-            dbParams,
+            hookedDbParams,
             sampleResults,
             undefined,
             databaseProviderPartial as IMetadataProvider
@@ -1341,11 +1354,15 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             Fields: ['ID'],
             ResultType: 'simple'
         };
-        ArtifactVersionPreRunViewHook(netParams, undefined, networkProviderPartial as IMetadataProvider);
-        expect(netParams.Fields).toEqual(['ID']);
+        const hookedNetParams = await ArtifactVersionPreRunViewHook(
+            netParams,
+            undefined,
+            networkProviderPartial as IMetadataProvider
+        );
+        expect(hookedNetParams.Fields).toEqual(['ID']);
 
         const netHookResult = await ArtifactVersionPostRunViewHook(
-            netParams,
+            hookedNetParams,
             sampleResults,
             undefined,
             networkProviderPartial as IMetadataProvider
@@ -1649,6 +1666,225 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             expect(await okEntity.Save()).toBe(true);
             expect(okEntity.ContentHash.length).toBe(64);
             expect(okEntity.ContentSizeBytes).toBe(CalculateContentSizeBytes('# Valid Content'));
+        } finally {
+            superSaveSpy.mockRestore();
+            superDeleteSpy.mockRestore();
+        }
+    });
+
+    it('B1 / B2: matches mixed-case EntityName, rejects EntityName vs ViewEntity mismatch, and preserves paged TotalRowCount & count_only when SQL-scoped', async () => {
+        const provider = new TestServerVersionProvider(async (params) => {
+            if (params.EntityName === 'MJ: Artifacts') {
+                return {
+                    Success: true,
+                    Results: [{ ID: targetArtifactId, UserID: ownerUserId }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            return {
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            };
+        });
+        const sysUser = makeRoleUser(systemUserId, 'sys@example.com', provider);
+        const reader = makeRoleUser(ownerUserId, 'owner@example.com', provider);
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(sysUser);
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet').mockResolvedValue(
+            new Set([targetArtifactId])
+        );
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: targetArtifactId,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: true,
+            CanShare: true,
+            Source: 'Owner',
+            Reason: 'Owner'
+        });
+
+        // 1. Mixed-case EntityName still gets SQL-scoped in PreRunView
+        const mixedParams: RunViewParams = {
+            EntityName: '  mj: artifact versions  ',
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple'
+        };
+        const hooked = await ArtifactVersionPreRunViewHook(mixedParams, reader, provider);
+        expect(String(hooked.ExtraFilter)).toContain(`ArtifactID IN ('${targetArtifactId}')`);
+
+        // When SQL-scoped and removedCount === 0 under MaxRows: 1, TotalRowCount (42) is preserved!
+        const pagedRes = await ArtifactVersionPostRunViewHook(
+            hooked,
+            {
+                Success: true,
+                Results: [{ ID: targetVersionId, ArtifactID: targetArtifactId }],
+                RowCount: 1,
+                TotalRowCount: 42,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            reader,
+            provider
+        );
+        expect(pagedRes.Results).toHaveLength(1);
+        expect(pagedRes.TotalRowCount).toBe(42);
+
+        // SQL-scoped count_only also preserves DB COUNT(*)
+        const countPre = await ArtifactVersionPreRunViewHook(
+            { EntityName: 'mj: artifact versions', ResultType: 'count_only' },
+            reader,
+            provider
+        );
+        const countRes = await ArtifactVersionPostRunViewHook(
+            countPre,
+            { Success: true, Results: [], RowCount: 0, TotalRowCount: 19, ExecutionTime: 1, ErrorMessage: '' },
+            reader,
+            provider
+        );
+        expect(countRes.TotalRowCount).toBe(19);
+
+        // EntityName vs ViewEntity mismatch rejects fail-closed
+        await expect(
+            ArtifactVersionPreRunViewHook(
+                {
+                    EntityName: 'Users',
+                    ViewEntity: { Entity: 'MJ: Artifact Versions' } as RunViewParams['ViewEntity'],
+                    ResultType: 'simple'
+                },
+                reader,
+                provider
+            )
+        ).rejects.toThrow(/does not match/);
+    });
+
+    it('B3 / S8: enforces locks & UserID/hash/version immutability on Save() and cascades guest share links on Delete()', async () => {
+        const provider = new TestServerVersionProvider(async (params) => {
+            if (params.EntityName === 'MJ: Artifacts') {
+                return { Success: true, Results: [{ ID: targetArtifactId, UserID: ownerUserId }], RowCount: 1, TotalRowCount: 1, ExecutionTime: 1, ErrorMessage: '' };
+            }
+            if (params.EntityName === 'MJ: Artifact Versions') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: targetVersionId,
+                            ArtifactID: targetArtifactId,
+                            VersionNumber: 3,
+                            Content: `<!-- mj-lock: owner-only user=${ownerUserId} -->\n## Locked Header\nImmutable owner copy.\n`
+                        }
+                    ],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Artifact Guest Share Links') {
+                return {
+                    Success: true,
+                    Results: [{ ID: '11111111-1111-4111-8111-111111111199', MagicLinkInviteID: '22222222-2222-4222-8222-222222222299' }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+        });
+
+        const sysUser = makeRoleUser(systemUserId, 'sys@example.com', provider);
+        const editor = makeRoleUser('33333333-3333-4333-8333-333333333388', 'editor@example.com', provider);
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(sysUser);
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: targetArtifactId,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: true,
+            CanShare: false,
+            Source: 'ArtifactPermission',
+            Reason: 'Editor'
+        });
+
+        const superSaveSpy = vi.spyOn(Object.getPrototypeOf(MJArtifactVersionEntityServer.prototype), 'Save').mockResolvedValue(true);
+        const superDeleteSpy = vi.spyOn(Object.getPrototypeOf(MJArtifactVersionEntityServer.prototype), 'Delete').mockResolvedValue(true);
+        try {
+            // 1. Non-owner creating new version that edits locked section is denied
+            const lockViolator = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            const hist1: MJArtifactVersionEntityServer['ResultHistory'] = [];
+            Object.defineProperty(lockViolator, 'ResultHistory', { value: hist1, writable: true });
+            Object.defineProperty(lockViolator, 'IsSaved', { value: false, writable: true });
+            Object.defineProperty(lockViolator, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(lockViolator, 'Content', {
+                value: `<!-- mj-lock: owner-only user=${ownerUserId} -->\n## Locked Header\nTampered by editor.\n`,
+                writable: true
+            });
+            Object.defineProperty(lockViolator, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(lockViolator, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(lockViolator, 'GetFieldByName', {
+                value: () => ({ Dirty: true, OldValue: null }),
+                configurable: true
+            });
+            expect(await lockViolator.Save()).toBe(false);
+            expect(hist1[0]?.Message).toMatch(/lock/i);
+            expect(superSaveSpy).not.toHaveBeenCalled();
+
+            // 2. Non-system caller attempting to mutate Content on an already-saved version is denied (B3 immutability)
+            const savedMutator = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            const hist2: MJArtifactVersionEntityServer['ResultHistory'] = [];
+            Object.defineProperty(savedMutator, 'ResultHistory', { value: hist2, writable: true });
+            Object.defineProperty(savedMutator, 'IsSaved', { value: true, writable: true });
+            Object.defineProperty(savedMutator, 'ID', { value: targetVersionId, writable: true });
+            Object.defineProperty(savedMutator, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(savedMutator, 'Content', { value: 'Overwritten snapshot!', writable: true });
+            Object.defineProperty(savedMutator, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(savedMutator, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(savedMutator, 'GetFieldByName', {
+                value: (n: string) =>
+                    n === 'Content'
+                        ? { Dirty: true, OldValue: 'Original snapshot!' }
+                        : { Dirty: false, OldValue: targetArtifactId },
+                configurable: true
+            });
+            expect(await savedMutator.Save()).toBe(false);
+            expect(hist2[0]?.Message).toContain('immutable');
+            expect(superSaveSpy).not.toHaveBeenCalled();
+
+            // 3. Deleting a version cascades guest share link deletion prior to super.Delete() (S8)
+            const linkDeleted = vi.fn().mockResolvedValue(true);
+            const getEntitySpy = vi.spyOn(provider, 'GetEntityObject').mockImplementation(async (name: string) => {
+                if (name === 'MJ: Artifact Guest Share Links') {
+                    return {
+                        Load: vi.fn().mockResolvedValue(true),
+                        Delete: linkDeleted,
+                        LatestResult: { Message: '' }
+                    } as never;
+                }
+                return null as never;
+            });
+            const verToDelete = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            Object.defineProperty(verToDelete, 'ResultHistory', { value: [], writable: true });
+            Object.defineProperty(verToDelete, 'IsSaved', { value: true, writable: true });
+            Object.defineProperty(verToDelete, 'ID', { value: targetVersionId, writable: true });
+            Object.defineProperty(verToDelete, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(verToDelete, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(verToDelete, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(verToDelete, 'GetFieldByName', {
+                value: () => ({ Dirty: false, OldValue: targetArtifactId }),
+                configurable: true
+            });
+            expect(await verToDelete.Delete()).toBe(true);
+            expect(linkDeleted).toHaveBeenCalledTimes(1);
+            expect(superDeleteSpy).toHaveBeenCalledTimes(1);
+            getEntitySpy.mockRestore();
         } finally {
             superSaveSpy.mockRestore();
             superDeleteSpy.mockRestore();

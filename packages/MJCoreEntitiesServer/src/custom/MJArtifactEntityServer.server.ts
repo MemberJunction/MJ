@@ -27,10 +27,23 @@ import {
     type MJUserViewEntity
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { GetGlobalObjectStore, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import {
+    CascadeDeleteArtifactGuestShareLinks,
+    ConsumePreResolvedIdsForParams,
+    EmptyPostRunViewResult,
+    FinalizePostRunViewResult,
+    GetGlobalOriginalFieldsMap,
+    GetGlobalWeakSet,
+    PrepareScopedPreRunView,
+    ShouldBypassPostRunViewAsync,
+    StripSyntheticFieldsFromRow
+} from './ArtifactSecurityHookHelpers';
 
+const ARTIFACT_ENTITY_NAME = 'MJ: Artifacts';
 const GLOBAL_KEY_INTERNAL_ARTIFACT_PARAMS = '__MJ_INTERNAL_ARTIFACT_SECURITY_QUERY_PARAMS__';
 const GLOBAL_KEY_ORIGINAL_ARTIFACT_FIELDS = '__MJ_ORIGINAL_ARTIFACT_FIELDS_BY_PARAMS__';
+const GLOBAL_KEY_SQL_SCOPED_ARTIFACT_PARAMS = '__MJ_SQL_SCOPED_ARTIFACT_PARAMS__';
 
 function getInternalArtifactQueryParamsSet(): WeakSet<object> {
     const store = GetGlobalObjectStore();
@@ -151,32 +164,30 @@ function readDelegateRegistryMap(): Map<string, IArtifactPermissionDelegate> | u
  * Server-side `PreRunView` hook ensuring `ID` is projected when a non-system caller queries
  * `MJ: Artifacts` with a narrow `Fields` list so `ArtifactPostRunViewHook` can check `CanRead`.
  */
-export const ArtifactPreRunViewHook: PreRunViewHook = (
+export const ArtifactPreRunViewHook: PreRunViewHook = async (
     params: RunViewParams,
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
-): RunViewParams => {
-    const provider = resolveMetadataProvider(hookProvider, contextUser);
-    const internalParams = getInternalArtifactQueryParamsSet();
-    if (
-        !params ||
-        internalParams.has(params) ||
-        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
-        resolveTargetEntityName(params) !== 'MJ: Artifacts' ||
-        isServerSystemUser(contextUser) ||
-        (!contextUser && provider !== null && provider.ProviderType !== 'Database')
-    ) {
-        return params;
-    }
-    if (
-        Array.isArray(params.Fields) &&
-        params.Fields.length > 0 &&
-        !hasFieldIgnoreCase(params.Fields, 'ID')
-    ) {
-        getOriginalArtifactFieldsMap().set(params, [...params.Fields]);
-        params.Fields = [...params.Fields, 'ID'];
-    }
-    return params;
+): Promise<RunViewParams> => {
+    return PrepareScopedPreRunView(
+        params,
+        {
+            TargetEntityName: ARTIFACT_ENTITY_NAME,
+            RequiredFields: ['ID'],
+            IdColumnName: 'ID',
+            InternalParams: getInternalArtifactQueryParamsSet(),
+            OriginalFieldsMap: getOriginalArtifactFieldsMap(),
+            SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_ARTIFACT_PARAMS),
+            ResolveReadableIds: (prov, user) =>
+                ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(prov, user),
+            CheckSingleIdReadable: async (prov, artifactId, user) => {
+                const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(prov, artifactId, user);
+                return perms.CanRead;
+            }
+        },
+        contextUser,
+        hookProvider
+    );
 };
 
 /**
@@ -189,75 +200,51 @@ export const ArtifactPostRunViewHook: PostRunViewHook = async (
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
 ): Promise<RunViewResult> => {
-    const internalParams = getInternalArtifactQueryParamsSet();
-    if (
-        !results?.Success ||
-        internalParams.has(params) ||
-        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
-        resolveTargetEntityName(params) !== 'MJ: Artifacts'
-    ) {
+    if (!results?.Success) {
         return results;
     }
-
-    const originalFieldsMap = getOriginalArtifactFieldsMap();
-    const shouldStripSyntheticId = originalFieldsMap.has(params);
-
-    if (isServerSystemUser(contextUser)) {
-        return results;
-    }
-
     const provider = resolveMetadataProvider(hookProvider, contextUser);
+    const sqlScopedSet = GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_ARTIFACT_PARAMS);
+    const { bypass, originalFields } = await ShouldBypassPostRunViewAsync(
+        params,
+        ARTIFACT_ENTITY_NAME,
+        getInternalArtifactQueryParamsSet(),
+        getOriginalArtifactFieldsMap(),
+        contextUser,
+        provider
+    );
+    if (bypass) {
+        sqlScopedSet.delete(params);
+        if (originalFields && Array.isArray(results.Results)) {
+            return {
+                ...results,
+                Results: (results.Results as ArtifactViewRow[]).map((r) => StripSyntheticFieldsFromRow(r, originalFields))
+            };
+        }
+        return results;
+    }
 
-    if (!contextUser) {
+    if (!contextUser || !provider || provider.ProviderType !== 'Database') {
+        sqlScopedSet.delete(params);
         if (provider !== null && provider.ProviderType !== 'Database') {
-            if (shouldStripSyntheticId && Array.isArray(results.Results)) {
+            if (originalFields && Array.isArray(results.Results)) {
                 return {
                     ...results,
-                    Results: (results.Results as ArtifactViewRow[]).map(stripSyntheticArtifactId)
+                    Results: (results.Results as ArtifactViewRow[]).map((r) => StripSyntheticFieldsFromRow(r, originalFields))
                 };
             }
             return results;
         }
-        return {
-            ...results,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0
-        };
-    }
-
-    if (!provider) {
-        return {
-            ...results,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0
-        };
-    }
-
-    if (provider.ProviderType !== 'Database') {
-        if (shouldStripSyntheticId && Array.isArray(results.Results)) {
-            return {
-                ...results,
-                Results: (results.Results as ArtifactViewRow[]).map(stripSyntheticArtifactId)
-            };
-        }
-        return results;
+        return EmptyPostRunViewResult(results);
     }
 
     if (!Array.isArray(results.Results) || results.Results.length === 0) {
-        if (params.ResultType === 'count_only' && (results.TotalRowCount ?? 0) > 0) {
-            return {
-                ...results,
-                RowCount: 0,
-                TotalRowCount: 0
-            };
-        }
-        return results;
+        return FinalizePostRunViewResult(params, results, [], 0, sqlScopedSet);
     }
 
     const rawRows = results.Results as ArtifactViewRow[];
-    const readAllowedByArtifact = new Map<string, boolean>();
+    const preResolved = ConsumePreResolvedIdsForParams(params);
+    const readAllowedByArtifact = new Map<string, boolean>(preResolved);
     const keptRows: ArtifactViewRow[] = [];
 
     for (const row of rawRows) {
@@ -286,24 +273,11 @@ export const ArtifactPostRunViewHook: PostRunViewHook = async (
             readAllowedByArtifact.set(normId, allowed);
         }
         if (allowed) {
-            keptRows.push(shouldStripSyntheticId ? stripSyntheticArtifactId(row) : row);
+            keptRows.push(StripSyntheticFieldsFromRow(row, originalFields));
         }
     }
 
-    const removedCount = rawRows.length - keptRows.length;
-    const isPaged = (results.TotalRowCount ?? rawRows.length) > rawRows.length;
-    if (removedCount === 0 && !shouldStripSyntheticId && !isPaged) {
-        return results;
-    }
-
-    return {
-        ...results,
-        Results: keptRows,
-        RowCount: keptRows.length,
-        TotalRowCount: isPaged
-            ? keptRows.length
-            : Math.max(0, (results.TotalRowCount ?? rawRows.length) - removedCount)
-    };
+    return FinalizePostRunViewResult(params, results, keptRows, rawRows.length, sqlScopedSet);
 };
 
 export function EnsureArtifactReadHookRegistered(): void {
@@ -508,8 +482,8 @@ export class MJArtifactEntityServer extends MJArtifactEntity {
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const actor = this.ContextCurrentUser;
+        const provider = resolveMetadataProvider(this.ProviderToUse, actor);
         if (!isServerSystemUser(actor)) {
-            const provider = resolveMetadataProvider(this.ProviderToUse, actor);
             if (provider?.ProviderType === 'Network') {
                 return super.Delete(options);
             }
@@ -533,6 +507,20 @@ export class MJArtifactEntityServer extends MJArtifactEntity {
         }
 
         const id = this.ID;
+        if (id && IsValidUUID(id)) {
+            const cascadeRes = await CascadeDeleteArtifactGuestShareLinks(
+                provider,
+                `ArtifactID='${EscapeSQLString(id)}'`,
+                actor
+            );
+            if (!cascadeRes.Success) {
+                return this.failResult(
+                    'delete',
+                    cascadeRes.ErrorMessage ?? 'Failed to clean up guest share links before deleting artifact.'
+                );
+            }
+        }
+
         const ok = await super.Delete(options);
         if (ok && id) {
             await ArtifactPermissionEngine.Instance.NotifyPermissionsChanged({

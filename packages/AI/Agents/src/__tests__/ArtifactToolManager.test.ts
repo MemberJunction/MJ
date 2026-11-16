@@ -1790,17 +1790,91 @@ describe('ArtifactToolManager', () => {
                 };
             });
 
-            manager.Initialize([
-                {
-                    name: 'Financials.xlsx',
-                    typeName: 'Spreadsheet',
-                    toolLibraryClass: 'SpreadsheetToolLibrary',
-                    artifactId: artifactUuid,
-                    versionId: 'ver-sheet-1',
-                    versionNumber: 1,
-                    content: initialWbJson,
+            const testUser = makeTestUser('u-rev-hash', 'Rev User');
+            const persistedVersions: Array<{
+                ID: string;
+                ArtifactID: string;
+                VersionNumber: number;
+                Content: string;
+            }> = [];
+            const testProvider = makeTestProvider({
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: artifactUuid, Name: 'Financials.xlsx', UserID: testUser.ID }],
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        const latest =
+                            persistedVersions.length > 0
+                                ? persistedVersions[persistedVersions.length - 1]
+                                : { ID: 'ver-sheet-1', VersionNumber: 1 };
+                        return {
+                            Success: true,
+                            Results: [{ ID: latest.ID, VersionNumber: latest.VersionNumber, ContentMode: 'Text' }],
+                        };
+                    }
+                    return { Success: true, Results: [] };
                 },
-            ]);
+                GetEntityObject: async (entityName: string) => {
+                    if (entityName === 'MJ: Artifact Versions') {
+                        return {
+                            ID: `ver-sheet-${persistedVersions.length + 2}`,
+                            ArtifactID: artifactUuid,
+                            VersionNumber: persistedVersions.length + 2,
+                            UserID: testUser.ID,
+                            Name: 'Financials.xlsx',
+                            Comments: null as string | null,
+                            ContentHash: null as string | null,
+                            ContentMode: 'Text' as const,
+                            FileID: null as string | null,
+                            Content: null as string | null,
+                            Configuration: null as string | null,
+                            NewRecord: () => {},
+                            Load: async () => false,
+                            Save: async function (this: { ID: string; VersionNumber: number; Content: string | null }) {
+                                const existingIdx = persistedVersions.findIndex((v) => v.ID === this.ID);
+                                if (existingIdx >= 0) {
+                                    persistedVersions[existingIdx].Content = this.Content ?? '';
+                                } else {
+                                    persistedVersions.push({
+                                        ID: this.ID || `ver-sheet-${persistedVersions.length + 2}`,
+                                        ArtifactID: artifactUuid,
+                                        VersionNumber: this.VersionNumber || persistedVersions.length + 2,
+                                        Content: this.Content ?? '',
+                                    });
+                                }
+                                return true;
+                            },
+                        };
+                    }
+                    return null;
+                },
+            });
+            const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+                ArtifactID: artifactUuid,
+                CanRead: true,
+                CanEdit: true,
+                CanDelete: false,
+                CanShare: false,
+                Source: 'Owner',
+                Reason: 'Owner',
+            });
+            manager.Initialize(
+                [
+                    {
+                        name: 'Financials.xlsx',
+                        typeName: 'Spreadsheet',
+                        toolLibraryClass: 'SpreadsheetToolLibrary',
+                        artifactId: artifactUuid,
+                        versionId: 'ver-sheet-1',
+                        versionNumber: 1,
+                        content: initialWbJson,
+                    },
+                ],
+                { contextUser: testUser, provider: testProvider },
+            );
 
             // Call 1: write B1
             const call1 = await manager.ExecuteSingleToolCall({

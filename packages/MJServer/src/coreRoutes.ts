@@ -123,16 +123,30 @@ function mountMagicLinkPublic(
     app: Application,
     publicUrl: string,
     log: RouteLog,
-): { authenticatedRouter: Router | undefined; service: MagicLinkService } {
-    const { publicRouter, authenticatedRouter, service } = CreateMagicLinkHandler(publicUrl, configInfo.magicLink);
-    MagicLinkService.SetActiveInstance(service);
-    RegisterMagicLinkAuthProvider(publicUrl, configInfo.magicLink);
-    app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), publicRouter);
-    log.LogIf('verbose', `[MagicLink] Public routes registered at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/redeem and ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
-    return {
-        authenticatedRouter: configInfo.magicLink?.enabled ? authenticatedRouter : undefined,
-        service,
-    };
+): { authenticatedRouter: Router | undefined; service: MagicLinkService } | undefined {
+    const magicLinkEnabled = Boolean(configInfo.magicLink?.enabled);
+    const guestShareEnabled = Boolean(configInfo.magicLink?.artifactGuestSharing?.enabled);
+
+    if (magicLinkEnabled || guestShareEnabled) {
+        const { publicRouter, authenticatedRouter, service } = CreateMagicLinkHandler(publicUrl, configInfo.magicLink);
+        MagicLinkService.SetActiveInstance(service);
+        RegisterMagicLinkAuthProvider(publicUrl, configInfo.magicLink);
+        app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), publicRouter);
+        log.LogIf('verbose', `[MagicLink] Public routes registered at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/redeem and ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
+        return {
+            authenticatedRouter: magicLinkEnabled ? authenticatedRouter : undefined,
+            service,
+        };
+    }
+
+    // Public web widget and local-dev auth share the /magic-link/jwks.json endpoint without
+    // exposing /magic-link/redeem or registering invite-redemption auth when magicLink & guest sharing are off.
+    if (configInfo.widget?.enabled || IsLocalDevAuthEnabled()) {
+        app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), CreateMagicLinkJwksRouter());
+        log.LogIf('verbose', `[MagicLink] Shared JWKS-only route registered at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
+    }
+
+    return undefined;
 }
 
 /**

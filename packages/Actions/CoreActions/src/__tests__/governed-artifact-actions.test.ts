@@ -455,4 +455,24 @@ describe('Governed Artifact CoreActions', () => {
         expect(badInputRes.Success).toBe(false);
         expect(badInputRes.Message).toContain("Tool parameter is required when invoking a single tool with Input");
     });
+
+    it('B7: RefreshAndSnapshotArtifactAction rejects FreezeRefreshedBlocks when invoked by an agent without UserConfirmedFreezeSecurityWarning', async () => {
+        const refreshSpy = vi.spyOn(GovernedArtifactService.Instance, 'RefreshAndSnapshotArtifact');
+        const action = new RefreshAndSnapshotArtifactAction();
+        const params: RunActionParams = {
+            ContextUser: user,
+            Context: { AgentRunID: 'run-agent-1' },
+            Action: { ID: 'a-3', Name: '__RefreshAndSnapshotArtifact' } as RunActionParams['Action'],
+            Filters: [],
+            Params: [
+                { Name: 'ArtifactID', Type: 'Input', Value: 'art-100' },
+                { Name: 'FreezeRefreshedBlocks', Type: 'Input', Value: true },
+            ],
+        };
+        (params as { Provider?: IMetadataProvider }).Provider = provider;
+        const res = await action.Run(params);
+        expect(res.Success).toBe(false);
+        expect(res.ResultCode).toBe('PERMISSION_DENIED');
+        expect(refreshSpy).not.toHaveBeenCalled();
+    });
 });

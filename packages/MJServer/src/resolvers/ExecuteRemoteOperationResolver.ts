@@ -136,10 +136,39 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
                 return fail('INVALID_INPUT_JSON', `Invalid input JSON: ${e instanceof Error ? e.message : String(e)}`);
             }
 
-            // (1) API-key scope gate — bind resource to target ArtifactID/CollectionID when provided, else operation key.
+            // (1) System-user gate.
+            if (opDecl?.RequiresSystemUser && !ctx.userPayload?.isSystemUser) {
+                return fail('FORBIDDEN', `Operation '${key}' may only be invoked by the system user`);
+            }
+            // (2) Resolve the acting user (works for OAuth/JWT and API-key sessions alike) and reject Magic Link / guest sessions.
+            const user = this.GetUserFromPayload(ctx.userPayload);
+            if (!user) {
+                return fail('NO_USER', 'Not authenticated');
+            }
+            if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+                return fail('FORBIDDEN', 'Magic Link sessions cannot invoke remote operations.');
+            }
+
+            const provider = GetReadWriteProvider(ctx.providers);
+
+            // (3) API-key scope gate — consult operation's GetScopeResourceIds (e.g. collection-expanded sources)
+            // when available, falling back to single-resource hint / operation key.
             if (opDecl?.RequiredScope) {
-                const scopeResourceId = extractRemoteOpResourceId(parsedInput, key);
-                await this.CheckAPIKeyScopeAuthorization(opDecl.RequiredScope, scopeResourceId, ctx.userPayload);
+                const opInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRemotableOperation>(
+                    BaseRemotableOperation,
+                    key,
+                );
+                const declaredScopeIds = opInstance
+                    ? (await opInstance.GetScopeResourceIds(parsedInput, { provider, user }))
+                          .map((id) => id.trim())
+                          .filter((id) => id.length > 0)
+                    : [];
+                const targets = declaredScopeIds.length > 0
+                    ? declaredScopeIds
+                    : [extractRemoteOpResourceId(parsedInput, key)];
+                for (const targetResourceId of targets) {
+                    await this.CheckAPIKeyScopeAuthorization(opDecl.RequiredScope, targetResourceId, ctx.userPayload);
+                }
             }
             if (key === ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY && parsedInput && typeof parsedInput === 'object') {
                 const hint = parsedInput as ParsedRemoteOpResourceHint;
@@ -148,19 +177,9 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
                     await this.CheckAPIKeyScopeAuthorization('agent:execute', agentHandle, ctx.userPayload);
                 }
             }
-            // (2) System-user gate.
-            if (opDecl?.RequiresSystemUser && !ctx.userPayload?.isSystemUser) {
-                return fail('FORBIDDEN', `Operation '${key}' may only be invoked by the system user`);
-            }
-            // (3) Resolve the acting user (works for OAuth/JWT and API-key sessions alike).
-            const user = this.GetUserFromPayload(ctx.userPayload);
-            if (!user) {
-                return fail('NO_USER', 'Not authenticated');
-            }
 
             // (4) Metadata gate (defense-in-depth): honor the op's MJ: Remote Operations Status/approval, so a
             // registered-but-disabled (or unapproved AI) op is rejected even though its class is still in code.
-            const provider = GetReadWriteProvider(ctx.providers);
             await RemoteOperationEngineBase.Instance.Config(false, user, provider);
             const invokability = RemoteOperationEngineBase.Instance.IsInvokable(key);
             if (!invokability.Invokable) {

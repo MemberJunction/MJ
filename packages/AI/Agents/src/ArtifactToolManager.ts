@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { CleanAndParseJSON, EscapeSQLString, IndexByUUID, IsValidUUID, MJEventType, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { CleanAndParseJSON, EscapeSQLString, GetGlobalObjectStore, IndexByUUID, IsValidUUID, MJEventType, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, IMetadataProvider, IRunViewProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
@@ -58,6 +58,8 @@ export type { InputArtifact, ArtifactLiveMutationEvent, ArtifactLiveMutationHook
 export { SetArtifactLiveMutationHook, GetArtifactLiveMutationHook };
 
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const GLOBAL_KEY_TRUSTED_AGENT_DRAFT = '__MJ_TRUSTED_AGENT_DRAFT_VERSION_ENTITIES__';
+const MAX_INITIAL_OPERATIONS = 100;
 
 /**
  * Optional persistence and execution context passed to {@link ArtifactToolManager.Initialize} (`A4`).
@@ -75,6 +77,8 @@ export interface ArtifactToolManagerOptions {
   agentName?: string;
   /** Whether always-on artifact workspace tools are exposed even when no artifacts are attached yet. */
   workspaceEnabled?: boolean;
+  /** Out-of-band server flag confirming the human user acknowledged the RLS/FLS snapshot freeze warning (`B7`). */
+  allowFreezeFromUserConfirmation?: boolean;
 }
 
 /**
@@ -188,6 +192,7 @@ export class ArtifactToolManager {
   private agentRunId?: string;
   private agentName?: string;
   private workspaceEnabled = false;
+  private allowFreezeFromUserConfirmation = false;
   private touchedArtifacts: Map<string, GovernedRunArtifactSummary> = new Map();
   private enteredPresenceArtifactIds: Set<string> = new Set();
 
@@ -214,6 +219,7 @@ export class ArtifactToolManager {
     this.agentRunId = options?.agentRunId;
     this.agentName = options?.agentName;
     this.workspaceEnabled = options?.workspaceEnabled ?? Boolean(options?.contextUser || inputArtifacts.length > 0);
+    this.allowFreezeFromUserConfirmation = options?.allowFreezeFromUserConfirmation === true;
     for (const artifact of inputArtifacts) {
       this.RegisterArtifact(artifact);
     }
@@ -921,8 +927,24 @@ export class ArtifactToolManager {
         | Awaited<ReturnType<typeof ArtifactPermissionEngine.Instance.ResolvePermissions>>
         | undefined;
 
-      // 1. Permission check before any tool execution (Blocker 2)
-      if (targetEntry.artifactId && this.contextUser && this.provider) {
+      // 1. Permission check before any tool execution (Blocker 2, Lower #4 fail-closed on missing context)
+      if (targetEntry.artifactId) {
+        if (!this.contextUser || !this.provider) {
+          const missingCtxStored: StoredToolResult = {
+            artifactId: call.artifactId,
+            tool: call.tool,
+            input: sanitizedInput,
+            result: {
+              success: false,
+              data: null,
+              errorMessage: 'Permission denied: authenticated contextUser and provider are required to access a persisted artifact.',
+            },
+            timestamp: new Date(),
+            durationMs: Date.now() - startedAt,
+          };
+          this.toolResults.push(missingCtxStored);
+          return missingCtxStored;
+        }
         resolvedPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
           this.provider,
           targetEntry.artifactId,
@@ -2133,6 +2155,8 @@ export class ArtifactToolManager {
         entry.contentMode = 'Text';
       }
 
+      this.markTrustedAgentDraftVersionSave(versionEntity);
+
       const saved = await versionEntity.Save();
       if (saved) {
         entry.versionId = versionEntity.ID;
@@ -2380,6 +2404,23 @@ export class ArtifactToolManager {
     }
   }
 
+  /** Marks an already-saved in-run draft version so `MJArtifactVersionEntityServer.Save` accepts sequential draft updates (`B3`). */
+  private markTrustedAgentDraftVersionSave(versionEntity: MJArtifactVersionEntity): void {
+    if (!versionEntity.IsSaved) {
+      return;
+    }
+    const store = GetGlobalObjectStore();
+    if (!store) {
+      return;
+    }
+    let draftSet = store[GLOBAL_KEY_TRUSTED_AGENT_DRAFT] as WeakSet<object> | undefined;
+    if (!(draftSet instanceof WeakSet)) {
+      draftSet = new WeakSet<object>();
+      store[GLOBAL_KEY_TRUSTED_AGENT_DRAFT] = draftSet;
+    }
+    draftSet.add(versionEntity);
+  }
+
   /** Saves a rollback write and logs any failure; returns whether it saved. */
   private async saveRollbackEntity(
     entry: ArtifactEntry,
@@ -2387,6 +2428,8 @@ export class ArtifactToolManager {
     action: string,
   ): Promise<boolean> {
     try {
+      this.markTrustedAgentDraftVersionSave(versionEntity);
+
       const saved = await versionEntity.Save();
       if (!saved) {
         LogError(
@@ -2597,6 +2640,11 @@ export class ArtifactToolManager {
     if (!Array.isArray(rawOps)) {
       return {
         errorMessage: 'initialOperations must be an array of { tool: string, input?: object } items.',
+      };
+    }
+    if (rawOps.length > MAX_INITIAL_OPERATIONS) {
+      return {
+        errorMessage: `initialOperations exceeds the maximum allowed ${MAX_INITIAL_OPERATIONS} operations per request.`,
       };
     }
 
@@ -3398,6 +3446,14 @@ export class ArtifactToolManager {
     const modeRaw = typeof input['mode'] === 'string' ? input['mode'].trim().toLowerCase() : 'live_refresh';
     const freezeRefreshedBlocks =
       modeRaw === 'freeze_all_blocks' || input['freezeRefreshedBlocks'] === true;
+    if (freezeRefreshedBlocks && !this.allowFreezeFromUserConfirmation) {
+      return this.recordToolResult(call, startedAt, {
+        success: false,
+        data: null,
+        errorMessage:
+          'Permission denied: agents cannot freeze live artifact blocks without explicit out-of-band user confirmation of the RLS/FLS snapshot security warning.',
+      });
+    }
     const skipIfUnchanged = input['skipIfUnchanged'] !== false;
     const forceRefreshFrozen = input['forceRefreshFrozen'] === true;
     const versionComments =

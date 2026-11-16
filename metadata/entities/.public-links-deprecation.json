@@ -8,10 +8,6 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Public Links"
-    },
-    "sync": {
-      "lastModified": "2026-11-16T18:14:06.983Z",
-      "checksum": "a17704bec7e6d3c5efde6f09d3fdc20490c64efe6609365df8060e6dc84e9300"
     }
   }
 ]

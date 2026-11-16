@@ -19,6 +19,7 @@ import {
 } from '../generated/remote_operations.js';
 import { MAX_AI_FORMULA_BATCH_CELLS } from './operations/ArtifactEvaluateAiFormulaOperation';
 import {
+    BuildBlockIdentityBinding,
     ComputeFrozenSnapshotHash,
     DocumentBlockColumn,
     DocumentBlockExecutionResult,
@@ -26,6 +27,7 @@ import {
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
     FrozenBlockSnapshot,
+    FrozenSnapshotIdentityBinding,
     ValidateFrozenBlockSnapshot
 } from './DocumentLiveBlockEngine';
 
@@ -2009,6 +2011,45 @@ export const MAX_XLSX_ENTRY_BYTES = 32 * 1024 * 1024;
 export const MAX_FORMULA_LENGTH = 8192;
 /** Maximum parser/evaluator AST recursion depth before returning `#VALUE!` / `#CALC!` (`P0-11`). */
 export const MAX_AST_DEPTH = 128;
+/** Maximum formula AST/lambda evaluation operations permitted within a single workbook pass (`B5`). */
+export const MAX_EVAL_OPS_PER_WORKBOOK = 2_000_000;
+/** Maximum wall-clock duration (ms) permitted for a single workbook evaluation pass (`B5`). */
+export const MAX_EVAL_TIME_MS = 5_000;
+/** Maximum character length permitted in any formula string result (matches Excel's 32,767 cell limit, `B5`). */
+export const MAX_CELL_STRING_LENGTH = 32_767;
+/** Maximum total cell grid entries emitted in a single `ExportToCsv` pass (`B5`). */
+export const MAX_EXPORT_CSV_CELLS = 500_000;
+
+class EvalBudgetExceededError extends Error {
+    constructor() {
+        super('Formula evaluation exceeded operation or time budget.');
+        this.name = 'EvalBudgetExceededError';
+    }
+}
+
+/**
+ * Builds the canonical {@link FrozenSnapshotIdentityBinding} for a {@link SpreadsheetLiveTableSpec} (`S3`).
+ */
+export function BuildLiveTableIdentityBinding(
+    table: Pick<
+        SpreadsheetLiveTableSpec,
+        'TableID' | 'SourceType' | 'EntityName' | 'ViewID' | 'ViewName' | 'QueryID' | 'QueryName'
+    >,
+    hostArtifactId?: string | null
+): FrozenSnapshotIdentityBinding {
+    return BuildBlockIdentityBinding(
+        {
+            BlockID: table.TableID,
+            Kind: table.SourceType,
+            EntityName: table.EntityName,
+            ViewID: table.ViewID,
+            ViewName: table.ViewName,
+            QueryID: table.QueryID,
+            QueryName: table.QueryName
+        },
+        hostArtifactId
+    );
+}
 
 /**
  * Sanitizes a worksheet name for Excel/OOXML compatibility: strips forbidden characters
@@ -2319,6 +2360,51 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private unimplementedResultCells = new WeakSet<SpreadsheetCellSpec>();
     private monotonicIdCounter = 0;
     private _lastEvaluatedFormulaCount = 0;
+    private activeEvalBudget: { ops: number; maxOps: number; deadlineMs: number; exceeded: boolean } | null = null;
+
+    private runWithEvalBudget<T>(fn: () => T): T {
+        if (this.activeEvalBudget) {
+            return fn();
+        }
+        this.activeEvalBudget = {
+            ops: 0,
+            maxOps: MAX_EVAL_OPS_PER_WORKBOOK,
+            deadlineMs: Date.now() + MAX_EVAL_TIME_MS,
+            exceeded: false
+        };
+        try {
+            return fn();
+        } finally {
+            this.activeEvalBudget = null;
+        }
+    }
+
+    private consumeEvalBudget(): void {
+        const budget = this.activeEvalBudget;
+        if (!budget) return;
+        if (budget.exceeded) {
+            throw new EvalBudgetExceededError();
+        }
+        budget.ops++;
+        if (budget.ops > budget.maxOps || ((budget.ops & 1023) === 0 && Date.now() > budget.deadlineMs)) {
+            budget.exceeded = true;
+            throw new EvalBudgetExceededError();
+        }
+    }
+
+    private joinCappedStrings(parts: readonly string[], delim = ''): string {
+        let totalLen = parts.length > 1 ? delim.length * (parts.length - 1) : 0;
+        if (totalLen > MAX_CELL_STRING_LENGTH) {
+            return '#VALUE!';
+        }
+        for (let i = 0; i < parts.length; i++) {
+            totalLen += parts[i].length;
+            if (totalLen > MAX_CELL_STRING_LENGTH) {
+                return '#VALUE!';
+            }
+        }
+        return parts.join(delim);
+    }
 
     /**
      * Number of cell formulas evaluated in the most recent `EvaluateWorkbook` or incremental recalculation pass.
@@ -5189,7 +5275,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
 
         if (formulaKeys.length > 0) {
-            this.evaluateCellKeysIteratively(workbook, dag, formulaKeys, null, editContext);
+            this.runWithEvalBudget(() => {
+                this.evaluateCellKeysIteratively(workbook, dag, formulaKeys, null, editContext);
+            });
         }
     }
 
@@ -5280,7 +5368,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        this.evaluateCellKeysIteratively(workbook, existingDag, queue, dirtySet, editContext);
+        this.runWithEvalBudget(() => {
+            this.evaluateCellKeysIteratively(workbook, existingDag, queue, dirtySet, editContext);
+        });
     }
 
     /**
@@ -5302,9 +5392,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             this.EvaluateWorkbook(workbook);
         }
         const ast = compileFormulaAstCached(body);
-        const raw = this.evalAstNode(ast, workbook, sheet, null);
-        if (raw === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return '#NAME?';
-        return raw === null ? 0 : raw;
+        try {
+            const raw = this.runWithEvalBudget(() => this.evalAstNode(ast, workbook, sheet, null));
+            if (raw === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return '#NAME?';
+            return raw === null ? 0 : raw;
+        } catch (err) {
+            if (err instanceof EvalBudgetExceededError) {
+                return '#CALC!';
+            }
+            return '#VALUE!';
+        }
     }
 
     private buildWorkbookDependencyGraph(workbook: WorkbookSpec): WorkbookDependencyGraph {
@@ -5852,11 +5949,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         }
                         computed = this.evalAstNode(ast, workbook, ws, lookupFn, addr, 0);
                     }
-                } catch {
+                } catch (err) {
                     if (!isLegacyCse) {
                         delete cell.SpillRange;
                     }
-                    computed = '#VALUE!';
+                    if (err instanceof EvalBudgetExceededError) {
+                        computed = '#CALC!';
+                        cell.ErrorMessage = err.message;
+                    } else {
+                        computed = '#VALUE!';
+                    }
                 }
                 writeEvaluatedValue(top.key, computed, true);
                 if (computed === '#SPILL!') {
@@ -5951,8 +6053,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             case '>':
             case '>=':
                 return this.compareValues(left, right, op);
-            case '&':
-                return `${left ?? ''}${right ?? ''}`;
+            case '&': {
+                const sLeft = String(left ?? '');
+                const sRight = String(right ?? '');
+                if (sLeft.length + sRight.length > MAX_CELL_STRING_LENGTH) {
+                    return '#VALUE!';
+                }
+                return `${sLeft}${sRight}`;
+            }
             case '+':
             case '-':
             case '*':
@@ -6134,6 +6242,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         depth = 0,
         lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
     ): SpreadsheetCellValue {
+        this.consumeEvalBudget();
         if (depth > MAX_AST_DEPTH) {
             return '#CALC!';
         }
@@ -6360,6 +6469,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         depth = 0,
         lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
     ): SpreadsheetCellValue[][] {
+        this.consumeEvalBudget();
         if (depth > MAX_AST_DEPTH) {
             return [['#CALC!']];
         }
@@ -6669,6 +6779,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         depth: number,
         callerScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
     ): SpreadsheetCellValue[][] {
+        this.consumeEvalBudget();
         if (depth > MAX_AST_DEPTH) {
             return [['#CALC!']];
         }
@@ -6747,6 +6858,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         depth: number,
         lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
     ): SpreadsheetCellValue[][] {
+        this.consumeEvalBudget();
         if (depth > MAX_AST_DEPTH) {
             return [['#CALC!']];
         }
@@ -6837,6 +6949,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 for (let r = 0; r < rows; r++) {
                     const rowArr: SpreadsheetCellValue[] = [];
                     for (let c = 0; c < cols; c++) {
+                        this.consumeEvalBudget();
                         rowArr.push(this.finiteOrNumError(cur));
                         cur += step;
                     }
@@ -7101,6 +7214,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         depth = 0,
         lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
     ): SpreadsheetCellValue {
+        this.consumeEvalBudget();
         if (depth > MAX_AST_DEPTH) {
             return '#CALC!';
         }
@@ -7678,7 +7792,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         }
                     }
                 }
-                return parts.join('');
+                return this.joinCappedStrings(parts, '');
             }
             case 'UPPER': {
                 const v = evalScalar(args[0]);
@@ -9295,7 +9409,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const newText = String(rawNew ?? '');
                 if (oldText === '') return text;
                 if (!isArgProvided(3)) {
-                    return text.split(oldText).join(newText);
+                    const parts = text.split(oldText);
+                    return this.joinCappedStrings(parts, newText);
                 }
                 const instNumVal = this.toNumberOrError(evalScalar(args[3]));
                 if (typeof instNumVal === 'string') return instNumVal;
@@ -9308,7 +9423,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     if (foundAt === -1) break;
                     occurrence++;
                     if (occurrence === instNum) {
-                        return text.slice(0, foundAt) + newText + text.slice(foundAt + oldText.length);
+                        const out = text.slice(0, foundAt) + newText + text.slice(foundAt + oldText.length);
+                        return out.length > MAX_CELL_STRING_LENGTH ? '#VALUE!' : out;
                     }
                     searchFrom = foundAt + oldText.length;
                 }
@@ -9413,7 +9529,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         pieces.push(s);
                     }
                 }
-                return pieces.join(delim);
+                return this.joinCappedStrings(pieces, delim);
             }
             case 'MAXIFS':
             case 'MINIFS': {
@@ -11865,7 +11981,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             for (const table of sheet.LiveTables) {
                 if (options?.TableID && table.TableID !== options.TableID) continue;
                 if (table.Mode === 'Frozen' && !options?.ForceRefreshFrozen) {
-                    const validation = ValidateFrozenBlockSnapshot(table.FrozenSnapshot);
+                    const validation = ValidateFrozenBlockSnapshot(
+                        table.FrozenSnapshot,
+                        undefined,
+                        BuildLiveTableIdentityBinding(table)
+                    );
                     if (!validation.Valid || !table.FrozenSnapshot || table.FrozenSnapshot.SecurityWarningAcknowledged !== true) {
                         const errMsg =
                             validation.ErrorMessage ||
@@ -12191,7 +12311,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         executionResult: DocumentBlockExecutionResult,
         freezingUser: Pick<UserInfo, 'ID' | 'Name'>,
         acknowledgeSecurityWarning: boolean,
-        preSignedSnapshot?: DocumentFrozenSnapshot
+        preSignedSnapshot?: DocumentFrozenSnapshot,
+        hostArtifactId?: string | null
     ): SpreadsheetLiveTableSpec {
         if (!acknowledgeSecurityWarning) {
             throw new Error(
@@ -12206,6 +12327,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (!table) {
             throw new Error(`Live table '${tableId}' not found on worksheet '${sheet.Name}'.`);
         }
+        const expectedBinding = BuildLiveTableIdentityBinding(table, hostArtifactId);
         const frozenAt = new Date().toISOString();
         const baseSnapshot = {
             FrozenAt: frozenAt,
@@ -12214,7 +12336,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             Columns: executionResult.Columns,
             Rows: executionResult.Rows,
             TotalRowCount: executionResult.TotalRowCount,
-            SecurityWarningAcknowledged: true
+            SecurityWarningAcknowledged: true,
+            Binding: expectedBinding
         };
         const resolvedSnapshot: DocumentFrozenSnapshot = preSignedSnapshot
             ? { ...preSignedSnapshot }
@@ -12877,6 +13000,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         for (const cell of Object.values(sheet.Cells)) {
             const pos = ParseCellAddress(cell.Address);
             if (!pos) continue;
+            if (pos.row > MAX_DENSE_ROWS || pos.col > MAX_DENSE_COLS) continue;
             const val = cell.ComputedValue ?? cell.RawValue;
             if (val !== null && val !== undefined && String(val) !== '') {
                 if (pos.row > maxRow) maxRow = pos.row;
@@ -12884,6 +13008,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
         if (maxRow === 0 || maxCol === 0) return '';
+        if (maxRow * maxCol > MAX_EXPORT_CSV_CELLS) {
+            throw new Error(
+                `CSV export grid (${maxRow}x${maxCol}) exceeds maximum allowed ${MAX_EXPORT_CSV_CELLS} cells.`
+            );
+        }
 
         const outLines: string[] = [];
         for (let r = 1; r <= maxRow; r++) {

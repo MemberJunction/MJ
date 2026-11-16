@@ -232,6 +232,12 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
     actingUser: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<CreateMagicLinkInviteResult> {
+    if (!this.config.artifactGuestSharing?.enabled) {
+      return {
+        success: false,
+        error: 'External artifact guest sharing is disabled on this server (magicLink.artifactGuestSharing.enabled is false).',
+      };
+    }
     if (params.Kind !== 'resource-share' || params.IdentityMode !== 'anonymous') {
       return {
         success: false,
@@ -635,7 +641,12 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
 
       // Fast, friendly pre-check (returns a precise reason). NOT the authority —
       // the atomic consume below is what actually enforces single-use.
-      if (this.config.enabled === false && (invite.Kind !== 'resource-share' || invite.IdentityMode !== 'anonymous')) {
+      const allowResourceShareOnly = Boolean(
+        this.config.artifactGuestSharing?.enabled &&
+          invite.Kind === 'resource-share' &&
+          invite.IdentityMode === 'anonymous',
+      );
+      if (this.config.enabled === false && !allowResourceShareOnly) {
         return done({ success: false, errorCode: 'invalid', error: 'Magic link invites are disabled on this server.' });
       }
 

@@ -125,6 +125,20 @@ export class RefreshAndSnapshotArtifactAction extends BaseAction {
 
         const attribution = this.helper.ExtractAgentAttribution(params);
 
+        if (
+            freezeRefreshedBlocks &&
+            (attribution.agentRunId || attribution.agentName) &&
+            !this.getBooleanParam(params, 'UserConfirmedFreezeSecurityWarning', false)
+        ) {
+            return {
+                Success: false,
+                ResultCode: 'PERMISSION_DENIED',
+                Message:
+                    'Agents cannot freeze live artifact blocks without explicit out-of-band user confirmation (UserConfirmedFreezeSecurityWarning = true) of the RLS/FLS snapshot security warning.',
+                Params: params.Params,
+            };
+        }
+
         try {
             const outcome = await GovernedArtifactService.Instance.RefreshAndSnapshotArtifact({
                 provider,

@@ -25,9 +25,19 @@ import {
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import {
+    EmptyPostRunViewResult,
+    FinalizePostRunViewResult,
+    GetGlobalWeakSet,
+    PrepareScopedPreRunView,
+    ResolveReadableArtifactVersionIdsForUser,
+    ShouldBypassPostRunViewAsync
+} from './ArtifactSecurityHookHelpers';
 
+const COLLECTION_ARTIFACT_ENTITY_NAME = 'MJ: Collection Artifacts';
 const GLOBAL_KEY_INTERNAL_COLLECTION_ARTIFACT_PARAMS = '__MJ_INTERNAL_COLLECTION_ARTIFACT_SECURITY_PARAMS__';
 const GLOBAL_KEY_ORIGINAL_COLLECTION_ARTIFACT_FIELDS = '__MJ_ORIGINAL_COLLECTION_ARTIFACT_FIELDS_BY_PARAMS__';
+const GLOBAL_KEY_SQL_SCOPED_COLLECTION_ARTIFACT_PARAMS = '__MJ_SQL_SCOPED_COLLECTION_ARTIFACT_PARAMS__';
 const MAX_COLLECTION_ANCESTRY_DEPTH = 16;
 
 function getInternalCollectionArtifactQueryParamsSet(): WeakSet<object> {
@@ -333,35 +343,32 @@ async function resolveMaxCollectionAncestryGrants(
  * Server-side `PreRunView` hook projecting `CollectionID` and `ArtifactVersionID` when
  * a non-system caller queries `MJ: Collection Artifacts` with a partial `Fields` list.
  */
-export const CollectionArtifactPreRunViewHook: PreRunViewHook = (
+export const CollectionArtifactPreRunViewHook: PreRunViewHook = async (
     params: RunViewParams,
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
-): RunViewParams => {
-    const provider = resolveMetadataProvider(hookProvider, contextUser);
-    const internalParams = getInternalCollectionArtifactQueryParamsSet();
-    if (
-        !params ||
-        internalParams.has(params) ||
-        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
-        resolveTargetEntityName(params) !== 'MJ: Collection Artifacts' ||
-        isServerSystemUser(contextUser) ||
-        (!contextUser && provider !== null && provider.ProviderType !== 'Database')
-    ) {
-        return params;
-    }
-    if (Array.isArray(params.Fields) && params.Fields.length > 0) {
-        const missingCollectionId = !hasFieldIgnoreCase(params.Fields, 'CollectionID');
-        const missingVersionId = !hasFieldIgnoreCase(params.Fields, 'ArtifactVersionID');
-        if (missingCollectionId || missingVersionId) {
-            getOriginalCollectionArtifactFieldsMap().set(params, [...params.Fields]);
-            const updated = [...params.Fields];
-            if (missingCollectionId) updated.push('CollectionID');
-            if (missingVersionId) updated.push('ArtifactVersionID');
-            params.Fields = updated;
-        }
-    }
-    return params;
+): Promise<RunViewParams> => {
+    return PrepareScopedPreRunView(
+        params,
+        {
+            TargetEntityName: COLLECTION_ARTIFACT_ENTITY_NAME,
+            RequiredFields: ['CollectionID', 'ArtifactVersionID'],
+            IdColumnName: 'ArtifactVersionID',
+            InternalParams: getInternalCollectionArtifactQueryParamsSet(),
+            OriginalFieldsMap: getOriginalCollectionArtifactFieldsMap(),
+            SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_COLLECTION_ARTIFACT_PARAMS),
+            ResolveReadableIds: (prov, user) => ResolveReadableArtifactVersionIdsForUser(prov, user),
+            ExtraPredicates: [
+                {
+                    IdColumnName: 'CollectionID',
+                    ResolveReadableIds: (prov, user) =>
+                        ArtifactPermissionEngine.Instance.BuildReadableCollectionIdSet(prov, user)
+                }
+            ]
+        },
+        contextUser,
+        hookProvider
+    );
 };
 
 /**
@@ -374,51 +381,44 @@ export const CollectionArtifactPostRunViewHook: PostRunViewHook = async (
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
 ): Promise<RunViewResult> => {
-    const internalParams = getInternalCollectionArtifactQueryParamsSet();
-    if (
-        !results?.Success ||
-        internalParams.has(params) ||
-        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
-        resolveTargetEntityName(params) !== 'MJ: Collection Artifacts'
-    ) {
+    if (!results?.Success) {
         return results;
-    }
-
-    const originalFieldsMap = getOriginalCollectionArtifactFieldsMap();
-    const originalFields = originalFieldsMap.get(params);
-    if (originalFields) {
-        originalFieldsMap.delete(params);
     }
 
     const provider = resolveMetadataProvider(hookProvider, contextUser);
-    if (isServerSystemUser(contextUser)) {
+    const sqlScopedSet = GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_COLLECTION_ARTIFACT_PARAMS);
+    const { bypass, originalFields } = await ShouldBypassPostRunViewAsync(
+        params,
+        COLLECTION_ARTIFACT_ENTITY_NAME,
+        getInternalCollectionArtifactQueryParamsSet(),
+        getOriginalCollectionArtifactFieldsMap(),
+        contextUser,
+        provider
+    );
+    if (bypass) {
+        sqlScopedSet.delete(params);
         return results;
     }
     if (!contextUser && provider !== null && provider.ProviderType !== 'Database') {
+        sqlScopedSet.delete(params);
         return results;
     }
     if (!contextUser || !provider) {
-        results.Results = [];
-        results.RowCount = 0;
-        results.TotalRowCount = 0;
-        return results;
+        sqlScopedSet.delete(params);
+        return EmptyPostRunViewResult(results);
     }
 
     if (params.ResultType === 'count_only') {
-        // Never leak unfiltered counts across collection+artifact ACL boundaries via count_only.
-        results.Results = [];
-        results.RowCount = 0;
-        results.TotalRowCount = 0;
-        return results;
+        if (sqlScopedSet.has(params)) {
+            sqlScopedSet.delete(params);
+            return results;
+        }
+        return EmptyPostRunViewResult(results);
     }
 
     const rows = (results.Results ?? []) as CollectionArtifactViewRow[];
     if (rows.length === 0) {
-        results.RowCount = 0;
-        if (typeof params.MaxRows === 'number' && params.MaxRows > 0) {
-            results.TotalRowCount = 0;
-        }
-        return results;
+        return FinalizePostRunViewResult(params, results, [], 0, sqlScopedSet);
     }
 
     const versionIds = rows
@@ -476,14 +476,7 @@ export const CollectionArtifactPostRunViewHook: PostRunViewHook = async (
         }
     }
 
-    const removedCount = rows.length - filtered.length;
-    const isPaged = (results.TotalRowCount ?? rows.length) > rows.length;
-    results.Results = filtered;
-    results.RowCount = filtered.length;
-    results.TotalRowCount = isPaged
-        ? filtered.length
-        : Math.max(0, (results.TotalRowCount ?? rows.length) - removedCount);
-    return results;
+    return FinalizePostRunViewResult(params, results, filtered, rows.length, sqlScopedSet);
 };
 
 export function EnsureCollectionArtifactReadHookRegistered(): void {

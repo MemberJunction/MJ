@@ -78,6 +78,9 @@ export class ArtifactFileResolver extends ResolverBase {
         if (!user) {
             throw new Error('Unauthorized');
         }
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            throw new Error(ARTIFACT_FILE_ACCESS_DENIED_MESSAGE);
+        }
 
         const p = GetReadWriteProvider(context.providers);
 

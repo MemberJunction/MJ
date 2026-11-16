@@ -529,14 +529,28 @@ export class SearchService {
     const lowerQuery = query.toLowerCase();
 
     const ownerFilter = `OwnerID='${currentUser.ID}'`;
-    const permissionSubquery = `ID IN (
-      SELECT CollectionID
-      FROM [__mj].[vwCollectionPermissions]
-      WHERE UserID='${currentUser.ID}'
-    )`;
+    const permRes = await rv.RunView<{ CollectionID?: string | null }>(
+      {
+        EntityName: 'MJ: Collection Permissions',
+        ExtraFilter: `UserID='${currentUser.ID}'`,
+        Fields: ['CollectionID'],
+        ResultType: 'simple'
+      },
+      currentUser
+    );
+    const sharedIds = Array.from(
+      new Set(
+        (permRes.Success && permRes.Results ? permRes.Results : [])
+          .map((row) => (row.CollectionID ?? '').trim())
+          .filter((id) => id.length > 0)
+      )
+    );
+    const permissionClause = sharedIds.length > 0
+      ? ` OR ID IN (${sharedIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ')})`
+      : '';
 
     let filter = `EnvironmentID='${environmentId}'`;
-    filter += ` AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+    filter += ` AND (OwnerID IS NULL OR ${ownerFilter}${permissionClause})`;
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {

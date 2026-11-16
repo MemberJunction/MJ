@@ -14,12 +14,14 @@ import {
   SavedQueryDocumentBlock,
   InteractiveComponentDocumentBlock,
   ArtifactDocumentBlock,
+  BuildBlockIdentityBinding,
   ValidateFrozenBlockSnapshot,
   DecodeDocumentUtf8Fallback,
   EncodeDocumentUtf8Fallback,
   LoadDocumentLiveBlocks,
   type DocumentBlockSpec,
 } from '../custom/DocumentLiveBlockEngine';
+import { ValidateArtifactContentMutationAgainstLocks } from '../custom/ArtifactLockValidation';
 
 LoadArtifactPermissionDelegates();
 LoadDocumentLiveBlocks();
@@ -1404,5 +1406,116 @@ describe('Security & Hardening Regression Coverage (SavedQuery, Component, Artif
 
     expect(engine.ParseArtifactCommentAnchor({ domain: 'invalid-domain' })).toBeNull();
     expect(engine.ParseArtifactCommentAnchor('not-json')).toBeNull();
+  });
+
+  it('S3: FrozenBlockSnapshot HMAC includes identity Binding and rejects block/target/artifact transplants', async () => {
+    const engine = DocumentLiveBlockEngine.Instance;
+    const mockUsersEntity = {
+      ID: 'ent-users',
+      Name: 'Users',
+      DisplayNameOrName: 'Users',
+      PrimaryKeys: [{ Name: 'ID', IsPrimaryKey: true, TSType: EntityFieldTSType.String }],
+      Fields: [
+        { Name: 'ID', DisplayNameOrName: 'ID', IsPrimaryKey: true, DefaultInView: true, TSType: EntityFieldTSType.String, IsBinaryFieldType: false },
+        { Name: 'Name', DisplayNameOrName: 'Name', IsPrimaryKey: false, DefaultInView: true, TSType: EntityFieldTSType.String, IsBinaryFieldType: false },
+      ] as unknown as EntityFieldInfo[],
+      FieldLevelSecurityApplies: false,
+      GetUserPermisions: vi.fn().mockReturnValue({ CanRead: true }),
+      GetDeniedReadFields: vi.fn().mockReturnValue(new Set<string>()),
+    } as unknown as EntityInfo;
+    const provider = {
+      Entities: [mockUsersEntity],
+      EntityByID: (id: string) => (id === mockUsersEntity.ID ? mockUsersEntity : undefined),
+      EntityByName: (name: string) => (name.trim().toLowerCase() === 'users' ? mockUsersEntity : undefined),
+      RunView: vi.fn().mockResolvedValue({
+        Success: true,
+        Results: [{ ID: 'row-1', Name: 'Alice' }],
+        TotalRowCount: 1,
+      }),
+    } as unknown as IMetadataProvider;
+    const origRunView = RunView.prototype.RunView;
+    RunView.prototype.RunView = vi.fn().mockResolvedValue({
+      Success: true,
+      Results: [{ ID: 'row-1', Name: 'Alice' }],
+      TotalRowCount: 1,
+    });
+    try {
+      const sourceSpec: DocumentBlockSpec = {
+        BlockID: 'blk-source',
+        Kind: 'EntityView',
+        EntityName: 'Users',
+        Mode: 'Live',
+      };
+      const hostArtifactId = 'aaaaaaaa-1111-1111-1111-111111111111';
+      const frozenRes = await engine.FreezeBlock(sourceSpec, actorUser, true, provider, undefined, hostArtifactId);
+      expect(frozenRes.Success).toBe(true);
+      const snap = frozenRes.UpdatedSpec!.FrozenSnapshot!;
+      expect(snap.Binding).toEqual({
+        ArtifactID: hostArtifactId,
+        BlockID: 'blk-source',
+        Kind: 'EntityView',
+        SourceTargetID: 'users',
+      });
+
+      // Exact matching binding succeeds
+      expect(ValidateFrozenBlockSnapshot(snap, undefined, BuildBlockIdentityBinding(sourceSpec, hostArtifactId)).Valid).toBe(true);
+
+      // Transplanting into a different BlockID fails
+      expect(
+        ValidateFrozenBlockSnapshot(
+          snap,
+          undefined,
+          BuildBlockIdentityBinding({ ...sourceSpec, BlockID: 'blk-other' }, hostArtifactId)
+        ).Valid
+      ).toBe(false);
+
+      // Changing QueryID/EntityName target fails
+      expect(
+        ValidateFrozenBlockSnapshot(
+          snap,
+          undefined,
+          BuildBlockIdentityBinding({ ...sourceSpec, EntityName: 'Orders' }, hostArtifactId)
+        ).Valid
+      ).toBe(false);
+
+      // Transplanting across artifacts fails
+      expect(
+        ValidateFrozenBlockSnapshot(
+          snap,
+          undefined,
+          BuildBlockIdentityBinding(sourceSpec, 'bbbbbbbb-2222-2222-2222-222222222222')
+        ).Valid
+      ).toBe(false);
+    } finally {
+      RunView.prototype.RunView = origRunView;
+    }
+  });
+
+  it('B3: ValidateArtifactContentMutationAgainstLocks enforces markdown locks for non-owners while allowing owners', () => {
+    const locked = [
+      `<!-- mj-lock: owner-only user=${actorUser.ID} -->`,
+      '## Terms',
+      'Fixed legal clause.',
+    ].join('\n');
+    const tampered = locked.replace('Fixed legal clause.', 'Altered clause.');
+
+    expect(ValidateArtifactContentMutationAgainstLocks(locked, tampered, otherUser.ID, false).Allowed).toBe(false);
+    expect(ValidateArtifactContentMutationAgainstLocks(locked, tampered, actorUser.ID, true).Allowed).toBe(true);
+  });
+
+  it('B2 / S10: ArtifactPermissionEngine fails closed on anonymous/magic-link users for collection & artifact sets', async () => {
+    const magicUser = new UserInfo(undefined, {
+      ID: actorUser.ID,
+      Name: 'Magic Guest',
+      IsMagicLinkAnonymous: true,
+    });
+    const provider = {
+      Entities: [],
+      RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+    } as unknown as IMetadataProvider;
+    const colSet = await ArtifactPermissionEngine.Instance.BuildReadableCollectionIdSet(provider, magicUser);
+    const artSet = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(provider, magicUser);
+    expect(colSet.size).toBe(0);
+    expect(artSet.size).toBe(0);
   });
 });

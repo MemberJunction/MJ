@@ -1510,4 +1510,29 @@ describe('Wave 2 Slides: SlideDeckExportService, Per-Slide Yjs Session Sync & Sl
     expect(secondCallOpts?.VerifiedBlockIds?.has(frozenRegionBlockId)).toBe(true);
     exportSpy.mockRestore();
   });
+
+  it('Lower #7: sanitizes SlideDeck Theme CSS properties on SafeTheme and rejects </style/url() injection in print HTML', () => {
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { detectChanges: () => {}, markForCheck: () => {} } },
+        { provide: ElementRef, useValue: new ElementRef(document.createElement('div')) },
+        { provide: SlideDeckExportService, useValue: exportService },
+        { provide: DocumentCollaborationService, useValue: collabService },
+      ],
+    });
+    const comp = runInInjectionContext(injector, () => new SlideDeckArtifactViewerComponent());
+    const deck = SlideDeckEngine.Instance.CreateDefaultDeck('CSS Injection Test', 'deck-css-guard');
+    deck.Theme.BackgroundColor = 'red; background-image: url(https://evil.example/x)';
+    deck.Theme.PrimaryColor = '#fff;</style><script>alert(1)</script>';
+    deck.Theme.HeadingFont = 'Inter; } body { display:none';
+    comp.Deck = deck;
+
+    expect(comp.SafeTheme.BackgroundColor).toBe('#ffffff');
+    expect(comp.SafeTheme.PrimaryColor).toBe('#4f46e5');
+    expect(comp.SafeTheme.HeadingFont).toBe('Inter, system-ui, sans-serif');
+
+    const printableHtml = exportService.BuildPrintableDeckHtml(deck, new Map(), false);
+    expect(printableHtml).not.toContain('evil.example');
+    expect(printableHtml).not.toContain('<script>alert(1)</script>');
+  });
 });

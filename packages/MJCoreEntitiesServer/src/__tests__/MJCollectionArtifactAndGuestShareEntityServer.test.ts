@@ -336,12 +336,12 @@ describe('MJCollectionArtifactEntityServer ACL & anti-escalation', () => {
             Fields: ['ID'],
             ResultType: 'simple'
         };
-        CollectionArtifactPreRunViewHook(params, outsiderUser, provider);
-        expect(params.Fields).toEqual(['ID', 'CollectionID', 'ArtifactVersionID']);
+        const hookedCaParams = await CollectionArtifactPreRunViewHook(params, outsiderUser, provider);
+        expect(hookedCaParams.Fields).toEqual(['ID', 'CollectionID', 'ArtifactVersionID']);
 
         vi.spyOn(ArtifactPermissionEngine.Instance, 'CheckPermission').mockResolvedValue(false);
         const filtered = await CollectionArtifactPostRunViewHook(
-            params,
+            hookedCaParams,
             {
                 Success: true,
                 Results: [{ ID: 'ca-1', CollectionID: COLLECTION_ID, ArtifactVersionID: VERSION_ID }],
@@ -460,8 +460,8 @@ describe('MJArtifactGuestShareLinkEntityServer direct-DB SystemUser & read ACL',
             Fields: ['ID', 'Label'],
             ResultType: 'simple'
         };
-        ArtifactGuestShareLinkPreRunViewHook(params, sharerUser, provider);
-        expect(params.Fields).toEqual(['ID', 'Label', 'ArtifactID']);
+        const hookedLinkParams = await ArtifactGuestShareLinkPreRunViewHook(params, sharerUser, provider);
+        expect(hookedLinkParams.Fields).toEqual(['ID', 'Label', 'ArtifactID']);
 
         const raw: RunViewResult = {
             Success: true,
@@ -472,7 +472,7 @@ describe('MJArtifactGuestShareLinkEntityServer direct-DB SystemUser & read ACL',
             ErrorMessage: ''
         };
 
-        const sharerRes = await ArtifactGuestShareLinkPostRunViewHook(params, raw, sharerUser, provider);
+        const sharerRes = await ArtifactGuestShareLinkPostRunViewHook(hookedLinkParams, raw, sharerUser, provider);
         expect(sharerRes.Results).toHaveLength(1);
         expect((sharerRes.Results[0] as { MagicLinkInviteID?: string }).MagicLinkInviteID).toBe(INVITE_ID);
 
