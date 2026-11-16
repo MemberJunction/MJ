@@ -333,6 +333,10 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
         awareness: awarenessProtocol.Awareness;
     }> {
         const doc = new Y.Doc();
+        // Ensure the random browser Y.Doc clientID never collides with the reserved server agent range (1 in 16 chance).
+        if (doc.clientID >= AGENT_AWARENESS_CLIENT_ID_BASE && doc.clientID <= AGENT_AWARENESS_CLIENT_ID_MAX) {
+            doc.clientID = (doc.clientID ^ 0x40000000) >>> 0;
+        }
         const awareness = new awarenessProtocol.Awareness(doc);
         const ws = new WsClient(
             `ws://127.0.0.1:${wsPort}/collaboration/yjs?artifactId=${encodeURIComponent(artifactId)}&testUserId=${encodeURIComponent(alice.ID)}`,
@@ -523,6 +527,12 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
         const sharedBus = new InMemoryYjsRelayBus();
         const serverB = ArtifactCollaborationServer.Instance;
         serverB.SetRoomRelay(new InMemoryYjsRoomRelay(sharedBus));
+        serverB.SetAgentPresenceTimings({
+            throttleMs: 0,
+            decayMs: 2_000,
+            ttlMs: 60_000,
+            exitGraceMs: 0,
+        });
 
         const serverA = new TestDetachedRelayCollabNode();
         serverA.SetRoomRelay(new InMemoryYjsRoomRelay(sharedBus));
