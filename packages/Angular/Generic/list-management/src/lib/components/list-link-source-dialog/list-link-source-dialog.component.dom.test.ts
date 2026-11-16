@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
+import type { EntityFieldInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import {
   MJAlertComponent,
@@ -54,10 +54,12 @@ const REGION: ListSourceParameterInfo = { Name: 'Region', Type: 'string', IsRequ
 
 let service: { Provider: unknown; UpdateListAsync: ReturnType<typeof vi.fn>; LoadSourceParametersAsync: ReturnType<typeof vi.fn> };
 
+const CONTACT_PK = { Name: 'ID' } satisfies Partial<EntityFieldInfo> as EntityFieldInfo;
+
 function provider(list = listRecord()): IMetadataProvider {
   const base = CreateFakeProvider({
     runViewResults: rows,
-    entities: [{ ID: ENTITY_ID, Name: 'Contacts', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } } as never],
+    entities: [{ ID: ENTITY_ID, Name: 'Contacts', PrimaryKeys: [CONTACT_PK], FirstPrimaryKey: CONTACT_PK }],
   });
   return Object.assign(base, { GetEntityObject: vi.fn(async () => list) });
 }
