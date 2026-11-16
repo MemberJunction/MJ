@@ -203,6 +203,42 @@ describe('ArtifactToolManager', () => {
         });
     });
 
+    describe('ResolveArtifactVersionUuid', () => {
+        it('resolves alpha IDs (case-insensitive and prefixed) to tracked versionId UUIDs', () => {
+            manager.Initialize([
+                {
+                    name: 'First',
+                    typeName: 'Data',
+                    content: '{}',
+                    artifactId: '11111111-1111-4111-8111-111111111111',
+                    versionId: 'aaaa1111-1111-4111-8111-111111111111',
+                },
+                {
+                    name: 'Second',
+                    typeName: 'Data',
+                    content: '{}',
+                    artifactId: '22222222-2222-4222-8222-222222222222',
+                    versionId: 'bbbb2222-2222-4222-8222-222222222222',
+                },
+                {
+                    name: 'DraftNoVersion',
+                    typeName: 'Data',
+                    content: '{}',
+                    artifactId: '33333333-3333-4333-8333-333333333333',
+                },
+            ]);
+
+            expect(manager.ResolveArtifactVersionUuid('A')).toBe('aaaa1111-1111-4111-8111-111111111111');
+            expect(manager.ResolveArtifactVersionUuid('b')).toBe('bbbb2222-2222-4222-8222-222222222222');
+            expect(manager.ResolveArtifactVersionUuid('Artifact B')).toBe('bbbb2222-2222-4222-8222-222222222222');
+            expect(manager.ResolveArtifactVersionUuid('C')).toBeUndefined();
+            expect(manager.ResolveArtifactVersionUuid('99999999-9999-4999-8999-999999999999')).toBe('99999999-9999-4999-8999-999999999999');
+            expect(manager.ResolveArtifactVersionUuid('Z')).toBeUndefined();
+            expect(manager.ResolveArtifactVersionUuid('')).toBeUndefined();
+            expect(manager.ResolveArtifactVersionUuid(undefined)).toBeUndefined();
+        });
+    });
+
     describe('ExecuteSingleToolCall', () => {
         it('returns the stored result for a successful call', async () => {
             manager.Initialize([

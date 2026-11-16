@@ -1,0 +1,144 @@
+@if (IsOpen && MenuLevels.length > 0) {
+  @for (level of MenuLevels; track level.Level) {
+    <div
+      class="mj-context-menu-panel"
+      role="menu"
+      tabindex="-1"
+      [attr.data-testid]="level.Level === 0 ? 'mj-context-menu-root' : 'mj-context-menu-submenu-' + level.ParentSubmenuID"
+      [attr.data-menu-level]="level.Level"
+      [attr.aria-label]="level.Level === 0 ? AriaLabel : level.AriaLabel"
+      [style.left.px]="level.Left"
+      [style.top.px]="level.Top"
+      [style.max-height.px]="level.MaxHeight"
+      [style.opacity]="level.IsPositioned ? null : '0'"
+      (mousedown)="OnPanelMouseDown($event)"
+      (mousemove)="OnPanelMouseMove($event)">
+      @for (item of level.Items; track TrackItem($index, item); let idx = $index) {
+        @switch (item.Kind) {
+          @case ('header') {
+            <div class="mj-context-menu-header" role="presentation">
+              @if (item.Icon) {
+                <i [class]="item.Icon + ' mj-context-menu-header-icon'" aria-hidden="true"></i>
+              }
+              <span>{{ item.Label }}</span>
+            </div>
+          }
+          @case ('separator') {
+            <div class="mj-context-menu-separator" role="separator"></div>
+          }
+          @case ('action') {
+            <button
+              type="button"
+              class="mj-context-menu-item"
+              [class.is-destructive]="item.Destructive"
+              [class.is-disabled]="item.Disabled"
+              [class.is-focused]="IsItemFocused(level.Level, idx)"
+              [attr.data-testid]="'mj-context-menu-item-' + item.ID"
+              [attr.data-menu-level]="level.Level"
+              [attr.data-item-index]="idx"
+              [attr.role]="GetItemRole(item)"
+              [attr.aria-checked]="GetAriaChecked(item)"
+              [attr.aria-disabled]="item.Disabled ? 'true' : null"
+              [attr.title]="item.Disabled && item.DisabledReason ? item.DisabledReason : null"
+              [tabIndex]="GetItemTabIndex(level, idx)"
+              (mousedown)="OnItemMouseDown($event)"
+              (mouseenter)="OnItemMouseEnter(level.Level, idx, item, $event)"
+              (click)="OnActionClick(item, $event)">
+              @if (HasCheckOrRadioColumn(level)) {
+                <span class="mj-context-menu-check-slot" aria-hidden="true">
+                  @if (item.Role === 'menuitemcheckbox' && item.Checked) {
+                    <i class="fa-solid fa-check mj-context-menu-check"></i>
+                  } @else if (item.Role === 'menuitemradio' && item.Checked) {
+                    <i class="fa-solid fa-circle mj-context-menu-radio-dot"></i>
+                  }
+                </span>
+              }
+              @if (item.Icon) {
+                <i [class]="item.Icon + ' mj-context-menu-icon'" aria-hidden="true"></i>
+              }
+              <span class="mj-context-menu-label">{{ item.Label }}</span>
+              @if (item.BadgeText) {
+                <span class="mj-context-menu-badge">{{ item.BadgeText }}</span>
+              }
+              @if (item.Shortcut) {
+                <span class="mj-context-menu-shortcut">{{ item.Shortcut }}</span>
+              }
+            </button>
+          }
+          @case ('submenu') {
+            <button
+              type="button"
+              class="mj-context-menu-item"
+              [class.is-disabled]="item.Disabled"
+              [class.is-submenu-open]="IsSubmenuOpenAtLevel(level.Level, item.ID)"
+              [class.is-focused]="IsItemFocused(level.Level, idx)"
+              [attr.data-testid]="'mj-context-menu-item-' + item.ID"
+              [attr.data-menu-level]="level.Level"
+              [attr.data-item-index]="idx"
+              role="menuitem"
+              aria-haspopup="menu"
+              [attr.aria-expanded]="IsSubmenuOpenAtLevel(level.Level, item.ID) ? 'true' : 'false'"
+              [attr.aria-disabled]="item.Disabled ? 'true' : null"
+              [attr.title]="item.Disabled && item.DisabledReason ? item.DisabledReason : null"
+              [tabIndex]="GetItemTabIndex(level, idx)"
+              (mousedown)="OnItemMouseDown($event)"
+              (mouseenter)="OnItemMouseEnter(level.Level, idx, item, $event)"
+              (click)="OnSubmenuClick(level.Level, idx, item, $event)">
+              @if (HasCheckOrRadioColumn(level)) {
+                <span class="mj-context-menu-check-slot" aria-hidden="true"></span>
+              }
+              @if (item.Icon) {
+                <i [class]="item.Icon + ' mj-context-menu-icon'" aria-hidden="true"></i>
+              }
+              <span class="mj-context-menu-label">{{ item.Label }}</span>
+              <i class="fa-solid fa-chevron-right mj-context-menu-chevron" aria-hidden="true"></i>
+            </button>
+          }
+          @case ('swatch-row') {
+            <div
+              class="mj-context-menu-swatch-row"
+              [class.is-disabled]="item.Disabled"
+              role="group"
+              [attr.data-testid]="'mj-context-menu-item-' + item.ID"
+              [attr.data-menu-level]="level.Level"
+              [attr.data-item-index]="idx"
+              [attr.aria-label]="item.Label"
+              [attr.title]="item.Disabled && item.DisabledReason ? item.DisabledReason : null"
+              (mouseenter)="OnItemMouseEnter(level.Level, idx, item, $event)">
+              <span class="mj-context-menu-swatch-label">{{ item.Label }}</span>
+              <div class="mj-context-menu-swatch-list" role="none">
+                @for (swatch of item.Swatches; track $index; let sIdx = $index) {
+                  <button
+                    type="button"
+                    class="mj-context-menu-swatch-btn"
+                    [class.is-selected]="swatch.Selected"
+                    [class.is-clear]="swatch.IsClearSwatch"
+                    [class.is-focused]="IsSwatchFocused(level.Level, idx, sIdx)"
+                    [style.background]="swatch.IsClearSwatch ? null : swatch.PreviewCssColor"
+                    [attr.data-testid]="'mj-context-menu-swatch-' + item.ID + '-' + sIdx"
+                    [attr.data-menu-level]="level.Level"
+                    [attr.data-item-index]="idx"
+                    [attr.data-swatch-index]="sIdx"
+                    role="menuitemradio"
+                    [attr.aria-checked]="swatch.Selected ? 'true' : 'false'"
+                    [attr.aria-label]="swatch.Label"
+                    [attr.title]="item.Disabled && item.DisabledReason ? item.DisabledReason : swatch.Label"
+                    [attr.aria-disabled]="item.Disabled ? 'true' : null"
+                    [tabIndex]="GetSwatchTabIndex(level, idx, sIdx)"
+                    (mousedown)="OnItemMouseDown($event)"
+                    (click)="OnSwatchClick(item, swatch, $event)">
+                    @if (swatch.IsClearSwatch) {
+                      <i class="fa-solid fa-ban" aria-hidden="true"></i>
+                    } @else if (swatch.Selected) {
+                      <i class="fa-solid fa-check" aria-hidden="true"></i>
+                    }
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        }
+      }
+    </div>
+  }
+}
