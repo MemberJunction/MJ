@@ -6,6 +6,7 @@ import {
     Metadata,
     PostRunViewHook,
     RegisterDataHook,
+    RegisterPostRunViewProtectedEntity,
     RunView,
     RunViewParams,
     RunViewResult,
@@ -471,10 +472,20 @@ async function fetchDetailConversationIdsByIds(
  * Ensures {@link AnchoredConversationPostRunViewHook} is registered in the global `PostRunView`
  * data hooks store. Safe to call multiple times (idempotent).
  */
+export const ANCHORED_CONVERSATION_POST_RUN_VIEW_PROTECTED_ENTITIES: readonly string[] = [
+    'MJ: Conversations',
+    'MJ: Comments',
+    'MJ: Field Suggestions',
+    'MJ: Conversation Details'
+];
+
 export function EnsureAnchoredConversationReadHookRegistered(): void {
     const existing = GetDataHooks<PostRunViewHook>('PostRunView');
     if (!existing.includes(AnchoredConversationPostRunViewHook)) {
         RegisterDataHook('PostRunView', AnchoredConversationPostRunViewHook);
+    }
+    for (const entityName of ANCHORED_CONVERSATION_POST_RUN_VIEW_PROTECTED_ENTITIES) {
+        RegisterPostRunViewProtectedEntity(entityName);
     }
 }
 

@@ -6257,6 +6257,8 @@ export class BaseAgent {
                     consultEnabled: this.isSubAgentConsultEnabledForSubAgent(params.agent, sa),
                     ...(presetNames.length > 0 ? { presetNames } : {})
                 };
+            }, {
+                IncludeArtifactDirective: control.NativeOnly && this.isArtifactSupportEnabled(params.agent)
             });
             if (control.NativeOnly && promptParams.data) {
                 // The template renders the tools-only prompt when this is set AND the runner resolves implicit control flow.

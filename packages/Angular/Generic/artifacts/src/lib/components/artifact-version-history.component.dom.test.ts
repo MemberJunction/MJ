@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { UserInfo } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
@@ -32,10 +33,18 @@ const ARTIFACT = { ID: 'art-1', Name: 'My Artifact' } as unknown as MJArtifactEn
 const USER = { ID: 'me', Name: 'Me' } as unknown as UserInfo;
 
 describe('ArtifactVersionHistoryComponent (DOM, data-bound)', () => {
+  const notificationsMock = { CreateSimpleNotification: vi.fn() };
+
+  afterEach(() => {
+    notificationsMock.CreateSimpleNotification.mockReset();
+    vi.restoreAllMocks();
+  });
+
   function renderWith(versions: MJArtifactVersionEntity[]): ComponentFixture<ArtifactVersionHistoryComponent> {
     return renderComponentFixture(ArtifactVersionHistoryComponent, {
       imports: [CommonModule, MJEmptyStateComponent],
       declarations: [ArtifactVersionHistoryComponent],
+      providers: [{ provide: MJNotificationService, useValue: notificationsMock }],
       inputs: {
         Provider: createFakeProvider<VersionRow>({ runViewResults: versions as unknown as VersionRow[] }),
         artifact: ARTIFACT,
@@ -91,5 +100,24 @@ describe('ArtifactVersionHistoryComponent (DOM, data-bound)', () => {
 
     (query(f, '.btn-close') as HTMLButtonElement).click();
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses MJNotificationService instead of alert() when comparing version 1 or downloading', async () => {
+    const f = renderWith(VERSIONS);
+    await f.componentInstance.OnCompareVersion(VERSIONS[1]);
+    expect(notificationsMock.CreateSimpleNotification).toHaveBeenCalledWith(
+      'Cannot compare: this is the first version',
+      'info',
+      3500,
+    );
+
+    vi.useFakeTimers();
+    const createSpy = vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:ver-dl');
+    const revokeSpy = vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+    f.componentInstance.OnDownloadVersion(VERSIONS[0]);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1000);
+    expect(revokeSpy).toHaveBeenCalledWith('blob:ver-dl');
+    vi.useRealTimers();
   });
 });

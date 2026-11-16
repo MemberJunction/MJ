@@ -162,4 +162,28 @@ describe('WhiteboardArtifactViewerComponent — plugin contract', () => {
     viewer.ngOnDestroy();
     expect(committedPayloads).toHaveLength(1);
   });
+
+  it('applies NavigationAnchor ElementID on ngOnInit/setter and emits SelectionChanged without echo loops (NW-6)', () => {
+    const viewer = new WhiteboardArtifactViewerComponent();
+    const state = new WhiteboardState();
+    const item = state.AddItem({ Kind: 'sticky', X: 50, Y: 60, Text: 'Focus Target' }, 'user');
+    viewer.readonly = false;
+    viewer.artifactVersion = fakeVersion(state.ToJSON(), 'NW-6 Board');
+
+    const emitted: Array<{ domain: string; elementId?: string }> = [];
+    viewer.SelectionChanged.subscribe((anchor) => emitted.push(anchor));
+
+    // Pre-init NavigationAnchor is applied on ngOnInit without re-emitting SelectionChanged
+    viewer.NavigationAnchor = { ElementID: item.ID };
+    viewer.ngOnInit();
+    expect(viewer.EditableBoardState.SelectedID).toBe(item.ID);
+    expect(emitted).toHaveLength(0);
+
+    // User selection on EditableBoardState emits SelectionChanged with whiteboard domain + elementId
+    const second = viewer.EditableBoardState.AddItem({ Kind: 'text', X: 140, Y: 80, Text: 'Second Node' }, 'user');
+    viewer.EditableBoardState.Select(second.ID);
+    expect(emitted).toEqual([{ domain: 'whiteboard', elementId: second.ID }]);
+
+    viewer.ngOnDestroy();
+  });
 });

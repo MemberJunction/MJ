@@ -1,6 +1,6 @@
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import type { UserInfo } from '@memberjunction/core';
-import type { ArtifactToolArgs } from '@memberjunction/ai-core-plus';
+import type { ArtifactJsonValue, ArtifactToolArgs } from '@memberjunction/ai-core-plus';
 import {
     FormatCellAddress,
     ParseCellAddress,
@@ -25,6 +25,8 @@ export const MUTATING_ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set([
     'move_block',
     'duplicate_block',
     'upsert_table',
+    'mutate_markdown_table',
+    'upsert_frontmatter',
     'insert_live_block',
     'embed_artifact_block',
     // SpreadsheetToolLibrary
@@ -49,6 +51,14 @@ export const MUTATING_ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set([
     'embed_artifact',
     'delete_embedded_artifact',
     'sort_and_filter',
+    'merge_cells',
+    'unmerge_cells',
+    'upsert_conditional_format',
+    'delete_conditional_format',
+    'upsert_validation_rule',
+    'delete_validation_rule',
+    'upsert_named_range',
+    'delete_named_range',
     // SlideDeckToolLibrary
     'add_slide',
     'update_slide',
@@ -58,10 +68,19 @@ export const MUTATING_ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set([
     'upsert_slide_element',
     'update_slide_region',
     'delete_slide_element',
+    'duplicate_region',
+    'align_distribute_regions',
     'update_speaker_notes',
+    'upsert_speaker_notes',
+    'batch_mutate_slides',
     'apply_theme',
     'update_deck_metadata',
     'generate_deck_from_markdown',
+    // Cross-domain locking & NW-3 suggestions
+    'set_lock',
+    'release_lock',
+    'propose_suggestion',
+    'review_suggestion',
     // WhiteboardToolLibrary
     'upsert_nodes',
     'UpsertNodes',
@@ -84,6 +103,7 @@ export interface ArtifactLiveMutationEvent {
     previousContent?: string;
     updatedContent: string;
     xlsxBase64?: string;
+    configurationPatch?: ArtifactToolArgs;
     tool: string;
     contextUser?: UserInfo;
     agentRunId?: string;
@@ -198,6 +218,8 @@ export interface ArtifactLiveRoomSnapshot {
     Content: string;
     VersionNumber?: number;
     VersionID?: string | null;
+    Configuration?: string;
+    Suggestions?: ArtifactJsonValue[];
 }
 
 export type ArtifactLiveContentReaderHook = (

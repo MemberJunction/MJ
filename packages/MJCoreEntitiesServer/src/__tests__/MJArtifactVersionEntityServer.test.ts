@@ -621,6 +621,13 @@ class TestServerVersionProvider extends DatabaseProviderBase {
                 'CollectionPermission',
                 'vwCollectionPermissions',
                 ['CollectionID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare']
+            ),
+            buildSupportEntityInfo(
+                '77777777-7777-4777-8777-777777777777',
+                'MJ: Collections',
+                'Collection',
+                'vwCollections',
+                ['OwnerID', 'ParentID']
             )
         ];
     }
@@ -1527,6 +1534,124 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
         } finally {
             sub.unsubscribe();
             superSaveSpy.mockRestore();
+        }
+    });
+
+    it('closes count_only and paged TotalRowCount leaks, blocks saved ArtifactID reassignment, and preserves hash/bytes when ExtractAndSaveAttributes throws (P0-3 / P1-12)', async () => {
+        const outsider = makeRoleUser('99999999-9999-4999-8999-999999999999', 'outsider@example.com');
+        const provider = new TestServerVersionProvider(async () => ({
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        }));
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: targetArtifactId,
+            CanRead: false,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Denied',
+            Reason: 'Denied'
+        });
+
+        const countOnlyLeak = await ArtifactVersionPostRunViewHook(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+                ResultType: 'count_only'
+            },
+            {
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 17,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            outsider,
+            provider
+        );
+        expect(countOnlyLeak.TotalRowCount).toBe(0);
+        expect(countOnlyLeak.RowCount).toBe(0);
+
+        const pagedLeak = await ArtifactVersionPostRunViewHook(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: 'VersionNumber >= 1',
+                MaxRows: 1,
+                ResultType: 'simple'
+            },
+            {
+                Success: true,
+                Results: [{ ID: targetVersionId, ArtifactID: targetArtifactId }],
+                RowCount: 1,
+                TotalRowCount: 55,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            outsider,
+            provider
+        );
+        expect(pagedLeak.Results).toEqual([]);
+        expect(pagedLeak.RowCount).toBe(0);
+        expect(pagedLeak.TotalRowCount).toBe(0);
+
+        // Saved ArtifactID reassignment blocked on both Save() and Delete()
+        const superSaveSpy = vi
+            .spyOn(Object.getPrototypeOf(MJArtifactVersionEntityServer.prototype), 'Save')
+            .mockResolvedValue(true);
+        const superDeleteSpy = vi
+            .spyOn(Object.getPrototypeOf(MJArtifactVersionEntityServer.prototype), 'Delete')
+            .mockResolvedValue(true);
+        try {
+            const attacker = makeRoleUser('11111111-1111-4111-8111-111111111111', 'attacker@example.com');
+            const entity = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            const history: MJArtifactVersionEntityServer['ResultHistory'] = [];
+            Object.defineProperty(entity, 'ResultHistory', { value: history, writable: true });
+            Object.defineProperty(entity, 'IsSaved', { value: true, writable: true });
+            Object.defineProperty(entity, 'ArtifactID', { value: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', writable: true });
+            Object.defineProperty(entity, 'ContextCurrentUser', { value: attacker, writable: true });
+            Object.defineProperty(entity, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(entity, 'GetFieldByName', {
+                value: (name: string) =>
+                    name === 'ArtifactID'
+                        ? { OldValue: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', Dirty: true }
+                        : { Dirty: false, OldValue: null },
+                configurable: true
+            });
+
+            expect(await entity.Save()).toBe(false);
+            expect(history[0]?.Message).toContain('cannot be reassigned');
+            expect(await entity.Delete()).toBe(false);
+            expect(superSaveSpy).not.toHaveBeenCalled();
+            expect(superDeleteSpy).not.toHaveBeenCalled();
+
+            // ExtractAndSaveAttributes failure still keeps ContentHash & ContentSizeBytes and saves cleanly
+            const sysUser = makeRoleUser('00000000-0000-4000-8000-000000000001', 'sys@example.com');
+            vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+            const okEntity = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            Object.defineProperty(okEntity, 'ResultHistory', { value: [], writable: true });
+            Object.defineProperty(okEntity, 'IsSaved', { value: false, writable: true });
+            Object.defineProperty(okEntity, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(okEntity, 'Content', { value: '# Valid Content', writable: true });
+            Object.defineProperty(okEntity, 'ContentHash', { value: '', writable: true });
+            Object.defineProperty(okEntity, 'ContentSizeBytes', { value: 0, writable: true });
+            Object.defineProperty(okEntity, 'ContextCurrentUser', { value: sysUser, writable: true });
+            Object.defineProperty(okEntity, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(okEntity, 'GetFieldByName', {
+                value: () => ({ Dirty: true, OldValue: null }),
+                configurable: true
+            });
+            vi.spyOn(okEntity as never, 'ExtractAndSaveAttributes').mockRejectedValue(new Error('attribute parse failed'));
+            expect(await okEntity.Save()).toBe(true);
+            expect(okEntity.ContentHash.length).toBe(64);
+            expect(okEntity.ContentSizeBytes).toBe(CalculateContentSizeBytes('# Valid Content'));
+        } finally {
+            superSaveSpy.mockRestore();
+            superDeleteSpy.mockRestore();
         }
     });
 });

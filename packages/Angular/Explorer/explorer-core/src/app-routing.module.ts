@@ -8,8 +8,9 @@ import {
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { OfficeConnectComponent } from './lib/office/office-connect.component';
+import { PublicArtifactGuestComponent } from './lib/public-guest/public-artifact-guest.component';
 import { OFFICE_CONNECT_ROUTE_PATH } from '@memberjunction/excel-addin';
-import { CHAT_TASKS_ROUTE, DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
+import { CHAT_COLLECTIONS_ROUTE, CHAT_TASKS_ROUTE, DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, RecordTabQueryParams, FindMovedNavItem } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
@@ -793,6 +794,17 @@ const routes: Routes = [
     component: OfficeConnectComponent
   },
 
+  // Anonymous external guest artifact share route (NW-1) — zero OAuth wall; resolves via
+  // pre-auth REST GET /guest-share/resolve?token=... (with @Public GraphQL fallback).
+  {
+    path: 'guest/artifact/:token',
+    component: PublicArtifactGuestComponent
+  },
+  {
+    path: 'guest/artifact',
+    component: PublicArtifactGuestComponent
+  },
+
   // App-scoped resource routes (new pattern)
   // These must come BEFORE app/:appName/:navItemName to be matched first
   {
@@ -820,6 +832,7 @@ const routes: Routes = [
   // the same rule to pins and saved tabs)
   DATA_EXPLORER_DASHBOARDS_ROUTE,
   CHAT_TASKS_ROUTE,
+  CHAT_COLLECTIONS_ROUTE,
   // App navigation routes
   {
     path: 'app/:appName/:navItemName',

@@ -1,11 +1,18 @@
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
+    ComputeFrozenSnapshotHash,
     DocumentBlockExecutionResult,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
     FrozenBlockSnapshot
 } from './DocumentLiveBlockEngine.js';
+import {
+    ExportDeckToPptxBytesInternal,
+    ImportDeckFromPptxBytesInternal,
+    SlideDeckPptxExportOptions
+} from './SlideDeckPptxEngine.js';
+export type { SlideDeckPptxExportOptions } from './SlideDeckPptxEngine.js';
 
 /**
  * Canonical slide layout types supported by MJ Slides (`plans/docs-slides-sheets.md § 5.1`).
@@ -432,6 +439,22 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         }
         // 4. Safe gradients: linear-gradient(...) or radial-gradient(...) with only color/angle/stop tokens
         if (/^(?:linear|radial)-gradient\(\s*[#a-z0-9.%,\s()-]+\s*\)$/i.test(trimmed)) {
+            // Verify balanced parentheses (reject unbalanced ')' that could break out of CSS declarations)
+            let parenDepth = 0;
+            for (let i = 0; i < trimmed.length; i++) {
+                const ch = trimmed.charAt(i);
+                if (ch === '(') {
+                    parenDepth++;
+                } else if (ch === ')') {
+                    parenDepth--;
+                    if (parenDepth < 0) {
+                        return fallback;
+                    }
+                }
+            }
+            if (parenDepth !== 0) {
+                return fallback;
+            }
             // Ensure the only nested functions inside a gradient are rgb/rgba/hsl/hsla
             const innerFns = trimmed
                 .replace(/^(?:linear|radial)-gradient\(/i, '')
@@ -450,6 +473,36 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     }
 
     /**
+     * Validates an image or logo URL for slides (`ImageUrl` / `Master.LogoUrl`).
+     * Allows `https://`, `http://`, same-origin relative `/...` paths (not `//`), and
+     * raster `data:image/(png|jpeg|jpg|webp|gif);base64,...` data URLs.
+     * Rejects `javascript:`, `vbscript:`, `data:text/html`, `data:image/svg+xml`, and control chars.
+     */
+    public SanitizeImageUrl(raw: string | undefined | null): string | undefined {
+        const trimmed = String(raw ?? '').trim();
+        if (!trimmed || trimmed.length > 1_048_576) {
+            return undefined;
+        }
+        if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
+            return undefined;
+        }
+        if (/^(?:javascript|vbscript|file):/i.test(trimmed)) {
+            return undefined;
+        }
+        if (/^data:/i.test(trimmed)) {
+            const safeRasterDataUrl = /^data:image\/(?:png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/i;
+            return safeRasterDataUrl.test(trimmed) ? trimmed : undefined;
+        }
+        if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+            return trimmed;
+        }
+        if (/^https?:\/\/[^\s"'<>]+$/i.test(trimmed)) {
+            return trimmed;
+        }
+        return undefined;
+    }
+
+    /**
      * Renders a standalone printable HTML document for `deck` with sanitized CSS theme tokens.
      */
     public RenderPrintHtml(deck: SlideDeckSpec): string {
@@ -460,6 +513,137 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        const renderInlineMarkdown = (raw: string): string => {
+            const escaped = escapeHtml(raw);
+            return escaped
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>');
+        };
+        const renderBlockHtml = (region: SlideRegionSpec, block: DocumentBlockSpec): string => {
+            const snap = block.FrozenSnapshot;
+            const titleText = escapeHtml(block.Title || region.Label || block.Kind);
+            if (snap && Array.isArray(snap.Columns) && snap.Columns.length > 0 && Array.isArray(snap.Rows)) {
+                const headers = snap.Columns.map((col) => `<th>${escapeHtml(col.DisplayName || col.Name)}</th>`).join('');
+                const bodyRows = snap.Rows.slice(0, 100)
+                    .map((row) => {
+                        const cells = snap.Columns.map((col) => {
+                            const cellVal = row[col.Name];
+                            return `<td>${escapeHtml(cellVal === null || cellVal === undefined ? '' : String(cellVal))}</td>`;
+                        }).join('');
+                        return `<tr>${cells}</tr>`;
+                    })
+                    .join('');
+                return `<div class="slide-block" data-block-id="${escapeHtml(block.BlockID)}"><div class="slide-block-title">${titleText}</div><table class="slide-block-table"><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+            }
+            if (snap?.ArtifactContentSnapshot) {
+                return `<div class="slide-block" data-block-id="${escapeHtml(block.BlockID)}"><div class="slide-block-title">${titleText}</div><div class="slide-block-meta">${escapeHtml(snap.ArtifactTypeSnapshot || block.ArtifactType || 'Artifact')} snapshot</div></div>`;
+            }
+            return `<div class="slide-block slide-block-live" data-block-id="${escapeHtml(block.BlockID)}"><div class="slide-block-title">${titleText}</div><div class="slide-block-meta">${escapeHtml(block.Kind)} (${escapeHtml(block.Mode)})</div></div>`;
+        };
+        const renderMarkdownContentHtml = (md: string): string => {
+            const lines = String(md ?? '').replace(/\r\n/g, '\n').split('\n');
+            const out: string[] = [];
+            let inList = false;
+            const closeList = (): void => {
+                if (inList) {
+                    out.push('</ul>');
+                    inList = false;
+                }
+            };
+            for (let i = 0; i < lines.length; i++) {
+                const trimmed = lines[i].trim();
+                if (!trimmed) {
+                    closeList();
+                    continue;
+                }
+                if (/^[-*]\s+/.test(trimmed)) {
+                    if (!inList) {
+                        out.push('<ul>');
+                        inList = true;
+                    }
+                    out.push(`<li>${renderInlineMarkdown(trimmed.replace(/^[-*]\s+/, ''))}</li>`);
+                    continue;
+                }
+                closeList();
+                const headingMatch = /^(#{1,4})\s+(.+)$/.exec(trimmed);
+                if (headingMatch) {
+                    const level = Math.min(4, headingMatch[1].length + 1);
+                    out.push(`<h${level}>${renderInlineMarkdown(headingMatch[2])}</h${level}>`);
+                    continue;
+                }
+                if (trimmed.startsWith('|')) {
+                    const tableLines: string[] = [trimmed];
+                    while (i + 1 < lines.length && lines[i + 1].trim().startsWith('|')) {
+                        i++;
+                        tableLines.push(lines[i].trim());
+                    }
+                    const parseRow = (rowLine: string): string[] =>
+                        rowLine
+                            .replace(/^\|/, '')
+                            .replace(/\|$/, '')
+                            .split('|')
+                            .map((c) => c.trim());
+                    const rows = tableLines
+                        .filter((tl) => !/^\|[\s:|-]+\|$/.test(tl))
+                        .map(parseRow);
+                    if (rows.length > 0) {
+                        const head = rows[0].map((c) => `<th>${renderInlineMarkdown(c)}</th>`).join('');
+                        const body = rows
+                            .slice(1)
+                            .map((r) => `<tr>${r.map((c) => `<td>${renderInlineMarkdown(c)}</td>`).join('')}</tr>`)
+                            .join('');
+                        out.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`);
+                        continue;
+                    }
+                }
+                out.push(`<p>${renderInlineMarkdown(trimmed)}</p>`);
+            }
+            closeList();
+            return out.join('');
+        };
+        const renderRegionHtml = (r: SlideRegionSpec): string => {
+            const block = r.BlockSpec ?? this.parseFirstBlockFromMarkdown(r.MarkdownContent);
+            if (r.Kind === 'mj-block' || block) {
+                const contentHtml = block
+                    ? renderBlockHtml(r, block)
+                    : `<div class="slide-block-meta">${escapeHtml(r.Label)}</div>`;
+                return `<div class="slide-region" data-region-id="${escapeHtml(r.RegionID)}" data-region-kind="mj-block">${contentHtml}</div>`;
+            }
+            if (r.Kind === 'big-number') {
+                const valueHtml = r.BigNumberValue
+                    ? `<div class="big-number-value">${escapeHtml(r.BigNumberValue)}</div>`
+                    : '';
+                const labelHtml = r.BigNumberLabel
+                    ? `<div class="big-number-label">${escapeHtml(r.BigNumberLabel)}</div>`
+                    : '';
+                const deltaHtml = r.BigNumberDelta
+                    ? `<div class="big-number-delta">${escapeHtml(r.BigNumberDelta)}</div>`
+                    : '';
+                const fallbackMd = !r.BigNumberValue && r.MarkdownContent
+                    ? `<div class="big-number-body">${renderMarkdownContentHtml(r.MarkdownContent)}</div>`
+                    : '';
+                return `<div class="slide-region slide-big-number" data-region-id="${escapeHtml(r.RegionID)}">${valueHtml}${labelHtml}${deltaHtml}${fallbackMd}</div>`;
+            }
+            if (r.Kind === 'quote') {
+                const quoteBody = r.MarkdownContent ? `<blockquote>${renderMarkdownContentHtml(r.MarkdownContent)}</blockquote>` : '';
+                const attrHtml = r.QuoteAttribution
+                    ? `<cite class="quote-attribution">${escapeHtml(r.QuoteAttribution)}</cite>`
+                    : '';
+                return `<div class="slide-region slide-quote" data-region-id="${escapeHtml(r.RegionID)}">${quoteBody}${attrHtml}</div>`;
+            }
+            if (r.Kind === 'image') {
+                const safeSrc = this.SanitizeImageUrl(r.ImageUrl);
+                const altText = escapeHtml(r.ImageAlt || r.Label || '');
+                const imgHtml = safeSrc
+                    ? `<img class="slide-image" src="${escapeHtml(safeSrc)}" alt="${altText}"/>`
+                    : `<div class="slide-image-placeholder">${altText || 'Image'}</div>`;
+                const captionHtml = r.MarkdownContent ? `<div class="slide-image-caption">${renderMarkdownContentHtml(r.MarkdownContent)}</div>` : '';
+                return `<div class="slide-region slide-image-region" data-region-id="${escapeHtml(r.RegionID)}">${imgHtml}${captionHtml}</div>`;
+            }
+            return `<div class="slide-region" data-region-id="${escapeHtml(r.RegionID)}" data-region-kind="${escapeHtml(r.Kind)}">${renderMarkdownContentHtml(r.MarkdownContent)}</div>`;
+        };
+
         const primary = this.SanitizeCssValue(deck.Theme?.PrimaryColor, '#4f46e5');
         const accent = this.SanitizeCssValue(deck.Theme?.AccentColor, '#0ea5e9');
         const bg = this.SanitizeCssValue(deck.Theme?.BackgroundColor, '#ffffff');
@@ -469,20 +653,40 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         const headingFont = this.SanitizeCssValue(deck.Theme?.HeadingFont, 'Inter, system-ui, sans-serif');
         const bodyFont = this.SanitizeCssValue(deck.Theme?.BodyFont, 'Inter, system-ui, sans-serif');
 
-        const slideBlocks = (deck.Slides ?? [])
-            .filter((s) => !s.Hidden)
-            .map((slide) => {
-                const regionsHtml = (slide.Regions ?? [])
-                    .map(
-                        (r) =>
-                            `<div class="slide-region" data-region-id="${escapeHtml(r.RegionID)}">${escapeHtml(r.MarkdownContent)}</div>`
-                    )
-                    .join('');
-                return `<section class="slide-page" data-slide-id="${escapeHtml(slide.SlideID)}"><h1>${escapeHtml(slide.Title)}</h1>${
+        const safeLogoUrl = this.SanitizeImageUrl(deck.Master?.LogoUrl);
+        const visibleSlides = (deck.Slides ?? []).filter((s) => !s.Hidden);
+        const dateLabel = deck.Master?.ShowDate ? new Date().toISOString().slice(0, 10) : '';
+
+        const slideBlocks = visibleSlides
+            .map((slide, visibleIdx) => {
+                const regionsHtml = (slide.Regions ?? []).map(renderRegionHtml).join('');
+                const headerParts: string[] = [];
+                if (safeLogoUrl) {
+                    headerParts.push(`<img class="slide-master-logo" src="${escapeHtml(safeLogoUrl)}" alt="${escapeHtml(deck.Master?.OrganizationName || 'Logo')}"/>`);
+                }
+                if (deck.Master?.OrganizationName) {
+                    headerParts.push(`<span class="slide-master-org">${escapeHtml(deck.Master.OrganizationName)}</span>`);
+                }
+                if (deck.Master?.HeaderText) {
+                    headerParts.push(`<span class="slide-master-header-text">${escapeHtml(deck.Master.HeaderText)}</span>`);
+                }
+                const headerHtml = headerParts.length > 0 ? `<header class="slide-master-header">${headerParts.join('')}</header>` : '';
+
+                const footerParts: string[] = [];
+                if (deck.Master?.FooterText) {
+                    footerParts.push(`<span class="slide-master-footer-text">${escapeHtml(deck.Master.FooterText)}</span>`);
+                }
+                if (dateLabel) {
+                    footerParts.push(`<span class="slide-master-date">${escapeHtml(dateLabel)}</span>`);
+                }
+                if (deck.Master?.ShowSlideNumbers) {
+                    footerParts.push(`<span class="slide-master-number">Slide ${visibleIdx + 1} of ${visibleSlides.length}</span>`);
+                }
+                const footerHtml = footerParts.length > 0 ? `<footer class="slide-master-footer">${footerParts.join(' ')}</footer>` : '';
+
+                return `<section class="slide-page" data-slide-id="${escapeHtml(slide.SlideID)}">${headerHtml}<h1>${escapeHtml(slide.Title)}</h1>${
                     slide.Subtitle ? `<h2>${escapeHtml(slide.Subtitle)}</h2>` : ''
-                }<div class="slide-regions">${regionsHtml}</div>${
-                    deck.Master?.FooterText ? `<footer>${escapeHtml(deck.Master.FooterText)}</footer>` : ''
-                }</section>`;
+                }<div class="slide-regions">${regionsHtml}</div>${footerHtml}</section>`;
             })
             .join('\n');
 
@@ -495,6 +699,12 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             'body { margin: 0; background: var(--slide-bg); color: var(--slide-text); font-family: var(--slide-body-font); }',
             'h1, h2 { font-family: var(--slide-heading-font); color: var(--slide-primary); }',
             '.slide-page { page-break-after: always; padding: 32px; background: var(--slide-bg); }',
+            '.slide-master-header, .slide-master-footer { display: flex; justify-content: space-between; align-items: center; color: var(--slide-muted); font-size: 12px; }',
+            '.big-number-value { font-size: 48px; font-weight: 700; color: var(--slide-primary); }',
+            '.big-number-label { font-size: 16px; color: var(--slide-muted); }',
+            '.big-number-delta { font-size: 14px; color: var(--slide-accent); }',
+            '.slide-block-table, table { width: 100%; border-collapse: collapse; margin: 12px 0; }',
+            'th, td { border: 1px solid var(--slide-muted); padding: 6px 8px; text-align: left; font-size: 13px; }',
             '</style></head>',
             `<body>${slideBlocks}</body></html>`
         ].join('\n');
@@ -821,14 +1031,21 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         const lines = normalizedMd.split('\n');
         const sections: Array<{ level: number; heading: string; bodyLines: string[] }> = [];
         let currentSection: { level: number; heading: string; bodyLines: string[] } | null = null;
-        let inFence = false;
+        let inBacktickFence = false;
+        let inColonFence = false;
 
         for (const line of lines) {
             const trimmedLine = line.trim();
-            if (trimmedLine.startsWith('```') || trimmedLine.startsWith(':::')) {
-                inFence = !inFence;
+            if (!inColonFence && trimmedLine.startsWith('```')) {
+                inBacktickFence = !inBacktickFence;
+            } else if (!inBacktickFence && trimmedLine.startsWith(':::')) {
+                if (!inColonFence && /^:::[a-zA-Z0-9_-]+/.test(trimmedLine)) {
+                    inColonFence = true;
+                } else if (inColonFence && trimmedLine === ':::') {
+                    inColonFence = false;
+                }
             }
-            const headingMatch = !inFence ? /^(#{1,3})\s+(.+)$/.exec(trimmedLine) : null;
+            const headingMatch = !inBacktickFence && !inColonFence ? /^(#{1,3})\s+(.+)$/.exec(trimmedLine) : null;
             if (headingMatch) {
                 if (currentSection) {
                     sections.push(currentSection);
@@ -898,9 +1115,28 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
 
             if (parsedBlocks.length > 0) {
                 const firstBlock = parsedBlocks[0].BlockSpec;
-                const blockDirective = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(firstBlock);
-                const strippedNarrative = cleanedBody.replace(parsedBlocks[0].RawText, () => '').trim();
+                let strippedNarrative = cleanedBody;
+                for (const blockSeg of parsedBlocks) {
+                    strippedNarrative = strippedNarrative.replace(blockSeg.RawText, () => '');
+                }
+                strippedNarrative = strippedNarrative.trim();
                 const isWhiteboard = firstBlock.Kind === 'Artifact' && firstBlock.ArtifactType === 'Whiteboard';
+
+                const regions: SlideRegionSpec[] = parsedBlocks.map((blockSeg, bIdx) => ({
+                    RegionID: bIdx === 0 ? 'data' : `data-${bIdx + 1}`,
+                    Label: blockSeg.BlockSpec.Title || (bIdx === 0 ? 'Embedded MJ Block' : `Embedded MJ Block ${bIdx + 1}`),
+                    Kind: 'mj-block',
+                    MarkdownContent: DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(blockSeg.BlockSpec),
+                    BlockSpec: blockSeg.BlockSpec
+                }));
+                regions.push({
+                    RegionID: 'narrative',
+                    Label: 'Key Insights',
+                    Kind: 'rich-text',
+                    MarkdownContent:
+                        strippedNarrative ||
+                        `- Live ${firstBlock.Kind} block integrated from source document\n- Viewer-scoped permissions enforced`
+                });
 
                 return {
                     SlideID: slideId,
@@ -908,23 +1144,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     Layout: isWhiteboard ? 'ChartAndText' : 'LiveDataSlide',
                     Title: sec.heading,
                     Subtitle: firstBlock.Title || `${firstBlock.Kind} Slide`,
-                    Regions: [
-                        {
-                            RegionID: 'data',
-                            Label: firstBlock.Title || 'Embedded MJ Block',
-                            Kind: 'mj-block',
-                            MarkdownContent: blockDirective,
-                            BlockSpec: firstBlock
-                        },
-                        {
-                            RegionID: 'narrative',
-                            Label: 'Key Insights',
-                            Kind: 'rich-text',
-                            MarkdownContent:
-                                strippedNarrative ||
-                                `- Live ${firstBlock.Kind} block integrated from source document\n- Viewer-scoped permissions enforced`
-                        }
-                    ],
+                    Regions: regions,
                     SpeakerNotes: noteLines.join('\n') || `Discuss ${firstBlock.Title || sec.heading}.`,
                     Transition: 'slide'
                 };
@@ -1237,6 +1457,24 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                 if (!check.Allowed) {
                     throw new Error(check.Reason);
                 }
+                if (patch.Layout && patch.Layout !== slide.Layout) {
+                    for (const region of slide.Regions) {
+                        if (region.Locked) {
+                            const regionCheck = this.CanActorEditRegion(
+                                slide,
+                                region,
+                                lockContext?.ActorUserID,
+                                lockContext?.OwnerUserID,
+                                lockContext?.IsEditor
+                            );
+                            if (!regionCheck.Allowed) {
+                                throw new Error(
+                                    `Cannot change layout on slide '${slide.SlideID}' because region '${region.RegionID}' is locked (owner-only protection).`
+                                );
+                            }
+                        }
+                    }
+                }
             }
             const nextLayout = patch.Layout ?? slide.Layout;
             const nextRegions =
@@ -1323,7 +1561,14 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     Label: regionPatch.Label ?? current.Label,
                     Kind: regionPatch.Kind ?? current.Kind,
                     MarkdownContent:
-                        regionPatch.MarkdownContent !== undefined ? regionPatch.MarkdownContent : current.MarkdownContent
+                        regionPatch.MarkdownContent !== undefined ? regionPatch.MarkdownContent : current.MarkdownContent,
+                    QuoteAttribution: regionPatch.QuoteAttribution ?? current.QuoteAttribution,
+                    CalloutTone: regionPatch.CalloutTone ?? current.CalloutTone,
+                    ImageUrl:
+                        regionPatch.ImageUrl !== undefined
+                            ? this.SanitizeImageUrl(regionPatch.ImageUrl)
+                            : this.SanitizeImageUrl(current.ImageUrl),
+                    ImageAlt: regionPatch.ImageAlt !== undefined ? regionPatch.ImageAlt : current.ImageAlt
                 };
                 if (merged.BlockSpec && regionPatch.MarkdownContent === undefined) {
                     merged.MarkdownContent = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(
@@ -1349,7 +1594,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     BigNumberDelta: regionPatch.BigNumberDelta,
                     QuoteAttribution: regionPatch.QuoteAttribution,
                     CalloutTone: regionPatch.CalloutTone,
-                    ImageUrl: regionPatch.ImageUrl,
+                    ImageUrl: this.SanitizeImageUrl(regionPatch.ImageUrl),
                     ImageAlt: regionPatch.ImageAlt
                 };
                 if (created.BlockSpec && !created.MarkdownContent) {
@@ -1405,6 +1650,20 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             );
             if (!check.Allowed) {
                 throw new Error(check.Reason);
+            }
+            for (const region of target.Regions) {
+                if (region.Locked) {
+                    const regionCheck = this.CanActorEditRegion(
+                        target,
+                        region,
+                        lockContext?.ActorUserID,
+                        lockContext?.OwnerUserID,
+                        lockContext?.IsEditor
+                    );
+                    if (!regionCheck.Allowed) {
+                        throw new Error(regionCheck.Reason);
+                    }
+                }
             }
         }
         const filtered = deck.Slides.filter((s) => s.SlideID !== target.SlideID);
@@ -1504,7 +1763,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     public FreezeDeckLiveBlocksForPresentation(
         deck: SlideDeckSpec,
         blockResultsByBlockId: ReadonlyMap<string, DocumentBlockExecutionResult>,
-        user?: Pick<UserInfo, 'ID' | 'Name'> | null
+        user?: Pick<UserInfo, 'ID' | 'Name'> | null,
+        options?: { SigningSecret?: string; RequireSignature?: boolean }
     ): SlideDeckSpec {
         const frozenAt = new Date().toISOString();
         const frozenByUserId = user?.ID ?? 'presenter';
@@ -1513,7 +1773,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         const nextSlides = deck.Slides.map((slide) => {
             const nextRegions = slide.Regions.map((region) => {
                 const block = this.ExtractRegionBlockSpec(region);
-                if (!block || block.Kind === 'Artifact') {
+                if (!block) {
                     return { ...region };
                 }
                 const result = blockResultsByBlockId.get(block.BlockID);
@@ -1527,12 +1787,25 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     Columns: result.Columns,
                     Rows: result.Rows,
                     TotalRowCount: result.TotalRowCount,
+                    ...(result.ArtifactContent !== undefined ? { ArtifactContentSnapshot: result.ArtifactContent } : {}),
+                    ...(result.ArtifactType !== undefined ? { ArtifactTypeSnapshot: result.ArtifactType } : {}),
                     SecurityWarningAcknowledged: true
                 };
+                let snapshotContentHash: string | undefined;
+                try {
+                    snapshotContentHash = ComputeFrozenSnapshotHash(snapshotBase, options?.SigningSecret);
+                } catch (err) {
+                    if (options?.RequireSignature) {
+                        throw err;
+                    }
+                }
+                const signedSnapshot: FrozenBlockSnapshot = snapshotContentHash
+                    ? { ...snapshotBase, SnapshotContentHash: snapshotContentHash }
+                    : snapshotBase;
                 const frozenBlock: DocumentBlockSpec = {
                     ...block,
                     Mode: 'Frozen',
-                    FrozenSnapshot: snapshotBase
+                    FrozenSnapshot: signedSnapshot
                 };
                 return {
                     ...region,
@@ -1552,6 +1825,25 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             Slides: nextSlides,
             UpdatedAt: frozenAt
         };
+    }
+
+    /**
+     * Headlessly exports `deck` to ECMA-376 `.pptx` archive bytes (`NW-4`) with valid DrawingML theme/charts,
+     * stripped XML control chars, hidden-slide filtering, and `4:3` / `16:9` aspect ratio support.
+     */
+    public ExportDeckToPptxBytes(deck: SlideDeckSpec, options?: SlideDeckPptxExportOptions): Uint8Array {
+        return ExportDeckToPptxBytesInternal(deck, {
+            ...options,
+            SanitizeImageUrl: (raw) => this.SanitizeImageUrl(raw)
+        });
+    }
+
+    /**
+     * Headlessly imports `.pptx` archive bytes into a normalized {@link SlideDeckSpec} (`NW-4`).
+     */
+    public ImportDeckFromPptxBytes(pptxBytes: Uint8Array, fallbackTitle = 'Imported Presentation'): SlideDeckSpec {
+        const parsed = ImportDeckFromPptxBytesInternal(pptxBytes, fallbackTitle);
+        return this.normalizeDeckSpec(parsed, parsed.Title, parsed.DeckID);
     }
 
     /**
@@ -1772,7 +2064,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                           BigNumberDelta: r.BigNumberDelta,
                           QuoteAttribution: r.QuoteAttribution,
                           CalloutTone: r.CalloutTone,
-                          ImageUrl: r.ImageUrl,
+                          ImageUrl: this.SanitizeImageUrl(r.ImageUrl),
                           ImageAlt: r.ImageAlt,
                           Locked: r.Locked,
                           LockedByUserID: r.LockedByUserID,
@@ -1824,7 +2116,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                 ShowSlideNumbers: raw.Master?.ShowSlideNumbers ?? true,
                 ShowDate: raw.Master?.ShowDate ?? true,
                 OrganizationName: raw.Master?.OrganizationName ?? 'MemberJunction',
-                LogoUrl: raw.Master?.LogoUrl
+                LogoUrl: this.SanitizeImageUrl(raw.Master?.LogoUrl)
             },
             Slides: normalizedSlides.length > 0 ? normalizedSlides : this.CreateDefaultDeck(fallbackTitle, fallbackDeckId).Slides,
             UpdatedAt: raw.UpdatedAt || new Date().toISOString()

@@ -237,7 +237,14 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
 
         const providerStub: Partial<IMetadataProvider & IRunViewProvider & IRunQueryProvider> = {
             Entities: [],
-            Queries: [],
+            Queries: [
+                {
+                    ID: 'qry-1',
+                    Name: 'Monthly Revenue',
+                    CategoryPath: '',
+                    UserCanRun: () => true,
+                } as IMetadataProvider['Queries'][number],
+            ],
             EntityByName: () => undefined,
             EntityByID: () => undefined,
             RunView: runViewFn as IRunViewProvider['RunView'],

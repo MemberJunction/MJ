@@ -55,9 +55,14 @@ describe('DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)', () => {
         'embed_artifact_block',
         'move_block',
         'duplicate_block',
+        'propose_suggestion',
+        'review_suggestion',
+        'list_comments',
+        'add_comment',
+        'reply_comment',
+        'resolve_comment',
       ]),
     );
-    expect(toolNames).not.toContain('propose_suggestion');
   });
 
   it('get_outline returns hierarchical headings with line numbers and word counts', async () => {

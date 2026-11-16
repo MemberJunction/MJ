@@ -572,7 +572,7 @@ describe('SLICE A governed artifact security, concurrency, discovery & realtime 
         expect(res.artifacts).toHaveLength(1);
         expect(downloadSpy).not.toHaveBeenCalled();
 
-        const artifactQuery = recordedFilters.find((f) => f.startsWith('MJ: Artifacts:'));
+        const artifactQuery = recordedFilters.find((f) => f.startsWith('MJ: Artifacts:') && f.includes('ID IN'));
         expect(artifactQuery).toContain(ART_ID);
         expect(artifactQuery).toContain('[%] [[]q1][_]' );
         expect(artifactQuery).toContain('Excel Spreadsheet');

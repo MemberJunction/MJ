@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { IsStandaloneRoute } from '../lib/standalone-routes';
 
 describe('IsStandaloneRoute', () => {
-    it('matches the OAuth callback and the Excel connect page', () => {
+    it('matches the OAuth callback, Excel connect, and public guest artifact pages', () => {
         expect(IsStandaloneRoute('/oauth/callback')).toBe(true);
         expect(IsStandaloneRoute('/office/connect')).toBe(true);
+        expect(IsStandaloneRoute('/guest/artifact/abc-token-123')).toBe(true);
+        expect(IsStandaloneRoute('/guest/artifact?token=abc')).toBe(true);
     });
 
     it('ignores the query string and fragment', () => {

@@ -18,6 +18,7 @@ import { ApiRoute } from './apiRoot.js';
 import { CreateOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { CreateSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { CreateMediaStreamRouter } from './rest/MediaStreamHandler.js';
+import { CreatePublicGuestShareRouter } from './rest/PublicGuestShareHandler.js';
 import { CreateRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
 import { CreateMagicLinkHandler, CreateMagicLinkJwksRouter, MagicLinkService, RegisterMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { CreateWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
@@ -82,6 +83,8 @@ export function MountPublicCoreRoutes(app: Application, publicUrl: string, log: 
     routers.Widget = mountWidgetPublic(app, publicUrl, log);
     mountLocalDevAuthPublic(app, publicUrl, log);
     mountRealtimeVerify(app, log);
+    app.use(ApiRoute('/guest-share'), cors<cors.CorsRequest>(), CreatePublicGuestShareRouter());
+    log.LogIf('verbose', `[GuestShare] Public resolution route registered at ${ApiRoute('/guest-share')}/resolve`);
     return routers;
 }
 

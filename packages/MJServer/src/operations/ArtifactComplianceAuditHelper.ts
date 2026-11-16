@@ -8,10 +8,21 @@ import {
     type MJAuditLogEntity,
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { RegisterClass } from '@memberjunction/global';
+import { IsValidUUID, RegisterClass } from '@memberjunction/global';
 
 const AUDIT_LOG_ENTITY = 'MJ: Audit Logs';
 const ARTIFACTS_ENTITY = 'MJ: Artifacts';
+const MAX_AUDIT_SUMMARY_LENGTH = 1000;
+const MAX_AUDIT_DETAILS_BYTES = 16_384;
+
+export type AuditDetailPrimitive = string | number | boolean | null | undefined;
+export type AuditDetailsRecord = Record<string, AuditDetailPrimitive | AuditDetailPrimitive[] | Record<string, AuditDetailPrimitive>>;
+
+const CLIENT_CALLABLE_AUDIT_PERMISSION_MAP: ReadonlyMap<string, 'Read' | 'Edit' | 'Share'> = new Map([
+    ['artifact exported', 'Read'],
+    ['artifact guest share link', 'Share'],
+    ['artifact connected drive sync', 'Edit'],
+]);
 
 /**
  * Input parameters for {@link WriteArtifactComplianceAudit}.
@@ -28,7 +39,7 @@ export interface WriteArtifactComplianceAuditParams {
     /** Outcome status (`'Success'` or `'Failed'`). Defaults to `'Success'`. */
     Status?: 'Success' | 'Failed';
     /** Optional structured details serialized to `Details` JSON. */
-    Details?: Record<string, unknown>;
+    Details?: AuditDetailsRecord;
 }
 
 /**
@@ -69,10 +80,11 @@ export async function WriteArtifactComplianceAudit(
         row.Status = params.Status ?? 'Success';
         row.EntityID = provider.EntityByName(ARTIFACTS_ENTITY)?.ID ?? null;
         row.RecordID = params.ArtifactID;
-        row.Description = params.Summary;
+        row.Description = (params.Summary ?? '').trim().slice(0, MAX_AUDIT_SUMMARY_LENGTH);
         row.Details = JSON.stringify({
-            artifactVersionId: params.ArtifactVersionID ?? null,
             ...(params.Details ?? {}),
+            // Authoritative version ID overwrites any client-supplied key with the same name.
+            artifactVersionId: params.ArtifactVersionID ?? null,
         });
 
         const saved = await row.Save();
@@ -110,14 +122,53 @@ export class ArtifactComplianceAuditServerOperation extends ArtifactComplianceAu
             throw new RemoteOperationError('NO_PROVIDER', 'Metadata provider is required.');
         }
         const artifactId = (input.ArtifactID ?? '').trim();
-        if (!artifactId) {
-            throw new RemoteOperationError('INVALID_INPUT', 'ArtifactID is required.');
+        if (!artifactId || !IsValidUUID(artifactId)) {
+            throw new RemoteOperationError('INVALID_INPUT', 'A valid ArtifactID UUID is required.');
         }
+        if (input.ArtifactVersionID && !IsValidUUID(input.ArtifactVersionID.trim())) {
+            throw new RemoteOperationError('INVALID_INPUT', 'ArtifactVersionID must be a valid UUID.');
+        }
+
+        const requestedType = (input.AuditLogTypeName ?? '').trim() || 'Artifact Exported';
+        const requiredPermission = CLIENT_CALLABLE_AUDIT_PERMISSION_MAP.get(requestedType.toLowerCase());
+        if (!requiredPermission) {
+            throw new RemoteOperationError(
+                'FORBIDDEN',
+                `AuditLogTypeName '${requestedType}' cannot be logged directly by client callers.`,
+            );
+        }
+
+        const summary = (input.Summary ?? '').trim();
+        if (summary.length > MAX_AUDIT_SUMMARY_LENGTH) {
+            throw new RemoteOperationError(
+                'INPUT_TOO_LARGE',
+                `Audit Summary exceeds maximum length (${MAX_AUDIT_SUMMARY_LENGTH} characters).`,
+            );
+        }
+        if (input.Details !== undefined && input.Details !== null) {
+            if (typeof input.Details !== 'object' || Array.isArray(input.Details)) {
+                throw new RemoteOperationError('INVALID_INPUT', 'Audit Details must be a JSON object.');
+            }
+            const serializedBytes = Buffer.byteLength(JSON.stringify(input.Details), 'utf8');
+            if (serializedBytes > MAX_AUDIT_DETAILS_BYTES) {
+                throw new RemoteOperationError(
+                    'INPUT_TOO_LARGE',
+                    `Audit Details exceeds maximum size (${MAX_AUDIT_DETAILS_BYTES} bytes).`,
+                );
+            }
+        }
+
         const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user);
-        if (!perms.CanRead) {
+        const allowed =
+            requiredPermission === 'Share'
+                ? perms.CanShare
+                : requiredPermission === 'Edit'
+                  ? perms.CanEdit
+                  : perms.CanRead;
+        if (!allowed) {
             throw new RemoteOperationError(
                 'ACCESS_DENIED',
-                perms.Reason || `User lacks permission to audit artifact '${artifactId}'.`,
+                perms.Reason || `User lacks ${requiredPermission} permission to audit '${requestedType}' on artifact '${artifactId}'.`,
             );
         }
         return true;
@@ -128,12 +179,17 @@ export class ArtifactComplianceAuditServerOperation extends ArtifactComplianceAu
         provider: IMetadataProvider,
         user: UserInfo,
     ): Promise<ArtifactComplianceAuditOutput> {
+        const auditTypeName = (input.AuditLogTypeName ?? '').trim() || 'Artifact Exported';
+        const sanitizedDetails =
+            input.Details && typeof input.Details === 'object' && !Array.isArray(input.Details)
+                ? (input.Details as AuditDetailsRecord)
+                : undefined;
         return await WriteArtifactComplianceAudit(provider, user, {
-            AuditLogTypeName: input.AuditLogTypeName,
-            ArtifactID: input.ArtifactID,
-            ArtifactVersionID: input.ArtifactVersionID ?? null,
+            AuditLogTypeName: auditTypeName,
+            ArtifactID: input.ArtifactID.trim(),
+            ArtifactVersionID: input.ArtifactVersionID?.trim() || null,
             Summary: input.Summary,
-            Details: input.Details,
+            Details: sanitizedDetails,
         });
     }
 }

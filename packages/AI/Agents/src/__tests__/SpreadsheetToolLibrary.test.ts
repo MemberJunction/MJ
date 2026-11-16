@@ -845,4 +845,58 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         expect(embedInvalidVersion.success).toBe(false);
         expect(embedInvalidVersion.errorMessage).toContain('Unable to resolve versionId');
     });
+
+    it('write_cells normalizes { r, c, v, f }, { cell, val }, and { address, value, formula } and fails clearly on empty/negative coordinates', async () => {
+        const blankWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('VoiceWorkbook', ['Summary']);
+        const blankJson = SpreadsheetEngine.Instance.SerializeWorkbook(blankWb);
+
+        const res = await sheetLib.InvokeTool(
+            'write_cells',
+            {
+                sheet: 'Summary',
+                cells: [
+                    { r: 0, c: 0, v: 'Region' },
+                    { r: 0, c: 1, v: 'Revenue' },
+                    { cell: 'A2', val: 'North' },
+                    { r: 1, c: 1, f: '=100+250' },
+                    { address: 'B3', value: 500, formula: '=B2*2' },
+                ],
+            },
+            blankJson
+        );
+        expect(res.success).toBe(true);
+        const data = res.data as {
+            updatedCells: Array<{ address: string }>;
+            updatedContent: string;
+        };
+        expect(data.updatedCells).toHaveLength(5);
+        expect(data.updatedCells.map((c) => c.address)).toEqual(['A1', 'B1', 'A2', 'B2', 'B3']);
+
+        const parsed = SpreadsheetEngine.Instance.ParseWorkbook(data.updatedContent);
+        const sheet = parsed.Worksheets[0];
+        expect(sheet.Cells['A1']?.RawValue).toBe('Region');
+        expect(sheet.Cells['B1']?.RawValue).toBe('Revenue');
+        expect(sheet.Cells['A2']?.RawValue).toBe('North');
+        expect(sheet.Cells['B2']?.Formula).toBe('=100+250');
+        expect(sheet.Cells['B3']?.Formula).toBe('=B2*2');
+
+        // Reject missing address & negative 0-based coordinates with actionable example shapes
+        const badEmpty = await sheetLib.InvokeTool(
+            'write_cells',
+            { sheet: 'Summary', cells: [{ v: 'Orphan' }] },
+            blankJson
+        );
+        expect(badEmpty.success).toBe(false);
+        expect(badEmpty.errorMessage).toContain('Invalid cell address');
+        expect(badEmpty.errorMessage).toContain('"address": "A1"');
+
+        const badNegative = await sheetLib.InvokeTool(
+            'write_cells',
+            { sheet: 'Summary', cells: [{ r: -1, c: 0, v: 'BadRow' }] },
+            blankJson
+        );
+        expect(badNegative.success).toBe(false);
+        expect(badNegative.errorMessage).toContain('Invalid cell coordinates');
+        expect(badNegative.errorMessage).toContain('"r": 0');
+    });
 });

@@ -128,7 +128,7 @@ function createProviderWithUser(userId: string, userName: string, ownerId: strin
       return { Success: true, Results: [], TotalRowCount: 0 };
     },
   };
-  return providerStub as IMetadataProvider;
+  return Object.assign(Object.create(null) as IMetadataProvider, providerStub);
 }
 
 function createArtifactVersionStub(wb: WorkbookSpec): MJArtifactVersionEntity {
@@ -183,7 +183,7 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
       userId?: string;
       userName?: string;
       ownerId?: string;
-      permissionsSource?: 'Owner' | 'Shared';
+      permissionsSource?: 'Owner' | 'ArtifactPermission';
     } = {},
   ): Promise<DocumentCollaborationSession> {
     const userId = options.userId ?? OWNER_USER_ID;
@@ -192,11 +192,13 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
     const source = options.permissionsSource ?? 'Owner';
 
     vi.spyOn(collabService, 'ResolvePermissionsFromServer').mockResolvedValue({
+      ArtifactID: 'art-r4-1',
       CanRead: true,
       CanEdit: true,
-      CanComment: true,
       CanShare: source === 'Owner',
+      CanDelete: source === 'Owner',
       Source: source,
+      Reason: 'test',
     });
 
     component.Provider = createProviderWithUser(userId, userName, ownerId);
@@ -359,7 +361,7 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
         userId: EDITOR_USER_ID,
         userName: 'Non-Owner Editor',
         ownerId: OWNER_USER_ID,
-        permissionsSource: 'Shared',
+        permissionsSource: 'ArtifactPermission',
       });
 
       component.OnContextMenuCommand({
@@ -484,6 +486,23 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
 
       SpreadsheetEngine.Instance.SetCell(wb, sheet1.SheetID, 'A1', { Value: 'Open' });
       SpreadsheetEngine.Instance.SetCell(wb, sheet1.SheetID, 'B3', { Value: 'Locked Value' });
+      sheet1.ValidationRules = [
+        {
+          RuleID: 'val-prot-1',
+          Range: 'B3:C4',
+          RuleType: 'list',
+          AllowedValues: ['Approved', 'Pending'],
+        },
+      ];
+      sheet1.ConditionalFormats = [
+        {
+          RuleID: 'cf-prot-1',
+          Range: 'B3:C4',
+          Operator: 'gt',
+          Value1: 0,
+          HighlightTone: 'success',
+        },
+      ];
       SpreadsheetEngine.Instance.AddProtectedRange(wb, sheet1.SheetID, {
         RangeID: 'prot-range-1',
         Range: 'B3:C4',
@@ -496,7 +515,7 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
         userId: EDITOR_USER_ID,
         userName: 'Non-Owner Editor',
         ownerId: OWNER_USER_ID,
-        permissionsSource: 'Shared',
+        permissionsSource: 'ArtifactPermission',
       });
       const liveSheet1 = component.Workbook.Worksheets[0];
       const liveSheet2 = component.Workbook.Worksheets[1];
@@ -563,6 +582,16 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
       expect(liveSheet1.Columns.length).toBe(initialColCount);
       expect(liveSheet1.Cells['B3']?.RawValue).toBe('Locked Value');
 
+      // Non-owner cannot delete ValidationRules or ConditionalFormats overlapping ProtectedRanges
+      component.RemoveValidationRule('val-prot-1');
+      expect(liveSheet1.ValidationRules?.map((r) => r.RuleID)).toEqual(['val-prot-1']);
+      expect(component.StatusBannerMessage).toContain('Finance locked range');
+
+      component.StatusBannerMessage = '';
+      component.RemoveConditionalFormatRule('cf-prot-1');
+      expect(liveSheet1.ConditionalFormats?.map((r) => r.RuleID)).toEqual(['cf-prot-1']);
+      expect(component.StatusBannerMessage).toContain('Finance locked range');
+
       // Deleting unprotected row 1 and unprotected col A (1) succeeds for non-owner
       component.OnContextMenuCommand({ Type: 'delete-rows', StartRowIndex: 1, Count: 1 });
       expect(liveSheet1.Rows.length).toBe(initialRowCount - 1);
@@ -581,11 +610,13 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
         OWNER_USER_ID.toLowerCase(),
       );
       component.Permissions = {
+        ArtifactID: 'art-r4-1',
         CanRead: true,
         CanEdit: true,
-        CanComment: true,
         CanShare: true,
+        CanDelete: true,
         Source: 'Owner',
+        Reason: 'test',
       };
       fixture.detectChanges();
 
@@ -593,6 +624,11 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
         `[data-testid="sheet-delete-tab-${liveSheet1.SheetID}"]`,
       ) as HTMLButtonElement;
       expect(ownerTabDeleteBtn1.disabled).toBe(false);
+
+      component.RemoveValidationRule('val-prot-1');
+      component.RemoveConditionalFormatRule('cf-prot-1');
+      expect(liveSheet1.ValidationRules).toEqual([]);
+      expect(liveSheet1.ConditionalFormats).toEqual([]);
 
       component.OnContextMenuCommand({ Type: 'delete-rows', StartRowIndex: 2, Count: 1 });
       expect(liveSheet1.Cells['A2']).toBeUndefined();

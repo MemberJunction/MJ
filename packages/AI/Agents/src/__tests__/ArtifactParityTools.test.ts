@@ -53,16 +53,32 @@ describe('Artifact Tool Libraries — SLICE B Parity & Security Suite', () => {
             expect(updatedContent).toContain('Revenue $100M & Margin $& Plan');
         });
 
-        it('does not expose deferred propose_suggestion tool', async () => {
+        it('exposes NW-3 propose_suggestion and comment/suggestion workflow tools', async () => {
             const lib = new DocumentToolLibrary();
-            expect(lib.GetToolList().some((t) => t.name === 'propose_suggestion')).toBe(false);
+            expect(lib.GetToolList().some((t) => t.name === 'propose_suggestion')).toBe(true);
+            const blocks = lib.ParseLogicalBlocks('# Title');
             const res = await lib.InvokeTool(
                 'propose_suggestion',
-                { targetBlockId: 'blk-1', proposedMarkdown: 'New', rationale: 'Test' },
-                '# Title'
+                {
+                    anchor: { blockId: blocks[0].blockId },
+                    originalSlice: '# Title',
+                    proposedReplacement: '# New Title',
+                    rationale: 'Test',
+                },
+                '# Title',
+                {
+                    artifactId: 'art-1',
+                    versionNumber: 1,
+                    contextUser: { ID: 'user-1', Name: 'Reviewer' } as UserInfo,
+                },
             );
-            expect(res.success).toBe(false);
-            expect(res.errorMessage).toContain('Unknown tool');
+            expect(res.success).toBe(true);
+            const data = res.data as {
+                suggestion?: { SuggestionID: string; Status: string };
+                configurationPatch?: { suggestions?: Array<{ Status: string }> };
+            };
+            expect(data.suggestion?.Status).toBe('Pending');
+            expect(data.configurationPatch?.suggestions?.length).toBe(1);
         });
 
         it('supports upsert_table alignments, expanded insert_live_block, embed_artifact_block (replaceBlockId + sheet fields), move_block, and duplicate_block', async () => {

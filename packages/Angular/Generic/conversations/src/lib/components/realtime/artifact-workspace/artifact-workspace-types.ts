@@ -53,6 +53,45 @@ export function IsComponentArtifactDescriptor(
   return normalizedType === 'component' || normalizedDriver === 'componentartifactviewerplugin';
 }
 
+export type ArtifactSelectionDomain = 'document' | 'spreadsheet' | 'slides' | 'whiteboard';
+
+export interface ArtifactSelectionAnchor {
+  domain: ArtifactSelectionDomain;
+  heading?: string;
+  blockId?: string;
+  quote?: string;
+  sheet?: string;
+  range?: string;
+  slideNumber?: number;
+  slideId?: string;
+  elementId?: string;
+}
+
+export interface ArtifactSelectionDelta {
+  instanceId: string;
+  artifactId: string;
+  artifactTypeName?: string;
+  anchor: ArtifactSelectionAnchor;
+}
+
+export type ArtifactWorkspaceViewMode = 'edit' | 'suggest' | 'diff' | 'present';
+
+export interface ArtifactViewerNavigationAnchor {
+  Sheet?: string;
+  Range?: string;
+  SlideNumber?: number;
+  SlideID?: string;
+  ElementID?: string;
+  Heading?: string;
+  BlockID?: string;
+  HighlightMs?: number;
+}
+
+export interface ArtifactNavigateToAnchorPayload extends ArtifactViewerNavigationAnchor {
+  InstanceID: string;
+  ArtifactID: string;
+}
+
 export interface ArtifactWorkspaceOpenPayload {
   ArtifactID: string;
   ArtifactVersionID?: string;
@@ -72,6 +111,8 @@ export interface ArtifactWorkspaceRecord {
   ArtifactTypeName?: string;
   DriverClass?: string;
   CanEdit?: boolean;
+  Selection?: ArtifactSelectionAnchor | null;
+  ViewMode?: ArtifactWorkspaceViewMode;
   LastUpdatedAt: number;
 }
 

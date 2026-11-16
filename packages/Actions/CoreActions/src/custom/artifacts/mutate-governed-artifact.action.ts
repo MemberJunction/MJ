@@ -35,12 +35,31 @@ export class MutateGovernedArtifactAction extends BaseGovernedArtifactAction {
 
         const tool = this.getStringParam(params, 'Tool');
         const input = this.getObjectParam(params, 'Input');
-        const operations = this.getOperationsParam(params, 'Operations');
-        if (!tool && !operations?.length) {
+        const parsedOps = this.parseOperationsParam(params, 'Operations');
+        if (parsedOps.errorMessage) {
             return {
                 Success: false,
                 ResultCode: 'MISSING_PARAMETER',
-                Message: 'Either Tool (with optional Input) or Operations array must be provided.',
+                Message: parsedOps.errorMessage,
+                Params: params.Params,
+            };
+        }
+        const operations = parsedOps.operations;
+        if (!tool && (!operations || operations.length === 0)) {
+            const rawInput = this.getParamValue(params, 'Input');
+            const hasInputWithoutTool =
+                input !== undefined ||
+                (rawInput !== undefined && rawInput !== null && !(typeof rawInput === 'string' && !rawInput.trim()));
+            const detailMsg =
+                operations && operations.length === 0
+                    ? "Operations array is empty. Provide at least one { tool: '...', input: { ... } } entry, or provide Tool (with optional Input)."
+                    : hasInputWithoutTool
+                      ? "Tool parameter is required when invoking a single tool with Input (e.g. Tool: 'write_cells', Input: { ... }); or pass Operations: [{ tool: 'write_cells', input: { ... } }]."
+                      : "Either Tool (with optional Input) or Operations array (e.g. [{ tool: 'write_cells', input: { ... } }]) must be provided.";
+            return {
+                Success: false,
+                ResultCode: 'MISSING_PARAMETER',
+                Message: detailMsg,
                 Params: params.Params,
             };
         }

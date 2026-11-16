@@ -193,7 +193,7 @@ describe('Next Horizons — Inline AI Overlay, Connected Drive Round-Trip Sync, 
           BaseView: name === 'MJ: Artifact Versions' ? 'vwArtifactVersions' : 'vwArtifacts',
         }) as EntityInfo,
       GetEntityObject: async <T>(entityName: string): Promise<T> => {
-        const id = `${entityName}-${++seq}`;
+        const id = `22222222-2222-4222-8222-${String(++seq).padStart(12, '0')}`;
         const rec: MockRecord = {
           ID: id,
           LatestResult: null,
@@ -224,6 +224,17 @@ describe('Next Horizons — Inline AI Overlay, Connected Drive Round-Trip Sync, 
 
     vi.spyOn(RunView.prototype, 'RunView').mockImplementation(
       async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
+        if (params.EntityName === 'MJ: Artifacts') {
+          const rows = Array.from(artifactsById.values());
+          return {
+            Success: true,
+            Results: rows as T[],
+            RowCount: rows.length,
+            TotalRowCount: rows.length,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        }
         if (params.EntityName === 'MJ: Artifact Versions') {
           const rows = Array.from(versionsById.values()).sort(
             (a, b) => (b.VersionNumber ?? 0) - (a.VersionNumber ?? 0),

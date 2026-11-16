@@ -104,7 +104,8 @@ export interface NormalizedSynthesizedArtifact {
     Warnings: string[];
 }
 
-type JsonRecord = Record<string, unknown>;
+export type SynthesisJsonValue = string | number | boolean | object | null | undefined;
+type JsonRecord = Record<string, SynthesisJsonValue>;
 
 const VALID_SLIDE_LAYOUTS = new Set<SlideLayoutKind>([
     'Title',
@@ -137,6 +138,8 @@ const VALID_REGION_KINDS = new Set<SlideRegionKind>([
  * permission-filtering AI synthesis outputs into valid serialized artifact payloads.
  */
 export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngine> {
+    private _blockSequence = 0;
+
     protected constructor() {
         super();
     }
@@ -287,14 +290,14 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         const stripped = this.stripJsonFence(options.RawOutput);
         const targetTypeName = SYNTHESIS_TARGET_TYPE_NAME_MAP[options.TargetKind];
 
-        let parsedObj: Record<string, unknown> | null = null;
+        let parsedObj: JsonRecord | null = null;
         if (stripped.startsWith('{') || stripped.startsWith('[')) {
             try {
-                const candidate: unknown = JSON.parse(stripped);
+                const candidate = JSON.parse(stripped) as SynthesisJsonValue;
                 if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
-                    parsedObj = candidate as Record<string, unknown>;
+                    parsedObj = candidate as JsonRecord;
                 } else if (Array.isArray(candidate) && options.TargetKind === 'presentation') {
-                    parsedObj = { slides: candidate };
+                    parsedObj = { slides: candidate as SynthesisJsonValue[] };
                 }
             } catch {
                 parsedObj = null;
@@ -367,11 +370,12 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
             ];
 
             let idx = 2;
+            const usedIds = new Set<string>();
             for (const d of digests) {
                 const chart = linkChartsAndRanges ? d.EmbeddedCharts[0] : undefined;
                 if (chart) {
                     const blockSpec: DocumentBlockSpec = {
-                        BlockID: `synth-chart-${idx}`,
+                        BlockID: this.mintUniqueBlockId('chart-blk', undefined, usedIds),
                         Kind: 'Artifact',
                         Mode: 'Live',
                         EmbedMode: 'Inline',
@@ -450,18 +454,18 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
             const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook(cleanTitle);
             const firstSheet = wb.Worksheets[0];
             SpreadsheetEngine.Instance.RenameWorksheet(wb, firstSheet.SheetID, 'Synthesis Index');
-            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'A1', { Value: 'Source Artifact' });
-            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'B1', { Value: 'Type' });
-            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'C1', { Value: 'Summary Highlights' });
+            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'A1', { Value: 'Source Artifact', Formula: null });
+            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'B1', { Value: 'Type', Formula: null });
+            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'C1', { Value: 'Summary Highlights', Formula: null });
             digests.forEach((d, rowOffset) => {
                 const row = rowOffset + 2;
-                SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, `A${row}`, { Value: d.Name });
-                SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, `B${row}`, { Value: d.ArtifactType });
+                SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, `A${row}`, { Value: d.Name, Formula: null });
+                SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, `B${row}`, { Value: d.ArtifactType, Formula: null });
                 SpreadsheetEngine.Instance.SetCell(
                     wb,
                     firstSheet.SheetID,
                     `C${row}`,
-                    { Value: d.SummaryText.replace(/\s+/g, ' ').slice(0, 220) },
+                    { Value: d.SummaryText.replace(/\s+/g, ' ').slice(0, 220), Formula: null },
                 );
             });
             SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
@@ -483,6 +487,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
             '',
         ];
         let linkedCount = 0;
+        const usedDocIds = new Set<string>();
         for (const d of digests) {
             lines.push(`## ${d.Name} (${d.ArtifactType})`);
             lines.push('');
@@ -491,7 +496,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
             if (linkChartsAndRanges && d.EmbeddedCharts.length > 0) {
                 const chart = d.EmbeddedCharts[0];
                 const spec: DocumentBlockSpec = {
-                    BlockID: `synth-doc-chart-${linkedCount + 1}`,
+                    BlockID: this.mintUniqueBlockId('chart-blk', undefined, usedDocIds),
                     Kind: 'Artifact',
                     Mode: 'Live',
                     EmbedMode: 'Inline',
@@ -531,17 +536,18 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
     ): void {
         try {
             const wb = SpreadsheetEngine.Instance.ParseWorkbook(raw, source.Configuration);
-            for (const sheet of wb.Worksheets.slice(0, 6)) {
+            const maxSheets = 12;
+            for (const sheet of wb.Worksheets.slice(0, maxSheets)) {
                 sections.push(sheet.Name);
                 const cellEntries = Object.entries(sheet.Cells ?? {});
                 const previewRows: string[] = [];
                 const rowsMap = new Map<number, Array<{ col: number; val: string }>>();
+                const summaryOrFormulaRows = new Set<number>();
 
                 for (const [addr, cell] of cellEntries) {
                     const m = /^([A-Za-z]+)(\d+)$/.exec(addr);
                     if (!m) continue;
                     const rowNum = Number(m[2]);
-                    if (rowNum > 15) continue;
                     const colNum = this.colLettersToNumber(m[1]);
                     const rawVal = cell.ComputedValue !== undefined ? cell.ComputedValue : cell.RawValue;
                     const strVal = rawVal != null ? String(rawVal).trim() : '';
@@ -549,17 +555,41 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                     const rowArr = rowsMap.get(rowNum) ?? [];
                     rowArr.push({ col: colNum, val: strVal.slice(0, 60) });
                     rowsMap.set(rowNum, rowArr);
+                    if (
+                        (typeof cell.Formula === 'string' && cell.Formula.trim().length > 0) ||
+                        /\b(?:total|subtotal|grand|summary|net|balance)\b/i.test(strVal)
+                    ) {
+                        summaryOrFormulaRows.add(rowNum);
+                    }
                 }
 
                 const sortedRows = Array.from(rowsMap.keys()).sort((a, b) => a - b);
+                const headRows = sortedRows.slice(0, 12);
+                const tailRows = sortedRows.slice(-8);
+                const lastHeadRow = headRows.length > 0 ? headRows[headRows.length - 1] : 0;
+                const selectedSet = new Set<number>(headRows);
                 for (const r of sortedRows) {
+                    if (summaryOrFormulaRows.has(r) && r > lastHeadRow) {
+                        selectedSet.add(r);
+                    }
+                }
+                for (const r of tailRows) {
+                    selectedSet.add(r);
+                }
+                const selectedRows = Array.from(selectedSet).sort((a, b) => a - b);
+                let prevSelectedRow = 0;
+                for (const r of selectedRows) {
+                    if (prevSelectedRow > 0 && r > prevSelectedRow + 1 && prevSelectedRow <= lastHeadRow) {
+                        previewRows.push('... (summary & trailing rows) ...');
+                    }
                     const cells = rowsMap.get(r)!.sort((a, b) => a.col - b.col);
                     previewRows.push(`Row ${r}: ${cells.map((c) => c.val).join(' | ')}`);
+                    prevSelectedRow = r;
                 }
 
                 summaryParts.push(
                     `Worksheet "${sheet.Name}" (${cellEntries.length} non-empty cells):` +
-                        (previewRows.length > 0 ? `\n${previewRows.join('\n')}` : ' (no sample rows in A1..15)'),
+                        (previewRows.length > 0 ? `\n${previewRows.join('\n')}` : ' (no sample rows)'),
                 );
 
                 for (const chart of sheet.Charts ?? []) {
@@ -573,6 +603,10 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                         RangeAddress: chart.SourceRange || 'A1:B10',
                     });
                 }
+            }
+            if (wb.Worksheets.length > maxSheets) {
+                const omitted = wb.Worksheets.slice(maxSheets).map((w) => w.Name).join(', ');
+                summaryParts.push(`Additional worksheets (${wb.Worksheets.length - maxSheets}): ${omitted}`);
             }
         } catch {
             this.digestGenericStructured(source, raw, summaryParts, sections);
@@ -611,38 +645,40 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
 
     private digestWhiteboard(raw: string, summaryParts: string[], sections: string[]): void {
         try {
-            const parsed: unknown = JSON.parse(raw);
+            const parsed = JSON.parse(raw) as SynthesisJsonValue;
             const texts: string[] = [];
             if (parsed && typeof parsed === 'object') {
-                const obj = parsed as Record<string, unknown>;
-                const pages = Array.isArray(obj['pages']) ? obj['pages'] : [];
+                const obj = parsed as JsonRecord;
+                const pages = Array.isArray(obj['pages']) ? (obj['pages'] as SynthesisJsonValue[]) : [];
                 for (const p of pages) {
                     if (!p || typeof p !== 'object') continue;
-                    const pageObj = p as Record<string, unknown>;
+                    const pageObj = p as JsonRecord;
                     const name = typeof pageObj['name'] === 'string' ? pageObj['name'] : 'Page';
                     sections.push(name);
-                    const items = Array.isArray(pageObj['items']) ? pageObj['items'] : [];
+                    const items = Array.isArray(pageObj['items']) ? (pageObj['items'] as SynthesisJsonValue[]) : [];
                     for (const item of items) {
                         if (!item || typeof item !== 'object') continue;
-                        const it = item as Record<string, unknown>;
+                        const it = item as JsonRecord;
                         for (const key of ['Label', 'Text', 'Sub']) {
-                            if (typeof it[key] === 'string' && it[key].trim()) {
-                                texts.push(it[key].trim());
+                            const val = it[key];
+                            if (typeof val === 'string' && val.trim()) {
+                                texts.push(val.trim());
                             }
                         }
                     }
                 }
                 const legacyElements = Array.isArray(obj['Elements'])
-                    ? obj['Elements']
+                    ? (obj['Elements'] as SynthesisJsonValue[])
                     : Array.isArray(obj['elements'])
-                      ? obj['elements']
+                      ? (obj['elements'] as SynthesisJsonValue[])
                       : [];
                 for (const el of legacyElements) {
                     if (!el || typeof el !== 'object') continue;
-                    const rec = el as Record<string, unknown>;
+                    const rec = el as JsonRecord;
                     for (const key of ['Text', 'text', 'Label', 'label']) {
-                        if (typeof rec[key] === 'string' && rec[key].trim()) {
-                            texts.push(rec[key].trim());
+                        const val = rec[key];
+                        if (typeof val === 'string' && val.trim()) {
+                            texts.push(val.trim());
                         }
                     }
                 }
@@ -709,11 +745,11 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         }
         if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
             try {
-                const parsed: unknown = JSON.parse(trimmed);
+                const parsed = JSON.parse(trimmed) as SynthesisJsonValue;
                 if (Array.isArray(parsed)) {
                     const keys =
                         parsed[0] && typeof parsed[0] === 'object'
-                            ? Object.keys(parsed[0] as Record<string, unknown>).slice(0, 12)
+                            ? Object.keys(parsed[0] as JsonRecord).slice(0, 12)
                             : [];
                     if (keys.length > 0) sections.push(...keys);
                     summaryParts.push(
@@ -761,7 +797,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
 
         const docChartHint =
             charts.length > 0
-                ? 'To embed a live source chart in Markdown, place a fenced block:\n```mj-block\n{"BlockID":"chart-1","Kind":"Artifact","Mode":"Live","EmbedMode":"Inline","ArtifactID":"<verified ArtifactID>","ArtifactType":"Excel Spreadsheet","SheetID":"<WorksheetName>","SheetChartID":"<ChartID>","SheetRange":"<RangeAddress>","Title":"<ChartTitle>"}\n```'
+                ? 'To embed a live source chart in Markdown, place a directive block:\n:::mj-block\n{"BlockID":"chart-1","Kind":"Artifact","Mode":"Live","EmbedMode":"Inline","ArtifactID":"<verified ArtifactID>","ArtifactType":"Excel Spreadsheet","SheetID":"<WorksheetName>","SheetChartID":"<ChartID>","SheetRange":"<RangeAddress>","Title":"<ChartTitle>"}\n:::'
                 : '';
 
         return [
@@ -819,11 +855,12 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
 
         const baseDeck = SlideDeckEngine.Instance.CreateDefaultDeck(title);
         const normalizedSlides: SlideSpec[] = [];
+        const usedBlockIds = new Set<string>();
         let linkedCharts = 0;
 
         rawSlides.forEach((rawSlide, index) => {
             if (!rawSlide || typeof rawSlide !== 'object') return;
-            const s = rawSlide as Record<string, unknown>;
+            const s = rawSlide as JsonRecord;
             const rawLayout = typeof s['Layout'] === 'string' ? (s['Layout'] as SlideLayoutKind) : 'TitleAndBody';
             const layout: SlideLayoutKind = VALID_SLIDE_LAYOUTS.has(rawLayout) ? rawLayout : 'TitleAndBody';
             const slideTitle =
@@ -831,12 +868,12 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
             const subtitle = typeof s['Subtitle'] === 'string' ? s['Subtitle'] : undefined;
             const speakerNotes =
                 typeof s['SpeakerNotes'] === 'string' ? s['SpeakerNotes'] : '';
-            const rawRegions = Array.isArray(s['Regions']) ? s['Regions'] : [];
+            const rawRegions = Array.isArray(s['Regions']) ? (s['Regions'] as SynthesisJsonValue[]) : [];
 
             const regions: SlideRegionSpec[] = [];
             rawRegions.forEach((rawReg, regIdx) => {
                 if (!rawReg || typeof rawReg !== 'object') return;
-                const r = rawReg as Record<string, unknown>;
+                const r = rawReg as JsonRecord;
                 const rawKind = typeof r['Kind'] === 'string' ? (r['Kind'] as SlideRegionKind) : 'rich-text';
                 const kind: SlideRegionKind = VALID_REGION_KINDS.has(rawKind) ? rawKind : 'rich-text';
                 let markdownContent =
@@ -849,6 +886,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                         candidateSpec,
                         allowedSourceArtifactIds,
                         warnings,
+                        usedBlockIds,
                     );
                     if (!verified) {
                         return;
@@ -863,6 +901,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                         markdownContent,
                         allowedSourceArtifactIds,
                         warnings,
+                        usedBlockIds,
                     );
                     markdownContent = sanitizedMd.Markdown;
                 }
@@ -943,7 +982,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
 
         rawSheets.forEach((rawSheet, idx) => {
             if (!rawSheet || typeof rawSheet !== 'object') return;
-            const sh = rawSheet as Record<string, unknown>;
+            const sh = rawSheet as JsonRecord;
             const rawName = typeof sh['Name'] === 'string' ? sh['Name'].trim() : `Sheet ${idx + 1}`;
             const safeName = rawName.slice(0, 31) || `Sheet ${idx + 1}`;
 
@@ -955,23 +994,32 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                 SpreadsheetEngine.Instance.RenameWorksheet(wb, targetSheet.SheetID, safeName);
             }
 
-            const headers = Array.isArray(sh['Headers']) ? sh['Headers'] : [];
+            const headers = Array.isArray(sh['Headers']) ? (sh['Headers'] as SynthesisJsonValue[]) : [];
             headers.forEach((h, cIdx) => {
-                if (cIdx > 25) return;
                 const addr = `${this.numberToColLetters(cIdx + 1)}1`;
                 SpreadsheetEngine.Instance.SetCell(wb, targetSheet.SheetID, addr, {
                     Value: h != null ? String(h) : '',
+                    Formula: null,
                 });
             });
 
-            const rows = Array.isArray(sh['Rows']) ? sh['Rows'] : [];
+            const rows = Array.isArray(sh['Rows']) ? (sh['Rows'] as SynthesisJsonValue[]) : [];
             const rowStart = headers.length > 0 ? 2 : 1;
             rows.forEach((rawRow, rIdx) => {
                 if (!Array.isArray(rawRow)) return;
-                rawRow.forEach((cellVal, cIdx) => {
-                    if (cIdx > 25) return;
+                (rawRow as SynthesisJsonValue[]).forEach((cellVal, cIdx) => {
                     const addr = `${this.numberToColLetters(cIdx + 1)}${rowStart + rIdx}`;
-                    if (typeof cellVal === 'string' && cellVal.trim().startsWith('=')) {
+                    if (typeof cellVal === 'string' && this.containsDisallowedMjFormula(cellVal)) {
+                        warnings.push(
+                            `Blocked disallowed MJ.* live formula in synthesized cell ${safeName}!${addr}.`,
+                        );
+                        const strippedBody = cellVal.trim().replace(/^[=+\-@\s]+/, '');
+                        SpreadsheetEngine.Instance.SetCell(wb, targetSheet.SheetID, addr, {
+                            Value: `[Blocked formula] ${strippedBody}`,
+                            Formula: null,
+                            Literal: true,
+                        });
+                    } else if (typeof cellVal === 'string' && cellVal.trim().startsWith('=')) {
                         SpreadsheetEngine.Instance.SetCell(wb, targetSheet.SheetID, addr, {
                             Formula: cellVal.trim(),
                         });
@@ -979,6 +1027,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                         const normalizedCell = this.toSpreadsheetCellValue(cellVal);
                         SpreadsheetEngine.Instance.SetCell(wb, targetSheet.SheetID, addr, {
                             Value: normalizedCell,
+                            Formula: null,
                         });
                     }
                 });
@@ -1041,12 +1090,38 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         };
     }
 
+    private mintUniqueBlockId(prefix: string, candidate?: string, usedBlockIds?: Set<string>): string {
+        const trimmed = (candidate ?? '').trim();
+        if (trimmed && (!usedBlockIds || !usedBlockIds.has(trimmed))) {
+            usedBlockIds?.add(trimmed);
+            return trimmed;
+        }
+        let generated = `${prefix}-${Date.now()}-${++this._blockSequence}`;
+        while (usedBlockIds?.has(generated)) {
+            generated = `${prefix}-${Date.now()}-${++this._blockSequence}`;
+        }
+        usedBlockIds?.add(generated);
+        return generated;
+    }
+
+    private containsDisallowedMjFormula(rawCell: string): boolean {
+        const trimmed = rawCell.trim();
+        if (!trimmed || !/^[=+\-@]/.test(trimmed)) {
+            return false;
+        }
+        // Strip quoted string literals (including Excel "" escapes) so unquoted MJ.* calls anywhere
+        // in the formula expression (direct, +MJ.*, @MJ.*, _xll.MJ.*, or nested in IF/CONCAT) are detected.
+        const unquoted = trimmed.replace(/"(?:[^"]|"")*"/g, '""');
+        return /\b(?:_xll\s*\.\s*)?MJ\s*\.\s*(?:VIEW|QUERY|AI|IMPORTRANGE)\b/i.test(unquoted);
+    }
+
     private filterUnauthorizedDeckBlocks(
         deck: SlideDeckSpec,
         allowedSourceArtifactIds: ReadonlyArray<string>,
         warnings: string[],
     ): { Deck: SlideDeckSpec; LinkedChartCount: number } {
         let linked = 0;
+        const usedBlockIds = new Set<string>();
         const slides = deck.Slides.map((slide) => ({
             ...slide,
             Regions: slide.Regions.map((region) => {
@@ -1055,12 +1130,34 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                         region.BlockSpec,
                         allowedSourceArtifactIds,
                         warnings,
+                        usedBlockIds,
                     );
                     if (!checked) {
                         return { ...region, Kind: 'rich-text' as SlideRegionKind, BlockSpec: undefined, MarkdownContent: '' };
                     }
                     if (checked.Kind === 'Artifact') linked++;
-                    return { ...region, BlockSpec: checked };
+                    const cleanedMarkdown =
+                        typeof region.MarkdownContent === 'string' &&
+                        (region.MarkdownContent.includes(':::mj-block') || region.MarkdownContent.includes('FrozenSnapshot'))
+                            ? DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(checked)
+                            : region.MarkdownContent;
+                    return {
+                        ...region,
+                        BlockSpec: checked,
+                        MarkdownContent: cleanedMarkdown,
+                    };
+                }
+                if (typeof region.MarkdownContent === 'string' && region.MarkdownContent.includes(':::mj-block')) {
+                    const stripped = this.stripUnauthorizedMarkdownArtifactBlocks(
+                        region.MarkdownContent,
+                        allowedSourceArtifactIds,
+                        warnings,
+                        usedBlockIds,
+                    );
+                    return {
+                        ...region,
+                        MarkdownContent: stripped.Markdown,
+                    };
                 }
                 return region;
             }),
@@ -1072,36 +1169,95 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         raw: DocumentBlockSpec,
         allowedSourceArtifactIds: ReadonlyArray<string>,
         warnings: string[],
+        usedBlockIds?: Set<string>,
     ): DocumentBlockSpec | null {
-        const kind = (raw.Kind ?? 'EntityView') as DocumentBlockKind;
-        // Synthesized embeds MUST run in Live mode so viewer RLS/permission checks apply at render time.
-        const mode: DocumentBlockMode = kind === 'Artifact' ? 'Live' : raw.Mode === 'Frozen' ? 'Frozen' : 'Live';
-        if (kind === 'Artifact') {
-            const targetId = (raw.ArtifactID ?? '').trim();
-            const isAllowed = targetId.length > 0 && allowedSourceArtifactIds.some((id) => UUIDsEqual(id, targetId));
-            if (!isAllowed) {
-                warnings.push(`Removed unverified Artifact reference "${targetId || 'unknown'}".`);
-                return null;
-            }
+        const kind = raw.Kind;
+        if (kind !== 'Artifact') {
+            warnings.push(
+                `Removed disallowed synthesized block of kind "${String(kind ?? 'unspecified')}": only Kind="Artifact" embeds referencing verified source artifacts are allowed.`,
+            );
+            return null;
+        }
+        const targetId = (raw.ArtifactID ?? '').trim();
+        const isAllowed = targetId.length > 0 && allowedSourceArtifactIds.some((id) => UUIDsEqual(id, targetId));
+        if (!isAllowed) {
+            warnings.push(`Removed unverified Artifact reference "${targetId || 'unspecified'}".`);
+            return null;
         }
         const cleaned: DocumentBlockSpec = {
             ...raw,
-            BlockID: raw.BlockID || `synth-blk-${Date.now()}`,
-            Kind: kind,
-            Mode: mode,
+            BlockID: this.mintUniqueBlockId('synth-blk', raw.BlockID, usedBlockIds),
+            Kind: 'Artifact',
+            Mode: 'Live',
         };
-        if (mode === 'Live') {
-            delete cleaned.FrozenSnapshot;
-        }
+        delete cleaned.FrozenSnapshot;
         return cleaned;
+    }
+
+    private normalizeBacktickMjBlockFences(
+        markdown: string,
+        allowedSourceArtifactIds: ReadonlyArray<string>,
+        warnings: string[],
+        usedBlockIds: Set<string>,
+    ): string {
+        const lines = (markdown ?? '').replace(/\r\n/g, '\n').split('\n');
+        const out: string[] = [];
+        let i = 0;
+        while (i < lines.length) {
+            const openMatch = /^\s*(`{3,}|~{3,})\s*mj-block\b/i.exec(lines[i]);
+            if (!openMatch) {
+                out.push(lines[i]);
+                i++;
+                continue;
+            }
+            const fenceChar = openMatch[1][0];
+            const fenceLen = openMatch[1].length;
+            const closeRe = new RegExp(`^\\s*${fenceChar}{${fenceLen},}\\s*$`);
+            let closeIdx = -1;
+            for (let j = i + 1; j < lines.length; j++) {
+                if (closeRe.test(lines[j])) {
+                    closeIdx = j;
+                    break;
+                }
+            }
+            if (closeIdx < 0) {
+                // Unterminated backtick mj-block fence — strip from output
+                warnings.push('Removed malformed backtick mj-block fence from synthesized markdown.');
+                break;
+            }
+            const innerJson = lines.slice(i + 1, closeIdx).join('\n').trim();
+            try {
+                const candidate = JSON.parse(innerJson) as DocumentBlockSpec;
+                const verified = this.sanitizeArtifactBlockSpec(
+                    candidate,
+                    allowedSourceArtifactIds,
+                    warnings,
+                    usedBlockIds,
+                );
+                if (verified) {
+                    out.push(DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(verified));
+                }
+            } catch {
+                warnings.push('Removed invalid JSON inside backtick mj-block fence from synthesized markdown.');
+            }
+            i = closeIdx + 1;
+        }
+        return out.join('\n');
     }
 
     private stripUnauthorizedMarkdownArtifactBlocks(
         markdown: string,
         allowedSourceArtifactIds: ReadonlyArray<string>,
         warnings: string[],
+        usedBlockIds = new Set<string>(),
     ): { Markdown: string; VerifiedArtifactBlockCount: number } {
-        const segments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(markdown);
+        const normalizedMarkdown = this.normalizeBacktickMjBlockFences(
+            markdown,
+            allowedSourceArtifactIds,
+            warnings,
+            usedBlockIds,
+        );
+        const segments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(normalizedMarkdown);
         let verifiedCount = 0;
         const rebuilt: string[] = [];
         for (const seg of segments) {
@@ -1113,6 +1269,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                 seg.BlockSpec,
                 allowedSourceArtifactIds,
                 warnings,
+                usedBlockIds,
             );
             if (!verified) {
                 continue;
@@ -1150,11 +1307,11 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         return '';
     }
 
-    private readArrayField(obj: JsonRecord | null, ...keys: string[]): unknown[] {
+    private readArrayField(obj: JsonRecord | null, ...keys: string[]): SynthesisJsonValue[] {
         if (!obj) return [];
         for (const key of keys) {
             const val = obj[key];
-            if (Array.isArray(val)) return val;
+            if (Array.isArray(val)) return val as SynthesisJsonValue[];
         }
         return [];
     }
@@ -1187,7 +1344,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         return lines.map((l) => (l.startsWith('- ') || l.startsWith('* ') ? l : `- ${l}`)).join('\n');
     }
 
-    private toSpreadsheetCellValue(value: unknown): SpreadsheetCellValue {
+    private toSpreadsheetCellValue(value: SynthesisJsonValue): SpreadsheetCellValue {
         if (value === null || value === undefined) return null;
         if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
             return value;

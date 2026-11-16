@@ -48,12 +48,11 @@ const SPEC = {
 const ENTITY = { Name: 'MJ_BizApps_Common: People', DisplayName: 'People' } as unknown as EntityInfo;
 const PROVIDER = { CurrentUser: null } as unknown as IMetadataProvider;
 
-type LifecycleProto = { ngOnInit: () => Promise<void>; ngOnChanges: () => Promise<void> };
+type LifecycleProto = { ngOnInit: () => Promise<void> };
 type ResolveProto = { resolveSpecWithCode: () => Promise<ComponentSpec | null> };
 
 function render(props: FormPanelHostProps | null = {} as FormPanelHostProps) {
     vi.spyOn(ComponentArtifactViewerComponent.prototype as unknown as LifecycleProto, 'ngOnInit').mockResolvedValue(undefined);
-    vi.spyOn(ComponentArtifactViewerComponent.prototype as unknown as LifecycleProto, 'ngOnChanges').mockResolvedValue(undefined);
     return renderComponentFixture(ComponentArtifactViewerComponent, {
         imports: [CommonModule, ReactStub, InteractiveFormStub, FeedbackStub, StubLoadingComponent],
         declarations: [ComponentArtifactViewerComponent],
@@ -186,7 +185,6 @@ describe('ComponentArtifactViewerComponent (DOM) — which form a panel goes on'
 
     async function init(spec: ComponentSpec) {
         vi.spyOn(ComponentArtifactViewerComponent.prototype as unknown as LifecycleProto, 'ngOnInit').mockResolvedValue(undefined);
-        vi.spyOn(ComponentArtifactViewerComponent.prototype as unknown as LifecycleProto, 'ngOnChanges').mockResolvedValue(undefined);
         vi.spyOn(ComponentArtifactViewerComponent.prototype as unknown as InitProto, 'loadTopOneRecord').mockResolvedValue(ADA);
         const f = renderComponentFixture(ComponentArtifactViewerComponent, {
             imports: [CommonModule, ReactStub, InteractiveFormStub, FeedbackStub, StubLoadingComponent],
@@ -236,7 +234,6 @@ describe('ComponentArtifactViewerComponent (DOM) — which form a panel goes on'
         const selfRelated = { ...ORDERS_ENTITY, RelatedEntities: [{ ...ordersRelationship, RelatedEntityJoinField: 'ParentOrderID' }] } as unknown as EntityInfo;
         const selfProvider = { CurrentUser: null, EntityByName: (name: string) => (name === ORDERS ? selfRelated : undefined) };
         vi.spyOn(ComponentArtifactViewerComponent.prototype as unknown as LifecycleProto, 'ngOnInit').mockResolvedValue(undefined);
-        vi.spyOn(ComponentArtifactViewerComponent.prototype as unknown as LifecycleProto, 'ngOnChanges').mockResolvedValue(undefined);
         vi.spyOn(ComponentArtifactViewerComponent.prototype as unknown as InitProto, 'loadTopOneRecord').mockResolvedValue(null);
         const f = renderComponentFixture(ComponentArtifactViewerComponent, {
             imports: [CommonModule, ReactStub, InteractiveFormStub, FeedbackStub, StubLoadingComponent],

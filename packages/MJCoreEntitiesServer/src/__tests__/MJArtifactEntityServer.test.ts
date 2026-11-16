@@ -116,6 +116,15 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             this.ResultHistory.push(result);
         }
 
+        public async InnerLoad(): Promise<boolean> {
+            return true;
+        }
+
+        public NewRecord(): void {
+            this.ID = '';
+            this.IsSaved = false;
+        }
+
         public async Save(_options?: EntitySaveOptions): Promise<boolean> {
             this.SuperSaveCalls++;
             return this.SuperSaveReturn;
@@ -133,7 +142,11 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     };
 });
 
-import { MJArtifactEntityServer } from '../custom/MJArtifactEntityServer.server';
+import {
+    ArtifactPostRunViewHook,
+    ArtifactPreRunViewHook,
+    MJArtifactEntityServer
+} from '../custom/MJArtifactEntityServer.server';
 
 interface StubArtifactHost {
     ID: string;
@@ -170,12 +183,16 @@ function makeUser(id: string, name: string): UserInfo {
 }
 
 function makeMockProvider(): IMetadataProvider {
+    const entities = [
+        { ID: ARTIFACTS_ENTITY_ID, Name: 'MJ: Artifacts' },
+        { ID: PROJECTS_ENTITY_ID, Name: 'MJ: Projects' },
+        { ID: UNREGISTERED_ENTITY_ID, Name: 'MJ: Unregistered Host' }
+    ];
     return {
-        Entities: [
-            { ID: ARTIFACTS_ENTITY_ID, Name: 'MJ: Artifacts' },
-            { ID: PROJECTS_ENTITY_ID, Name: 'MJ: Projects' },
-            { ID: UNREGISTERED_ENTITY_ID, Name: 'MJ: Unregistered Host' }
-        ]
+        ProviderType: 'Database',
+        Entities: entities,
+        EntityByID: (id: string) => entities.find((e) => e.ID === id),
+        EntityByName: (name: string) => entities.find((e) => e.Name === name)
     } as unknown as IMetadataProvider;
 }
 
@@ -225,7 +242,21 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
     let notifySpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
-        resolvePermsSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions');
+        resolvePermsSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
+            .mockImplementation(async (_p, targetArtifactId, user) => {
+                const isOwner = user.ID === OWNER_ID;
+                const isEditor = isOwner || user.ID === SHARED_EDITOR_ID;
+                return {
+                    ArtifactID: targetArtifactId,
+                    CanRead: isEditor,
+                    CanEdit: isEditor,
+                    CanDelete: isOwner,
+                    CanShare: isOwner,
+                    Source: isOwner ? 'Owner' : isEditor ? 'ArtifactPermission' : 'Denied',
+                    Reason: isOwner ? 'Owner' : isEditor ? 'Shared editor' : 'Denied'
+                };
+            });
         notifySpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'NotifyPermissionsChanged').mockResolvedValue();
     });
 
@@ -460,5 +491,104 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             ArtifactID: ARTIFACT_ID,
             ChangedByUserID: OWNER_ID
         });
+    });
+
+    it('enforces UserID === actor.ID on create, CanEdit on non-delegation saved updates, and CanDelete on Delete() (P0-1)', async () => {
+        // 1. Spoofing UserID on !wasSaved create is rejected
+        const spoofedCreate = buildArtifact({
+            wasSaved: false,
+            actor: outsiderUser,
+            oldUserId: null,
+            newUserId: OWNER_ID
+        });
+        expect(await spoofedCreate.entity.Save()).toBe(false);
+        expect(spoofedCreate.host.SuperSaveCalls).toBe(0);
+
+        // 2. Outsider cannot update Name on an existing artifact
+        const outsiderUpdate = buildArtifact({
+            wasSaved: true,
+            actor: outsiderUser,
+            oldUserId: OWNER_ID,
+            newUserId: OWNER_ID
+        });
+        outsiderUpdate.entity.Name = 'Hijacked Name';
+        expect(await outsiderUpdate.entity.Save()).toBe(false);
+        expect(outsiderUpdate.host.SuperSaveCalls).toBe(0);
+
+        // 3. Shared editor without CanDelete cannot Delete()
+        const deniedDelete = buildArtifact({
+            wasSaved: true,
+            actor: sharedEditorUser,
+            oldUserId: OWNER_ID,
+            newUserId: OWNER_ID
+        });
+        expect(await deniedDelete.entity.Delete()).toBe(false);
+        expect(deniedDelete.host.SuperDeleteCalls).toBe(0);
+    });
+
+    it('enforces CanRead on InnerLoad, PreRunView/PostRunView, count_only, and paged TotalRowCount (P0-1)', async () => {
+        // InnerLoad rejects outsider via NewRecord()
+        const superInnerLoadSpy = vi
+            .spyOn(Object.getPrototypeOf(MJArtifactEntityServer.prototype), 'InnerLoad')
+            .mockResolvedValue(true);
+        try {
+            const loaded = buildArtifact({
+                wasSaved: true,
+                actor: outsiderUser
+            });
+            expect(await loaded.entity.InnerLoad({ FieldValues: [{ FieldName: 'ID', Value: ARTIFACT_ID }] } as never)).toBe(false);
+        } finally {
+            superInnerLoadSpy.mockRestore();
+        }
+
+        // PreRunView appends ID when missing; PostRunView strips synthetic ID and adjusts paged/count_only totals
+        const params = {
+            EntityName: 'MJ: Artifacts',
+            Fields: ['Name'],
+            MaxRows: 1,
+            ResultType: 'simple' as const
+        };
+        const provider = makeMockProvider();
+        ArtifactPreRunViewHook(params, sharedEditorUser, provider);
+        expect(params.Fields).toEqual(['Name', 'ID']);
+
+        const postRes = await ArtifactPostRunViewHook(
+            params,
+            {
+                Success: true,
+                Results: [
+                    { ID: ARTIFACT_ID, Name: 'Allowed' },
+                    { ID: HOST_ARTIFACT_ID, Name: 'Denied' }
+                ],
+                RowCount: 2,
+                TotalRowCount: 99,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            outsiderUser,
+            provider
+        );
+        expect(postRes.Results).toEqual([]);
+        expect(postRes.RowCount).toBe(0);
+        expect(postRes.TotalRowCount).toBe(0);
+
+        const countOnlyRes = await ArtifactPostRunViewHook(
+            {
+                EntityName: 'MJ: Artifacts',
+                ResultType: 'count_only'
+            },
+            {
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 42,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            outsiderUser,
+            provider
+        );
+        expect(countOnlyRes.TotalRowCount).toBe(0);
+        expect(countOnlyRes.RowCount).toBe(0);
     });
 });

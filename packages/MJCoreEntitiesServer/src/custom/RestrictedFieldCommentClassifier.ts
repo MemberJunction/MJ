@@ -9,13 +9,15 @@ import {
     WellKnownUserSource
 } from '@memberjunction/core';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIEngine } from '@memberjunction/aiengine';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import {
     BuildLinkedRecordPrimaryKeyFilter,
     DetectReferencedRestrictedFieldsDeterministic,
     MergeRestrictedFieldsIntoAnchorMetadata,
     ParseConversationAnchorMetadata,
+    type AnchoredRecordValues,
     type MJConversationEntity
 } from '@memberjunction/core-entities';
 
@@ -45,24 +47,42 @@ export type RestrictedFieldLLMClassifierCallback = (
     contextUser: UserInfo
 ) => Promise<string[]>;
 
-let customRestrictedFieldClassifier: RestrictedFieldLLMClassifierCallback | null = null;
+interface RestrictedFieldClassifierGlobalState {
+    Callback: RestrictedFieldLLMClassifierCallback | null;
+}
+
+const GLOBAL_KEY_RESTRICTED_FIELD_CLASSIFIER = '___MJ_RESTRICTED_FIELD_LLM_CLASSIFIER_STATE__';
+
+function getRestrictedFieldClassifierState(): RestrictedFieldClassifierGlobalState {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        const existing = store[GLOBAL_KEY_RESTRICTED_FIELD_CLASSIFIER];
+        if (existing && typeof existing === 'object' && 'Callback' in existing) {
+            return existing as RestrictedFieldClassifierGlobalState;
+        }
+        const created: RestrictedFieldClassifierGlobalState = { Callback: null };
+        store[GLOBAL_KEY_RESTRICTED_FIELD_CLASSIFIER] = created;
+        return created;
+    }
+    return { Callback: null };
+}
 
 /**
  * Registers (or clears with `null`) a custom semantic classifier callback for detecting
  * references to FLS-restricted fields in record comments. Used by tests and custom
- * enterprise classification policies; when `null`, the default `AIEngine` classifier runs.
+ * enterprise classification policies; when `null`, the default `AIEngineBase` classifier runs.
  */
 export function RegisterRestrictedFieldLLMClassifier(
     callback: RestrictedFieldLLMClassifierCallback | null
 ): void {
-    customRestrictedFieldClassifier = callback;
+    getRestrictedFieldClassifierState().Callback = callback;
 }
 
 /**
  * Returns the currently registered custom classifier callback, if any.
  */
 export function GetRegisteredRestrictedFieldLLMClassifier(): RestrictedFieldLLMClassifierCallback | null {
-    return customRestrictedFieldClassifier;
+    return getRestrictedFieldClassifierState().Callback;
 }
 
 /**
@@ -102,7 +122,7 @@ export async function InspectAndStampRestrictedFieldsForComment(params: {
     Conversation: MJConversationEntity;
     EntityInfo: EntityInfo;
     MessageText: string | null | undefined;
-    RecordValues?: Readonly<Record<string, unknown>> | null;
+    RecordValues?: Readonly<AnchoredRecordValues> | null;
     SkipLLMStage?: boolean;
 }): Promise<RestrictedFieldInspectionResult> {
     const { Provider, ContextUser, Conversation, EntityInfo: entityInfo, MessageText } = params;
@@ -137,7 +157,7 @@ export async function InspectAndStampRestrictedFieldsForComment(params: {
         (f) => !deniedLower.has(f.Name.trim().toLowerCase())
     );
 
-    let readableRecordValues: Record<string, unknown> | null = null;
+    let readableRecordValues: AnchoredRecordValues | null = null;
     if (authorReadableRestrictedFields.length > 0 && (MessageText ?? '').trim().length > 0) {
         const rawRecordValues =
             params.RecordValues ??
@@ -175,6 +195,7 @@ export async function InspectAndStampRestrictedFieldsForComment(params: {
     const unmatchedFields = restrictedFields.filter((f) => !detectedSet.has(f.Name));
     if (!params.SkipLLMStage && text.length > 0 && unmatchedFields.length > 0) {
         const llmMatches = await runSemanticRestrictedFieldClassifier(
+            Provider,
             entityInfo,
             unmatchedFields,
             text,
@@ -251,7 +272,7 @@ async function loadLinkedRecordRestrictedFieldValues(
     entityInfo: EntityInfo,
     linkedRecordId: string,
     restrictedFields: readonly EntityFieldInfo[]
-): Promise<Record<string, unknown> | null> {
+): Promise<AnchoredRecordValues | null> {
     if (provider?.ProviderType !== 'Database' || restrictedFields.length === 0) {
         return null;
     }
@@ -267,7 +288,7 @@ async function loadLinkedRecordRestrictedFieldValues(
             ...entityInfo.PrimaryKeys.map((pk) => pk.Name),
             ...restrictedFields.map((f) => f.Name)
         ];
-        const result = await rv.RunView<Record<string, unknown>>(
+        const result = await rv.RunView<AnchoredRecordValues>(
             {
                 EntityName: entityInfo.Name,
                 ExtraFilter: pkFilter,
@@ -291,6 +312,7 @@ async function loadLinkedRecordRestrictedFieldValues(
 }
 
 async function runSemanticRestrictedFieldClassifier(
+    provider: IMetadataProvider,
     entityInfo: EntityInfo,
     candidateFields: readonly EntityFieldInfo[],
     messageText: string,
@@ -316,9 +338,10 @@ async function runSemanticRestrictedFieldClassifier(
         validByLower.set(f.Name.toLowerCase(), f.Name);
     }
 
-    if (customRestrictedFieldClassifier) {
+    const customClassifier = GetRegisteredRestrictedFieldLLMClassifier();
+    if (customClassifier) {
         try {
-            const rawMatches = await customRestrictedFieldClassifier(prompt, contextUser);
+            const rawMatches = await customClassifier(prompt, contextUser);
             return normalizeMatchedFieldNames(rawMatches, validByLower);
         } catch (error) {
             LogError(
@@ -330,7 +353,7 @@ async function runSemanticRestrictedFieldClassifier(
         }
     }
 
-    return runDefaultAIEngineRestrictedFieldClassifier(prompt, contextUser, validByLower);
+    return runDefaultAIEngineRestrictedFieldClassifier(provider, prompt, contextUser, validByLower);
 }
 
 function normalizeMatchedFieldNames(
@@ -354,13 +377,19 @@ function normalizeMatchedFieldNames(
 
 const RESTRICTED_FIELD_CLASSIFIER_PROMPT_NAME = 'Anchored Comment Restricted Field Classifier';
 
+interface RestrictedFieldClassifierPromptResult {
+    restrictedFields?: string[];
+}
+
 async function runDefaultAIEngineRestrictedFieldClassifier(
+    provider: IMetadataProvider,
     prompt: RestrictedFieldClassifierPrompt,
     contextUser: UserInfo,
     validByLower: ReadonlyMap<string, string>
 ): Promise<string[]> {
+    const aiEngine = AIEngineBase.GetProviderInstance<AIEngineBase>(provider, AIEngineBase) as AIEngineBase;
     try {
-        await AIEngine.Instance.Config(false, contextUser);
+        await aiEngine.Config(false, contextUser);
     } catch (error) {
         LogStatus(
             `[RestrictedFieldCommentClassifier] AIEngine.Config unavailable; skipping Stage 2 semantic classification: ${
@@ -370,7 +399,7 @@ async function runDefaultAIEngineRestrictedFieldClassifier(
         return [];
     }
 
-    const aiPrompt = AIEngine.Instance.Prompts?.find(
+    const aiPrompt = aiEngine.Prompts?.find(
         (p) => p.Name === RESTRICTED_FIELD_CLASSIFIER_PROMPT_NAME && p.Status === 'Active'
     );
     if (!aiPrompt) {
@@ -381,10 +410,21 @@ async function runDefaultAIEngineRestrictedFieldClassifier(
         const runner = new AIPromptRunner();
         const params = new AIPromptParams();
         params.prompt = aiPrompt;
-        params.data = prompt as unknown as Record<string, unknown>;
+        params.data = {
+            EntityName: prompt.EntityName,
+            EntityDisplayName: prompt.EntityDisplayName,
+            MessageText: prompt.MessageText,
+            AnchorType: prompt.AnchorType,
+            AnchorKey: prompt.AnchorKey,
+            CandidateFields: prompt.CandidateFields.map((f) => ({
+                Name: f.Name,
+                DisplayName: f.DisplayName,
+                Description: f.Description
+            }))
+        };
         params.contextUser = contextUser;
 
-        const execution = await runner.ExecutePrompt<{ restrictedFields?: unknown }>(params);
+        const execution = await runner.ExecutePrompt<RestrictedFieldClassifierPromptResult>(params);
         if (!execution.success || !execution.result) {
             LogStatus(
                 `[RestrictedFieldCommentClassifier] Governed prompt "${RESTRICTED_FIELD_CLASSIFIER_PROMPT_NAME}" returned unsuccessful result: ${

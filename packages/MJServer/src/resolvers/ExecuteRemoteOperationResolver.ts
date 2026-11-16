@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, ID, InputType, Mutation, ObjectType, PubSub, PubSubEngine, Resolver, Root, Subscription } from 'type-graphql';
-import { MJGlobal } from '@memberjunction/global';
+import { IsValidUUID, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseRemotableOperation, RemoteOpInvokeMode, RemoteOpProgress } from '@memberjunction/core';
-import { RemoteOperationEngineBase } from '@memberjunction/core-entities';
+import { ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY, RemoteOperationEngineBase } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -58,6 +58,30 @@ export class RemoteOperationProgressNotification {
     ProgressJSON: string;
 }
 
+interface RemoteOperationProgressTopicPayload extends RemoteOperationProgressNotification {
+    OwnerUserId: string;
+}
+
+interface ParsedRemoteOpResourceHint {
+    ArtifactID?: string;
+    artifactId?: string;
+    CollectionID?: string;
+    collectionId?: string;
+    AgentHandle?: string;
+    agentHandle?: string;
+}
+
+function extractRemoteOpResourceId(parsedInput: object | string | number | boolean | null, fallbackKey: string): string {
+    if (parsedInput && typeof parsedInput === 'object') {
+        const hint = parsedInput as ParsedRemoteOpResourceHint;
+        const candidate = hint.ArtifactID ?? hint.artifactId ?? hint.CollectionID ?? hint.collectionId;
+        if (typeof candidate === 'string' && IsValidUUID(candidate.trim())) {
+            return candidate.trim();
+        }
+    }
+    return fallbackKey;
+}
+
 /** Result of the generic Remote Operation transport mutation. */
 @ObjectType()
 export class ExecuteRemoteOperationResultType {
@@ -105,12 +129,27 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
             }
             const opDecl = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRemotableOperation>(BaseRemotableOperation, key);
 
-            // (1) API-key scope gate — a no-op for interactive OAuth/JWT users.
+            let parsedInput: object | string | number | boolean | null;
+            try {
+                parsedInput = input.inputJSON ? (JSON.parse(input.inputJSON) as object | string | number | boolean | null) : {};
+            } catch (e) {
+                return fail('INVALID_INPUT_JSON', `Invalid input JSON: ${e instanceof Error ? e.message : String(e)}`);
+            }
+
+            // (1) API-key scope gate — bind resource to target ArtifactID/CollectionID when provided, else operation key.
             if (opDecl?.RequiredScope) {
-                await this.CheckAPIKeyScopeAuthorization(opDecl.RequiredScope, key, ctx.userPayload);
+                const scopeResourceId = extractRemoteOpResourceId(parsedInput, key);
+                await this.CheckAPIKeyScopeAuthorization(opDecl.RequiredScope, scopeResourceId, ctx.userPayload);
+            }
+            if (key === ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY && parsedInput && typeof parsedInput === 'object') {
+                const hint = parsedInput as ParsedRemoteOpResourceHint;
+                const agentHandle = (hint.AgentHandle ?? hint.agentHandle ?? '').trim();
+                if (agentHandle) {
+                    await this.CheckAPIKeyScopeAuthorization('agent:execute', agentHandle, ctx.userPayload);
+                }
             }
             // (2) System-user gate.
-            if (opDecl?.RequiresSystemUser && !ctx.userPayload.isSystemUser) {
+            if (opDecl?.RequiresSystemUser && !ctx.userPayload?.isSystemUser) {
                 return fail('FORBIDDEN', `Operation '${key}' may only be invoked by the system user`);
             }
             // (3) Resolve the acting user (works for OAuth/JWT and API-key sessions alike).
@@ -143,18 +182,16 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
                 }
             }
 
-            let parsedInput: object | string | number | boolean | null;
-            try {
-                parsedInput = input.inputJSON ? (JSON.parse(input.inputJSON) as object | string | number | boolean | null) : {};
-            } catch (e) {
-                return fail('INVALID_INPUT_JSON', `Invalid input JSON: ${e instanceof Error ? e.message : String(e)}`);
-            }
-
             // Attached over-the-wire (RO-3): forward each emitted RemoteOpProgress to the progress channel so a
             // remote caller's onProgress fires live. No-op when the caller didn't open a channel (sync calls).
             const onProgress = input.progressChannelId
                 ? (p: RemoteOpProgress) => {
-                      void pubSub.publish(REMOTE_OP_PROGRESS_TOPIC, { ChannelId: input.progressChannelId!, ProgressJSON: JSON.stringify(p) });
+                      const envelope: RemoteOperationProgressTopicPayload = {
+                          ChannelId: input.progressChannelId!,
+                          OwnerUserId: user.ID,
+                          ProgressJSON: JSON.stringify(p),
+                      };
+                      void pubSub.publish(REMOTE_OP_PROGRESS_TOPIC, envelope);
                   }
                 : undefined;
 
@@ -189,7 +226,21 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
      */
     @Subscription(() => RemoteOperationProgressNotification, {
         topics: REMOTE_OP_PROGRESS_TOPIC,
-        filter: ({ payload, args }: { payload: RemoteOperationProgressNotification; args: { channelId: string } }) => payload.ChannelId === args.channelId,
+        filter: ({
+            payload,
+            args,
+            context,
+        }: {
+            payload: RemoteOperationProgressTopicPayload;
+            args: { channelId: string };
+            context?: AppContext;
+        }) => {
+            if (payload.ChannelId !== args.channelId) {
+                return false;
+            }
+            const subscriberUserId = context?.userPayload?.userRecord?.ID;
+            return Boolean(subscriberUserId && payload.OwnerUserId && UUIDsEqual(payload.OwnerUserId, subscriberUserId));
+        },
     })
     RemoteOperationProgress(
         @Root() notification: RemoteOperationProgressNotification,

@@ -119,6 +119,7 @@ import { MJArchiveConfigurationFormComponent } from "./Entities/MJArchiveConfigu
 import { MJArchiveRunDetailFormComponent } from "./Entities/MJArchiveRunDetail/mjarchiverundetail.form.component";
 import { MJArchiveRunFormComponent } from "./Entities/MJArchiveRun/mjarchiverun.form.component";
 import { MJArtifactFormComponent } from "./Entities/MJArtifact/mjartifact.form.component";
+import { MJArtifactGuestShareLinkFormComponent } from "./Entities/MJArtifactGuestShareLink/mjartifactguestsharelink.form.component";
 import { MJArtifactPermissionFormComponent } from "./Entities/MJArtifactPermission/mjartifactpermission.form.component";
 import { MJArtifactTypeFormComponent } from "./Entities/MJArtifactType/mjartifacttype.form.component";
 import { MJArtifactUseFormComponent } from "./Entities/MJArtifactUse/mjartifactuse.form.component";
@@ -1094,6 +1095,7 @@ declarations: [
     MJAIAgentPersonaFormComponent,
     MJAIModalityFormComponent,
     MJAISkillSearchScopeFormComponent,
+    MJArtifactGuestShareLinkFormComponent,
     MJCompanyIntegrationRunDetailFormComponent,
     MJConversationArtifactFormComponent,
     MJEntityOrganicKeyRelatedEntityFormComponent,

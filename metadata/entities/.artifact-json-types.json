@@ -1,0 +1,66 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: Artifact Versions.Configuration so CodeGen emits a typed",
+      "ConfigurationObject accessor returning MJArtifactVersionEntity_IArtifactVersionConfiguration.",
+      "Source: metadata/entities/JSONType-interfaces/IArtifactVersionConfiguration.ts"
+    ],
+    "fields": {
+      "Name": "MJ: Artifact Versions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IArtifactVersionConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IArtifactVersionConfiguration.ts"
+          },
+          "_comments": [
+            "ArtifactVersion.Configuration — preview snapshot, thumbnail data URL, connected drive link metadata, and legacy guest share link entries"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifact Versions&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-11-15T21:17:47.419Z",
+            "checksum": "097db7889d2fc9f4bcba8b1ab4d8f871ee4404fb5b429aa0d3f50ed216644f87"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Versions"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: Comment Types.AllowedAnchorTypes so CodeGen emits a typed",
+      "AllowedAnchorTypesObject accessor returning Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType> | null.",
+      "Source: metadata/entities/JSONType-interfaces/CommentTypeAllowedAnchorType.ts"
+    ],
+    "fields": {
+      "Name": "MJ: Comment Types"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "CommentTypeAllowedAnchorType",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/CommentTypeAllowedAnchorType.ts"
+          },
+          "_comments": [
+            "CommentType.AllowedAnchorTypes — optional JSON array of permitted Conversation.AnchorType values"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Comment Types&Name=AllowedAnchorTypes"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Comment Types"
+    }
+  }
+]

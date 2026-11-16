@@ -38,6 +38,7 @@ import {
     @if (CurrentUser) {
       <mj-library-workspace
         #workspace
+        [Provider]="ProviderToUse"
         [CurrentUser]="CurrentUser"
         [EnvironmentId]="EnvironmentId"
         [InitialMode]="DefaultSurfaceMode"
@@ -232,7 +233,7 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
           ? state.NavigatorSection
           : null,
       collectionId:
-        state.Mode === 'navigator' && state.NavigatorSection === 'collection' && state.CollectionId
+        (state.Mode === 'hub' || state.NavigatorSection === 'collection') && state.CollectionId
           ? state.CollectionId
           : null,
       driveId: state.DriveId || null,
@@ -336,6 +337,7 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
     @if (CurrentUser) {
       <mj-library-workspace
         #workspace
+        [Provider]="ProviderToUse"
         [CurrentUser]="CurrentUser"
         [EnvironmentId]="EnvironmentId"
         [InitialDriveMode]="true"

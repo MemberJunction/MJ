@@ -3,7 +3,7 @@ import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'typ
 import type { ChatMessage } from '@memberjunction/ai';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
@@ -23,6 +23,9 @@ import {
     ValidateFrozenBlockSnapshot
 } from '@memberjunction/core-entities';
 import { MarkTrustedServerRestoreSave } from '@memberjunction/core-entities-server';
+
+const MAX_FROZEN_SPEC_JSON_CHARS = 512 * 1024;
+const MAX_RESTORE_VERSION_CONFLICT_RETRIES = 3;
 import { ApiRoute } from '../apiRoot.js';
 import { configInfo } from '../config.js';
 import {
@@ -232,7 +235,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
             issued = ArtifactCollaborationServer.Instance.IssueTicket({
                 ArtifactID: normalizedArtifactId,
                 User: user,
-                ApiKeyHash: context.userPayload.apiKeyHash
+                ApiKeyHash: context.userPayload.apiKeyHash,
+                Provider: provider
             });
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Live collaboration is unavailable on this server.';
@@ -306,8 +310,25 @@ export class DocumentCollaborationResolver extends ResolverBase {
 
     @Query(() => VerifyFrozenBlockSnapshotOutput)
     async VerifyFrozenBlockSnapshot(
-        @Arg('specJson') specJson: string
+        @Arg('specJson') specJson: string,
+        @Ctx() context?: AppContext
     ): Promise<VerifyFrozenBlockSnapshotOutput> {
+        const user = this.GetUserFromPayload(context?.userPayload);
+        if (!user) {
+            return {
+                Valid: false,
+                SnapshotVerified: false,
+                ErrorMessage: 'Authentication required.'
+            };
+        }
+        await this.CheckAPIKeyScopeAuthorization('artifact:read', '*', context?.userPayload);
+        if (typeof specJson !== 'string' || specJson.length > MAX_FROZEN_SPEC_JSON_CHARS) {
+            return {
+                Valid: false,
+                SnapshotVerified: false,
+                ErrorMessage: 'Frozen block specification exceeds maximum allowed size.'
+            };
+        }
         try {
             const spec = JSON.parse(specJson) as DocumentBlockSpec;
             if (!spec || spec.Mode !== 'Frozen' || !spec.FrozenSnapshot) {
@@ -493,7 +514,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
             user,
             saveVersion,
             undefined,
-            { capturedThumbnailDataUrl: validCapturedThumbnail }
+            { capturedThumbnailDataUrl: validCapturedThumbnail, provider }
         );
         return {
             Success: applied.Success,
@@ -518,6 +539,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
 
         const normalizedHostId = (hostArtifactId ?? '').trim();
         await this.CheckAPIKeyScopeAuthorization('artifact:edit', normalizedHostId || '*', context.userPayload);
+        await this.CheckAPIKeyScopeAuthorization('artifact:create', '*', context.userPayload);
 
         if (!normalizedHostId) {
             return { Success: false, ErrorMessage: 'hostArtifactId is required.' };
@@ -545,13 +567,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
             };
         }
 
-        const artifactsEntityInfo = provider.Entities.find((e) => e.Name === 'MJ: Artifacts');
-        if (!artifactsEntityInfo) {
-            return {
-                Success: false,
-                ErrorMessage: 'MJ: Artifacts entity metadata not found.'
-            };
-        }
+        const artifactsEntityInfo =
+            typeof provider.EntityByName === 'function' ? provider.EntityByName('MJ: Artifacts') : undefined;
 
         const rv = RunView.FromMetadataProvider(provider);
         const lookupUser = UserCache.Instance.GetSystemUser() ?? user;
@@ -586,7 +603,9 @@ export class DocumentCollaborationResolver extends ResolverBase {
         childArtifact.TypeID = artType.ID;
         childArtifact.UserID = user.ID;
         childArtifact.EnvironmentID = hostEnvironmentId;
-        childArtifact.DelegateEntityID = artifactsEntityInfo.ID;
+        if (artifactsEntityInfo) {
+            childArtifact.DelegateEntityID = artifactsEntityInfo.ID;
+        }
         childArtifact.DelegateRecordID = normalizedHostId;
 
         const savedArtifact = await childArtifact.Save();
@@ -733,7 +752,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
 
         const currentContent = await ArtifactCollaborationServer.Instance.GetRoomContent(
             normalizedArtifactId,
-            user
+            user,
+            provider
         );
 
         if (normalizedMode === 'edit') {
@@ -755,13 +775,20 @@ export class DocumentCollaborationResolver extends ResolverBase {
             }
         }
 
+        const artifactsEntityInfo =
+            typeof provider.EntityByName === 'function' ? provider.EntityByName('MJ: Artifacts') : undefined;
+        const linkedEntityFilter = artifactsEntityInfo
+            ? ` AND LinkedEntityID='${EscapeSQLString(artifactsEntityInfo.ID)}'`
+            : '';
+
+        let matchedAnchorMetadataRaw: string | null | undefined;
         if (normalizedConversationId.length > 0) {
             const rv = RunView.FromMetadataProvider(provider);
-            const threadCheck = await rv.RunView<{ ID: string }>(
+            const threadCheck = await rv.RunView<{ ID: string; AnchorMetadata?: string | null }>(
                 {
                     EntityName: 'MJ: Conversations',
-                    ExtraFilter: `ID='${EscapeSQLString(normalizedConversationId)}' AND LinkedRecordID='${EscapeSQLString(normalizedArtifactId)}' AND AnchorType IS NOT NULL`,
-                    Fields: ['ID'],
+                    ExtraFilter: `ID='${EscapeSQLString(normalizedConversationId)}' AND LinkedRecordID='${EscapeSQLString(normalizedArtifactId)}'${linkedEntityFilter} AND AnchorType IS NOT NULL`,
+                    Fields: ['ID', 'AnchorMetadata'],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
@@ -779,9 +806,10 @@ export class DocumentCollaborationResolver extends ResolverBase {
                     ErrorMessage: 'Anchored comment thread not found.'
                 };
             }
+            matchedAnchorMetadataRaw = matchedThread.AnchorMetadata;
         }
 
-        const resolvedAgent = await this.resolveAgentByHandle(normalizedHandle, user);
+        const resolvedAgent = await this.resolveAgentByHandle(normalizedHandle, user, provider);
         if (!resolvedAgent.Agent) {
             return {
                 Success: false,
@@ -844,40 +872,111 @@ export class DocumentCollaborationResolver extends ResolverBase {
         const extracted = this.extractMentionAgentOutput(agentResult, normalizedMode);
 
         if (normalizedMode === 'edit') {
+            const proposedFullContent = extracted.UpdatedDocumentContent;
             const proposedReplacement = extracted.Replacement;
-            if (
-                typeof proposedReplacement !== 'string' ||
-                proposedReplacement.trim().length === 0 ||
-                proposedReplacement === trimmedQuote
-            ) {
-                return {
-                    Success: false,
-                    AgentHandle: normalizedHandle,
-                    AgentMode: normalizedMode,
-                    ErrorMessage: `AI agent '@${agent.Name}' did not produce a valid replacement for the anchored quote.`
-                };
+            let nextContent: string | null = null;
+            let editTargetToken: string | undefined;
+
+            if (typeof proposedFullContent === 'string' && proposedFullContent.trim().length > 0 && !proposedReplacement) {
+                if (proposedFullContent === currentContent) {
+                    const noopReply = extracted.Reply || 'No changes were needed for the document.';
+                    await this.persistAnchoredAgentReplyIfThreadExists(
+                        provider,
+                        user,
+                        normalizedArtifactId,
+                        trimmedQuote,
+                        agent.ID,
+                        noopReply,
+                        normalizedConversationId || undefined
+                    );
+                    return {
+                        Success: true,
+                        AgentHandle: normalizedHandle,
+                        AgentMode: normalizedMode,
+                        ReplyBody: noopReply,
+                        UpdatedContent: currentContent
+                    };
+                }
+                nextContent = proposedFullContent;
+            } else {
+                if (
+                    typeof proposedReplacement !== 'string' ||
+                    proposedReplacement.trim().length === 0 ||
+                    proposedReplacement === trimmedQuote
+                ) {
+                    const plainTextReply = (extracted.Reply ?? '').trim();
+                    if (plainTextReply.length > 0) {
+                        await this.persistAnchoredAgentReplyIfThreadExists(
+                            provider,
+                            user,
+                            normalizedArtifactId,
+                            trimmedQuote,
+                            agent.ID,
+                            plainTextReply,
+                            normalizedConversationId || undefined
+                        );
+                        return {
+                            Success: true,
+                            AgentHandle: normalizedHandle,
+                            AgentMode: normalizedMode,
+                            ReplyBody: plainTextReply
+                        };
+                    }
+                    return {
+                        Success: false,
+                        AgentHandle: normalizedHandle,
+                        AgentMode: normalizedMode,
+                        ErrorMessage: `AI agent '@${agent.Name}' did not produce a valid replacement for the anchored quote.`
+                    };
+                }
+
+                const quoteIdx = this.findDisambiguatedQuoteIndex(
+                    currentContent,
+                    trimmedQuote,
+                    matchedAnchorMetadataRaw
+                );
+                if (quoteIdx < 0) {
+                    return {
+                        Success: false,
+                        AgentHandle: normalizedHandle,
+                        AgentMode: normalizedMode,
+                        ErrorMessage: 'Anchored quote is no longer present in the current document content.'
+                    };
+                }
+                nextContent =
+                    currentContent.slice(0, quoteIdx) +
+                    proposedReplacement +
+                    currentContent.slice(quoteIdx + trimmedQuote.length);
+                editTargetToken = proposedReplacement;
             }
 
-            const quoteIdx = currentContent.indexOf(trimmedQuote);
-            if (quoteIdx < 0) {
+            if (nextContent === currentContent) {
+                const noopReply = extracted.Reply || 'No changes were needed for the document.';
+                await this.persistAnchoredAgentReplyIfThreadExists(
+                    provider,
+                    user,
+                    normalizedArtifactId,
+                    trimmedQuote,
+                    agent.ID,
+                    noopReply,
+                    normalizedConversationId || undefined
+                );
                 return {
-                    Success: false,
+                    Success: true,
                     AgentHandle: normalizedHandle,
                     AgentMode: normalizedMode,
-                    ErrorMessage: 'Anchored quote is no longer present in the current document content.'
+                    ReplyBody: noopReply,
+                    UpdatedContent: currentContent
                 };
             }
-            const nextContent =
-                currentContent.slice(0, quoteIdx) +
-                proposedReplacement +
-                currentContent.slice(quoteIdx + trimmedQuote.length);
 
             const mutated = await ArtifactCollaborationServer.Instance.ApplyServerContentMutation(
                 normalizedArtifactId,
                 nextContent,
                 user,
                 true,
-                currentContent
+                currentContent,
+                { provider }
             );
             if (!mutated.Success) {
                 return {
@@ -916,7 +1015,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 } not applied because of concurrent edits.${previewSnippet}`;
                 const allAgentEditsRejected =
                     resolvedMergedContent === currentContent ||
-                    !resolvedMergedContent.includes(proposedReplacement);
+                    (editTargetToken !== undefined && !resolvedMergedContent.includes(editTargetToken));
                 if (allAgentEditsRejected) {
                     editReply = extracted.Reply
                         ? `${extracted.Reply} (${conflictSummary})`
@@ -1012,14 +1111,19 @@ export class DocumentCollaborationResolver extends ResolverBase {
 
     private async resolveAgentByHandle(
         handle: string,
-        user: UserInfo
+        user: UserInfo,
+        provider?: IMetadataProvider | null
     ): Promise<{ Agent: MJAIAgentEntityExtended | null; ErrorMessage?: string }> {
         const stripped = handle.trim().replace(/^@+/, '').trim();
         if (!stripped) {
             return { Agent: null, ErrorMessage: 'Agent handle is required.' };
         }
+        const effectiveProvider = provider ?? Metadata.Provider;
+        const aiEngine = effectiveProvider
+            ? (AIEngineBase.GetProviderInstance<AIEngineBase>(effectiveProvider, AIEngineBase) as AIEngineBase)
+            : AIEngineBase.Instance;
         try {
-            await AIEngine.Instance.Config(false, user);
+            await aiEngine.Config(false, user, effectiveProvider ?? undefined);
         } catch (cfgErr) {
             const msg = cfgErr instanceof Error ? cfgErr.message : String(cfgErr);
             LogError(`DocumentCollaborationResolver.resolveAgentByHandle failed to configure AIEngine for '@${stripped}': ${msg}`);
@@ -1029,7 +1133,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
             };
         }
 
-        const agents = AIEngine.Instance.Agents ?? [];
+        const agents = aiEngine.Agents ?? [];
         const lower = stripped.toLowerCase();
         const collapsed = lower.replace(/[\s_-]+/g, '');
 
@@ -1056,10 +1160,10 @@ export class DocumentCollaborationResolver extends ResolverBase {
             };
         }
 
-        if (typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+        if (typeof aiEngine.CanUserRunAgent === 'function') {
             let canRun = false;
             try {
-                canRun = await AIEngine.Instance.CanUserRunAgent(activeAgent.ID, user);
+                canRun = await aiEngine.CanUserRunAgent(activeAgent.ID, user);
             } catch (permErr) {
                 const msg = permErr instanceof Error ? permErr.message : String(permErr);
                 LogError(
@@ -1099,7 +1203,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
             modeGuidance,
             anchoredQuote ? `Anchored Quote:\n"""\n${anchoredQuote}\n"""` : '',
             `User Instruction:\n${instruction}`,
-            documentContent ? `Document Context:\n"""\n${documentContent.slice(0, 16_000)}\n"""` : ''
+            documentContent ? `Document Context:\n"""\n${documentContent}\n"""` : ''
         ].filter((part) => part.length > 0);
 
         return [
@@ -1110,6 +1214,87 @@ export class DocumentCollaborationResolver extends ResolverBase {
         ];
     }
 
+    private findDisambiguatedQuoteIndex(
+        content: string,
+        quote: string,
+        rawAnchorMetadata?: string | null
+    ): number {
+        const firstIdx = content.indexOf(quote);
+        if (firstIdx < 0) {
+            return -1;
+        }
+        const secondIdx = content.indexOf(quote, firstIdx + 1);
+        if (secondIdx < 0 || !rawAnchorMetadata) {
+            return firstIdx;
+        }
+
+        const occurrences: number[] = [];
+        let cursor = firstIdx;
+        while (cursor >= 0) {
+            occurrences.push(cursor);
+            cursor = content.indexOf(quote, cursor + Math.max(1, quote.length));
+        }
+
+        try {
+            const parsedJson = JSON.parse(rawAnchorMetadata) as {
+                from?: number;
+                startOffset?: number;
+                offset?: number;
+                BlockID?: string;
+                blockId?: string;
+                SegmentID?: string;
+                segmentId?: string;
+                SlideID?: string;
+                slideId?: string;
+            };
+            const targetOffset =
+                typeof parsedJson.from === 'number'
+                    ? parsedJson.from
+                    : typeof parsedJson.startOffset === 'number'
+                      ? parsedJson.startOffset
+                      : typeof parsedJson.offset === 'number'
+                        ? parsedJson.offset
+                        : null;
+            if (targetOffset !== null && Number.isFinite(targetOffset)) {
+                let bestIdx = firstIdx;
+                let bestDist = Math.abs(firstIdx - targetOffset);
+                for (const occ of occurrences) {
+                    const dist = Math.abs(occ - targetOffset);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestIdx = occ;
+                    }
+                }
+                return bestIdx;
+            }
+
+            const structuredAnchor = DocumentLiveBlockEngine.Instance.ParseArtifactCommentAnchor(rawAnchorMetadata);
+            const blockToken =
+                structuredAnchor?.BlockID ??
+                structuredAnchor?.SegmentID ??
+                structuredAnchor?.SlideID ??
+                parsedJson.BlockID ??
+                parsedJson.blockId ??
+                parsedJson.SegmentID ??
+                parsedJson.segmentId ??
+                parsedJson.SlideID ??
+                parsedJson.slideId;
+            if (typeof blockToken === 'string' && blockToken.trim().length > 0) {
+                const tokenPos = content.indexOf(blockToken.trim());
+                if (tokenPos >= 0) {
+                    const afterToken = occurrences.find((occ) => occ >= tokenPos);
+                    if (afterToken !== undefined) {
+                        return afterToken;
+                    }
+                }
+            }
+        } catch {
+            // Fall back to first occurrence when AnchorMetadata is malformed
+        }
+
+        return firstIdx;
+    }
+
     private extractMentionAgentOutput(
         agentResult: ExecuteAgentResult<{
             replacement?: string;
@@ -1118,8 +1303,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
             reply?: string;
             message?: string;
         } | string>,
-        mode: 'comment' | 'suggest' | 'edit'
-    ): { Reply?: string; Replacement?: string } {
+        _mode: 'comment' | 'suggest' | 'edit'
+    ): { Reply?: string; Replacement?: string; UpdatedDocumentContent?: string } {
         type StructuredMentionPayload = {
             replacement?: string;
             updatedContent?: string;
@@ -1129,7 +1314,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
         };
         const parseStructuredCandidate = (
             raw: StructuredMentionPayload | string | null | undefined
-        ): { Reply?: string; Replacement?: string } | null => {
+        ): { Reply?: string; Replacement?: string; UpdatedDocumentContent?: string } | null => {
             if (!raw) {
                 return null;
             }
@@ -1137,19 +1322,18 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 const rep =
                     typeof raw.replacement === 'string'
                         ? raw.replacement
-                        : typeof raw.updatedContent === 'string'
-                          ? raw.updatedContent
-                          : typeof raw.updatedQuote === 'string'
-                            ? raw.updatedQuote
-                            : undefined;
+                        : typeof raw.updatedQuote === 'string'
+                          ? raw.updatedQuote
+                          : undefined;
+                const fullDoc = typeof raw.updatedContent === 'string' ? raw.updatedContent : undefined;
                 const reply =
                     typeof raw.reply === 'string'
                         ? raw.reply.trim()
                         : typeof raw.message === 'string'
                           ? raw.message.trim()
                           : undefined;
-                if (rep !== undefined || reply !== undefined) {
-                    return { Reply: reply, Replacement: rep };
+                if (rep !== undefined || fullDoc !== undefined || reply !== undefined) {
+                    return { Reply: reply, Replacement: rep, UpdatedDocumentContent: fullDoc };
                 }
                 return null;
             }
@@ -1186,13 +1370,13 @@ export class DocumentCollaborationResolver extends ResolverBase {
             return fromMessageJson;
         }
 
+        // Plain non-JSON agent text is treated strictly as a conversational reply (`P0-15`),
+        // never as a document replacement string.
         if (typeof agentResult.payload === 'string' && agentResult.payload.trim().length > 0) {
-            return mode === 'comment'
-                ? { Reply: agentResult.payload.trim() }
-                : { Reply: rawRunMessage || undefined, Replacement: agentResult.payload };
+            return { Reply: agentResult.payload.trim() };
         }
         if (rawRunMessage.length > 0) {
-            return mode === 'comment' ? { Reply: rawRunMessage } : { Reply: rawRunMessage };
+            return { Reply: rawRunMessage };
         }
         return {};
     }
@@ -1211,6 +1395,11 @@ export class DocumentCollaborationResolver extends ResolverBase {
         }
         try {
             const rv = RunView.FromMetadataProvider(provider);
+            const artifactsEntityInfo =
+                typeof provider.EntityByName === 'function' ? provider.EntityByName('MJ: Artifacts') : undefined;
+            const linkedEntityFilter = artifactsEntityInfo
+                ? ` AND LinkedEntityID='${EscapeSQLString(artifactsEntityInfo.ID)}'`
+                : '';
             const conversationFilterPrefix = conversationId
                 ? `ID='${EscapeSQLString(conversationId)}' AND `
                 : '';
@@ -1220,7 +1409,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
             }>(
                 {
                     EntityName: 'MJ: Conversations',
-                    ExtraFilter: `${conversationFilterPrefix}LinkedRecordID='${EscapeSQLString(artifactId)}' AND AnchorType IS NOT NULL`,
+                    ExtraFilter: `${conversationFilterPrefix}LinkedRecordID='${EscapeSQLString(artifactId)}'${linkedEntityFilter} AND AnchorType IS NOT NULL`,
                     OrderBy: '__mj_CreatedAt DESC',
                     Fields: ['ID', 'AnchorMetadata'],
                     MaxRows: 10,
@@ -1357,39 +1546,6 @@ export class DocumentCollaborationResolver extends ResolverBase {
         }
 
         const rv = RunView.FromMetadataProvider(provider);
-        const rvRes = await rv.RunView<{ VersionNumber: number }>(
-            {
-                EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: `ArtifactID='${EscapeSQLString(normalizedArtifactId)}'`,
-                Fields: ['VersionNumber'],
-                OrderBy: 'VersionNumber DESC',
-                MaxRows: 1,
-                SkipTotalRowCount: true,
-                ResultType: 'simple'
-            },
-            user
-        );
-        const maxVersion =
-            rvRes.Success && rvRes.Results && rvRes.Results.length > 0 && typeof rvRes.Results[0]?.VersionNumber === 'number'
-                ? rvRes.Results[0].VersionNumber
-                : sourceVersion.VersionNumber;
-        const nextVersionNumber = maxVersion + 1;
-
-        const restoredVer = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
-        restoredVer.NewRecord();
-        restoredVer.ArtifactID = normalizedArtifactId;
-        restoredVer.UserID = user.ID;
-        restoredVer.VersionNumber = nextVersionNumber;
-        restoredVer.Name = sourceVersion.Name;
-        restoredVer.Description = `Restored from v${sourceVersion.VersionNumber}`;
-        restoredVer.Comments = `Restored from v${sourceVersion.VersionNumber}`;
-        restoredVer.ContentMode = sourceVersion.ContentMode;
-        restoredVer.FileID = sourceVersion.FileID;
-        restoredVer.MimeType = sourceVersion.MimeType;
-        restoredVer.FileName = sourceVersion.FileName;
-        restoredVer.ContentSizeBytes = sourceVersion.ContentSizeBytes;
-        restoredVer.ContentHash = sourceVersion.ContentHash;
-        restoredVer.Content = sourceVersion.Content;
         let restoreTypeEntity: MJArtifactTypeEntity | null = null;
         let allRestoreTypes: ReadonlyArray<MJArtifactTypeEntity> = [];
         try {
@@ -1413,47 +1569,109 @@ export class DocumentCollaborationResolver extends ResolverBase {
         } catch {
             // Fall back safely when unit-test mocks omit artifact type metadata
         }
-        const sourceParsedConfig = ParseArtifactVersionConfiguration(sourceVersion.Configuration);
-        const restorePolicy = ResolveArtifactTypeThumbnailPolicy(
-            restoreTypeEntity,
-            allRestoreTypes,
-            restoreTypeEntity?.DriverClass ?? null
-        );
-        const enrichedRestoredConfig = BuildArtifactVersionConfigurationWithPreview(
-            sourceVersion.Configuration,
-            sourceVersion.Content,
-            restoreTypeEntity?.DriverClass ?? null,
-            sourceVersion.Name ?? null,
-            {
-                Policy: restorePolicy,
-                ArtifactType: restoreTypeEntity,
-                AllArtifactTypes: allRestoreTypes,
-                CapturedThumbnailDataUrl: sourceParsedConfig?.thumbnailDataUrl ?? null
-            }
-        );
-        if (enrichedRestoredConfig !== null && enrichedRestoredConfig !== undefined) {
-            restoredVer.Configuration = enrichedRestoredConfig;
+
+        const isFileMode = sourceVersion.ContentMode === 'File';
+        let enrichedRestoredConfig: string | null | undefined;
+        if (isFileMode) {
+            enrichedRestoredConfig = sourceVersion.Configuration;
+        } else {
+            const sourceParsedConfig = ParseArtifactVersionConfiguration(sourceVersion.Configuration);
+            const restorePolicy = ResolveArtifactTypeThumbnailPolicy(
+                restoreTypeEntity,
+                allRestoreTypes,
+                restoreTypeEntity?.DriverClass ?? null
+            );
+            enrichedRestoredConfig = BuildArtifactVersionConfigurationWithPreview(
+                sourceVersion.Configuration,
+                sourceVersion.Content,
+                restoreTypeEntity?.DriverClass ?? null,
+                sourceVersion.Name ?? null,
+                {
+                    Policy: restorePolicy,
+                    ArtifactType: restoreTypeEntity,
+                    AllArtifactTypes: allRestoreTypes,
+                    CapturedThumbnailDataUrl: sourceParsedConfig?.thumbnailDataUrl ?? null
+                }
+            );
         }
 
-        MarkTrustedServerRestoreSave(restoredVer);
-        const saved = await restoredVer.Save();
-        if (!saved) {
+        let restoredVer: MJArtifactVersionEntity | null = null;
+        let nextVersionNumber = 0;
+        let lastErrorMessage = 'Failed to save restored artifact version.';
+
+        for (let attempt = 0; attempt < MAX_RESTORE_VERSION_CONFLICT_RETRIES; attempt++) {
+            const rvRes = await rv.RunView<{ VersionNumber: number }>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID='${EscapeSQLString(normalizedArtifactId)}'`,
+                    Fields: ['VersionNumber'],
+                    OrderBy: 'VersionNumber DESC',
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            const maxVersion =
+                rvRes.Success && rvRes.Results && rvRes.Results.length > 0 && typeof rvRes.Results[0]?.VersionNumber === 'number'
+                    ? rvRes.Results[0].VersionNumber
+                    : sourceVersion.VersionNumber;
+            nextVersionNumber = maxVersion + 1 + (attempt > 0 ? attempt : 0);
+
+            const candidateVer = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+            candidateVer.NewRecord();
+            candidateVer.ArtifactID = normalizedArtifactId;
+            candidateVer.UserID = user.ID;
+            candidateVer.VersionNumber = nextVersionNumber;
+            candidateVer.Name = sourceVersion.Name;
+            candidateVer.Description = `Restored from v${sourceVersion.VersionNumber}`;
+            candidateVer.Comments = `Restored from v${sourceVersion.VersionNumber}`;
+            candidateVer.ContentMode = sourceVersion.ContentMode;
+            candidateVer.FileID = sourceVersion.FileID;
+            candidateVer.MimeType = sourceVersion.MimeType;
+            candidateVer.FileName = sourceVersion.FileName;
+            candidateVer.ContentSizeBytes = sourceVersion.ContentSizeBytes;
+            candidateVer.ContentHash = sourceVersion.ContentHash;
+            candidateVer.Content = sourceVersion.Content;
+            if (enrichedRestoredConfig !== null && enrichedRestoredConfig !== undefined) {
+                candidateVer.Configuration = enrichedRestoredConfig;
+            }
+
+            MarkTrustedServerRestoreSave(candidateVer);
+            const saved = await candidateVer.Save();
+            if (saved) {
+                restoredVer = candidateVer;
+                break;
+            }
+            const errMsg = candidateVer.LatestResult?.CompleteMessage || 'Failed to save restored artifact version.';
+            lastErrorMessage = errMsg;
+            const looksLikeVersionConflict =
+                /duplicate|unique|conflict|2601|2627|23505|versionnumber/i.test(errMsg);
+            if (!looksLikeVersionConflict) {
+                break;
+            }
+        }
+
+        if (!restoredVer) {
             return {
                 Success: false,
-                ErrorMessage: restoredVer.LatestResult?.CompleteMessage || 'Failed to save restored artifact version.'
+                ErrorMessage: lastErrorMessage
             };
         }
 
-        await ArtifactCollaborationServer.Instance.RestoreToSavedVersion(
-            normalizedArtifactId,
-            {
-                ID: restoredVer.ID,
-                VersionNumber: nextVersionNumber,
-                Content: restoredVer.Content,
-                Configuration: restoredVer.Configuration
-            },
-            user
-        );
+        if (!isFileMode) {
+            await ArtifactCollaborationServer.Instance.RestoreToSavedVersion(
+                normalizedArtifactId,
+                {
+                    ID: restoredVer.ID,
+                    VersionNumber: nextVersionNumber,
+                    Content: restoredVer.Content,
+                    Configuration: restoredVer.Configuration
+                },
+                user,
+                provider
+            );
+        }
 
         return {
             Success: true,

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as Y from 'yjs';
 import * as encoding from 'lib0/encoding';
+import * as decoding from 'lib0/decoding';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { SpreadsheetEngine, type WorkbookSpec } from '@memberjunction/core-entities';
 import {
@@ -12,6 +13,7 @@ import {
   SanitizeAwarenessColor,
   type CollaborationMergeConflictEvent,
   type CollaborationNotificationSink,
+  type CollaborationResetConflictDraft,
 } from './document-collaboration.service';
 
 describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3, Blocker 7)', () => {
@@ -1020,11 +1022,19 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
       unconfSession.Destroy();
 
       // 4. ngOnDestroy cleanly detaches window and document listeners
+      const registeredOnlineListener = mockWindow.addEventListener.mock.calls.find(
+        ([type]) => type === 'online',
+      )?.[1];
+      const registeredVisibilityListener = mockDocument.addEventListener.mock.calls.find(
+        ([type]) => type === 'visibilitychange',
+      )?.[1];
+      expect(typeof registeredOnlineListener).toBe('function');
+      expect(typeof registeredVisibilityListener).toBe('function');
       recoveryService.ngOnDestroy();
-      expect(mockWindow.removeEventListener).toHaveBeenCalledWith('online', expect.any(Function));
+      expect(mockWindow.removeEventListener).toHaveBeenCalledWith('online', registeredOnlineListener);
       expect(mockDocument.removeEventListener).toHaveBeenCalledWith(
         'visibilitychange',
-        expect.any(Function),
+        registeredVisibilityListener,
       );
       expect(windowListeners.get('online')?.size ?? 0).toBe(0);
       expect(documentListeners.get('visibilitychange')?.size ?? 0).toBe(0);
@@ -1337,5 +1347,267 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
       reindexSpy.mockRestore();
       session.Destroy();
     }
+  });
+
+  it('Awareness.on(update) broadcasts MSG_AWARENESS frames over open WebSocket and removes state on Destroy', async () => {
+    class MockWs {
+      public static readonly OPEN = 1;
+      public static readonly CLOSED = 3;
+      public static instances: MockWs[] = [];
+      public readyState = 0;
+      public binaryType = 'arraybuffer';
+      public sentFrames: Uint8Array[] = [];
+      public onopen: (() => void) | null = null;
+      public onmessage: ((ev: MessageEvent) => void) | null = null;
+      public onclose: ((ev: CloseEvent) => void) | null = null;
+      public onerror: (() => void) | null = null;
+      constructor(public url: string) {
+        MockWs.instances.push(this);
+      }
+      send(data: Uint8Array): void {
+        this.sentFrames.push(data);
+      }
+      close(): void {
+        this.readyState = MockWs.CLOSED;
+      }
+    }
+    const origWs = globalThis.WebSocket;
+    vi.stubGlobal('WebSocket', MockWs);
+
+    const session = service.CreateSession(
+      'art-awareness-tx',
+      'hello',
+      { id: 'u1', name: 'Alice' },
+      true,
+      true,
+    );
+    try {
+      await session.Connect('wss://collab.example.com/yjs?artifactId=art-awareness-tx');
+      const ws = MockWs.instances[MockWs.instances.length - 1];
+      ws.readyState = MockWs.OPEN;
+      ws.onopen?.();
+      ws.sentFrames.length = 0;
+
+      session.SetActiveBlock('blk-7');
+      const hasAwarenessFrame = ws.sentFrames.some((frame) => {
+        const dec = decoding.createDecoder(frame);
+        return decoding.readVarUint(dec) === 1;
+      });
+      expect(hasAwarenessFrame).toBe(true);
+
+      ws.sentFrames.length = 0;
+      session.Destroy();
+      const sentRemovalOnDestroy = ws.sentFrames.some((frame) => {
+        const dec = decoding.createDecoder(frame);
+        return decoding.readVarUint(dec) === 1;
+      });
+      expect(sentRemovalOnDestroy).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+      if (origWs !== undefined) {
+        globalThis.WebSocket = origWs;
+      }
+    }
+  });
+
+  it('4401 ticket expired refreshes ticket once and falls back to LiveSyncUnavailable if 4401 persists', async () => {
+    class MockWs4401 {
+      public static readonly OPEN = 1;
+      public static readonly CLOSED = 3;
+      public static instances: MockWs4401[] = [];
+      public readyState = 0;
+      public binaryType = 'arraybuffer';
+      public onopen: (() => void) | null = null;
+      public onmessage: ((ev: MessageEvent) => void) | null = null;
+      public onclose: ((ev: CloseEvent) => void) | null = null;
+      public onerror: (() => void) | null = null;
+      constructor(public url: string) {
+        MockWs4401.instances.push(this);
+      }
+      send(): void {}
+      close(): void {
+        this.readyState = MockWs4401.CLOSED;
+      }
+    }
+    const origWs = globalThis.WebSocket;
+    vi.stubGlobal('WebSocket', MockWs4401);
+
+    let ticketCalls = 0;
+    const customService = new DocumentCollaborationService();
+    const provider = mockGqlProvider({
+      ConfigData: { URL: 'https://example.com/graphql' },
+      ExecuteGQL: async () => {
+        ticketCalls++;
+        return {
+          MintArtifactCollaborationTicket: {
+            Success: true,
+            Ticket: `fresh-tkt-${ticketCalls}`,
+            WsPath: '/collaboration/yjs',
+            CanRead: true,
+            CanEdit: true,
+          },
+        };
+      },
+    });
+    const session = customService.CreateSession(
+      'art-4401',
+      'seed',
+      { id: 'u1', name: 'Alice' },
+      true,
+      true,
+    );
+    try {
+      await session.Connect(null, provider);
+      expect(ticketCalls).toBe(1);
+      const firstWs = MockWs4401.instances[0];
+      firstWs.onclose?.({ code: 4401 } as CloseEvent);
+
+      // Flush microtask queue so the single ticket refresh Connect() opens socket #2
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(ticketCalls).toBe(2);
+      expect(MockWs4401.instances.length).toBe(2);
+      expect(MockWs4401.instances[1].url).toContain('ticket=fresh-tkt-2');
+      expect(session.LiveSyncUnavailable).toBe(false);
+
+      // Second consecutive 4401 stops retrying and exposes clean local fallback instead of looping
+      MockWs4401.instances[1].onclose?.({ code: 4401 } as CloseEvent);
+      expect(ticketCalls).toBe(2);
+      expect(session.LiveSyncUnavailable).toBe(true);
+      expect(session.Status).toBe('local');
+    } finally {
+      session.Destroy();
+      vi.unstubAllGlobals();
+      if (origWs !== undefined) {
+        globalThis.WebSocket = origWs;
+      }
+    }
+  });
+
+  it('VerifyFrozenSnapshotOnServer does not cache transient GraphQL errors', async () => {
+    let callCount = 0;
+    const flakyProvider = mockGqlProvider({
+      ExecuteGQL: async () => {
+        callCount++;
+        if (callCount === 1) {
+          throw new Error('503 temporary network outage');
+        }
+        return {
+          VerifyFrozenBlockSnapshot: {
+            Valid: true,
+            SnapshotVerified: true,
+          },
+        };
+      },
+    });
+    const block = {
+      BlockID: 'blk-transient-err',
+      Kind: 'EntityView' as const,
+      Mode: 'Frozen' as const,
+      FrozenSnapshot: {
+        FrozenAt: '2026-11-10T00:00:00.000Z',
+        FrozenByUserID: 'u-1',
+        FrozenByUserName: 'Admin',
+        Columns: [],
+        Rows: [],
+        TotalRowCount: 0,
+        SecurityWarningAcknowledged: true,
+        SnapshotContentHash: 'hmac-sha256:server-hash-ok',
+      },
+    };
+
+    expect(await service.VerifyFrozenSnapshotOnServer(block, flakyProvider)).toBe(false);
+    expect(await service.VerifyFrozenSnapshotOnServer(block, flakyProvider)).toBe(true);
+    expect(callCount).toBe(2);
+    expect(service.IsFrozenSnapshotVerified(block)).toBe(true);
+  });
+
+  it('ApplyRoomReset destroys old Y.Doc and preserves diverged local draft via RoomResetConflict$ without appending EOF', () => {
+    const wsSession = service.CreateSession(
+      'art-reset-conflict',
+      'Initial baseline',
+      { id: 'u1', name: 'Alice' },
+      true,
+      false,
+    );
+    const oldDoc = wsSession.YDoc;
+    const oldDestroySpy = vi.spyOn(oldDoc, 'destroy');
+
+    const conflicts: Array<CollaborationResetConflictDraft | null> = [];
+    const sub = wsSession.RoomResetConflict$.subscribe((c) => conflicts.push(c));
+
+    // Local diverged edit while offline
+    wsSession.SetContent('Local diverged draft');
+    expect(wsSession.GetContent()).toBe('Local diverged draft');
+
+    const serverResetDoc = new Y.Doc();
+    serverResetDoc.getText('content').insert(0, 'Server clean baseline');
+    const updateBytes = Y.encodeStateAsUpdate(serverResetDoc);
+    let binaryStr = '';
+    for (let i = 0; i < updateBytes.length; i++) {
+      binaryStr += String.fromCharCode(updateBytes[i]);
+    }
+    wsSession.ApplyRoomReset(btoa(binaryStr));
+
+    expect(oldDestroySpy).toHaveBeenCalledTimes(1);
+    expect(wsSession.GetContent()).toBe('Server clean baseline');
+    expect(wsSession.PendingResetConflictDraft?.LocalDraft).toBe('Local diverged draft');
+    expect(conflicts.some((c) => c?.LocalDraft === 'Local diverged draft')).toBe(true);
+    expect(wsSession.GetCollaborators().length).toBeGreaterThanOrEqual(1);
+
+    expect(wsSession.ApplyResetConflictDraft()).toBe(true);
+    expect(wsSession.GetContent()).toBe('Local diverged draft');
+    expect(wsSession.PendingResetConflictDraft).toBeNull();
+
+    sub.unsubscribe();
+    wsSession.Destroy();
+  });
+
+  it('prunes deleted slides from slidesById and syncs shared Yjs suggestions map', () => {
+    const twoSlidesDeck = JSON.stringify({
+      SchemaVersion: '1.0',
+      DeckID: 'deck-prune',
+      Title: 'Deck',
+      Subtitle: 'Sub A',
+      AspectRatio: '16:9',
+      Slides: [
+        { SlideID: 's1', SlideNumber: 1, Layout: 'content', Regions: [] },
+        { SlideID: 's2', SlideNumber: 2, Layout: 'content', Regions: [] },
+      ],
+    });
+    const session = service.CreateSession('art-slide-prune', twoSlidesDeck, {
+      id: 'u1',
+      name: 'Alice',
+    });
+
+    const oneSlideDeck = JSON.stringify({
+      SchemaVersion: '1.0',
+      DeckID: 'deck-prune',
+      Title: 'Deck',
+      AspectRatio: '16:9',
+      Slides: [{ SlideID: 's1', SlideNumber: 1, Layout: 'content', Regions: [] }],
+    });
+    session.SetContent(oneSlideDeck);
+
+    const parsed = JSON.parse(session.GetContent()) as { Slides: Array<{ SlideID: string }>; Subtitle?: string };
+    expect(parsed.Slides.map((s) => s.SlideID)).toEqual(['s1']);
+    expect(session.YDoc.getMap<string>('slidesById').has('s2')).toBe(false);
+    expect(parsed.Subtitle).toBeUndefined();
+
+    // Shared Yjs suggestions map round-trip
+    let suggestionChangeEvents = 0;
+    const sub = session.SuggestionsChanged$.subscribe(() => {
+      suggestionChangeEvents++;
+    });
+    session.SetSharedSuggestionRaw('sug-1', JSON.stringify({ ID: 'sug-1', Target: 's1' }));
+    expect(session.GetSharedSuggestionsRaw().get('sug-1')).toContain('sug-1');
+    session.DeleteSharedSuggestion('sug-1');
+    expect(session.GetSharedSuggestionsRaw().size).toBe(0);
+    expect(suggestionChangeEvents).toBeGreaterThanOrEqual(2);
+
+    sub.unsubscribe();
+    session.Destroy();
   });
 });

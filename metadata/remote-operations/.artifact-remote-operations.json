@@ -1,0 +1,148 @@
+[
+  {
+    "fields": {
+      "Name": "Synthesize Artifact From Sources",
+      "OperationKey": "Artifact.SynthesizeFromSources",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Artifacts",
+      "Description": "Synthesizes a new governed collaborative artifact (Presentation, Markdown Document, or Excel Spreadsheet) from one or more authorized source artifacts, preserving live chart and range embeds. Implemented by SynthesizeArtifactFromSourcesServerOperation in @memberjunction/server.",
+      "InputTypeName": "SynthesizeArtifactFromSourcesInput",
+      "InputTypeDefinition": "@file:types/artifact-synthesize-from-sources.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "SynthesizeArtifactFromSourcesOutput",
+      "OutputTypeDefinition": "@file:types/artifact-synthesize-from-sources.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "artifact:edit",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "87E12A26-CE77-4A19-84F9-E809552D5CBB"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Evaluate Spreadsheet AI Formulas",
+      "OperationKey": "Artifact.EvaluateAiFormula",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Artifacts",
+      "Description": "Explicitly evaluates a bounded batch (up to 50 cells) of opt-in =MJ.AI(...) spreadsheet formulas for an authorized editable artifact. Implemented by ArtifactEvaluateAiFormulaServerOperation in @memberjunction/server.",
+      "InputTypeName": "ArtifactEvaluateAiFormulaInput",
+      "InputTypeDefinition": "@file:types/artifact-evaluate-ai-formula.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ArtifactEvaluateAiFormulaOutput",
+      "OutputTypeDefinition": "@file:types/artifact-evaluate-ai-formula.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "artifact:edit",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C1DD5761-8799-4538-BD78-7D446EE7897A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Log Artifact Compliance Audit",
+      "OperationKey": "Artifact.LogComplianceAudit",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Artifacts",
+      "Description": "Writes a structured compliance audit log entry (MJ: Audit Logs) for block freeze, connected drive sync, export, permission changes, and guest share link events. Implemented by ArtifactComplianceAuditServerOperation in @memberjunction/server.",
+      "InputTypeName": "ArtifactComplianceAuditInput",
+      "InputTypeDefinition": "@file:types/artifact-log-compliance-audit.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ArtifactComplianceAuditOutput",
+      "OutputTypeDefinition": "@file:types/artifact-log-compliance-audit.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "artifact:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2B274F47-A2D6-4FE8-8EBB-DE68DA1E34D3"
+    },
+    "sync": {
+      "lastModified": "2026-11-15T21:15:09.103Z",
+      "checksum": "a1f109478b95d37e8b010a9072518c49dfb4dff5a11793fb0f95ac309af79e9b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Artifact Guest Share Link",
+      "OperationKey": "Artifact.CreateGuestShareLink",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Artifacts",
+      "Description": "Issues a Frozen-only expiring read-only external guest share link for a governed artifact version and persists its hashed token record. Implemented by CreateGuestShareLinkServerOperation in @memberjunction/server.",
+      "InputTypeName": "CreateGuestShareLinkInput",
+      "InputTypeDefinition": "@file:types/artifact-create-guest-share-link.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "CreateGuestShareLinkOutput",
+      "OutputTypeDefinition": "@file:types/artifact-create-guest-share-link.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "artifact:share",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "810B2AD9-17AF-45B9-ACDD-FD83685C27DB"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Revoke Artifact Guest Share Link",
+      "OperationKey": "Artifact.RevokeGuestShareLink",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Artifacts",
+      "Description": "Revokes an active Frozen-only external guest share link by LinkID so subsequent resolution requests are rejected immediately. Implemented by RevokeGuestShareLinkServerOperation in @memberjunction/server.",
+      "InputTypeName": "RevokeGuestShareLinkInput",
+      "InputTypeDefinition": "@file:types/artifact-revoke-guest-share-link.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "RevokeGuestShareLinkOutput",
+      "OutputTypeDefinition": "@file:types/artifact-revoke-guest-share-link.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "artifact:share",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8D2B8D23-BC44-4101-94AC-0494E9A734EF"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Resolve Artifact Guest Share Link",
+      "OperationKey": "Artifact.ResolveGuestShareLink",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Artifacts",
+      "Description": "Validates an external guest share link token (signature, expiration, revocation, Frozen-only invariant) and returns the read-only artifact snapshot. Implemented by ResolveGuestShareLinkServerOperation in @memberjunction/server.",
+      "InputTypeName": "ResolveGuestShareLinkInput",
+      "InputTypeDefinition": "@file:types/artifact-resolve-guest-share-link.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ResolveGuestShareLinkOutput",
+      "OutputTypeDefinition": "@file:types/artifact-resolve-guest-share-link.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "artifact:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "205CEC06-54D2-4406-9CE0-072545E58659"
+    },
+    "sync": {
+      "lastModified": "2026-11-15T21:23:51.945Z",
+      "checksum": "55654569392f48f8949ed65238defe48da35c3d0ed890b3e75ec81339a759979"
+    }
+  }
+]

@@ -296,11 +296,11 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
         expect(pgProvider.calls.some((c) => c.sql.startsWith('INSERT INTO'))).toBe(true);
         expect(pgProvider.calls.some((c) => c.sql.startsWith('UPDATE'))).toBe(true);
 
-        // Delete path on PostgreSQL
+        // Delete path on PostgreSQL uses AND (never OR across two different rows)
         pgProvider.calls.length = 0;
         expect(await pgEntity.Delete()).toBe(true);
         expect(pgProvider.calls[0]?.sql).toBe(
-            'DELETE FROM "__mj"."ArtifactWorkingState" WHERE "ID" = $1 OR "ArtifactID" = $2'
+            'DELETE FROM "__mj"."ArtifactWorkingState" WHERE "ID" = $1 AND "ArtifactID" = $2'
         );
 
         // 2. SQL Server dialect: reads vwArtifactWorkingStates and executes generated CRUD sprocs

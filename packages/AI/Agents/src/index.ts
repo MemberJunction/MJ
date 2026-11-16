@@ -120,16 +120,8 @@ export * from './realtime/realtime-recording-capture';
 export * from './realtime/realtime-recording-store';
 export * from './realtime/realtime-recording-ledger';
 export * from './realtime/realtime-recording-opus-assembly';
+export * from './realtime/realtime-artifact-helpers';
 
-// Re-export from ai-reranker for backward compatibility
-export {
-  RerankerService,
-  RerankerConfiguration,
-  parseRerankerConfiguration,
-  RerankServiceResult,
-  RerankObservabilityOptions,
-  LLMReranker,
-} from '@memberjunction/ai-reranker';
 export * from './native-tools/action-tool-builder';
 export * from './native-tools/action-param-schema';
 export * from './native-tools/dual-channel';

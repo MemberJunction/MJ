@@ -10,7 +10,8 @@ import {
   MJTaskEntity,
   MJArtifactEntity,
   MJArtifactVersionEntity,
-  ConversationEngine
+  ConversationEngine,
+  UserInfoEngine
 } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
@@ -890,11 +891,11 @@ export class SearchService {
   }
 
   /**
-   * Load recent searches from localStorage
+   * Load recent searches from server-backed UserInfoEngine
    */
   private loadRecentSearches(): void {
     try {
-      const stored = localStorage.getItem('mj-recent-searches');
+      const stored = UserInfoEngine.Instance.GetSetting('mj-recent-searches');
       if (stored) {
         this.recentSearches = JSON.parse(stored);
       }
@@ -905,11 +906,11 @@ export class SearchService {
   }
 
   /**
-   * Save recent searches to localStorage
+   * Save recent searches via UserInfoEngine
    */
   private saveRecentSearches(): void {
     try {
-      localStorage.setItem('mj-recent-searches', JSON.stringify(this.recentSearches));
+      UserInfoEngine.Instance.SetSettingDebounced('mj-recent-searches', JSON.stringify(this.recentSearches));
     } catch (error) {
       console.error('Failed to save recent searches:', error);
     }

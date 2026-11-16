@@ -35,7 +35,7 @@ import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
-import { ArtifactCollaborationServer, RedisYjsRoomRelay } from './collaboration/index.js';
+import { ArtifactCollaborationServer, RedisTicketReplayStore, RedisYjsRoomRelay } from './collaboration/index.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
 import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
@@ -278,6 +278,8 @@ export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/DocumentCollaborationResolver.js';
+export * from './resolvers/PublicGuestShareResolver.js';
+export * from './rest/PublicGuestShareHandler.js';
 export { SynthesizeArtifactFromSourcesServerOperation, LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
 export { ArtifactComplianceAuditServerOperation, LoadArtifactComplianceAuditOperation, WriteArtifactComplianceAudit } from './operations/ArtifactComplianceAuditHelper.js';
 export { ArtifactEvaluateAiFormulaServerOperation, LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
@@ -287,6 +289,11 @@ export {
     ResolveGuestShareLinkServerOperation,
     LoadArtifactGuestShareOperations,
     SetGuestShareSigningSecret,
+    ResolvePublicArtifactGuestShareData,
+    FindUnfrozenLiveContentReason,
+    SanitizeGuestShareConfiguration,
+    type PublicArtifactGuestShareResolution,
+    type PublicGuestShareErrorCode,
 } from './operations/ArtifactGuestShareServerOperations.js';
 export * from './collaboration/index.js';
 export * from './resolvers/FileCategoryResolver.js';
@@ -321,7 +328,12 @@ export * from './multiTenancy/index.js';
 export * from './middleware/index.js';
 
 import { RegisterDataHook } from '@memberjunction/core';
-import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/core-entities-server';
+import { RegisterArtifactPostRunViewProtectedEntities } from './generic/RegisterArtifactProtectedEntities.js';
+import { RegisterServerArtifactFileBytesLoader } from './resolvers/ArtifactFileResolver.js';
+export { RegisterArtifactPostRunViewProtectedEntities };
+
+RegisterArtifactPostRunViewProtectedEntities();
+RegisterServerArtifactFileBytesLoader();
 import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
 import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactComplianceAuditHelper.js';
 import { LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
@@ -594,6 +606,7 @@ const setupComplete$ = new ReplaySubject(1);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
     ArtifactCollaborationServer.Instance.SetRoomRelay(new RedisYjsRoomRelay(sharedCache));
+    ArtifactCollaborationServer.Instance.SetTicketReplayStore(new RedisTicketReplayStore(sharedCache));
     const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
     startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
@@ -1145,7 +1158,8 @@ const setupComplete$ = new ReplaySubject(1);
       RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
       RegisterDataHook('PreSave', mw.PreSave.bind(mw));
   }
-  EnsureAnchoredConversationReadHookRegistered();
+  RegisterArtifactPostRunViewProtectedEntities();
+  RegisterServerArtifactFileBytesLoader();
 
   // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
   let allResolvers = resolvers;

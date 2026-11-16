@@ -10,10 +10,7 @@
 -- This forward migration restores both while preserving @Configuration parameters.
 -- =====================================================================================
 
-DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateArtifactType];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateArtifactType]
+CREATE OR ALTER PROCEDURE [${flyway:defaultSchema}].[spUpdateArtifactType]
     @ID uniqueidentifier,
     @Name nvarchar(100) = NULL,
     @Description_Clear bit = 0,
@@ -72,10 +69,7 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactType] FROM [cdp_Int
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactType] TO [cdp_Developer], [cdp_Integration];
 GO
 
-DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateArtifactType];
-GO
-
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateArtifactType
+CREATE OR ALTER TRIGGER [${flyway:defaultSchema}].trgUpdateArtifactType
 ON [${flyway:defaultSchema}].[ArtifactType]
 AFTER UPDATE
 AS

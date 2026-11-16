@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
+import jwt from 'jsonwebtoken';
 import { WebSocket as WsClient, WebSocketServer, type RawData } from 'ws';
 import * as Y from 'yjs';
 import * as syncProtocol from 'y-protocols/sync';
@@ -28,10 +29,12 @@ import {
     ArtifactPermissionEngine,
     BuildArtifactVersionConfigurationWithPreview,
     DocumentLiveBlockEngine,
+    FormatCellAddress,
     IsValidThumbnailDataUrl,
     MJArtifactTypeEntity,
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
+    ParseRangeAddress,
     ResolveArtifactTypeThumbnailPolicy,
     SlideDeckEngine,
     SpreadsheetEngine,
@@ -54,6 +57,7 @@ import {
     type ArtifactAgentPresenceEvent,
     type ArtifactLiveRoomSnapshot,
 } from '@memberjunction/ai-agents';
+import type { ArtifactJsonValue, ArtifactToolArgs } from '@memberjunction/ai-core-plus';
 
 /** Canonical WebSocket upgrade path for Yjs artifact collaboration rooms (relative to `MJAPI_BASE_PATH`). */
 export const ARTIFACT_COLLABORATION_WS_PATH = '/collaboration/yjs';
@@ -265,6 +269,10 @@ export interface IssueCollaborationTicketParams {
     User: UserInfo;
     ApiKeyHash?: string;
     TTLSeconds?: number;
+    /** Optional provider used to bind the ticket to a specific tenant/database scope. */
+    Provider?: IMetadataProvider;
+    /** Optional upstream token expiry (epoch ms) propagated onto the WebSocket connection. */
+    TokenExpiresAtMs?: number;
 }
 
 /**
@@ -278,10 +286,13 @@ export interface IssuedCollaborationTicket {
 interface StoredCollaborationTicket {
     Nonce: string;
     ArtifactID: string;
+    ProviderKey: string;
+    Provider?: IMetadataProvider | null;
     User: UserInfo;
     ApiKeyHash?: string;
     IssuedAtMs: number;
     ExpiresAtMs: number;
+    TokenExpiresAtMs?: number;
 }
 
 /**
@@ -300,7 +311,9 @@ export interface CollaborationClientConnection {
     IsOwner?: boolean;
     /** Optional API key hash if this connection was established via a scoped API key. */
     ApiKeyHash?: string;
-    /** Set of Yjs awareness client IDs owned by this socket (cleaned up on disconnect). */
+    /** Optional upstream auth token expiration timestamp (epoch ms) checked on permission sweeps (`NW-5`). */
+    TokenExpiresAtMs?: number;
+    /** Set of Yjs awareness client IDs owned by this socket (cleaned up on disconnect, capped at `32`). */
     ControlledClientIDs: Set<number>;
     /** Tracks ping/pong liveness across heartbeat sweeps. */
     Alive: boolean;
@@ -312,6 +325,12 @@ export interface CollaborationClientConnection {
  * Active in-memory Yjs room for a single `MJ: Artifacts` record.
  */
 export interface CollaborationRoom {
+    /** Canonical composite room map key (`${providerKey}::${normalizedArtifactId}`). */
+    RoomKey: string;
+    /** Provider/tenant scope key isolating rooms across distinct providers/tenants. */
+    ProviderKey: string;
+    /** Metadata provider bound to this room when hydrated. */
+    Provider: IMetadataProvider;
     /** `MJ: Artifacts.ID` represented by this room. */
     ArtifactID: string;
     /** Optional delegating entity ID (`MJ: Artifacts.DelegateEntityID`) if this artifact inherits permissions. */
@@ -328,6 +347,8 @@ export interface CollaborationRoom {
     DirtyWorkingState: boolean;
     /** Whether `Doc` has changes not yet compacted into an immutable `MJ: Artifact Versions` row. */
     DirtyVersion: boolean;
+    /** Cached flag indicating whether any document, slide, or spreadsheet lock is currently present (`O(1)` fast path). */
+    HasActiveLocks: boolean;
     /** Consecutive failed flush/compaction attempts during idle room disposal (capped at `MAX_IDLE_FLUSH_RETRIES`). */
     CompactionRetryCount: number;
     /** User who most recently applied an edit in this room. */
@@ -338,6 +359,10 @@ export interface CollaborationRoom {
     BaseVersionNumber: number;
     /** Serialized content of the latest `MJ: Artifact Versions` row reconciled into this room. */
     BaseVersionText: string;
+    /** Raw `Configuration` JSON string of the latest `MJ: Artifact Versions` row reconciled into this room. */
+    BaseConfiguration?: string | null;
+    /** Trusted DB `__mj_UpdatedAt` epoch millis of the last working-state row hydrated or saved by this room. */
+    LastPersistedWorkingStateMs?: number;
     /** In-memory ID of the most recent authoritative restore applied on this node (`R9-2`). */
     LastAppliedRestoreVersionID: string | null;
     /** In-memory VersionNumber of the most recent authoritative restore applied on this node (`R9-2`). */
@@ -360,6 +385,8 @@ export interface CollaborationRoom {
     RoomEpoch: string;
     /** Serialized per-room flush promise queue so concurrent `FlushWorkingState` calls never interleave. */
     FlushQueue: Promise<boolean>;
+    /** Serialized per-room compaction promise queue preventing concurrent version compactions (`NW-5`). */
+    CompactionQueue: Promise<{ Saved: boolean; VersionID?: string; VersionNumber?: number }>;
     /** Debounce timer for periodic working-state checkpointing. */
     WorkingStateTimer: ReturnType<typeof setTimeout> | null;
     /** Idle room disposal timer armed when `Connections.size === 0`. */
@@ -367,11 +394,11 @@ export interface CollaborationRoom {
     /** Relay unsubscribe function for cross-instance pub/sub. */
     UnsubscribeRelay: (() => void) | null;
     /** Listener bound to `Doc.on('update', ...)` so it can be detached on room disposal. */
-    DocUpdateListener: (update: Uint8Array, origin: unknown) => void;
+    DocUpdateListener: (update: Uint8Array, origin: CollaborationClientConnection | string | null | undefined) => void;
     /** Listener bound to `Awareness.on('update', ...)` so it can be detached on room disposal. */
     AwarenessUpdateListener: (
         changes: { added: number[]; updated: number[]; removed: number[] },
-        origin: unknown
+        origin: CollaborationClientConnection | string | null | undefined
     ) => void;
     /** Server-owned awareness client IDs reserved for AI agents inside this room (`C3` anti-spoof). */
     ProtectedAgentClientIDs: Set<number>;
@@ -411,6 +438,18 @@ export interface CollaborationControlFrame {
 interface AuthenticatedUpgradeResult {
     User: UserInfo;
     ApiKeyHash?: string;
+    TokenExpiresAtMs?: number;
+    ProviderKey?: string;
+    Provider?: IMetadataProvider | null;
+}
+
+interface ServerPersistedWatermark {
+    BaseVersionID: string | null;
+    BaseVersionNumber: number;
+    BaseVersionText: string;
+    LastAppliedRestoreVersionID: string | null;
+    LastAppliedRestoreVersionNumber: number;
+    UpdatedAtMs: number;
 }
 
 interface WorkingStateProjection {
@@ -473,6 +512,8 @@ interface RegisteredLiveMutationEvent {
     previousContent?: string;
     updatedContent: string;
     xlsxBase64?: string;
+    configurationPatch?: ArtifactToolArgs;
+    provider?: IMetadataProvider | null;
     tool: string;
     contextUser?: UserInfo;
     agentRunId?: string;
@@ -532,27 +573,76 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private static readonly MAX_TRACKED_COMPACTED_VECTORS_PER_ARTIFACT = 8;
     private static readonly MAX_INLINE_RELAY_DOC_UPDATE_BYTES = 262_144;
     private static readonly SYNC_WAIT_TIMEOUT_MS = 1500;
-    private static readonly _compactedStateVectors = new Map<
-        string,
-        {
-            OriginServerID: string;
-            SavedStateVectorB64: string;
-            SavedSnapshotB64?: string;
-            VersionID: string;
-            ContentHash: string;
+    private static readonly MAX_CONTROLLED_CLIENT_IDS_PER_CONN = 32;
+    private static readonly MAX_AGENT_CLOCK_HIGH_WATER_ENTRIES = 10_000;
+    private static readonly COMPACTION_LEASE_TTL_MS = 15_000;
+
+    private static getSharedCollabState(): {
+        CompactedStateVectors: Map<
+            string,
+            {
+                OriginServerID: string;
+                SavedStateVectorB64: string;
+                SavedSnapshotB64?: string;
+                VersionID: string;
+                ContentHash: string;
+            }
+        >;
+        CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
+        InFlightCompactionVersionIds: Set<string>;
+        ServerVersionWatermarks: Map<string, ServerPersistedWatermark>;
+    } {
+        const store = GetGlobalObjectStore();
+        const storeKey = '___SINGLETON__MJ_COLLAB_SHARED_STATE';
+        if (!store[storeKey]) {
+            store[storeKey] = {
+                CompactedStateVectors: new Map(),
+                CompactedVectorKeysByArtifact: new Map(),
+                InFlightCompactionVersionIds: new Set<string>(),
+                ServerVersionWatermarks: new Map<string, ServerPersistedWatermark>(),
+            };
         }
-    >();
-    private static readonly _compactedVectorKeysByArtifact = new Map<
-        string,
-        Array<{ verKey: string; artKey: string }>
-    >();
+        const state = store[storeKey] as {
+            CompactedStateVectors: Map<
+                string,
+                {
+                    OriginServerID: string;
+                    SavedStateVectorB64: string;
+                    SavedSnapshotB64?: string;
+                    VersionID: string;
+                    ContentHash: string;
+                }
+            >;
+            CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
+            InFlightCompactionVersionIds: Set<string>;
+            ServerVersionWatermarks?: Map<string, ServerPersistedWatermark>;
+        };
+        if (!state.ServerVersionWatermarks) {
+            state.ServerVersionWatermarks = new Map<string, ServerPersistedWatermark>();
+        }
+        return state as {
+            CompactedStateVectors: Map<
+                string,
+                {
+                    OriginServerID: string;
+                    SavedStateVectorB64: string;
+                    SavedSnapshotB64?: string;
+                    VersionID: string;
+                    ContentHash: string;
+                }
+            >;
+            CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
+            InFlightCompactionVersionIds: Set<string>;
+            ServerVersionWatermarks: Map<string, ServerPersistedWatermark>;
+        };
+    }
 
     private readonly _serverInstanceId = `collab-${randomUUID()}`;
     private readonly _rooms = new Map<string, CollaborationRoom>();
+    private readonly _providersByKey = new Map<string, IMetadataProvider>();
     private readonly _roomInitPromises = new Map<string, Promise<CollaborationRoom>>();
     private readonly _tickets = new Map<string, StoredCollaborationTicket>();
     private readonly _consumedTickets = new Map<string, number>();
-    private static readonly _inFlightCompactionVersionIds = new Set<string>();
     private readonly _pendingSyncWaiters = new Map<string, Set<PendingSyncWaiterEntry>>();
     private readonly _pendingUpgradesByArtifact = new Map<string, number>();
     private readonly _detachedAgentPresence = new Map<string, DetachedAgentPresenceEntry>();
@@ -742,9 +832,250 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
     }
 
+    private resolveProviderKey(provider?: IMetadataProvider | null, user?: UserInfo | null): string {
+        if (user?.TenantContext?.TenantID) {
+            return `tenant:${NormalizeUUID(user.TenantContext.TenantID)}`;
+        }
+        const effectiveProvider = provider ?? this.activeProvider();
+        if (effectiveProvider) {
+            const candidate = effectiveProvider as IMetadataProvider & {
+                ProviderKey?: string;
+                InstanceConnectionString?: string;
+                ConfigData?: {
+                    MJCoreSchemaName?: string;
+                    Database?: string;
+                    ConnectionString?: string;
+                };
+            };
+            if (typeof candidate.ProviderKey === 'string' && candidate.ProviderKey.trim().length > 0) {
+                return candidate.ProviderKey.trim().toLowerCase();
+            }
+            const cfgKeyParts = [
+                candidate.ConfigData?.Database,
+                candidate.ConfigData?.MJCoreSchemaName,
+                candidate.InstanceConnectionString ?? candidate.ConfigData?.ConnectionString,
+            ].filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+            if (cfgKeyParts.length > 0) {
+                return createHash('sha256').update(cfgKeyParts.join('|'), 'utf8').digest('hex').slice(0, 16);
+            }
+        }
+        return 'default';
+    }
+
+    private getRoomKey(
+        artifactId: string,
+        provider?: IMetadataProvider | null,
+        user?: UserInfo | null
+    ): string {
+        const normId = NormalizeUUID((artifactId ?? '').trim());
+        const providerKey = this.resolveProviderKey(provider, user);
+        return `${providerKey}::${normId}`;
+    }
+
+    private relayKeyForRoom(artifactId: string, providerKey: string): string {
+        const cleanId = (artifactId ?? '').trim().toLowerCase();
+        if (!providerKey || providerKey === 'default') {
+            return cleanId;
+        }
+        return `${providerKey}::${NormalizeUUID(cleanId)}`;
+    }
+
+    private recordServerWatermark(room: CollaborationRoom): void {
+        const shared = ArtifactCollaborationServer.getSharedCollabState();
+        shared.ServerVersionWatermarks.set(room.RoomKey, {
+            BaseVersionID: room.BaseVersionID ?? null,
+            BaseVersionNumber: room.BaseVersionNumber ?? 0,
+            BaseVersionText: room.BaseVersionText ?? '',
+            LastAppliedRestoreVersionID: room.LastAppliedRestoreVersionID ?? null,
+            LastAppliedRestoreVersionNumber: room.LastAppliedRestoreVersionNumber ?? 0,
+            UpdatedAtMs: Date.now(),
+        });
+    }
+
+    private parseSuggestionArray(raw: ArtifactJsonValue | undefined): ArtifactJsonValue[] {
+        if (!Array.isArray(raw)) {
+            return [];
+        }
+        const out: ArtifactJsonValue[] = [];
+        for (const item of raw) {
+            if (item && typeof item === 'object' && !Array.isArray(item)) {
+                const candidate = item as { SuggestionID?: ArtifactJsonValue };
+                if (typeof candidate.SuggestionID === 'string' && candidate.SuggestionID.trim().length > 0) {
+                    out.push(item);
+                }
+            }
+        }
+        return out;
+    }
+
+    private readSuggestionsFromVersionConfiguration(configRaw?: string | null): ArtifactJsonValue[] {
+        if (!configRaw || typeof configRaw !== 'string' || configRaw.trim().length === 0) {
+            return [];
+        }
+        try {
+            const parsed = JSON.parse(configRaw) as { suggestions?: ArtifactJsonValue };
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return this.parseSuggestionArray(parsed.suggestions);
+            }
+        } catch {
+            // Non-JSON configuration
+        }
+        return [];
+    }
+
+    private readSuggestionsFromDoc(doc: Y.Doc): ArtifactJsonValue[] {
+        const map = doc.getMap<string>('suggestions');
+        if (map.size === 0) {
+            return [];
+        }
+        const list: Array<{ CreatedAt: string; SuggestionID: string; Raw: ArtifactJsonValue }> = [];
+        for (const [id, jsonStr] of map.entries()) {
+            if (typeof jsonStr !== 'string' || jsonStr.trim().length === 0) {
+                continue;
+            }
+            try {
+                const parsed = JSON.parse(jsonStr) as { CreatedAt?: ArtifactJsonValue; SuggestionID?: ArtifactJsonValue };
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    const effectiveId =
+                        typeof parsed.SuggestionID === 'string' && parsed.SuggestionID.trim().length > 0
+                            ? parsed.SuggestionID.trim()
+                            : id;
+                    const createdAt = typeof parsed.CreatedAt === 'string' ? parsed.CreatedAt : '';
+                    list.push({
+                        CreatedAt: createdAt,
+                        SuggestionID: effectiveId,
+                        Raw: parsed as ArtifactJsonValue
+                    });
+                }
+            } catch {
+                // Skip malformed entry
+            }
+        }
+        list.sort((a, b) => {
+            if (a.CreatedAt !== b.CreatedAt) {
+                return a.CreatedAt < b.CreatedAt ? -1 : 1;
+            }
+            return a.SuggestionID.localeCompare(b.SuggestionID);
+        });
+        return list.map((entry) => entry.Raw);
+    }
+
+    private syncSuggestionsIntoDoc(
+        doc: Y.Doc,
+        suggestions: ArtifactJsonValue[],
+        options?: { replace?: boolean }
+    ): boolean {
+        const map = doc.getMap<string>('suggestions');
+        const nextById = new Map<string, string>();
+        for (const item of suggestions) {
+            if (item && typeof item === 'object' && !Array.isArray(item)) {
+                const candidate = item as { SuggestionID?: ArtifactJsonValue };
+                if (typeof candidate.SuggestionID === 'string' && candidate.SuggestionID.trim().length > 0) {
+                    nextById.set(candidate.SuggestionID.trim(), JSON.stringify(item));
+                }
+            }
+        }
+        let changed = false;
+        for (const [id, serialized] of nextById.entries()) {
+            if (map.get(id) !== serialized) {
+                map.set(id, serialized);
+                changed = true;
+            }
+        }
+        if (options?.replace === true) {
+            for (const existingId of Array.from(map.keys())) {
+                if (!nextById.has(existingId)) {
+                    map.delete(existingId);
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private mergeConfigurationWithSuggestions(
+        baseConfigRaw: string | null | undefined,
+        suggestions: ArtifactJsonValue[]
+    ): string | null {
+        let baseObj: Record<string, ArtifactJsonValue> | null = null;
+        if (baseConfigRaw && typeof baseConfigRaw === 'string' && baseConfigRaw.trim().length > 0) {
+            try {
+                const parsed = JSON.parse(baseConfigRaw) as Record<string, ArtifactJsonValue>;
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    baseObj = { ...parsed };
+                }
+            } catch {
+                baseObj = null;
+            }
+        }
+        if (!baseObj) {
+            if (suggestions.length === 0) {
+                return baseConfigRaw ?? null;
+            }
+            baseObj = {};
+        }
+        if (suggestions.length > 0) {
+            baseObj['suggestions'] = suggestions;
+        } else if ('suggestions' in baseObj) {
+            baseObj['suggestions'] = [];
+        }
+        return JSON.stringify(baseObj);
+    }
+
+    private findRoomForArtifact(
+        artifactId: string,
+        provider?: IMetadataProvider | null,
+        user?: UserInfo | null
+    ): CollaborationRoom | undefined {
+        const scoped = this._rooms.get(this.getRoomKey(artifactId, provider, user));
+        if (scoped) {
+            return scoped;
+        }
+        if (!provider) {
+            const normalized = NormalizeUUID((artifactId ?? '').trim());
+            const matches: CollaborationRoom[] = [];
+            for (const room of this._rooms.values()) {
+                if (NormalizeUUID(room.ArtifactID) === normalized) {
+                    matches.push(room);
+                }
+            }
+            if (matches.length === 1) {
+                return matches[0];
+            }
+            if (matches.length > 1) {
+                const userProviderKey = this.resolveProviderKey(null, user);
+                const exactUserTenantRoom = matches.find((m) => m.ProviderKey === userProviderKey);
+                if (exactUserTenantRoom) {
+                    return exactUserTenantRoom;
+                }
+                // Multiple distinct providers/tenants hold rooms for the same ArtifactID; fail closed.
+                return undefined;
+            }
+        }
+        return undefined;
+    }
+
     /** Returns `true` when an in-memory collaboration room is currently loaded for `artifactId`. */
-    public HasActiveRoom(artifactId: string): boolean {
-        return this._rooms.has((artifactId ?? '').trim().toLowerCase());
+    public HasActiveRoom(artifactId: string, provider?: IMetadataProvider | null): boolean {
+        if (!artifactId || artifactId.trim().length === 0) {
+            return false;
+        }
+        if (this._rooms.has(this.getRoomKey(artifactId, provider))) {
+            return true;
+        }
+        if (!provider) {
+            const normalized = NormalizeUUID(artifactId.trim());
+            let matchCount = 0;
+            for (const room of this._rooms.values()) {
+                if (NormalizeUUID(room.ArtifactID) === normalized) {
+                    matchCount += 1;
+                }
+            }
+            if (matchCount === 1) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Returns the count of currently loaded in-memory collaboration rooms. */
@@ -788,6 +1119,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (!artifactId) {
             throw new Error('IssueTicket requires a non-empty ArtifactID.');
         }
+        const providerKey = this.resolveProviderKey(params.Provider ?? null, params.User);
+        if (params.Provider) {
+            this._providersByKey.set(providerKey, params.Provider);
+        }
         const ttlSeconds = Math.max(
             1,
             Math.min(
@@ -801,10 +1136,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const payloadJson = JSON.stringify({
             n: nonce,
             a: artifactId,
+            pk: providerKey,
             u: params.User.ID,
             k: params.ApiKeyHash ?? undefined,
             i: issuedAtMs,
-            e: expiresAtMs
+            e: expiresAtMs,
+            ...(typeof params.TokenExpiresAtMs === 'number' && Number.isFinite(params.TokenExpiresAtMs)
+                ? { te: params.TokenExpiresAtMs }
+                : {})
         });
         const payloadB64 = Buffer.from(payloadJson, 'utf8').toString('base64url');
         const sigB64 = createHmac('sha256', secret)
@@ -815,10 +1154,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         this._tickets.set(ticket, {
             Nonce: nonce,
             ArtifactID: artifactId,
+            ProviderKey: providerKey,
+            Provider: params.Provider ?? null,
             User: params.User,
             ApiKeyHash: params.ApiKeyHash,
             IssuedAtMs: issuedAtMs,
-            ExpiresAtMs: expiresAtMs
+            ExpiresAtMs: expiresAtMs,
+            TokenExpiresAtMs: params.TokenExpiresAtMs
         });
 
         return {
@@ -829,12 +1171,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     /**
      * Atomically consumes a single-use collaboration ticket and verifies its HMAC signature,
-     * server-capped TTL, and `expectedArtifactId` (`A3`, `Blocker 1`).
+     * server-capped TTL, provider scope, and `expectedArtifactId` (`A3`, `Blocker 1`).
      */
     public async ConsumeTicket(
         ticket: string,
-        expectedArtifactId: string
-    ): Promise<{ User: UserInfo; ApiKeyHash?: string } | null> {
+        expectedArtifactId: string,
+        expectedProvider?: IMetadataProvider | null
+    ): Promise<AuthenticatedUpgradeResult | null> {
         this.pruneExpiredTickets();
         const secret = this.getTicketHmacSecret();
         if (!secret) {
@@ -870,10 +1213,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as {
                 n?: string;
                 a?: string;
+                pk?: string;
                 u?: string;
                 k?: string;
                 i?: number;
                 e?: number;
+                te?: number;
             };
             if (
                 !parsed ||
@@ -936,9 +1281,28 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (!user || user.IsActive === false) {
                 return null;
             }
+            const ticketProviderKey = entry?.ProviderKey ?? parsed.pk;
+            const currentProviderKey = expectedProvider
+                ? this.resolveProviderKey(expectedProvider, user)
+                : ticketProviderKey ?? this.resolveProviderKey(null, user);
+            if (ticketProviderKey && expectedProvider && ticketProviderKey !== currentProviderKey) {
+                return null;
+            }
+            const resolvedTicketProvider =
+                expectedProvider ??
+                entry?.Provider ??
+                (ticketProviderKey ? this._providersByKey.get(ticketProviderKey) : undefined) ??
+                null;
+            const tokenExpiresAtMs = entry?.TokenExpiresAtMs ?? parsed.te;
+            if (typeof tokenExpiresAtMs === 'number' && Number.isFinite(tokenExpiresAtMs) && tokenExpiresAtMs <= now) {
+                return null;
+            }
             return {
                 User: user,
-                ApiKeyHash: entry?.ApiKeyHash ?? parsed.k
+                ApiKeyHash: entry?.ApiKeyHash ?? parsed.k,
+                TokenExpiresAtMs: tokenExpiresAtMs,
+                ProviderKey: ticketProviderKey ?? currentProviderKey,
+                Provider: resolvedTicketProvider
             };
         } catch {
             return null;
@@ -1058,23 +1422,41 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         artifactId: string,
         targetUserId?: string,
         publishRelay: boolean = false,
-        visitedRoomKeys?: Set<string>
+        visitedRoomKeys?: Set<string>,
+        providerOverride?: IMetadataProvider | null
     ): Promise<void> {
         const normalizedId = (artifactId ?? '').trim();
         if (!normalizedId) {
             return;
         }
-        const roomKey = normalizedId.toLowerCase();
+        const visitKey = providerOverride
+            ? this.getRoomKey(normalizedId, providerOverride)
+            : normalizedId.toLowerCase();
         const visited = visitedRoomKeys ?? new Set<string>();
-        if (visited.has(roomKey)) {
+        if (visited.has(visitKey)) {
             return;
         }
-        visited.add(roomKey);
+        visited.add(visitKey);
+
+        const matchingRooms: CollaborationRoom[] = [];
+        if (providerOverride) {
+            const scoped = this._rooms.get(this.getRoomKey(normalizedId, providerOverride));
+            if (scoped) matchingRooms.push(scoped);
+        } else {
+            const normTargetId = NormalizeUUID(normalizedId);
+            for (const candidate of this._rooms.values()) {
+                if (NormalizeUUID(candidate.ArtifactID) === normTargetId) {
+                    matchingRooms.push(candidate);
+                }
+            }
+        }
 
         if (publishRelay) {
             try {
+                const relayProviderKey = matchingRooms[0]?.ProviderKey ?? this.resolveProviderKey(providerOverride);
                 await this._relay.PublishToRoom({
                     ArtifactID: normalizedId,
+                    ProviderKey: relayProviderKey,
                     MessageType: 'permission-revoked',
                     PayloadBase64: '',
                     TargetUserID: targetUserId
@@ -1088,15 +1470,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
         }
 
-        const room = this._rooms.get(roomKey);
-        if (room) {
-            const provider = this.activeProvider();
+        for (const room of matchingRooms) {
+            const provider = room.Provider ?? this.activeProvider();
+            const nowMs = Date.now();
             for (const conn of Array.from(room.Connections)) {
                 if (targetUserId && !UUIDsEqual(conn.User.ID, targetUserId)) {
                     continue;
                 }
 
-                const isActive = this.isUserStillActive(conn.User);
+                const tokenExpired =
+                    typeof conn.TokenExpiresAtMs === 'number' &&
+                    Number.isFinite(conn.TokenExpiresAtMs) &&
+                    conn.TokenExpiresAtMs <= nowMs;
+                const isActive = !tokenExpired && this.isUserStillActive(conn.User);
                 const canReadScope =
                     isActive && conn.ApiKeyHash
                         ? await this.CheckApiKeyScope(conn.ApiKeyHash, 'artifact:read', room.ArtifactID, conn.User, true)
@@ -1112,9 +1498,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         : null;
 
                 if (!isActive || !canReadScope || !perms || !perms.CanRead) {
-                    const reason = !isActive
-                        ? 'User account is inactive.'
-                        : perms?.Reason || 'Read permission revoked.';
+                    const reason = tokenExpired
+                        ? 'Authentication token has expired.'
+                        : !isActive
+                          ? 'User account is inactive.'
+                          : perms?.Reason || 'Read permission revoked.';
                     this.sendPermissionStatusFrame(conn.Socket, {
                         canRead: false,
                         canEdit: false,
@@ -1123,7 +1511,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     this.clearControlledAwarenessStates(room, conn);
                     room.Connections.delete(conn);
                     try {
-                        conn.Socket.close(WS_CLOSE_FORBIDDEN, 'Read permission revoked');
+                        conn.Socket.close(WS_CLOSE_FORBIDDEN, tokenExpired ? 'Token expired' : 'Read permission revoked');
                     } catch {
                         // Ignore socket close error
                     }
@@ -1131,6 +1519,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         this.handleRoomBecameEmpty(room, conn.User);
                     }
                 } else {
+                    conn.IsOwner = perms.Source === 'Owner';
                     let effectiveCanEdit = perms.CanEdit;
                     if (effectiveCanEdit && conn.ApiKeyHash) {
                         const canEditScope = await this.CheckApiKeyScope(
@@ -1165,13 +1554,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
             const matchesParent =
                 UUIDsEqual(candidateRoom.DelegateRecordID, normalizedId) ||
-                candidateRoom.DelegateRecordID.trim().toLowerCase() === roomKey;
+                candidateRoom.DelegateRecordID.trim().toLowerCase() === normalizedId.toLowerCase();
             if (matchesParent) {
                 await this.ReevaluateRoomPermissions(
                     candidateRoom.ArtifactID,
                     targetUserId,
                     publishRelay,
-                    visited
+                    visited,
+                    candidateRoom.Provider
                 );
             }
         }
@@ -1187,14 +1577,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     public async FlushWorkingState(
         artifactId: string,
         contextUser: UserInfo,
-        options?: { guardNewerPersistedVersion?: boolean }
+        options?: { guardNewerPersistedVersion?: boolean; provider?: IMetadataProvider | null }
     ): Promise<boolean> {
         this.ensureShutdownRegistered();
-        const key = (artifactId ?? '').trim().toLowerCase();
-        const room = this._rooms.get(key);
+        const room = this.findRoomForArtifact(artifactId, options?.provider ?? null, contextUser);
         if (!room) {
             return false;
         }
+        const key = room.RoomKey;
         if (room.WorkingStateTimer) {
             clearTimeout(room.WorkingStateTimer);
             room.WorkingStateTimer = null;
@@ -1204,7 +1594,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (this._rooms.get(key) !== room) {
                 return false;
             }
-            const provider = this.activeProvider();
+            const provider = room.Provider ?? this.activeProvider();
             const actor = contextUser ?? room.LastModifiedByUser;
             const persistenceUser = UserCache.Instance.GetSystemUser() ?? actor;
             if (!provider || !actor || !persistenceUser) {
@@ -1220,6 +1610,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     {
                         EntityName: 'MJ: Artifact Working States',
                         ExtraFilter: `ArtifactID='${EscapeSQLString(room.ArtifactID)}'`,
+                        Fields: ['ID', 'ArtifactID', 'YjsState', 'LastModifiedByUserID', '__mj_UpdatedAt'],
                         IncludeBinaryFields: true,
                         MaxRows: 1,
                         SkipTotalRowCount: true,
@@ -1233,26 +1624,45 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         ? existingRes.Results[0]
                         : undefined;
 
-                if (options?.guardNewerPersistedVersion && existingRow?.['YjsState']) {
-                    const existingStateBytes = DecodeWorkingStateBytes(existingRow['YjsState']);
-                    if (existingStateBytes.byteLength > 0) {
-                        const probeDoc = new Y.Doc();
-                        try {
-                            Y.applyUpdate(probeDoc, existingStateBytes, 'probe');
-                            const probeMeta = probeDoc.getMap('meta');
-                            const persistedVersionNum = Number(
-                                probeMeta.get('baseVersionNumber') ?? probeMeta.get('versionNumber') ?? 0
-                            );
-                            const localMeta = room.Doc.getMap('meta');
-                            const localVersionNum = Math.max(
-                                room.BaseVersionNumber,
-                                Number(localMeta.get('baseVersionNumber') ?? localMeta.get('versionNumber') ?? 0)
-                            );
-                            if (Number.isFinite(persistedVersionNum) && persistedVersionNum > localVersionNum) {
-                                return false;
-                            }
-                        } finally {
-                            probeDoc.destroy();
+                if (options?.guardNewerPersistedVersion) {
+                    // P0-13: Evaluate version progression exclusively from trusted server watermarks
+                    // and DB version/working-state rows — NEVER read watermarks from client-writable Y.Map('meta').
+                    const sharedState = ArtifactCollaborationServer.getSharedCollabState();
+                    const serverWatermark = sharedState.ServerVersionWatermarks.get(room.RoomKey);
+                    if (serverWatermark && serverWatermark.BaseVersionNumber > room.BaseVersionNumber) {
+                        return false;
+                    }
+                    const existingUpdatedRaw = existingRow?.['__mj_UpdatedAt'];
+                    const existingUpdatedMs =
+                        existingUpdatedRaw instanceof Date
+                            ? existingUpdatedRaw.getTime()
+                            : typeof existingUpdatedRaw === 'string' && existingUpdatedRaw.length > 0
+                              ? new Date(existingUpdatedRaw).getTime()
+                              : NaN;
+                    const knownPersistedMs = room.LastPersistedWorkingStateMs ?? 0;
+                    if (
+                        existingRow?.['YjsState'] &&
+                        Number.isFinite(existingUpdatedMs) &&
+                        existingUpdatedMs > knownPersistedMs
+                    ) {
+                        const latestVerRes = await rv.RunView<{ VersionNumber: number }>(
+                            {
+                                EntityName: 'MJ: Artifact Versions',
+                                ExtraFilter: `ArtifactID='${EscapeSQLString(room.ArtifactID)}'`,
+                                OrderBy: 'VersionNumber DESC',
+                                Fields: ['VersionNumber'],
+                                MaxRows: 1,
+                                SkipTotalRowCount: true,
+                                ResultType: 'simple'
+                            },
+                            persistenceUser
+                        );
+                        const latestVerNum =
+                            latestVerRes.Success && latestVerRes.Results && latestVerRes.Results.length > 0
+                                ? Number(latestVerRes.Results[0].VersionNumber ?? 0)
+                                : 0;
+                        if (Number.isFinite(latestVerNum) && latestVerNum > room.BaseVersionNumber) {
+                            return false;
                         }
                     }
                 }
@@ -1273,6 +1683,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 if (saved) {
                     room.DirtyWorkingState = false;
                     room.CompactionRetryCount = 0;
+                    const updatedRaw = entity.__mj_UpdatedAt;
+                    const updatedMs =
+                        updatedRaw instanceof Date
+                            ? updatedRaw.getTime()
+                            : Date.now();
+                    room.LastPersistedWorkingStateMs = Number.isFinite(updatedMs) ? updatedMs : Date.now();
+                    this.recordServerWatermark(room);
                 } else {
                     room.DirtyWorkingState = true;
                     LogError(
@@ -1356,15 +1773,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     public async CompactRoomToArtifactVersion(
         artifactId: string,
         contextUser: UserInfo,
-        options?: { CapturedThumbnailDataUrl?: string | null }
+        options?: { CapturedThumbnailDataUrl?: string | null; Provider?: IMetadataProvider | null }
     ): Promise<{ Saved: boolean; VersionID?: string; VersionNumber?: number }> {
         this.ensureShutdownRegistered();
-        const provider = this.activeProvider();
-        if (!provider || !contextUser) {
+        const resolvedProvider = options?.Provider ?? this.activeProvider();
+        if (!resolvedProvider || !contextUser) {
             return { Saved: false };
         }
         const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-            provider,
+            resolvedProvider,
             artifactId,
             contextUser
         );
@@ -1372,16 +1789,41 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             return { Saved: false };
         }
 
-        const room = await this.GetOrCreateRoom(artifactId, contextUser);
+        const room = await this.GetOrCreateRoom(artifactId, contextUser, resolvedProvider);
         if (!room) {
             return { Saved: false };
         }
 
-        const rv = RunView.FromMetadataProvider(provider);
-        const queryUser = UserCache.Instance.GetSystemUser() ?? contextUser;
+        const runCompaction = async (): Promise<{ Saved: boolean; VersionID?: string; VersionNumber?: number }> => {
+            const provider = room.Provider ?? resolvedProvider;
+            const relayKey = this.relayKeyForRoom(room.ArtifactID, room.ProviderKey);
+            let leaseHeld = false;
+            if (this._relay.TryAcquireCompactionLease) {
+                leaseHeld = await this._relay.TryAcquireCompactionLease(
+                    relayKey,
+                    ArtifactCollaborationServer.COMPACTION_LEASE_TTL_MS
+                );
+                if (!leaseHeld) {
+                    await new Promise((r) => setTimeout(r, 100));
+                    leaseHeld = await this._relay.TryAcquireCompactionLease(
+                        relayKey,
+                        ArtifactCollaborationServer.COMPACTION_LEASE_TTL_MS
+                    );
+                }
+            } else {
+                leaseHeld = true;
+            }
+            if (!leaseHeld) {
+                return { Saved: false };
+            }
 
-        let lastSaveError = 'unknown error';
-        for (let attempt = 1; attempt <= MAX_VERSION_SAVE_ATTEMPTS; attempt++) {
+            try {
+                const rv = RunView.FromMetadataProvider(provider);
+                const queryUser = UserCache.Instance.GetSystemUser() ?? contextUser;
+                const sharedState = ArtifactCollaborationServer.getSharedCollabState();
+
+                let lastSaveError = 'unknown error';
+                for (let attempt = 1; attempt <= MAX_VERSION_SAVE_ATTEMPTS; attempt++) {
             const latestRes = await rv.RunView<{
                 ID: string;
                 VersionNumber: number;
@@ -1430,7 +1872,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     room.ArtifactID,
                     latest.ID,
                     latest.VersionNumber,
-                    latestHash
+                    latestHash,
+                    room.ProviderKey
                 );
                 this.reconcileOutOfBandVersionIntoRoom(room, latest, {
                     originServerId: tracked?.OriginServerID,
@@ -1441,15 +1884,23 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             const currentContent = this.extractRoomSerializedContent(room.Doc);
+            const roomSuggestions = this.readSuggestionsFromDoc(room.Doc);
+            const latestSuggestions = latest
+                ? this.readSuggestionsFromVersionConfiguration(latest.Configuration)
+                : [];
+            const suggestionsUnchanged =
+                JSON.stringify(roomSuggestions) === JSON.stringify(latestSuggestions);
             const preMetaStateVectorB64 = BytesToBase64(Y.encodeStateVector(room.Doc));
             const contentHash = createHash('sha256').update(currentContent, 'utf8').digest('hex');
 
-            if (latest && (latest.ContentHash === contentHash || latest.Content === currentContent)) {
+            if (latest && suggestionsUnchanged && (latest.ContentHash === contentHash || latest.Content === currentContent)) {
                 room.DirtyVersion = false;
                 room.CompactionRetryCount = 0;
                 room.BaseVersionID = latest.ID;
                 room.BaseVersionNumber = latest.VersionNumber;
                 room.BaseVersionText = currentContent;
+                room.BaseConfiguration = latest.Configuration ?? null;
+                this.recordServerWatermark(room);
                 const keepMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${latest.VersionNumber}`;
                 room.Doc.transact(() => {
                     const meta = room.Doc.getMap('meta');
@@ -1464,7 +1915,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }, 'version-meta');
                 room.LastCompactedStateVector = Y.encodeStateVector(room.Doc);
                 if (room.DirtyWorkingState) {
-                    await this.FlushWorkingState(artifactId, contextUser);
+                    await this.FlushWorkingState(artifactId, contextUser, { provider });
                 }
                 if (room.Connections.size === 0 && !this._shuttingDown) {
                     this.scheduleIdleRoomDisposal(room);
@@ -1480,7 +1931,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             // so even if the post-version flush fails or the process crashes right after versionEntity.Save(),
             // the working state already holds the exact client CRDT items (Blocker 2).
             if (room.DirtyWorkingState) {
-                await this.FlushWorkingState(artifactId, contextUser);
+                await this.FlushWorkingState(artifactId, contextUser, { provider });
             }
 
             const nextVersionNumber = (latest?.VersionNumber ?? 0) + 1;
@@ -1506,7 +1957,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const rawBaseConfig =
                 room.Doc.getMap('worksheetsById').size > 0
                     ? currentContent
-                    : (latest?.Configuration ?? null);
+                    : (latest?.Configuration ?? room.BaseConfiguration ?? null);
             const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
                 rawBaseConfig,
                 currentContent,
@@ -1519,8 +1970,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     CapturedThumbnailDataUrl: options?.CapturedThumbnailDataUrl ?? null
                 }
             );
-            if (enrichedConfig) {
-                versionEntity.Configuration = enrichedConfig;
+            const baseConfigForSuggestions =
+                enrichedConfig ?? (room.Doc.getMap('worksheetsById').size > 0 ? currentContent : rawBaseConfig);
+            const finalConfig =
+                roomSuggestions.length > 0 || latestSuggestions.length > 0
+                    ? this.mergeConfigurationWithSuggestions(baseConfigForSuggestions, roomSuggestions)
+                    : baseConfigForSuggestions;
+            if (finalConfig) {
+                versionEntity.Configuration = finalConfig;
             } else if (room.Doc.getMap('worksheetsById').size > 0) {
                 versionEntity.Configuration = currentContent;
             }
@@ -1529,7 +1986,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 versionEntity.ID = randomUUID();
             }
             const normPendingVersionId = NormalizeUUID(versionEntity.ID);
-            ArtifactCollaborationServer._inFlightCompactionVersionIds.add(normPendingVersionId);
+            sharedState.InFlightCompactionVersionIds.add(normPendingVersionId);
             let saved = false;
             try {
                 saved = await versionEntity.Save();
@@ -1540,9 +1997,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 lastSaveError = err instanceof Error ? err.message : String(err);
                 saved = false;
             } finally {
-                ArtifactCollaborationServer._inFlightCompactionVersionIds.delete(normPendingVersionId);
+                sharedState.InFlightCompactionVersionIds.delete(normPendingVersionId);
                 if (versionEntity.ID && versionEntity.ID.trim().length > 0) {
-                    ArtifactCollaborationServer._inFlightCompactionVersionIds.delete(NormalizeUUID(versionEntity.ID));
+                    sharedState.InFlightCompactionVersionIds.delete(NormalizeUUID(versionEntity.ID));
                 }
             }
 
@@ -1553,6 +2010,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 room.BaseVersionID = versionEntity.ID;
                 room.BaseVersionNumber = versionEntity.VersionNumber;
                 room.BaseVersionText = currentContent;
+                room.BaseConfiguration = versionEntity.Configuration ?? null;
+                this.recordServerWatermark(room);
                 const versionVectorMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${versionEntity.VersionNumber}`;
                 const preMetaSnapshotB64 = BytesToBase64(Y.encodeSnapshot(Y.snapshot(room.Doc)));
                 const versionVectorMetaValue = JSON.stringify({
@@ -1593,12 +2052,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     versionEntity.VersionNumber,
                     savedStateVectorB64,
                     contentHash,
-                    savedSnapshotB64
+                    savedSnapshotB64,
+                    room.ProviderKey
                 );
 
                 // Flush working state AFTER saving the version and updating `meta` so the working state
                 // timestamp is never older than the version and includes the updated `versionNumber`/`versionId`.
-                await this.FlushWorkingState(artifactId, contextUser);
+                await this.FlushWorkingState(artifactId, contextUser, { provider });
 
                 this.broadcastControlFrame(room, {
                     action: 'version-saved',
@@ -1622,6 +2082,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 try {
                     await this._relay.PublishToRoom({
                         ArtifactID: room.ArtifactID,
+                        ProviderKey: room.ProviderKey,
                         MessageType: 'version-saved',
                         PayloadBase64: versionSavedRelayPayload,
                         VersionID: versionEntity.ID,
@@ -1655,6 +2116,20 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             `ArtifactCollaborationServer.CompactRoomToArtifactVersion failed after ${MAX_VERSION_SAVE_ATTEMPTS} attempts for '${artifactId}': ${lastSaveError}`
         );
         return { Saved: false };
+            } finally {
+                if (leaseHeld && this._relay.ReleaseCompactionLease) {
+                    try {
+                        await this._relay.ReleaseCompactionLease(relayKey);
+                    } catch {
+                        // Lease will naturally expire by TTL
+                    }
+                }
+            }
+        };
+
+        const queued = room.CompactionQueue.then(runCompaction, runCompaction);
+        room.CompactionQueue = queued.catch(() => ({ Saved: false }));
+        return await queued;
     }
 
     /**
@@ -1677,6 +2152,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             persistedVersionNumber?: number;
             persistedContent?: string;
             capturedThumbnailDataUrl?: string | null;
+            provider?: IMetadataProvider | null;
         }
     ): Promise<{
         Success: boolean;
@@ -1693,7 +2169,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     }> {
         this.ensureShutdownRegistered();
         this.ensureGlobalMutationListenerRegistered();
-        const provider = this.activeProvider();
+        const provider = options?.provider ?? this.activeProvider();
         if (!provider || !user) {
             return { Success: false };
         }
@@ -1708,16 +2184,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const isOwner = perms.Source === 'Owner';
 
         if (options?.dryRun === true) {
-            const roomKey = artifactId.trim().toLowerCase();
             const tempDoc = new Y.Doc();
             try {
-                const liveRoom = this._rooms.get(roomKey);
+                const liveRoom = this.findRoomForArtifact(artifactId, provider, user);
                 if (liveRoom) {
                     Y.applyUpdate(tempDoc, Y.encodeStateAsUpdate(liveRoom.Doc));
                 } else {
-                    const hasWorking = await this.hasPersistedWorkingState(artifactId, user);
+                    const hasWorking = await this.hasPersistedWorkingState(artifactId, user, provider);
                     if (hasWorking) {
-                        const hydratedRoom = await this.GetOrCreateRoom(artifactId, user);
+                        const hydratedRoom = await this.GetOrCreateRoom(artifactId, user, provider);
                         if (hydratedRoom) {
                             Y.applyUpdate(tempDoc, Y.encodeStateAsUpdate(hydratedRoom.Doc));
                         }
@@ -1803,7 +2278,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
         }
 
-        const room = await this.GetOrCreateRoom(artifactId, user);
+        const room = await this.GetOrCreateRoom(artifactId, user, provider);
         if (!room) {
             return { Success: false };
         }
@@ -1906,7 +2381,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (saveVersion) {
             const preCompactVersionId = room.BaseVersionID;
             const compacted = await this.CompactRoomToArtifactVersion(artifactId, user, {
-                CapturedThumbnailDataUrl: options?.capturedThumbnailDataUrl ?? null
+                CapturedThumbnailDataUrl: options?.capturedThumbnailDataUrl ?? null,
+                Provider: room.Provider
             });
             if (isRestore) {
                 const effectiveVerId = compacted.VersionID ?? room.BaseVersionID ?? undefined;
@@ -1989,7 +2465,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     room.BaseVersionNumber,
                     BytesToBase64(postRestoreSv),
                     this.computeSha256Hex(mergedContent),
-                    BytesToBase64(Y.encodeSnapshot(Y.snapshot(room.Doc)))
+                    BytesToBase64(Y.encodeSnapshot(Y.snapshot(room.Doc))),
+                    room.ProviderKey
                 );
             }
         } else if (options?.persistedVersionId) {
@@ -2018,7 +2495,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }, 'server-agent');
             room.LastCompactedStateVector = room.DirtyVersion ? null : Y.encodeStateVector(room.Doc);
         }
-        await this.FlushWorkingState(artifactId, user);
+        this.recordServerWatermark(room);
+        await this.FlushWorkingState(artifactId, user, { provider: room.Provider });
         if (isRestore) {
             this.broadcastControlFrame(room, {
                 action: 'version-saved',
@@ -2064,15 +2542,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     public async RestoreToSavedVersion(
         artifactId: string,
         savedVersion: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null },
-        user: UserInfo
+        user: UserInfo,
+        provider?: IMetadataProvider | null
     ): Promise<void> {
-        const hasLive = this.HasActiveRoom(artifactId) || (await this.hasPersistedWorkingState(artifactId, user));
+        const resolvedProvider = provider ?? this.activeProvider();
+        const resolvedProviderKey = this.resolveProviderKey(resolvedProvider, user);
+        const hasLive = this.HasActiveRoom(artifactId, resolvedProvider) || (await this.hasPersistedWorkingState(artifactId, user, resolvedProvider));
         const targetText = savedVersion.Content || savedVersion.Configuration || '';
         const targetContentHash = this.computeSha256Hex(targetText);
         let handledViaLocalRoom = false;
 
         if (hasLive) {
-            const room = await this.GetOrCreateRoom(artifactId, user);
+            const room = await this.GetOrCreateRoom(artifactId, user, resolvedProvider);
             if (room) {
                 handledViaLocalRoom = true;
                 const alreadyAppliedByListener = Boolean(
@@ -2084,7 +2565,24 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     }
                     this.reconcileOutOfBandVersionIntoRoom(room, savedVersion, { isRestore: true });
                 }
-                await this.FlushWorkingState(artifactId, user);
+                room.HasActiveLocks = this.computeContentHasActiveLocks(this.extractRoomSerializedContent(room.Doc));
+                await this.FlushWorkingState(artifactId, user, { provider: resolvedProvider });
+                if (this._relay) {
+                    try {
+                        await this._relay.PublishToRoom({
+                            ArtifactID: room.ArtifactID,
+                            ProviderKey: room.ProviderKey,
+                            MessageType: 'sync-state',
+                            PayloadBase64: BytesToBase64(Y.encodeStateAsUpdate(room.Doc))
+                        });
+                    } catch (syncRelayErr) {
+                        LogError(
+                            `ArtifactCollaborationServer.RestoreToSavedVersion sync-state relay publish failed: ${
+                                syncRelayErr instanceof Error ? syncRelayErr.message : String(syncRelayErr)
+                            }`
+                        );
+                    }
+                }
                 if (room.Connections.size === 0 && !this._shuttingDown) {
                     this.scheduleIdleRoomDisposal(room);
                 }
@@ -2099,6 +2597,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             try {
                 await this._relay.PublishToRoom({
                     ArtifactID: artifactId,
+                    ProviderKey: resolvedProviderKey,
                     MessageType: 'version-saved',
                     PayloadBase64: relayPayload,
                     VersionID: savedVersion.ID,
@@ -2118,11 +2617,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      * Returns the current in-memory room for `artifactId`, hydrating it from `MJ: Artifact Working States`
      * or `MJ: Artifact Versions` if not yet loaded.
      */
-    public async GetOrCreateRoom(artifactId: string, contextUser: UserInfo): Promise<CollaborationRoom | null> {
-        const key = (artifactId ?? '').trim().toLowerCase();
-        if (!key || !contextUser) {
+    public async GetOrCreateRoom(
+        artifactId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider | null
+    ): Promise<CollaborationRoom | null> {
+        const cleanId = (artifactId ?? '').trim();
+        if (!cleanId || !contextUser) {
             return null;
         }
+        const resolvedProvider = provider ?? this.activeProvider();
+        const key = this.getRoomKey(cleanId, resolvedProvider, contextUser);
         this.ensureShutdownRegistered();
         this.ensurePermissionListenerRegistered();
         this.ensureGlobalMutationListenerRegistered();
@@ -2141,7 +2646,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (inFlight) {
             return await inFlight;
         }
-        const initPromise = this.createAndHydrateRoom(artifactId.trim(), contextUser).finally(() => {
+        const initPromise = this.createAndHydrateRoom(cleanId, contextUser, resolvedProvider).finally(() => {
             this._roomInitPromises.delete(key);
         });
         this._roomInitPromises.set(key, initPromise);
@@ -2152,10 +2657,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      * Returns the current collaborative string content for `artifactId` from its active Yjs room
      * (or hydrates the room first), reconciling any newer out-of-band `MJ: Artifact Versions` row.
      */
-    public async GetRoomContent(artifactId: string, contextUser: UserInfo): Promise<string> {
-        const key = (artifactId ?? '').trim().toLowerCase();
+    public async GetRoomContent(
+        artifactId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider | null
+    ): Promise<string> {
+        const resolvedProvider = provider ?? this.activeProvider();
+        const key = this.getRoomKey(artifactId, resolvedProvider, contextUser);
         const wasAlreadyLoaded = this._rooms.has(key);
-        const room = await this.GetOrCreateRoom(artifactId, contextUser);
+        const room = await this.GetOrCreateRoom(artifactId, contextUser, resolvedProvider);
         if (room && wasAlreadyLoaded) {
             await this.checkAndReconcileLatestDatabaseVersion(room, contextUser);
         }
@@ -2191,7 +2701,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (room.DirtyWorkingState) {
                 const flushActor = room.LastModifiedByUser ?? UserCache.Instance.GetSystemUser();
                 if (flushActor) {
-                    await this.FlushWorkingState(room.ArtifactID, flushActor);
+                    await this.FlushWorkingState(room.ArtifactID, flushActor, { provider: room.Provider });
                 }
             }
             for (const conn of room.Connections) {
@@ -2214,7 +2724,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         this._agentClientClockHighWater.clear();
         this._tickets.clear();
         this._consumedTickets.clear();
-        ArtifactCollaborationServer._inFlightCompactionVersionIds.clear();
+        const sharedState = ArtifactCollaborationServer.getSharedCollabState();
+        sharedState.InFlightCompactionVersionIds.clear();
+        sharedState.CompactedStateVectors.clear();
+        sharedState.CompactedVectorKeysByArtifact.clear();
+        sharedState.ServerVersionWatermarks.clear();
         for (const waiters of this._pendingSyncWaiters.values()) {
             for (const waiter of waiters) {
                 waiter.settle(false);
@@ -2252,6 +2766,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         this._agentPresenceTtlMs = DEFAULT_AGENT_PRESENCE_TTL_MS;
         this._agentPresenceExitGraceMs = DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS;
         await this._relay.Shutdown();
+    }
+
+    /** Clears `_shuttingDown` after `Shutdown()` in isolated unit tests reusing the process singleton. */
+    public ResetShutdownForTests(): void {
+        this._shuttingDown = false;
     }
 
     /**
@@ -2440,7 +2959,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         versionNumber: number,
         savedStateVectorB64: string,
         contentHash: string,
-        savedSnapshotB64?: string
+        savedSnapshotB64?: string,
+        providerKey: string = 'default'
     ): void {
         if (!savedStateVectorB64 || !versionId || !versionId.trim()) {
             return;
@@ -2452,15 +2972,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             VersionID: versionId.trim(),
             ContentHash: contentHash
         };
-        const map = ArtifactCollaborationServer._compactedStateVectors;
+        const sharedState = ArtifactCollaborationServer.getSharedCollabState();
+        const map = sharedState.CompactedStateVectors;
+        const pKey = providerKey || 'default';
         const normArtId = NormalizeUUID(artifactId);
-        const verKey = `ver:${NormalizeUUID(versionId)}`;
-        const artKey = `art:${normArtId}:v:${versionNumber}`;
+        const verKey = `${pKey}::ver:${NormalizeUUID(versionId)}`;
+        const artKey = `${pKey}::art:${normArtId}:v:${versionNumber}`;
         map.set(verKey, entry);
         map.set(artKey, entry);
 
-        const perArtifactMap = ArtifactCollaborationServer._compactedVectorKeysByArtifact;
-        const existingPerArtifact = perArtifactMap.get(normArtId) ?? [];
+        const perArtifactMap = sharedState.CompactedVectorKeysByArtifact;
+        const perArtifactKey = `${pKey}::${normArtId}`;
+        const existingPerArtifact = perArtifactMap.get(perArtifactKey) ?? [];
         const filteredPerArtifact = existingPerArtifact.filter(
             (item) => item.verKey !== verKey && item.artKey !== artKey
         );
@@ -2476,7 +2999,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             map.delete(evicted.verKey);
             map.delete(evicted.artKey);
         }
-        perArtifactMap.set(normArtId, filteredPerArtifact);
+        perArtifactMap.set(perArtifactKey, filteredPerArtifact);
 
         while (map.size > ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_VECTORS) {
             const oldestKey = map.keys().next().value;
@@ -2511,9 +3034,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private async hasPersistedWorkingState(
         artifactId: string,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        providerOverride?: IMetadataProvider | null
     ): Promise<boolean> {
-        const provider = this.activeProvider();
+        const provider = providerOverride ?? this.activeProvider();
         const queryUser = UserCache.Instance.GetSystemUser() ?? contextUser;
         if (!provider || !queryUser) {
             return false;
@@ -2551,7 +3075,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         artifactId: string,
         versionId: string,
         versionNumber: number,
-        expectedContentHash: string
+        expectedContentHash: string,
+        providerKey: string = 'default'
     ):
         | {
               OriginServerID: string;
@@ -2561,8 +3086,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
               ContentHash: string;
           }
         | undefined {
-        const map = ArtifactCollaborationServer._compactedStateVectors;
-        const byId = map.get(`ver:${NormalizeUUID(versionId)}`);
+        const map = ArtifactCollaborationServer.getSharedCollabState().CompactedStateVectors;
+        const pKey = providerKey || 'default';
+        const byId = map.get(`${pKey}::ver:${NormalizeUUID(versionId)}`);
         if (
             byId &&
             UUIDsEqual(byId.VersionID, versionId) &&
@@ -2570,7 +3096,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         ) {
             return byId;
         }
-        const bySlot = map.get(`art:${NormalizeUUID(artifactId)}:v:${versionNumber}`);
+        const bySlot = map.get(`${pKey}::art:${NormalizeUUID(artifactId)}:v:${versionNumber}`);
         if (
             bySlot &&
             UUIDsEqual(bySlot.VersionID, versionId) &&
@@ -2892,6 +3418,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         try {
             const peerCount = await this._relay.PublishToRoom({
                 ArtifactID: room.ArtifactID,
+                ProviderKey: room.ProviderKey,
                 MessageType: 'sync-request',
                 PayloadBase64: BytesToBase64(Y.encodeStateVector(room.Doc))
             });
@@ -2946,9 +3473,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 if (this._shuttingDown || !evt?.artifactId) {
                     return undefined;
                 }
+                const evtProvider = evt.provider ?? null;
                 const hasLiveState =
-                    this.HasActiveRoom(evt.artifactId) ||
-                    (await this.hasPersistedWorkingState(evt.artifactId, evt.contextUser));
+                    this.HasActiveRoom(evt.artifactId, evtProvider) ||
+                    (await this.hasPersistedWorkingState(evt.artifactId, evt.contextUser, evtProvider));
                 if (!hasLiveState) {
                     return undefined;
                 }
@@ -2956,11 +3484,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 if (!actor) {
                     return undefined;
                 }
+                const incomingSuggestions = Array.isArray(evt.configurationPatch?.suggestions)
+                    ? this.parseSuggestionArray(evt.configurationPatch.suggestions)
+                    : null;
                 if (evt.deferCommit === true) {
-                    const existingRoom = this._rooms.get(evt.artifactId.trim().toLowerCase());
+                    const existingRoom = this.findRoomForArtifact(evt.artifactId, evtProvider, actor);
+                    const effectiveProvider = evtProvider ?? existingRoom?.Provider ?? null;
                     const preDeferVersionId = existingRoom?.BaseVersionID ?? null;
                     const preDeferVersionNumber = existingRoom?.BaseVersionNumber ?? 0;
                     const preDeferBaseVersionText = existingRoom?.BaseVersionText ?? null;
+                    const preDeferBaseConfiguration = existingRoom?.BaseConfiguration ?? null;
+                    const preDeferSuggestions = existingRoom
+                        ? this.readSuggestionsFromDoc(existingRoom.Doc)
+                        : null;
                     const preDeferContent = existingRoom
                         ? this.extractRoomSerializedContent(existingRoom.Doc)
                         : (evt.previousContent ?? '');
@@ -2971,7 +3507,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         actor,
                         false,
                         evt.previousContent,
-                        { dryRun: true, actorUserId: evt.contextUser?.ID }
+                        { dryRun: true, actorUserId: evt.contextUser?.ID, provider: effectiveProvider }
                     );
                     if (!preview.Success) {
                         return undefined;
@@ -2986,7 +3522,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         rejectedHunksCount: preview.RejectedAgentHunks?.length ?? 0,
                         rejectedAgentHunks: preview.RejectedAgentHunks,
                         commit: async (persisted) => {
-                            const provider = this.activeProvider();
+                            const provider = effectiveProvider ?? this.activeProvider();
                             if (provider && actor) {
                                 const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
                                     provider,
@@ -2998,7 +3534,25 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 }
                             }
                             const targetPersistedContent = preview.MergedContent ?? evt.updatedContent;
-                            const currentTargetRoom = this._rooms.get(evt.artifactId.trim().toLowerCase()) ?? existingRoom;
+                            const currentTargetRoom =
+                                this.findRoomForArtifact(evt.artifactId, effectiveProvider, actor) ?? existingRoom;
+                            const applyLiveSuggestionsToRoom = (targetRoom: CollaborationRoom): boolean => {
+                                if (!incomingSuggestions) {
+                                    return false;
+                                }
+                                let changed = false;
+                                targetRoom.Doc.transact(() => {
+                                    changed = this.syncSuggestionsIntoDoc(
+                                        targetRoom.Doc,
+                                        incomingSuggestions,
+                                        { replace: true }
+                                    );
+                                }, 'server-agent');
+                                if (changed) {
+                                    targetRoom.DirtyWorkingState = true;
+                                }
+                                return changed;
+                            };
                             const reconciledThisVersionViaOob = Boolean(
                                 currentTargetRoom &&
                                 persisted?.versionId &&
@@ -3013,6 +3567,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 (reconciledThisVersionViaOob ||
                                     this.extractRoomSerializedContent(currentTargetRoom.Doc) === targetPersistedContent)
                             ) {
+                                applyLiveSuggestionsToRoom(currentTargetRoom);
                                 const actualRoomContent = this.extractRoomSerializedContent(currentTargetRoom.Doc);
                                 const oobMerge = reconciledThisVersionViaOob
                                     ? currentTargetRoom.LastReconciledOobMergeResult
@@ -3027,7 +3582,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                           RejectedAgentLines: this.splitLogicalLineStrings(h.RejectedIncomingText)
                                       }))
                                     : preview.RejectedAgentHunks;
-                                await this.FlushWorkingState(evt.artifactId, actor);
+                                await this.FlushWorkingState(evt.artifactId, actor, {
+                                    provider: currentTargetRoom.Provider
+                                });
                                 if (!oobMerge && preview.HadConflict && (preview.RejectedAgentHunks?.length ?? 0) > 0) {
                                     this.broadcastMergeConflictFrame(currentTargetRoom, {
                                         action: 'merge-conflict',
@@ -3059,9 +3616,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                     actorUserId: evt.contextUser?.ID,
                                     persistedVersionId: persisted?.versionId,
                                     persistedVersionNumber: persisted?.versionNumber,
-                                    persistedContent: targetPersistedContent
+                                    persistedContent: targetPersistedContent,
+                                    provider: effectiveProvider
                                 }
                             );
+                            if (commitRes.Success && incomingSuggestions) {
+                                const updatedRoom =
+                                    this.findRoomForArtifact(evt.artifactId, effectiveProvider, actor) ?? existingRoom;
+                                if (updatedRoom && applyLiveSuggestionsToRoom(updatedRoom)) {
+                                    await this.FlushWorkingState(evt.artifactId, actor, {
+                                        provider: updatedRoom.Provider
+                                    });
+                                }
+                            }
                             if (commitRes.Success && typeof commitRes.MergedContent === 'string') {
                                 appliedAgentContent = commitRes.MergedContent;
                             }
@@ -3074,8 +3641,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             };
                         },
                         rollback: async (rolledBackVersionId?: string): Promise<void> => {
-                            const roomKey = evt.artifactId.trim().toLowerCase();
-                            const currentRoom = this._rooms.get(roomKey) ?? existingRoom;
+                            const currentRoom =
+                                this.findRoomForArtifact(evt.artifactId, effectiveProvider, actor) ?? existingRoom;
                             const roomReconciledRolledBackVersion = Boolean(
                                 currentRoom &&
                                     rolledBackVersionId &&
@@ -3100,6 +3667,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                     [agentResultContent, preview.MergedContent ?? '', evt.updatedContent],
                                     preDeferContent
                                 );
+                                if (preDeferSuggestions !== null) {
+                                    this.syncSuggestionsIntoDoc(
+                                        currentRoom.Doc,
+                                        this.parseSuggestionArray(preDeferSuggestions),
+                                        { replace: true }
+                                    );
+                                }
                                 const meta = currentRoom.Doc.getMap('meta');
                                 if (preDeferVersionId) {
                                     meta.set('versionId', preDeferVersionId);
@@ -3109,12 +3683,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                     meta.set('versionNumber', preDeferVersionNumber);
                                     meta.set('baseVersionNumber', preDeferVersionNumber);
                                 }
-                                meta.set('baseVersionText', restoredBaseText);
                             }, 'server-rollback');
 
                             currentRoom.BaseVersionID = preDeferVersionId;
                             currentRoom.BaseVersionNumber = preDeferVersionNumber;
                             currentRoom.BaseVersionText = restoredBaseText;
+                            currentRoom.BaseConfiguration = preDeferBaseConfiguration;
                             const postRollbackText = this.extractRoomSerializedContent(currentRoom.Doc);
                             currentRoom.DirtyVersion = postRollbackText !== restoredBaseText;
                             currentRoom.PreOutOfBandDocState = null;
@@ -3122,6 +3696,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             currentRoom.LastReconciledOobContent = null;
                             currentRoom.LastReconciledOobMergeResult = null;
                             currentRoom.LastReconciledBaselineText = null;
+                            this.recordServerWatermark(currentRoom);
 
                             const fullState = Y.encodeStateAsUpdate(currentRoom.Doc);
                             const encoder = encoding.createEncoder();
@@ -3133,10 +3708,27 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             }
                             await this._relay.PublishToRoom({
                                 ArtifactID: currentRoom.ArtifactID,
+                                ProviderKey: currentRoom.ProviderKey,
                                 MessageType: 'sync-state',
                                 PayloadBase64: BytesToBase64(fullState)
                             });
-                            await this.FlushWorkingState(currentRoom.ArtifactID, actor);
+                            await this._relay.PublishToRoom({
+                                ArtifactID: currentRoom.ArtifactID,
+                                ProviderKey: currentRoom.ProviderKey,
+                                MessageType: 'room-rollback',
+                                PayloadBase64: Buffer.from(
+                                    JSON.stringify({
+                                        restoredVersionId: preDeferVersionId,
+                                        restoredVersionNumber: preDeferVersionNumber,
+                                        restoredBaseText,
+                                        restoredBaseConfiguration: preDeferBaseConfiguration
+                                    }),
+                                    'utf8'
+                                ).toString('base64')
+                            });
+                            await this.FlushWorkingState(currentRoom.ArtifactID, actor, {
+                                provider: currentRoom.Provider
+                            });
                         }
                     };
                 }
@@ -3146,10 +3738,29 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     actor,
                     false,
                     evt.previousContent,
-                    { actorUserId: evt.contextUser?.ID }
+                    { actorUserId: evt.contextUser?.ID, provider: evtProvider }
                 );
                 if (!res.Success) {
                     return undefined;
+                }
+                if (incomingSuggestions) {
+                    const liveRoom = this.findRoomForArtifact(evt.artifactId, evtProvider, actor);
+                    if (liveRoom) {
+                        let suggestionsChanged = false;
+                        liveRoom.Doc.transact(() => {
+                            suggestionsChanged = this.syncSuggestionsIntoDoc(
+                                liveRoom.Doc,
+                                incomingSuggestions,
+                                { replace: true }
+                            );
+                        }, 'server-agent');
+                        if (suggestionsChanged) {
+                            liveRoom.DirtyWorkingState = true;
+                            await this.FlushWorkingState(liveRoom.ArtifactID, actor, {
+                                provider: liveRoom.Provider
+                            });
+                        }
+                    }
                 }
                 return {
                     mergedContent: res.MergedContent,
@@ -3183,8 +3794,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     return null;
                 }
                 const normalizedId = artifactId.trim();
-                const roomKey = normalizedId.toLowerCase();
-                let room = this._rooms.get(roomKey);
+                let room = this.findRoomForArtifact(normalizedId, null, contextUser);
                 if (!room) {
                     const effectiveUser = contextUser ?? UserCache.Instance.GetSystemUser();
                     if (effectiveUser && (await this.hasPersistedWorkingState(normalizedId, effectiveUser))) {
@@ -3197,10 +3807,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 if (!room) {
                     return null;
                 }
+                const suggestions = this.readSuggestionsFromDoc(room.Doc);
+                const mergedConfig = this.mergeConfigurationWithSuggestions(
+                    room.BaseConfiguration ?? null,
+                    suggestions
+                );
                 return {
                     Content: this.extractRoomSerializedContent(room.Doc),
                     VersionNumber: room.BaseVersionNumber,
-                    VersionID: room.BaseVersionID
+                    VersionID: room.BaseVersionID,
+                    ...(mergedConfig ? { Configuration: mergedConfig } : {}),
+                    Suggestions: suggestions
                 };
             };
         }
@@ -3301,6 +3918,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
         }
         if (next > 0) {
+            if (
+                !this._agentClientClockHighWater.has(hwKey) &&
+                this._agentClientClockHighWater.size >= ArtifactCollaborationServer.MAX_AGENT_CLOCK_HIGH_WATER_ENTRIES
+            ) {
+                const oldestKey = this._agentClientClockHighWater.keys().next().value;
+                if (typeof oldestKey === 'string') {
+                    this._agentClientClockHighWater.delete(oldestKey);
+                }
+            }
             this._agentClientClockHighWater.set(hwKey, next);
         }
         return next;
@@ -3366,13 +3992,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return encoding.toUint8Array(encoder);
     }
 
-    private publishAgentAwarenessRelay(artifactId: string, awarenessBytes: Uint8Array): void {
+    private publishAgentAwarenessRelay(
+        artifactId: string,
+        awarenessBytes: Uint8Array,
+        providerKey?: string
+    ): void {
         if (awarenessBytes.byteLength === 0) {
             return;
         }
         void this._relay
             .PublishToRoom({
                 ArtifactID: artifactId,
+                ProviderKey: providerKey,
                 MessageType: 'awareness',
                 PayloadBase64: BytesToBase64(awarenessBytes)
             })
@@ -3425,7 +4056,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private scheduleRelayedAgentPresenceGhostTtl(room: CollaborationRoom, clientID: number): void {
         this.clearRelayedAgentPresenceTimer(room, clientID);
-        const roomKey = room.ArtifactID.trim().toLowerCase();
+        const roomKey = room.RoomKey;
         const graceMs = Math.min(5_000, Math.max(25, Math.round(this._agentPresenceTtlMs * 0.2)));
         const timeoutMs = Math.max(25, this._agentPresenceTtlMs) + graceMs;
         const timer = setTimeout(() => {
@@ -3448,7 +4079,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private syncProtectedAgentClientIdsFromRelayAwareness(room: CollaborationRoom, awarenessBytes: Uint8Array): void {
         try {
-            const roomKey = room.ArtifactID.trim().toLowerCase();
+            const roomKey = room.RoomKey;
             const decoder = decoding.createDecoder(awarenessBytes);
             const count = decoding.readVarUint(decoder);
             for (let i = 0; i < count; i++) {
@@ -3506,7 +4137,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             return;
         }
         // No local WebSocket room on this MJServer instance: relay directly so peer nodes deliver it to their viewers.
-        this.publishAgentAwarenessRelay(artifactId, awarenessBytes);
+        const providerKey = roomKey.includes('::') ? roomKey.slice(0, roomKey.indexOf('::')) : undefined;
+        this.publishAgentAwarenessRelay(artifactId, awarenessBytes, providerKey);
     }
 
     private removeServerAgentPresenceEntry(
@@ -3546,7 +4178,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         entry.Clock = Math.max(entry.Clock, roomClock, highWater) + 1;
         this.recordAgentClientClockHighWater(roomKey, entry.ClientID, entry.Clock);
         const removalBytes = this.encodeAgentAwarenessUpdate(entry.ClientID, entry.Clock, 'null');
-        this.publishAgentAwarenessRelay(artifactId, removalBytes);
+        const providerKey = roomKey.includes('::') ? roomKey.slice(0, roomKey.indexOf('::')) : undefined;
+        this.publishAgentAwarenessRelay(artifactId, removalBytes, providerKey);
     }
 
     private scheduleAgentHardTtl(
@@ -3593,13 +4226,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     }
 
     protected applyServerAgentPresenceEvent(evt: ArtifactAgentPresenceEvent): void {
-        const roomKey = evt.ArtifactID.trim().toLowerCase();
+        const cleanArtifactId = (evt.ArtifactID ?? '').trim();
         const presenceKey = evt.AgentPresenceKey.trim();
-        if (!roomKey || !presenceKey) {
+        if (!cleanArtifactId || !presenceKey) {
             return;
         }
 
-        const room = this._rooms.get(roomKey);
+        const matchedRoom = this.findRoomForArtifact(cleanArtifactId, null, null);
+        const roomKey = matchedRoom ? matchedRoom.RoomKey : this.getRoomKey(cleanArtifactId, null, null);
+        const room = matchedRoom ?? this._rooms.get(roomKey);
         const detachedKey = this.buildDetachedPresenceKey(roomKey, presenceKey);
         let entry = room ? room.AgentPresenceEntries.get(presenceKey) : this._detachedAgentPresence.get(detachedKey)?.Entry;
 
@@ -3768,53 +4403,60 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     payload.ArtifactID &&
                     eventVersionId &&
                     typeof payload.VersionNumber === 'number' &&
-                    !ArtifactCollaborationServer._inFlightCompactionVersionIds.has(NormalizeUUID(eventVersionId))
+                    !ArtifactCollaborationServer.getSharedCollabState().InFlightCompactionVersionIds.has(
+                        NormalizeUUID(eventVersionId)
+                    )
                 ) {
-                    const room = this._rooms.get(payload.ArtifactID.trim().toLowerCase());
-                    if (
-                        room &&
-                        (!UUIDsEqual(room.BaseVersionID, eventVersionId) || payload.IsRestore === true)
-                    ) {
-                        const eventContent = payload.Content || payload.Configuration || '';
-                        const expectedHash = payload.SavedContentHash ?? this.computeSha256Hex(eventContent);
-                        const tracked = this.lookupVerifiedCompactedStateVector(
-                            payload.ArtifactID,
-                            eventVersionId,
-                            payload.VersionNumber,
-                            expectedHash
-                        );
-                        this.reconcileOutOfBandVersionIntoRoom(
-                            room,
-                            {
-                                ID: eventVersionId,
-                                VersionNumber: payload.VersionNumber,
-                                Content: payload.Content,
-                                Configuration: payload.Configuration,
-                                Description: payload.Description,
-                                Comments: payload.Comments,
-                                UserID: actorUserId
-                            },
-                            {
-                                originServerId: payload.OriginServerID ?? tracked?.OriginServerID,
-                                savedStateVectorB64: payload.SavedStateVectorB64 ?? tracked?.SavedStateVectorB64,
-                                savedSnapshotB64: tracked?.SavedSnapshotB64,
-                                savedContentHash: expectedHash,
-                                isRestore: payload.IsRestore,
-                                actorUserId: actorUserId
+                    const normEventArtId = NormalizeUUID(payload.ArtifactID.trim());
+                    const matchingRooms = Array.from(this._rooms.values()).filter(
+                        (r) => NormalizeUUID(r.ArtifactID) === normEventArtId
+                    );
+                    for (const room of matchingRooms) {
+                        if (!UUIDsEqual(room.BaseVersionID, eventVersionId) || payload.IsRestore === true) {
+                            const eventContent = payload.Content || payload.Configuration || '';
+                            const expectedHash = payload.SavedContentHash ?? this.computeSha256Hex(eventContent);
+                            const tracked = this.lookupVerifiedCompactedStateVector(
+                                payload.ArtifactID,
+                                eventVersionId,
+                                payload.VersionNumber,
+                                expectedHash,
+                                room.ProviderKey
+                            );
+                            this.reconcileOutOfBandVersionIntoRoom(
+                                room,
+                                {
+                                    ID: eventVersionId,
+                                    VersionNumber: payload.VersionNumber,
+                                    Content: payload.Content,
+                                    Configuration: payload.Configuration,
+                                    Description: payload.Description,
+                                    Comments: payload.Comments,
+                                    UserID: actorUserId
+                                },
+                                {
+                                    originServerId: payload.OriginServerID ?? tracked?.OriginServerID,
+                                    savedStateVectorB64: payload.SavedStateVectorB64 ?? tracked?.SavedStateVectorB64,
+                                    savedSnapshotB64: tracked?.SavedSnapshotB64,
+                                    savedContentHash: expectedHash,
+                                    isRestore: payload.IsRestore,
+                                    actorUserId: actorUserId
+                                }
+                            );
+                        } else if (UUIDsEqual(room.BaseVersionID, eventVersionId)) {
+                            const eventContent = payload.Content || payload.Configuration || '';
+                            if (eventContent !== room.BaseVersionText) {
+                                room.BaseVersionText = eventContent;
+                                room.LastReconciledOobVersionID = null;
+                                room.LastReconciledOobContent = null;
+                                room.LastReconciledOobMergeResult = null;
+                                const currentRoomText = this.extractRoomSerializedContent(room.Doc);
+                                room.DirtyVersion = currentRoomText !== eventContent;
+                                room.LastCompactedStateVector = room.DirtyVersion
+                                    ? null
+                                    : Y.encodeStateVector(room.Doc);
+                                room.DirtyWorkingState = true;
+                                this.scheduleWorkingStateFlush(room);
                             }
-                        );
-                    } else if (room && UUIDsEqual(room.BaseVersionID, eventVersionId)) {
-                        const eventContent = payload.Content || payload.Configuration || '';
-                        if (eventContent !== room.BaseVersionText) {
-                            room.BaseVersionText = eventContent;
-                            room.LastReconciledOobVersionID = null;
-                            room.LastReconciledOobContent = null;
-                            room.LastReconciledOobMergeResult = null;
-                            const currentRoomText = this.extractRoomSerializedContent(room.Doc);
-                            room.DirtyVersion = currentRoomText !== eventContent;
-                            room.LastCompactedStateVector = room.DirtyVersion ? null : Y.encodeStateVector(room.Doc);
-                            room.DirtyWorkingState = true;
-                            this.scheduleWorkingStateFlush(room);
                         }
                     }
                 }
@@ -3877,7 +4519,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             room.ArtifactID,
             version.ID,
             version.VersionNumber,
-            targetContentHash
+            targetContentHash,
+            room.ProviderKey
         );
         const relayHashMatches =
             !options?.savedContentHash || options.savedContentHash === targetContentHash;
@@ -3946,13 +4589,23 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     const meta = room.Doc.getMap('meta');
                     meta.set('lastAppliedRestoreVersionId', version.ID);
                     meta.set('lastAppliedRestoreVersionNumber', version.VersionNumber);
+                    const restoreSuggestions = this.readSuggestionsFromVersionConfiguration(version.Configuration);
+                    if (restoreSuggestions.length > 0 || room.Doc.getMap('suggestions').size > 0) {
+                        this.syncSuggestionsIntoDoc(
+                            room.Doc,
+                            this.parseSuggestionArray(restoreSuggestions),
+                            { replace: true }
+                        );
+                    }
                 }, 'server-oob-version');
                 room.BaseVersionID = version.ID;
                 room.BaseVersionNumber = version.VersionNumber;
                 room.BaseVersionText = targetText;
+                room.BaseConfiguration = version.Configuration ?? null;
                 room.LastReconciledBaselineText = targetText;
                 room.LastAppliedRestoreVersionID = version.ID;
                 room.LastAppliedRestoreVersionNumber = version.VersionNumber;
+                this.recordServerWatermark(room);
                 const currentText = this.extractRoomSerializedContent(room.Doc);
                 room.DirtyVersion = currentText !== targetText;
                 room.LastCompactedStateVector = room.DirtyVersion ? null : Y.encodeStateVector(room.Doc);
@@ -3982,6 +4635,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             room.Doc.transact(() => {
                 this.syncSlideDeckStructuresIfPresent(room.Doc, targetText);
                 this.syncSpreadsheetStructuresIfPresent(room.Doc, targetText, version.Configuration ?? null);
+                const restoreSuggestions = this.readSuggestionsFromVersionConfiguration(version.Configuration);
+                if (restoreSuggestions.length > 0 || room.Doc.getMap('suggestions').size > 0) {
+                    this.syncSuggestionsIntoDoc(
+                        room.Doc,
+                        this.parseSuggestionArray(restoreSuggestions),
+                        { replace: true }
+                    );
+                }
             }, 'server-restore');
 
             const postRestoreSv = Y.encodeStateVector(room.Doc);
@@ -4004,15 +4665,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             room.BaseVersionID = version.ID;
             room.BaseVersionNumber = version.VersionNumber;
             room.BaseVersionText = targetText;
+            room.BaseConfiguration = version.Configuration ?? null;
             room.LastAppliedRestoreVersionID = version.ID;
             room.LastAppliedRestoreVersionNumber = version.VersionNumber;
+            room.HasActiveLocks = this.computeContentHasActiveLocks(this.extractRoomSerializedContent(room.Doc));
+            this.recordServerWatermark(room);
             this.recordCompactedStateVector(
                 room.ArtifactID,
                 version.ID,
                 version.VersionNumber,
                 postRestoreSvB64,
                 targetContentHash,
-                postRestoreSnapB64
+                postRestoreSnapB64,
+                room.ProviderKey
             );
             room.DirtyWorkingState = true;
             this.scheduleWorkingStateFlush(room);
@@ -4035,6 +4700,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 try {
                     void this._relay.PublishToRoom({
                         ArtifactID: room.ArtifactID,
+                        ProviderKey: room.ProviderKey,
                         MessageType: 'version-saved',
                         PayloadBase64: restoreRelayPayload,
                         VersionID: version.ID,
@@ -4050,7 +4716,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
             const flushUser = room.LastModifiedByUser ?? UserCache.Instance.GetSystemUser();
             if (flushUser) {
-                void this.FlushWorkingState(room.ArtifactID, flushUser);
+                void this.FlushWorkingState(room.ArtifactID, flushUser, { provider: room.Provider });
             }
 
             this.broadcastControlFrame(room, {
@@ -4122,6 +4788,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         baselineContent: baselineText
                     }
                 );
+                const oobSuggestions = this.readSuggestionsFromVersionConfiguration(version.Configuration);
+                if (oobSuggestions.length > 0) {
+                    this.syncSuggestionsIntoDoc(room.Doc, this.parseSuggestionArray(oobSuggestions));
+                }
                 isStructuredSlideOrSheet =
                     room.Doc.getMap('slidesById').size > 0 ||
                     room.Doc.getMap('worksheetsById').size > 0;
@@ -4147,7 +4817,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         room.BaseVersionID = version.ID;
         room.BaseVersionNumber = version.VersionNumber;
         room.BaseVersionText = targetText;
+        room.BaseConfiguration = version.Configuration ?? null;
+        room.HasActiveLocks = this.computeContentHasActiveLocks(this.extractRoomSerializedContent(room.Doc));
         room.DirtyWorkingState = true;
+        this.recordServerWatermark(room);
         this.scheduleWorkingStateFlush(room);
 
         this.broadcastControlFrame(room, {
@@ -4475,9 +5148,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (!payload?.userRecord || payload.userRecord.IsActive !== true) {
                 return null;
             }
+            let tokenExpiresAtMs: number | undefined;
+            if (bearerToken) {
+                try {
+                    const rawJwt = bearerToken.slice(7).trim();
+                    const decoded = jwt.decode(rawJwt);
+                    if (decoded && typeof decoded === 'object' && 'exp' in decoded && typeof decoded.exp === 'number') {
+                        tokenExpiresAtMs = decoded.exp * 1000;
+                    }
+                } catch {
+                    tokenExpiresAtMs = undefined;
+                }
+            }
             return {
                 User: payload.userRecord,
-                ApiKeyHash: payload.apiKeyHash
+                ApiKeyHash: payload.apiKeyHash,
+                TokenExpiresAtMs: tokenExpiresAtMs
             };
         } catch {
             return null;
@@ -4517,7 +5203,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
             }
 
-            const provider = this.activeProvider();
+            if (
+                typeof auth.TokenExpiresAtMs === 'number' &&
+                Number.isFinite(auth.TokenExpiresAtMs) &&
+                auth.TokenExpiresAtMs <= Date.now()
+            ) {
+                this.rejectRawUpgrade(socket, 401, 'Unauthorized: token expired');
+                return;
+            }
+
+            const provider = auth.Provider ?? this.activeProvider();
             const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
                 provider,
                 artifactId,
@@ -4542,12 +5237,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
             }
 
-            const roomKey = artifactId.toLowerCase();
+            const roomKey = this.getRoomKey(artifactId, provider, auth.User);
             this._pendingUpgradesByArtifact.set(roomKey, (this._pendingUpgradesByArtifact.get(roomKey) ?? 0) + 1);
             try {
                 let room: CollaborationRoom | null = null;
                 try {
-                    room = await this.GetOrCreateRoom(artifactId, auth.User);
+                    room = await this.GetOrCreateRoom(artifactId, auth.User, provider);
                 } catch (hydrationErr) {
                     LogError(
                         `ArtifactCollaborationServer failed to hydrate room '${artifactId}': ${
@@ -4575,7 +5270,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         auth.User,
                         effectiveCanEdit,
                         auth.ApiKeyHash,
-                        perms.Source === 'Owner'
+                        perms.Source === 'Owner',
+                        auth.TokenExpiresAtMs
                     );
                 });
             } finally {
@@ -4665,8 +5361,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return candidateClientId;
     }
 
-    private async createAndHydrateRoom(artifactId: string, contextUser: UserInfo): Promise<CollaborationRoom> {
-        const key = artifactId.trim().toLowerCase();
+    private async createAndHydrateRoom(
+        artifactId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider | null
+    ): Promise<CollaborationRoom> {
+        const resolvedProvider = provider ?? this.activeProvider();
+        const providerKey = this.resolveProviderKey(resolvedProvider, contextUser);
+        if (resolvedProvider) {
+            this._providersByKey.set(providerKey, resolvedProvider);
+        }
+        const key = this.getRoomKey(artifactId, resolvedProvider, contextUser);
+        const relayRoomKey = this.relayKeyForRoom(artifactId, providerKey);
         const doc = new Y.Doc();
         const awareness = new awarenessProtocol.Awareness(doc);
         // Remove the server Y.Doc's synthetic empty local state so only real connected users appear in awareness
@@ -4674,6 +5380,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         const room: CollaborationRoom = {
             ArtifactID: artifactId,
+            RoomKey: key,
+            ProviderKey: providerKey,
+            Provider: resolvedProvider ?? null,
+            HasActiveLocks: false,
             DelegateEntityID: null,
             DelegateRecordID: null,
             Doc: doc,
@@ -4686,6 +5396,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             BaseVersionID: null,
             BaseVersionNumber: 0,
             BaseVersionText: '',
+            BaseConfiguration: null,
+            LastPersistedWorkingStateMs: 0,
             LastAppliedRestoreVersionID: null,
             LastAppliedRestoreVersionNumber: 0,
             LastReconciledOobVersionID: null,
@@ -4695,10 +5407,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             PendingHydrateConflict: null,
             RoomEpoch: `epoch-init-${artifactId}`,
             FlushQueue: Promise.resolve(true),
+            CompactionQueue: Promise.resolve({ Saved: false }),
             WorkingStateTimer: null,
             IdleDisposeTimer: null,
             UnsubscribeRelay: null,
-            DocUpdateListener: (update: Uint8Array, origin: unknown) => {
+            DocUpdateListener: (update: Uint8Array, origin: CollaborationClientConnection | string | null | undefined) => {
                 this.onRoomDocUpdate(room, update, origin);
             },
             AwarenessUpdateListener: (changes, origin) => {
@@ -4715,7 +5428,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             doc.on('update', room.DocUpdateListener);
             awareness.on('update', room.AwarenessUpdateListener);
 
-            room.UnsubscribeRelay = await this._relay.SubscribeRoom(artifactId, async (msg: YjsRelayMessage) => {
+            room.UnsubscribeRelay = await this._relay.SubscribeRoom(relayRoomKey, async (msg: YjsRelayMessage) => {
                 await this.onRelayMessage(room, msg);
             });
 
@@ -4724,13 +5437,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
             const localHydrateClock = Y.decodeStateVector(Y.encodeStateVector(room.Doc)).get(room.Doc.clientID) ?? 0;
             if (overwriteStaleWorkingState) {
-                await this.FlushWorkingState(room.ArtifactID, contextUser);
+                await this.FlushWorkingState(room.ArtifactID, contextUser, { provider: room.Provider });
             }
             if (overwriteStaleWorkingState || localHydrateClock > 0) {
                 try {
                     const hydratedState = Y.encodeStateAsUpdate(room.Doc);
                     await this._relay.PublishToRoom({
                         ArtifactID: room.ArtifactID,
+                        ProviderKey: room.ProviderKey,
                         MessageType: 'sync-state',
                         PayloadBase64: BytesToBase64(hydratedState)
                     });
@@ -4750,6 +5464,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 const stateVector = Y.encodeStateVector(room.Doc);
                 await this._relay.PublishToRoom({
                     ArtifactID: room.ArtifactID,
+                    ProviderKey: room.ProviderKey,
                     MessageType: 'sync-request',
                     PayloadBase64: BytesToBase64(stateVector)
                 });
@@ -4777,7 +5492,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         room: CollaborationRoom,
         contextUser: UserInfo
     ): Promise<{ overwriteStaleWorkingState: boolean }> {
-        const provider = this.activeProvider();
+        const provider = room.Provider ?? this.activeProvider();
         if (!provider || !contextUser) {
             return { overwriteStaleWorkingState: false };
         }
@@ -4861,31 +5576,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
             }
 
-            const metaMap = room.Doc.getMap('meta');
-            const rawHydratedRestoreId = metaMap.get('lastAppliedRestoreVersionId');
-            if (typeof rawHydratedRestoreId === 'string' && rawHydratedRestoreId.trim().length > 0) {
-                room.LastAppliedRestoreVersionID = rawHydratedRestoreId.trim();
+            const sharedState = ArtifactCollaborationServer.getSharedCollabState();
+            const serverWatermark = sharedState.ServerVersionWatermarks.get(room.RoomKey);
+            if (serverWatermark?.LastAppliedRestoreVersionID) {
+                room.LastAppliedRestoreVersionID = serverWatermark.LastAppliedRestoreVersionID;
             }
-            const rawHydratedRestoreNum = metaMap.get('lastAppliedRestoreVersionNumber');
-            if (typeof rawHydratedRestoreNum === 'number' && Number.isFinite(rawHydratedRestoreNum)) {
-                room.LastAppliedRestoreVersionNumber = rawHydratedRestoreNum;
+            if (serverWatermark && serverWatermark.LastAppliedRestoreVersionNumber > 0) {
+                room.LastAppliedRestoreVersionNumber = serverWatermark.LastAppliedRestoreVersionNumber;
             }
-            const rawBaseVersionId = (metaMap.get('baseVersionId') ?? metaMap.get('versionId')) as
-                | string
-                | undefined;
             const workingVersionId =
-                typeof rawBaseVersionId === 'string' && rawBaseVersionId.trim().length > 0
-                    ? rawBaseVersionId.trim()
+                serverWatermark?.BaseVersionID && serverWatermark.BaseVersionID.trim().length > 0
+                    ? serverWatermark.BaseVersionID.trim()
                     : undefined;
-            const rawBaseVersionNum = (metaMap.get('baseVersionNumber') ?? metaMap.get('versionNumber')) as
-                | number
-                | undefined;
             const workingVersionNum =
-                typeof rawBaseVersionNum === 'number' ? rawBaseVersionNum : undefined;
-            const hasMetaBaseContent = metaMap.has('baseContent');
-            const metaBaseContent = hasMetaBaseContent
-                ? String(metaMap.get('baseContent') ?? '')
-                : undefined;
+                serverWatermark && serverWatermark.BaseVersionNumber > 0
+                    ? serverWatermark.BaseVersionNumber
+                    : undefined;
 
             const versionCreatedMs = versionRow?.__mj_CreatedAt
                 ? new Date(versionRow.__mj_CreatedAt).getTime()
@@ -4893,31 +5599,36 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const workingUpdatedMs = workingRow?.__mj_UpdatedAt
                 ? new Date(workingRow.__mj_UpdatedAt).getTime()
                 : NaN;
+            room.LastPersistedWorkingStateMs = Number.isFinite(workingUpdatedMs) ? workingUpdatedMs : 0;
             const timestampNewer =
                 Number.isFinite(versionCreatedMs) &&
                 Number.isFinite(workingUpdatedMs) &&
                 versionCreatedMs > workingUpdatedMs;
+            const hasServerBaseZero =
+                serverWatermark !== undefined &&
+                workingVersionId === undefined &&
+                (workingVersionNum ?? 0) === 0;
             const versionLineageNewer =
                 Boolean(versionRow) &&
-                workingVersionId !== undefined &&
-                !UUIDsEqual(versionRow!.ID, workingVersionId) &&
+                (workingVersionId !== undefined
+                    ? !UUIDsEqual(versionRow!.ID, workingVersionId)
+                    : hasServerBaseZero) &&
                 versionRow!.VersionNumber > (workingVersionNum ?? 0) &&
                 !(Number.isFinite(versionCreatedMs) && Number.isFinite(workingUpdatedMs) && workingUpdatedMs > versionCreatedMs);
 
             const yText = room.Doc.getText('content');
             const versionTargetText = versionRow?.Content || versionRow?.Configuration || '';
+            const versionSuggestions = this.readSuggestionsFromVersionConfiguration(versionRow?.Configuration);
             const versionNewerThanWorkingState =
                 Boolean(versionRow) &&
                 Boolean(workingRow?.YjsState) &&
                 (workingVersionId
                     ? !UUIDsEqual(workingVersionId, versionRow!.ID)
-                    : hasMetaBaseContent
-                      ? versionTargetText !== (metaBaseContent ?? '')
-                      : timestampNewer || versionLineageNewer);
+                    : timestampNewer || versionLineageNewer);
 
             let seededOrUpdatedWorkingState = sanitizedLegacyMeta;
 
-            if (!appliedWorkingState && yText.length === 0 && versionTargetText) {
+            if (!appliedWorkingState && yText.length === 0 && (versionTargetText || versionSuggestions.length > 0)) {
                 // Seed inside a deterministic-clientID Y.Doc derived from versionRow.ID (or room.ArtifactID)
                 // so multi-instance cold opens produce identical Yjs CRDT item IDs (clientID, clock)
                 // and merge without duplicating text (Blocker 2, Path 2).
@@ -4926,13 +5637,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 const nextEpoch = `epoch-${versionRow?.ID ?? room.ArtifactID}`;
                 room.RoomEpoch = nextEpoch;
                 seedDoc.transact(() => {
-                    seedDoc.getText('content').insert(0, versionTargetText);
+                    if (versionTargetText) {
+                        seedDoc.getText('content').insert(0, versionTargetText);
+                    }
                     this.syncSlideDeckStructuresIfPresent(seedDoc, versionTargetText);
                     this.syncSpreadsheetStructuresIfPresent(
                         seedDoc,
                         versionRow?.Content ?? '',
                         versionRow?.Configuration ?? null
                     );
+                    if (versionSuggestions.length > 0) {
+                        this.syncSuggestionsIntoDoc(
+                            seedDoc,
+                            this.parseSuggestionArray(versionSuggestions),
+                            { replace: true }
+                        );
+                    }
                     const seedMeta = seedDoc.getMap('meta');
                     if (versionRow) {
                         seedMeta.set('versionNumber', versionRow.VersionNumber);
@@ -4974,7 +5694,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     room.ArtifactID,
                     versionRow.ID,
                     versionRow.VersionNumber,
-                    versionContentHash
+                    versionContentHash,
+                    room.ProviderKey
                 );
                 const hydrateSnapshotSatisfied =
                     !trackedHydrate?.SavedSnapshotB64 ||
@@ -4999,7 +5720,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             ))
                 );
 
-                let baseVersionText: string | undefined = hasMetaBaseContent ? metaBaseContent : undefined;
+                let baseVersionText: string | undefined = serverWatermark?.BaseVersionText;
                 if (
                     !isHydrateRestore &&
                     baseVersionText === undefined &&
@@ -5063,6 +5784,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             versionTargetText,
                             versionRow.Configuration ?? null
                         );
+                        if (versionSuggestions.length > 0 || room.Doc.getMap('suggestions').size > 0) {
+                            this.syncSuggestionsIntoDoc(
+                                room.Doc,
+                                this.parseSuggestionArray(versionSuggestions),
+                                { replace: true }
+                            );
+                        }
                     }, 'hydrate');
                 } else {
                     room.Doc.transact(() => {
@@ -5093,6 +5821,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
                                 this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
                             }
+                        }
+                        if (versionSuggestions.length > 0) {
+                            this.syncSuggestionsIntoDoc(
+                                room.Doc,
+                                this.parseSuggestionArray(versionSuggestions)
+                            );
                         }
                     }, 'hydrate');
                 }
@@ -5191,12 +5925,30 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 room.BaseVersionID = versionRow.ID;
                 room.BaseVersionNumber = versionRow.VersionNumber;
                 room.BaseVersionText = versionTargetText;
+                room.BaseConfiguration = versionRow.Configuration ?? null;
+                if (
+                    versionSuggestions.length > 0 &&
+                    (versionNewerThanWorkingState || room.Doc.getMap('suggestions').size === 0)
+                ) {
+                    room.Doc.transact(() => {
+                        this.syncSuggestionsIntoDoc(room.Doc, this.parseSuggestionArray(versionSuggestions), {
+                            replace: versionNewerThanWorkingState
+                        });
+                    }, 'hydrate');
+                    seededOrUpdatedWorkingState = true;
+                }
                 const postHydrateText = this.extractRoomSerializedContent(room.Doc);
                 room.LastCompactedStateVector =
                     postHydrateText === versionTargetText ? Y.encodeStateVector(room.Doc) : null;
+                room.HasActiveLocks = this.computeContentHasActiveLocks(postHydrateText);
+                this.recordServerWatermark(room);
             } else {
-                room.BaseVersionText = this.extractRoomSerializedContent(room.Doc);
+                const postHydrateText = this.extractRoomSerializedContent(room.Doc);
+                room.BaseVersionText = postHydrateText;
+                room.BaseConfiguration = null;
                 room.LastCompactedStateVector = null;
+                room.HasActiveLocks = this.computeContentHasActiveLocks(postHydrateText);
+                this.recordServerWatermark(room);
             }
 
             return { overwriteStaleWorkingState: seededOrUpdatedWorkingState };
@@ -5216,7 +5968,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         user: UserInfo,
         canEdit: boolean,
         apiKeyHash?: string,
-        isOwner: boolean = false
+        isOwner: boolean = false,
+        tokenExpiresAtMs?: number
     ): void {
         if (room.IdleDisposeTimer) {
             clearTimeout(room.IdleDisposeTimer);
@@ -5230,6 +5983,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             CanEdit: canEdit,
             IsOwner: isOwner,
             ApiKeyHash: apiKeyHash,
+            TokenExpiresAtMs: tokenExpiresAtMs,
             ControlledClientIDs: new Set(),
             Alive: true,
             InitialSyncDedupeChecked: false
@@ -5345,8 +6099,190 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     }
 
     /**
-     * Validates an incoming Yjs write update against Markdown heading locks, Slide Deck locks,
-     * and Spreadsheet ProtectedRanges by simulating the update against a cloned doc snapshot.
+     * Checks whether serialized room content currently contains any lock annotations
+     * (`<!-- mj-lock -->`, locked `:::mj-block`, slide/region `Locked: true`, or spreadsheet `ProtectedRanges`)
+     * so normal keystrokes on unlocked documents skip cloning `room.Doc` (`O(1)` fast path).
+     */
+    private computeContentHasActiveLocks(content: string): boolean {
+        if (!content || content.length === 0) {
+            return false;
+        }
+        const trimmed = content.trim();
+        if (trimmed.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(trimmed) as {
+                    Slides?: Array<{ Locked?: boolean; Regions?: Array<{ Locked?: boolean }> }>;
+                    Worksheets?: Array<{ ProtectedRanges?: Array<object> }>;
+                };
+                if (Array.isArray(parsed.Slides)) {
+                    for (const slide of parsed.Slides) {
+                        if (slide?.Locked) {
+                            return true;
+                        }
+                        if (Array.isArray(slide?.Regions) && slide.Regions.some((r) => Boolean(r?.Locked))) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                if (Array.isArray(parsed.Worksheets)) {
+                    return parsed.Worksheets.some(
+                        (ws) => Array.isArray(ws?.ProtectedRanges) && ws.ProtectedRanges.length > 0
+                    );
+                }
+            } catch {
+                // Fall back to lock parser / fail-safe detection below
+                return true;
+            }
+        }
+        try {
+            return DocumentLiveBlockEngine.Instance.ParseDocumentLocks(content).length > 0;
+        } catch {
+            return true;
+        }
+    }
+
+    private isSlideLockConfigEqual(
+        a: { Locked?: boolean; LockedByUserID?: string; AllowEditors?: boolean } | undefined,
+        b: { Locked?: boolean; LockedByUserID?: string; AllowEditors?: boolean } | undefined
+    ): boolean {
+        return (
+            Boolean(a?.Locked) === Boolean(b?.Locked) &&
+            (a?.LockedByUserID ?? '').trim().toLowerCase() === (b?.LockedByUserID ?? '').trim().toLowerCase() &&
+            Boolean(a?.AllowEditors) === Boolean(b?.AllowEditors)
+        );
+    }
+
+    private findDuplicateNonEmptyId(ids: Array<string | undefined | null>): string | null {
+        const seen = new Set<string>();
+        for (const raw of ids) {
+            const trimmed = (raw ?? '').trim();
+            if (!trimmed) {
+                continue;
+            }
+            if (seen.has(trimmed)) {
+                return trimmed;
+            }
+            seen.add(trimmed);
+        }
+        return null;
+    }
+
+    private doParsedRangesOverlap(
+        a: { startRow: number; endRow: number; startCol: number; endCol: number },
+        b: { startRow: number; endRow: number; startCol: number; endCol: number }
+    ): boolean {
+        return a.startRow <= b.endRow && b.startRow <= a.endRow && a.startCol <= b.endCol && b.startCol <= a.endCol;
+    }
+
+    private checkSheetCellMostRestrictive(
+        sheet: WorksheetSpec,
+        cellAddress: string,
+        editCtx: { UserID?: string; OwnerUserID: string; IsEditor: boolean }
+    ): { Allowed: boolean; Reason?: string } {
+        const rules = sheet.ProtectedRanges ?? [];
+        for (const rule of rules) {
+            const singleRuleRes = SpreadsheetEngine.Instance.CheckCellWritePermission(
+                { ...sheet, ProtectedRanges: [rule] },
+                cellAddress,
+                editCtx
+            );
+            if (!singleRuleRes.Allowed) {
+                return singleRuleRes;
+            }
+        }
+        return { Allowed: true };
+    }
+
+    private validateNewLocksOnEmptyContent(
+        nextContent: string,
+        actorUserId: string | null | undefined,
+        isOwner: boolean
+    ): { Allowed: boolean; Reason?: string } | null {
+        const trimmedNext = nextContent.trim();
+        if (!trimmedNext.startsWith('{')) {
+            return null;
+        }
+        const normActor = actorUserId ? NormalizeUUID(actorUserId) : '';
+        let parsedType: 'slides' | 'workbook' | null = null;
+        try {
+            const parsedNext = JSON.parse(trimmedNext) as {
+                Slides?: Array<object>;
+                Worksheets?: Array<object>;
+            };
+            if (Array.isArray(parsedNext.Slides)) {
+                parsedType = 'slides';
+                const nextDeck = SlideDeckEngine.Instance.ParseDeckSpec(nextContent);
+                const dupSlideId = this.findDuplicateNonEmptyId(nextDeck.Slides.map((s) => s.SlideID));
+                if (dupSlideId) {
+                    return { Allowed: false, Reason: `Duplicate SlideID '${dupSlideId}' is not allowed.` };
+                }
+                for (const nextSlide of nextDeck.Slides) {
+                    const dupRegionId = this.findDuplicateNonEmptyId(nextSlide.Regions.map((r) => r.RegionID));
+                    if (dupRegionId) {
+                        return { Allowed: false, Reason: `Duplicate RegionID '${dupRegionId}' is not allowed.` };
+                    }
+                    if (!isOwner) {
+                        if (nextSlide.Locked && (!normActor || NormalizeUUID(nextSlide.LockedByUserID ?? '') !== normActor)) {
+                            return {
+                                Allowed: false,
+                                Reason: 'Cannot create locked slide with another user as LockedByUserID.'
+                            };
+                        }
+                        for (const reg of nextSlide.Regions) {
+                            if (reg.Locked && (!normActor || NormalizeUUID(reg.LockedByUserID ?? '') !== normActor)) {
+                                return {
+                                    Allowed: false,
+                                    Reason: 'Cannot create locked region with another user as LockedByUserID.'
+                                };
+                            }
+                        }
+                    }
+                }
+                return { Allowed: true };
+            }
+            if (Array.isArray(parsedNext.Worksheets)) {
+                parsedType = 'workbook';
+                const nextWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
+                const dupSheetId = this.findDuplicateNonEmptyId(nextWb.Worksheets.map((w) => w.SheetID));
+                if (dupSheetId) {
+                    return { Allowed: false, Reason: `Duplicate SheetID '${dupSheetId}' is not allowed.` };
+                }
+                for (const nextSheet of nextWb.Worksheets) {
+                    const dupRangeId = this.findDuplicateNonEmptyId(
+                        (nextSheet.ProtectedRanges ?? []).map((r) => r.RangeID)
+                    );
+                    if (dupRangeId) {
+                        return { Allowed: false, Reason: `Duplicate RangeID '${dupRangeId}' is not allowed.` };
+                    }
+                    if (!isOwner) {
+                        for (const rule of nextSheet.ProtectedRanges ?? []) {
+                            if (!normActor || NormalizeUUID(rule.LockedByUserID) !== normActor) {
+                                return {
+                                    Allowed: false,
+                                    Reason: `Cannot create protected range '${rule.Range}' with spoofed LockedByUserID.`
+                                };
+                            }
+                        }
+                    }
+                }
+                return { Allowed: true };
+            }
+        } catch {
+            if (parsedType !== null) {
+                return {
+                    Allowed: false,
+                    Reason: 'Write rejected: malformed update to structured document.'
+                };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Validates an incoming Yjs write update against client `meta` immutability, Markdown heading locks,
+     * Slide Deck locks, and Spreadsheet ProtectedRanges by simulating the update against a cloned doc snapshot.
+     * Always evaluates `probeDoc` on every non-empty client write frame (`P0-12`, `P0-13`).
      */
     private isIncomingUpdateBlockedByLocks(
         room: CollaborationRoom,
@@ -5356,11 +6292,36 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (incomingUpdateBytes.byteLength === 0) {
             return { Allowed: true };
         }
+
         const currentContent = this.extractRoomSerializedContent(room.Doc);
+        const beforeMetaJson = JSON.stringify(room.Doc.getMap('meta').toJSON());
         const probeDoc = new Y.Doc();
         try {
+            const decodedUpdate = Y.decodeUpdate(incomingUpdateBytes);
+            const serverStateVector = Y.decodeStateVector(Y.encodeStateVector(room.Doc));
+            const readStructParent = (item: Y.Item): object | string | null => item.parent;
+            const touchesMetaMap = decodedUpdate.structs.some((struct) => {
+                if (!(struct instanceof Y.Item) || readStructParent(struct) !== 'meta') {
+                    return false;
+                }
+                const knownClock = serverStateVector.get(struct.id.client) ?? 0;
+                return struct.id.clock >= knownClock;
+            });
+            if (touchesMetaMap) {
+                return {
+                    Allowed: false,
+                    Reason: 'Forbidden: clients cannot mutate server collaboration metadata.'
+                };
+            }
             Y.applyUpdate(probeDoc, Y.encodeStateAsUpdate(room.Doc));
             Y.applyUpdate(probeDoc, incomingUpdateBytes);
+            const afterMetaJson = JSON.stringify(probeDoc.getMap('meta').toJSON());
+            if (afterMetaJson !== beforeMetaJson) {
+                return {
+                    Allowed: false,
+                    Reason: 'Forbidden: clients cannot mutate server collaboration metadata.'
+                };
+            }
             const nextContent = this.extractRoomSerializedContent(probeDoc);
             return this.validateContentMutationAgainstLocks(
                 currentContent,
@@ -5369,7 +6330,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 conn.IsOwner === true
             );
         } catch {
-            return { Allowed: true };
+            // Fail closed when lock validation cannot parse/apply the update cleanly (`P0-12`).
+            return {
+                Allowed: false,
+                Reason: 'Write rejected: unable to verify protected-region lock permissions.'
+            };
         } finally {
             probeDoc.destroy();
         }
@@ -5385,19 +6350,42 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         actorUserId?: string | null,
         isOwner: boolean = false
     ): { Allowed: boolean; Reason?: string } {
-        if (!currentContent || currentContent === nextContent) {
+        if (currentContent === nextContent) {
             return { Allowed: true };
         }
         const effectiveOwnerId = isOwner && actorUserId ? actorUserId : '__artifact_owner__';
+        const normActor = actorUserId ? NormalizeUUID(actorUserId) : '';
         const trimmedCurrent = currentContent.trim();
 
+        if (!trimmedCurrent) {
+            const emptyStructCheck = this.validateNewLocksOnEmptyContent(nextContent, actorUserId, isOwner);
+            if (emptyStructCheck !== null) {
+                return emptyStructCheck;
+            }
+        }
+
         if (trimmedCurrent.startsWith('{')) {
+            let parsedCurrentType: 'slides' | 'workbook' | null = null;
             try {
-                const parsedCurrent = JSON.parse(trimmedCurrent) as Record<string, unknown>;
+                const parsedCurrent = JSON.parse(trimmedCurrent) as { Slides?: Array<object>; Worksheets?: Array<object> };
                 if (Array.isArray(parsedCurrent.Slides)) {
+                    parsedCurrentType = 'slides';
                     const prevDeck = SlideDeckEngine.Instance.ParseDeckSpec(currentContent);
                     const nextDeck = SlideDeckEngine.Instance.ParseDeckSpec(nextContent);
+                    const dupSlideId = this.findDuplicateNonEmptyId(nextDeck.Slides.map((s) => s.SlideID));
+                    if (dupSlideId) {
+                        return { Allowed: false, Reason: `Duplicate SlideID '${dupSlideId}' is not allowed.` };
+                    }
                     const nextSlidesById = new Map(nextDeck.Slides.map((s) => [s.SlideID, s]));
+                    for (const nextSlide of nextDeck.Slides) {
+                        const dupRegionId = this.findDuplicateNonEmptyId(nextSlide.Regions.map((r) => r.RegionID));
+                        if (dupRegionId) {
+                            return {
+                                Allowed: false,
+                                Reason: `Duplicate RegionID '${dupRegionId}' on slide '${nextSlide.SlideID}' is not allowed.`
+                            };
+                        }
+                    }
                     for (const prevSlide of prevDeck.Slides) {
                         const nextSlide = nextSlidesById.get(prevSlide.SlideID);
                         const slideCheck = SlideDeckEngine.Instance.CanActorEditSlide(
@@ -5412,8 +6400,29 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             }
                             continue;
                         }
-                        if (prevSlide.Regions.length > 0 && nextSlide) {
-                            const nextRegionsById = new Map(nextSlide.Regions.map((r) => [r.RegionID, r]));
+                        if (!isOwner && nextSlide && !this.isSlideLockConfigEqual(prevSlide, nextSlide)) {
+                            const canSelfLockSlide =
+                                !prevSlide.Locked &&
+                                Boolean(nextSlide.Locked) &&
+                                normActor !== '' &&
+                                NormalizeUUID(nextSlide.LockedByUserID ?? '') === normActor &&
+                                !nextSlide.AllowEditors;
+                            const isSelfLockOwner =
+                                Boolean(prevSlide.Locked) &&
+                                normActor !== '' &&
+                                NormalizeUUID(prevSlide.LockedByUserID ?? '') === normActor &&
+                                (!nextSlide.Locked || NormalizeUUID(nextSlide.LockedByUserID ?? '') === normActor);
+                            if (!canSelfLockSlide && !isSelfLockOwner) {
+                                return {
+                                    Allowed: false,
+                                    Reason: 'Cannot modify slide lock metadata without owner permission.'
+                                };
+                            }
+                        }
+                        if (prevSlide.Regions.length > 0) {
+                            const nextRegionsById = nextSlide
+                                ? new Map(nextSlide.Regions.map((r) => [r.RegionID, r]))
+                                : null;
                             for (const prevRegion of prevSlide.Regions) {
                                 const regionCheck = SlideDeckEngine.Instance.CanActorEditRegion(
                                     prevSlide,
@@ -5422,10 +6431,59 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                     effectiveOwnerId,
                                     true
                                 );
+                                const nextRegion = nextRegionsById?.get(prevRegion.RegionID);
                                 if (!regionCheck.Allowed) {
-                                    const nextRegion = nextRegionsById.get(prevRegion.RegionID);
-                                    if (!nextRegion || JSON.stringify(prevRegion) !== JSON.stringify(nextRegion)) {
+                                    if (!nextSlide || !nextRegion || JSON.stringify(prevRegion) !== JSON.stringify(nextRegion)) {
                                         return { Allowed: false, Reason: regionCheck.Reason };
+                                    }
+                                } else if (
+                                    !isOwner &&
+                                    nextRegion &&
+                                    !this.isSlideLockConfigEqual(prevRegion, nextRegion)
+                                ) {
+                                    const canSelfLockRegion =
+                                        !prevRegion.Locked &&
+                                        Boolean(nextRegion.Locked) &&
+                                        normActor !== '' &&
+                                        NormalizeUUID(nextRegion.LockedByUserID ?? '') === normActor &&
+                                        !nextRegion.AllowEditors;
+                                    const isSelfLockOwner =
+                                        Boolean(prevRegion.Locked) &&
+                                        normActor !== '' &&
+                                        NormalizeUUID(prevRegion.LockedByUserID ?? '') === normActor &&
+                                        (!nextRegion.Locked ||
+                                            NormalizeUUID(nextRegion.LockedByUserID ?? '') === normActor);
+                                    if (!canSelfLockRegion && !isSelfLockOwner) {
+                                        return {
+                                            Allowed: false,
+                                            Reason: 'Cannot modify slide region lock metadata without owner permission.'
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Block spoofing LockedByUserID on any newly added slides/regions (`P0-12`).
+                    if (!isOwner) {
+                        const prevSlidesById = new Map(prevDeck.Slides.map((s) => [s.SlideID, s]));
+                        for (const nextSlide of nextDeck.Slides) {
+                            const prevSlide = prevSlidesById.get(nextSlide.SlideID);
+                            if (!prevSlide && nextSlide.Locked) {
+                                if (!normActor || NormalizeUUID(nextSlide.LockedByUserID ?? '') !== normActor) {
+                                    return {
+                                        Allowed: false,
+                                        Reason: 'Cannot create locked slide with another user as LockedByUserID.'
+                                    };
+                                }
+                            }
+                            const prevRegIds = new Set(prevSlide ? prevSlide.Regions.map((r) => r.RegionID) : []);
+                            for (const nextReg of nextSlide.Regions) {
+                                if (!prevRegIds.has(nextReg.RegionID) && nextReg.Locked) {
+                                    if (!normActor || NormalizeUUID(nextReg.LockedByUserID ?? '') !== normActor) {
+                                        return {
+                                            Allowed: false,
+                                            Reason: 'Cannot create locked region with another user as LockedByUserID.'
+                                        };
                                     }
                                 }
                             }
@@ -5435,10 +6493,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
 
                 if (Array.isArray(parsedCurrent.Worksheets)) {
+                    parsedCurrentType = 'workbook';
                     const prevWb = SpreadsheetEngine.Instance.ParseWorkbook(currentContent);
                     const nextWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
+                    const dupSheetId = this.findDuplicateNonEmptyId(nextWb.Worksheets.map((s) => s.SheetID));
+                    if (dupSheetId) {
+                        return { Allowed: false, Reason: `Duplicate SheetID '${dupSheetId}' is not allowed.` };
+                    }
                     const nextSheetsById = new Map<string, WorksheetSpec>(
                         nextWb.Worksheets.map((s) => [s.SheetID, s])
+                    );
+                    const prevSheetsById = new Map<string, WorksheetSpec>(
+                        prevWb.Worksheets.map((s) => [s.SheetID, s])
                     );
                     const editCtx = {
                         UserID: actorUserId ?? undefined,
@@ -5447,12 +6513,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     };
                     for (const prevSheet of prevWb.Worksheets) {
                         const rules = prevSheet.ProtectedRanges ?? [];
-                        if (rules.length === 0) {
-                            continue;
-                        }
                         const nextSheet = nextSheetsById.get(prevSheet.SheetID);
                         if (!nextSheet) {
-                            if (!isOwner) {
+                            if (rules.length > 0 && !isOwner) {
                                 return {
                                     Allowed: false,
                                     Reason: `Cannot delete worksheet '${prevSheet.Name}' containing protected ranges.`
@@ -5460,20 +6523,154 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             }
                             continue;
                         }
+
+                        const dupRangeId = this.findDuplicateNonEmptyId(
+                            (nextSheet.ProtectedRanges ?? []).map((r) => r.RangeID)
+                        );
+                        if (dupRangeId) {
+                            return {
+                                Allowed: false,
+                                Reason: `Duplicate RangeID '${dupRangeId}' on worksheet '${prevSheet.Name}' is not allowed.`
+                            };
+                        }
+
+                        const prevRulesById = new Map(rules.map((r) => [r.RangeID, r]));
                         const nextRulesById = new Map((nextSheet.ProtectedRanges ?? []).map((r) => [r.RangeID, r]));
-                        const normActor = actorUserId ? NormalizeUUID(actorUserId) : '';
+
+                        // Block non-owners/non-creators from modifying, removing, or spoofing ProtectedRanges rules.
                         for (const rule of rules) {
                             const matchingNextRule = nextRulesById.get(rule.RangeID);
-                            if (
-                                (!matchingNextRule ||
-                                    matchingNextRule.Range !== rule.Range ||
-                                    Boolean(matchingNextRule.AllowEditors) !== Boolean(rule.AllowEditors)) &&
-                                !isOwner &&
-                                NormalizeUUID(rule.LockedByUserID) !== normActor
-                            ) {
+                            const isRuleOwner =
+                                isOwner || (normActor !== '' && NormalizeUUID(rule.LockedByUserID) === normActor);
+                            const ruleModified =
+                                !matchingNextRule ||
+                                matchingNextRule.Range !== rule.Range ||
+                                Boolean(matchingNextRule.AllowEditors) !== Boolean(rule.AllowEditors) ||
+                                NormalizeUUID(matchingNextRule.LockedByUserID) !== NormalizeUUID(rule.LockedByUserID) ||
+                                (matchingNextRule.Description ?? '') !== (rule.Description ?? '') ||
+                                (matchingNextRule.LockedAt ?? '') !== (rule.LockedAt ?? '');
+                            if (ruleModified && !isRuleOwner) {
                                 return {
                                     Allowed: false,
                                     Reason: `Cannot alter or remove protected range '${rule.Range}' without owner permission.`
+                                };
+                            }
+                        }
+                        const maxRows = Math.max(prevSheet.Rows?.length ?? 0, nextSheet.Rows?.length ?? 0, 1000);
+                        const maxCols = Math.max(prevSheet.Columns?.length ?? 0, nextSheet.Columns?.length ?? 0, 260);
+                        if (!isOwner) {
+                            for (const nextRule of nextSheet.ProtectedRanges ?? []) {
+                                if (!prevRulesById.has(nextRule.RangeID)) {
+                                    if (!normActor || NormalizeUUID(nextRule.LockedByUserID) !== normActor) {
+                                        return {
+                                            Allowed: false,
+                                            Reason: `Cannot create protected range '${nextRule.Range}' with spoofed LockedByUserID.`
+                                        };
+                                    }
+                                    // Prevent inserting a permissive/shadowing ProtectedRange overlapping another user's restrictive rule (`P0-12`).
+                                    const nextParsed = ParseRangeAddress(nextRule.Range, maxRows, maxCols);
+                                    if (!nextParsed) {
+                                        return {
+                                            Allowed: false,
+                                            Reason: `Invalid protected range address '${nextRule.Range}'.`
+                                        };
+                                    }
+                                    for (const prevRule of rules) {
+                                        const isPrevRuleCreator =
+                                            normActor !== '' && NormalizeUUID(prevRule.LockedByUserID) === normActor;
+                                        if (isPrevRuleCreator || prevRule.AllowEditors) {
+                                            continue;
+                                        }
+                                        const prevParsed = ParseRangeAddress(prevRule.Range, maxRows, maxCols);
+                                        if (!prevParsed || this.doParsedRangesOverlap(nextParsed, prevParsed)) {
+                                            return {
+                                                Allowed: false,
+                                                Reason: `Cannot add protected range '${nextRule.Range}' overlapping locked range '${prevRule.Range}'.`
+                                            };
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (rules.length === 0) {
+                            continue;
+                        }
+
+                        // Enforce structural protection (rows, columns, sorting, merges) overlapping ANY non-editable rule.
+                        for (const rule of rules) {
+                            const parsedRange = ParseRangeAddress(rule.Range, maxRows, maxCols);
+                            if (!parsedRange) {
+                                if (!isOwner) {
+                                    return {
+                                        Allowed: false,
+                                        Reason: `Blocked structural edit: invalid protected range '${rule.Range}'.`
+                                    };
+                                }
+                                continue;
+                            }
+                            const sampleAddr = FormatCellAddress(parsedRange.startRow, parsedRange.startCol);
+                            const samplePerm = SpreadsheetEngine.Instance.CheckCellWritePermission(
+                                { ...prevSheet, ProtectedRanges: [rule] },
+                                sampleAddr,
+                                editCtx
+                            );
+                            if (samplePerm.Allowed) {
+                                continue;
+                            }
+
+                            const prevRowsPrefix = (prevSheet.Rows ?? [])
+                                .slice(0, parsedRange.endRow)
+                                .map((r) => r.RowID);
+                            const nextRowsPrefix = (nextSheet.Rows ?? [])
+                                .slice(0, parsedRange.endRow)
+                                .map((r) => r.RowID);
+                            if (
+                                prevRowsPrefix.length !== nextRowsPrefix.length ||
+                                prevRowsPrefix.some((id, idx) => id !== nextRowsPrefix[idx])
+                            ) {
+                                return {
+                                    Allowed: false,
+                                    Reason:
+                                        samplePerm.Reason ??
+                                        `Cannot insert, delete, or reorder rows intersecting protected range '${rule.Range}'.`
+                                };
+                            }
+
+                            const prevColsPrefix = (prevSheet.Columns ?? [])
+                                .slice(0, parsedRange.endCol)
+                                .map((c) => c.ColumnID);
+                            const nextColsPrefix = (nextSheet.Columns ?? [])
+                                .slice(0, parsedRange.endCol)
+                                .map((c) => c.ColumnID);
+                            if (
+                                prevColsPrefix.length !== nextColsPrefix.length ||
+                                prevColsPrefix.some((id, idx) => id !== nextColsPrefix[idx])
+                            ) {
+                                return {
+                                    Allowed: false,
+                                    Reason:
+                                        samplePerm.Reason ??
+                                        `Cannot insert, delete, or reorder columns intersecting protected range '${rule.Range}'.`
+                                };
+                            }
+
+                            if (
+                                JSON.stringify(prevSheet.SortSpec ?? null) !==
+                                JSON.stringify(nextSheet.SortSpec ?? null)
+                            ) {
+                                return {
+                                    Allowed: false,
+                                    Reason: `Cannot alter sort specification on worksheet with protected range '${rule.Range}'.`
+                                };
+                            }
+                            if (
+                                JSON.stringify(prevSheet.MergeRanges ?? []) !==
+                                JSON.stringify(nextSheet.MergeRanges ?? [])
+                            ) {
+                                return {
+                                    Allowed: false,
+                                    Reason: `Cannot alter merged ranges on worksheet with protected range '${rule.Range}'.`
                                 };
                             }
                         }
@@ -5488,16 +6685,49 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             if (JSON.stringify(prevCell ?? null) === JSON.stringify(nextCell ?? null)) {
                                 continue;
                             }
-                            const perm = SpreadsheetEngine.Instance.CheckCellWritePermission(prevSheet, addr, editCtx);
+                            const perm = this.checkSheetCellMostRestrictive(prevSheet, addr, editCtx);
                             if (!perm.Allowed) {
                                 return { Allowed: false, Reason: perm.Reason };
+                            }
+                        }
+                    }
+
+                    // Also block spoofing LockedByUserID on brand-new worksheets added in the same update.
+                    if (!isOwner) {
+                        for (const nextSheet of nextWb.Worksheets) {
+                            if (prevSheetsById.has(nextSheet.SheetID)) {
+                                continue;
+                            }
+                            const dupRangeId = this.findDuplicateNonEmptyId(
+                                (nextSheet.ProtectedRanges ?? []).map((r) => r.RangeID)
+                            );
+                            if (dupRangeId) {
+                                return {
+                                    Allowed: false,
+                                    Reason: `Duplicate RangeID '${dupRangeId}' on worksheet '${nextSheet.Name}' is not allowed.`
+                                };
+                            }
+                            for (const nextRule of nextSheet.ProtectedRanges ?? []) {
+                                if (!normActor || NormalizeUUID(nextRule.LockedByUserID) !== normActor) {
+                                    return {
+                                        Allowed: false,
+                                        Reason: `Cannot create protected range '${nextRule.Range}' with spoofed LockedByUserID.`
+                                    };
+                                }
                             }
                         }
                     }
                     return { Allowed: true };
                 }
             } catch {
-                // Fall through to markdown lock validation if content isn't valid structured JSON
+                // If structured JSON already identified Slides or Worksheets, fail closed (`P0-12`);
+                // only non-structured content starting with `{` falls through to markdown validation.
+                if (parsedCurrentType !== null) {
+                    return {
+                        Allowed: false,
+                        Reason: 'Write rejected: malformed update to structured document with protected regions.'
+                    };
+                }
             }
         }
 
@@ -5508,9 +6738,34 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             effectiveOwnerId,
             true
         );
-        return docCheck.Allowed
-            ? { Allowed: true }
-            : { Allowed: false, Reason: docCheck.ViolationReason };
+        if (!docCheck.Allowed) {
+            return { Allowed: false, Reason: docCheck.ViolationReason };
+        }
+        if (!isOwner) {
+            const prevLocks = DocumentLiveBlockEngine.Instance.ParseDocumentLocks(currentContent);
+            const nextLocks = DocumentLiveBlockEngine.Instance.ParseDocumentLocks(nextContent);
+            if (nextLocks.length > prevLocks.length) {
+                const prevKeys = prevLocks.map(
+                    (l) => `${l.Kind}|${l.Scope}|${l.LockedByUserID ? NormalizeUUID(l.LockedByUserID) : ''}|${l.Label}`
+                );
+                for (const nl of nextLocks) {
+                    const nlKey = `${nl.Kind}|${nl.Scope}|${nl.LockedByUserID ? NormalizeUUID(nl.LockedByUserID) : ''}|${nl.Label}`;
+                    const existingIdx = prevKeys.indexOf(nlKey);
+                    if (existingIdx >= 0) {
+                        prevKeys.splice(existingIdx, 1);
+                        continue;
+                    }
+                    const lockedByNorm = nl.LockedByUserID ? NormalizeUUID(nl.LockedByUserID) : '';
+                    if (nl.Scope === 'owner-only' || !normActor || lockedByNorm !== normActor) {
+                        return {
+                            Allowed: false,
+                            Reason: `Cannot add document lock '${nl.Label}' without owner permission.`
+                        };
+                    }
+                }
+            }
+        }
+        return { Allowed: true };
     }
 
     private onClientMessage(
@@ -5597,7 +6852,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             ? control.thumbnailDataUrl
                             : null;
                         void this.CompactRoomToArtifactVersion(room.ArtifactID, conn.User, {
-                            CapturedThumbnailDataUrl: validCapturedThumbnail
+                            CapturedThumbnailDataUrl: validCapturedThumbnail,
+                            Provider: room.Provider
                         });
                     }
                     break;
@@ -5706,6 +6962,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         isAgent: false
                     }
                 };
+                if (
+                    !conn.ControlledClientIDs.has(clientID) &&
+                    conn.ControlledClientIDs.size >= ArtifactCollaborationServer.MAX_CONTROLLED_CLIENT_IDS_PER_CONN
+                ) {
+                    continue;
+                }
                 conn.ControlledClientIDs.add(clientID);
                 accepted.push({
                     clientID,
@@ -5734,10 +6996,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         );
     }
 
-    private onRoomDocUpdate(room: CollaborationRoom, update: Uint8Array, origin: unknown): void {
+    private onRoomDocUpdate(
+        room: CollaborationRoom,
+        update: Uint8Array,
+        origin: CollaborationClientConnection | string | null | undefined
+    ): void {
         if (origin === 'hydrate') {
             return;
         }
+        room.HasActiveLocks = this.computeContentHasActiveLocks(this.extractRoomSerializedContent(room.Doc));
 
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, YJS_MESSAGE_SYNC);
@@ -5756,6 +7023,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             void this._relay
                 .PublishToRoom({
                     ArtifactID: room.ArtifactID,
+                    ProviderKey: room.ProviderKey,
                     MessageType: 'sync-update',
                     PayloadBase64: BytesToBase64(update)
                 })
@@ -5772,7 +7040,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private onRoomAwarenessUpdate(
         room: CollaborationRoom,
         changes: { added: number[]; updated: number[]; removed: number[] },
-        origin: unknown
+        origin: CollaborationClientConnection | string | null | undefined
     ): void {
         const changedClients = changes.added.concat(changes.updated, changes.removed);
         if (changedClients.length === 0) {
@@ -5782,7 +7050,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (origin && typeof origin === 'object' && 'ControlledClientIDs' in origin) {
             const conn = origin as CollaborationClientConnection;
             for (const clientId of changes.added) {
-                conn.ControlledClientIDs.add(clientId);
+                if (
+                    conn.ControlledClientIDs.has(clientId) ||
+                    conn.ControlledClientIDs.size < ArtifactCollaborationServer.MAX_CONTROLLED_CLIENT_IDS_PER_CONN
+                ) {
+                    conn.ControlledClientIDs.add(clientId);
+                }
             }
             for (const clientId of changes.removed) {
                 conn.ControlledClientIDs.delete(clientId);
@@ -5803,6 +7076,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             void this._relay
                 .PublishToRoom({
                     ArtifactID: room.ArtifactID,
+                    ProviderKey: room.ProviderKey,
                     MessageType: 'awareness',
                     PayloadBase64: BytesToBase64(updateBytes)
                 })
@@ -5816,27 +7090,34 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
     }
 
-    private syncRoomBaseVersionFromDocMetaOnRollback(room: CollaborationRoom): void {
-        const meta = room.Doc.getMap('meta');
-        const metaBaseVerId = meta.get('baseVersionId');
-        const metaBaseVerNum = meta.get('baseVersionNumber');
-        const metaBaseVerText = meta.get('baseVersionText');
+    private applyServerRoomRollback(
+        room: CollaborationRoom,
+        payload: {
+            restoredVersionId?: string | null;
+            restoredVersionNumber?: number;
+            restoredBaseText?: string;
+            restoredBaseConfiguration?: string | null;
+        }
+    ): void {
         if (
-            typeof metaBaseVerId === 'string' &&
-            typeof metaBaseVerNum === 'number' &&
-            metaBaseVerNum > 0 &&
-            metaBaseVerNum < room.BaseVersionNumber
+            typeof payload.restoredVersionNumber === 'number' &&
+            payload.restoredVersionNumber > 0 &&
+            payload.restoredVersionNumber < room.BaseVersionNumber
         ) {
-            room.BaseVersionID = metaBaseVerId;
-            room.BaseVersionNumber = metaBaseVerNum;
-            if (typeof metaBaseVerText === 'string') {
-                room.BaseVersionText = metaBaseVerText;
+            room.BaseVersionID = payload.restoredVersionId ?? null;
+            room.BaseVersionNumber = payload.restoredVersionNumber;
+            if (typeof payload.restoredBaseText === 'string') {
+                room.BaseVersionText = payload.restoredBaseText;
+            }
+            if (payload.restoredBaseConfiguration !== undefined) {
+                room.BaseConfiguration = payload.restoredBaseConfiguration;
             }
             room.DirtyVersion = this.extractRoomSerializedContent(room.Doc) !== room.BaseVersionText;
             room.LastReconciledOobVersionID = null;
             room.LastReconciledOobContent = null;
             room.LastReconciledOobMergeResult = null;
             room.LastReconciledBaselineText = null;
+            this.recordServerWatermark(room);
         }
     }
 
@@ -5845,7 +7126,24 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const updateBytes = Base64ToBytes(msg.PayloadBase64);
             if (updateBytes.byteLength > 0) {
                 Y.applyUpdate(room.Doc, updateBytes, 'relay');
-                this.syncRoomBaseVersionFromDocMetaOnRollback(room);
+                this.dedupeOrderArraysAfterRelay(room.Doc);
+                room.HasActiveLocks = this.computeContentHasActiveLocks(this.extractRoomSerializedContent(room.Doc));
+            }
+        } else if (msg.MessageType === 'room-rollback' && msg.PayloadBase64) {
+            try {
+                const parsed = JSON.parse(Buffer.from(msg.PayloadBase64, 'base64').toString('utf8')) as {
+                    restoredVersionId?: string | null;
+                    restoredVersionNumber?: number;
+                    restoredBaseText?: string;
+                    restoredBaseConfiguration?: string | null;
+                };
+                this.applyServerRoomRollback(room, parsed);
+            } catch (err) {
+                LogError(
+                    `ArtifactCollaborationServer failed parsing room-rollback relay payload for '${room.ArtifactID}': ${
+                        err instanceof Error ? err.message : String(err)
+                    }`
+                );
             }
         } else if (msg.MessageType === 'sync-request') {
             const reqSvBytes = msg.PayloadBase64 ? this.decodeStrictBase64Bytes(msg.PayloadBase64) : null;
@@ -5857,6 +7155,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 try {
                     await this._relay.PublishToRoom({
                         ArtifactID: room.ArtifactID,
+                        ProviderKey: room.ProviderKey,
                         MessageType: 'sync-state',
                         PayloadBase64: BytesToBase64(diffUpdate)
                     });
@@ -5873,7 +7172,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (parsedSync.updateBytes && parsedSync.updateBytes.byteLength > 0) {
                 try {
                     Y.applyUpdate(room.Doc, parsedSync.updateBytes, 'collab-relay');
-                    this.syncRoomBaseVersionFromDocMetaOnRollback(room);
+                    this.dedupeOrderArraysAfterRelay(room.Doc);
+                    room.HasActiveLocks = this.computeContentHasActiveLocks(this.extractRoomSerializedContent(room.Doc));
                     this.resolvePendingSyncWaiters(room.ArtifactID, true);
                 } catch (err) {
                     LogError(
@@ -5890,7 +7190,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 awarenessProtocol.applyAwarenessUpdate(room.Awareness, awarenessBytes, 'relay');
             }
         } else if (msg.MessageType === 'permission-revoked') {
-            await this.ReevaluateRoomPermissions(room.ArtifactID, msg.TargetUserID, false);
+            await this.ReevaluateRoomPermissions(room.ArtifactID, msg.TargetUserID, false, undefined, room.Provider);
         } else if (msg.MessageType === 'version-saved' && typeof msg.VersionNumber === 'number') {
             const relayPayload = this.parseVersionSavedRelayPayload(msg.PayloadBase64);
             let crdtSynced = false;
@@ -5909,6 +7209,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 if (updateBytes && updateBytes.byteLength > 0) {
                     try {
                         Y.applyUpdate(room.Doc, updateBytes, 'collab-relay');
+                        this.dedupeOrderArraysAfterRelay(room.Doc);
+                        room.HasActiveLocks = this.computeContentHasActiveLocks(
+                            this.extractRoomSerializedContent(room.Doc)
+                        );
                         crdtSynced = true;
                     } catch (err) {
                         LogError(
@@ -6055,7 +7359,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private handleRoomBecameEmpty(room: CollaborationRoom, fallbackUser: UserInfo): void {
         if (room.DirtyWorkingState || room.DirtyVersion) {
             const actor = room.LastModifiedByUser ?? fallbackUser;
-            void this.CompactRoomToArtifactVersion(room.ArtifactID, actor).finally(() => {
+            void this.CompactRoomToArtifactVersion(room.ArtifactID, actor, {
+                Provider: room.Provider
+            }).finally(() => {
                 if (room.Connections.size === 0 && !this._shuttingDown) {
                     this.scheduleIdleRoomDisposal(room);
                 }
@@ -6078,7 +7384,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     }
 
     private async disposeRoomIfIdle(room: CollaborationRoom): Promise<void> {
-        const key = room.ArtifactID.trim().toLowerCase();
+        const key = room.RoomKey;
         if (
             this._shuttingDown ||
             room.Connections.size > 0 ||
@@ -6094,9 +7400,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const actor = room.LastModifiedByUser ?? UserCache.Instance.GetSystemUser();
             if (actor) {
                 if (room.DirtyVersion) {
-                    await this.CompactRoomToArtifactVersion(room.ArtifactID, actor);
+                    await this.CompactRoomToArtifactVersion(room.ArtifactID, actor, { Provider: room.Provider });
                 } else {
-                    await this.FlushWorkingState(room.ArtifactID, actor);
+                    await this.FlushWorkingState(room.ArtifactID, actor, { provider: room.Provider });
                 }
             }
             if (room.Connections.size > 0 || (this._pendingUpgradesByArtifact.get(key) ?? 0) > 0) {
@@ -6129,6 +7435,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         room.PreOutOfBandDocState = null;
         room.LastCompactedStateVector = null;
         room.PendingHydrateConflict = null;
+        const hwPrefix = `${room.RoomKey}::`;
+        for (const hwKey of Array.from(this._agentClientClockHighWater.keys())) {
+            if (hwKey.startsWith(hwPrefix)) {
+                this._agentClientClockHighWater.delete(hwKey);
+            }
+        }
         if (room.IdleDisposeTimer) {
             clearTimeout(room.IdleDisposeTimer);
             room.IdleDisposeTimer = null;
@@ -6176,7 +7488,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             room.WorkingStateTimer = null;
             if (room.DirtyWorkingState && room.LastModifiedByUser) {
                 void this.FlushWorkingState(room.ArtifactID, room.LastModifiedByUser, {
-                    guardNewerPersistedVersion: true
+                    guardNewerPersistedVersion: true,
+                    provider: room.Provider
                 });
             }
         }, WORKING_STATE_FLUSH_DEBOUNCE_MS);
@@ -8226,11 +9539,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             const currentOrder = slideOrder.toArray();
-            const targetOrder = this.resolveMergedOrder(
-                currentOrder,
-                deck.Slides.map((s) => s.SlideID),
-                baselineEntries?.Order,
-                (id) => slidesById.has(id)
+            const targetOrder = this.dedupeStringArray(
+                this.resolveMergedOrder(
+                    currentOrder,
+                    deck.Slides.map((s) => s.SlideID),
+                    baselineEntries?.Order,
+                    (id) => slidesById.has(id)
+                )
             );
             if (preservedConcurrentSlideIds.size > 0) {
                 for (const id of currentOrder) {
@@ -8270,11 +9585,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         rawConfiguration?: string | null,
         options?: { preserveConcurrentAdditions?: boolean; baselineContent?: string }
     ): void {
-        const candidate = (rawConfiguration || rawContent || '').trim();
-        if (!candidate) return;
+        const trimmedContent = (rawContent ?? '').trim();
+        const trimmedConfig = (rawConfiguration ?? '').trim();
+        if (!trimmedContent && !trimmedConfig) return;
         const looksLikeJsonWorkbook =
-            candidate.startsWith('{') && candidate.includes('"Worksheets"');
-        const looksLikeXlsx = candidate.startsWith('data:') || candidate.startsWith('UEsDB');
+            (trimmedContent.startsWith('{') && trimmedContent.includes('"Worksheets"')) ||
+            (trimmedConfig.startsWith('{') && trimmedConfig.includes('"Worksheets"'));
+        const looksLikeXlsx =
+            trimmedContent.startsWith('data:') ||
+            trimmedContent.startsWith('UEsDB') ||
+            trimmedConfig.startsWith('data:') ||
+            trimmedConfig.startsWith('UEsDB');
         if (!looksLikeJsonWorkbook && !looksLikeXlsx) {
             return;
         }
@@ -8323,10 +9644,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
             }
 
+            const createdAtIso =
+                typeof wb.CreatedAt === 'string' && wb.CreatedAt.trim().length > 0
+                    ? wb.CreatedAt.trim()
+                    : '1970-01-01T00:00:00.000Z';
+            const updatedAtIso =
+                typeof wb.UpdatedAt === 'string' && wb.UpdatedAt.trim().length > 0
+                    ? wb.UpdatedAt.trim()
+                    : createdAtIso;
+
             setWorkbookMeta('WorkbookID', wb.WorkbookID);
             setWorkbookMeta('Title', wb.Title);
             setWorkbookMeta('ActiveSheetID', wb.ActiveSheetID);
             setWorkbookMeta('NamedRanges', JSON.stringify(wb.NamedRanges ?? []));
+            setWorkbookMeta('CreatedAt', createdAtIso);
+            setWorkbookMeta('UpdatedAt', updatedAtIso);
             if (typeof wb.PreferredObjectsPaneHeightPx === 'number' && Number.isFinite(wb.PreferredObjectsPaneHeightPx)) {
                 setWorkbookMeta('PreferredObjectsPaneHeightPx', String(Math.round(wb.PreferredObjectsPaneHeightPx)));
             } else if (
@@ -8423,11 +9755,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             const currentOrder = sheetOrder.toArray();
-            const targetOrder = this.resolveMergedOrder(
-                currentOrder,
-                wb.Worksheets.map((w) => w.SheetID),
-                baselineEntries?.Order,
-                (id) => worksheetsById.has(id)
+            const targetOrder = this.dedupeStringArray(
+                this.resolveMergedOrder(
+                    currentOrder,
+                    wb.Worksheets.map((w) => w.SheetID),
+                    baselineEntries?.Order,
+                    (id) => worksheetsById.has(id)
+                )
             );
             if (preservedConcurrentSheetIds.size > 0) {
                 for (const sId of currentOrder) {
@@ -8599,6 +9933,50 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return baseline !== undefined && baseline.get(key) === incomingValue;
     }
 
+    private dedupeStringArray(values: string[]): string[] {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const v of values) {
+            if (typeof v === 'string' && v.length > 0 && !seen.has(v)) {
+                seen.add(v);
+                out.push(v);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Deduplicates `slideOrder` and `sheetOrder` Y.Arrays in place after concurrent CRDT array insertions
+     * from multiple replicas during restore/sync (`NW-5`).
+     */
+    private dedupeOrderArraysAfterRelay(doc: Y.Doc): void {
+        const dedupeArr = (arr: Y.Array<string>, itemsMap: Y.Map<string>): void => {
+            const current = arr.toArray();
+            if (current.length === 0) {
+                return;
+            }
+            const next = this.dedupeStringArray(current).filter((id) => itemsMap.size === 0 || itemsMap.has(id));
+            if (next.length !== current.length || next.some((id, idx) => id !== current[idx])) {
+                arr.delete(0, arr.length);
+                if (next.length > 0) {
+                    arr.insert(0, next);
+                }
+            }
+        };
+        const slideOrder = doc.getArray<string>('slideOrder');
+        const sheetOrder = doc.getArray<string>('sheetOrder');
+        const slidesById = doc.getMap<string>('slidesById');
+        const worksheetsById = doc.getMap<string>('worksheetsById');
+        const hasDupSlide = new Set(slideOrder.toArray()).size !== slideOrder.length;
+        const hasDupSheet = new Set(sheetOrder.toArray()).size !== sheetOrder.length;
+        if (hasDupSlide || hasDupSheet) {
+            doc.transact(() => {
+                if (hasDupSlide) dedupeArr(slideOrder, slidesById);
+                if (hasDupSheet) dedupeArr(sheetOrder, worksheetsById);
+            }, 'collab-relay');
+        }
+    }
+
     /**
      * The order to write during a merge. When the incoming version kept the baseline order, a concurrent
      * live reorder wins: the live order is kept (minus removed items) and items the incoming version added
@@ -8615,9 +9993,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             baselineOrder.length === incomingOrder.length &&
             baselineOrder.every((id, idx) => id === incomingOrder[idx]);
         if (!incomingKeptBaselineOrder) {
-            return incomingOrder;
+            return this.dedupeStringArray(incomingOrder);
         }
-        const merged = liveOrder.filter((id) => exists(id));
+        const merged = this.dedupeStringArray(liveOrder).filter((id) => exists(id));
         for (const id of incomingOrder) {
             if (!merged.includes(id)) {
                 merged.push(id);
@@ -8675,11 +10053,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (!wb || !Array.isArray(wb.Worksheets) || wb.Worksheets.length === 0) {
                 return null;
             }
+            const createdAtIso =
+                typeof wb.CreatedAt === 'string' && wb.CreatedAt.trim().length > 0
+                    ? wb.CreatedAt.trim()
+                    : '1970-01-01T00:00:00.000Z';
+            const updatedAtIso =
+                typeof wb.UpdatedAt === 'string' && wb.UpdatedAt.trim().length > 0
+                    ? wb.UpdatedAt.trim()
+                    : createdAtIso;
             const meta = new Map<string, string>([
                 ['WorkbookID', wb.WorkbookID],
                 ['Title', wb.Title],
                 ['ActiveSheetID', wb.ActiveSheetID],
-                ['NamedRanges', JSON.stringify(wb.NamedRanges ?? [])]
+                ['NamedRanges', JSON.stringify(wb.NamedRanges ?? [])],
+                ['CreatedAt', createdAtIso],
+                ['UpdatedAt', updatedAtIso]
             ]);
             if (typeof wb.PreferredObjectsPaneHeightPx === 'number' && Number.isFinite(wb.PreferredObjectsPaneHeightPx)) {
                 meta.set('PreferredObjectsPaneHeightPx', String(Math.round(wb.PreferredObjectsPaneHeightPx)));
@@ -8755,7 +10143,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             namedRanges = [];
                         }
                     }
-                    const now = new Date().toISOString();
+                    const createdAt = workbookMeta.get('CreatedAt') || '1970-01-01T00:00:00.000Z';
+                    const updatedAt = workbookMeta.get('UpdatedAt') || createdAt;
                     const activeId = workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID;
                     const prefPaneRaw = workbookMeta.get('PreferredObjectsPaneHeightPx');
                     const prefPaneHeight = prefPaneRaw ? Number(prefPaneRaw) : NaN;
@@ -8768,14 +10157,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         ...(Number.isFinite(prefPaneHeight) && prefPaneHeight > 0
                             ? { PreferredObjectsPaneHeightPx: Math.round(prefPaneHeight) }
                             : {}),
-                        CreatedAt: now,
-                        UpdatedAt: now
+                        CreatedAt: createdAt,
+                        UpdatedAt: updatedAt
                     });
                     SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
-                    return SpreadsheetEngine.Instance.SerializeWorkbook(wb);
+                    return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
                 }
-            } catch {
-                // Fall back to other extractors
+                throw new Error('Corrupt collaboration state: worksheetsById has entries but zero valid worksheets.');
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                throw new Error(`Failed to extract collaborative workbook content (fail-closed): ${msg}`);
             }
         }
 
@@ -8798,21 +10189,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 let theme = baseDeck.Theme;
                 const rawTheme = deckMeta.get('Theme');
                 if (rawTheme) {
-                    try {
-                        theme = JSON.parse(rawTheme) as SlideDeckSpec['Theme'];
-                    } catch {
-                        // Keep baseDeck.Theme
-                    }
+                    theme = JSON.parse(rawTheme) as SlideDeckSpec['Theme'];
                 }
 
                 let master = baseDeck.Master;
                 const rawMaster = deckMeta.get('Master');
                 if (rawMaster) {
-                    try {
-                        master = JSON.parse(rawMaster) as SlideDeckSpec['Master'];
-                    } catch {
-                        // Keep baseDeck.Master
-                    }
+                    master = JSON.parse(rawMaster) as SlideDeckSpec['Master'];
                 }
 
                 const orderedIds = slideOrder.toArray();
@@ -8859,8 +10242,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     );
                     return SlideDeckEngine.Instance.SerializeDeckSpec(reconstructed);
                 }
-            } catch {
-                // Fall back to Y.Text('content')
+                throw new Error('Corrupt collaboration state: slidesById has entries but zero valid slides.');
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                throw new Error(`Failed to extract collaborative slide deck content (fail-closed): ${msg}`);
             }
         }
 

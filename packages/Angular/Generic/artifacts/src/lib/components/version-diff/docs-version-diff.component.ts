@@ -3,10 +3,9 @@ import {
   ChangeDetectorRef,
   Component,
   Input,
-  OnChanges,
-  SimpleChanges,
   inject,
 } from '@angular/core';
+import type { IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import {
@@ -25,13 +24,13 @@ import {
         <div class="mj-docs-vdiff__toolbar">
           <div class="mj-docs-vdiff__stats">
             <span class="mj-vdiff-chip mj-vdiff-chip--add">
-              <i class="fas fa-plus"></i> {{ DiffResult.AddedWords }} words ({{ DiffResult.AddedBlocks }} blocks)
+              <i class="fa-solid fa-plus"></i> {{ DiffResult.AddedWords }} words ({{ DiffResult.AddedBlocks }} blocks)
             </span>
             <span class="mj-vdiff-chip mj-vdiff-chip--del">
-              <i class="fas fa-minus"></i> {{ DiffResult.RemovedWords }} words ({{ DiffResult.RemovedBlocks }} blocks)
+              <i class="fa-solid fa-minus"></i> {{ DiffResult.RemovedWords }} words ({{ DiffResult.RemovedBlocks }} blocks)
             </span>
             <span class="mj-vdiff-chip mj-vdiff-chip--mod">
-              <i class="fas fa-pen-nib"></i> {{ DiffResult.ModifiedBlocks }} edited
+              <i class="fa-solid fa-pen-nib"></i> {{ DiffResult.ModifiedBlocks }} edited
             </span>
           </div>
 
@@ -51,7 +50,7 @@ import {
           DiffResult.ModifiedBlocks === 0
         ) {
           <div class="mj-docs-vdiff__identical">
-            <i class="fas fa-circle-check"></i>
+            <i class="fa-solid fa-circle-check"></i>
             <span>Document content is identical between v{{ BaseVersion.VersionNumber }} and v{{ TargetVersion.VersionNumber }}.</span>
           </div>
         } @else {
@@ -87,7 +86,7 @@ import {
                   <div class="mj-docs-vdiff__livecard">
                     <div class="mj-docs-vdiff__livecard-head">
                       <i
-                        class="fas"
+                        class="fa-solid"
                         [class.fa-table]="blk.Category === 'live-block'"
                         [class.fa-cube]="blk.Category === 'artifact-embed'"
                       ></i>
@@ -103,7 +102,7 @@ import {
                           <div class="mj-docs-vdiff__delta-row">
                             <span class="mj-docs-vdiff__delta-key">{{ d.Label }}</span>
                             <span class="mj-docs-vdiff__delta-old">{{ d.OldValue }}</span>
-                            <i class="fas fa-arrow-right"></i>
+                            <i class="fa-solid fa-arrow-right"></i>
                             <span class="mj-docs-vdiff__delta-new">{{ d.NewValue }}</span>
                           </div>
                         }
@@ -431,21 +430,45 @@ import {
     `,
   ],
 })
-export class DocsVersionDiffComponent implements IArtifactVersionDiffViewer, OnChanges {
+export class DocsVersionDiffComponent implements IArtifactVersionDiffViewer {
   private readonly diffService = inject(ArtifactVersionDiffService);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  @Input() BaseVersion!: MJArtifactVersionEntity;
-  @Input() TargetVersion!: MJArtifactVersionEntity;
+  private baseVersion!: MJArtifactVersionEntity;
+  private targetVersion!: MJArtifactVersionEntity;
+
+  @Input()
+  public get BaseVersion(): MJArtifactVersionEntity {
+    return this.baseVersion;
+  }
+  public set BaseVersion(value: MJArtifactVersionEntity) {
+    if (this.baseVersion !== value) {
+      this.baseVersion = value;
+      this.recomputeDiff();
+    }
+  }
+
+  @Input()
+  public get TargetVersion(): MJArtifactVersionEntity {
+    return this.targetVersion;
+  }
+  public set TargetVersion(value: MJArtifactVersionEntity) {
+    if (this.targetVersion !== value) {
+      this.targetVersion = value;
+      this.recomputeDiff();
+    }
+  }
+
+  @Input() public Provider?: IMetadataProvider | null = null;
 
   public DiffResult: DocsVisualDiffResult | null = null;
   public HideUnchanged = false;
 
-  ngOnChanges(_changes: SimpleChanges): void {
-    if (this.BaseVersion && this.TargetVersion) {
+  private recomputeDiff(): void {
+    if (this.baseVersion && this.targetVersion) {
       this.DiffResult = this.diffService.ComputeDocsVisualDiff(
-        this.BaseVersion.Content,
-        this.TargetVersion.Content,
+        this.baseVersion.Content,
+        this.targetVersion.Content,
       );
       this.cdr.markForCheck();
     }

@@ -30,6 +30,7 @@ import {
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     EscapeSQLString,
+    GetGlobalObjectStore,
     MJEventType,
     MJGlobal,
     NormalizeUUID,
@@ -56,13 +57,51 @@ export interface ArtifactVersionSavedEventPayload {
     SavedContentHash?: string;
 }
 
-const TRUSTED_SERVER_RESTORE_ENTITIES = new WeakSet<object>();
+const GLOBAL_KEY_TRUSTED_RESTORE = '__MJ_TRUSTED_SERVER_RESTORE_ENTITIES__';
+const GLOBAL_KEY_INTERNAL_VERSION_PARAMS = '__MJ_INTERNAL_VERSION_SECURITY_QUERY_PARAMS__';
+const GLOBAL_KEY_ORIGINAL_VERSION_FIELDS = '__MJ_ORIGINAL_VERSION_FIELDS_BY_PARAMS__';
+
+function getGlobalWeakSet(key: string): WeakSet<object> {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        const existing = store[key];
+        if (existing instanceof WeakSet) {
+            return existing;
+        }
+        const created = new WeakSet<object>();
+        store[key] = created;
+        return created;
+    }
+    return new WeakSet<object>();
+}
+
+function getOriginalVersionFieldsMap(): WeakMap<RunViewParams, string[]> {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        const existing = store[GLOBAL_KEY_ORIGINAL_VERSION_FIELDS];
+        if (existing instanceof WeakMap) {
+            return existing;
+        }
+        const created = new WeakMap<RunViewParams, string[]>();
+        store[GLOBAL_KEY_ORIGINAL_VERSION_FIELDS] = created;
+        return created;
+    }
+    return new WeakMap<RunViewParams, string[]>();
+}
 
 export function MarkTrustedServerRestoreSave(entity: MJArtifactVersionEntity): void {
     if (entity && typeof entity === 'object') {
-        TRUSTED_SERVER_RESTORE_ENTITIES.add(entity);
+        getGlobalWeakSet(GLOBAL_KEY_TRUSTED_RESTORE).add(entity);
     }
 }
+
+interface ArtifactVersionRowProjection {
+    ID?: string | null;
+    ArtifactID?: string | null;
+    [key: string]: string | number | boolean | Date | null | undefined;
+}
+
+type ArtifactVersionViewRow = BaseEntity | ArtifactVersionRowProjection;
 
 type ExtractedAttributeItem = Parameters<typeof ArtifactExtractor.SerializeForStorage>[0][number];
 
@@ -109,30 +148,27 @@ function resolveTargetEntityName(params: RunViewParams): string {
     return '';
 }
 
-function readVersionArtifactId(row: unknown): string | null {
+function readVersionArtifactId(row: ArtifactVersionViewRow | null | undefined): string | null {
     if (!row || typeof row !== 'object') {
         return null;
     }
     if (row instanceof MJArtifactVersionEntity) {
         return row.ArtifactID || null;
     }
-    const candidate = (row as Record<string, unknown>)['ArtifactID'];
+    const candidate = (row as ArtifactVersionRowProjection).ArtifactID;
     return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
 }
 
-function readVersionRowId(row: unknown): string | null {
+function readVersionRowId(row: ArtifactVersionViewRow | null | undefined): string | null {
     if (!row || typeof row !== 'object') {
         return null;
     }
     if (row instanceof MJArtifactVersionEntity) {
         return row.ID || null;
     }
-    const candidate = (row as Record<string, unknown>)['ID'];
+    const candidate = (row as ArtifactVersionRowProjection).ID;
     return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
 }
-
-const INTERNAL_VERSION_SECURITY_QUERY_PARAMS = new WeakSet<object>();
-const ORIGINAL_CALLER_FIELDS_BY_PARAMS = new WeakMap<RunViewParams, string[]>();
 
 const SINGLE_ARTIFACT_EQ_FILTER_RE =
     /^\s*\[?ArtifactID\]?\s*=\s*N?'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'\s*$/i;
@@ -185,7 +221,7 @@ async function fetchVersionArtifactIdsByIds(
             SkipTotalRowCount: true,
             ResultType: 'simple'
         };
-        INTERNAL_VERSION_SECURITY_QUERY_PARAMS.add(lookupParams);
+        getGlobalWeakSet(GLOBAL_KEY_INTERNAL_VERSION_PARAMS).add(lookupParams);
         ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(lookupParams);
         const res = await rv.RunView<{ ID?: string; ArtifactID?: string }>(
             lookupParams,
@@ -216,15 +252,15 @@ async function fetchVersionArtifactIdsByIds(
     return map;
 }
 
-function stripSyntheticArtifactId(row: unknown): unknown {
+function stripSyntheticArtifactId(row: ArtifactVersionViewRow): ArtifactVersionViewRow {
     if (!row || typeof row !== 'object' || row instanceof BaseEntity) {
         return row;
     }
     if (!Object.prototype.hasOwnProperty.call(row, 'ArtifactID')) {
         return row;
     }
-    const copy = { ...(row as Record<string, unknown>) };
-    delete copy['ArtifactID'];
+    const copy: ArtifactVersionRowProjection = { ...(row as ArtifactVersionRowProjection) };
+    delete copy.ArtifactID;
     return copy;
 }
 
@@ -244,7 +280,7 @@ export const ArtifactVersionPreRunViewHook: PreRunViewHook = (
     const provider = resolveMetadataProvider(hookProvider, contextUser);
     if (
         !params ||
-        INTERNAL_VERSION_SECURITY_QUERY_PARAMS.has(params) ||
+        getGlobalWeakSet(GLOBAL_KEY_INTERNAL_VERSION_PARAMS).has(params) ||
         ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
         resolveTargetEntityName(params) !== 'MJ: Artifact Versions' ||
         isServerSystemUser(contextUser) ||
@@ -257,7 +293,7 @@ export const ArtifactVersionPreRunViewHook: PreRunViewHook = (
         params.Fields.length > 0 &&
         !hasFieldIgnoreCase(params.Fields, 'ArtifactID')
     ) {
-        ORIGINAL_CALLER_FIELDS_BY_PARAMS.set(params, [...params.Fields]);
+        getOriginalVersionFieldsMap().set(params, [...params.Fields]);
         params.Fields = [...params.Fields, 'ArtifactID'];
     }
     return params;
@@ -275,14 +311,14 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
 ): Promise<RunViewResult> => {
     if (
         !results?.Success ||
-        INTERNAL_VERSION_SECURITY_QUERY_PARAMS.has(params) ||
+        getGlobalWeakSet(GLOBAL_KEY_INTERNAL_VERSION_PARAMS).has(params) ||
         ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
         resolveTargetEntityName(params) !== 'MJ: Artifact Versions'
     ) {
         return results;
     }
 
-    const shouldStripSyntheticArtifactId = ORIGINAL_CALLER_FIELDS_BY_PARAMS.has(params);
+    const shouldStripSyntheticArtifactId = getOriginalVersionFieldsMap().has(params);
 
     if (isServerSystemUser(contextUser)) {
         return results;
@@ -291,17 +327,11 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
     const provider = resolveMetadataProvider(hookProvider, contextUser);
 
     if (!contextUser) {
-        // Client-side providers (e.g. GraphQLDataProvider where ProviderType === 'Network') invoke
-        // PostRunView hooks with contextUser === undefined after MJServer has already enforced
-        // server-side CanRead (`DSLC2`). On a server DatabaseProviderBase (`ProviderType === 'Database'`)
-        // or when no provider is configured, missing `contextUser` MUST fail closed (`R6-3`) because
-        // `DatabaseProviderBase.InternalRunView` falls back to `this.CurrentUser` and
-        // `ProviderBase.RunView`'s `LocalCacheManager` cache-hit path skips `CheckUserReadPermissions`.
         if (provider !== null && provider.ProviderType !== 'Database') {
             if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
                 return {
                     ...results,
-                    Results: results.Results.map(stripSyntheticArtifactId)
+                    Results: (results.Results as ArtifactVersionViewRow[]).map(stripSyntheticArtifactId)
                 };
             }
             return results;
@@ -327,23 +357,50 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
         if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
             return {
                 ...results,
-                Results: results.Results.map(stripSyntheticArtifactId)
+                Results: (results.Results as ArtifactVersionViewRow[]).map(stripSyntheticArtifactId)
             };
         }
         return results;
     }
 
+    const filterArtifactId = extractSingleArtifactIdFromFilter(params.ExtraFilter);
+
     if (!Array.isArray(results.Results) || results.Results.length === 0) {
+        if (params.ResultType === 'count_only' && (results.TotalRowCount ?? 0) > 0) {
+            if (filterArtifactId) {
+                try {
+                    const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                        provider,
+                        filterArtifactId,
+                        contextUser
+                    );
+                    if (perms.CanRead) {
+                        return results;
+                    }
+                } catch (error) {
+                    LogError(
+                        `ArtifactVersionPostRunViewHook failed resolving count_only CanRead for artifact ${filterArtifactId}: ${
+                            error instanceof Error ? error.message : String(error)
+                        }`
+                    );
+                }
+            }
+            return {
+                ...results,
+                RowCount: 0,
+                TotalRowCount: 0
+            };
+        }
         return results;
     }
 
-    const filterArtifactId = extractSingleArtifactIdFromFilter(params.ExtraFilter);
+    const rawRows = results.Results as ArtifactVersionViewRow[];
 
     // If any rows lack `ArtifactID` (e.g. direct hook call or narrow projection without PreRunView)
     // and `ExtraFilter` is not a single-artifact equality predicate, hydrate `ArtifactID` by `ID`.
     const missingIds: string[] = [];
     if (!filterArtifactId) {
-        for (const row of results.Results) {
+        for (const row of rawRows) {
             if (!readVersionArtifactId(row)) {
                 const versionId = readVersionRowId(row);
                 if (versionId) {
@@ -358,9 +415,9 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
             : null;
 
     const readAllowedByArtifact = new Map<string, boolean>();
-    const keptRows: unknown[] = [];
+    const keptRows: ArtifactVersionViewRow[] = [];
 
-    for (const row of results.Results) {
+    for (const row of rawRows) {
         let artifactId = readVersionArtifactId(row) ?? filterArtifactId;
         if (!artifactId && hydratedArtifactIds) {
             const versionId = readVersionRowId(row);
@@ -397,16 +454,27 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
         }
     }
 
-    if (keptRows.length === results.Results.length && !shouldStripSyntheticArtifactId) {
+    const removedCount = rawRows.length - keptRows.length;
+    const isPaged = (results.TotalRowCount ?? rawRows.length) > rawRows.length;
+    if (
+        removedCount === 0 &&
+        !shouldStripSyntheticArtifactId &&
+        (!isPaged || Boolean(filterArtifactId))
+    ) {
         return results;
     }
 
-    const removedCount = results.Results.length - keptRows.length;
+    const totalRowCount = isPaged
+        ? removedCount === 0 && filterArtifactId
+            ? results.TotalRowCount ?? keptRows.length
+            : keptRows.length
+        : Math.max(0, (results.TotalRowCount ?? rawRows.length) - removedCount);
+
     return {
         ...results,
         Results: keptRows,
         RowCount: keptRows.length,
-        TotalRowCount: Math.max(0, (results.TotalRowCount ?? results.Results.length) - removedCount)
+        TotalRowCount: totalRowCount
     };
 };
 
@@ -497,7 +565,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
             const result = await rv.RunView<MJArtifactVersionAttributeEntity>(
                 {
                     EntityName: 'MJ: Artifact Version Attributes',
-                    ExtraFilter: `ArtifactVersionID='${this.ID}'`,
+                    ExtraFilter: `ArtifactVersionID='${EscapeSQLString(this.ID)}'`,
                     ResultType: 'entity_object'
                 },
                 this.ContextCurrentUser
@@ -531,7 +599,30 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         const actor = this.ContextCurrentUser;
         if (!isServerSystemUser(actor)) {
             const provider = resolveMetadataProvider(this.ProviderToUse, actor);
-            if (!actor || !provider || !this.ArtifactID) {
+            if (provider?.ProviderType === 'Network') {
+                return super.Save(options);
+            }
+            const artifactIdField = this.safeGetField('ArtifactID');
+            const oldArtifactId =
+                typeof artifactIdField?.OldValue === 'string' &&
+                artifactIdField.OldValue.trim().length > 0
+                    ? artifactIdField.OldValue.trim()
+                    : null;
+            const currentArtifactId = this.ArtifactID ? this.ArtifactID.trim() : '';
+
+            if (
+                this.IsSaved &&
+                oldArtifactId &&
+                (!currentArtifactId || !UUIDsEqual(oldArtifactId, currentArtifactId))
+            ) {
+                return this.recordPermissionFailure(
+                    saveType,
+                    'Permission denied: ArtifactID cannot be reassigned on an existing artifact version.'
+                );
+            }
+
+            const authArtifactId = (this.IsSaved ? oldArtifactId : null) ?? currentArtifactId;
+            if (!actor || !provider || !authArtifactId) {
                 return this.recordPermissionFailure(
                     saveType,
                     'Permission denied: authenticated user context and target ArtifactID are required to save an artifact version.'
@@ -539,36 +630,37 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
             }
             const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
                 provider,
-                this.ArtifactID,
+                authArtifactId,
                 actor
             );
             if (!perms.CanEdit) {
                 return this.recordPermissionFailure(
                     saveType,
-                    `Permission denied: user '${actor.Email || actor.ID}' does not hold Edit permission on artifact '${this.ArtifactID}'.`
+                    `Permission denied: user '${actor.Email || actor.ID}' does not hold Edit permission on artifact '${authArtifactId}'.`
                 );
             }
         }
 
-        const contentField = this.GetFieldByName('Content');
+        const contentField = this.safeGetField('Content');
         const previousContentValue =
             typeof contentField?.OldValue === 'string' ? contentField.OldValue : null;
         const contentDirty = this.IsSaved === false || contentField?.Dirty;
 
         if (contentDirty && this.Content) {
+            // 1. Calculate ContentHash using SHA-256
+            this.ContentHash = this.CalculateContentHash(this.Content);
+
+            // 2. Capture the UTF-8 byte length so the client can render file sizes
+            //    without reading the full Content blob.
+            this.ContentSizeBytes = CalculateContentSizeBytes(this.Content);
+
+            // 3. Extract attributes (sets Name/Description and stores pending attributes)
             try {
-                // 1. Calculate ContentHash using SHA-256
-                this.ContentHash = this.CalculateContentHash(this.Content);
-
-                // 2. Capture the UTF-8 byte length so the client can render file sizes
-                //    without reading the full Content blob.
-                this.ContentSizeBytes = CalculateContentSizeBytes(this.Content);
-
-                // 3. Extract attributes (sets Name/Description and stores pending attributes)
                 await this.ExtractAndSaveAttributes();
             } catch (error) {
+                this._pendingAttributes = null;
                 LogError(
-                    `Error in MJArtifactVersionEntityServer.Save pre-processing: ${
+                    `Error in MJArtifactVersionEntityServer.Save attribute extraction: ${
                         error instanceof Error ? error.message : String(error)
                     }`
                 );
@@ -576,12 +668,13 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         }
 
         // Save the main entity
-        const isTrustedRestore = TRUSTED_SERVER_RESTORE_ENTITIES.has(this);
+        const trustedRestoreSet = getGlobalWeakSet(GLOBAL_KEY_TRUSTED_RESTORE);
+        const isTrustedRestore = trustedRestoreSet.has(this);
         let saveResult: boolean;
         try {
             saveResult = await super.Save(options);
         } finally {
-            TRUSTED_SERVER_RESTORE_ENTITIES.delete(this);
+            trustedRestoreSet.delete(this);
         }
 
         // Notify ArtifactCollaborationServer when a version's content is saved so active Yjs rooms
@@ -646,7 +739,30 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         const actor = this.ContextCurrentUser;
         if (!isServerSystemUser(actor)) {
             const provider = resolveMetadataProvider(this.ProviderToUse, actor);
-            if (!actor || !provider || !this.ArtifactID) {
+            if (provider?.ProviderType === 'Network') {
+                return super.Delete(options);
+            }
+            const artifactIdField = this.safeGetField('ArtifactID');
+            const oldArtifactId =
+                typeof artifactIdField?.OldValue === 'string' &&
+                artifactIdField.OldValue.trim().length > 0
+                    ? artifactIdField.OldValue.trim()
+                    : null;
+            const currentArtifactId = this.ArtifactID ? this.ArtifactID.trim() : '';
+
+            if (
+                this.IsSaved &&
+                oldArtifactId &&
+                (!currentArtifactId || !UUIDsEqual(oldArtifactId, currentArtifactId))
+            ) {
+                return this.recordPermissionFailure(
+                    'delete',
+                    'Permission denied: ArtifactID cannot be reassigned before deleting an artifact version.'
+                );
+            }
+
+            const authArtifactId = (this.IsSaved ? oldArtifactId : null) ?? currentArtifactId;
+            if (!actor || !provider || !authArtifactId) {
                 return this.recordPermissionFailure(
                     'delete',
                     'Permission denied: authenticated user context and target ArtifactID are required to delete an artifact version.'
@@ -654,17 +770,34 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
             }
             const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
                 provider,
-                this.ArtifactID,
+                authArtifactId,
                 actor
             );
             if (!perms.CanDelete) {
                 return this.recordPermissionFailure(
                     'delete',
-                    `Permission denied: user '${actor.Email || actor.ID}' does not hold Delete permission on artifact '${this.ArtifactID}'.`
+                    `Permission denied: user '${actor.Email || actor.ID}' does not hold Delete permission on artifact '${authArtifactId}'.`
                 );
             }
         }
         return super.Delete(options);
+    }
+
+    private safeGetField(fieldName: string) {
+        if (Array.isArray(this.Fields)) {
+            const found = this.Fields.find((f) => f.Name === fieldName);
+            if (found) {
+                return found;
+            }
+        }
+        if (typeof this.GetFieldByName === 'function') {
+            try {
+                return this.GetFieldByName(fieldName);
+            } catch {
+                return undefined;
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -769,7 +902,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         const existingAttrsResult = await rv.RunView<MJArtifactVersionAttributeEntity>(
             {
                 EntityName: 'MJ: Artifact Version Attributes',
-                ExtraFilter: `ArtifactVersionID='${this.ID}'`,
+                ExtraFilter: `ArtifactVersionID='${EscapeSQLString(this.ID)}'`,
                 ResultType: 'entity_object'
             },
             this.ContextCurrentUser

@@ -6,9 +6,16 @@ import {
     InputArtifact,
     SetArtifactLiveMutationHook,
 } from '../ArtifactToolManager';
+import { BuildMergedFileVersionConfiguration } from '../GovernedArtifactService';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
-import { ArtifactMetadataEngine, ArtifactPermissionEngine, SpreadsheetEngine, XlsxOpenXmlAdapter } from '@memberjunction/core-entities';
+import {
+    ArtifactMetadataEngine,
+    ArtifactPermissionEngine,
+    MJArtifactTypeEntity,
+    SpreadsheetEngine,
+    XlsxOpenXmlAdapter,
+} from '@memberjunction/core-entities';
 import { RegisterClass, MJEventType, MJGlobal } from '@memberjunction/global';
 import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -22,6 +29,24 @@ import '../artifact-tools/SearchResultSetToolLibrary';
 import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
 import '../artifact-tools/SpreadsheetToolLibrary';
 import '../artifact-tools/ExcelToolLibrary';
+
+type ArtifactTypeTestStub = Pick<MJArtifactTypeEntity, 'ID' | 'Name' | 'ParentID' | 'ToolLibraryClass'>;
+
+function setEngineArtifactTypes(types: ArtifactTypeTestStub[]): void {
+    Object.defineProperty(ArtifactMetadataEngine.Instance, '_artifactTypes', {
+        value: types,
+        writable: true,
+        configurable: true,
+    });
+}
+
+function makeTestUser(id: string, name: string): UserInfo {
+    return new UserInfo(undefined, { ID: id, Name: name });
+}
+
+function makeTestProvider(impl: object): IMetadataProvider {
+    return Object.assign(Object.create(null) as IMetadataProvider, impl);
+}
 
 function makeArtifact(name: string, typeName: string, content: string): InputArtifact {
     return { name, typeName, content };
@@ -331,16 +356,14 @@ describe('ArtifactToolManager', () => {
 
         beforeEach(() => {
             // Pre-populate the engine with a two-level artifact type chain
-            const engineAny = ArtifactMetadataEngine.Instance as unknown as { _artifactTypes: Array<Record<string, unknown>> };
-            engineAny._artifactTypes = [
+            setEngineArtifactTypes([
                 { ID: dataTypeId, Name: 'Data', ParentID: null, ToolLibraryClass: 'TestParentLib' },
                 { ID: snapshotTypeId, Name: 'Data Snapshot', ParentID: dataTypeId, ToolLibraryClass: 'TestChildLib' },
-            ];
+            ]);
         });
 
         afterEach(() => {
-            const engineAny = ArtifactMetadataEngine.Instance as unknown as { _artifactTypes: Array<Record<string, unknown>> };
-            engineAny._artifactTypes = [];
+            setEngineArtifactTypes([]);
         });
 
         it('merges tools from child and parent libraries, child wins on name collision', async () => {
@@ -410,21 +433,15 @@ describe('ArtifactToolManager', () => {
         });
 
         beforeEach(() => {
-            const engineAny = ArtifactMetadataEngine.Instance as unknown as {
-                _artifactTypes: Array<Record<string, unknown>>;
-            };
-            engineAny._artifactTypes = [
+            setEngineArtifactTypes([
                 { ID: dataTypeId, Name: 'Data', ParentID: null, ToolLibraryClass: 'JSONToolLibrary' },
                 { ID: dataSnapshotTypeId, Name: 'Data Snapshot', ParentID: dataTypeId, ToolLibraryClass: 'DataSnapshotToolLibrary' },
                 { ID: searchResultSetTypeId, Name: 'Search Result Set', ParentID: dataSnapshotTypeId, ToolLibraryClass: 'SearchResultSetToolLibrary' },
-            ];
+            ]);
         });
 
         afterEach(() => {
-            const engineAny = ArtifactMetadataEngine.Instance as unknown as {
-                _artifactTypes: Array<Record<string, unknown>>;
-            };
-            engineAny._artifactTypes = [];
+            setEngineArtifactTypes([]);
         });
 
         it('exposes the 5 SearchResultSet-specific tools when a Search Result Set artifact is loaded', () => {
@@ -490,8 +507,8 @@ describe('ArtifactToolManager', () => {
                 ContentMode: 'File' | 'Text';
             }> = [];
 
-            const mockUser = { ID: 'user-agent-1', Name: 'Docs Agent User' } as unknown as UserInfo;
-            const mockProvider = {
+            const mockUser = makeTestUser('11111111-0003-4000-8000-000000000003', 'Docs Agent User');
+            const mockProvider = makeTestProvider({
                 RunView: async (params: { EntityName: string }) => {
                     if (params.EntityName === 'MJ: Artifacts') {
                         return {
@@ -500,7 +517,7 @@ describe('ArtifactToolManager', () => {
                                 {
                                     ID: 'aaaa1111-2222-4333-8444-555555555555',
                                     Name: 'Board Strategy.md',
-                                    UserID: 'user-agent-1',
+                                    UserID: '11111111-0003-4000-8000-000000000003',
                                     DelegateEntityID: null,
                                     DelegateRecordID: null,
                                 },
@@ -559,7 +576,7 @@ describe('ArtifactToolManager', () => {
                     };
                     return draft;
                 },
-            } as unknown as IMetadataProvider;
+            });
 
             const hookEvents: ArtifactLiveMutationEvent[] = [];
             SetArtifactLiveMutationHook((evt) => {
@@ -672,8 +689,8 @@ describe('ArtifactToolManager', () => {
                 },
             ];
 
-            const mockUser = { ID: 'user-agent-1', Name: 'Docs Agent User' } as unknown as UserInfo;
-            const mockProvider = {
+            const mockUser = makeTestUser('11111111-0003-4000-8000-000000000003', 'Docs Agent User');
+            const mockProvider = makeTestProvider({
                 RunView: async (params: { EntityName: string }) => {
                     if (params.EntityName === 'MJ: Artifacts') {
                         return {
@@ -682,7 +699,7 @@ describe('ArtifactToolManager', () => {
                                 {
                                     ID: 'aaaa1111-2222-4333-8444-555555555555',
                                     Name: 'Board Strategy.md',
-                                    UserID: 'user-agent-1',
+                                    UserID: '11111111-0003-4000-8000-000000000003',
                                     DelegateEntityID: null,
                                     DelegateRecordID: null,
                                 },
@@ -699,7 +716,7 @@ describe('ArtifactToolManager', () => {
                     NewRecord: () => undefined,
                     Save: async () => true,
                 }),
-            } as unknown as IMetadataProvider;
+            });
 
             const hookEvents: ArtifactLiveMutationEvent[] = [];
             SetArtifactLiveMutationHook((evt) => hookEvents.push(evt));
@@ -756,9 +773,9 @@ describe('ArtifactToolManager', () => {
         });
 
         it('enforces ArtifactPermissionEngine.ResolvePermissions before mutating or reading artifacts (Blocker 2)', async () => {
-            const mockViewerUser = { ID: 'user-viewer-only', Name: 'Read Only Viewer' } as unknown as UserInfo;
+            const mockViewerUser = makeTestUser('11111111-0004-4000-8000-000000000004', 'Read Only Viewer');
             let saveCalled = false;
-            const mockProvider = {
+            const mockProvider = makeTestProvider({
                 RunView: async (params: { EntityName: string }) => {
                     if (params.EntityName === 'MJ: Artifacts') {
                         return {
@@ -767,7 +784,7 @@ describe('ArtifactToolManager', () => {
                                 {
                                     ID: 'aaaa1111-2222-4333-8444-555555555555',
                                     Name: 'Restricted.md',
-                                    UserID: 'user-owner-999', // Viewer is NOT owner
+                                    UserID: '11111111-0005-4000-8000-000000000005', // Viewer is NOT owner
                                     DelegateEntityID: null,
                                     DelegateRecordID: null,
                                 },
@@ -781,7 +798,7 @@ describe('ArtifactToolManager', () => {
                                 {
                                     ID: 'perm-1',
                                     ArtifactID: 'aaaa1111-2222-4333-8444-555555555555',
-                                    UserID: 'user-viewer-only',
+                                    UserID: '11111111-0004-4000-8000-000000000004',
                                     CanRead: true,
                                     CanEdit: false,
                                     CanDelete: false,
@@ -799,7 +816,7 @@ describe('ArtifactToolManager', () => {
                         return true;
                     },
                 }),
-            } as unknown as IMetadataProvider;
+            });
 
             const hookEvents: ArtifactLiveMutationEvent[] = [];
             SetArtifactLiveMutationHook((evt) => hookEvents.push(evt));
@@ -848,9 +865,9 @@ describe('ArtifactToolManager', () => {
         });
 
         it('refuses to downgrade ContentMode from File to Text when FileStorageEngine upload fails (Blocker 2)', async () => {
-            const mockUser = { ID: 'user-agent-1', Name: 'Sheets Agent User' } as unknown as UserInfo;
+            const mockUser = makeTestUser('11111111-0003-4000-8000-000000000003', 'Sheets Agent User');
             let saveCalled = false;
-            const mockProvider = {
+            const mockProvider = makeTestProvider({
                 RunView: async (params: { EntityName: string }) => {
                     if (params.EntityName === 'MJ: Artifacts') {
                         return {
@@ -859,7 +876,7 @@ describe('ArtifactToolManager', () => {
                                 {
                                     ID: 'bbbb1111-2222-4333-8444-555555555555',
                                     Name: 'Budget.xlsx',
-                                    UserID: 'user-agent-1',
+                                    UserID: '11111111-0003-4000-8000-000000000003',
                                     DelegateEntityID: null,
                                     DelegateRecordID: null,
                                 },
@@ -885,7 +902,7 @@ describe('ArtifactToolManager', () => {
                         return true;
                     },
                 }),
-            } as unknown as IMetadataProvider;
+            });
 
             manager.Initialize(
                 [
@@ -943,13 +960,13 @@ describe('ArtifactToolManager', () => {
                 },
             ];
             let failVersionLookup = false;
-            const mockUser = { ID: 'user-agent-1', Name: 'Docs Agent User' } as unknown as UserInfo;
-            const mockProvider = {
+            const mockUser = makeTestUser('11111111-0003-4000-8000-000000000003', 'Docs Agent User');
+            const mockProvider = makeTestProvider({
                 RunView: async (params: { EntityName: string }) => {
                     if (params.EntityName === 'MJ: Artifacts') {
                         return {
                             Success: true,
-                            Results: [{ ID: 'aaaa1111-2222-4333-8444-555555555555', UserID: 'user-agent-1' }],
+                            Results: [{ ID: 'aaaa1111-2222-4333-8444-555555555555', UserID: '11111111-0003-4000-8000-000000000003' }],
                         };
                     }
                     if (failVersionLookup) {
@@ -989,7 +1006,7 @@ describe('ArtifactToolManager', () => {
                     };
                     return draft;
                 },
-            } as unknown as IMetadataProvider;
+            });
 
             manager.Initialize(
                 [
@@ -1564,7 +1581,7 @@ describe('ArtifactToolManager', () => {
         it('R10-6 (S7c): reconciles concurrent human edit during Save() between deferCommit preview and commit()', async () => {
             const artifactUuid = 'cccc1111-2222-4333-8444-777777777777';
             const user = new UserInfo();
-            user.ID = 'user-r10-6';
+            user.ID = '11111111-0006-4000-8000-000000000006';
             user.Name = 'Agent User';
             user.Email = 'agent@example.com';
             user.IsActive = true;
@@ -1683,7 +1700,7 @@ describe('ArtifactToolManager', () => {
                         content: initialMarkdown,
                     },
                 ],
-                { contextUser: user, provider: mockProvider as unknown as IMetadataProvider },
+                { contextUser: user, provider: makeTestProvider(mockProvider) },
             );
 
             const blocksCall = await manager.ExecuteSingleToolCall({
@@ -1822,7 +1839,7 @@ describe('ArtifactToolManager', () => {
                 },
             });
             expect(readBack.result.success).toBe(true);
-            const cells = (readBack.result.data as { cells: Array<{ address: string; rawValue: unknown }> }).cells;
+            const cells = (readBack.result.data as { cells: Array<{ address: string; rawValue: string | number | boolean | null }> }).cells;
             const cellMap = new Map(cells.map((c) => [c.address, c.rawValue]));
             expect(cellMap.get('B1')).toBe('Agent B1');
             expect(cellMap.get('C1')).toBe('Human C1');
@@ -1832,7 +1849,7 @@ describe('ArtifactToolManager', () => {
         it('S7d: second Save() during concurrent merge re-persist returns false -> result.success === false and logs error', async () => {
             const artifactUuid = 'cccc1111-2222-4333-8444-888888888888';
             const user = new UserInfo();
-            user.ID = 'user-s7d';
+            user.ID = '11111111-0007-4000-8000-000000000007';
             user.Name = 'Agent User';
             user.Email = 'agent@example.com';
             user.IsActive = true;
@@ -1878,6 +1895,7 @@ describe('ArtifactToolManager', () => {
                             Configuration: null as string | null,
                             NewRecord: () => {},
                             Load: async () => false,
+                            Delete: async () => true,
                             Save: async () => {
                                 saveCount++;
                                 // First Save() succeeds; second Save() fails
@@ -1949,7 +1967,7 @@ describe('ArtifactToolManager', () => {
         it('S7e: commit() returns applied: false -> result.success === false, rolls back in-memory content, and deletes v2 DB version', async () => {
             const artifactUuid = 'cccc1111-2222-4333-8444-999999999999';
             const user = new UserInfo();
-            user.ID = 'user-s7e';
+            user.ID = '11111111-0008-4000-8000-000000000008';
             user.Name = 'Agent User';
             user.Email = 'agent@example.com';
             user.IsActive = true;
@@ -2070,7 +2088,7 @@ describe('ArtifactToolManager', () => {
         it('R12-1 / S7c End-to-End Test: reconciles concurrent human edit during Save() with rejectedAgentHunks and re-persists v2', async () => {
             const artifactUuid = 'aaaa1111-2222-3333-4444-555555555551';
             const user = new UserInfo();
-            user.ID = 'user-s7c';
+            user.ID = '11111111-000a-4000-8000-00000000000a';
             user.Name = 'S7c User';
 
             const initialMarkdown = '# Project\n\nBudget: $5k.\n';
@@ -2216,7 +2234,7 @@ describe('ArtifactToolManager', () => {
         it('R12-3 / S7e DB Version Rollback Test: deletes v2 when commit() throws and reverts v2.Content when reused version commit fails', async () => {
             const artifactUuid = 'cccc2222-3333-4444-5555-666666666666';
             const user = new UserInfo();
-            user.ID = 'user-s7e-throw';
+            user.ID = '11111111-0009-4000-8000-000000000009';
 
             const deleteSpy = vi.fn(async () => true);
             let currentEntityContent: string | null = null;
@@ -2365,7 +2383,7 @@ describe('ArtifactToolManager', () => {
         it('R12-5: File-Mode Reference Guard checks MJ: Artifact Versions before deleting superseded FileID', async () => {
             const artifactUuid = 'ffff3333-4444-5555-6666-777777777777';
             const user = new UserInfo();
-            user.ID = 'user-r12-5';
+            user.ID = '11111111-000b-4000-8000-00000000000b';
 
             const fileIds = [
                 '11111111-2222-3333-4444-555555555551',
@@ -2534,9 +2552,9 @@ describe('ArtifactToolManager', () => {
             it('R13-3a / R15-2: rollback deletes the version as the system user, so it succeeds when the agent user lost Delete', async () => {
                 const artifactUuid = '11112222-3333-4444-5555-666677778888';
                 const user = new UserInfo();
-                user.ID = 'user-r13-3a';
+                user.ID = '11111111-000c-4000-8000-00000000000c';
                 const systemUser = new UserInfo();
-                systemUser.ID = 'system-user-r13-3a';
+                systemUser.ID = '11111111-000d-4000-8000-00000000000d';
                 const systemUserSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
 
                 // The caller's entity refuses Delete (rights revoked); only the system-user copy may delete.
@@ -2622,7 +2640,7 @@ describe('ArtifactToolManager', () => {
             it('R13-3b: When commit throws or returns applied: false, hookResult.rollback is invoked alongside DB rollback', async () => {
                 const artifactUuid = '22223333-4444-5555-6666-777788889999';
                 const user = new UserInfo();
-                user.ID = 'user-r13-3b';
+                user.ID = '11111111-000e-4000-8000-00000000000e';
 
                 const rollbackSpy1 = vi.fn().mockResolvedValue(undefined);
                 const rollbackSpy2 = vi.fn().mockResolvedValue(undefined);
@@ -2712,7 +2730,7 @@ describe('ArtifactToolManager', () => {
             it('R13-3c: When a reused file-backed version rolls back after commit fails, the newly uploaded FileID is cleaned up while previous FileID is restored', async () => {
                 const artifactUuid = '33334444-5555-6666-7777-888899990000';
                 const user = new UserInfo();
-                user.ID = 'user-r13-3c';
+                user.ID = '11111111-000f-4000-8000-00000000000f';
 
                 const fileIdPrev = 'aaaaaaaa-1111-2222-3333-444444444441';
                 const fileIdNew = 'bbbbbbbb-1111-2222-3333-444444444442';
@@ -2841,7 +2859,7 @@ describe('ArtifactToolManager', () => {
             it('R13-3d: When a newer version v3 was created before rollback runs, v2 is NOT deleted', async () => {
                 const artifactUuid = '44445555-6666-7777-8888-999900001111';
                 const user = new UserInfo();
-                user.ID = 'user-r13-3d';
+                user.ID = '11111111-0010-4000-8000-000000000010';
 
                 const deleteSpy = vi.fn().mockResolvedValue(true);
                 const mockVersionEntity = {
@@ -2920,7 +2938,7 @@ describe('ArtifactToolManager', () => {
             it('X2 & X3: when persistOutcome.persisted is false (Save() fails or CanEdit revoked), hookResult.rollback is NOT called', async () => {
                 const artifactUuid = '55556666-7777-8888-9999-000011112222';
                 const user = new UserInfo();
-                user.ID = 'user-x2-x3';
+                user.ID = '11111111-0011-4000-8000-000000000011';
 
                 const rollbackSpy = vi.fn().mockResolvedValue(undefined);
                 const mockVersionEntity = {
@@ -2989,9 +3007,9 @@ describe('ArtifactToolManager', () => {
             it('X4b / R15-2: when the system-user delete fails, the previous content is saved back on that same system-user copy', async () => {
                 const artifactUuid = '66667777-8888-9999-0000-111122223333';
                 const user = new UserInfo();
-                user.ID = 'user-x4b';
+                user.ID = '11111111-0012-4000-8000-000000000012';
                 const systemUser = new UserInfo();
-                systemUser.ID = 'system-user-x4b';
+                systemUser.ID = '11111111-0013-4000-8000-000000000013';
                 const systemUserSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
 
                 const mockVersionEntity = {
@@ -3077,7 +3095,7 @@ describe('ArtifactToolManager', () => {
             it('X5 & X6: when human restores v3 during agent v2 commit failure, v2 is NOT deleted, entry stays at v1, and subsequent edit without reload fails with concurrent modification error', async () => {
                 const artifactUuid = '77778888-9999-0000-1111-222233334444';
                 const user = new UserInfo();
-                user.ID = 'user-x5-x6';
+                user.ID = '11111111-0014-4000-8000-000000000014';
 
                 const deleteSpy = vi.fn().mockResolvedValue(true);
                 const mockVersionEntity = {
@@ -3161,6 +3179,294 @@ describe('ArtifactToolManager', () => {
                 });
                 expect(secondEditRes.result.success).toBe(false);
                 expect(secondEditRes.result.errorMessage).toContain('Artifact was modified concurrently (v3 > v1); call reload_artifact before mutating');
+            });
+
+            it('NW3: preserves existing suggestions and comments in Configuration across File-mode .xlsx edits and saves', async () => {
+                const artifactUuid = '99998888-7777-4666-8555-444433332222';
+                const user = makeTestUser('11111111-0010-4000-8000-000000000010', 'Sheets Editor');
+                const sheetEngine = SpreadsheetEngine.Instance;
+                const wb = sheetEngine.CreateEmptyWorkbook('Financials', ['Sheet1'], 5, 5);
+                sheetEngine.SetCell(wb, 'Sheet1', 'A1', { Value: 'Revenue' }, true);
+                const initialWbJson = sheetEngine.SerializeWorkbook(wb);
+                const xlsxBuffer = Buffer.from(sheetEngine.ExportToXlsxBytes(wb, false));
+
+                const initialWbObj = JSON.parse(initialWbJson) as Record<string, object | string | number | boolean | null>;
+                const initialConfigJson = JSON.stringify({
+                    ...initialWbObj,
+                    comments: [{ CommentID: 'comment-existing-1', Body: 'Verify Q4 margin' }],
+                    suggestions: [{ SuggestionID: 'sug-existing-1', Domain: 'spreadsheet', Status: 'Pending' }],
+                });
+
+                // 1. Direct helper test for GovernedArtifactService.BuildMergedFileVersionConfiguration
+                const updatedWb = sheetEngine.CreateEmptyWorkbook('Financials', ['Sheet1'], 5, 5);
+                sheetEngine.SetCell(updatedWb, 'Sheet1', 'A1', { Value: 'Revenue' }, true);
+                sheetEngine.SetCell(updatedWb, 'Sheet1', 'B1', { Value: 4200 }, true);
+                const mergedViaHelper = JSON.parse(
+                    BuildMergedFileVersionConfiguration({
+                        existingConfiguration: initialConfigJson,
+                        contentConfigurationJson: sheetEngine.SerializeWorkbook(updatedWb),
+                        configurationPatch: { previewSnapshot: { summary: 'ok' } },
+                    }),
+                ) as {
+                    comments?: Array<{ CommentID: string }>;
+                    suggestions?: Array<{ SuggestionID: string }>;
+                    previewSnapshot?: { summary: string };
+                    Worksheets: Array<{ Cells: Record<string, { RawValue?: string | number }> }>;
+                };
+                expect(mergedViaHelper.comments?.map((c) => c.CommentID)).toEqual(['comment-existing-1']);
+                expect(mergedViaHelper.suggestions?.map((s) => s.SuggestionID)).toEqual(['sug-existing-1']);
+                expect(mergedViaHelper.previewSnapshot?.summary).toBe('ok');
+                expect(mergedViaHelper.Worksheets[0].Cells.B1?.RawValue).toBe(4200);
+
+                // 2. End-to-end ArtifactToolManager flow: File-mode .xlsx propose_suggestion -> write_cells
+                let uploadSeq = 0;
+                vi.spyOn(FileStorageEngine.Instance, 'Config').mockResolvedValue();
+                Object.defineProperty(FileStorageEngine.Instance, 'HasStorageAccounts', { value: true, configurable: true });
+                vi.spyOn(FileStorageEngine.Instance, 'UploadFile').mockImplementation(async () => ({
+                    FileID: `file-uploaded-${++uploadSeq}`,
+                    FileName: 'Financials.xlsx',
+                    ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    Status: 'success',
+                }));
+                vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+                    ArtifactID: artifactUuid,
+                    UserID: user.ID,
+                    IsOwner: true,
+                    CanRead: true,
+                    CanEdit: true,
+                    CanDelete: true,
+                    CanShare: true,
+                    HasDirectPermissions: false,
+                    GrantedBy: 'owner',
+                });
+
+                const savedVersion = {
+                    ID: 'ver-xlsx-initial',
+                    ArtifactID: artifactUuid,
+                    VersionNumber: 1,
+                    ContentMode: 'File' as 'File' | 'Text',
+                    FileID: 'file-orig-1' as string | null,
+                    Name: 'Financials.xlsx',
+                    Comments: '',
+                    Content: null as string | null,
+                    Configuration: initialConfigJson as string | null,
+                    ContentHash: 'hash-1',
+                    ContentSizeBytes: xlsxBuffer.byteLength,
+                    MimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' as string | null,
+                    FileName: 'Financials.xlsx' as string | null,
+                    NewRecord: vi.fn(),
+                    Save: vi.fn().mockResolvedValue(true),
+                };
+
+                const mockProvider = makeTestProvider({
+                    RunView: async (params: { EntityName: string }) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return { Success: true, Results: [{ ID: artifactUuid, Name: 'Financials.xlsx', UserID: user.ID }] };
+                        }
+                        if (params.EntityName === 'MJ: Artifact Versions') {
+                            return { Success: true, Results: [savedVersion] };
+                        }
+                        return { Success: true, Results: [] };
+                    },
+                    GetEntityObject: async () => savedVersion,
+                });
+
+                const manager = new ArtifactToolManager();
+                manager.Initialize(
+                    [
+                        {
+                            name: 'Financials.xlsx',
+                            typeName: 'Excel Spreadsheet',
+                            toolLibraryClass: 'SpreadsheetToolLibrary',
+                            artifactId: artifactUuid,
+                            versionId: 'ver-xlsx-initial',
+                            versionNumber: 1,
+                            content: xlsxBuffer,
+                        },
+                    ],
+                    { contextUser: user, provider: mockProvider },
+                );
+
+                // First mutation: propose_suggestion (config-patch-only on File-mode .xlsx Buffer)
+                const suggestRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'propose_suggestion',
+                    input: {
+                        anchor: { domain: 'spreadsheet', sheet: 'Sheet1', range: 'A1' },
+                        originalSlice: 'Revenue',
+                        proposedReplacement: 'Net Revenue',
+                        rationale: 'Clarify metric',
+                    },
+                });
+                expect(suggestRes.result.success).toBe(true);
+                expect(savedVersion.ContentMode).toBe('File');
+
+                // Second mutation: write_cells edit/save must NOT overwrite comments or suggestions
+                const writeRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'write_cells',
+                    input: {
+                        sheet: 'Sheet1',
+                        cells: [{ address: 'B1', value: 5500 }],
+                    },
+                });
+                expect(writeRes.result.success).toBe(true);
+                expect(savedVersion.ContentMode).toBe('File');
+
+                const finalConfig = JSON.parse(savedVersion.Configuration ?? '{}') as {
+                    comments?: Array<{ CommentID: string }>;
+                    suggestions?: Array<{ SuggestionID: string; OriginalSlice?: string }>;
+                    Worksheets?: Array<{ Cells: Record<string, { RawValue?: string | number }> }>;
+                };
+                expect(finalConfig.comments?.map((c) => c.CommentID)).toEqual(['comment-existing-1']);
+                expect(finalConfig.suggestions?.some((s) => s.SuggestionID === 'sug-existing-1')).toBe(true);
+                expect(finalConfig.suggestions?.some((s) => s.OriginalSlice === 'Revenue')).toBe(true);
+                expect(finalConfig.Worksheets?.[0]?.Cells?.B1?.RawValue).toBe(5500);
+            });
+        });
+
+        describe('create_artifact InitialOperations forwarding', () => {
+            it('executes InitialOperations (write_cells + upsert_chart) atomically in-memory and fails closed on invalid op', async () => {
+                const manager = new ArtifactToolManager();
+                manager.Initialize([]);
+
+                const createRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'workspace',
+                    tool: 'create_artifact',
+                    input: {
+                        title: 'Data Entry Demo Workbook',
+                        artifactType: 'Excel Spreadsheet',
+                        sheetNames: ['Sales Data', 'Summary'],
+                        InitialOperations: [
+                            {
+                                tool: 'write_cells',
+                                input: {
+                                    sheet: 'Sales Data',
+                                    cells: [
+                                        { address: 'A1', value: 'Month' },
+                                        { address: 'B1', value: 'Sales' },
+                                        { address: 'A2', value: 'Jan' },
+                                        { address: 'B2', value: 12000 },
+                                    ],
+                                },
+                            },
+                            {
+                                tool: 'write_cells',
+                                input: {
+                                    sheet: 'Summary',
+                                    cells: [
+                                        { address: 'A1', value: 'Total Sales' },
+                                        { address: 'B1', formula: "=SUM('Sales Data'!B2:B2)" },
+                                    ],
+                                },
+                            },
+                            {
+                                tool: 'upsert_chart',
+                                input: {
+                                    sheet: 'Summary',
+                                    title: 'Monthly Sales',
+                                    chartType: 'bar',
+                                    dataRange: "'Sales Data'!A1:B2",
+                                },
+                            },
+                        ],
+                    },
+                });
+                expect(createRes.result.success).toBe(true);
+
+                const readSales = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'read_range',
+                    input: { sheet: 'Sales Data', range: 'A1:B2' },
+                });
+                expect(readSales.result.success).toBe(true);
+                const salesData = readSales.result.data as {
+                    cells?: Record<string, { RawValue?: string | number }>;
+                };
+                expect(salesData.cells?.A1?.RawValue).toBe('Month');
+                expect(salesData.cells?.B2?.RawValue).toBe(12000);
+
+                const badRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'workspace',
+                    tool: 'create_artifact',
+                    input: {
+                        title: 'Broken Workbook',
+                        artifactType: 'Excel Spreadsheet',
+                        InitialOperations: [
+                            { tool: 'nonexistent_sheet_tool', input: {} },
+                        ],
+                    },
+                });
+                expect(badRes.result.success).toBe(false);
+                expect(badRes.result.errorMessage).toContain('nonexistent_sheet_tool');
+            });
+
+            it('forwards InitialOperations (PascalCase) to GovernedArtifactService.CreateGovernedArtifact when provider + user are bound', async () => {
+                const user = makeUser();
+                const createSpy = vi
+                    .spyOn(GovernedArtifactService.Instance, 'CreateGovernedArtifact')
+                    .mockResolvedValue({
+                        success: true,
+                        artifactId: '506c2915-972c-4654-9f5a-fb7013051064',
+                        versionId: 'cbec1596-eda6-4f88-9827-e28e1a0ce42c',
+                        versionNumber: 1,
+                        name: 'Data Entry Demo Workbook',
+                        typeName: 'Excel Spreadsheet',
+                        driverClass: 'SpreadsheetArtifactViewerPlugin',
+                        content: JSON.stringify({
+                            WorkbookID: 'wb-1',
+                            Title: 'Data Entry Demo Workbook',
+                            ActiveSheetID: 'sheet-1',
+                            Worksheets: [
+                                {
+                                    SheetID: 'sheet-1',
+                                    Name: 'Sales Data',
+                                    Rows: [],
+                                    Columns: [],
+                                    Cells: { A1: { RawValue: 'Month' }, B2: { RawValue: 12000 } },
+                                },
+                            ],
+                        }),
+                        results: [{ tool: 'write_cells', data: { writtenCount: 2 } }],
+                    });
+
+                const manager = new ArtifactToolManager();
+                manager.Initialize([], { contextUser: user, provider: makeTestProvider() });
+
+                const res = await manager.ExecuteSingleToolCall({
+                    artifactId: 'workspace',
+                    tool: 'create_artifact',
+                    input: {
+                        title: 'Data Entry Demo Workbook',
+                        artifactType: 'Excel Spreadsheet',
+                        sheetNames: ['Sales Data', 'Summary'],
+                        InitialOperations: [
+                            {
+                                tool: 'write_cells',
+                                input: {
+                                    sheet: 'Sales Data',
+                                    cells: [{ address: 'A1', value: 'Month' }],
+                                },
+                            },
+                        ],
+                    },
+                });
+
+                expect(res.result.success).toBe(true);
+                expect(createSpy).toHaveBeenCalledTimes(1);
+                expect(createSpy.mock.calls[0][0].initialOperations).toEqual([
+                    {
+                        tool: 'write_cells',
+                        input: {
+                            sheet: 'Sales Data',
+                            cells: [{ address: 'A1', value: 'Month' }],
+                        },
+                    },
+                ]);
+                const data = res.result.data as {
+                    initialOperationResults?: Array<{ tool: string }>;
+                };
+                expect(data.initialOperationResults?.map((r) => r.tool)).toEqual(['write_cells']);
             });
         });
     });

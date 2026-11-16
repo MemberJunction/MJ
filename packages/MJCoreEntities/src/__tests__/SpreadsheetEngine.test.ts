@@ -365,7 +365,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
 
         let latestSheetSerialized = engine.SerializeWorkbook(sheetWb);
         const sheetArtifactId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-        const viewer = createMockUser('u-slide-viewer', 'Carol Viewer', true);
+        const viewer = createMockUser('33333333-4444-4444-8444-333333333333', 'Carol Viewer', true);
 
         // Create a slide deck with a chart region referencing the Sheet's chart-q-rev
         const slideEngine = SlideDeckEngine.Instance;
@@ -429,6 +429,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
 
         const mockProvider = {
             Entities: [],
+            EntityByName: () => undefined,
             Queries: [],
             RunView: runSingleMockView,
             RunViews: async (paramsList: Array<{ EntityName: string }>) =>
@@ -701,6 +702,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         let lastExtraFilter = '';
         const provider = {
             Entities: [mockEntity],
+            EntityByName: (name: string) => (name === mockEntity.Name ? mockEntity : undefined),
             Queries: [],
             RunView: async (params: { ExtraFilter?: string }) => {
                 lastExtraFilter = params.ExtraFilter ?? '';
@@ -895,6 +897,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         } as unknown as EntityInfo;
         const provider = {
             Entities: [mockEmpEntity],
+            EntityByName: (name: string) => (name === mockEmpEntity.Name ? mockEmpEntity : undefined),
             Queries: [],
             RunView: async () => ({
                 Success: true,
@@ -1007,13 +1010,13 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(engine.EvaluateFormulaExpression(multiWb, 'Q1 Revenue', '=SUM(2:2)')).toBe(41);
 
         // Denied live table propagates #MJ_ACCESS_DENIED! across all table cells and cannot be masked by IFERROR or COUNT
+        const deniedEmpEntity = {
+            ...mockEmpEntity,
+            GetUserPermisions: () => ({ CanRead: false })
+        } as unknown as EntityInfo;
         const deniedProvider = {
-            Entities: [
-                {
-                    ...mockEmpEntity,
-                    GetUserPermisions: () => ({ CanRead: false })
-                }
-            ],
+            Entities: [deniedEmpEntity],
+            EntityByName: (name: string) => (name === deniedEmpEntity.Name ? deniedEmpEntity : undefined),
             Queries: [],
             RunView: async () => ({ Success: false, Results: [], TotalRowCount: 0 })
         } as unknown as IMetadataProvider;
@@ -1226,7 +1229,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(xmlB).toContain('<f>G5*2</f><v>80</v>');
         // Newly edited future functions get _xlfn. prefix in both PatchXlsxBytes and ExportToXlsxBytes, and A1 keeps cm="1" + t="array" with updated non-stale ref="A1" while omitting <v>#NAME?</v>!
         expect(xmlB).toContain('cm="1"');
-        expect(xmlB).toContain('<f t="array" ref="A1">_xlfn.SEQUENCE(5, 1, 10)</f></c>');
+        expect(xmlB).toContain('<f t="array" ref="A1">_xlfn.SEQUENCE(5, 1, 10)</f><v>10</v></c>');
         expect(xmlB).not.toContain('#NAME?');
         expect(xmlB).toContain('<f>_xlfn.XLOOKUP(20, G2:G5, H2:H5)</f><v>40</v>');
 
@@ -1363,26 +1366,30 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(wb, s.SheetID, 'B2', { Value: 0 }, false);
         engine.SetCell(wb, s.SheetID, 'B3', { Value: 1 }, true);
 
-        // Unimplemented dynamic-array functions must return honest #NAME? (never silent wrong numbers!)
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SEQUENCE(3)')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(SEQUENCE(3))')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SORT(A1:A3, 1, -1)')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SORTBY(A1:A3, B1:B3)')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=FILTER(A1:A3, B1:B3=1)')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=UNIQUE(A1:A3)')).toBe('#NAME?');
+        // Implemented NW-4 dynamic-array & lexical functions evaluate accurately; unimplemented ones still return honest #NAME?
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SEQUENCE(3)')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(SEQUENCE(3))')).toBe(6);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SORT(A1:A3, 1, -1)')).toBe(30);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SORTBY(A1:A3, B1:B3)')).toBe(10);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=FILTER(A1:A3, B1:B3=1)')).toBe(30);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=UNIQUE(A1:A3)')).toBe(30);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=LET(x, 5, x + 1)')).toBe(6);
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=RANDARRAY()')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=LET(x, 5, x + 1)')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(RANDARRAY(3))')).toBe('#NAME?');
 
-        // Accurate scalar future functions keep working and round-trip with _xlfn.IFNA and _xlfn.DAYS
+        // Accurate scalar future functions keep working and round-trip with _xlfn.IFNA and _xlfn.DAYS;
+        // unimplemented RANDARRAY omits <v> while implemented SORT/FILTER emit computed <v> and _xlfn._xlws.
         engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=IFNA(VLOOKUP(999, A1:B3, 2, FALSE), 42)' }, false);
         engine.SetCell(wb, s.SheetID, 'D2', { Formula: '=DAYS(DATE(2026, 1, 15), DATE(2026, 1, 5))' }, false);
-        engine.SetCell(wb, s.SheetID, 'D3', { Formula: '=SORT(A1:A3, 1, -1)' }, false);
-        engine.SetCell(wb, s.SheetID, 'D4', { Formula: '=FILTER(A1:A3, B1:B3=1)' }, true);
+        engine.SetCell(wb, s.SheetID, 'D3', { Formula: '=RANDARRAY(2)' }, false);
+        engine.SetCell(wb, s.SheetID, 'G1', { Formula: '=SORT(A1:A3, 1, -1)' }, false);
+        engine.SetCell(wb, s.SheetID, 'H1', { Formula: '=FILTER(A1:A3, B1:B3=1)' }, true);
 
         expect(s.Cells['D1']?.ComputedValue).toBe(42);
         expect(s.Cells['D2']?.ComputedValue).toBe(10);
         expect(s.Cells['D3']?.ComputedValue).toBe('#NAME?');
-        expect(s.Cells['D4']?.ComputedValue).toBe('#NAME?');
+        expect(s.Cells['G1']?.ComputedValue).toBe(30);
+        expect(s.Cells['H1']?.ComputedValue).toBe(30);
 
         const decoder = new TextDecoder();
         const encoder = new TextEncoder();
@@ -1392,8 +1399,9 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
 
         expect(sheetXml).toContain('<f>_xlfn.IFNA(VLOOKUP(999, A1:B3, 2, FALSE), 42)</f><v>42</v>');
         expect(sheetXml).toContain('<f>_xlfn.DAYS(DATE(2026, 1, 15), DATE(2026, 1, 5))</f><v>10</v>');
-        expect(sheetXml).toContain('<c r="D3" cm="1"><f t="array" ref="D3">_xlfn._xlws.SORT(A1:A3, 1, -1)</f></c>');
-        expect(sheetXml).toContain('<c r="D4" cm="1"><f t="array" ref="D4">_xlfn._xlws.FILTER(A1:A3, B1:B3=1)</f></c>');
+        expect(sheetXml).toContain('<c r="D3" cm="1"><f t="array" ref="D3">_xlfn.RANDARRAY(2)</f></c>');
+        expect(sheetXml).toContain('<c r="G1" cm="1" t="n"><f t="array" ref="G1">_xlfn._xlws.SORT(A1:A3, 1, -1)</f><v>30</v></c>');
+        expect(sheetXml).toContain('<c r="H1" cm="1" t="n"><f t="array" ref="H1">_xlfn._xlws.FILTER(A1:A3, B1:B3=1)</f><v>30</v></c>');
         expect(sheetXml).not.toContain('#NAME?');
         expect(exportedFiles.has('xl/metadata.xml')).toBe(true);
 
@@ -1404,8 +1412,8 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(rs.Cells['D1']?.ComputedValue).toBe(42);
         expect(rs.Cells['D2']?.Formula).toBe('=DAYS(DATE(2026, 1, 15), DATE(2026, 1, 5))');
         expect(rs.Cells['D2']?.ComputedValue).toBe(10);
-        expect(rs.Cells['D3']?.Formula).toBe('=SORT(A1:A3, 1, -1)');
-        expect(rs.Cells['D4']?.Formula).toBe('=FILTER(A1:A3, B1:B3=1)');
+        expect(rs.Cells['G1']?.Formula).toBe('=SORT(A1:A3, 1, -1)');
+        expect(rs.Cells['H1']?.Formula).toBe('=FILTER(A1:A3, B1:B3=1)');
 
         // Legacy CSE formula (<f t="array" ref="E1:E3">SUM(A1:A3)</f> without cm="1") preserves t="array" ref="E1:E3" on edit!
         const cseSheetXml = sheetXml.replace(
@@ -1422,7 +1430,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const csePatchedBytes = engine.PatchXlsxBytes(cseSeedBytes, cseWb);
         const csePatchedXml = decoder.decode(engine.ExtractZipArchive(csePatchedBytes).get('xl/worksheets/sheet1.xml')!);
         expect(csePatchedXml).toContain('<c r="E9" t="n"><f t="array" ref="E9:E10">SUM(A1:A3)</f><v>60</v></c>');
-        expect(csePatchedXml).toContain('<c r="F9" cm="1"><f t="array" ref="F9">_xlfn.SEQUENCE(4)</f></c>');
+        expect(csePatchedXml).toContain('<c r="F9" cm="1" t="n"><f t="array" ref="F9">_xlfn.SEQUENCE(4)</f><v>1</v></c>');
         expect(csePatchedXml).not.toContain('#NAME?');
     });
 
@@ -1727,10 +1735,10 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         for (let r = 1; r <= 5; r++) {
             engine.SetCell(wb, s.SheetID, `A${r}`, { Value: r * 10 }, false);
         }
-        engine.SetCell(wb, s.SheetID, 'B1', { Formula: '=ROWS(UNIQUE(A1:A5))' }, false);
-        engine.SetCell(wb, s.SheetID, 'B2', { Formula: '=COLUMNS(UNIQUE(A1:A5))' }, false);
-        engine.SetCell(wb, s.SheetID, 'B3', { Formula: '=COUNTA(UNIQUE(A1:A5))' }, false);
-        engine.SetCell(wb, s.SheetID, 'B4', { Formula: '=IFERROR(SORT(A1:A5), 0)' }, false);
+        engine.SetCell(wb, s.SheetID, 'B1', { Formula: '=ROWS(RANDARRAY(5))' }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Formula: '=COLUMNS(TAKE(A1:A5, 2))' }, false);
+        engine.SetCell(wb, s.SheetID, 'B3', { Formula: '=COUNTA(RANDARRAY(5))' }, false);
+        engine.SetCell(wb, s.SheetID, 'B4', { Formula: '=IFERROR(TAKE(A1:A5, 2), 0)' }, false);
         engine.SetCell(wb, s.SheetID, 'B5', { Formula: '=ROWS(1/0)' }, false);
         engine.SetCell(wb, s.SheetID, 'B6', { Formula: '=COLUMNS(1/0)' }, true);
 
@@ -1755,8 +1763,8 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(baseWb, 'Sheet1', 'A1', { Value: 10 }, true);
         const seedBytes = engine.ExportToXlsxBytes(baseWb, false);
         const imported = engine.ImportFromXlsxBytes(seedBytes);
-        engine.SetCell(imported, 'Sheet1', 'C1', { Formula: '=ROWS(UNIQUE(A1:A5))' }, false);
-        engine.SetCell(imported, 'Sheet1', 'C2', { Formula: '=IFERROR(SORT(A1:A5), 0)' }, true);
+        engine.SetCell(imported, 'Sheet1', 'C1', { Formula: '=ROWS(RANDARRAY(5))' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C2', { Formula: '=IFERROR(TAKE(A1:A5, 2), 0)' }, true);
         const patchedBytes = engine.PatchXlsxBytes(seedBytes, imported);
         const patchedXml = decoder.decode(engine.ExtractZipArchive(patchedBytes).get('xl/worksheets/sheet1.xml')!);
         for (const addr of ['C1', 'C2']) {
@@ -1791,7 +1799,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         );
 
         const editWb1 = engine.ImportFromXlsxBytes(seedValueOnlyBytes);
-        engine.SetCell(editWb1, 'Sheet1', 'B1', { Formula: '=UNIQUE(A1:A2)' }, false);
+        engine.SetCell(editWb1, 'Sheet1', 'C1', { Formula: '=UNIQUE(A1:A2)' }, false);
         engine.SetCell(editWb1, 'Sheet1', 'B2', { Formula: '=LET(x, 1, y, 2, x+y)' }, false);
         engine.SetCell(
             editWb1,
@@ -1809,7 +1817,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(metaXml1).toContain('name="XLDAPR"');
         expect(metaXml1).toContain('<futureMetadata name="XLDAPR"');
         expect(metaXml1).toContain('<cellMetadata count="1"><bk><rc t="2" v="0"/></bk></cellMetadata>');
-        expect(sheetXml1).toContain('<c r="B1" cm="1"><f t="array" ref="B1">_xlfn.UNIQUE(A1:A2)</f></c>');
+        expect(sheetXml1).toContain('<c r="C1" cm="1" t="n"><f t="array" ref="C1">_xlfn.UNIQUE(A1:A2)</f><v>10</v></c>');
         expect(sheetXml1).toContain('<f>_xlfn.LET(_xlpm.x, 1, _xlpm.y, 2, _xlpm.x+_xlpm.y)</f>');
         expect(sheetXml1).toContain(
             '<f>_xlfn.LET(_xlpm.rate, 5, IF(_xlpm.rate&gt;0, &quot;rate&quot;, Sheet1!A1 + SUM(_xlpm.rate)))</f>'
@@ -1842,7 +1850,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             '<cellMetadata count="2"><bk><rc t="1" v="0"/></bk><bk><rc t="2" v="0"/></bk></cellMetadata>'
         );
         expect(decoder.decode(patchedFiles2.get('xl/worksheets/sheet1.xml')!)).toContain(
-            '<c r="B1" cm="2"><f t="array" ref="B1">_xlfn.UNIQUE(A1:A2)</f></c>'
+            '<c r="B1" cm="2" t="n"><f t="array" ref="B1">_xlfn.UNIQUE(A1:A2)</f><v>10</v></c>'
         );
 
         // 2. Item 5.2: Sparse COUNTIF / SUMIF on A:A with A1000000 = 42 runs in < 50ms
@@ -1930,9 +1938,9 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             engine.SetCell(wb, s.SheetID, `A${r}`, { Value: r }, false);
             engine.SetCell(wb, s.SheetID, `B${r}`, { Value: r * 10 }, false);
         }
-        engine.SetCell(wb, s.SheetID, 'C1', { Formula: '=IFERROR(MATCH(1, SORT(A1:A5), 0), 0)' }, false);
-        engine.SetCell(wb, s.SheetID, 'C2', { Formula: '=COUNTIFS(UNIQUE(A1:A5), ">1")' }, false);
-        engine.SetCell(wb, s.SheetID, 'C3', { Formula: '=XLOOKUP(1, SORT(A1:A5), SORT(A1:A5), "none")' }, false);
+        engine.SetCell(wb, s.SheetID, 'C1', { Formula: '=IFERROR(MATCH(1, TAKE(A1:A5, 2), 0), 0)' }, false);
+        engine.SetCell(wb, s.SheetID, 'C2', { Formula: '=COUNTIFS(RANDARRAY(5), ">1")' }, false);
+        engine.SetCell(wb, s.SheetID, 'C3', { Formula: '=XLOOKUP(1, TAKE(A1:A5, 2), TAKE(A1:A5, 2), "none")' }, false);
         engine.SetCell(wb, s.SheetID, 'C4', { Formula: '=IFERROR(LARGE(B1:B5, 2), 0)' }, false);
         engine.SetCell(wb, s.SheetID, 'C5', { Formula: '=LARGE(B1:B5, 2)' }, false);
         engine.SetCell(wb, s.SheetID, 'D5', { Formula: '=IFERROR(C5, 99)' }, true);
@@ -1959,9 +1967,9 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             engine.SetCell(imported, 'Sheet1', `A${r}`, { Value: r }, false);
             engine.SetCell(imported, 'Sheet1', `B${r}`, { Value: r * 10 }, false);
         }
-        engine.SetCell(imported, 'Sheet1', 'C1', { Formula: '=IFERROR(MATCH(1, SORT(A1:A5), 0), 0)' }, false);
-        engine.SetCell(imported, 'Sheet1', 'C2', { Formula: '=COUNTIFS(UNIQUE(A1:A5), ">1")' }, false);
-        engine.SetCell(imported, 'Sheet1', 'C3', { Formula: '=XLOOKUP(1, SORT(A1:A5), SORT(A1:A5), "none")' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C1', { Formula: '=IFERROR(MATCH(1, TAKE(A1:A5, 2), 0), 0)' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C2', { Formula: '=COUNTIFS(RANDARRAY(5), ">1")' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C3', { Formula: '=XLOOKUP(1, TAKE(A1:A5, 2), TAKE(A1:A5, 2), "none")' }, false);
         engine.SetCell(imported, 'Sheet1', 'C4', { Formula: '=IFERROR(LARGE(B1:B5, 2), 0)' }, false);
         engine.SetCell(imported, 'Sheet1', 'C5', { Formula: '=LARGE(B1:B5, 2)' }, false);
         engine.SetCell(imported, 'Sheet1', 'D5', { Formula: '=IFERROR(C5, 99)' }, true);
@@ -2013,7 +2021,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const patchedBytes = engine.PatchXlsxBytes(seedXlsx, imported);
         const patchedSheetXml = decoder.decode(engine.ExtractZipArchive(patchedBytes).get('xl/worksheets/sheet1.xml')!);
 
-        expect(patchedSheetXml).toContain('<c r="I6" cm="1"><f t="array" ref="I6">_xlfn.SEQUENCE(5)</f></c>');
+        expect(patchedSheetXml).toContain('<c r="I6" cm="1" t="n"><f t="array" ref="I6">_xlfn.SEQUENCE(5)</f><v>1</v></c>');
         expect(patchedSheetXml).not.toContain('<v>2</v>');
         expect(patchedSheetXml).not.toContain('<v>3</v>');
     });
@@ -2066,6 +2074,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         vi.spyOn(deployEntity, 'GetUserPermisions').mockReturnValue(baseUserPerm);
         const mockProvider: IMetadataProvider = Object.assign({}, Metadata.Provider, {
             Entities: [deployEntity],
+            EntityByName: (name: string) => (name === deployEntity.Name ? deployEntity : undefined),
             Queries: [],
             RunView: vi.fn().mockResolvedValue({
                 Success: true,
@@ -2572,7 +2581,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(wb, s.SheetID, 'A2', { Value: 2 }, false);
         engine.SetCell(wb, s.SheetID, 'A3', { Value: 3 }, false);
         engine.SetCell(wb, s.SheetID, 'B1', { Value: 'x' }, false);
-        engine.SetCell(wb, s.SheetID, 'B2', { Formula: '=SORT(D1:D3)' }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Formula: '=RANDARRAY(3)' }, false);
         engine.SetCell(wb, s.SheetID, 'B3', { Value: 'x' }, false);
         engine.SetCell(wb, s.SheetID, 'C1', { Value: 'y' }, false);
         engine.SetCell(wb, s.SheetID, 'C2', { Value: 'y' }, false);
@@ -2833,7 +2842,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(wb, s.SheetID, 'B4', { Value: 40 }, false);
 
         // Case 1: D has unimplemented dynamic array
-        engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=UNIQUE(A1:A4)' }, true);
+        engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=TAKE(A1:A4, 2)' }, true);
         expect(s.Cells['D1']?.ComputedValue).toBe('#NAME?');
 
         // In both argument orders, SUMIFS must produce #NAME? when the row matches the other criterion
@@ -2863,9 +2872,9 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "zz", D1:D4, ">1")')).toBe(0);
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(D1:D4, ">1", A1:A4, "zz")')).toBe(0);
 
-        // Case 3: IFERROR(SUMIFS(B1:B4, UNIQUE(B1:B5), ">1"), 0) propagates #NAME? (NOT swallowed to 0 via #VALUE!)
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(SUMIFS(B1:B4, UNIQUE(B1:B5), ">1"), 0)')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(COUNTIFS(UNIQUE(B1:B5), ">1"), 0)')).toBe('#NAME?');
+        // Case 3: IFERROR(SUMIFS(B1:B4, TAKE(B1:B5, 2), ">1"), 0) propagates #NAME? (NOT swallowed to 0 via #VALUE!)
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(SUMIFS(B1:B4, TAKE(B1:B5, 2), ">1"), 0)')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(COUNTIFS(RANDARRAY(5), ">1"), 0)')).toBe('#NAME?');
     });
 
     it('R11-3: *IFS must return "nomatch" when any known criterion on that row fails (both direct and flattened)', () => {
@@ -3285,7 +3294,16 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(cellB.ComputedValue).toBe('{=}');
 
         const csv = 'Name,Formula\n"{=FirstName}","=1+1"';
-        const impWb = engine.ImportFromCsv(csv);
+        // By default AllowFormulas is false -> neutralizes =1+1 as text literal (CSV injection defense)
+        const safeCsvWb = engine.ImportFromCsv(csv);
+        const safeWs = safeCsvWb.Worksheets[0];
+        expect(safeWs.Cells['A2']?.Formula ?? null).toBeNull();
+        expect(safeWs.Cells['A2']?.RawValue).toBe('{=FirstName}');
+        expect(safeWs.Cells['B2']?.Formula ?? null).toBeNull();
+        expect(safeWs.Cells['B2']?.RawValue).toBe('=1+1');
+
+        // Explicit opt-in AllowFormulas: true evaluates =1+1 while still keeping {=FirstName} as text
+        const impWb = engine.ImportFromCsv(csv, 'Sheet1', 'Imported CSV', { AllowFormulas: true });
         const ws = impWb.Worksheets[0];
         expect(ws.Cells['A2']?.Formula ?? null).toBeNull();
         expect(ws.Cells['A2']?.RawValue).toBe('{=FirstName}');
@@ -3812,5 +3830,56 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.DeleteColumns(wb, ws.SheetID, 2, 1);
         expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-single')).toBeUndefined();
         expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('D4:F7');
+    });
+
+    it('[P1-P3-1d] GetProtectedRangeForCell and CheckCellWritePermission enforce most-restrictive precedence across overlapping ranges', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('OverlappingProtection', ['Sheet1'], 10, 10);
+        const ws = wb.Worksheets[0];
+
+        // Add permissive AllowEditors: true range BEFORE restrictive AllowEditors: false range
+        engine.AddProtectedRange(wb, ws.SheetID, {
+            RangeID: 'prot-allow-editors',
+            Range: 'A1:D5',
+            LockedByUserID: 'locker-1',
+            AllowEditors: true,
+        });
+        engine.AddProtectedRange(
+            wb,
+            ws.SheetID,
+            {
+                RangeID: 'prot-deny-editors',
+                Range: 'B2:C4',
+                LockedByUserID: 'locker-2',
+                AllowEditors: false,
+            },
+            { UserID: 'locker-2', IsEditor: true }
+        );
+
+        // Overlap cell B3 must resolve to the restrictive AllowEditors: false range
+        const resolvedB3 = engine.GetProtectedRangeForCell(ws, 'B3');
+        expect(resolvedB3?.RangeID).toBe('prot-deny-editors');
+        expect(resolvedB3?.AllowEditors).toBe(false);
+
+        // Non-overlapping cell A1 still resolves to prot-allow-editors
+        const resolvedA1 = engine.GetProtectedRangeForCell(ws, 'A1');
+        expect(resolvedA1?.RangeID).toBe('prot-allow-editors');
+        expect(resolvedA1?.AllowEditors).toBe(true);
+
+        // Editor is allowed in A1, but DENIED in B3
+        const editorCtx = { UserID: 'editor-user', OwnerUserID: 'owner-user', IsEditor: true };
+        expect(engine.CheckCellWritePermission(ws, 'A1', editorCtx).Allowed).toBe(true);
+        const b3Check = engine.CheckCellWritePermission(ws, 'B3', editorCtx);
+        expect(b3Check.Allowed).toBe(false);
+        expect(b3Check.ProtectedRange?.RangeID).toBe('prot-deny-editors');
+
+        // locker-1 (who owns prot-allow-editors, NOT prot-deny-editors) is also DENIED in B3
+        const locker1Check = engine.CheckCellWritePermission(ws, 'B3', {
+            UserID: 'locker-1',
+            OwnerUserID: 'owner-user',
+            IsEditor: true,
+        });
+        expect(locker1Check.Allowed).toBe(false);
+        expect(locker1Check.ProtectedRange?.RangeID).toBe('prot-deny-editors');
     });
 });
