@@ -190,6 +190,18 @@ describe('leakage-guard-validation', () => {
       expect(SanitizeNameToken('ChekInTime')).toBe('ChekInTime');
     });
 
+    it('keeps wrapper characters inside the name and empties an all-wrapper token', () => {
+      expect(SanitizeNameToken('"a [b] c"')).toBe('a [b] c');
+      expect(SanitizeNameToken(' [ "` ')).toBe('');
+    });
+
+    it('trims a long crafted token in linear time', () => {
+      const hostile = 'x' + '['.repeat(100_000) + 'x';
+      const started = performance.now();
+      expect(SanitizeNameToken(hostile)).toBe(hostile);
+      expect(performance.now() - started).toBeLessThan(2500);
+    });
+
     it('normalizeName lowercases and trims', () => {
       expect(NormalizeName('  CheckInTime ')).toBe('checkintime');
     });

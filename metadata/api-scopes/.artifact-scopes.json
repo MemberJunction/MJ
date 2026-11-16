@@ -1,0 +1,62 @@
+[
+  {
+    "fields": {
+      "Name": "artifact",
+      "FullPath": "artifact",
+      "ParentID": null,
+      "Category": "Artifacts",
+      "Description": "Parent scope for artifact operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-file-lines",
+        "color": "#6366f1"
+      }
+    },
+    "primaryKey": {
+      "ID": "783D9F4A-8E51-4F26-9B83-2A63C9B4E101"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "artifact:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=artifact",
+      "Category": "Artifacts",
+      "Description": "Read artifact metadata, versions, live blocks, and collaboration state",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "894E0A5B-9F62-4A37-8C94-3B74D0C5F202"
+    }
+  },
+  {
+    "fields": {
+      "Name": "edit",
+      "FullPath": "artifact:edit",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=artifact",
+      "Category": "Artifacts",
+      "Description": "Create, edit, freeze, or compact artifact content and collaborative working state",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "9A5F1B6C-A073-4B48-9DA5-4C85E1D6A303"
+    }
+  },
+  {
+    "fields": {
+      "Name": "comment",
+      "FullPath": "artifact:comment",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=artifact",
+      "Category": "Artifacts",
+      "Description": "Add, reply to, or resolve anchored comments and inline suggestions on artifacts",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "440AD75F-0EA9-4D8B-92FB-480767F4DFA8"
+    }
+  }
+]

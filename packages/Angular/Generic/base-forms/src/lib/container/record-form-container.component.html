@@ -618,6 +618,17 @@
       <div class="mj-forms-all-panels">
         <ng-content></ng-content>
 
+        @if (EffectiveRecord && EffectiveRecord.EntityInfo.SubtypeSelectorConfig?.FoldIntoForm && !FormComponent?.OwnsEntireFormBody) {
+          <mj-folded-subtype-section
+            [Provider]="Provider"
+            [Record]="EffectiveRecord"
+            [FormComponent]="FormComponent"
+            [FormContext]="FormComponent?.formContext"
+            [EditMode]="EffectiveEditMode"
+            (Navigate)="OnNavigate($event)">
+          </mj-folded-subtype-section>
+        }
+
         <!--
           Fill-in related grids for DisplayInForm relationships the template
           did not bake and no registered panel claimed. Claimed / extra panels

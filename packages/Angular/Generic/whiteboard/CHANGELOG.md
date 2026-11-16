@@ -1,5 +1,23 @@
 # @memberjunction/ng-whiteboard
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- d22c60f: Whiteboard item `Color` must be a hex color (`#rgb` / `#rrggbb`). Loading a saved board drops any other `Color` (ink falls back to the first pen color), and the HTML and SVG exports write only hex colors. `WHITEBOARD_PEN_COLORS` now lives in `whiteboard-state.ts` (still exported from the package).
+- Updated dependencies [03bb8b6]
+- Updated dependencies [1b282a0]
+- Updated dependencies [4884a47]
+- Updated dependencies [31cc053]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ng-ui-components@6.3.0-edge.0
+  - @memberjunction/ng-code-editor@6.3.0-edge.0
+  - @memberjunction/ng-markdown@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Patch Changes

@@ -32,6 +32,8 @@ per-surface code and no regeneration.
 | **Time-travel version preview** | `MjRecordFormContainerComponent` (`ActiveVersionPreview`, `OnPreviewVersionSelected`, `OnStepVersionPreview`, `OnExitVersionPreview`), `FormSlotCoordinator.VersionPreviewChanged$` | Rehydrates historical `FullRecordJSON` + `ChangesJSON` snapshots directly inside the form with a top Time-Travel Scrubber Bar and changed-field jump chips. See [Forms Architecture §7g](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7g-in-form-time-travel-version-preview--record-changes-activity-sparkline). |
 | **New-record defaults** | `BaseFormComponent.NewRecordValues` / `NewRecordValuesForJoinFields` | Related grids copy every join field onto the child. Explorer persists them as `/record/:entity/new?NewRecordValues=...`. |
 | **Duplicate check at entry** | `DuplicateEntryCheckController`, `DuplicateEntryCheckSession`, `BaseFormComponent.CheckDuplicateEntry` | Flags existing records that may duplicate a new record while it is being typed. See [Duplicate check at entry](#duplicate-check-at-entry). |
+| **Folded IS-A subtype sections** | `MjFoldedSubtypeSectionComponent` (`<mj-folded-subtype-section>`), `EntitySubtypeUIDriverBase` | When `Entity.SubtypeSelector` sets `FoldIntoForm: true`, renders the resolved IS-A child's own fields (or its `UIDriver` component) inline as soon as a type is picked — including before first save. |
+| **Notes & suggestions** | `MjRecordCommentsComponent` (`<mj-record-comments>`), `MjCommentCardDriverHostComponent`, `FieldSuggestionCardComponent`, `FormRecordCommentsCoordinatorService` | Unified **Notes & suggestions** drawer and field popover with per-type field badges, type filter pills, dynamic `UIDriverClass` cards, and one-click `Field Suggestion` Accept / Reject / Discuss. |
 
 ## Quick start
 
@@ -267,14 +269,15 @@ tab. It only flags — it never blocks a save, and saving clears the notice.
 How the server finds and judges the candidates is in the
 [Duplicate Management Guide](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md#7-the-entry-time-duplicate-check).
 
-## Anchored Record Comments (`<mj-record-comments>`)
+## Notes & Suggestions (`<mj-record-comments>` & `FieldSuggestionCardComponent`)
 
-Every saved record form automatically provides threaded conversations (`MJ: Conversations` + `MJ: Conversation Details`) anchored at the **Record**, **Field**, **Section**, **Group (Left-Nav Tab)**, or **Contribution** level:
+Every saved record form automatically provides threaded conversations and structured comment subtypes (`MJ: Conversations`, `MJ: Comments`, `MJ: Comment Types`, and `MJ: Field Suggestions`) anchored at the **Record**, **Field**, **Section**, **Group (Left-Nav Tab)**, or **Contribution** level:
 
-- **Form Toolbar Action (`RecordCommentsToolbarAction`, key `'comments'`)**: Displays the total open comment count across the record and toggles the slide-over Record Comments Drawer.
-- **Field-Level Trigger & Badge (`<mj-form-field>`)**: Shows an inline comment count badge on fields with active threads (or a hover trigger to start a thread), capturing a `quotedValue` snapshot of the field's value at the time of commenting. Fields with open comments are never collapsed away as empty in read mode.
-- **Section & Left-Nav Rail Rollup (`<mj-collapsible-panel>`, `<mj-record-form-container>`, `FormSectionIndicators`)**: Open field and section comments roll up into section header chips and left-nav group badges. Clicking any anchor chip in the drawer or popover expands the target group/section, scrolls the field into view, and pulses it.
-- **RLS & FLS Security + `@Mention` Notifications**: Enforces Row-Level Security and Field-Level Security (including write-time restricted-field classification and `AnchorMetadataObject.restrictedFields` stamping) and dispatches `MJ: User Notifications` on `@mention` only to users permitted to read both the record and the anchored/referenced fields.
+- **Form Toolbar Action (`RecordCommentsToolbarAction`, key `'comments'`, label `'Notes & suggestions'`)**: Displays the total open note + pending field-suggestion count across the record and toggles the slide-over **Notes & suggestions** drawer.
+- **Per-Type Field Triggers & Badges (`<mj-form-field>`)**: Shows separate inline badges for open plain notes and pending `MJ: Field Suggestions` (or a hover trigger to start a thread), opening the anchored popover pre-filtered to that comment type. Fields with open notes or suggestions are never collapsed away as empty in read mode.
+- **Dynamic `UIDriverClass` Cards (`<mj-comment-card-driver-host>` & `FieldSuggestionCardComponent`)**: Plain comments render with the standard threaded card, whereas comment types declaring a `UIDriverClass` (such as `FieldSuggestionCardComponent`, registered via `@RegisterClass(EntitySubtypeUIDriverBase, 'FieldSuggestionCardComponent')`) render specialized cards with ghost value diffs, **Accept** (reloading the clean record into the form), **Reject**, and on-demand **Discuss**.
+- **Section & Left-Nav Rail Rollup (`<mj-collapsible-panel>`, `<mj-record-form-container>`, `FormSectionIndicators`)**: Open counts roll up into section header chips and left-nav group badges. Clicking any anchor chip in the drawer or popover expands the target group/section, scrolls the field into view, and pulses it.
+- **RLS & FLS Security + `@Mention` Notifications**: Enforces Row-Level Security and Field-Level Security across all IS-A views (`MJ: Conversations`, `MJ: Comments`, `MJ: Field Suggestions`, `MJ: Conversation Details`) and dispatches `MJ: User Notifications` on `@mention` only to users permitted to read both the record and the anchored/referenced fields.
 
 ## Related docs
 

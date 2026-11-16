@@ -1,5 +1,90 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- b332459: Implement ORM improvements across three workstreams:
+  1. Server-side concurrency and delta-only `spUpdate*` / `fn_update*` bindings (`DeltaUpdates` / `databaseSettings.deltaUpdates`, default `true` with `false` kill-switch), `UPDLOCK, ROWLOCK` (SQL Server) / `FOR UPDATE` (PostgreSQL) row locking, shared `DetectFieldConcurrencyConflicts` detector, `ConcurrencyCheckMode` (`'off' | 'log' | 'enforce'`, default `'off'` server-wide and `'enforce'` on GraphQL `UpdateRecord` mutations supplying `OldValues___`), subclass-setter-routed `@JSONType` `JSONFieldBinding` flushes, and multi-level IS-A chain concurrency rollback & baseline propagation.
+  2. First-class structured `CompositeFilter` support in `RunView`, `BaseEngine` (`Where()` and in-memory/local-cache slot maintenance), `FilterOf<T>()` fluent builder, parameterized `CompositeFilterSQLCompiler` (with literal compilation and FLS enforcement for `MJUserViewEntityExtended.GenerateWhereClauseFromFilterState`), and GraphQL `RunView` inputs.
+  3. CodeGen-generated `TypedQuerySpec<TParams, TRow>` descriptors (`typed_query_codegen.ts`) and `RunQuery(spec, params, options)` overloads with SHA-256 signature drift detection (`typedQueryDrift: 'off' | 'warn' | 'throw'`).
+
+### Patch Changes
+
+- 87ac205: Add parameterized `RunView` support via `RunViewParams.Parameters`:
+  - `@memberjunction/core`: Add `RunViewParameterScalar`, `RunViewParameterValue`, `RunViewParameters`, `RunViewParametersKey`, and `RunViewParams.Parameters`. Include canonicalized parameters in `RunViewParams.Equals` and `LocalCacheManager.GenerateRunViewFingerprint` (`prm:` segment when non-empty). Teach `FieldSecuritySQLGate` to recognize `@paramName` parameter tokens on both SQL Server and PostgreSQL dialects.
+  - `@memberjunction/generic-database-provider`: Add `BindExtraFilterParameters` using `SqlTokens.Lex` and `EditSet` to rewrite `@paramName` tokens in `ExtraFilter` to dialect-native bound placeholders (`@p0` on SQL Server, `$1` on PostgreSQL) and `NamedQueryParameter` bindings (with array expansion for `IN (@list)`). Thread bound parameters through `executeRunViewCore`, `RunViewsWithCacheCheck`, `getBatchedServerCacheStatus`, `getUpdatedRowsSince`, and `IsCoalescibleCountBatch`.
+  - `@memberjunction/sqlserver-dataprovider`: Support `NamedQueryParameter` and `TypedQueryParameter` lists in `ExecuteSQLBatch` and `ExecuteSQLBatchStatic` with parameter deduplication across shared `mssql.Request` batches, and forward `queryParameters` in `executeSQLForUserViewRunLogging` and `getBatchedServerCacheStatus`.
+  - `@memberjunction/postgresql-dataprovider`: Exclude `@paramName` and `$1` parameter tokens from column auto-quoting in `quoteFieldNamesInToken`.
+  - `@memberjunction/server`: Accept and validate `Parameters` (`GraphQLJSONObject`) on `RunViewByIDInput`, `RunViewByNameInput`, `RunDynamicViewInput`, `RunViewGenericInput`, and `RunViewsWithCacheCheck`.
+  - `@memberjunction/graphql-dataprovider`: Forward `RunViewParams.Parameters` in `InternalRunView`, `InternalRunViews`, and `RunViewsWithCacheCheck`.
+
+- 6049806: ActionEngine's execution-log saves no longer join the transaction they were queued from. With a durable submitter registered, an After\* `Durable` Entity Action runs inside the save's transaction (#6198), and ActionEngine queued its "Submitted for durable execution" log row from there. The queued save inherited the caller's transaction membership, reached SQL behind the save's COMMIT, and was rejected (`The ambient transaction ended before this query ran`), so the run left no Action Execution Log row (#6251, EA6). `BaseEntitySaveQueue` gains an opt-in `detachFromTransaction` option that runs each save through the new optional `IEntityDataProvider.RunOutsideAmbientTransaction` (implemented by `GenericDatabaseProvider`), so the write runs on the pool and commits on its own. Only ActionEngine's log queue turns it on; other queues (agent run steps, prompt runs, process run details) keep joining the caller's transaction, since their owners flush them before commit and their rows reference rows that transaction wrote.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [2bf6237]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [7edd599]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/generic-database-provider@6.3.0-edge.0
+  - @memberjunction/ai-vector-dupe@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/actions@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+  - @memberjunction/query-processor@6.3.0-edge.0
+  - @memberjunction/ai-vectordb@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/encryption@6.3.0-edge.0
+  - @memberjunction/queue@6.3.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

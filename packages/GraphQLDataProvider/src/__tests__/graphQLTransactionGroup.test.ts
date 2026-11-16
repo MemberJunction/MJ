@@ -257,6 +257,69 @@ describe('GraphQLTransactionGroup', () => {
     expect(registered[0].Message).toContain('You may only assign a role that you hold yourself');
   });
 
+  it('sends an item\'s OldValues when the queued update carries them, and omits the key otherwise', async () => {
+    mockProvider.ExecuteGQL.mockResolvedValue({
+      ExecuteTransactionGroup: { Success: true, ErrorMessages: [], ResultsJSON: ['{"ID":"1"}', '{"ID":"2"}'] },
+    });
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    const oldValues = [{ Key: 'ID', Value: '1' }, { Key: 'Name', Value: 'Old Name' }];
+    group.PendingTransactions = [
+      {
+        BaseEntity: { EntityInfo: { Name: 'Users' }, GetDataObjectJSON: vi.fn().mockResolvedValue('{"ID":"1","Name":"New"}') },
+        OperationType: 'Update',
+        ExtraData: { ignoreDirtyState: true, oldValues },
+      },
+      {
+        BaseEntity: { EntityInfo: { Name: 'Users' }, GetDataObjectJSON: vi.fn().mockResolvedValue('{"Name":"Created"}') },
+        OperationType: 'Create',
+      },
+    ] as never;
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    const items = mockProvider.ExecuteGQL.mock.calls[0][1].group.Items;
+    expect(items[0].OldValues).toEqual(oldValues);
+    expect(Object.prototype.hasOwnProperty.call(items[1], 'OldValues')).toBe(false);
+  });
+
+  it("keeps the server's concurrency conflict details on the refused item's result", async () => {
+    mockProvider.ExecuteGQL.mockResolvedValue({
+      ExecuteTransactionGroup: {
+        Success: false,
+        ErrorMessages: [
+          JSON.stringify({
+            Success: false,
+            Type: 'update',
+            Message: 'Concurrent modification conflict on Users for field(s): Name.',
+            ConcurrencyConflict: { ConflictingFields: ['Name'] },
+          }),
+        ],
+        ResultsJSON: ['{"ID":"1"}'],
+      },
+    });
+    const registered: Array<{ ConcurrencyConflict?: { ConflictingFields: string[] } }> = [];
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    group.PendingTransactions = [
+      {
+        BaseEntity: {
+          EntityInfo: { Name: 'Users' },
+          IsSaved: true,
+          GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+          RegisterResultHistoryEntry: (r: { ConcurrencyConflict?: { ConflictingFields: string[] } }) => registered.push(r),
+        },
+        OperationType: 'Update',
+        ExtraData: { ignoreDirtyState: true },
+      },
+    ] as never;
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    expect(registered).toHaveLength(1);
+    expect(registered[0].ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
+  });
+
   it('registers nothing for an item the server did NOT refuse, so no phantom failure is invented', async () => {
     // A partially-refused group: item 0 was ACCEPTED, item 1 was refused. Only the refusal has a
     // reason to report.

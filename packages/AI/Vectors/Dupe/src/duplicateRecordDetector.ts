@@ -16,7 +16,7 @@
  */
 
 import { GetAIAPIKey } from "@memberjunction/ai";
-import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
+import { AIEmbeddingRunner, EmbeddingCarrierPrompts } from "@memberjunction/ai-prompts";
 import {
     PotentialDuplicateRequest,
     PotentialDuplicateResponse,
@@ -622,6 +622,7 @@ export class DuplicateRecordDetector extends VectorBase {
             () => this.GenerateTemplateTexts(templateParser, entityDocument, [record], contextUser));
         const embedResult = await step('embedding the record', () => this.EmbeddingRunner.RunEmbedding({
             Texts: templateTexts,
+            PromptName: EmbeddingCarrierPrompts.DuplicateDetection,
             ModelID: this.embeddingModelID ?? undefined,
             Dimensions: this.embeddingDimensions,
             ContextUser: contextUser,
@@ -987,6 +988,7 @@ export class DuplicateRecordDetector extends VectorBase {
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
             const subEmbedResult = await this.EmbeddingRunner.RunEmbedding({
                 Texts: subTemplateTexts,
+                PromptName: EmbeddingCarrierPrompts.DuplicateDetection,
                 ModelID: this.embeddingModelID ?? undefined,
                 Dimensions: this.embeddingDimensions,
                 ContextUser: contextUser,

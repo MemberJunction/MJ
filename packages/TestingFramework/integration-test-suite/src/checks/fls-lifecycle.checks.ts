@@ -218,35 +218,37 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-lifecycle', {
 // ─────────────────────────────────────────────────────────────────── checks
 
 /**
- * LC1 — the flag flip is ATOMIC (2.4). A permission row planted by direct SQL (invisible to
- * the delta, which reads metadata) makes the snapshot collide with
- * UQ_EntityFieldPermission_Field_Role midway. The save must report failure, the flag must
- * roll back to 0, and no snapshot rows may survive — only the planted poison row.
+ * LC1 — the flag flip is ATOMIC (2.4). A temporary CHECK constraint planted by direct SQL refuses
+ * the snapshot row for one field midway (the snapshot reads the existing rows from the database,
+ * so a planted duplicate row no longer collides). The save must report failure, the flag must roll
+ * back to 0, and no snapshot rows may survive.
  */
 export async function CheckLc1FlagFlipIsAtomic(ctx: IntegrationCheckContext): Promise<void> {
     if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC1')) return;
-    const fx = ctx.FlsFixture!;
     await resetFls(ctx);
     const entity = FlsEntity(ctx);
     const fields = RestrictableFields(entity);
     const midField = fields[Math.floor(fields.length / 2)];
+    const constraint = `CK_IT_FLS_LC1_${Date.now()}`;
     await Q(ctx,
-        `INSERT INTO [${SchemaOf(ctx)}].EntityFieldPermission (EntityFieldID, RoleID, ReadAccess, UpdateAccess, CreateAccess) ` +
-        `VALUES ('${midField.ID}', '${fx.RoleIDs!.Reader}', 'Allow', 'No Access', 'No Access')`);
+        `ALTER TABLE [${SchemaOf(ctx)}].EntityFieldPermission WITH NOCHECK ` +
+        `ADD CONSTRAINT [${constraint}] CHECK (EntityFieldID <> '${midField.ID}')`);
+    try {
+        const [ok, msg] = await setFlag(ctx, true);
+        Assert(!ok, `the enable must FAIL on the planted constraint (got success; poison on ${midField.Name})`);
+        Assert(msg.length > 0, 'the failed save must carry an error message');
 
-    const [ok, msg] = await setFlag(ctx, true);
-    Assert(!ok, `the enable must FAIL on the planted unique-key collision (got success; poison on ${midField.Name})`);
-    Assert(msg.length > 0, 'the failed save must carry an error message');
-
-    const flag = await Q<{ f: boolean }>(ctx,
-        `SELECT EnableFieldLevelSecurity AS f FROM [${SchemaOf(ctx)}].Entity WHERE ID = '${entity.ID}'`);
-    AssertEqual(flag[0].f, false, 'the flag must roll back to 0 with the snapshot');
-    const rows = await Q<{ n: number }>(ctx,
-        `SELECT COUNT(*) AS n FROM [${SchemaOf(ctx)}].EntityFieldPermission p ` +
-        `JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
-    AssertEqual(rows[0].n, 1, 'only the planted poison row may remain — a partial snapshot means the transaction tore');
-
-    await resetFls(ctx); // remove the poison
+        const flag = await Q<{ f: boolean }>(ctx,
+            `SELECT EnableFieldLevelSecurity AS f FROM [${SchemaOf(ctx)}].Entity WHERE ID = '${entity.ID}'`);
+        AssertEqual(flag[0].f, false, 'the flag must roll back to 0 with the snapshot');
+        const rows = await Q<{ n: number }>(ctx,
+            `SELECT COUNT(*) AS n FROM [${SchemaOf(ctx)}].EntityFieldPermission p ` +
+            `JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
+        AssertEqual(rows[0].n, 0, 'no snapshot row may remain — a partial snapshot means the transaction tore');
+    } finally {
+        await Q(ctx, `ALTER TABLE [${SchemaOf(ctx)}].EntityFieldPermission DROP CONSTRAINT [${constraint}]`).catch(() => undefined);
+        await resetFls(ctx);
+    }
 }
 
 /** @deprecated Use {@link CheckLc1FlagFlipIsAtomic}. */

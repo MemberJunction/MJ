@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BuildAppContextSnapshot, FormatAppContextNote, AppContextSnapshot } from '../app-context';
+import { BuildAppContextSnapshot, DiffAppContextSnapshot, FormatAppContextNote, AppContextSnapshot } from '../app-context';
 
 describe('BuildAppContextSnapshot', () => {
     it('builds from minimal inputs with safe defaults', () => {
@@ -78,5 +78,130 @@ describe('FormatAppContextNote', () => {
             Capabilities: { Tools: [{ Name: 'NavigateToApp', Description: 'go', InputSchema: { properties: { AppName: {}, NavItemName: {} }, required: ['AppName'] } }] },
         });
         expect(note).toContain('NavigateToApp(AppName, NavItemName?) — go');
+    });
+});
+
+describe('DiffAppContextSnapshot', () => {
+    const globalTools = [
+        { Name: 'NavigateToApp', Description: 'Navigate to an app or section', InputSchema: { properties: { AppName: {}, NavItemName: {} }, required: ['AppName'] } },
+        { Name: 'OpenEntityRecord', Description: 'Open an entity record by ID', InputSchema: { properties: { EntityName: {}, RecordID: {} }, required: ['EntityName', 'RecordID'] } },
+        { Name: 'SearchGlobal', Description: 'Global workspace search', InputSchema: { properties: { Query: {} }, required: ['Query'] } },
+    ];
+
+    function makeExplorerSnapshot(overrides: Partial<AppContextSnapshot> = {}): AppContextSnapshot {
+        return {
+            App: { Name: 'Data Explorer', Description: 'Browse and manage records' },
+            ActiveNavItem: { Name: 'Home', ResourceType: 'Custom' },
+            OtherNavItems: [
+                { Name: 'Accounts' },
+                { Name: 'Contacts' },
+                { Name: 'Opportunities' },
+                { Name: 'Queries' },
+                { Name: 'Reports' },
+            ],
+            NavigableApps: [
+                { Name: 'Knowledge Hub' },
+                { Name: 'Admin' },
+                { Name: 'Chat' },
+            ],
+            User: { Name: 'Amith', Roles: ['Developer'] },
+            AdditionalContext: { ActiveDashboard: 'Overview', OpenWidgetCount: 4 },
+            Capabilities: { Tools: globalTools },
+            ...overrides,
+        };
+    }
+
+    it('returns the full snapshot when previous is null or undefined', () => {
+        const snap = makeExplorerSnapshot();
+        expect(DiffAppContextSnapshot(null, snap)).toBe(snap);
+        expect(DiffAppContextSnapshot(undefined, snap)).toBe(snap);
+    });
+
+    it('returns null when nothing visible to FormatAppContextNote changed (including cloned objects)', () => {
+        const prev = makeExplorerSnapshot();
+        const next = makeExplorerSnapshot({
+            AdditionalContext: { ActiveDashboard: 'Overview', OpenWidgetCount: 4, IgnoredEmpty: null },
+        });
+        expect(DiffAppContextSnapshot(prev, next)).toBeNull();
+    });
+
+    it('emits a compact location + screen-state delta on intra-app tab navigation without repeating OtherNavItems, NavigableApps, or unchanged Tools', () => {
+        const home = makeExplorerSnapshot();
+        // Switching from Home -> Accounts inside Data Explorer swaps Home & Accounts between ActiveNavItem and OtherNavItems
+        const accounts = makeExplorerSnapshot({
+            ActiveNavItem: { Name: 'Accounts', ResourceType: 'Records' },
+            OtherNavItems: [
+                { Name: 'Home' },
+                { Name: 'Contacts' },
+                { Name: 'Opportunities' },
+                { Name: 'Queries' },
+                { Name: 'Reports' },
+            ],
+            AdditionalContext: { EntityName: 'Accounts', TotalRowCount: 412, ActiveFilter: 'Active' },
+        });
+
+        const delta = DiffAppContextSnapshot(home, accounts);
+        expect(delta).not.toBeNull();
+        expect(delta?.OtherNavItems).toBeUndefined();
+        expect(delta?.NavigableApps).toBeUndefined();
+        expect(delta?.Capabilities).toBeUndefined();
+
+        const wireNote = FormatAppContextNote(delta!);
+        const fullNote = FormatAppContextNote(accounts);
+        expect(wireNote).toContain('location: Data Explorer › Accounts (Records)');
+        expect(wireNote).toContain('EntityName: Accounts');
+        expect(wireNote).not.toContain('sections in this app');
+        expect(wireNote).not.toContain('apps you can open');
+        expect(wireNote).not.toContain('NavigateToApp(');
+        expect(wireNote.length).toBeLessThan(fullNote.length * 0.4);
+    });
+
+    it('includes the new app OtherNavItems when switching applications while omitting unchanged NavigableApps catalog', () => {
+        const explorer = makeExplorerSnapshot();
+        const knowledgeHub = makeExplorerSnapshot({
+            App: { Name: 'Knowledge Hub', Description: 'Search & analytics' },
+            ActiveNavItem: { Name: 'Search', ResourceType: 'Custom' },
+            OtherNavItems: [{ Name: 'Clusters' }, { Name: 'Analytics' }],
+            NavigableApps: [{ Name: 'Data Explorer' }, { Name: 'Admin' }, { Name: 'Chat' }],
+            AdditionalContext: { Query: 'AIDP' },
+        });
+
+        const delta = DiffAppContextSnapshot(explorer, knowledgeHub);
+        const wireNote = FormatAppContextNote(delta!);
+        expect(wireNote).toContain('location: Knowledge Hub › Search (Custom)');
+        expect(wireNote).toContain('sections in this app (NavigateToApp NavItemName): Clusters, Analytics');
+        expect(wireNote).not.toContain('apps you can open');
+    });
+
+    it('includes Capabilities.Tools when a surface registers or removes custom client tools', () => {
+        const before = makeExplorerSnapshot();
+        const withSurfaceTool = makeExplorerSnapshot({
+            Capabilities: {
+                Tools: [
+                    ...globalTools,
+                    { Name: 'ExportCSV', Description: 'Export grid rows', InputSchema: { properties: { Format: {} }, required: ['Format'] } },
+                ],
+            },
+        });
+
+        const delta = DiffAppContextSnapshot(before, withSurfaceTool);
+        expect(delta?.Capabilities?.Tools).toHaveLength(4);
+        expect(FormatAppContextNote(delta!)).toContain('ExportCSV(Format) — Export grid rows');
+    });
+
+    it('re-emits location when View or AdditionalContext is cleared on the current screen so clearing state is observable', () => {
+        const withSelection = makeExplorerSnapshot({
+            View: {
+                VisibleEntities: ['Accounts'],
+                Selection: { EntityName: 'Accounts', RecordIDs: ['1', '2'] },
+            },
+        });
+        const clearedSelection = makeExplorerSnapshot({
+            View: undefined,
+        });
+
+        const delta = DiffAppContextSnapshot(withSelection, clearedSelection);
+        expect(delta).not.toBeNull();
+        expect(FormatAppContextNote(delta!)).toBe('[app-context]\nlocation: Data Explorer › Home (Custom)');
     });
 });

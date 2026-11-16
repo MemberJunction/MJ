@@ -75,9 +75,9 @@ This provider supports all 15 operations defined in `BaseCommunicationProvider`:
 | Operation | Description |
 |-----------|-------------|
 | `SendSingleMessage` | Send email via Graph API |
-| `GetMessages` | Retrieve messages with filtering and header extraction |
+| `GetMessages` | Retrieve messages with filtering and header extraction; each carries `Direction` (Sent Items, or this mailbox as sender/from, is `Outbound`) and `BCCRecipients` |
 | `GetSingleMessage` | Retrieve a single message by ID |
-| `ForwardMessage` | Forward email to new recipients |
+| `ForwardMessage` | Forward email to new recipients; `ContextData.Email` names the mailbox |
 | `ReplyToMessage` | Reply to an existing email thread |
 | `CreateDraft` | Create a draft message in the mailbox |
 | `DeleteMessage` | Move to Deleted Items or permanently delete |

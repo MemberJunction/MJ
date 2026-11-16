@@ -1,79 +1,14 @@
 /**
- * Filter Types - Kendo-compatible filter descriptor interfaces
+ * Filter Builder UI types.
  *
- * These types match the Kendo UI filter format used in UserView.FilterState
- * to ensure backward compatibility with existing saved views.
+ * The filter *payload* shapes — `FilterOperator`, `FilterLogic`, `FilterDescriptor`,
+ * `CompositeFilterDescriptor` and their type guards — are owned by
+ * `@memberjunction/core` (`generic/filters/filter.types.ts`) and are the format
+ * `UserView.FilterState` persists. Import them from there, not from here: this file
+ * declares only the types the builder's UI needs on top of that payload.
  */
 
-/**
- * Available filter operators
- * These match the operators supported by Kendo and the GenerateWhereClause method
- */
-export type FilterOperator =
-  // Equality
-  | 'eq'           // equals
-  | 'neq'          // not equals
-  // Comparison (numbers, dates)
-  | 'gt'           // greater than
-  | 'gte'          // greater than or equal
-  | 'lt'           // less than
-  | 'lte'          // less than or equal
-  // String operations
-  | 'contains'     // contains substring
-  | 'doesnotcontain' // does not contain substring
-  | 'startswith'   // starts with
-  | 'endswith'     // ends with
-  // Null checks
-  | 'isnull'       // is null
-  | 'isnotnull'    // is not null
-  | 'isempty'      // is empty (alias for isnull)
-  | 'isnotempty';  // is not empty (alias for isnotnull)
-
-/**
- * Logical operators for combining filters
- */
-export type FilterLogic = 'and' | 'or';
-
-/**
- * A single filter condition (Kendo FilterDescriptor)
- */
-export interface FilterDescriptor {
-  /** The field name to filter on */
-  field: string;
-  /** The filter operator */
-  operator: FilterOperator;
-  /** The value to filter by (type depends on field type) */
-  value: unknown;
-}
-
-/**
- * A group of filters combined with AND/OR logic (Kendo CompositeFilterDescriptor)
- * Filters can be nested to create complex expressions
- */
-export interface CompositeFilterDescriptor {
-  /** The logical operator to combine filters */
-  logic: FilterLogic;
-  /** Array of filters - can be simple FilterDescriptor or nested CompositeFilterDescriptor */
-  filters: (FilterDescriptor | CompositeFilterDescriptor)[];
-}
-
-/**
- * Type guard to check if a filter is a composite (group) filter
- */
-export function IsCompositeFilter(
-  filter: FilterDescriptor | CompositeFilterDescriptor
-): filter is CompositeFilterDescriptor {
-  return 'logic' in filter && 'filters' in filter;
-}
-
-/**
- * Type guard to check if a filter is a simple filter descriptor
- */
-export function IsSimpleFilter(
-  filter: FilterDescriptor | CompositeFilterDescriptor
-): filter is FilterDescriptor {
-  return 'field' in filter && 'operator' in filter;
-}
+import type { CompositeFilterDescriptor, FilterDescriptor, FilterOperator } from '@memberjunction/core';
 
 /**
  * Field types supported by the filter builder

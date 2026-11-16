@@ -120,5 +120,17 @@
       "lastModified": "2026-11-01T22:53:21.211Z",
       "checksum": "13d3a1a45511baf28f1054f7cc46fdeb9269f47ada5a35aba4b8b848c5345738"
     }
+  },
+  {
+    "fields": {
+      "Name": "Per 1K Characters",
+      "Description": "Linear pricing per 1,000 characters of input text, e.g. text-to-speech. Cost rows state the price for 1,000 characters; a run's recorded character count is divided by 1,000.",
+      "DriverClass": "Linear",
+      "UsageTypeID": "@lookup:MJ: AI Usage Types.Name=Characters",
+      "UnitsPerBillingUnit": 1000
+    },
+    "primaryKey": {
+      "ID": "F62CA925-A561-4C77-AE5E-E8B7F4769A67"
+    }
   }
 ]

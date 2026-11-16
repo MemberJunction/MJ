@@ -1,5 +1,5 @@
 import { google, drive_v3 } from 'googleapis';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, TrimChars, TrimTrailingSlashes } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import env from 'env-var';
 import mime from 'mime-types';
@@ -429,7 +429,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     console.log('[GoogleDriveFileStorage] _getItemByPath called with:', JSON.stringify(path));
 
     // Normalize path: remove leading/trailing slashes and collapse multiple slashes
-    const normalizedPath = path ? path.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/') : '';
+    const normalizedPath = path ? TrimChars(path, '/').replace(/\/+/g, '/') : '';
     console.log('[GoogleDriveFileStorage] Normalized path:', JSON.stringify(normalizedPath));
 
     if (!normalizedPath) {
@@ -563,7 +563,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
   private _fileToMetadata(file: drive_v3.Schema$File, parentPath: string = ''): StorageObjectMetadata {
     const isDirectory = file.mimeType === 'application/vnd.google-apps.folder';
     // Normalize parent path: remove trailing slash to avoid double slashes, handle root properly
-    const normalizedParent = parentPath && parentPath !== '/' ? parentPath.replace(/\/+$/, '') : '';
+    const normalizedParent = parentPath && parentPath !== '/' ? TrimTrailingSlashes(parentPath) : '';
     const fullPath = normalizedParent ? `${normalizedParent}/${file.name}` : file.name!;
 
     return {

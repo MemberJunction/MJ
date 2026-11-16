@@ -771,6 +771,11 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * Confidence score (0.00-1.00) when AI detection was used for this field
      */
     AutoDetectConfidenceScore: number = null
+    /**
+     * Whether this output column is produced by every template branch variant of the query.
+     * Defaults to true; when false, the column is only present when a conditional branch is taken.
+     */
+    InAllBranchVariants: boolean = true
 
     // virtual fields - returned by the database VIEW
     /**

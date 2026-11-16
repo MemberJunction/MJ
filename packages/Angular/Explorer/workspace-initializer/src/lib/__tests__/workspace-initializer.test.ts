@@ -25,6 +25,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock Angular
 vi.mock('@angular/core', () => ({
   Injectable: () => (target: Function) => target,
+  Optional: () => () => {},
+  NgZone: class {
+    runOutsideAngular<T>(fn: () => T): T {
+      return fn();
+    }
+  },
 }));
 
 type RunViewStubResult = { Success: boolean; Results: unknown[]; ErrorMessage?: string };
@@ -56,9 +62,16 @@ vi.mock('@memberjunction/core', async () => {
 
 vi.mock('@memberjunction/graphql-dataprovider', () => ({
   setupGraphQLClient: vi.fn(),
+  GraphQLDataProvider: {
+    Instance: null,
+  },
   GraphQLProviderConfigData: class {
     constructor(...args: unknown[]) {}
   },
+}));
+
+vi.mock('@memberjunction/ng-shared-generic', () => ({
+  SetupAngularGraphQLClient: vi.fn(),
 }));
 
 vi.mock('@memberjunction/ng-auth-services', () => ({
@@ -415,3 +428,46 @@ describe('WorkspaceInitializerService.applyDefaultBrandTheme', () => {
     expect(themeService.ClearBrandOverlay).not.toHaveBeenCalled();
   });
 });
+
+// ======================= WorkspaceInitializerService.InitializeWorkspace =======================
+describe('WorkspaceInitializerService.InitializeWorkspace with SetupAngularGraphQLClient', () => {
+  it('calls SetupAngularGraphQLClient with the injected NgZone', async () => {
+    const mod = await import('../services/workspace-initializer.service');
+    const { SetupAngularGraphQLClient } = await import('@memberjunction/ng-shared-generic');
+    const { NgZone } = await import('@angular/core');
+    const zone = new NgZone();
+    const authBase = {
+      classifyError: vi.fn(() => ({ type: 'UNKNOWN_ERROR', message: 'unknown' })),
+      refreshToken: vi.fn(async () => ({ idToken: 'refreshed' })),
+      login: vi.fn(),
+      logout: vi.fn(),
+    };
+    const startupValidation = {
+      validateSystemSetup: vi.fn(),
+      addNoRolesValidationIssue: vi.fn(),
+    };
+    const themeService = {
+      Initialize: vi.fn(),
+      GetSelectedBrandThemeId: vi.fn(() => null),
+      RegisterBrandTheme: vi.fn(),
+      ApplyBrandOverlay: vi.fn(),
+    };
+    const service = new mod.WorkspaceInitializerService(
+      authBase as never,
+      startupValidation as never,
+      themeService as never,
+      zone
+    );
+    const env = {
+      GRAPHQL_URI: 'http://localhost:4000/graphql',
+      GRAPHQL_WS_URI: 'ws://localhost:4000/graphql',
+      MJ_CORE_SCHEMA_NAME: 'mj',
+    };
+    await service.InitializeWorkspace('init-token', {} as never, env as never);
+    expect(SetupAngularGraphQLClient).toHaveBeenCalledWith(
+      expect.anything(),
+      zone
+    );
+  });
+});
+

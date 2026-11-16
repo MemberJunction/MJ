@@ -2,6 +2,9 @@ import { DatabaseProviderBase, IMetadataProvider, RunView, type UserInfo } from 
 import type { MJCompanyIntegrationRecordMapEntity } from '@memberjunction/core-entities';
 import { QuoteTextLiteral, type SqlQuoter } from './prefetchFilter.js';
 
+/** How a record map came to point at its MJ row (#3528): the sync inserted it, or matched one that existed. */
+export type PendingRecordMapOrigin = 'Created' | 'Adopted';
+
 /** One external↔MJ mapping awaiting write. */
 export interface PendingRecordMap {
     /** The MJ entity the mapping is for. Batches are keyed on this + CompanyIntegrationID. */
@@ -10,6 +13,8 @@ export interface PendingRecordMap {
     ExternalID: string;
     /** The MJ record's primary key, '|'-joined for composite PKs. */
     EntityRecordID: string;
+    /** Written only when the map row is new; an existing row keeps its origin. */
+    Origin: PendingRecordMapOrigin;
 }
 
 /** A mapping that did not make it to the database, with the reason. */
@@ -131,7 +136,8 @@ export class RecordMapBatch {
             externalID: string,
             entityID: string,
             entityRecordID: string,
-            contextUser: UserInfo
+            contextUser: UserInfo,
+            origin: PendingRecordMapOrigin
         ) => Promise<void>,
     ) {}
 
@@ -277,9 +283,14 @@ export class RecordMapBatch {
                 const loaded = await recordMap.Load(existingID);
                 // The row was read a moment ago, so a failure to load means it has since been
                 // deleted. Insert rather than abandon the mapping.
-                if (!loaded) recordMap.NewRecord();
+                if (!loaded) {
+                    recordMap.NewRecord();
+                    recordMap.Origin = mapping.Origin;
+                }
             } else {
                 recordMap.NewRecord();
+                // An existing mapping keeps the origin it was written with (#3528).
+                recordMap.Origin = mapping.Origin;
             }
 
             recordMap.CompanyIntegrationID = this.companyIntegrationID;
@@ -312,7 +323,7 @@ export class RecordMapBatch {
 
         for (const m of chunk) {
             try {
-                await this.saveSingle(this.companyIntegrationID, m.ExternalID, entityID, m.EntityRecordID, this.contextUser);
+                await this.saveSingle(this.companyIntegrationID, m.ExternalID, entityID, m.EntityRecordID, this.contextUser, m.Origin);
             } catch (err) {
                 this.failures.push({
                     ExternalID: m.ExternalID,

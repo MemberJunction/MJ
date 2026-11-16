@@ -8,6 +8,7 @@ describe('PickPromptExecutionScope', () => {
     params.contextUser = { ID: 'user-1' } as UserInfo;
     params.configurationId = 'config-1';
     params.apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+    params.APIKeyResolver = (driverClass: string) => (driverClass === 'OpenAILLM' ? 'run-key' : undefined);
     params.credentialId = 'credential-1';
     params.CredentialScope = 'RuntimeOnly';
 
@@ -16,6 +17,7 @@ describe('PickPromptExecutionScope', () => {
       provider: undefined,
       configurationId: 'config-1',
       apiKeys: params.apiKeys,
+      APIKeyResolver: params.APIKeyResolver,
       credentialId: 'credential-1',
       CredentialScope: 'RuntimeOnly',
     });
@@ -30,7 +32,7 @@ describe('PickPromptExecutionScope', () => {
     const scope = PickPromptExecutionScope(params);
 
     expect(Object.keys(scope).sort()).toEqual(
-      ['CredentialScope', 'apiKeys', 'configurationId', 'contextUser', 'credentialId', 'provider']
+      ['APIKeyResolver', 'CredentialScope', 'apiKeys', 'configurationId', 'contextUser', 'credentialId', 'provider']
     );
   });
 });

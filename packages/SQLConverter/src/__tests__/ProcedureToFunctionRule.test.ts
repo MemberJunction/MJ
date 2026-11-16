@@ -199,6 +199,36 @@ END`;
       expect(result).not.toContain('INOUT');
     });
 
+    it('parses tab-separated params, defaults with OUTPUT, and a default that ends in OUT', () => {
+      const input = `CREATE PROCEDURE [__mj].[spTest]
+    @Count\t\tint\t=\t5 OUTPUT,
+    @Mode nvarchar(20) = 'TIMEOUT',
+    @Amount decimal(18, 2) OUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 1
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('p_Count INTEGER DEFAULT 5');
+      expect(result).toContain("p_Mode VARCHAR(20) DEFAULT 'TIMEOUT'");
+      expect(result).toMatch(/p_Amount NUMERIC\(18,\s?2\)/);
+    });
+
+    it('parses a long whitespace run in a param quickly', () => {
+      const input = `CREATE PROCEDURE [__mj].[spTest]
+    @A ${'\t'.repeat(50000)}int
+AS
+BEGIN
+    SELECT 1
+END`;
+
+      const started = Date.now();
+      convert(input);
+      expect(Date.now() - started).toBeLessThan(2000);
+    });
+
     it('should convert BIT default 0 to FALSE', () => {
       const input = `CREATE PROCEDURE [__mj].[spTest]
     @Active bit = 0

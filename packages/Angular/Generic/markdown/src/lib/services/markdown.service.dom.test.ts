@@ -115,6 +115,31 @@ describe('MarkdownService (DOM)', () => {
       expect(service.getConfig().enableHtml).toBe(false);
     });
 
+    it('caches Marked configuration and skips redundant engine reconfiguration when config has not changed', () => {
+      const engine = service['engine'];
+      const spy = vi.spyOn(engine, 'configureMarked');
+
+      // Call with default config when already configured
+      service.configureMarked({});
+      expect(spy).not.toHaveBeenCalled();
+
+      // Call with new config option
+      service.configureMarked({ enableHtml: true });
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // Call again with the exact same config option
+      service.configureMarked({ enableHtml: true });
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // Reset to defaults
+      service.resetConfig();
+      expect(spy).toHaveBeenCalledTimes(2);
+
+      // Second reset to defaults
+      service.resetConfig();
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
+
     it('isLanguageSupported reflects Prism registration', () => {
       // typescript is imported by the service; a made-up language is not.
       expect(service.isLanguageSupported('typescript')).toBe(true);

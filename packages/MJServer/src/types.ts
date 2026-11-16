@@ -178,6 +178,11 @@ export type RunViewGenericParams = {
    * Propagated to `RunViewParams.Parameters`.
    */
   parameters?: RunViewParameters;
+  /**
+   * Optional JSON-encoded `CompositeFilterDescriptor` for structured filtering.
+   * Parsed into `RunViewParams.Filter`.
+   */
+  filter?: string;
 };
 
 

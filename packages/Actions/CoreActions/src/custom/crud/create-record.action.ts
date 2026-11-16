@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
 import { BaseAction } from '@memberjunction/actions';
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * Generic action for creating new entity records in the database.
@@ -74,6 +75,33 @@ export class CreateRecordAction extends BaseRecordMutationAction {
             
             // Set field values using base class method
             this.setFieldValues(entity!, fields, entityName, entityInfo);
+
+            const mutatedFields = Object.keys(fields).map(
+                (fieldName) => this.resolveEntityFieldName(entity!, fieldName, entityInfo) ?? fieldName
+            );
+            // fls-guard: entity was instantiated for params.ContextUser and is passed only to internal agent policy evaluation (never serialized to caller)
+            const pendingCreateRecord = entity!.GetAll();
+            const policyOutcome = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                params,
+                entityInfo: entityInfo!,
+                operation: 'Create',
+                mutatedFields,
+                record: pendingCreateRecord,
+            });
+            if ('Blocked' in policyOutcome) {
+                return policyOutcome.Blocked;
+            }
+            if (policyOutcome.Allowed.Active && policyOutcome.Allowed.EffectiveWhereClause) {
+                const whereError = await AgentDataPolicyGuard.VerifyEntityStatePassesWhereClause({
+                    params,
+                    entity: entity!,
+                    entityInfo: entityInfo!,
+                    effectiveWhereClause: policyOutcome.Allowed.EffectiveWhereClause,
+                });
+                if (whereError) {
+                    return whereError;
+                }
+            }
 
             // Save the record
             const saveResult = await entity!.Save();

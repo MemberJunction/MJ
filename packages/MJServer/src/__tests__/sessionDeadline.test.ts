@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { ExpiryCloseReason, ParseSessionDeadlineMs, VerifyTimeLimitClaim } from '../agentSessions/sessionDeadline.js';
+import {
+  ExpiryCloseReason,
+  IsMaxSessionDeadlineElapsed,
+  ParseSessionDeadlineMs,
+  RemainingSessionSeconds,
+  VerifyTimeLimitClaim,
+} from '../agentSessions/sessionDeadline.js';
 
 const T = Date.parse('2026-10-29T12:00:00Z');
 const MIN = 60_000;
@@ -48,4 +54,32 @@ describe('VerifyTimeLimitClaim', () => {
   it('no stored deadline → Explicit', () => expect(VerifyTimeLimitClaim(row(T - MIN), T)).toBe('Explicit'));
   it('Config_ null → Explicit', () => expect(VerifyTimeLimitClaim({ LastActiveAt: new Date(T), Config_: null }, T)).toBe('Explicit'));
   it('a long-idle session is never promoted to TimeLimit by idleness', () => expect(VerifyTimeLimitClaim(row(T - 999 * MIN), T)).toBe('Explicit'));
+});
+
+describe('IsMaxSessionDeadlineElapsed', () => {
+  const config = (deadline: number) => row(T, deadline).Config_;
+  it('deadline passed → true', () => expect(IsMaxSessionDeadlineElapsed(config(T - 1), T)).toBe(true));
+  it('exactly at the deadline → true', () => expect(IsMaxSessionDeadlineElapsed(config(T), T)).toBe(true));
+  it('deadline ahead → false', () => expect(IsMaxSessionDeadlineElapsed(config(T + 1), T)).toBe(false));
+  it('no deadline, null, or malformed Config → false', () => {
+    expect(IsMaxSessionDeadlineElapsed('{}', T)).toBe(false);
+    expect(IsMaxSessionDeadlineElapsed(null, T)).toBe(false);
+    expect(IsMaxSessionDeadlineElapsed('{not json', T)).toBe(false);
+    expect(IsMaxSessionDeadlineElapsed(JSON.stringify({ maxSessionDeadlineIso: 'garbage' }), T)).toBe(false);
+  });
+});
+
+describe('RemainingSessionSeconds', () => {
+  const config = (deadline: number) => row(T, deadline).Config_;
+  it('whole seconds left until the deadline, rounded down', () => expect(RemainingSessionSeconds(config(T + 90_500), T)).toBe(90));
+  it('at least 1 while any time is left', () => expect(RemainingSessionSeconds(config(T + 200), T)).toBe(1));
+  it('undefined once the deadline has passed or is now', () => {
+    expect(RemainingSessionSeconds(config(T), T)).toBeUndefined();
+    expect(RemainingSessionSeconds(config(T - MIN), T)).toBeUndefined();
+  });
+  it('undefined with no deadline, a null Config or a malformed one', () => {
+    expect(RemainingSessionSeconds('{}', T)).toBeUndefined();
+    expect(RemainingSessionSeconds(null, T)).toBeUndefined();
+    expect(RemainingSessionSeconds('{not json', T)).toBeUndefined();
+  });
 });

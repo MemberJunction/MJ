@@ -62,6 +62,13 @@ export interface TableDefinition {
     ForeignKeys?: ForeignKeyDefinition[];
 
     /**
+     * Column name tuples that form organic keys (cross-system natural match keys,
+     * such as Email or QuickBooks_ID). Each entry is a single- or multi-column tuple
+     * that receives a non-unique index (`IX_{Schema}_{Table}_OK_{Cols}`).
+     */
+    OrganicKeys?: string[][];
+
+    /**
      * Additional columns injected by the consumer (e.g., integration sync columns).
      * SchemaEngine appends these after the user-defined Columns.
      */
@@ -132,6 +139,8 @@ export interface ExistingTableInfo {
     SchemaName: string;
     TableName: string;
     Columns: ExistingColumnInfo[];
+    /** Existing index names on the table (optional; used to skip already-present indexes in diffs). */
+    Indexes?: string[];
 }
 
 /** Current state of a single column. */
@@ -144,6 +153,13 @@ export interface ExistingColumnInfo {
     Scale: number | null;
 }
 
+/** Definition of a non-unique or unique index to be emitted on a table. */
+export interface IndexDefinition {
+    IndexName: string;
+    Columns: string[];
+    Unique?: boolean;
+}
+
 /** Result of comparing desired vs existing table state. */
 export interface SchemaDiff {
     /** Columns in desired that are not in existing — need ALTER TABLE ADD. */
@@ -152,6 +168,8 @@ export interface SchemaDiff {
     ModifiedColumns: ColumnModification[];
     /** Columns in existing that are not in desired — deprecated (no physical drop). */
     RemovedColumns: string[];
+    /** Soft PK, Soft FK, and Organic Key indexes to ensure on the table. */
+    AddedIndexes?: IndexDefinition[];
 }
 
 /** A single column type/nullability change. */

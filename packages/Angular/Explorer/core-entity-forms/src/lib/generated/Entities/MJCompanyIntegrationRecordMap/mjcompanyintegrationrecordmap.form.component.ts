@@ -17,6 +17,7 @@ export class MJCompanyIntegrationRecordMapFormComponent extends BaseFormComponen
         this.initSections([
             { sectionKey: 'integrationKeys', sectionName: 'Integration Keys', isExpanded: true },
             { sectionKey: 'mappingDetails', sectionName: 'Mapping Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

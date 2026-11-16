@@ -44,6 +44,7 @@ class ConcreteTestProvider extends DatabaseProviderBase {
             restoreContext,
             quoteToEscape,
             cloneContext,
+            false,
             syncContext,
         );
     }
