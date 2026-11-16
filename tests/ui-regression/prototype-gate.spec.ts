@@ -113,8 +113,16 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await openSheetBtn.click();
     const sheet = page.locator('.cdk-overlay-container [role="dialog"][aria-modal="true"]');
     await expect(sheet).toBeVisible();
-    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Done' }).click();
     await expect(sheet).toBeHidden();
+
+    // Non-modal popover opens and Dismiss button closes it
+    const openPopoverBtn = page.getByRole('button', { name: 'Open Popover' });
+    await openPopoverBtn.click();
+    const popover = page.locator('.cdk-overlay-container [role="dialog"][data-kind="popover"]');
+    await expect(popover).toBeVisible();
+    await page.getByRole('button', { name: 'Dismiss' }).click();
+    await expect(popover).toBeHidden();
   });
 
   test('focus-visible ring works across all 3 looks and phone targets meet 44px', async ({

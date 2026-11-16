@@ -22,8 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById(openBtnId)?.addEventListener('click', () => {
       layerEl?.setAttribute('open', 'true');
     });
-    document.getElementById(closeBtnId)?.addEventListener('click', () => {
-      layerEl?.setAttribute('open', 'false');
+    // Event delegation: projected close buttons live inside CDK's TemplatePortal until opened.
+    document.addEventListener('click', (event) => {
+      if (event.target instanceof Element && event.target.closest(`#${closeBtnId}`)) {
+        layerEl?.setAttribute('open', 'false');
+      }
     });
     layerEl?.addEventListener('mj-after-close', () => {
       layerEl.setAttribute('open', 'false');
