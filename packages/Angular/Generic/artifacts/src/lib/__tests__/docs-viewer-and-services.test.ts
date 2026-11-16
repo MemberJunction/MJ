@@ -1742,8 +1742,9 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     const restoredVersionId = 'ver-restored-3';
     const restoredVersionNumber = 3;
 
-    // Track all RunViews batches executed by fallback
+    // Track all RunViews batches and single RunView calls executed by fallback
     const executedBatches: RunViewParams[][] = [];
+    const executedSingles: RunViewParams[] = [];
 
     const mockProvider = Object.create(null) as IMetadataProvider;
     Object.assign(mockProvider, {
@@ -1772,18 +1773,84 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
         }
         return Object.create(null);
       },
+      RunView: async (q: RunViewParams): Promise<RunViewResult> => {
+        executedSingles.push(q);
+        if (/\bvw(?:ArtifactVersions|ConversationDetailArtifacts|ConversationDetails)\b/i.test(String(q.ExtraFilter ?? ''))) {
+          return {
+            Success: false,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 1,
+            ErrorMessage: 'Refused by ClientClauseScreen',
+          };
+        }
+        if (q.EntityName === 'MJ: Conversation Detail Artifacts') {
+          return {
+            Success: true,
+            Results: [
+              { ID: 'cda-1', ArtifactVersionID: 'ver-1', ConversationDetailID: 'detail-on-path' },
+              { ID: 'cda-999', ArtifactVersionID: 'ver-out-of-scope-999', ConversationDetailID: 'detail-off-branch' },
+            ],
+            RowCount: 2,
+            TotalRowCount: 2,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        }
+        if (q.EntityName === 'MJ: Conversation Details') {
+          return {
+            Success: true,
+            Results: [{ ID: 'detail-on-path' }],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        }
+        return {
+          Success: true,
+          Results: [],
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0,
+          ErrorMessage: '',
+        };
+      },
       RunViews: async (queries: RunViewParams[]): Promise<RunViewResult[]> => {
         executedBatches.push(queries);
+        if (
+          queries.some((q) =>
+            /\bvw(?:ArtifactVersions|ConversationDetailArtifacts|ConversationDetails)\b/i.test(String(q.ExtraFilter ?? '')),
+          )
+        ) {
+          return queries.map(() => ({
+            Success: false,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 1,
+            ErrorMessage: 'Refused by ClientClauseScreen',
+          }));
+        }
         return queries.map((q) => {
-          // Scoped version list query (lightweight fields, no Content)
+          // Unscoped version list query (lightweight fields, no Content) — returns both in-scope and off-branch rows
           if (q.Fields && q.Fields.includes('VersionNumber') && !q.MaxRows) {
+            const v999OutOfScope = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+            Object.defineProperties(v999OutOfScope, {
+              ID: { value: 'ver-out-of-scope-999', enumerable: true },
+              ArtifactID: { value: artifactId, enumerable: true },
+              VersionNumber: { value: 999, enumerable: true },
+              Name: { value: 'Version 999', enumerable: true },
+              Description: { value: 'off branch', enumerable: true },
+            });
             const v2Scoped = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
             Object.defineProperties(v2Scoped, {
               ID: { value: 'ver-2', enumerable: true },
               ArtifactID: { value: artifactId, enumerable: true },
               VersionNumber: { value: 2, enumerable: true },
               Name: { value: 'Version 2', enumerable: true },
-              Description: { value: 'v2 in scope', enumerable: true },
+              Description: { value: 'v2 unlinked', enumerable: true },
             });
             const v1Scoped = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
             Object.defineProperties(v1Scoped, {
@@ -1795,24 +1862,7 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
             });
             return {
               Success: true,
-              Results: [v2Scoped, v1Scoped],
-              RowCount: 2,
-              TotalRowCount: 2,
-              ExecutionTime: 1,
-              ErrorMessage: '',
-            };
-          }
-          // ID-only query for all versions of artifact
-          if (q.Fields && q.Fields.length === 1 && q.Fields[0] === 'ID') {
-            const v1Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v1Id, { ID: { value: 'ver-1', enumerable: true } });
-            const v2Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v2Id, { ID: { value: 'ver-2', enumerable: true } });
-            const v999Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
-            Object.defineProperties(v999Id, { ID: { value: 'ver-out-of-scope-999', enumerable: true } });
-            return {
-              Success: true,
-              Results: [v1Id, v2Id, v999Id],
+              Results: [v999OutOfScope, v2Scoped, v1Scoped],
               RowCount: 3,
               TotalRowCount: 3,
               ExecutionTime: 1,
@@ -1877,32 +1927,34 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     // Trigger restore of version 1
     await panel.OnRestoreComparedVersion(1);
 
-    // 1. Verify executed fallback query batch
+    // 1. Verify executed fallback query batch + RLS-safe scope reads
     expect(executedBatches).toHaveLength(1);
     const batch = executedBatches[0];
-    expect(batch).toHaveLength(3);
+    expect(batch).toHaveLength(2);
 
-    const [scopedListQuery, allIdsQuery, singleVerQuery] = batch;
+    const [versionListQuery, singleVerQuery] = batch;
 
-    // (a) Scoped list query has conversation scope filter, simple result type, and lightweight fields without Content
-    expect(scopedListQuery.EntityName).toBe('MJ: Artifact Versions');
-    expect(scopedListQuery.ResultType).toBe('simple');
-    expect(scopedListQuery.ExtraFilter).toBe(
-      ConversationEngine.ArtifactVersionScopeFilter(scope, artifactId),
-    );
-    expect(scopedListQuery.Fields).toBeDefined();
-    expect(scopedListQuery.Fields).not.toContain('Content');
+    // (a) Unscoped version list query has simple result type, lightweight fields without Content, and no base-view subquery
+    expect(versionListQuery.EntityName).toBe('MJ: Artifact Versions');
+    expect(versionListQuery.ResultType).toBe('simple');
+    expect(versionListQuery.ExtraFilter).toBe(`ArtifactID='${artifactId}'`);
+    expect(versionListQuery.Fields).toBeDefined();
+    expect(versionListQuery.Fields).not.toContain('Content');
 
-    // (b) ID query for maintaining artifactVersionIds
-    expect(allIdsQuery.EntityName).toBe('MJ: Artifact Versions');
-    expect(allIdsQuery.Fields).toEqual(['ID']);
-    expect(allIdsQuery.ResultType).toBe('simple');
-
-    // (c) Single restored version query has entity_object, MaxRows 1, and filters for restored version ID
+    // (b) Single restored version query has entity_object, MaxRows 1, and filters for restored version ID
     expect(singleVerQuery.EntityName).toBe('MJ: Artifact Versions');
     expect(singleVerQuery.MaxRows).toBe(1);
     expect(singleVerQuery.ResultType).toBe('entity_object');
     expect(singleVerQuery.ExtraFilter).toContain(restoredVersionId);
+
+    // (c) Scope reads run directly on MJ: Conversation Detail Artifacts and MJ: Conversation Details with zero SELECT subqueries
+    expect(executedSingles.map((q) => q.EntityName)).toEqual([
+      'MJ: Conversation Detail Artifacts',
+      'MJ: Conversation Details',
+    ]);
+    for (const q of [...batch, ...executedSingles]) {
+      expect(String(q.ExtraFilter ?? '')).not.toMatch(/\bSELECT\b/i);
+    }
 
     // 2. Verify panel state
     // Does NOT leak out-of-scope version 'ver-out-of-scope-999' into AllVersions

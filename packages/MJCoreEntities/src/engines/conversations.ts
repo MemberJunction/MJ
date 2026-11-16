@@ -4686,6 +4686,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * `[column] IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE <ScopeFilter>)` for entities
      * anchored by a conversation detail id column.
+     *
+     * @deprecated Do not pass to client-originated `RunView.ExtraFilter`: MJ 6.2 `ClientClauseScreen`
+     * refuses `[__mj].[vwConversationDetails]` subqueries whenever `MJ: Conversation Details` has a
+     * row-level security filter for the caller. Load in-scope detail IDs with a separate `RunView` over
+     * `MJ: Conversation Details` using {@link ScopeFilter} and pass a scalar `[column] IN (...)` predicate instead.
      */
     public static ScopeSubquery(scope: ConversationScope, column: string = 'ConversationDetailID'): string {
         return `[${column}] IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${ConversationEngine.ScopeFilter(scope)})`;
@@ -4709,6 +4714,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * Filter over MJ: Artifact Versions for the versions of one artifact visible in scope: versions
      * linked (in any direction) from a message on the path, and versions with no conversation link
      * at all.
+     *
+     * @deprecated Do not pass to client-originated `RunView.ExtraFilter`: MJ 6.2 `ClientClauseScreen`
+     * refuses `vwConversationDetailArtifacts` / `vwConversationDetails` subqueries whenever either
+     * entity has a row-level security filter for the caller. Load the artifact's versions, link rows,
+     * and in-scope detail IDs via separate `RunView` calls and filter in memory with
+     * {@link FilterArtifactVersionsToScope}.
      */
     public static ArtifactVersionScopeFilter(scope: ConversationScope, artifactId: string): string {
         const path = ConversationEngine.ScopeFilter(scope);
@@ -4717,6 +4728,42 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             `[ID] IN (SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts] WHERE ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${path}))` +
             ` OR [ID] NOT IN (SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts] WHERE ArtifactVersionID IS NOT NULL)` +
             `)`;
+    }
+
+    /**
+     * RLS-safe in-memory equivalent of {@link ArtifactVersionScopeFilter}. Keeps every version in
+     * `versions` (preserving order) that either has no non-null link in `links`, or has at least one
+     * link whose `ConversationDetailID` is in `inScopeDetailIds`.
+     */
+    public static FilterArtifactVersionsToScope<T extends { ID: string }>(
+        versions: readonly T[],
+        links: ReadonlyArray<{ ArtifactVersionID?: string | null; ConversationDetailID?: string | null }>,
+        inScopeDetailIds: Iterable<string>
+    ): T[] {
+        const visibleDetailIds = inScopeDetailIds instanceof UUIDSet ? inScopeDetailIds : new UUIDSet();
+        if (!(inScopeDetailIds instanceof UUIDSet)) {
+            for (const detailId of inScopeDetailIds) {
+                if (detailId && detailId.trim().length > 0) {
+                    visibleDetailIds.Add(detailId);
+                }
+            }
+        }
+        const linkedAny = new UUIDSet();
+        const linkedInScope = new UUIDSet();
+        for (const link of links) {
+            if (!link.ArtifactVersionID || link.ArtifactVersionID.trim().length === 0) {
+                continue;
+            }
+            linkedAny.Add(link.ArtifactVersionID);
+            if (
+                link.ConversationDetailID &&
+                link.ConversationDetailID.trim().length > 0 &&
+                visibleDetailIds.Has(link.ConversationDetailID)
+            ) {
+                linkedInScope.Add(link.ArtifactVersionID);
+            }
+        }
+        return versions.filter(v => !linkedAny.Has(v.ID) || linkedInScope.Has(v.ID));
     }
 
     /** The kind of a fork row; a missing or unknown value is 'Fork'. */

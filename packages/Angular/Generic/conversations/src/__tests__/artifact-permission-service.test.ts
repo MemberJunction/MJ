@@ -126,6 +126,103 @@ describe('ArtifactPermissionService.GetReadableArtifactsFilter', () => {
     expect(queries.length).toBeGreaterThan(0);
     for (const q of queries) {
       expect(q.ExtraFilter ?? '').not.toMatch(/SELECT/i);
+      expect(q.IgnoreMaxRows).toBe(true);
+    }
+  });
+
+  it('escapes single quotes in userId and returned artifact/collection IDs', async () => {
+    const quotedUser = { ID: "user'1", Name: 'Quoted User' } as unknown as UserInfo;
+    rows['MJ: Artifact Permissions'] = [{ ArtifactID: "art'direct", CanRead: true }];
+    rows['MJ: Collection Permissions'] = [{ CollectionID: "col'1" }];
+    rows['MJ: Collection Artifacts'] = [{ ArtifactVersionID: "ver'1" }];
+    rows['MJ: Artifact Versions'] = [{ ArtifactID: "art'coll" }];
+
+    const filter = await service.GetReadableArtifactsFilter(quotedUser.ID, quotedUser);
+
+    expect(filter).toBe("(UserID='user''1' OR ID IN ('art''direct','art''coll'))");
+    expect(queriesFor('MJ: Artifact Permissions')[0].ExtraFilter).toBe("UserID='user''1'");
+    expect(queriesFor('MJ: Collection Artifacts')[0].ExtraFilter).toBe("CollectionID IN ('col''1')");
+    expect(queriesFor('MJ: Artifact Versions')[0].ExtraFilter).toBe("ID IN ('ver''1')");
+  });
+});
+
+describe('ArtifactPermissionService.CheckPermission and GetEffectiveUsers', () => {
+  let service: ArtifactPermissionService;
+  let collectionPermissions: CollectionPermissionService;
+  let queries: RunViewParams[];
+  let rows: Rows;
+
+  beforeEach(() => {
+    queries = [];
+    rows = {};
+    collectionPermissions = new CollectionPermissionService();
+    service = new ArtifactPermissionService(collectionPermissions);
+    service.Provider = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return rows[params.EntityName ?? ''] ?? [];
+      },
+    });
+  });
+
+  it('inherits collection edit permission in CheckPermission without issuing a SELECT subquery', async () => {
+    rows['MJ: Artifacts'] = [{ ID: 'art-1', UserID: 'other-owner', __mj_CreatedAt: new Date() }];
+    rows['MJ: Artifact Versions'] = [{ ID: 'ver-1' }, { ID: 'ver-2' }];
+    rows['MJ: Collection Artifacts'] = [{ CollectionID: 'col-1', Collection: 'Shared Folder', ArtifactVersionID: 'ver-1' }];
+    vi.spyOn(collectionPermissions, 'checkPermission').mockResolvedValue({
+      id: 'cp-1',
+      collectionId: 'col-1',
+      userId: USER.ID,
+      userName: USER.Name,
+      canRead: true,
+      canShare: false,
+      canEdit: true,
+      canDelete: false,
+      sharedByUserId: null,
+      sharedByUserName: null,
+      sharedAt: new Date(),
+    });
+
+    const allowed = await service.CheckPermission('art-1', USER.ID, 'edit', USER);
+
+    expect(allowed).toBe(true);
+    for (const q of queries) {
+      expect(String(q.ExtraFilter ?? '')).not.toMatch(/\bSELECT\b|vwArtifactVersions/i);
+    }
+    const collectionLinkQuery = queries.find((q) => q.EntityName === 'MJ: Collection Artifacts');
+    expect(collectionLinkQuery?.ExtraFilter).toBe("ArtifactVersionID IN ('ver-1','ver-2')");
+  });
+
+  it('loads collection-inherited users in GetEffectiveUsers without issuing a SELECT subquery', async () => {
+    const sharedAt = new Date('2026-11-01T00:00:00Z');
+    rows['MJ: Artifacts'] = [{ ID: 'art-1', UserID: 'owner-1', User: 'Owner', __mj_CreatedAt: sharedAt }];
+    rows['MJ: Artifact Versions'] = [{ ID: 'ver-1' }];
+    rows['MJ: Collection Artifacts'] = [{ CollectionID: 'col-1', Collection: 'Team Docs', ArtifactVersionID: 'ver-1' }];
+    vi.spyOn(collectionPermissions, 'loadPermissions').mockResolvedValue([
+      {
+        id: 'cp-2',
+        collectionId: 'col-1',
+        userId: 'user-1',
+        userName: 'User One',
+        canRead: true,
+        canShare: false,
+        canEdit: false,
+        canDelete: false,
+        sharedByUserId: 'owner-1',
+        sharedByUserName: 'Owner',
+        sharedAt,
+      },
+    ]);
+
+    const users = await service.GetEffectiveUsers('art-1', USER);
+
+    expect(users.map((u) => ({ userId: u.userId, source: u.source, collectionName: u.collectionName }))).toEqual([
+      { userId: 'owner-1', source: 'owner', collectionName: undefined },
+      { userId: 'user-1', source: 'collection', collectionName: 'Team Docs' },
+    ]);
+    for (const q of queries) {
+      expect(String(q.ExtraFilter ?? '')).not.toMatch(/\bSELECT\b|vwArtifactVersions/i);
     }
   });
 });
+

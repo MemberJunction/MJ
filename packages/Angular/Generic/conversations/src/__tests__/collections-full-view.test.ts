@@ -1,4 +1,20 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+// Angular components in this package are partial-compiled — load the JIT compiler first
+// (same convention as the other component suites in this node test environment).
+import '@angular/compiler';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ChangeDetectorRef } from '@angular/core';
+import { RunViewParams, UserInfo } from '@memberjunction/core';
+import { MJCollectionEntity } from '@memberjunction/core-entities';
+import { ArtifactIconService } from '@memberjunction/ng-artifacts';
+import { CreateFakeProvider } from '@memberjunction/ng-test-utils';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { CollectionsFullViewComponent } from '../lib/components/collection/collections-full-view.component';
+import { CollectionViewComponent } from '../lib/components/collection/collection-view.component';
+import { ArtifactPermissionService } from '../lib/services/artifact-permission.service';
+import { ArtifactStateService } from '../lib/services/artifact-state.service';
+import { CollectionPermissionService } from '../lib/services/collection-permission.service';
+import { CollectionStateService } from '../lib/services/collection-state.service';
+import { DialogService } from '../lib/services/dialog.service';
 
 /**
  * Tests for collections-full-view logic — extracted from the component
@@ -281,3 +297,105 @@ describe('Bug 2: item count display', () => {
     });
   });
 });
+
+class NoopChangeDetectorRef extends ChangeDetectorRef {
+  markForCheck(): void {}
+  detach(): void {}
+  detectChanges(): void {}
+  checkNoChanges(): void {}
+  reattach(): void {}
+}
+
+describe('Collections components RLS-safe entity reads (no base-view subqueries)', () => {
+  const user = new UserInfo(undefined, { ID: 'user-1', Name: 'User One' });
+  let queries: RunViewParams[];
+  let rows: Record<string, object[]>;
+
+  beforeEach(() => {
+    queries = [];
+    rows = {};
+  });
+
+  it('CollectionsFullViewComponent.LoadAllCollections resolves Collection Permissions before Collections without SELECT subqueries', async () => {
+    rows['MJ: Collection Permissions'] = [{ CollectionID: 'col-shared-1' }, { CollectionID: 'COL-SHARED-1' }];
+    rows['MJ: Collections'] = [
+      { ID: 'col-shared-1', Name: 'Shared Folder', ParentID: null },
+      { ID: 'col-owned-1', Name: 'My Folder', ParentID: null }
+    ];
+
+    const permissionService = new CollectionPermissionService();
+    const artifactState = new ArtifactStateService(new ArtifactPermissionService(permissionService));
+    const dialogService: DialogService = Object.create(DialogService.prototype);
+    const iconService: ArtifactIconService = Object.create(ArtifactIconService.prototype);
+    const component = new CollectionsFullViewComponent(
+      dialogService,
+      artifactState,
+      new CollectionStateService(),
+      permissionService,
+      iconService,
+      new NoopChangeDetectorRef()
+    );
+    component.Provider = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return rows[params.EntityName ?? ''] ?? [];
+      }
+    });
+    component.CurrentUser = user;
+    component.EnvironmentId = 'env-1';
+
+    await component.LoadAllCollections(true);
+
+    expect(component.AllCollections.map(c => c.ID)).toEqual(['col-shared-1', 'col-owned-1']);
+    expect(queries.map(q => q.EntityName)).toEqual(['MJ: Collection Permissions', 'MJ: Collections']);
+    expect(queries[0].ExtraFilter).toBe("UserID='user-1'");
+    expect(queries[0].BypassCache).toBe(true);
+    expect(queries[1].ExtraFilter).toBe(
+      "EnvironmentID='env-1' AND (OwnerID IS NULL OR OwnerID='user-1' OR ID IN ('col-shared-1'))"
+    );
+    for (const q of queries) {
+      expect(String(q.ExtraFilter ?? '')).not.toMatch(/\bSELECT\b|vwCollectionPermissions/i);
+    }
+  });
+
+  it('CollectionViewComponent loads collection links before versions without SELECT subqueries', async () => {
+    rows['MJ: Collection Artifacts'] = [{ ArtifactVersionID: 'ver-1' }, { ArtifactVersionID: 'VER-1' }];
+    rows['MJ: Artifact Versions'] = [{ ID: 'ver-1', ArtifactID: 'ART-1', VersionNumber: 1 }];
+    rows['MJ: Artifacts'] = [{ ID: 'art-1', Name: 'Member Guide' }];
+
+    const confirmService: MJConfirmService = Object.create(MJConfirmService.prototype);
+    const component = new CollectionViewComponent(new NoopChangeDetectorRef(), confirmService);
+    component.Provider = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return rows[params.EntityName ?? ''] ?? [];
+      }
+    });
+    const collection: MJCollectionEntity = Object.create(MJCollectionEntity.prototype, {
+      ID: { value: 'col-1', enumerable: true },
+      Name: { value: 'Member Collection', enumerable: true }
+    });
+    component.Collection = collection;
+    component.CurrentUser = user;
+    component.EnvironmentId = 'env-1';
+
+    component.OnSortChange();
+    await vi.waitFor(() => {
+      expect(component.ArtifactVersions).toHaveLength(1);
+    });
+
+    expect(component.ArtifactVersions[0].artifact.Name).toBe('Member Guide');
+    expect(queries.map(q => q.EntityName)).toEqual([
+      'MJ: Collection Artifacts',
+      'MJ: Artifact Versions',
+      'MJ: Artifacts'
+    ]);
+    expect(queries[0].ExtraFilter).toBe("CollectionID='col-1'");
+    expect(queries[1].ExtraFilter).toBe("ID IN ('ver-1')");
+    expect(queries[2].ExtraFilter).toBe("ID='ART-1'");
+    for (const q of queries) {
+      expect(String(q.ExtraFilter ?? '')).not.toMatch(/\bSELECT\b|vwCollectionArtifacts/i);
+    }
+  });
+});
+

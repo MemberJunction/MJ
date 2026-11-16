@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
-import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString, UUIDMap, UUIDSet } from '@memberjunction/global';
 import { ArtifactPermissionService } from './artifact-permission.service';
 
 /**
@@ -255,16 +256,66 @@ export class ArtifactStateService {
   async LoadArtifactsForCollection(collectionId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
-      // Load artifacts through the collection join - use subquery to get artifact IDs from versions
+      const linkResult = await rv.RunView<Pick<MJCollectionArtifactEntity, 'ArtifactVersionID'>>(
+        {
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}'`,
+          Fields: ['ArtifactVersionID'],
+          ResultType: 'simple',
+          IgnoreMaxRows: true
+        },
+        currentUser
+      );
+
+      if (!linkResult.Success) {
+        return [];
+      }
+
+      const seenVersionIds = new UUIDSet();
+      const versionIds: string[] = [];
+      for (const row of linkResult.Results ?? []) {
+        const versionId = row.ArtifactVersionID?.trim();
+        if (versionId && !seenVersionIds.Has(versionId)) {
+          seenVersionIds.Add(versionId);
+          versionIds.push(versionId);
+        }
+      }
+      if (versionIds.length === 0) {
+        return [];
+      }
+
+      const versionResult = await rv.RunView<Pick<MJArtifactVersionEntity, 'ArtifactID'>>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID IN (${versionIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
+          Fields: ['ArtifactID'],
+          ResultType: 'simple',
+          IgnoreMaxRows: true
+        },
+        currentUser
+      );
+
+      if (!versionResult.Success) {
+        return [];
+      }
+
+      const seenArtifactIds = new UUIDSet();
+      const artifactIds: string[] = [];
+      for (const row of versionResult.Results ?? []) {
+        const artifactId = row.ArtifactID?.trim();
+        if (artifactId && !seenArtifactIds.Has(artifactId)) {
+          seenArtifactIds.Add(artifactId);
+          artifactIds.push(artifactId);
+        }
+      }
+      if (artifactIds.length === 0) {
+        return [];
+      }
+
       const artifactsResult = await rv.RunView<MJArtifactEntity>(
         {
           EntityName: 'MJ: Artifacts',
-          ExtraFilter: `ID IN (
-            SELECT DISTINCT av.ArtifactID
-            FROM [__mj].[vwArtifactVersions] av
-            INNER JOIN [__mj].[vwCollectionArtifacts] ca ON ca.ArtifactVersionID = av.ID
-            WHERE ca.CollectionID = '${collectionId}'
-          )`,
+          ExtraFilter: `ID IN (${artifactIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'entity_object'
         },
@@ -312,11 +363,12 @@ export class ArtifactStateService {
       // `bypassCache` is passed right after a move: the link delete's cache invalidation
       // is asynchronous relative to Delete() resolving, so an immediate cached read can
       // still return the old membership. Bypassing reads the committed DB state directly.
-      const linkResult = await rv.RunView<{ ArtifactVersionID: string }>({
+      const linkResult = await rv.RunView<Pick<MJCollectionArtifactEntity, 'ArtifactVersionID'>>({
         EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `CollectionID='${collectionId}'`,
+        ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}'`,
         Fields: ['ArtifactVersionID'],
         ResultType: 'simple',
+        IgnoreMaxRows: true,
         BypassCache: bypassCache
       }, currentUser);
 
@@ -324,11 +376,15 @@ export class ArtifactStateService {
         return [];
       }
 
-      const versionIds = [...new Set(
-        (linkResult.Results ?? [])
-          .map(r => r.ArtifactVersionID)
-          .filter((id): id is string => !!id)
-      )];
+      const seenVersionIds = new UUIDSet();
+      const versionIds: string[] = [];
+      for (const r of linkResult.Results ?? []) {
+        const id = r.ArtifactVersionID?.trim();
+        if (id && !seenVersionIds.Has(id)) {
+          seenVersionIds.Add(id);
+          versionIds.push(id);
+        }
+      }
 
       if (versionIds.length === 0) {
         return [];
@@ -337,7 +393,7 @@ export class ArtifactStateService {
       // Load the specific versions that are members of this collection.
       const versionResult = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ID IN (${versionIds.map(id => `'${id}'`).join(',')})`,
+        ExtraFilter: `ID IN (${versionIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
         OrderBy: '__mj_UpdatedAt DESC',
         ResultType: 'entity_object'
       }, currentUser);
@@ -347,11 +403,18 @@ export class ArtifactStateService {
       }
 
       // Load parent artifacts for display metadata
-      const artifactIds = [...new Set(versionResult.Results.map(v => v.ArtifactID))];
-      const artifactMap = new Map<string, MJArtifactEntity>();
+      const seenArtifactIds = new UUIDSet();
+      const artifactIds: string[] = [];
+      for (const v of versionResult.Results) {
+        if (v.ArtifactID && !seenArtifactIds.Has(v.ArtifactID)) {
+          seenArtifactIds.Add(v.ArtifactID);
+          artifactIds.push(v.ArtifactID);
+        }
+      }
+      const artifactMap = new UUIDMap<MJArtifactEntity>();
 
       if (artifactIds.length > 0) {
-        const artifactFilter = artifactIds.map(id => `ID='${id}'`).join(' OR ');
+        const artifactFilter = artifactIds.map(id => `ID='${EscapeSQLString(id)}'`).join(' OR ');
         const artifactResult = await rv.RunView<MJArtifactEntity>({
           EntityName: 'MJ: Artifacts',
           ExtraFilter: artifactFilter,
@@ -360,7 +423,7 @@ export class ArtifactStateService {
 
         if (artifactResult.Success && artifactResult.Results) {
           artifactResult.Results.forEach(a => {
-            artifactMap.set(a.ID, a);
+            artifactMap.Set(a.ID, a);
             this.CacheArtifact(a); // Cache parent artifacts
           });
         }
@@ -370,7 +433,7 @@ export class ArtifactStateService {
       return versionResult.Results
         .map(version => ({
           version,
-          artifact: artifactMap.get(version.ArtifactID)!
+          artifact: artifactMap.Get(version.ArtifactID)!
         }))
         .filter(item => item.artifact != null);
     } catch (error) {
@@ -537,14 +600,15 @@ export class ArtifactStateService {
     if (!targetVersionId) {
       const rv = RunView.FromMetadataProvider(this.Provider);
       // conversation-scope: artifact-wide read, no conversation path applies
-      const versionResult = await rv.RunView<any>(
+      const versionResult = await rv.RunView<Pick<MJArtifactVersionEntity, 'ID'>>(
         {
           EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID='${artifactId}'`,
+          ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
           OrderBy: 'VersionNumber DESC',
+          Fields: ['ID'],
           MaxRows: 1,
           SkipTotalRowCount: true,
-          ResultType: 'entity_object'
+          ResultType: 'simple'
         },
         currentUser
       );
@@ -557,10 +621,10 @@ export class ArtifactStateService {
     }
 
     const md = this.Provider;
-    const collectionArtifact = await md.GetEntityObject('MJ: Collection Artifacts', currentUser);
+    const collectionArtifact = await md.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', currentUser);
 
-    (collectionArtifact as any).CollectionID = collectionId;
-    (collectionArtifact as any).ArtifactVersionID = targetVersionId;
+    collectionArtifact.CollectionID = collectionId;
+    collectionArtifact.ArtifactVersionID = targetVersionId;
 
     const saved = await collectionArtifact.Save();
     if (!saved) {
@@ -587,13 +651,39 @@ export class ArtifactStateService {
     }
 
     const rv = RunView.FromMetadataProvider(this.Provider);
+    const versionResult = await rv.RunView<Pick<MJArtifactVersionEntity, 'ID'>>(
+      {
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+        Fields: ['ID'],
+        ResultType: 'simple',
+        IgnoreMaxRows: true
+      },
+      currentUser
+    );
+
+    if (!versionResult.Success) {
+      throw new Error(versionResult.ErrorMessage || 'Failed to find artifact versions');
+    }
+
+    const seenVersionIds = new UUIDSet();
+    const versionIds: string[] = [];
+    for (const row of versionResult.Results ?? []) {
+      const versionId = row.ID?.trim();
+      if (versionId && !seenVersionIds.Has(versionId)) {
+        seenVersionIds.Add(versionId);
+        versionIds.push(versionId);
+      }
+    }
+    if (versionIds.length === 0) {
+      throw new Error('Collection artifact link not found');
+    }
+
     // Find all versions of this artifact in the collection
-    const result = await rv.RunView<any>(
+    const result = await rv.RunView<MJCollectionArtifactEntity>(
       {
         EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID IN (
-          SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
-        )`,
+        ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}' AND ArtifactVersionID IN (${versionIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
         ResultType: 'entity_object'
       },
       currentUser
@@ -611,7 +701,7 @@ export class ArtifactStateService {
     for (const collectionArtifact of result.Results) {
       const deleted = await collectionArtifact.Delete();
       if (!deleted) {
-        const errorMsg = collectionArtifact.LatestResult?.Message || 'Failed to remove artifact from collection';
+        const errorMsg = collectionArtifact.LatestResult?.CompleteMessage || collectionArtifact.LatestResult?.Message || 'Failed to remove artifact from collection';
         throw new Error(errorMsg);
       }
     }

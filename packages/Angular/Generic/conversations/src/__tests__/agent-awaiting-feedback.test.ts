@@ -54,6 +54,9 @@ function fakeProvider(rows: MJAIAgentRunEntity[]): ProviderProbe {
     const provider = {
         RunView: async (params: RunViewParams): Promise<RunViewResult> => {
             calls.push(params);
+            if (params.EntityName === 'MJ: Conversation Details') {
+                return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' } as RunViewResult;
+            }
             // ExtraFilter is `string | PlatformSQL`; this service builds a plain string, and a
             // non-string would serve zero rows here — loudly, which is what we want.
             const filterText = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
@@ -92,8 +95,8 @@ describe('AgentStateService — a finished chat turn is not an active agent', ()
 
         await pollOnce(service, probe);
 
-        expect(probe.calls).toHaveLength(1);
-        const filter = probe.calls[0].ExtraFilter ?? '';
+        expect(probe.calls.map((c) => c.EntityName)).toEqual(['MJ: Conversation Details', 'MJ: AI Agent Runs']);
+        const filter = probe.calls[1].ExtraFilter ?? '';
         expect(filter).toContain("'Running'");
         expect(filter).toContain("'Paused'");
         expect(filter).not.toContain("'AwaitingFeedback'");

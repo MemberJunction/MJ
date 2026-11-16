@@ -216,7 +216,7 @@ describe('SearchService visibility scope', () => {
     const idQuery = queriesFor('MJ: Conversations')[0];
     expect(idQuery.ExtraFilter).toBe(VISIBLE_CONVERSATIONS);
     expect(idQuery.Fields).toEqual(['ID']);
-    expect(idQuery.MaxRows).toBeUndefined();
+    expect(idQuery.IgnoreMaxRows).toBe(true);
     const messageFilter = filterFor('MJ: Conversation Details');
     expect(messageFilter.startsWith("ConversationID IN ('c1','c2') AND ")).toBe(true);
     expect(messageFilter).toContain("LOWER(Message) LIKE '%poem%'");
@@ -327,6 +327,34 @@ describe('SearchService visibility scope', () => {
     expect(artifactPermissions.GetReadableArtifactsFilter).toHaveBeenCalledWith('user-1', USER);
     const filter = filterFor('MJ: Artifacts');
     expect(filter.startsWith(`EnvironmentID='env-1' AND ${READABLE_ARTIFACTS} AND (`)).toBe(true);
+  });
+
+  it('escapes quotes in environmentId and conversationIds for artifact and message searches', async () => {
+    rows['MJ: Conversations'] = [{ ID: "conv'1" }];
+    service.SetSearchFilter('all');
+
+    await service.Search('poem', "env'quote", USER);
+
+    expect(filterFor('MJ: Artifacts').startsWith("EnvironmentID='env''quote' AND ")).toBe(true);
+    expect(filterFor('MJ: Conversation Details').startsWith("ConversationID IN ('conv''1') AND ")).toBe(true);
+  });
+
+  it('searches collections without a subquery over Collection Permissions', async () => {
+    rows['MJ: Collection Permissions'] = [{ CollectionID: 'col-shared-1' }, { CollectionID: 'col-shared-2' }];
+    rows['MJ: Collections'] = [
+      { ID: 'col-shared-1', Name: 'Poem Collection', Description: 'Shared poems', __mj_UpdatedAt: new Date(), __mj_CreatedAt: new Date() },
+    ];
+    service.SetSearchFilter('collections');
+
+    const results = await service.Search('poem', 'env-1', USER);
+
+    expect(results.collections).toHaveLength(1);
+    expect(queriesFor('MJ: Collection Permissions')[0]?.ExtraFilter).toBe("UserID='user-1'");
+    const collectionFilter = filterFor('MJ: Collections');
+    expect(collectionFilter).toContain("(OwnerID IS NULL OR OwnerID='user-1' OR ID IN ('col-shared-1','col-shared-2'))");
+    for (const q of queries) {
+      expect(String(q.ExtraFilter ?? '')).not.toMatch(/\bSELECT\b|vwCollectionPermissions/i);
+    }
   });
 });
 
@@ -465,6 +493,7 @@ describe('SearchService artifact collections', () => {
     for (const q of [...versionReads, ...linkReads]) {
       expect(filterOf(q)).not.toMatch(/SELECT|__mj|vw/i);
       expect(q.ResultType).toBe('simple');
+      expect(q.IgnoreMaxRows).toBe(true);
     }
   });
 

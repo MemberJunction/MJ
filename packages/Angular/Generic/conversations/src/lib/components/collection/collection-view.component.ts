@@ -1,7 +1,8 @@
 import { Component, Input, OnInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { UserInfo, RunView } from '@memberjunction/core';
+import { EscapeSQLString, UUIDMap, UUIDSet } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 
@@ -260,28 +261,56 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
 
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const md = this.ProviderToUse;
+
+      const linkResult = await rv.RunView<Pick<MJCollectionArtifactEntity, 'ArtifactVersionID'>>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID='${EscapeSQLString(this.Collection.ID)}'`,
+        Fields: ['ArtifactVersionID'],
+        ResultType: 'simple',
+        IgnoreMaxRows: true
+      }, this.CurrentUser);
+
+      if (!linkResult.Success) {
+        this.ArtifactVersions = [];
+        return;
+      }
+
+      const seenVersionIds = new UUIDSet();
+      const versionIds: string[] = [];
+      for (const row of linkResult.Results ?? []) {
+        const versionId = row.ArtifactVersionID?.trim();
+        if (versionId && !seenVersionIds.Has(versionId)) {
+          seenVersionIds.Add(versionId);
+          versionIds.push(versionId);
+        }
+      }
+      if (versionIds.length === 0) {
+        this.ArtifactVersions = [];
+        return;
+      }
 
       // Load ALL VERSIONS in this collection (no DISTINCT - each version is separate)
       const versionResult = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ID IN (
-          SELECT ca.ArtifactVersionID
-          FROM [__mj].[vwCollectionArtifacts] ca
-          WHERE ca.CollectionID='${this.Collection.ID}'
-        )`,
+        ExtraFilter: `ID IN (${versionIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
         OrderBy: this.getVersionOrderBy(),
         ResultType: 'entity_object'
       }, this.CurrentUser);
 
       if (versionResult.Success && versionResult.Results) {
-        // Get unique artifact IDs
-        const artifactIds = [...new Set(versionResult.Results.map(v => v.ArtifactID))];
+        const seenArtifactIds = new UUIDSet();
+        const artifactIds: string[] = [];
+        for (const v of versionResult.Results) {
+          if (v.ArtifactID && !seenArtifactIds.Has(v.ArtifactID)) {
+            seenArtifactIds.Add(v.ArtifactID);
+            artifactIds.push(v.ArtifactID);
+          }
+        }
 
         // Load parent artifact info (just for display metadata - no visibility filtering)
-        const artifactMap = new Map<string, MJArtifactEntity>();
+        const artifactMap = new UUIDMap<MJArtifactEntity>();
         if (artifactIds.length > 0) {
-          const artifactFilter = artifactIds.map(id => `ID='${id}'`).join(' OR ');
+          const artifactFilter = artifactIds.map(id => `ID='${EscapeSQLString(id)}'`).join(' OR ');
           const artifactResult = await rv.RunView<MJArtifactEntity>({
             EntityName: 'MJ: Artifacts',
             ExtraFilter: artifactFilter,
@@ -289,7 +318,7 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
           }, this.CurrentUser);
 
           if (artifactResult.Success && artifactResult.Results) {
-            artifactResult.Results.forEach(a => artifactMap.set(a.ID, a));
+            artifactResult.Results.forEach(a => artifactMap.Set(a.ID, a));
           }
         }
 
@@ -297,7 +326,7 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
         this.ArtifactVersions = versionResult.Results
           .map(version => ({
             version,
-            artifact: artifactMap.get(version.ArtifactID)!
+            artifact: artifactMap.Get(version.ArtifactID)!
           }))
           .filter(item => item.artifact != null); // Filter out any without parent artifact
       } else {

@@ -3,12 +3,14 @@ import { UserInfo, RunView, Metadata, IMetadataProvider } from '@memberjunction/
 import { MJArtifactPermissionEntity, MJArtifactEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import type { MJArtifactVersionEntity, MJCollectionPermissionEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService } from './collection-permission.service';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual, UUIDSet, EscapeSQLString } from '@memberjunction/global';
 
 type ArtifactGrantRow = Pick<MJArtifactPermissionEntity, 'ArtifactID' | 'CanRead'>;
 type CollectionGrantRow = Pick<MJCollectionPermissionEntity, 'CollectionID'>;
 type CollectionArtifactRow = Pick<MJCollectionArtifactEntity, 'ArtifactVersionID'>;
 type ArtifactVersionRow = Pick<MJArtifactVersionEntity, 'ArtifactID'>;
+type ArtifactVersionIdRow = Pick<MJArtifactVersionEntity, 'ID'>;
+type ArtifactCollectionLinkRow = Pick<MJCollectionArtifactEntity, 'CollectionID' | 'Collection'>;
 
 export interface ArtifactPermission {
     id: string;
@@ -65,7 +67,7 @@ export class ArtifactPermissionService {
         const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJArtifactPermissionEntity>({
             EntityName: 'MJ: Artifact Permissions',
-            ExtraFilter: `ArtifactID='${artifactId}'`,
+            ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
             OrderBy: '__mj_CreatedAt ASC',
             ResultType: 'entity_object'
         }, currentUser);
@@ -142,7 +144,7 @@ export class ArtifactPermissionService {
         const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJArtifactPermissionEntity>({
             EntityName: 'MJ: Artifact Permissions',
-            ExtraFilter: `ArtifactID='${artifactId}' AND UserID='${userId}'`,
+            ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}' AND UserID='${EscapeSQLString(userId)}'`,
             MaxRows: 1,
             SkipTotalRowCount: true,
             ResultType: 'entity_object'
@@ -168,7 +170,7 @@ export class ArtifactPermissionService {
      */
     async GetEffectiveUsers(artifactId: string, currentUser: UserInfo): Promise<EffectivePermission[]> {
         const effectivePermissions: EffectivePermission[] = [];
-        const seenUsers = new Set<string>();
+        const seenUsers = new UUIDSet();
 
         // 1. Add owner
         const artifact = await this.getArtifact(artifactId, currentUser);
@@ -186,18 +188,18 @@ export class ArtifactPermissionService {
                 sharedAt: artifact.__mj_CreatedAt,
                 source: 'owner'
             });
-            seenUsers.add(artifact.UserID);
+            seenUsers.Add(artifact.UserID);
         }
 
         // 2. Add explicit permissions
         const explicitPerms = await this.LoadPermissions(artifactId, currentUser);
         for (const perm of explicitPerms) {
-            if (!seenUsers.has(perm.userId)) {
+            if (!seenUsers.Has(perm.userId)) {
                 effectivePermissions.push({
                     ...perm,
                     source: 'explicit'
                 });
-                seenUsers.add(perm.userId);
+                seenUsers.Add(perm.userId);
             }
         }
 
@@ -210,7 +212,7 @@ export class ArtifactPermissionService {
             );
 
             for (const collPerm of collectionPerms) {
-                if (!seenUsers.has(collPerm.userId)) {
+                if (!seenUsers.Has(collPerm.userId)) {
                     effectivePermissions.push({
                         id: '',
                         artifactId: artifactId,
@@ -225,7 +227,7 @@ export class ArtifactPermissionService {
                         source: 'collection',
                         collectionName: collection.Collection || 'Unknown Collection'
                     });
-                    seenUsers.add(collPerm.userId);
+                    seenUsers.Add(collPerm.userId);
                 }
             }
         }
@@ -415,20 +417,23 @@ export class ArtifactPermissionService {
      * Each lookup runs against its own entity, so the filter holds only `UserID` and IDs.
      */
     async GetReadableArtifactsFilter(userId: string, currentUser: UserInfo): Promise<string> {
-        const ownerOnly = `(UserID='${userId}')`;
+        const safeUserId = EscapeSQLString(userId);
+        const ownerOnly = `(UserID='${safeUserId}')`;
         const rv = RunView.FromMetadataProvider(this.Provider);
         const [grantResult, collectionResult] = await rv.RunViews([
             {
                 EntityName: 'MJ: Artifact Permissions',
-                ExtraFilter: `UserID='${userId}'`,
+                ExtraFilter: `UserID='${safeUserId}'`,
                 Fields: ['ArtifactID', 'CanRead'],
-                ResultType: 'simple'
+                ResultType: 'simple',
+                IgnoreMaxRows: true
             },
             {
                 EntityName: 'MJ: Collection Permissions',
-                ExtraFilter: `UserID='${userId}' AND CanRead=1`,
+                ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
                 Fields: ['CollectionID'],
-                ResultType: 'simple'
+                ResultType: 'simple',
+                IgnoreMaxRows: true
             }
         ], currentUser);
 
@@ -447,7 +452,7 @@ export class ArtifactPermissionService {
 
         const readableIds = this.resolveReadableArtifactIds(grants, collectionArtifactIds);
         return readableIds.length > 0
-            ? `(UserID='${userId}' OR ID IN (${readableIds.map(id => `'${id}'`).join(',')}))`
+            ? `(UserID='${safeUserId}' OR ID IN (${readableIds.map(id => `'${EscapeSQLString(id)}'`).join(',')}))`
             : ownerOnly;
     }
 
@@ -455,27 +460,32 @@ export class ArtifactPermissionService {
      * IDs of artifacts that have at least one version in any of the given collections.
      */
     private async getArtifactIdsInCollections(collectionIds: string[], currentUser: UserInfo): Promise<string[]> {
-        if (collectionIds.length === 0) {
+        const cleanCollectionIds = collectUniqueNonEmptyIds(collectionIds);
+        if (cleanCollectionIds.length === 0) {
             return [];
         }
 
         const rv = RunView.FromMetadataProvider(this.Provider);
         const versionResult = await rv.RunView<CollectionArtifactRow>({
             EntityName: 'MJ: Collection Artifacts',
-            ExtraFilter: `CollectionID IN (${collectionIds.map(id => `'${id}'`).join(',')})`,
+            ExtraFilter: `CollectionID IN (${cleanCollectionIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
             Fields: ['ArtifactVersionID'],
-            ResultType: 'simple'
+            ResultType: 'simple',
+            IgnoreMaxRows: true
         }, currentUser);
-        const versionIds = versionResult.Success ? (versionResult.Results ?? []).map(r => r.ArtifactVersionID) : [];
+        const versionIds = collectUniqueNonEmptyIds(
+            versionResult.Success ? (versionResult.Results ?? []).map(r => r.ArtifactVersionID) : []
+        );
         if (versionIds.length === 0) {
             return [];
         }
 
         const artifactResult = await rv.RunView<ArtifactVersionRow>({
             EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ID IN (${versionIds.map(id => `'${id}'`).join(',')})`,
+            ExtraFilter: `ID IN (${versionIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
             Fields: ['ArtifactID'],
-            ResultType: 'simple'
+            ResultType: 'simple',
+            IgnoreMaxRows: true
         }, currentUser);
         return artifactResult.Success ? (artifactResult.Results ?? []).map(r => r.ArtifactID) : [];
     }
@@ -514,7 +524,7 @@ export class ArtifactPermissionService {
         const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJArtifactEntity>({
             EntityName: 'MJ: Artifacts',
-            ExtraFilter: `ID='${artifactId}'`,
+            ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
             MaxRows: 1,
             SkipTotalRowCount: true,
             ResultType: 'entity_object'
@@ -532,14 +542,39 @@ export class ArtifactPermissionService {
     private async getArtifactCollections(
         artifactId: string,
         currentUser: UserInfo
-    ): Promise<MJCollectionArtifactEntity[]> {
+    ): Promise<ArtifactCollectionLinkRow[]> {
         const rv = RunView.FromMetadataProvider(this.Provider);
-        const result = await rv.RunView<MJCollectionArtifactEntity>({
+        const versionResult = await rv.RunView<ArtifactVersionIdRow>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            IgnoreMaxRows: true
+        }, currentUser);
+
+        if (!versionResult.Success) {
+            return [];
+        }
+
+        const seenVersionIds = new UUIDSet();
+        const versionIds: string[] = [];
+        for (const row of versionResult.Results ?? []) {
+            const versionId = row.ID?.trim();
+            if (versionId && !seenVersionIds.Has(versionId)) {
+                seenVersionIds.Add(versionId);
+                versionIds.push(versionId);
+            }
+        }
+        if (versionIds.length === 0) {
+            return [];
+        }
+
+        const result = await rv.RunView<ArtifactCollectionLinkRow>({
             EntityName: 'MJ: Collection Artifacts',
-            ExtraFilter: `ArtifactVersionID IN (
-                SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
-            )`,
-            ResultType: 'entity_object'
+            ExtraFilter: `ArtifactVersionID IN (${versionIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
+            Fields: ['CollectionID', 'Collection'],
+            ResultType: 'simple',
+            IgnoreMaxRows: true
         }, currentUser);
 
         return result.Success && result.Results ? result.Results : [];
@@ -594,4 +629,17 @@ export class ArtifactPermissionService {
             sharedAt: entity.__mj_CreatedAt
         };
     }
+}
+
+function collectUniqueNonEmptyIds(ids: ReadonlyArray<string | null | undefined>): string[] {
+    const seen = new UUIDSet();
+    const out: string[] = [];
+    for (const raw of ids) {
+        const trimmed = raw?.trim();
+        if (trimmed && !seen.Has(trimmed)) {
+            seen.Add(trimmed);
+            out.push(trimmed);
+        }
+    }
+    return out;
 }

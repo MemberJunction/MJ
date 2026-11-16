@@ -7,13 +7,14 @@ import {
   MJConversationArtifactEntity,
   MJCollectionEntity,
   MJCollectionArtifactEntity,
+  MJCollectionPermissionEntity,
   MJTaskEntity,
   MJArtifactEntity,
   MJArtifactVersionEntity,
   ConversationEngine
 } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDMap, UUIDSet } from '@memberjunction/global';
 import { ArtifactPermissionService } from './artifact-permission.service';
 import { BuildConversationTasksFilter } from './conversation-tasks-filter';
 
@@ -343,7 +344,7 @@ export class SearchService {
 
     // The IDs come from a separate query so this filter names only Conversation Details
     // columns, which every provider can quote.
-    let filter = `ConversationID IN (${conversationIds.map(id => `'${id}'`).join(',')})`;
+    let filter = `ConversationID IN (${conversationIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`;
     filter += ` AND LOWER(Message) LIKE '%${EscapeSQLString(lowerQuery)}%'`;
     filter += ` AND (HiddenToUser IS NULL OR HiddenToUser=0)`;
 
@@ -386,7 +387,8 @@ export class SearchService {
         EntityName: 'MJ: Conversations',
         ExtraFilter: await ConversationEngine.Instance.GetVisibleConversationsFilter(environmentId, currentUser),
         Fields: ['ID'],
-        ResultType: 'simple'
+        ResultType: 'simple',
+        IgnoreMaxRows: true
       },
       currentUser
     );
@@ -412,7 +414,7 @@ export class SearchService {
     const lowerQuery = query.toLowerCase();
 
     const readableFilter = await this.artifactPermissions.GetReadableArtifactsFilter(currentUser.ID, currentUser);
-    let filter = `EnvironmentID='${environmentId}' AND ${readableFilter}`;
+    let filter = `EnvironmentID='${EscapeSQLString(environmentId)}' AND ${readableFilter}`;
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
@@ -443,7 +445,7 @@ export class SearchService {
       currentUser
     );
     return result.Results.map(artifact => {
-      const collection = collections.get(artifact.ID.toLowerCase());
+      const collection = collections.Get(artifact.ID);
       return collection
         ? this.mapArtifactToSearchResult(artifact, query, collection.CollectionID, collection.Collection ?? undefined)
         : this.mapArtifactToSearchResult(artifact, query);
@@ -451,7 +453,7 @@ export class SearchService {
   }
 
   /**
-   * The first collection each artifact sits in, keyed by lower-cased artifact ID.
+   * The first collection each artifact sits in, keyed by case-insensitive artifact ID.
    *
    * Two batched reads, each filtering only its own entity's columns (no subquery on another
    * entity's view, so it runs on every provider): the artifacts' versions, then the
@@ -461,8 +463,8 @@ export class SearchService {
   private async loadArtifactCollections(
     artifactIds: string[],
     currentUser: UserInfo
-  ): Promise<Map<string, ArtifactCollectionRow>> {
-    const byArtifact = new Map<string, ArtifactCollectionRow>();
+  ): Promise<UUIDMap<ArtifactCollectionRow>> {
+    const byArtifact = new UUIDMap<ArtifactCollectionRow>();
     if (artifactIds.length === 0) {
       return byArtifact;
     }
@@ -473,7 +475,8 @@ export class SearchService {
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID IN (${artifactIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
         Fields: ['ID', 'ArtifactID'],
-        ResultType: 'simple'
+        ResultType: 'simple',
+        IgnoreMaxRows: true
       },
       currentUser
     );
@@ -491,7 +494,8 @@ export class SearchService {
         EntityName: 'MJ: Collection Artifacts',
         ExtraFilter: `ArtifactVersionID IN (${versionRows.map(v => `'${EscapeSQLString(v.ID)}'`).join(',')})`,
         Fields: ['ArtifactVersionID', 'CollectionID', 'Collection'],
-        ResultType: 'simple'
+        ResultType: 'simple',
+        IgnoreMaxRows: true
       },
       currentUser
     );
@@ -500,15 +504,15 @@ export class SearchService {
       return byArtifact;
     }
 
-    const artifactByVersion = new Map<string, string>();
+    const artifactByVersion = new UUIDMap<string>();
     for (const version of versionRows) {
-      artifactByVersion.set(version.ID.toLowerCase(), version.ArtifactID.toLowerCase());
+      artifactByVersion.Set(version.ID, NormalizeUUID(version.ArtifactID));
     }
     for (const link of links.Results ?? []) {
-      const artifactKey = artifactByVersion.get(link.ArtifactVersionID.toLowerCase());
+      const artifactKey = artifactByVersion.Get(link.ArtifactVersionID);
       // First collection wins, as with the single-row lookup this replaces.
-      if (artifactKey && !byArtifact.has(artifactKey)) {
-        byArtifact.set(artifactKey, link);
+      if (artifactKey && !byArtifact.Has(artifactKey)) {
+        byArtifact.Set(artifactKey, link);
       }
     }
     return byArtifact;
@@ -527,15 +531,38 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    const ownerFilter = `OwnerID='${currentUser.ID}'`;
-    const permissionSubquery = `ID IN (
-      SELECT CollectionID
-      FROM [__mj].[vwCollectionPermissions]
-      WHERE UserID='${currentUser.ID}'
-    )`;
+    const permissionResult = await rv.RunView<Pick<MJCollectionPermissionEntity, 'CollectionID'>>(
+      {
+        EntityName: 'MJ: Collection Permissions',
+        ExtraFilter: `UserID='${EscapeSQLString(currentUser.ID)}'`,
+        Fields: ['CollectionID'],
+        ResultType: 'simple',
+        IgnoreMaxRows: true
+      },
+      currentUser
+    );
 
-    let filter = `EnvironmentID='${environmentId}'`;
-    filter += ` AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+    const seenPermittedIds = new UUIDSet();
+    const permittedIds: string[] = [];
+    if (permissionResult.Success) {
+      for (const row of permissionResult.Results ?? []) {
+        const collectionId = row.CollectionID?.trim();
+        if (collectionId && !seenPermittedIds.Has(collectionId)) {
+          seenPermittedIds.Add(collectionId);
+          permittedIds.push(collectionId);
+        }
+      }
+    } else {
+      console.error('Failed to load collection permissions for search:', permissionResult.ErrorMessage);
+    }
+
+    const ownerFilter = `OwnerID='${EscapeSQLString(currentUser.ID)}'`;
+    const visibilityClause = permittedIds.length > 0
+      ? `(OwnerID IS NULL OR ${ownerFilter} OR ID IN (${permittedIds.map(id => `'${EscapeSQLString(id)}'`).join(',')}))`
+      : `(OwnerID IS NULL OR ${ownerFilter})`;
+
+    let filter = `EnvironmentID='${EscapeSQLString(environmentId)}'`;
+    filter += ` AND ${visibilityClause}`;
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {

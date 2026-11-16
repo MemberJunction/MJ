@@ -171,6 +171,38 @@ describe('ConversationScope', () => {
         expect(f.startsWith(`[ArtifactID]='a''1' AND (`)).toBe(true);
     });
 
+    it('FilterArtifactVersionsToScope keeps unlinked versions and versions linked in any direction on the path', () => {
+        const versions = [
+            { ID: 'V4-UNLINKED', VersionNumber: 4 },
+            { ID: 'V3-OFF-PATH', VersionNumber: 3 },
+            { ID: 'V2-INPUT-ON-PATH', VersionNumber: 2 },
+            { ID: 'V1-OUTPUT-ON-PATH', VersionNumber: 1 },
+        ];
+        const links = [
+            { ArtifactVersionID: 'v1-output-on-path', ConversationDetailID: 'DETAIL-TRUNK-1' },
+            { ArtifactVersionID: 'v2-input-on-path', ConversationDetailID: 'detail-trunk-2' },
+            { ArtifactVersionID: 'v3-off-path', ConversationDetailID: 'detail-other-branch' },
+            { ArtifactVersionID: null, ConversationDetailID: 'detail-trunk-1' },
+        ];
+        const kept = ConversationEngine.FilterArtifactVersionsToScope(
+            versions,
+            links,
+            ['detail-trunk-1', 'DETAIL-TRUNK-2']
+        );
+        expect(kept.map(v => v.ID)).toEqual(['V4-UNLINKED', 'V2-INPUT-ON-PATH', 'V1-OUTPUT-ON-PATH']);
+    });
+
+    it('FilterArtifactVersionsToScope keeps a version linked to both an off-path and an on-path message', () => {
+        const versions = [{ ID: 'V1' }, { ID: 'V2' }];
+        const links = [
+            { ArtifactVersionID: 'V1', ConversationDetailID: 'off-path' },
+            { ArtifactVersionID: 'V1', ConversationDetailID: 'on-path' },
+            { ArtifactVersionID: 'V2', ConversationDetailID: 'off-path' },
+        ];
+        expect(ConversationEngine.FilterArtifactVersionsToScope(versions, links, ['on-path']).map(v => v.ID))
+            .toEqual(['V1']);
+    });
+
     it('LoadScope normalises an empty branch id to the trunk without loading branches', async () => {
         const spy = vi.spyOn(ConversationEngine, 'LoadBranchesFresh');
         const s = await ConversationEngine.LoadScope(C, '', user);

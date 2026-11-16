@@ -1,8 +1,8 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { map, shareReplay, switchMap } from 'rxjs/operators';
-import { LogStatusEx, RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { LogError, LogStatusEx, RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { ConversationEngine, MJAIAgentRunEntity, type ConversationScope } from '@memberjunction/core-entities';
 
 export type AgentStatus = 'acknowledging' | 'working' | 'completing' | 'completed' | 'error';
@@ -173,8 +173,7 @@ export class AgentStateService implements OnDestroy {
       let filter = `Status IN ('Running', 'Paused')`;
 
       if (conversationId) {
-        const inScope = ConversationEngine.ScopeSubquery(scope ?? ConversationEngine.TrunkScope(conversationId));
-        filter += ` AND (${inScope} OR ([ConversationID]='${EscapeSQLString(conversationId)}' AND [ConversationDetailID] IS NULL))`;
+        filter += ` AND ${await this.buildConversationRunFilter(rv, conversationId, scope)}`;
       }
 
       LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - Executing RunView for AI Agent Runs`, verboseOnly: true});
@@ -206,6 +205,44 @@ export class AgentStateService implements OnDestroy {
     } catch (error) {
       console.error('Failed to load active agents:', error);
     }
+  }
+
+  /**
+   * Builds an RLS-safe predicate for `MJ: AI Agent Runs` in `conversationId` and `scope` by
+   * resolving in-scope `MJ: Conversation Details` IDs first instead of passing
+   * `ConversationEngine.ScopeSubquery`, which MJ 6.2 `ClientClauseScreen` refuses under RLS.
+   */
+  private async buildConversationRunFilter(
+    rv: RunView,
+    conversationId: string,
+    scope: ConversationScope | null
+  ): Promise<string> {
+    const safeConversationId = EscapeSQLString(conversationId);
+    const nullDetailClause = `([ConversationID]='${safeConversationId}' AND [ConversationDetailID] IS NULL)`;
+    const effectiveScope = scope ?? ConversationEngine.TrunkScope(conversationId);
+    const detailsResult = await rv.RunView<{ ID: string }>(
+      {
+        EntityName: 'MJ: Conversation Details',
+        ExtraFilter: ConversationEngine.ScopeFilter(effectiveScope),
+        Fields: ['ID'],
+        IgnoreMaxRows: true,
+        ResultType: 'simple'
+      },
+      this.currentUser
+    );
+
+    if (!detailsResult.Success) {
+      LogError(`AgentStateService: failed to load in-scope conversation details: ${detailsResult.ErrorMessage}`);
+      return nullDetailClause;
+    }
+
+    const detailIds = collectUniqueNonEmptyIds((detailsResult.Results ?? []).map(row => row.ID));
+    if (detailIds.length === 0) {
+      return nullDetailClause;
+    }
+
+    const inList = detailIds.map(id => `'${EscapeSQLString(id)}'`).join(',');
+    return `([ConversationDetailID] IN (${inList}) OR ${nullDetailClause})`;
   }
 
   /**
@@ -336,7 +373,7 @@ export class AgentStateService implements OnDestroy {
       const result = await rv.RunView<{ ID: string }>(
         {
           EntityName: 'MJ: AI Agent Runs',
-          ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Status IN ('Running', 'Paused')`,
+          ExtraFilter: `ConversationDetailID='${EscapeSQLString(conversationDetailId)}' AND Status IN ('Running', 'Paused')`,
           OrderBy: 'StartedAt DESC',
           MaxRows: 1,
           SkipTotalRowCount: true,
@@ -378,4 +415,17 @@ export class AgentStateService implements OnDestroy {
   setPollInterval(milliseconds: number): void {
     return this.SetPollInterval(milliseconds);
   }
+}
+
+function collectUniqueNonEmptyIds(ids: ReadonlyArray<string | null | undefined>): string[] {
+  const seen = new UUIDSet();
+  const out: string[] = [];
+  for (const raw of ids) {
+    const trimmed = raw?.trim();
+    if (trimmed && !seen.Has(trimmed)) {
+      seen.Add(trimmed);
+      out.push(trimmed);
+    }
+  }
+  return out;
 }

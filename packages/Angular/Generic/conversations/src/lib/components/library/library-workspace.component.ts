@@ -1966,36 +1966,23 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }
 
   /**
-   * Builds per-chunk version summary queries (`VersionNumber = 1` + exact single latest version
-   * per artifact via `ROW_NUMBER() OVER (PARTITION BY [ArtifactID] ORDER BY [VersionNumber] DESC) = 1`)
-   * so an artifact with thousands of historical versions never crowds out other artifacts on the page.
+   * Builds per-chunk version summary queries (`VERSION_SUMMARY_FIELDS`, excluding heavy `Content`)
+   * ordered by `VersionNumber DESC` with scalar `ArtifactID IN (...)` predicates.
+   *
+   * Reads versions directly with a scalar filter instead of a `ROW_NUMBER() ... FROM [__mj].[vwArtifactVersions]`
+   * window subquery because MJ 6.2 `ClientClauseScreen` refuses subqueries referencing row-filtered base
+   * views, and returning every version's lightweight summary ensures collection links on intermediate
+   * versions still resolve alongside the latest version.
    */
   private buildScopedArtifactVersionQueries(artifactIds: ReadonlyArray<string>): RunViewParams[] {
     const queries: RunViewParams[] = [];
-    const verEntity = this.ProviderToUse.EntityByName('MJ: Artifact Versions');
-    const schemaName = verEntity?.SchemaName || '__mj';
-    const baseView = verEntity?.BaseView || 'vwArtifactVersions';
-
     for (const chunk of this.chunkIds(artifactIds)) {
       const inList = this.sqlUuidInList(chunk);
       queries.push({
         EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID IN (${inList}) AND VersionNumber = 1`,
+        ExtraFilter: `ArtifactID IN (${inList})`,
         Fields: VERSION_SUMMARY_FIELDS,
-        IgnoreMaxRows: true,
-        ResultType: 'simple',
-      });
-      queries.push({
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter:
-          `ArtifactID IN (${inList}) AND [ID] IN (` +
-          `SELECT [ID] FROM (` +
-          `SELECT [ID], ROW_NUMBER() OVER (PARTITION BY [ArtifactID] ORDER BY [VersionNumber] DESC) AS [__rn] ` +
-          `FROM [${schemaName}].[${baseView}] ` +
-          `WHERE [ArtifactID] IN (${inList})` +
-          `) AS [__latest_ver] WHERE [__latest_ver].[__rn] = 1` +
-          `)`,
-        Fields: VERSION_SUMMARY_FIELDS,
+        OrderBy: 'VersionNumber DESC',
         IgnoreMaxRows: true,
         ResultType: 'simple',
       });

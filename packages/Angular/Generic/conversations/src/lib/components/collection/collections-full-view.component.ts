@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity, MJCollectionPermissionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
@@ -9,7 +9,7 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 import { Subject, takeUntil } from 'rxjs';
 import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSortOrder } from '../../models/collection-view.model';
-import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { EscapeSQLString, UUIDSet, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 
 /**
  * Full-panel Collections view component
@@ -2318,22 +2318,52 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
   }
 
+  /**
+   * Builds a visibility filter clause for `MJ: Collections` without embedding a subquery
+   * against `[__mj].[vwCollectionPermissions]`, so row-level security applies to each entity
+   * and `ClientClauseScreen` never refuses the filter for row-filtered users.
+   */
+  private async buildVisibleCollectionsClause(bypassCache: boolean = false): Promise<string> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const permissionResult = await rv.RunView<Pick<MJCollectionPermissionEntity, 'CollectionID'>>(
+      {
+        EntityName: 'MJ: Collection Permissions',
+        ExtraFilter: `UserID='${EscapeSQLString(this.CurrentUser.ID)}'`,
+        Fields: ['CollectionID'],
+        ResultType: 'simple',
+        IgnoreMaxRows: true,
+        BypassCache: bypassCache
+      },
+      this.CurrentUser
+    );
+
+    const seenPermittedIds = new UUIDSet();
+    const permittedIds: string[] = [];
+    if (permissionResult.Success) {
+      for (const row of permissionResult.Results ?? []) {
+        const collectionId = row.CollectionID?.trim();
+        if (collectionId && !seenPermittedIds.Has(collectionId)) {
+          seenPermittedIds.Add(collectionId);
+          permittedIds.push(collectionId);
+        }
+      }
+    }
+
+    const ownerFilter = `OwnerID='${EscapeSQLString(this.CurrentUser.ID)}'`;
+    return permittedIds.length > 0
+      ? `(OwnerID IS NULL OR ${ownerFilter} OR ID IN (${permittedIds.map(id => `'${EscapeSQLString(id)}'`).join(',')}))`
+      : `(OwnerID IS NULL OR ${ownerFilter})`;
+  }
+
   private async loadCollections(bypassCache: boolean = false): Promise<void> {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
-      // Load collections where user is owner OR has permissions
-      const ownerFilter = `OwnerID='${this.CurrentUser.ID}'`;
-      const permissionSubquery = `ID IN (
-        SELECT CollectionID
-        FROM [__mj].[vwCollectionPermissions]
-        WHERE UserID='${this.CurrentUser.ID}'
-      )`;
+      const visibilityClause = await this.buildVisibleCollectionsClause(bypassCache);
+      const baseFilter = `EnvironmentID='${EscapeSQLString(this.EnvironmentId)}'` +
+                         (this.CurrentCollectionId ? ` AND ParentID='${EscapeSQLString(this.CurrentCollectionId)}'` : ' AND ParentID IS NULL');
 
-      const baseFilter = `EnvironmentID='${this.EnvironmentId}'` +
-                         (this.CurrentCollectionId ? ` AND ParentID='${this.CurrentCollectionId}'` : ' AND ParentID IS NULL');
-
-      const filter = `${baseFilter} AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+      const filter = `${baseFilter} AND ${visibilityClause}`;
 
       const result = await rv.RunView<MJCollectionEntity>(
         {
@@ -3659,11 +3689,8 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     this.cdr.detectChanges();
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const ownerFilter = `OwnerID='${this.CurrentUser.ID}'`;
-      const permissionSubquery = `ID IN (
-        SELECT CollectionID FROM [__mj].[vwCollectionPermissions] WHERE UserID='${this.CurrentUser.ID}'
-      )`;
-      const filter = `EnvironmentID='${this.EnvironmentId}' AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+      const visibilityClause = await this.buildVisibleCollectionsClause();
+      const filter = `EnvironmentID='${EscapeSQLString(this.EnvironmentId)}' AND ${visibilityClause}`;
 
       const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
@@ -4134,11 +4161,8 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
   public async LoadAllCollections(bypassCache: boolean = false): Promise<void> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const ownerFilter = `OwnerID='${this.CurrentUser.ID}'`;
-    const permissionSubquery = `ID IN (
-      SELECT CollectionID FROM [__mj].[vwCollectionPermissions] WHERE UserID='${this.CurrentUser.ID}'
-    )`;
-    const filter = `EnvironmentID='${this.EnvironmentId}' AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+    const visibilityClause = await this.buildVisibleCollectionsClause(bypassCache);
+    const filter = `EnvironmentID='${EscapeSQLString(this.EnvironmentId)}' AND ${visibilityClause}`;
     const result = await rv.RunView<MJCollectionEntity>({
       EntityName: 'MJ: Collections',
       ExtraFilter: filter,

@@ -954,10 +954,12 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     await component.ReloadWorkspaceData();
 
     expect(runViewsCalls.length).toBeGreaterThanOrEqual(2);
-    // Batch 1 scopes MJ: Artifacts and MJ: Collections by UserID/OwnerID with zero raw __mj schema references
+    // Batch 1 scopes MJ: Artifacts and MJ: Collections by UserID/OwnerID with zero raw __mj schema references or SELECT subqueries
     for (const batch of runViewsCalls) {
       for (const q of batch) {
-        expect(extraFilterAsString(q.ExtraFilter)).not.toContain('__mj.');
+        const filterText = extraFilterAsString(q.ExtraFilter);
+        expect(filterText).not.toContain('__mj.');
+        expect(filterText).not.toMatch(/\bSELECT\b|vwArtifactVersions/i);
         if (q.EntityName === 'MJ: Artifact Versions') {
           expect(q.Fields).toBeDefined();
           expect(q.Fields).not.toContain('Content');
@@ -972,36 +974,41 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     // Verify LoadMoreArtifacts paging when TotalRowCount > LoadedArtifactCount
     component.TotalArtifactCount = 2;
     expect(component.HasMoreArtifacts).toBe(true);
-    mockRunViews.mockImplementationOnce(async () => [
-      okRunViewResult(
-        [
+    mockRunViews.mockImplementationOnce(async (queries: RunViewParams[]) => {
+      runViewsCalls.push(queries);
+      return [
+        okRunViewResult(
+          [
+            {
+              ID: 'art-owned-2',
+              Name: 'Page 2 Doc',
+              TypeID: ARTIFACT_TYPES[0].ID,
+              UserID: TEST_USER.ID,
+              __mj_UpdatedAt: new Date('2026-11-08T15:00:00Z'),
+            },
+          ],
+          2,
+        ),
+      ];
+    });
+    mockRunViews.mockImplementationOnce(async (queries: RunViewParams[]) => {
+      runViewsCalls.push(queries);
+      return queries.map(() =>
+        okRunViewResult([
           {
-            ID: 'art-owned-2',
+            ID: 'ver-owned-2',
+            ArtifactID: 'art-owned-2',
+            VersionNumber: 1,
             Name: 'Page 2 Doc',
-            TypeID: ARTIFACT_TYPES[0].ID,
-            UserID: TEST_USER.ID,
+            Description: null,
+            ContentMode: 'Text',
+            MimeType: 'text/markdown',
+            FileName: null,
             __mj_UpdatedAt: new Date('2026-11-08T15:00:00Z'),
           },
-        ],
-        2,
-      ),
-    ]);
-    mockRunViews.mockImplementationOnce(async () => [
-      okRunViewResult([
-        {
-          ID: 'ver-owned-2',
-          ArtifactID: 'art-owned-2',
-          VersionNumber: 1,
-          Name: 'Page 2 Doc',
-          Description: null,
-          ContentMode: 'Text',
-          MimeType: 'text/markdown',
-          FileName: null,
-          __mj_UpdatedAt: new Date('2026-11-08T15:00:00Z'),
-        },
-      ]),
-      okRunViewResult([], 0),
-    ]);
+        ]),
+      );
+    });
     await component.LoadMoreArtifacts();
     expect(component.AllItems.map((i) => i.Id)).toEqual(['art-owned-1', 'art-owned-2']);
     expect(component.LoadedArtifactCount).toBe(2);
@@ -1027,14 +1034,19 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(component.LoadMoreError).toBe('Transient paging failure');
     expect(notifySpy).toHaveBeenCalledWith('Transient paging failure', 'error', 4000);
 
-    // Verify per-artifact latest version query uses ROW_NUMBER() OVER (PARTITION BY [ArtifactID] ...) = 1 and IgnoreMaxRows
+    // Verify per-artifact version queries use scalar ArtifactID IN (...) with IgnoreMaxRows and zero SELECT subqueries
     const allQueries = runViewsCalls.flat();
-    const latestVerQueries = allQueries.filter(
+    const versionSummaryQueries = allQueries.filter(
       (q) =>
         q.EntityName === 'MJ: Artifact Versions' &&
-        extraFilterAsString(q.ExtraFilter).includes('ROW_NUMBER() OVER'),
+        extraFilterAsString(q.ExtraFilter).startsWith('ArtifactID IN ('),
     );
-    expect(latestVerQueries.length).toBeGreaterThan(0);
+    expect(versionSummaryQueries.length).toBeGreaterThan(0);
+    for (const q of versionSummaryQueries) {
+      expect(q.IgnoreMaxRows).toBe(true);
+      expect(q.OrderBy).toBe('VersionNumber DESC');
+      expect(extraFilterAsString(q.ExtraFilter)).not.toMatch(/\bSELECT\b|ROW_NUMBER|vwArtifactVersions/i);
+    }
 
     // Verify failed initial/full ReloadWorkspaceData sets LoadError instead of silently returning []
     mockRunViews.mockImplementationOnce(async () => [
@@ -1856,6 +1868,106 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(component.HasMoreArtifacts).toBe(false);
     expect(component.IsLoadingMore).toBe(false);
     expect(component.IsLoadingMoreArtifacts).toBe(false);
+  });
+
+  it('loads multi-version artifacts with scalar ArtifactID IN queries and resolves LatestVersionNumber and VersionCount without subqueries', async () => {
+    const { component } = buildWorkspaceComponent();
+    component.EnvironmentId = 'env-default';
+    const recordedQueries: RunViewParams[] = [];
+
+    vi.spyOn(RunView.prototype, 'RunViews').mockImplementation(
+      async (queries: RunViewParams[]): Promise<RunViewResult[]> => {
+        recordedQueries.push(...queries);
+        return queries.map((q): RunViewResult => {
+          if (q.EntityName === 'MJ: Artifacts') {
+            return okRunViewResult([
+              {
+                ID: 'art-multi',
+                Name: 'Multi-Version Spec',
+                TypeID: ARTIFACT_TYPES[0].ID,
+                EnvironmentID: 'env-default',
+                UserID: TEST_USER.ID,
+                __mj_UpdatedAt: new Date('2026-11-10T10:00:00Z'),
+              },
+            ]);
+          }
+          if (q.EntityName === 'MJ: Artifact Versions') {
+            return okRunViewResult([
+              {
+                ID: 'ver-3',
+                ArtifactID: 'art-multi',
+                VersionNumber: 3,
+                Name: 'v3',
+                Description: 'Latest revision',
+                ContentMode: 'Text',
+                MimeType: 'text/markdown',
+                FileName: null,
+                __mj_UpdatedAt: new Date('2026-11-10T10:00:00Z'),
+              },
+              {
+                ID: 'ver-2',
+                ArtifactID: 'art-multi',
+                VersionNumber: 2,
+                Name: 'v2',
+                Description: null,
+                ContentMode: 'Text',
+                MimeType: 'text/markdown',
+                FileName: null,
+                __mj_UpdatedAt: new Date('2026-11-09T10:00:00Z'),
+              },
+              {
+                ID: 'ver-1',
+                ArtifactID: 'art-multi',
+                VersionNumber: 1,
+                Name: 'v1',
+                Description: null,
+                ContentMode: 'Text',
+                MimeType: 'text/markdown',
+                FileName: null,
+                __mj_UpdatedAt: new Date('2026-11-08T10:00:00Z'),
+              },
+            ]);
+          }
+          return okRunViewResult([], 0);
+        });
+      },
+    );
+
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
+
+    const mockProvider: Partial<IMetadataProvider> = {
+      CurrentUser: TEST_USER,
+      EntityByName: vi.fn(mockEntityByName),
+    };
+    Object.assign(component as object, {
+      iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
+      collectionPermByColId: new Map(),
+      collectionLinksByCollectionAndVersion: new Map(),
+    });
+    Object.defineProperty(component, 'ProviderToUse', {
+      configurable: true,
+      get: () => mockProvider as IMetadataProvider,
+    });
+
+    await component.ReloadWorkspaceData();
+
+    expect(component.LoadError).toBeNull();
+    expect(component.AllItems).toHaveLength(1);
+    expect(component.AllItems[0].LatestVersionId).toBe('ver-3');
+    expect(component.AllItems[0].LatestVersionNumber).toBe(3);
+    expect(component.AllItems[0].VersionCount).toBe(3);
+
+    const versionQueries = recordedQueries.filter((q) => q.EntityName === 'MJ: Artifact Versions');
+    expect(versionQueries.length).toBeGreaterThan(0);
+    for (const q of versionQueries) {
+      const filterText = extraFilterAsString(q.ExtraFilter);
+      expect(filterText).toBe("ArtifactID IN ('art-multi')");
+      expect(filterText).not.toMatch(/\bSELECT\b|ROW_NUMBER|vwArtifactVersions/i);
+      expect(q.IgnoreMaxRows).toBe(true);
+      expect(q.OrderBy).toBe('VersionNumber DESC');
+      expect(q.Fields).not.toContain('Content');
+    }
   });
 
   it('uses 100% --mj-* semantic CSS design tokens with zero hardcoded hex or rgb colors', () => {
