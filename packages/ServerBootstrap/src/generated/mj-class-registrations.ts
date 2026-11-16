@@ -1877,7 +1877,7 @@ import {
     WorkQueueValidateBindingsServerOperation,
 } from '@memberjunction/work-queue-engine';
 
-// @memberjunction/server (14 classes)
+// @memberjunction/server (13 classes)
 import {
     AWSIoTCoreBroadcastProvider,
     ArtifactComplianceAuditServerOperation,
@@ -1889,7 +1889,6 @@ import {
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
     RedisStreamBroadcastProvider,
-    ResolveGuestShareLinkServerOperation,
     RevokeGuestShareLinkServerOperation,
     SequencedRoleBucketBroadcastProvider,
     SynthesizeArtifactFromSourcesServerOperation,
@@ -3320,7 +3319,6 @@ const CLASS_REGISTRATIONS_6: any[] = [
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
     RedisStreamBroadcastProvider,
-    ResolveGuestShareLinkServerOperation,
     RevokeGuestShareLinkServerOperation,
     SequencedRoleBucketBroadcastProvider,
     SynthesizeArtifactFromSourcesServerOperation,
@@ -3357,7 +3355,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1384;
+export const CLASS_REGISTRATIONS_COUNT = 1383;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -782,7 +782,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (121 classes)
+// @memberjunction/ng-dashboards (122 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -848,6 +848,7 @@ import {
     ListsCategoriesResource,
     ListsMyListsResource,
     ListsOperationsResource,
+    ListsRefreshesResource,
     ListsSharedWithMeResource,
     LoginStudioResourceComponent,
     MCPDashboardComponent,
@@ -1687,6 +1688,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ListsCategoriesResource,
     ListsMyListsResource,
     ListsOperationsResource,
+    ListsRefreshesResource,
     ListsSharedWithMeResource,
     LoginStudioResourceComponent,
     MCPDashboardComponent,
