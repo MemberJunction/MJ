@@ -131,6 +131,15 @@ describe('SQLServerCodeGenProvider — soft primary key index', () => {
             expect(sql[0]).toContain('([record_id], [tenant_id])');
         });
 
+        it('skips a composite soft PK when another unfiltered index leads with the same columns, in order (#6466)', () => {
+            const entity = createMockEntity({}, [softPKField('tenant_id', 2), softPKField('record_id', 1)]);
+
+            const sql = provider.generateSoftPrimaryKeyIndex(entity)[0];
+
+            expect(sql).toContain("(ic.key_ordinal = 1 AND COL_NAME(ic.object_id, ic.column_id) = 'record_id') OR (ic.key_ordinal = 2 AND COL_NAME(ic.object_id, ic.column_id) = 'tenant_id')");
+            expect(sql).toContain(') = 2');
+        });
+
         it('creates a NON-unique index — uniqueness is what the soft-PK design refuses to assert', () => {
             const entity = createMockEntity({}, [softPKField('external_id', 1)]);
 

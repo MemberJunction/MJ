@@ -37,12 +37,12 @@ class TestableManageMetadata extends ManageMetadataBase {
       this.executedSql.push(...sqlBatch);
    }
 
-   public testBuild(excludeSchemas: string[]) {
-      return this.buildSearchFlagHygieneSQL(excludeSchemas);
+   public testBuild(authoredExclude: string[], includeSchemas?: string[]) {
+      return this.buildSearchFlagHygieneSQL({ AuthoredExclude: authoredExclude, IncludeSchemas: includeSchemas });
    }
 
-   public testApply(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
-      return this.applySearchFlagHygiene(pool, excludeSchemas);
+   public testApply(pool: CodeGenConnection, authoredExclude: string[]): Promise<boolean> {
+      return this.applySearchFlagHygiene(pool, { AuthoredExclude: authoredExclude });
    }
 }
 
@@ -250,6 +250,24 @@ describe('search-flag hygiene — scope and ordering', () => {
 
    it('omits the schema filter entirely when nothing is excluded', () => {
       expect(flat(mm.testBuild([]).seedSQL)).not.toContain('NOT IN ()');
+      expect(flat(mm.testBuild([]).seedSQL)).not.toContain('[SchemaName] IN');
+   });
+
+   it('under includeSchemas, names only the include list and the authored excludes (#6384)', () => {
+      // The compiled exclude list (every other schema on the publisher's database) is never
+      // passed in, so no schema outside the config can appear in the statements or the probes.
+      const built = mm.testBuild(['sys', 'staging'], ['acme_app']);
+      for (const sql of [built.seedSQL, built.clearSQL, built.seedProbeSQL, built.clearProbeSQL].map(flat)) {
+         expect(sql).toContain("[SchemaName] IN ('acme_app')");
+         expect(sql).toContain("[SchemaName] NOT IN ('sys','staging')");
+         expect(sql.match(/\[SchemaName\] (NOT )?IN/g)).toHaveLength(2);
+      }
+   });
+
+   it('under includeSchemas with no authored excludes, carries only the IN list', () => {
+      const sql = flat(mm.testBuild([], ['acme_app', "o'brien"]).clearSQL);
+      expect(sql).toContain("[SchemaName] IN ('acme_app','o''brien')");
+      expect(sql).not.toContain('NOT IN');
    });
 
    it('seeds before it clears, so it never disables an entity it just fixed', async () => {

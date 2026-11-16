@@ -1063,6 +1063,35 @@ export type ExecuteAgentResult<P = any> = {
      * @since 5.24.0
      */
     resolvedStorageAccountId?: string;
+
+    /**
+     * Collaborative governed `MJ: Artifacts` (Docs, Slides, Sheets, Whiteboards) created,
+     * synthesized, or mutated mid-run via `artifact_tool` or `GovernedArtifactService` actions.
+     * Ensures `AgentRunner` and realtime delegation link these artifacts even when `payload` is empty.
+     */
+    touchedArtifacts?: GovernedRunArtifactSummary[];
+}
+
+/**
+ * Summary of a governed `MJ: Artifacts` record touched during an agent run via workspace tools
+ * or governed CoreActions. Carried on {@link ExecuteAgentResult.touchedArtifacts} so conversation
+ * detail links and realtime delegation channels can surface collaborative Docs/Slides/Sheets.
+ */
+export interface GovernedRunArtifactSummary {
+    /** `MJ: Artifacts` primary key UUID. */
+    ArtifactID: string;
+    /** Latest `MJ: Artifact Versions` primary key UUID produced or updated during the run. */
+    ArtifactVersionID: string;
+    /** Monotonic version number corresponding to {@link ArtifactVersionID}. */
+    VersionNumber: number;
+    /** Display name of the artifact. */
+    Name: string;
+    /** Canonical `MJ: Artifact Types` Name (e.g. `'Markdown Document'`, `'Presentation'`, `'Excel Spreadsheet'`). */
+    ArtifactTypeName: string;
+    /** Optional `DriverClass` from `MJ: Artifact Types` (used for channel partitioning). */
+    DriverClass?: string;
+    /** Highest-precedence operation performed on this artifact during the run. */
+    Operation: 'created' | 'mutated' | 'synthesized';
 }
 
 /**

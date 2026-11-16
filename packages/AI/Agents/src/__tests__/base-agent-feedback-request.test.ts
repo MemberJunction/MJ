@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BaseAgent } from '../base-agent';
 import type {
+    AgentRunStepSaveQueue,
     BaseAgentNextStep,
     ExecuteAgentParams,
     MJAIAgentEntityExtended,
@@ -25,9 +26,15 @@ interface FeedbackRequestInternals {
     createFeedbackRequest(params: ExecuteAgentParams, step: MJAIAgentRunStepEntityExtended, decision: BaseAgentNextStep): Promise<void>;
     _feedbackRequestId: string | null;
     _agentRun: MJAIAgentRunEntityExtended | null;
+    _stepSaveQueue: AgentRunStepSaveQueue;
 }
 
 class TestFeedbackBaseAgent extends BaseAgent {
+    /** Fires a step's INSERT on this agent's own step queue, the way `createStepEntity` does. */
+    public QueueStepInsert(step: MJAIAgentRunStepEntityExtended): void {
+        (this as unknown as FeedbackRequestInternals)._stepSaveQueue.Insert(step);
+    }
+
     public async InvokeCreateFeedbackRequest(
         params: ExecuteAgentParams,
         stepEntity: MJAIAgentRunStepEntityExtended,
@@ -209,5 +216,52 @@ describe('BaseAgent.createFeedbackRequest', () => {
         expect(savedRecord.OriginatingAgentRunID).toBe('ffffffff-ffff-4fff-8fff-000000000002');
         expect(savedRecord.OriginatingAgentRunStepID).toBe('99999999-9999-4999-8999-000000000002');
         expect(savedRecord.Save).toHaveBeenCalledOnce();
+    });
+
+    it("should not save the request until its step's fire-and-forget INSERT has landed (FK_AIAgentRequest_OriginatingStep)", async () => {
+        const events: string[] = [];
+        let landStepInsert: (ok: boolean) => void = () => undefined;
+        const step: Partial<MJAIAgentRunStepEntityExtended> & { Save: () => Promise<boolean> } = {
+            ID: '99999999-9999-4999-8999-000000000003',
+            Save: vi.fn(() => new Promise<boolean>((resolve) => {
+                landStepInsert = (ok: boolean) => {
+                    events.push('step INSERT landed');
+                    resolve(ok);
+                };
+            })),
+        };
+        const savedRecord: Partial<MJAIAgentRequestEntity> & { Save: () => Promise<boolean>; NewRecord: () => boolean } = {
+            ID: 'eeeeeeee-eeee-4eee-8eee-000000000003',
+            NewRecord: () => true,
+            Save: vi.fn(async () => {
+                events.push('request saved');
+                return true;
+            }),
+        };
+        mockGetEntityObject.mockResolvedValueOnce(savedRecord as MJAIAgentRequestEntity);
+
+        const agent: Partial<MJAIAgentEntityExtended> = { ID: AGENT_ID, Name: 'WrapperTestAgent', TypeID: null, CategoryID: null };
+        const params: ExecuteAgentParams = {
+            agent: agent as MJAIAgentEntityExtended,
+            conversationMessages: [],
+            contextUser: SYSTEM_USER,
+            provider: { GetEntityObject: providerGetEntityObject } as Partial<IMetadataProvider> as IMetadataProvider,
+        };
+        const decision: BaseAgentNextStep = { step: 'Chat', terminate: true, message: 'Which aspect ratio?' };
+
+        const testAgent = new TestFeedbackBaseAgent();
+        testAgent.QueueStepInsert(step as MJAIAgentRunStepEntityExtended);
+        const pending = testAgent.InvokeCreateFeedbackRequest(params, step as MJAIAgentRunStepEntityExtended, decision);
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(step.Save).toHaveBeenCalledOnce();
+        expect(savedRecord.Save).not.toHaveBeenCalled();
+
+        landStepInsert(true);
+        const feedbackRequestId = await pending;
+
+        expect(events).toEqual(['step INSERT landed', 'request saved']);
+        expect(savedRecord.OriginatingAgentRunStepID).toBe('99999999-9999-4999-8999-000000000003');
+        expect(feedbackRequestId).toBe('eeeeeeee-eeee-4eee-8eee-000000000003');
     });
 });

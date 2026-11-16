@@ -3,6 +3,13 @@ import type * as DocxModule from 'docx';
 import type TurndownService from 'turndown';
 import { DocumentLiveBlockEngine, type DocumentBlockSpec } from '@memberjunction/core-entities';
 import { ConvertDocxToHtml, type MammothModuleShim } from '../components/previews/office-preview.logic';
+import { IsVisualDiagramOrChartBlock, RasterizeBlockDiagramToPng } from '../utils/diagram-png-encoder';
+
+/** Options controlling optional `.docx` visual rasterization parity (`§ 3.4`). */
+export interface DocxExportOptions {
+  /** Optional caller override supplying custom PNG bytes for an embedded chart or Whiteboard block. */
+  RasterizeBlockToPng?: (block: DocumentBlockSpec) => Promise<Uint8Array | null>;
+}
 
 // dynamic-import: docx (~250KB OOXML archive builder) is deferred until .docx export is invoked to avoid eager bundle cost (Rule 8 #3)
 let docxModulePromise: Promise<typeof DocxModule> | null = null;
@@ -172,9 +179,13 @@ export class DocumentImportExportService {
    * @param title Document display title
    * @returns `Uint8Array` containing the `.docx` archive bytes
    */
-  public async ConvertMarkdownToDocxBytes(markdown: string, title = 'Document'): Promise<Uint8Array> {
+  public async ConvertMarkdownToDocxBytes(
+    markdown: string,
+    title = 'Document',
+    options?: DocxExportOptions,
+  ): Promise<Uint8Array> {
     const docx = await loadDocxModule();
-    const { Document: DocxDocument, Packer, Paragraph, TextRun } = docx;
+    const { Document: DocxDocument, ImageRun, Packer, Paragraph, TextRun } = docx;
     const children: Array<DocxModule.Paragraph | DocxModule.Table> = [];
     const lines = markdown.replace(/\r\n/g, '\n').split('\n');
     const parsedSegments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(markdown);
@@ -203,6 +214,26 @@ export class DocumentImportExportService {
             spacing: { before: 160, after: 80 },
           }),
         );
+        if (IsVisualDiagramOrChartBlock(block)) {
+          let pngBytes = (await options?.RasterizeBlockToPng?.(block)) ?? null;
+          if (!pngBytes || pngBytes.byteLength === 0) {
+            pngBytes = RasterizeBlockDiagramToPng(block);
+          }
+          if (pngBytes && pngBytes.byteLength > 0 && ImageRun) {
+            children.push(
+              new Paragraph({
+                children: [
+                  new ImageRun({
+                    type: 'png',
+                    data: pngBytes,
+                    transformation: { width: 520, height: 260 },
+                  }),
+                ],
+                spacing: { before: 80, after: 120 },
+              }),
+            );
+          }
+        }
         if (block.FrozenSnapshot && block.FrozenSnapshot.Columns.length > 0) {
           const colNames = block.FrozenSnapshot.Columns.map((c) => c.Name);
           children.push(this.buildDocxTable(docx, colNames, block.FrozenSnapshot.Rows));
