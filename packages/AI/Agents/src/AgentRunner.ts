@@ -2050,7 +2050,8 @@ export class AgentRunner {
                         creationMode,
                         directive,
                         payload,
-                        forkCommentNote
+                        forkCommentNote,
+                        agentResult.payloadArtifactTypeID
                     );
                     artifactId = artifact.ID;
                     artifactTypeId = artifact.TypeID;
@@ -2678,7 +2679,8 @@ export class AgentRunner {
         creationMode: string | undefined,
         directive: ArtifactDirective | undefined,
         payload?: unknown,
-        comments?: string
+        comments?: string,
+        payloadArtifactTypeID?: string
     ): Promise<MJArtifactEntity> {
         const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
 
@@ -2691,8 +2693,10 @@ export class AgentRunner {
         artifact.Description = AgentRunner.safeDirectiveText(directive?.description)
             || `Payload returned by ${agentName}`;
 
-        // Use agent's DefaultArtifactTypeID if available; otherwise infer Research Content when
-        // the payload carries a non-empty report.html string (e.g., Research Report Writer).
+        // Prefer a delegated sub-agent's payloadArtifactTypeID over the parent agent's
+        // DefaultArtifactTypeID so router agents (e.g. Skip -> Data Answerer) don't overwrite
+        // a specialist child's artifact type; otherwise infer Research Content when the payload
+        // carries a non-empty report.html string.
         const payloadObj = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
             ? (payload as Record<string, unknown>)
             : undefined;
@@ -2700,7 +2704,8 @@ export class AgentRunner {
             ? (payloadObj.report as Record<string, unknown>)
             : undefined;
         const hasReportHtml = typeof reportObj?.html === 'string' && reportObj.html.trim().length > 0;
-        artifact.TypeID = agent?.DefaultArtifactTypeID
+        artifact.TypeID = payloadArtifactTypeID
+            || agent?.DefaultArtifactTypeID
             || (hasReportHtml ? AgentRunner.RESEARCH_CONTENT_ARTIFACT_TYPE_ID : AgentRunner.JSON_ARTIFACT_TYPE_ID);
 
         artifact.UserID = contextUser.ID;
