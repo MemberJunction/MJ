@@ -11,6 +11,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { FieldConfidenceMap, PipelineStageRequest, RetryBackoff, RetryDelayMs, WellKnownField, WorkingRecord } from '@memberjunction/content-pipeline-base';
 import { GetEntityFieldMap, GetEntityName, GetStatusFields } from './EntityFieldMap.js';
 import { WhereEqual } from './Filters.js';
+import { BASE_ITEM_ENTITY, ItemEntityResolver } from './ItemEntityResolver.js';
 
 /** Retries in a row since a stage last settled the record. Content Items and Content Item Chunks carry it. */
 const RETRY_COUNT_FIELD = 'RetryCount';
@@ -143,7 +144,7 @@ export class WorkingRecordCommitter {
     ): Promise<CommitResult> {
         await this.matchExisting(child, parentDefaults);
         const created = !child.Identity.IsPersisted;
-        const entityObject = await this.load(child);
+        const entityObject = await this.load(child, parentDefaults.ContentSourceID);
         const wasPendingDelete = !created && this.readColumn(entityObject, 'DeleteStatus') === 'Pending';
         const storedDateBefore = this.readColumn(entityObject, 'Date');
         const storedConfidence = created || wasPendingDelete ? {} : this.parseConfidence(this.readString(entityObject, 'FieldConfidence'));
@@ -635,11 +636,11 @@ export class WorkingRecordCommitter {
         for (const [column, value] of Object.entries(custom)) {
             if (FRAMEWORK_OWNED_COLUMNS.has(column) || column.startsWith('__mj_')) {
                 throw new Error(
-                    `Column '${column}' on ${GetEntityName(record.Entity)} is owned by the pipeline framework and cannot be set via Columns`,
+                    `Column '${column}' on ${entityObject.EntityInfo?.Name ?? GetEntityName(record.Entity)} is owned by the pipeline framework and cannot be set via Columns`,
                 );
             }
             if (entityObject.Fields.length > 0 && !this.hasField(entityObject, column)) {
-                throw new Error(`Column '${column}' does not exist on ${GetEntityName(record.Entity)}`);
+                throw new Error(`Column '${column}' does not exist on ${entityObject.EntityInfo?.Name ?? GetEntityName(record.Entity)}`);
             }
             const previous = this.readColumn(entityObject, column);
             const changed = value instanceof Date ? !this.datesEqual(previous, value) : previous !== value;
@@ -663,18 +664,64 @@ export class WorkingRecordCommitter {
         return written;
     }
 
-    /** Load the existing row, or start a new one for a record that has only just been produced. */
-    private async load(record: WorkingRecord): Promise<BaseEntity> {
-        const entityObject = await this.provider.GetEntityObject<BaseEntity>(GetEntityName(record.Entity), this.contextUser);
+    /**
+     * Load the existing row, or start a new one for a record that has only just been produced. A Content Item
+     * is loaded or created as the entity its source's items are ({@link ItemEntityResolver}), so an IS-A
+     * extension's fields can be written and a new item's save writes its extension row too. An existing item
+     * that has no extension row yet gets one added here.
+     */
+    private async load(record: WorkingRecord, contentSourceID?: unknown): Promise<BaseEntity> {
+        const entityName = await this.entityNameFor(record, contentSourceID);
+        const entityObject = await this.provider.GetEntityObject<BaseEntity>(entityName, this.contextUser);
         if (record.Identity.RecordID) {
-            if (!(await entityObject.InnerLoad(CompositeKey.FromID(record.Identity.RecordID)))) { // first-pk-ok: MJ core content entity, single-column ID
-                throw new Error(`${GetEntityName(record.Entity)} record '${record.Identity.RecordID}' vanished before commit`);
+            const key = CompositeKey.FromID(record.Identity.RecordID); // first-pk-ok: MJ core content entity, single-column ID
+            if (!(await entityObject.InnerLoad(key))) {
+                if (entityName !== GetEntityName(record.Entity)) {
+                    return this.addExtensionRow(entityName, key, record.Identity.RecordID);
+                }
+                throw new Error(`${entityName} record '${record.Identity.RecordID}' vanished before commit`);
             }
         } else {
             entityObject.NewRecord();
             this.applyValues(entityObject, { URL: record.Identity.EphemeralID || null });
         }
         return entityObject;
+    }
+
+    /**
+     * The entity to load or create this record as. Only a Content Item can be an extension; the answer is kept
+     * on the record (`Pipeline.itemEntity`, which the hydrator also sets) so a record resolves once.
+     */
+    private async entityNameFor(record: WorkingRecord, contentSourceID?: unknown): Promise<string> {
+        if (record.Entity !== 'Content Item') {
+            return GetEntityName(record.Entity);
+        }
+        const known = record.GetExtension<string>('Pipeline', 'itemEntity');
+        if (known) {
+            return known;
+        }
+        const sourceID = typeof contentSourceID === 'string' ? contentSourceID : record.GetExtension<string>('Pipeline', 'contentSourceID');
+        const resolved = await new ItemEntityResolver(this.provider, this.contextUser).Resolve(sourceID);
+        record.SetExtension('Pipeline', 'itemEntity', resolved.EntityName);
+        return resolved.EntityName;
+    }
+
+    /**
+     * Give an existing item the extension row it lacks (created before the setting, or by a path that wrote
+     * only the core row): bind a new extension record to the existing core row and save it, which inserts
+     * only the extension's row. The commit then goes on as an update of the now complete item.
+     */
+    private async addExtensionRow(entityName: string, key: CompositeKey, recordID: string): Promise<BaseEntity> {
+        const extension = await this.provider.GetEntityObject<BaseEntity>(entityName, this.contextUser);
+        extension.NewRecord();
+        if (!(await extension.AttachToParent(key))) {
+            throw new Error(`${BASE_ITEM_ENTITY} record '${recordID}' vanished before commit`);
+        }
+        if (!(await extension.Save())) {
+            throw new Error(`Could not add the '${entityName}' row to item '${recordID}': ${this.describeFailure(extension)}`);
+        }
+        LogStatus(`WorkingRecordCommitter: added the missing '${entityName}' row to item '${recordID}'`);
+        return extension;
     }
 
     /** A new Content Item takes its content type, source type and file type from its source. */

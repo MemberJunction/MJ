@@ -11,6 +11,16 @@
  * the user needs to provide when configuring a source of that type.
  */
 export interface IContentSourceTypeConfiguration {
+    /**
+     * The entity items of every source of this type are created, loaded and saved as: an IS-A extension of `MJ: Content Items`
+     * (for example a product's own `Content Items` entity), by name. Saving an item as its extension
+     * writes both rows under one ID, so no item exists without its extension row; an existing item that
+     * has none gets it added. Used when the source names none; overrides the content type's and the system default
+     * (`ContentPipeline.ItemEntity` on the default AI Configuration). Unset everywhere means plain
+     * `MJ: Content Items`. An entity that is not an extension of `MJ: Content Items` fails the item.
+     */
+    ItemEntity?: string;
+
     /** Fields required when creating a content source of this type */
     RequiredFields?: IContentSourceTypeField[];
     /** Whether this source type requires a Content Type selection. Default true. Entity sources set this to false. */
