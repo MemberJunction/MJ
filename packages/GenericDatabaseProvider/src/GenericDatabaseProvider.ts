@@ -5135,7 +5135,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
                     // An EntityRelationship joins on ONE column (RelatedEntityJoinField / JoinEntityJoinField)
                     // that references this entity's key — a single-column foreign-key target by metadata design.
-                    const pkField = entity.FirstPrimaryKey; // first-pk-ok: relationship join field is a single-column FK target
+                    const pkField = entityInfo.FirstPrimaryKey; // first-pk-ok: relationship join field is a single-column FK target
                     const pkLiteral = this.RenderPrimaryKeyLiteral(pkField, ret[pkField.Name], entityInfo.Name);
                     let relSql: string;
 

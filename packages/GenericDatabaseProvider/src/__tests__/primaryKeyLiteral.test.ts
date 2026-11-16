@@ -108,6 +108,7 @@ describe('GenericDatabaseProvider Load key', () => {
                 Name: 'Widgets',
                 SchemaName: 'dbo',
                 BaseView: 'vwWidgets',
+                FirstPrimaryKey: textKey,
                 PrimaryKeys: [textKey],
                 Fields: [textKey],
                 RelatedEntities: [
