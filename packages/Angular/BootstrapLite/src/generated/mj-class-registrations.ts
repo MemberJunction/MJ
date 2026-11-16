@@ -646,9 +646,10 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-conversations (13 classes)
+// @memberjunction/ng-conversations (14 classes)
 import {
     AgentMentionProvider,
+    ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
@@ -1365,6 +1366,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
     AgentMentionProvider,
+    ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
@@ -1396,11 +1398,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     LibraryResource,
     ListDetailResource,
     MeetingsResource,
-    OmnibarAgentProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    OmnibarAgentProvider,
     OmnibarCommandProvider,
     OmnibarRecordProvider,
     OmnibarSearchProvider,
@@ -1496,7 +1498,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 681;
+export const CLASS_REGISTRATIONS_COUNT = 682;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

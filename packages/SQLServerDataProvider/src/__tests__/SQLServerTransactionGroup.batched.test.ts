@@ -262,6 +262,26 @@ describe('SQLServerTransactionGroup.scopeItemVariables', () => {
         expect(SQLServerTransactionGroup.scopeItemVariables(src, 0)).toBe(src);
     });
 
+    it('renames @ID assignments after a semicolon-free EXEC without mistaking callee @Set params for statements', () => {
+        const src = `
+            DECLARE @ResultTable TABLE (ID UNIQUEIDENTIFIER)
+            INSERT INTO @ResultTable
+            EXEC [__mj].[spDeleteMJQueryParameter] @ID='p-1', @Set=1
+            DECLARE @ID UNIQUEIDENTIFIER
+            SELECT @ID=ID FROM @ResultTable
+            IF @ID IS NOT NULL
+            BEGIN
+                EXEC [__mj].[spCreateRecordChange_Internal] @EntityName=N'MJ: Query Parameters', @RecordID='p-1', @SuppressReturn=1
+            END
+            SELECT @ID AS [ID]`;
+        const out = SQLServerTransactionGroup.scopeItemVariables(src, 0);
+        expect(out).toContain("EXEC [__mj].[spDeleteMJQueryParameter] @ID='p-1', @Set=1");
+        expect(out).toContain('DECLARE @ID_mjb0 UNIQUEIDENTIFIER');
+        expect(out).toContain('SELECT @ID_mjb0=ID FROM @ResultTable_mjb0');
+        expect(out).toContain('IF @ID_mjb0 IS NOT NULL');
+        expect(out).toContain('SELECT @ID_mjb0 AS [ID]');
+    });
+
     describe('Parameter-Limit Chunking (MaxBatchParameterCount = 1800)', () => {
         it('exposes MaxBatchParameterCount as 1800 to maintain safe margin below SQL Server 2100 limit', () => {
             expect(SQLServerTransactionGroup.MaxBatchParameterCount).toBe(1800);

@@ -64,6 +64,9 @@ import { ArtifactTypePluginViewerComponent } from './components/artifact-type-pl
 import { ArtifactVersionHistoryComponent } from './components/artifact-version-history.component';
 import { ArtifactViewerPanelComponent } from './components/artifact-viewer-panel.component';
 import { ArtifactMessageCardComponent } from './components/artifact-message-card.component';
+import { ArtifactAgentPresenceBarComponent } from './components/presence/artifact-agent-presence-bar.component';
+import { ArtifactAgentRegionIndicatorComponent } from './components/presence/artifact-agent-region-indicator.component';
+import { MjContextMenuComponent } from './components/context-menu/mj-context-menu.component';
 
 // Git-style Version History & Diff components (standalone)
 import { ArtifactVersionCompareComponent } from './components/version-diff/artifact-version-compare.component';
@@ -90,6 +93,7 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     ArtifactViewerPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
+    MjContextMenuComponent,
 
     // Plugin components
     JsonArtifactViewerComponent,
@@ -155,6 +159,8 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     SpreadsheetVersionDiffComponent,
     ComponentVersionDiffComponent,
     QueryVersionDiffComponent,
+    ArtifactAgentPresenceBarComponent,
+    ArtifactAgentRegionIndicatorComponent,
   ],
   exports: [
     // Export artifact type plugin viewer
@@ -164,6 +170,9 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     ArtifactViewerPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
+    MjContextMenuComponent,
+    ArtifactAgentPresenceBarComponent,
+    ArtifactAgentRegionIndicatorComponent,
     ArtifactVersionCompareComponent,
     GitDiffLinesViewComponent,
     DocsVersionDiffComponent,

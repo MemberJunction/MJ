@@ -96,11 +96,38 @@
             <i [class]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
           </button>
         }
+        @if (ShowConnectedDriveSyncControls) {
+          <button
+            type="button"
+            class="drive-sync-btn"
+            (click)="OnConnectedDriveSync('push')"
+            title="Push this version to Connected Drive"
+            data-testid="connected-drive-push-btn"
+          >
+            <i class="fas fa-cloud-arrow-up"></i>
+          </button>
+          <button
+            type="button"
+            class="drive-sync-btn"
+            (click)="OnConnectedDriveSync('pull')"
+            title="Pull latest version from Connected Drive and compare"
+            data-testid="connected-drive-pull-btn"
+          >
+            <i class="fas fa-cloud-arrow-down"></i>
+          </button>
+        }
         @if (canShare) {
           <button class="share-btn"
                   (click)="onShare()"
                   title="Share">
             <i class="fas fa-share-nodes"></i>
+          </button>
+          <button class="guest-share-btn"
+                  type="button"
+                  (click)="OpenGuestShareModal()"
+                  title="External Guest Share Links (Frozen Snapshot Only)"
+                  data-testid="guest-share-btn">
+            <i class="fas fa-link"></i>
           </button>
         }
         <button class="analyze-btn"
@@ -413,5 +440,92 @@
       </div>
     }
   </div>
+
+  @if (ShowGuestShareModal) {
+    <div class="guest-share-backdrop" (click)="CloseGuestShareModal()">
+      <div
+        class="guest-share-modal"
+        role="dialog"
+        aria-label="External Guest Share Links"
+        (click)="$event.stopPropagation()"
+        data-testid="guest-share-modal"
+      >
+        <div class="guest-share-modal__header">
+          <h4><i class="fas fa-shield-halved"></i> External Guest Share Links (Frozen Snapshot Only)</h4>
+          <button type="button" class="close-btn" (click)="CloseGuestShareModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="guest-share-modal__body">
+          <p class="guest-share-hint">
+            Guest links expire automatically, grant read-only access, and require all Live data blocks to be Frozen before sharing externally.
+          </p>
+          <div class="guest-share-form">
+            <input
+              type="text"
+              class="guest-share-input"
+              [(ngModel)]="GuestShareLabel"
+              placeholder="Recipient or review label (optional)"
+              data-testid="guest-share-label-input"
+            />
+            <select
+              class="guest-share-select"
+              [(ngModel)]="GuestShareExpiresHours"
+              data-testid="guest-share-expiry-select"
+            >
+              <option [ngValue]="24">Expires in 24 hours</option>
+              <option [ngValue]="168">Expires in 7 days</option>
+              <option [ngValue]="720">Expires in 30 days</option>
+            </select>
+            <button
+              type="button"
+              class="btn-icon btn-primary"
+              [disabled]="GuestShareBusy"
+              (click)="CreateGuestShareLink()"
+              data-testid="create-guest-share-btn"
+            >
+              <i class="fas" [ngClass]="GuestShareBusy ? 'fa-spinner fa-spin' : 'fa-link'"></i>
+              Create Link
+            </button>
+          </div>
+          @if (GuestShareError) {
+            <div class="guest-share-error" role="alert" data-testid="guest-share-error">
+              <i class="fas fa-triangle-exclamation"></i> {{ GuestShareError }}
+            </div>
+          }
+          @if (LatestCreatedGuestShareUrl) {
+            <div class="guest-share-created" data-testid="guest-share-created-url">
+              <input type="text" readonly [value]="LatestCreatedGuestShareUrl" class="guest-share-input" />
+              <button type="button" class="btn-icon" (click)="CopyGuestShareUrl(LatestCreatedGuestShareUrl)">
+                <i class="fas fa-copy"></i> Copy
+              </button>
+            </div>
+          }
+          @if (ActiveGuestShareLinks.length > 0) {
+            <div class="guest-share-list">
+              <h5>Active Links ({{ ActiveGuestShareLinks.length }})</h5>
+              @for (link of ActiveGuestShareLinks; track link.LinkID) {
+                <div class="guest-share-row">
+                  <div class="guest-share-row__meta">
+                    <strong>{{ link.Label || 'External Guest Link' }}</strong>
+                    <span>v{{ link.VersionNumber }} · Expires {{ link.ExpiresAt | date:'short' }}</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn-icon"
+                    [disabled]="GuestShareBusy"
+                    (click)="RevokeGuestShareLink(link)"
+                    [attr.data-testid]="'revoke-guest-link-' + link.LinkID"
+                  >
+                    Revoke
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
 </div>
 

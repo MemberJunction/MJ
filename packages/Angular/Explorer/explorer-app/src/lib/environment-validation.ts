@@ -1,4 +1,4 @@
-import type { MJEnvironmentConfig } from '@memberjunction/ng-bootstrap';
+import type { MJEnvironmentConfig } from '@memberjunction/ng-bootstrap/types';
 import type { SystemValidationIssue } from '@memberjunction/ng-explorer-core';
 
 /** An environment problem to surface on the validation screen (the service stamps the time). */

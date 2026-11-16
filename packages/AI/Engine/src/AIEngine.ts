@@ -1344,6 +1344,20 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     // ========================================================================
 
     /**
+     * Checks whether `service` holds at least one candidate matching `filter` before running
+     * an embedding model call. Fails open (`true`) for minimal test doubles that omit `HasMatching`.
+     */
+    private hasMatchingVectorCandidate<TMetadata>(
+        service: SimpleVectorService<TMetadata>,
+        filter: (metadata: TMetadata) => boolean
+    ): boolean {
+        if (typeof service.HasMatching === 'function') {
+            return service.HasMatching(filter);
+        }
+        return true;
+    }
+
+    /**
      * Find notes similar to query text using semantic search.
      * Falls back to returning notes from cache if vector service is unavailable.
      */
@@ -1366,13 +1380,16 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             throw new Error('queryText cannot be empty');
         }
 
+        const composedFilter = this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
+        if (!this.hasMatchingVectorCandidate(this._noteVectorService, composedFilter)) {
+            return [];
+        }
+
         const queryEmbedding = await this.EmbedTextLocal(queryText, { inputType: 'query' });
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
             LogError('FindSimilarAgentNotes: Failed to generate embedding for query text. Falling back to cached notes.');
             return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
-
-        const composedFilter = this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
 
         // Async: on a server the scan runs off the event loop (worker pool / native backend)
         const results = await this._noteVectorService.FindNearestAsync(
@@ -1480,13 +1497,16 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             throw new Error('queryText cannot be empty');
         }
 
+        const composedFilter = this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
+        if (!this.hasMatchingVectorCandidate(this._exampleVectorService, composedFilter)) {
+            return [];
+        }
+
         const queryEmbedding = await this.EmbedTextLocal(queryText, { inputType: 'query' });
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
             LogError('FindSimilarAgentExamples: Failed to generate embedding for query text. Falling back to cached examples.');
             return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
-
-        const composedFilter = this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
 
         const results = await this._exampleVectorService.FindNearestAsync(
             queryEmbedding.result.vector,

@@ -200,12 +200,12 @@ export class UserInfo extends BaseInfo {
     /**
      * Foreign key reference to the Entities table
      */
-    LinkedEntityID: number = null
+    LinkedEntityID: string = null
     
     /**
      * ID of the specific record this user is linked to
      */
-    LinkedEntityRecordID: number = null
+    LinkedEntityRecordID: string = null
     
     /**
      * Timestamp when the user record was created
