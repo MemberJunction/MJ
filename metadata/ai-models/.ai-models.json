@@ -393,6 +393,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "StartedAt": "2025-09-29T00:00:00.000Z",
+            "EndedAt": "2026-11-30T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
@@ -400,7 +401,7 @@
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 4.5 Sonnet standard tier pricing on Anthropic as of September 2025. Prompt caching available: write $3.75/M, read $0.30/M. Batch processing: 50% discount. Extended context (>200K tokens): $6/M input, $22.50/M output.",
+            "Comments": "Claude 4.5 Sonnet standard tier pricing on Anthropic as of September 2025. Prompt caching available: write $3.75/M, read $0.30/M. Batch processing: 50% discount. Extended context (>200K tokens): $6/M input, $22.50/M output. WINDOW-CLOSED 2026-11-16: Anthropic retires `claude-sonnet-4-5-20250929` on the Claude API on November 30, 2026 (deprecated September 30, 2026; recommended replacement `claude-sonnet-5-5`). EndedAt is set to the retirement date so this price stops being selected automatically on 2026-12-01; Status stays Active until the date passes because the model is still served and billed at $3/$15 until then. The Anthropic Inference Provider route is already Deprecated. Follow-up for the run after the retirement date: flip that route to Inactive and this row to Expired per the routine's deprecation recipe. Amazon Bedrock and OpenRouter set their own retirement schedules and are deliberately untouched. Source: https://platform.claude.com/docs/en/about-claude/model-deprecations",
             "CacheReadPricePerUnit": 0.3,
             "CacheWritePricePerUnit": 3.75
           },
@@ -31390,6 +31391,459 @@
     "sync": {
       "lastModified": "2026-11-10T23:41:24.359Z",
       "checksum": "402391107cc2cea1b545ac1432e92ed705ce699639f849de35850980079dd175"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Fable 5.2",
+      "PowerRank": 28,
+      "Description": "Anthropic's Fable-class flagship, released November 9, 2026 as the successor to Claude Fable 5.1. Positioned by Anthropic for demanding reasoning and long-horizon agentic work - the model to reach for when evals on Claude Opus 5.5 at higher effort still fall short. 1M-token context, 128K max output, adaptive thinking always on with a default effort of `high`. Reliable knowledge cutoff June 2026. Per-token price DROPS 20% from Fable 5.1 to $8/$40 per 1M in/out (from $10/$50), with cache hits and refreshes at $0.20/1M (0.025x base input, the same discounted multiplier Fable 5.1 introduced); 5-minute cache writes $10/1M, 1-hour writes $16/1M. Batch API is half rate. Uses the Claude 4.7-and-later tokenizer (~30% more tokens for the same text than Sonnet 4.6 and earlier). Generally available on the Claude API, Claude Platform on AWS, Amazon Bedrock, Claude Models on Google Cloud, and Microsoft Foundry; the Bedrock route uses the global inference profile ID `global.anthropic.claude-fable-5-2`. Companion Claude Mythos 5.2 shares the same specifications and rate card but is limited-availability through Anthropic's verification programs. Tentative retirement not sooner than November 9, 2027.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Fable 5.1",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true,
+          "SupportsForcedToolChoice": false
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "3080FA4F-8A32-4657-AA28-4E4E449392C3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-fable-5-2",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1FC5F463-F996-448A-A07F-0877A14A3E48"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "global.anthropic.claude-fable-5-2",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "2465CBC4-E98F-4241-A3D2-278D9CB9BF2B"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-11-09T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 8,
+            "OutputPricePerUnit": 40,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Fable 5.2 pricing on Anthropic direct as of the November 9, 2026 launch: $8/$40 per 1M in/out, a 20% cut from Fable 5.1's $10/$50. Cache hits and refreshes $0.20/1M (0.025x base input). CacheWritePricePerUnit records the 5-minute cache write at $10/1M; the 1-hour write is $16/1M and is not representable in this schema. Batch API is half rate ($4/$20). Read directly from the first-party rate card on 2026-11-16. Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/models/overview ; https://platform.claude.com/docs/en/about-claude/model-deprecations",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": 10
+          },
+          "primaryKey": {
+            "ID": "801E4353-7217-4C69-9F3B-731368B5D000"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "CAF71DE1-0EEB-4D24-9345-24E32CDC0D01"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "481DCD6F-D0FE-47F4-857B-EF6E7CD06CF7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6FF16771-EB37-4CFE-9BF5-E671C564B8B5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Mythos 5.2",
+      "PowerRank": 28,
+      "Description": "Anthropic's Mythos-class Claude 5.2 flagship, released November 9, 2026 as the successor to Claude Mythos 5.1 and the companion to Claude Fable 5.2. Anthropic's docs describe it as the same underlying model as Fable 5.2, sharing its specifications and rate card (1M-token context, 128K max output, adaptive thinking always on with a default effort of `high`, $8/$40 per 1M tokens, cache hits and refreshes at $0.20/1M - 0.025x base input) but WITHOUT Fable's safety-classifier routing layer. Limited-availability: access runs through Anthropic's verification programs (such as the Cyber Verification Program). Uses the Claude 4.7-and-later tokenizer (~30% more tokens for the same text than Sonnet 4.6 and earlier). Listed as Active on the Claude API with a tentative retirement not sooner than November 9, 2027. Modelled here per the routine's standing decision on limited-availability models: the Inference Provider route is seeded at Preview so model selection never routes to it automatically; a customer with access flips it to Active.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Mythos 5.1",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true,
+          "SupportsForcedToolChoice": false
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "72A8A7CA-7C84-4560-9146-E5CCEDBAABE1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Preview",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-mythos-5-2",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A596046D-4BF4-486D-85A5-FC2A5A36CB26"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-11-09T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 8,
+            "OutputPricePerUnit": 40,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Mythos 5.2 pricing on Anthropic direct as of the November 9, 2026 launch: $8/$40 per 1M in/out, identical to Claude Fable 5.2 and a 20% cut from Mythos 5.1's $10/$50. Cache hits and refreshes $0.20/1M (0.025x base input). CacheWritePricePerUnit records the 5-minute cache write at $10/1M; the 1-hour write is $16/1M and is not representable in this schema. The cost row is Active (the published rate is real) while the Inference Provider route is Preview (limited availability), so nothing routes here automatically. Read directly from the first-party rate card on 2026-11-16. Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/models/overview ; https://platform.claude.com/docs/en/about-claude/model-deprecations",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": 10
+          },
+          "primaryKey": {
+            "ID": "CE8B05FB-960E-4EDC-BB79-AD6772331C45"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "EC6A43A7-74D0-4728-9062-A2B0C6EC3E48"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "5C2F2C3D-CBAC-4BFA-9466-C55CC4894E5A"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BFBA3F78-FB77-4684-9CAF-C835AB64DD70"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 4 Carbon",
+      "PowerRank": 28,
+      "Description": "Google's deep-reasoning Gemini 4 model (gemini-4-carbon), generally available on the paid tier of the Gemini API from November 10, 2026 as a sibling to Gemini 4 Argon rather than its successor; Carbon trades latency for longer internal deliberation on hard reasoning, software-engineering and scientific problems. ~1,048,576-token context window shared across input, thinking, tool calls and the final answer, with thinking effort levels low/medium/high (medium default) and thinking tokens billed as output. Not available on the Gemini API free tier. Introductory pricing through November 30, 2026 is $2.00/1M input, $10.00/1M output and $0.10/1M cached input; standard pricing from December 1, 2026 steps up to $4.00/1M input, $20.00/1M output and $0.20/1M cached input - the same introductory-then-double structure Gemini 4 Argon carries. MaxOutputTokens is deliberately left unset: third-party listings disagree (65,536 synchronous vs ~1,048,576 with long decode vs 32,768), and no first-party figure was reachable. ai.google.dev is blocked from the research environment, so every figure here comes from independent write-ups that quote Google's changelog verbatim and agree with one another; flagged for a first-party re-read.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 5,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "846C0F38-ABC1-40F7-ADF8-A6FDB45887B8"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-4-carbon",
+            "MaxInputTokens": 1048576,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6CA837DD-A7C1-447E-92E2-B6991411F5E6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "21AE18BD-BE7F-46BC-B4BD-5DAAFBDD4371"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "gemini-4-carbon",
+            "MaxInputTokens": 1048576,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8BBE3B54-2484-43EC-AB63-1630881B3978"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemini-4-carbon",
+            "MaxInputTokens": 1048576,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "BA4F95A7-9591-4B0D-B668-9B23C95E2BCF"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-11-10T00:00:00.000Z",
+            "EndedAt": "2026-12-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 10,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Carbon (gemini-4-carbon) introductory pricing on Google direct as of the November 10, 2026 GA launch: $2.00/1M input, $10.00/1M output, $0.10/1M cached input. The introductory period ends November 30, 2026, so this row is window-closed at 2026-12-01 and the successor row at $4.00/$20.00 takes over automatically (GetModelCost selects on Status='Active' AND the StartedAt/EndedAt window). Sourcing note: ai.google.dev is unreachable from this environment, so the rate was taken from multiple independent write-ups that quote the Gemini API changelog entry verbatim (\"introductory pricing of $2.00 per 1M input tokens and $10.00 per 1M output tokens through November 30, 2026\") and agree with each other and with the identical Gemini 4 Argon structure MJ already carries. Flagged in reports/ai-model-research/2026-11-16-weekly-report.md for a first-party re-read. Sources: https://neomanex.com/news/gemini-4-carbon-ga-paid-api-2-10-until-nov-30-then-4-20 ; https://apidog.com/blog/gemini-4-carbon-api/ ; https://www.layer3labs.io/guides/gemini-4-carbon-pricing ; https://openrouter.ai/google/gemini-4-carbon",
+            "CacheReadPricePerUnit": 0.1,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "9F668D1F-A9BD-4C5B-91C3-167948C95E71"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-11-10T00:00:00.000Z",
+            "EndedAt": "2026-12-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 10,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Carbon (gemini-4-carbon) introductory pricing on Vertex AI, mirrored from Google direct at parity - the same convention MJ applies to Gemini 4 Argon and Gemini 3.8 Flash, whose Google/Vertex pairs have tracked each other since launch. Window-closed at 2026-12-01; the $4.00/$20.00 successor row takes over automatically. The Vertex AI price list was not independently readable. Sourcing note: ai.google.dev is unreachable from this environment, so the rate was taken from multiple independent write-ups that quote the Gemini API changelog entry verbatim (\"introductory pricing of $2.00 per 1M input tokens and $10.00 per 1M output tokens through November 30, 2026\") and agree with each other and with the identical Gemini 4 Argon structure MJ already carries. Flagged in reports/ai-model-research/2026-11-16-weekly-report.md for a first-party re-read. Sources: https://neomanex.com/news/gemini-4-carbon-ga-paid-api-2-10-until-nov-30-then-4-20 ; https://apidog.com/blog/gemini-4-carbon-api/ ; https://www.layer3labs.io/guides/gemini-4-carbon-pricing ; https://openrouter.ai/google/gemini-4-carbon",
+            "CacheReadPricePerUnit": 0.1,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "641D4DDF-C2E9-4D5A-B09A-D5A3DCF7AC3D"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-12-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Carbon (gemini-4-carbon) standard (post-introductory) pricing on Google direct, effective December 1, 2026: $4.00/1M input, $20.00/1M output, $0.20/1M cached input (output price includes thinking tokens). Not selected by GetModelCost until StartedAt passes, so the cutover from the $2.00/$10.00 introductory row needs no further edit. Sourcing note: ai.google.dev is unreachable from this environment, so the rate was taken from multiple independent write-ups that quote the Gemini API changelog entry verbatim (\"introductory pricing of $2.00 per 1M input tokens and $10.00 per 1M output tokens through November 30, 2026\") and agree with each other and with the identical Gemini 4 Argon structure MJ already carries. Flagged in reports/ai-model-research/2026-11-16-weekly-report.md for a first-party re-read. Sources: https://neomanex.com/news/gemini-4-carbon-ga-paid-api-2-10-until-nov-30-then-4-20 ; https://apidog.com/blog/gemini-4-carbon-api/ ; https://www.layer3labs.io/guides/gemini-4-carbon-pricing ; https://openrouter.ai/google/gemini-4-carbon",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "3045EDDD-06C1-4D1F-BF2A-61E8FB0C7A40"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-12-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Carbon (gemini-4-carbon) standard (post-introductory) pricing on Vertex AI, effective December 1, 2026, mirrored from Google direct at parity. Not selected by GetModelCost until StartedAt passes, so the cutover needs no further edit. Sourcing note: ai.google.dev is unreachable from this environment, so the rate was taken from multiple independent write-ups that quote the Gemini API changelog entry verbatim (\"introductory pricing of $2.00 per 1M input tokens and $10.00 per 1M output tokens through November 30, 2026\") and agree with each other and with the identical Gemini 4 Argon structure MJ already carries. Flagged in reports/ai-model-research/2026-11-16-weekly-report.md for a first-party re-read. Sources: https://neomanex.com/news/gemini-4-carbon-ga-paid-api-2-10-until-nov-30-then-4-20 ; https://apidog.com/blog/gemini-4-carbon-api/ ; https://www.layer3labs.io/guides/gemini-4-carbon-pricing ; https://openrouter.ai/google/gemini-4-carbon",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "2F6E1B88-4181-452D-8473-9616229AEFD7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "59BBB4C5-3762-401A-A086-819EF135A8FE"
     }
   }
 ]
