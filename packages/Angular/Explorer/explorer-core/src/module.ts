@@ -28,10 +28,8 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
 
 // Local Components
 import { ConversationsModule } from '@memberjunction/ng-conversations';
-import { CoreDashboardsModule } from '@memberjunction/ng-dashboards/core-dashboards.module';
+import { DashboardEditorModule } from '@memberjunction/ng-dashboards/dashboard-editor.module';
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
-import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
-import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
@@ -70,16 +68,6 @@ import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { ConversationFeedbackResource } from './lib/conversation-feedback';
-import { LiveKitRoomResource } from './lib/resource-wrappers/livekit-room-resource.component';
-import { HumanHandoffConsoleResource } from './lib/resource-wrappers/human-handoff-console-resource.component';
-import { MeetingsResource } from './lib/resource-wrappers/meetings-resource.component';
-import { MJConversationOffersComponent } from '@memberjunction/ng-conversation-offers';
-import {
-  MJLiveKitRoomComponent,
-  MJMeetingListComponent,
-  MJMeetingScheduleFormComponent,
-  MJMeetingLobbyComponent,
-} from '@memberjunction/ng-mj-livekit-room';
 
 @NgModule({
   declarations: [
@@ -113,9 +101,6 @@ import {
     NotificationsResource,
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
-    LiveKitRoomResource,
-    HumanHandoffConsoleResource,
-    MeetingsResource,
   ],
   imports: [
     MarkdownModule,
@@ -131,17 +116,15 @@ import {
     QueryViewerModule,
     MemberJunctionSharedModule,
     ConversationsModule,
-    CoreDashboardsModule,
+    DashboardEditorModule,
     DashboardViewerModule,
     AngularSplitModule,
-    ExplorerSettingsModule,
     EntityFormDialogModule,
     RecordSelectorModule,
     ResourcePermissionsModule,
     GenericDialogModule,
     MJProgressBarComponent,
     DragDropModule,
-    AITestHarnessModule, // [3.0] TO DO TO-DO Need to verify this works correctly!
     ArtifactsModule,
     SharedGenericModule,
     EntityViewerModule,
@@ -157,11 +140,6 @@ import {
     MJWindowComponent,
     MJWindowTitlebarComponent,
     PaginationComponent,
-    MJLiveKitRoomComponent,
-    MJMeetingListComponent,
-    MJMeetingScheduleFormComponent,
-    MJMeetingLobbyComponent,
-    MJConversationOffersComponent,
     MJEmptyStateComponent,
     MJAlertComponent
   ],
@@ -182,7 +160,6 @@ import {
     ListDetailResource,
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
-    MeetingsResource,
     LibraryResource,
     LibraryDriveResource,
     ChatCollectionsResource

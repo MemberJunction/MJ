@@ -13,6 +13,10 @@
       "types": "./dist/core-dashboards.module.d.ts",
       "default": "./dist/core-dashboards.module.js"
     },
+    "./dashboard-editor.module": {
+      "types": "./dist/dashboard-editor.module.d.ts",
+      "default": "./dist/dashboard-editor.module.js"
+    },
     "./ai-dashboards.module": {
       "types": "./dist/ai-dashboards.module.d.ts",
       "default": "./dist/ai-dashboards.module.js"

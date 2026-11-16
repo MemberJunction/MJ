@@ -2,8 +2,7 @@ import { NgModule, ModuleWithProviders, InjectionToken, Provider } from '@angula
 import { CommonModule } from '@angular/common';
 import { MJAuthBase } from './mjexplorer-auth-base.service';
 import { AngularAuthProviderFactory } from './AngularAuthProviderFactory';
-import { MJMagicLinkProvider } from './providers/mjexplorer-magic-link-provider.service';
-import './providers/mjexplorer-local-dev-provider.service';
+import { HasMagicLinkSessionToken, MAGIC_LINK_PROVIDER_TYPE } from './magic-link-session';
 import { MJGlobal } from '@memberjunction/global';
 import type { PublicAuthProviderInfo } from '@memberjunction/core';
 import { AuthProviderCatalog, type AuthProviderResolution } from './auth-provider-catalog';
@@ -70,7 +69,7 @@ export class AuthServicesModule {
     // use the catalog selection, then the configured AUTH_TYPE. This auto-falls-back
     // to the IdP once a guest's token is gone (expired/logged out), so the normal
     // login button works again.
-    const magicLinkActive = MJMagicLinkProvider.hasSessionToken();
+    const magicLinkActive = HasMagicLinkSessionToken();
 
     // The catalog resolves which provider this load uses; it never overrides an active
     // magic-link session, which is a property of THIS page load rather than a configured choice.
@@ -78,7 +77,7 @@ export class AuthServicesModule {
     providers.push({ provide: MJ_AUTH_PROVIDER_RESOLUTION, useValue: resolution });
 
     const catalogType = resolution.active?.driverClass?.toLowerCase();
-    const authType = magicLinkActive ? MJMagicLinkProvider.PROVIDER_TYPE : (catalogType ?? configuredType);
+    const authType = magicLinkActive ? MAGIC_LINK_PROVIDER_TYPE : (catalogType ?? configuredType);
 
     if (!authType) {
       console.error('No authentication provider available: the server published no catalog and no AUTH_TYPE is set in the environment');

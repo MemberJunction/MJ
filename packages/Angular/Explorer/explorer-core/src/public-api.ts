@@ -16,7 +16,7 @@ export * from './lib/resource-wrappers/chat-collections-resource.component'
 export * from './lib/resource-wrappers/library-resource.component'
 export * from './lib/resource-wrappers/library-agent-context'
 export * from './lib/resource-wrappers/artifact-resource.component'
-export * from './lib/resource-wrappers/meetings-resource.component'
+export * from './lib/resource-wrappers/livekit-lazy-config'
 export * from './lib/conversation-feedback'
 
 // Command Palette (only component and service, no module)

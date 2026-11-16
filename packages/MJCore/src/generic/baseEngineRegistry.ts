@@ -1,4 +1,4 @@
-import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
+import { BaseSingleton, GetClassName, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
 import { LogError } from './logging';
 import { BaseEntity } from './baseEntity';
 import { CompositeFilter } from './filters/compositeFilter';
@@ -176,7 +176,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * @param className - Optional class name override (uses constructor name by default)
      */
     public RegisterEngine(engine: unknown, className?: string): void {
-        const name = className || (engine as object).constructor.name;
+        const name = className || GetClassName((engine as object).constructor);
 
         const existingInfo = this._engines.get(name);
         if (existingInfo) {
@@ -206,7 +206,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * @param engine - The engine instance to unregister
      */
     public UnregisterEngine(engine: unknown): void {
-        const name = (engine as object).constructor.name;
+        const name = GetClassName((engine as object).constructor);
         this._engines.delete(name);
         for (const [k, v] of this._engines) {
             if (v.instance === engine) {
@@ -299,7 +299,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * @param engine - The engine that was loaded
      */
     public NotifyEngineLoaded(engine: unknown): void {
-        const name = (engine as object).constructor.name;
+        const name = GetClassName((engine as object).constructor);
         const info = this._engines.get(name);
         if (info) {
             info.lastLoadedAt = new Date();
@@ -605,7 +605,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
         }
         this._recordedEngineInstances.add(engine);
 
-        const engineClassName = engine.constructor.name;
+        const engineClassName = GetClassName(engine.constructor);
         for (const entityName of entityNames) {
             this.RecordEntityLoad(engineClassName, entityName);
         }
