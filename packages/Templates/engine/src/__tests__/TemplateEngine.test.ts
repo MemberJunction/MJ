@@ -885,15 +885,16 @@ describe('TemplateEngineServer', () => {
             await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
             const compile = vi.spyOn(engine as unknown as { createNunjucksTemplate: () => unknown }, 'createNunjucksTemplate');
             try {
-                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                // Use a block tag so this test exercises compiled Nunjucks template caching rather than the pure-interpolation fast path.
+                await engine.RenderTemplateSimple('{% if name %}Hello {{ name }}{% endif %}', { name: 'World' });
                 expect(compile).toHaveBeenCalledTimes(1);
 
                 await engine.Config(false, { ID: 'test-user-2', Name: 'Test2' } as never);
-                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                await engine.RenderTemplateSimple('{% if name %}Hello {{ name }}{% endif %}', { name: 'World' });
                 expect(compile).toHaveBeenCalledTimes(1);
 
                 await engine.Config(true, { ID: 'test-user-2', Name: 'Test2' } as never);
-                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                await engine.RenderTemplateSimple('{% if name %}Hello {{ name }}{% endif %}', { name: 'World' });
                 expect(compile).toHaveBeenCalledTimes(2);
             } finally {
                 compile.mockRestore();
@@ -1001,6 +1002,50 @@ describe('TemplateEngineServer', () => {
 
             expect(result.Complete).toBe(true);
             expect(result.Names.has('childVar')).toBe(true);
+        });
+    });
+
+    describe('Sync extension-free fast path parity', () => {
+        it('renders HTML escaping, raw autoescape:false, loops, and custom json filters identically via fast path', async () => {
+            const escaped = await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'Acme & <Co>' });
+            expect(escaped).toEqual({ Success: true, Output: 'Hello Acme &amp; &lt;Co&gt;', Message: undefined });
+
+            const raw = await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'Acme & Co' }, { autoescape: false });
+            expect(raw).toEqual({ Success: true, Output: 'Hello Acme & Co', Message: undefined });
+
+            const loopResult = await engine.RenderTemplateSimple(
+                '{% for item in items %}{% if not loop.first %},{% endif %}{{ item }}{% endfor %} | {{ meta | jsoninline }}',
+                { items: ['a', 'b', 'c'], meta: { ok: true } },
+            );
+            expect(loopResult).toEqual({ Success: true, Output: 'a,b,c | {&quot;ok&quot;:true}', Message: undefined });
+
+            const rawLoopResult = await engine.RenderTemplateSimple(
+                '{% for item in items %}{% if not loop.first %},{% endif %}{{ item }}{% endfor %} | {{ meta | jsoninline }}',
+                { items: ['a', 'b', 'c'], meta: { ok: true } },
+                { autoescape: false },
+            );
+            expect(rawLoopResult).toEqual({ Success: true, Output: 'a,b,c | {"ok":true}', Message: undefined });
+        });
+
+        it('returns structured error result when sync fast-path template syntax throws', async () => {
+            const bad = await engine.RenderTemplateSimple('{{ unclosed', {});
+            expect(bad.Success).toBe(false);
+            expect(bad.Output).toBeNull();
+            expect(typeof bad.Message).toBe('string');
+            expect(bad.Message!.length).toBeGreaterThan(0);
+        });
+
+        it('renders via RenderTemplateSimple even before Config/SetupNunjucks initializes _nunjucksEnv', async () => {
+            const prevEnv = Reflect.get(engine, '_nunjucksEnv');
+            try {
+                Reflect.set(engine, '_nunjucksEnv', undefined);
+                engine.ClearTemplateCache();
+                const res = await engine.RenderTemplateSimple('Hello {{ who }}!', { who: 'World' });
+                expect(res).toEqual({ Success: true, Output: 'Hello World!', Message: undefined });
+            } finally {
+                Reflect.set(engine, '_nunjucksEnv', prevEnv);
+                engine.ClearTemplateCache();
+            }
         });
     });
 });

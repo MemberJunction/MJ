@@ -651,9 +651,10 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-conversations (13 classes)
+// @memberjunction/ng-conversations (14 classes)
 import {
     AgentMentionProvider,
+    ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
@@ -1512,6 +1513,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
     AgentMentionProvider,
+    ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
@@ -1542,11 +1544,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UserManagementComponent,
     RubricEngineBase,
     AIAgentCategoryHeaderPanel,
-    AIAgentCategoryHierarchyPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,

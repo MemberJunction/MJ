@@ -278,6 +278,16 @@ export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/DocumentCollaborationResolver.js';
+export { SynthesizeArtifactFromSourcesServerOperation, LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
+export { ArtifactComplianceAuditServerOperation, LoadArtifactComplianceAuditOperation, WriteArtifactComplianceAudit } from './operations/ArtifactComplianceAuditHelper.js';
+export { ArtifactEvaluateAiFormulaServerOperation, LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
+export {
+    CreateGuestShareLinkServerOperation,
+    RevokeGuestShareLinkServerOperation,
+    ResolveGuestShareLinkServerOperation,
+    LoadArtifactGuestShareOperations,
+    SetGuestShareSigningSecret,
+} from './operations/ArtifactGuestShareServerOperations.js';
 export * from './collaboration/index.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
@@ -312,6 +322,14 @@ export * from './middleware/index.js';
 
 import { RegisterDataHook } from '@memberjunction/core';
 import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/core-entities-server';
+import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
+import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactComplianceAuditHelper.js';
+import { LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
+import { LoadArtifactGuestShareOperations } from './operations/ArtifactGuestShareServerOperations.js';
+LoadSynthesizeArtifactFromSourcesOperation();
+LoadArtifactComplianceAuditOperation();
+LoadArtifactEvaluateAiFormulaOperation();
+LoadArtifactGuestShareOperations();
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';

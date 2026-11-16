@@ -28,6 +28,7 @@ import {
   ComputeLineDiff as computeLineDiffFromUtil,
   type SequenceDiffOp,
 } from '../utils/line-diff';
+import { ARTIFACT_AI_ASSISTANT_ENABLED } from './artifact-ai-assistant-bridge';
 
 export type { SequenceDiffOp } from '../utils/line-diff';
 export type ArtifactEffectivePermissions = ResolvedArtifactPermissions;
@@ -43,6 +44,20 @@ export interface VerifiedArtifactPermissions extends ResolvedArtifactPermissions
 }
 
 const ANCHORED_COMMENT_MENTION_SOURCE = '(?:^|[\\s([{"\'])@([A-Za-z][A-Za-z0-9_-]*)';
+const SAFE_AWARENESS_COLOR_RE =
+  /^(#[0-9a-fA-F]{3,8}|var\(--mj-[a-zA-Z0-9-]+\)|(rgb|hsl)a?\([0-9.,\s%/]+\))$/;
+
+/**
+ * Validates a CSS color or `--mj-*` design token from untrusted Yjs awareness state,
+ * rejecting arbitrary CSS payloads such as `url(...)` exfiltration beacons.
+ */
+export function SanitizeAwarenessColor(rawColor: string | null | undefined): string {
+  if (typeof rawColor !== 'string') {
+    return 'var(--mj-brand-primary)';
+  }
+  const trimmed = rawColor.trim();
+  return SAFE_AWARENESS_COLOR_RE.test(trimmed) ? trimmed : 'var(--mj-brand-primary)';
+}
 
 /**
  * Extracts unique `@handle` mentions from comment text while strictly ignoring email addresses
@@ -93,8 +108,8 @@ const MINT_COLLABORATION_TICKET_MUTATION = `
 `;
 
 const COMMIT_ARTIFACT_INLINE_EDIT_MUTATION = `
-  mutation CommitArtifactInlineEdit($artifactId: String!, $content: String!, $saveVersion: Boolean) {
-    CommitArtifactInlineEdit(artifactId: $artifactId, content: $content, saveVersion: $saveVersion) {
+  mutation CommitArtifactInlineEdit($artifactId: String!, $content: String!, $saveVersion: Boolean, $thumbnailDataUrl: String) {
+    CommitArtifactInlineEdit(artifactId: $artifactId, content: $content, saveVersion: $saveVersion, thumbnailDataUrl: $thumbnailDataUrl) {
       Success
       VersionID
       VersionNumber
@@ -443,6 +458,23 @@ export type CollaborationConnectionStatus =
   | 'error';
 
 /**
+ * Structural coordinate for live agent presence across Docs, Slides, Sheets, and Whiteboards.
+ */
+export interface CollaboratorAgentLocation {
+  Domain: 'spreadsheet' | 'document' | 'slides' | 'whiteboard' | 'generic';
+  SheetID?: string;
+  SheetName?: string;
+  Range?: string;
+  SlideID?: string;
+  SlideNumber?: number;
+  ElementID?: string;
+  SectionHeading?: string;
+  BlockID?: string;
+  StartLine?: number;
+  EndLine?: number;
+}
+
+/**
  * Active collaborator presence metadata broadcast via Yjs awareness.
  */
 export interface CollaboratorPresence {
@@ -454,6 +486,17 @@ export interface CollaboratorPresence {
   ActiveBlockID?: string;
   CanEdit: boolean;
   IsAgent?: boolean;
+  AgentPresenceKey?: string;
+  AgentRunID?: string;
+  AgentName?: string;
+  ActingForUserID?: string;
+  ActingForUserName?: string;
+  ActingForUserEmail?: string;
+  AgentPhase?: 'enter' | 'working' | 'settled' | 'exit';
+  ToolName?: string;
+  ActionSummary?: string;
+  AgentLocation?: CollaboratorAgentLocation;
+  TimestampMs?: number;
 }
 
 /**
@@ -491,7 +534,7 @@ export interface DocumentSlashCommand {
   Command: string;
   Label: string;
   Description: string;
-  Category: 'Structure' | 'Live Data' | 'Embedded Artifact';
+  Category: 'Structure' | 'Live Data' | 'Embedded Artifact' | 'AI Assistant';
   Icon: string;
   BlockType?: DocumentBlockKind;
   Snippet?: string;
@@ -634,6 +677,12 @@ export class DocumentCollaborationSession {
   private readonly versionSaved$ = new Subject<{ versionId: string; versionNumber: number }>();
   private readonly mergeConflict$ = new Subject<CollaborationMergeConflictEvent>();
   private readonly liveSyncUnavailable$ = new BehaviorSubject<boolean>(false);
+  private readonly canUndo$ = new BehaviorSubject<boolean>(false);
+  private readonly canRedo$ = new BehaviorSubject<boolean>(false);
+  private undoManager: Y.UndoManager | null = null;
+  private readonly undoStateListener = (): void => {
+    this.syncUndoRedoSubjects();
+  };
 
   public get YDoc(): Y.Doc {
     return this.Doc;
@@ -710,6 +759,48 @@ export class DocumentCollaborationSession {
 
   public get MergeConflict$(): Observable<CollaborationMergeConflictEvent> {
     return this.mergeConflict$.asObservable();
+  }
+
+  public get CanUndo(): boolean {
+    return this.canUndo$.value;
+  }
+
+  public get CanRedo(): boolean {
+    return this.canRedo$.value;
+  }
+
+  public get CanUndo$(): Observable<boolean> {
+    return this.canUndo$.asObservable();
+  }
+
+  public get CanRedo$(): Observable<boolean> {
+    return this.canRedo$.asObservable();
+  }
+
+  public Undo(): boolean {
+    if (!this.CanMutateDocument || !this.undoManager || !this.undoManager.canUndo()) {
+      return false;
+    }
+    this.undoManager.undo();
+    this.syncUndoRedoSubjects();
+    return true;
+  }
+
+  public Redo(): boolean {
+    if (!this.CanMutateDocument || !this.undoManager || !this.undoManager.canRedo()) {
+      return false;
+    }
+    this.undoManager.redo();
+    this.syncUndoRedoSubjects();
+    return true;
+  }
+
+  /**
+   * Closes the current undo capture window so subsequent edits form a distinct undo step
+   * (e.g., when moving focus between blocks, cells, or slides).
+   */
+  public StopUndoCapture(): void {
+    this.undoManager?.stopCapturing();
   }
 
   public get Recoverable(): boolean {
@@ -843,13 +934,14 @@ export class DocumentCollaborationSession {
       userId: user.id,
       name: user.name,
       email: user.email,
-      color: user.color ?? 'var(--mj-brand-primary)',
+      color: SanitizeAwarenessColor(user.color),
       canEdit,
       isAgent: user.isAgent,
       role: user.role,
     });
 
     this.bindDocObservers(this.Doc);
+    this.initUndoManager(this.Doc);
 
     this.Awareness.on('change', () => {
       this.collaboratorsChanged$.next(this.GetCollaborators());
@@ -893,6 +985,60 @@ export class DocumentCollaborationSession {
     }
   }
 
+  private initUndoManager(doc: Y.Doc): void {
+    this.destroyUndoManager();
+    const scopes = [
+      this.ContentText,
+      doc.getMap<string>('slidesById'),
+      doc.getArray<string>('slideOrder'),
+      doc.getMap<string>('deckMeta'),
+      doc.getMap<string>('sheetCellsByCoord'),
+      doc.getMap<string>('worksheetsById'),
+      doc.getArray<string>('sheetOrder'),
+      doc.getMap<string>('workbookMeta'),
+    ];
+    this.undoManager = new Y.UndoManager(scopes, {
+      trackedOrigins: new Set<string>(['local']),
+      captureTimeout: 500,
+    });
+    this.undoManager.on('stack-item-added', this.undoStateListener);
+    this.undoManager.on('stack-item-popped', this.undoStateListener);
+    this.undoManager.on('stack-cleared', this.undoStateListener);
+    this.syncUndoRedoSubjects();
+  }
+
+  private destroyUndoManager(): void {
+    if (this.undoManager) {
+      this.undoManager.off('stack-item-added', this.undoStateListener);
+      this.undoManager.off('stack-item-popped', this.undoStateListener);
+      this.undoManager.off('stack-cleared', this.undoStateListener);
+      this.undoManager.destroy();
+      this.undoManager = null;
+    }
+    if (!this.destroyed) {
+      if (this.canUndo$.value) {
+        this.canUndo$.next(false);
+      }
+      if (this.canRedo$.value) {
+        this.canRedo$.next(false);
+      }
+    }
+  }
+
+  private syncUndoRedoSubjects(): void {
+    if (this.destroyed) {
+      return;
+    }
+    const nextCanUndo = this.undoManager?.canUndo() ?? false;
+    const nextCanRedo = this.undoManager?.canRedo() ?? false;
+    if (this.canUndo$.value !== nextCanUndo) {
+      this.canUndo$.next(nextCanUndo);
+    }
+    if (this.canRedo$.value !== nextCanRedo) {
+      this.canRedo$.next(nextCanRedo);
+    }
+  }
+
   /**
    * Replaces `YDoc` with a fresh `new Y.Doc()`, applies a server `'room-reset'` payload without
    * destroying `this.Awareness`, preserves any unsent local line edits on top of the reset baseline,
@@ -906,6 +1052,7 @@ export class DocumentCollaborationSession {
     const baseBeforeReset = this.lastSyncedRemoteContent;
 
     const previousDoc = this.Doc;
+    this.destroyUndoManager();
     this.detachDocObservers(previousDoc);
 
     const nextDoc = new Y.Doc();
@@ -960,6 +1107,7 @@ export class DocumentCollaborationSession {
     this.lastSyncedRemoteContent = resetBaseline;
 
     this.bindDocObservers(nextDoc);
+    this.initUndoManager(nextDoc);
 
     // Re-apply any unsynced local prose hunks on top of the reset baseline so local edits are never dropped
     if (
@@ -996,6 +1144,7 @@ export class DocumentCollaborationSession {
       return;
     }
     const previousDoc = this.Doc;
+    this.destroyUndoManager();
     this.detachDocObservers(previousDoc);
     const nextDoc = new Y.Doc();
     this.Doc = nextDoc;
@@ -1006,6 +1155,7 @@ export class DocumentCollaborationSession {
     this.hasUnsentLocalEdits = false;
     this.hasCompletedInitialSync = false;
     this.bindDocObservers(nextDoc);
+    this.initUndoManager(nextDoc);
     this.statusChanged$.next(this.status);
   }
 
@@ -1440,6 +1590,42 @@ export class DocumentCollaborationSession {
   }
 
   /**
+   * Applies a batch of spreadsheet cell updates and deletions inside a single `'local'`
+   * Yjs transaction so multi-cell paste or range clear forms one atomic undo/redo step.
+   */
+  public BatchUpdateSpreadsheetCells(
+    sheetId: string,
+    updates: ReadonlyArray<SpreadsheetCellSpec>,
+    deletes: ReadonlyArray<{ rowId: string; colId: string }> = [],
+    fullWorkbookFallback?: WorkbookSpec,
+  ): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    if (updates.length === 0 && deletes.length === 0) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getMap<string>('worksheetsById').size === 0 && fullWorkbookFallback) {
+        this.populateSpreadsheetCrdtIfWorkbook(
+          SpreadsheetEngine.Instance.SerializeWorkbook(fullWorkbookFallback),
+        );
+      }
+      const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+      for (const cell of updates) {
+        sheetCellsByCoord.set(`${sheetId}::${cell.RowID}::${cell.ColumnID}`, JSON.stringify(cell));
+      }
+      for (const del of deletes) {
+        sheetCellsByCoord.delete(`${sheetId}::${del.rowId}::${del.colId}`);
+      }
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
    * Surgically updates worksheet structural metadata (`Rows`, `Columns`, `LiveTables`, `Charts`,
    * `EmbeddedArtifacts`, `Sort`, `Filters`, `FrozenRows`, `FrozenColumns`) in `worksheetsById` (`Y.Map`)
    * without touching individual cell entries in `sheetCellsByCoord` (`Accept #1`).
@@ -1498,13 +1684,19 @@ export class DocumentCollaborationSession {
    * Sends a `save-version` control frame (`MSG_CONTROL = 2`) to the collaboration server
    * to compact the active room into a new immutable `MJ: Artifact Versions` record.
    */
-  public RequestSaveVersion(): boolean {
+  public RequestSaveVersion(thumbnailDataUrl?: string | null): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.canEdit) {
       return false;
     }
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MSG_CONTROL);
-    encoding.writeVarString(encoder, JSON.stringify({ action: 'save-version' }));
+    const framePayload: { action: 'save-version'; thumbnailDataUrl?: string } = {
+      action: 'save-version',
+    };
+    if (thumbnailDataUrl && thumbnailDataUrl.startsWith('data:image/')) {
+      framePayload.thumbnailDataUrl = thumbnailDataUrl;
+    }
+    encoding.writeVarString(encoder, JSON.stringify(framePayload));
     this.socket.send(encoding.toUint8Array(encoder));
     return true;
   }
@@ -1532,11 +1724,40 @@ export class DocumentCollaborationSession {
   /**
    * Returns all active collaborators from the Yjs Awareness state map.
    */
+  private deriveActiveBlockIdFromLocation(
+    loc: CollaboratorAgentLocation | undefined,
+  ): string | undefined {
+    if (!loc) {
+      return undefined;
+    }
+    if (loc.Domain === 'spreadsheet') {
+      const sheet = loc.SheetID || loc.SheetName;
+      if (sheet && loc.Range) {
+        return `${sheet}:${loc.Range}`;
+      }
+      return loc.Range || sheet || undefined;
+    }
+    if (loc.Domain === 'slides') {
+      if (loc.SlideID) {
+        return loc.SlideID;
+      }
+      if (typeof loc.SlideNumber === 'number') {
+        return `Slide ${loc.SlideNumber}`;
+      }
+    }
+    if (loc.Domain === 'document') {
+      return loc.BlockID || loc.SectionHeading || undefined;
+    }
+    return loc.ElementID || loc.BlockID || undefined;
+  }
+
   public GetCollaborators(): CollaboratorPresence[] {
     const result: CollaboratorPresence[] = [];
     this.Awareness.getStates().forEach(
       (
         state: {
+          agentPhase?: CollaboratorPresence['AgentPhase'];
+          agentLocation?: CollaboratorAgentLocation;
           user?: {
             userId?: string | number;
             name?: string;
@@ -1546,21 +1767,56 @@ export class DocumentCollaborationSession {
             canEdit?: boolean;
             isAgent?: boolean;
             role?: string;
+            agentPresenceKey?: string;
+            agentRunId?: string;
+            agentName?: string;
+            actingForUserId?: string;
+            actingForUserName?: string;
+            actingForUserEmail?: string;
+            agentPhase?: CollaboratorPresence['AgentPhase'];
+            toolName?: string;
+            actionSummary?: string;
+            agentLocation?: CollaboratorAgentLocation;
+            timestampMs?: number;
           };
         },
         clientId: number,
       ) => {
         const u = state.user;
         if (u && typeof u.name === 'string') {
+          const isAgent = u.isAgent === true;
+          const agentLocation = state.agentLocation ?? u.agentLocation;
+          const activeBlockId =
+            typeof u.activeBlockId === 'string'
+              ? u.activeBlockId
+              : this.deriveActiveBlockIdFromLocation(agentLocation);
           result.push({
             ClientID: clientId,
             UserID: String(u.userId ?? clientId),
             Name: u.name,
             Email: typeof u.email === 'string' ? u.email : undefined,
-            Color: typeof u.color === 'string' ? u.color : 'var(--mj-brand-primary)',
-            ActiveBlockID: typeof u.activeBlockId === 'string' ? u.activeBlockId : undefined,
+            Color: SanitizeAwarenessColor(typeof u.color === 'string' ? u.color : undefined),
+            ActiveBlockID: activeBlockId,
             CanEdit: u.canEdit !== false,
-            IsAgent: u.isAgent === true || u.role === 'agent' || /\bagent\b/i.test(u.name),
+            IsAgent: isAgent,
+            AgentPresenceKey:
+              isAgent && typeof u.agentPresenceKey === 'string' ? u.agentPresenceKey : undefined,
+            AgentRunID: isAgent && typeof u.agentRunId === 'string' ? u.agentRunId : undefined,
+            AgentName: isAgent && typeof u.agentName === 'string' ? u.agentName : undefined,
+            ActingForUserID:
+              isAgent && typeof u.actingForUserId === 'string' ? u.actingForUserId : undefined,
+            ActingForUserName:
+              isAgent && typeof u.actingForUserName === 'string' ? u.actingForUserName : undefined,
+            ActingForUserEmail:
+              isAgent && typeof u.actingForUserEmail === 'string'
+                ? u.actingForUserEmail
+                : undefined,
+            AgentPhase: isAgent ? (state.agentPhase ?? u.agentPhase) : undefined,
+            ToolName: isAgent && typeof u.toolName === 'string' ? u.toolName : undefined,
+            ActionSummary:
+              isAgent && typeof u.actionSummary === 'string' ? u.actionSummary : undefined,
+            AgentLocation: isAgent ? agentLocation : undefined,
+            TimestampMs: isAgent && typeof u.timestampMs === 'number' ? u.timestampMs : undefined,
           });
         }
       },
@@ -1582,6 +1838,9 @@ export class DocumentCollaborationSession {
     this.versionSaved$.complete();
     this.mergeConflict$.complete();
     this.liveSyncUnavailable$.complete();
+    this.destroyUndoManager();
+    this.canUndo$.complete();
+    this.canRedo$.complete();
     this.Awareness.destroy();
     this.Doc.destroy();
     this.onDestroyed?.(this);
@@ -1954,6 +2213,15 @@ export class DocumentCollaborationSession {
     workbookMeta.set('Title', parsed.Title || 'Workbook');
     workbookMeta.set('ActiveSheetID', parsed.ActiveSheetID || parsed.Worksheets[0].SheetID);
     workbookMeta.set('NamedRanges', JSON.stringify(parsed.NamedRanges ?? []));
+    if (
+      typeof parsed.PreferredObjectsPaneHeightPx === 'number' &&
+      Number.isFinite(parsed.PreferredObjectsPaneHeightPx) &&
+      parsed.PreferredObjectsPaneHeightPx > 0
+    ) {
+      workbookMeta.set('PreferredObjectsPaneHeightPx', String(Math.round(parsed.PreferredObjectsPaneHeightPx)));
+    } else {
+      workbookMeta.delete('PreferredObjectsPaneHeightPx');
+    }
 
     const nextSheetIds: string[] = [];
     const activeCellKeys = new Set<string>();
@@ -2085,6 +2353,9 @@ export class DocumentCollaborationSession {
       namedRanges = SafeJSONParse<SpreadsheetNamedRangeSpec[]>(rawNamedRanges) ?? [];
     }
 
+    const rawPrefPaneHeight = workbookMeta.get('PreferredObjectsPaneHeightPx');
+    const parsedPrefPaneHeight = rawPrefPaneHeight ? Number(rawPrefPaneHeight) : NaN;
+
     const nowIso = new Date().toISOString();
     const wb: WorkbookSpec = {
       WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
@@ -2092,10 +2363,16 @@ export class DocumentCollaborationSession {
       ActiveSheetID: workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID,
       Worksheets: worksheets,
       NamedRanges: namedRanges,
+      ...(Number.isFinite(parsedPrefPaneHeight) && parsedPrefPaneHeight > 0
+        ? { PreferredObjectsPaneHeightPx: Math.round(parsedPrefPaneHeight) }
+        : {}),
       CreatedAt: nowIso,
       UpdatedAt: nowIso,
     };
 
+    // Bind `wb` in SpreadsheetEngine before per-sheet reindex so cross-sheet
+    // `FormulaStable` references (@SHEET_CELL, @SHEET_RANGE, etc.) resolve instead of #REF!
+    SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
     for (const ws of wb.Worksheets) {
       SpreadsheetEngine.Instance.ReindexWorksheetAndResolveFormulas(ws);
     }
@@ -2297,6 +2574,13 @@ export class DocumentCollaborationService implements OnDestroy {
   }
   private readonly slashCommands: ReadonlyArray<DocumentSlashCommand> = [
     {
+      Command: '/ai',
+      Label: 'Ask AI',
+      Description: 'Open the slide-in AI Assistant to draft, rewrite, or summarize using this document',
+      Category: 'AI Assistant',
+      Icon: 'fa-wand-magic-sparkles',
+    },
+    {
       Command: '/paragraph',
       Label: 'Paragraph',
       Description: 'Standard body text paragraph block',
@@ -2422,6 +2706,22 @@ export class DocumentCollaborationService implements OnDestroy {
       Description: 'Embed any MemberJunction Artifact with version pinning and inline rendering',
       Category: 'Embedded Artifact',
       Icon: 'fa-cube',
+      BlockType: 'Artifact',
+    },
+    {
+      Command: '/sheet-chart',
+      Label: 'Spreadsheet Chart',
+      Description: 'Embed a live chart from an MJ Spreadsheet workbook with version pinning',
+      Category: 'Embedded Artifact',
+      Icon: 'fa-chart-column',
+      BlockType: 'Artifact',
+    },
+    {
+      Command: '/sheet-range',
+      Label: 'Spreadsheet Range',
+      Description: 'Embed a live cell range (e.g. A1:D8) from an MJ Spreadsheet workbook',
+      Category: 'Embedded Artifact',
+      Icon: 'fa-table-cells',
       BlockType: 'Artifact',
     },
   ];
@@ -3127,6 +3427,7 @@ export class DocumentCollaborationService implements OnDestroy {
     content: string,
     saveVersion = true,
     providerOverride?: IMetadataProvider | null,
+    thumbnailDataUrl?: string | null,
   ): Promise<{
     HandledByServer: boolean;
     Success: boolean;
@@ -3143,6 +3444,7 @@ export class DocumentCollaborationService implements OnDestroy {
         artifactId,
         content,
         saveVersion,
+        ...(thumbnailDataUrl ? { thumbnailDataUrl } : {}),
       });
       const payload = gqlRes?.CommitArtifactInlineEdit;
       if (!payload) {
@@ -3338,11 +3640,14 @@ export class DocumentCollaborationService implements OnDestroy {
    * Returns `/slash` commands filtered by an optional query string.
    */
   public GetSlashCommands(query = ''): DocumentSlashCommand[] {
+    const enabledCommands = ARTIFACT_AI_ASSISTANT_ENABLED
+      ? this.slashCommands
+      : this.slashCommands.filter((cmd) => cmd.Command !== '/ai');
     const trimmed = query.trim().toLowerCase().replace(/^\//, '');
     if (!trimmed) {
-      return [...this.slashCommands];
+      return [...enabledCommands];
     }
-    return this.slashCommands.filter(
+    return enabledCommands.filter(
       (cmd) =>
         cmd.Command.toLowerCase().includes(trimmed) ||
         cmd.Label.toLowerCase().includes(trimmed) ||

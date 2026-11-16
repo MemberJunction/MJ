@@ -1054,6 +1054,32 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
   public Has(key: string): boolean {
     return this.store.Has(key);
   }
+
+  /**
+   * Returns true as soon as at least one live entry in the store satisfies `filter`
+   * (or when the store is non-empty if `filter` is omitted). Short-circuits on the
+   * first match without allocating arrays or scoring vectors, allowing callers to
+   * skip expensive query-embedding generation when zero candidates can match.
+   */
+  public HasMatching(filter?: (metadata: TMetadata) => boolean): boolean {
+    if (this.store.Size === 0) {
+      return false;
+    }
+    if (!filter) {
+      return true;
+    }
+    const rowCount = this.store.RowCount;
+    for (let row = 0; row < rowCount; row++) {
+      if (!this.store.IsLive(row)) {
+        continue;
+      }
+      const meta = this.store.MetadataAt(row);
+      if (meta !== undefined && filter(meta)) {
+        return true;
+      }
+    }
+    return false;
+  }
   
   /**
    * Retrieves a specific vector by its key
