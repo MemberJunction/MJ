@@ -54,8 +54,13 @@ Every Wave 0+ primitive ships with:
 
 ### 2.2 Open axes (D2)
 Closed union types for visual axes (`role`, `tone`, `density`, `emphasis`) are prohibited unless they are defaults over an open string axis.
-- **Inputs accept `string` with documented defaults** (e.g. `Tone = Input<string>('neutral')`, `Role = Input<string>('surface')`).
-- **Runtime variable mapping**: known values map to Tier 2 semantic variables; unknown brand-defined names resolve through CSS custom properties (`data-tone="..."`, `data-role="..."`, or `--mj-tone-<name>-*`) and fall back to the author's explicit `Emphasis` (`solid`, `subtle`, `outline`, `ghost`) or neutral defaults without throwing or dropping styles.
+- **Inputs accept `string` with documented defaults** (e.g. `Tone = input<string>('neutral', { alias: 'tone' })`, `VisualRole = input<string>('surface', { alias: 'visual-role' })`). Note: the visual role axis uses `VisualRole` / `visual-role` so it never collides with HTML's native ARIA `role` attribute.
+- **Runtime variable mapping**: primitives bind runtime private variables on their host (`--_mj-tone-text: var(--mj-tone-<name>-text, ...)`, `--_mj-role-bg: var(--mj-role-<name>-bg, ...)`) so a brand adds a custom tone or role purely by declaring `--mj-tone-<name>-*` or `--mj-role-<name>-*` tokens in `:root` without writing CSS selectors against primitive internals.
+
+### 2.3 PascalCase public members vs. HTML / Angular Elements attribute aliases
+MemberJunction's TypeScript naming standard requires PascalCase public class members (`Density`, `Interactive`, `AllowPhoneSheet`), while HTML parsers lowercase custom-element attribute names (`density`, `interactive`, `allow-phone-sheet`).
+- **Rule**: Every primitive declares PascalCase signal properties in TypeScript with an explicit lowercase/kebab-case `alias` (`public readonly AllowPhoneSheet = input(true, { alias: 'allow-phone-sheet', transform: booleanAttribute })`).
+- **Why**: TypeScript consumers and `mj standards check` see PascalCase class members, while Angular templates and `createCustomElement`'s native `observedAttributes` share one standard kebab-case HTML attribute contract with zero `MutationObserver` workarounds. Primitives run zoneless (`provideZonelessChangeDetection()`) and never bundle `zone.js` into Angular Elements.
 
 ---
 
@@ -156,7 +161,8 @@ A single CDK-backed service pair replaces the four separate overlay implementati
 ### 5.1 `MJLayerService` (on `@angular/cdk/overlay` + `@angular/cdk/a11y`)
 - **Single overlay stack**: Tracks open layer refs in a LIFO stack (`MJLayerRef[]`). Escape and backdrop clicks target only the topmost dismissible layer.
 - **Z-index ladder**: Managed by CDK `OverlayContainer` order plus `--mj-z-overlay` base token, eliminating the 5 hardcoded z-index bands (`1000`, `1200`, `9998`, `10000`, `10001`, `20000`) for new/migrated layers.
-- **Focus trap & restore**: Uses `ConfigurableFocusTrapFactory` (`@angular/cdk/a11y`) on modal/sheet/panel layers, moves initial focus to `[data-autofocus]` or the first tabbable element (or container `tabindex="-1"`), and restores focus to the trigger element on close.
+- **Focus trap, popover/menu entry, & restore**: Uses `ConfigurableFocusTrapFactory` (`@angular/cdk/a11y`) on modal/sheet/panel layers, moves initial focus into both modal and non-modal `popover`/`menu` portals (since CDK portals render at the end of `document.body` outside natural DOM Tab order), synchronizes `aria-expanded` on anchor triggers, provides Arrow/Home/End roving focus on `Kind="menu"`, and restores focus to the trigger element on close.
+- **Angular Elements portal safety (`DomPortal`)**: Uses CDK `DomPortal` backed by a hidden staging wrapper (`.mj-layer-staging`) rather than `TemplatePortal` when hosting custom elements so nested Angular Elements are not destroyed by `@angular/elements`'s disconnect timer while closed.
 - **Ref-counted scroll lock**: Replaces direct `document.body.style.overflow = 'hidden'` mutations with a ref-counted lock (or CDK `BlockScrollStrategy`) so closing a nested modal never unlocks scroll while a parent sheet is still open.
 - **Responsive collapse**: A `layer` configured as `Kind="dialog"` automatically renders as a bottom sheet on phone viewports (`@media` / `PhoneViewport` breakpoint) unless `AllowPhoneSheet="false"`.
 
@@ -205,7 +211,9 @@ A horizontal flex/grid item primitive for list items, nav rows, menu items, pick
   - `Tone: string = 'neutral'` (open axis)
 - **Named parts**: `mjRowLeading` (icon/avatar/checkbox), `mjRowContent` (primary + secondary text), `mjRowTrailing` (badge/action/chevron). Any part can be omitted or reordered in the template without breaking layout.
 - **Exposed tokens**: `--mj-row-min-height`, `--mj-row-padding-inline`, `--mj-row-padding-block`, `--mj-row-gap`, `--mj-row-bg`, `--mj-row-bg-hover`, `--mj-row-bg-selected`, `--mj-row-radius`.
-- **Accessibility**: Visible focus ring (`--mj-focus-ring`), `aria-selected` / `aria-disabled` when interactive, 44px minimum touch target on `pointer: coarse`.
+- **Accessibility (WCAG 4.1.2)**:
+  - When `Interactive` is `false` (default), `mj-row` is a pure layout container with no `role` and no `tabindex`; rows that pair a primary link/button with a trailing action button MUST keep `Interactive="false"` so interactive controls are siblings, never nested.
+  - When `Interactive` is `true`, `mj-row` requires an explicit `ItemRole` (`'option' | 'menuitem' | 'menuitemradio' | 'button'`, defaulting to `'option'`), emits the matching `aria-selected` / `aria-checked` / `aria-pressed` state, renders `--mj-focus-ring`, enforces a 44px minimum target on `pointer: coarse`, and guards against nested interactive children.
 
 ---
 
