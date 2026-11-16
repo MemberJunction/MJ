@@ -364,19 +364,21 @@ export class ColumnStatsCache {
           const cachedStats = tableStats.columns.get(column.name);
           if (!cachedStats) continue;
 
-          // Merge cached stats into column.statistics
+          // Merge cached stats into column.statistics while preserving richer DataSampler fields (min, max, avg, stdDev)
+          const existing = column.statistics;
           column.statistics = {
-            totalRows: cachedStats.totalRows,
-            distinctCount: cachedStats.distinctCount,
-            uniquenessRatio: cachedStats.uniqueness,
-            nullCount: cachedStats.nullCount,
-            nullPercentage: cachedStats.nullPercentage,
+            ...existing,
+            totalRows: existing?.totalRows ?? cachedStats.totalRows,
+            distinctCount: existing?.distinctCount ?? cachedStats.distinctCount,
+            uniquenessRatio: existing?.uniquenessRatio ?? cachedStats.uniqueness,
+            nullCount: existing?.nullCount ?? cachedStats.nullCount,
+            nullPercentage: existing?.nullPercentage ?? cachedStats.nullPercentage * 100,
             dataPattern: cachedStats.dataPattern,
-            sampleValues: cachedStats.sampleValues,
-            valueDistribution: cachedStats.valueDistribution,
-            minValue: cachedStats.minValue,
-            maxValue: cachedStats.maxValue,
-            avgLength: cachedStats.avgLength,
+            sampleValues: existing?.sampleValues?.length ? existing.sampleValues : cachedStats.sampleValues,
+            valueDistribution: existing?.valueDistribution ?? cachedStats.valueDistribution,
+            minValue: existing?.minValue ?? cachedStats.minValue,
+            maxValue: existing?.maxValue ?? cachedStats.maxValue,
+            avgLength: existing?.avgLength ?? cachedStats.avgLength,
             computedAt: cachedStats.computedAt,
             queryTimeMs: cachedStats.queryTimeMs
           };
@@ -389,4 +391,74 @@ export class ColumnStatsCache {
   public mergeIntoSchemas(schemas: import('../types/state.js').SchemaDefinition[]): void {
     return this.MergeIntoSchemas(schemas);
   }
+
+  /**
+   * Seed the discovery cache from `ColumnDefinition.statistics` already gathered
+   * during table sampling or carried forward from a prior incremental run.
+   * Returns the number of columns seeded.
+   */
+  public SeedFromSchemas(schemas: import('../types/state.js').SchemaDefinition[]): number {
+    let seeded = 0;
+    for (const schema of schemas) {
+      for (const table of schema.tables) {
+        for (const col of table.columns) {
+          if (!col.statistics) continue;
+          this.SetColumnStats(buildCachedStatsFromColumn(schema.name, table.name, col));
+          seeded++;
+        }
+      }
+    }
+    return seeded;
+  }
+}
+
+function buildCachedStatsFromColumn(
+  schemaName: string,
+  tableName: string,
+  col: import('../types/state.js').ColumnDefinition,
+): CachedColumnStats {
+  const s = col.statistics!;
+  const totalRows = s.totalRows ?? 0;
+  const uniqueness = s.uniquenessRatio ?? (totalRows > 0 ? s.distinctCount / totalRows : 0);
+  const samples: Array<string | number | null> = Array.isArray(s.sampleValues) ? s.sampleValues : [];
+  const hasBlankOrZero = samples.some(
+    (v) => v === '' || v === 0 || v === '0' || (typeof v === 'string' && v.trim() === ''),
+  );
+  return {
+    schemaName,
+    tableName,
+    columnName: col.name,
+    dataType: col.dataType,
+    totalRows,
+    nullCount: s.nullCount,
+    nullPercentage: totalRows > 0 ? s.nullCount / totalRows : 0,
+    distinctCount: s.distinctCount,
+    uniqueness,
+    minValue: s.minValue ?? s.min,
+    maxValue: s.maxValue ?? s.max,
+    avgLength: s.avgLength,
+    dataPattern: s.dataPattern ?? inferPatternFromSamples(samples, col.dataType),
+    sampleValues: samples,
+    valueDistribution: s.valueDistribution,
+    pkEligible: s.nullCount === 0 && !hasBlankOrZero && uniqueness === 1.0 && totalRows > 0,
+    fkEligible: true,
+    computedAt: s.computedAt ?? new Date().toISOString(),
+    queryTimeMs: s.queryTimeMs ?? 0,
+  };
+}
+
+function inferPatternFromSamples(
+  samples: Array<string | number | null>,
+  dataType: string,
+): CachedColumnStats['dataPattern'] {
+  const lower = dataType.toLowerCase();
+  if (lower.includes('uniqueidentifier') || lower.includes('uuid')) return 'guid';
+  const nonNull = samples.filter((v): v is string | number => v !== null && v !== undefined);
+  if (nonNull.length > 0 && nonNull.every((v) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(v))) {
+    return 'guid';
+  }
+  if (lower.includes('int') && nonNull.every((v) => typeof v === 'number')) {
+    return 'sequential';
+  }
+  return 'unknown';
 }

@@ -139,6 +139,8 @@ export class Introspector {
           isNullable: col.isNullable,
           isPrimaryKey: col.isPrimaryKey,
           isForeignKey: col.isForeignKey,
+          isCatalogPrimaryKey: col.isPrimaryKey,
+          isCatalogForeignKey: col.isForeignKey,
           checkConstraint: col.checkConstraint,
           defaultValue: col.defaultValue,
           maxLength: col.maxLength,

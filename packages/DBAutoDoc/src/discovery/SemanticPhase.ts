@@ -59,6 +59,12 @@ import {
 import { ColumnClusterer, ClustererInputColumn } from './ColumnClusterer.js';
 import { CreateEmbeddingProvider, EmbeddingProviderName } from './EmbeddingProvider.js';
 import { DefaultEmbeddingProviderFor } from './embedding-provider-default.js';
+import { CachedTableNormalization } from '../types/incremental.js';
+import {
+    BuildUpdatedNormalizationCache,
+    EmbedNormalizedColumnsWithCache,
+    PartitionTableNormalizations,
+} from '../incremental/OrganicKeyCache.js';
 
 const AUDIT_COLUMN_PATTERN = /^(modified|created|updated|inserted|changed)(date|at|time|by|on)?$|^rowguid$|^timestamp$|^row_?version$|^__mj_.*$/i;
 const NON_VALUEMATCHABLE_TYPES = /(binary|blob|image|varbinary|xml|geography|geometry|hierarchyid|sql_variant)/i;
@@ -108,6 +114,7 @@ type RawCluster = { memberIndexes: number[]; members: OrganicKeyClusterMember[];
 export interface SemanticPhaseResult {
     clusters: OrganicKeyCluster[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     tokens: { input: number; output: number; total: number };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    CachedNormalizations?: Record<string, CachedTableNormalization>;
     Summary: {
         columnsInScope: number;
         columnsNormalized: number;
@@ -125,6 +132,8 @@ export interface SemanticPhaseResult {
          * silent quality regression.
          */
         tablesSkippedForBudget: number;
+        tablesNormalizedCount?: number;
+        tablesCachedCount?: number;
     };
 }
 
@@ -149,42 +158,97 @@ export async function RunSemanticPhase(
     // pass cannot get past, so it has to fail here rather than after every table was normalized.
     const embedProvider = ResolveEmbeddingProvider(config, aiConfig);
 
-    // ─── 2. Normalize to business space (LLM per-table) ──────────────────────
-    progress('semantic: normalizing column descriptions to business space');
+    // ─── 2. Normalize to business space (LLM per-table, reusing incremental cache) ──
     const tableInputs = groupColumnsByTable(state, candidates);
-    const normResult = await new TableNormalizer(aiConfig).normalizeAll(tableInputs, {
-        Concurrency: config.refinementConcurrency ?? DEFAULT_DETECTOR_CONFIG.RefinementConcurrency,
-        MaxRetries: config.maxRefinementRetries ?? 2,
-        TokenBudget: config.tokenBudget,
-        OnProgress: () => {},
-    });
-    progress(`semantic: ${normResult.Normalized.length} columns kept (${normResult.rejected} rejected by PR-#2193 axes)`);
+    const priorCache = state.phases?.organicKeyDetection?.CachedNormalizations;
+    const partitioned = PartitionTableNormalizations(tableInputs, priorCache);
+    if (partitioned.CachedTablesCount > 0) {
+        progress(
+            `semantic: reusing cached normalization for ${partitioned.CachedTablesCount} unchanged table(s); normalizing ${partitioned.DirtyInputs.length} table(s)`,
+        );
+    } else {
+        progress('semantic: normalizing column descriptions to business space');
+    }
+
+    const normResult = partitioned.DirtyInputs.length > 0
+        ? await new TableNormalizer(aiConfig).normalizeAll(partitioned.DirtyInputs, {
+              Concurrency: config.refinementConcurrency ?? DEFAULT_DETECTOR_CONFIG.RefinementConcurrency,
+              MaxRetries: config.maxRefinementRetries ?? 2,
+              TokenBudget: config.tokenBudget,
+              OnProgress: () => {},
+          })
+        : { Normalized: [], rejected: 0, errors: 0, tokens: { total: 0, input: 0, output: 0 }, BudgetExhausted: false, TablesSkippedForBudget: 0 };
+
+    const allNormalized = [...partitioned.CachedNormalized, ...normResult.Normalized];
+    const totalRejected = partitioned.CachedRejectedCount + normResult.rejected;
+    const skippedLowerTables = recordDirtyRejectedCounts(
+        partitioned.DirtyInputs,
+        normResult.Normalized,
+        normResult.TablesSkippedForBudget,
+        partitioned.RejectedCountByTable,
+    );
+
+    progress(`semantic: ${allNormalized.length} columns kept (${totalRejected} rejected by PR-#2193 axes)`);
     if (normResult.BudgetExhausted) {
         progress(
             `semantic: PARTIAL — token budget reached, ${normResult.TablesSkippedForBudget} table(s) not normalized`,
         );
     }
 
-    if (normResult.Normalized.length < (config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.MinClusterSize)) {
+    if (allNormalized.length < (config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.MinClusterSize)) {
+        const minCache = BuildUpdatedNormalizationCache(
+            tableInputs,
+            allNormalized,
+            [],
+            [],
+            embedProvider.name,
+            partitioned.RejectedCountByTable,
+            skippedLowerTables,
+            priorCache,
+        );
         return {
             clusters: [],
             tokens: normResult.tokens,
+            CachedNormalizations: minCache,
             Summary: {
                 columnsInScope: candidates.length,
-                columnsNormalized: normResult.Normalized.length,
-                columnsRejectedByNormalizer: normResult.rejected,
+                columnsNormalized: allNormalized.length,
+                columnsRejectedByNormalizer: totalRejected,
                 clustersBeforeSplit: 0,
                 clustersFound: 0,
                 clustersDropped: 0,
                 tablesSkippedForBudget: normResult.TablesSkippedForBudget,
+                tablesNormalizedCount: Math.max(0, partitioned.DirtyInputs.length - normResult.TablesSkippedForBudget),
+                tablesCachedCount: partitioned.CachedTablesCount,
             },
         };
     }
 
-    // ─── 3. Embed the normalized descriptions ────────────────────────────────
-    progress(`semantic: embedding ${normResult.Normalized.length} descriptions via ${embedProvider.name}`);
-    const texts = normResult.Normalized.map((n) => buildEmbeddingText(n));
-    const embeddings = await embedProvider.embed(texts);
+    // ─── 3. Embed the normalized descriptions (reusing cached vectors when matched) ──
+    const texts = allNormalized.map((n) => buildEmbeddingText(n));
+    const embedResult = await EmbedNormalizedColumnsWithCache(
+        allNormalized,
+        texts,
+        embedProvider.name,
+        (batch) => embedProvider.embed(batch),
+        partitioned.CachedEmbeddings,
+    );
+    progress(
+        embedResult.ReusedCount > 0
+            ? `semantic: embedded ${embedResult.ComputedCount} new description(s) and reused ${embedResult.ReusedCount} cached vector(s) via ${embedProvider.name}`
+            : `semantic: embedding ${allNormalized.length} descriptions via ${embedProvider.name}`,
+    );
+    const embeddings = embedResult.Embeddings;
+    const updatedCache = BuildUpdatedNormalizationCache(
+        tableInputs,
+        allNormalized,
+        texts,
+        embeddings,
+        embedProvider.name,
+        partitioned.RejectedCountByTable,
+        skippedLowerTables,
+        priorCache,
+    );
 
     // ─── 4. Cluster columns by embedding distance ────────────────────────────
     const sensitivity = config.clusteringSensitivity ?? 'balanced';
@@ -195,7 +259,7 @@ export async function RunSemanticPhase(
         MinClusterSize: config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.MinClusterSize,
         MinDistinctTables: config.minDistinctTables ?? DEFAULT_DETECTOR_CONFIG.MinDistinctTables,
     });
-    const clustererInputs: ClustererInputColumn[] = normResult.Normalized.map((n, i) => ({
+    const clustererInputs: ClustererInputColumn[] = allNormalized.map((n, i) => ({
         schema: n.schema,
         table: n.table,
         column: n.Column,
@@ -212,7 +276,7 @@ export async function RunSemanticPhase(
     const minDistinctTables = config.minDistinctTables ?? DEFAULT_DETECTOR_CONFIG.MinDistinctTables;
     const { clusters: split, dropped } = splitClustersByConceptName(
         rawClusters,
-        normResult.Normalized,
+        allNormalized,
         minClusterSize,
         minDistinctTables,
     );
@@ -222,21 +286,24 @@ export async function RunSemanticPhase(
 
     // ─── 6. Label clusters from member votes ─────────────────────────────────
     const clusters: OrganicKeyCluster[] = split.map((rc, idx) => {
-        const memberNormalized = rc.memberIndexes.map((i) => normResult.Normalized[i]);
+        const memberNormalized = rc.memberIndexes.map((i) => allNormalized[i]);
         return labelCluster(memberNormalized, rc.members, rc.maxIntraDistance, idx);
     });
 
     return {
         clusters,
         tokens: normResult.tokens,
+        CachedNormalizations: updatedCache,
         Summary: {
             columnsInScope: candidates.length,
-            columnsNormalized: normResult.Normalized.length,
-            columnsRejectedByNormalizer: normResult.rejected,
+            columnsNormalized: allNormalized.length,
+            columnsRejectedByNormalizer: totalRejected,
             clustersBeforeSplit: rawClusters.length,
             clustersFound: clusters.length,
             clustersDropped: dropped,
             tablesSkippedForBudget: normResult.TablesSkippedForBudget,
+            tablesNormalizedCount: Math.max(0, partitioned.DirtyInputs.length - normResult.TablesSkippedForBudget),
+            tablesCachedCount: partitioned.CachedTablesCount,
         },
     };
 }
@@ -397,11 +464,37 @@ function groupColumnsByTable(state: DatabaseDocumentation, columns: NormalizerIn
         return {
             schema,
             table,
-            schemaDescription: schemaDesc.get(schema),
-            tableDescription: tableDesc.get(k),
+            SchemaDescription: schemaDesc.get(schema),
+            TableDescription: tableDesc.get(k),
             columns: cols,
         };
     });
+}
+
+function recordDirtyRejectedCounts(
+    dirtyInputs: TableNormalizationInput[],
+    freshNormalized: NormalizedColumn[],
+    skippedForBudgetCount: number,
+    rejectedByTable: Map<string, number>,
+): Set<string> {
+    const survivingCount = new Map<string, number>();
+    for (const col of freshNormalized) {
+        const key = `${col.schema}.${col.table}`.toLowerCase();
+        survivingCount.set(key, (survivingCount.get(key) ?? 0) + 1);
+    }
+    const skippedLower = new Set<string>();
+    const cutoff = Math.max(0, dirtyInputs.length - skippedForBudgetCount);
+    for (let i = 0; i < dirtyInputs.length; i++) {
+        const input = dirtyInputs[i];
+        const lower = `${input.schema}.${input.table}`.toLowerCase();
+        if (i >= cutoff) {
+            skippedLower.add(lower);
+            continue;
+        }
+        const kept = survivingCount.get(lower) ?? 0;
+        rejectedByTable.set(lower, Math.max(0, input.columns.length - kept));
+    }
+    return skippedLower;
 }
 
 /**

@@ -10,6 +10,16 @@ import { FKCandidate, FKEvidence, PKCandidate } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig } from '../types/config.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 
+/** Optional scope restricting source columns and/or target tables during incremental FK detection. */
+export interface FKDetectionScope {
+  /** Lowercase column names on `sourceTable` to evaluate; omit to evaluate all columns. */
+  SourceColumns?: ReadonlySet<string>;
+  /** Lowercase `"schema.table"` keys eligible as targets; omit to consider all tables. */
+  TargetTables?: ReadonlySet<string>;
+  /** Existing surviving FKs on `sourceTable` so GATE 5 fan-out limits account for prior targets. */
+  ExistingTableFKs?: FKCandidate[];
+}
+
 export class FKDetector {
   constructor(
     private driver: BaseAutoDocDriver,
@@ -44,7 +54,8 @@ export class FKDetector {
     sourceSchema: string,
     sourceTable: TableDefinition,
     discoveredPKs: PKCandidate[],
-    iteration: number
+    iteration: number,
+    scope?: FKDetectionScope
   ): Promise<FKCandidate[]> {
     const candidates: FKCandidate[] = [];
 
@@ -54,6 +65,10 @@ export class FKDetector {
 
     // For each column in source table
     for (const sourceColumn of sourceTable.columns) {
+      if (scope?.SourceColumns && !scope.SourceColumns.has(sourceColumn.name.toLowerCase())) {
+        continue;
+      }
+
       // Tier 1: Skip non-key data types (dates, booleans, floats — never FK columns)
       if (this.isNonKeyDataType(sourceColumn.dataType)) {
         console.log(`[FKDetector]   Skip ${sourceColumn.name} - non-key data type (${sourceColumn.dataType})`);
@@ -89,23 +104,28 @@ export class FKDetector {
       }
 
       // Find potential target tables/columns
-      const potentialTargets = this.findPotentialTargets(
+      const rawTargets = this.findPotentialTargets(
         schemas,
         sourceSchema,
         sourceTable.name,
         sourceColumn,
         discoveredPKs
       );
+      const potentialTargets = scope?.TargetTables
+        ? rawTargets.filter(t => scope.TargetTables!.has(`${t.schemaName}.${t.tableName}`.toLowerCase()))
+        : rawTargets;
 
-      console.log(`[FKDetector]   Column ${sourceColumn.name}: Found ${potentialTargets.length} potential targets`);
-      if (potentialTargets.length > 0) {
-        console.log(`[FKDetector]     Targets: ${potentialTargets.map(t => `${t.schemaName}.${t.tableName}.${t.columnName}`).join(', ')}`);
+      if (potentialTargets.length === 0) {
+        continue;
       }
+      console.log(`[FKDetector]   Column ${sourceColumn.name}: Found ${potentialTargets.length} potential targets`);
+      console.log(`[FKDetector]     Targets: ${potentialTargets.map(t => `${t.schemaName}.${t.tableName}.${t.columnName}`).join(', ')}`);
 
       // Analyze each potential target, collect per-column candidates
       const columnCandidates: FKCandidate[] = [];
       for (const target of potentialTargets) {
         const candidate = await this.analyzeFKCandidate(
+          schemas,
           sourceSchema,
           sourceTable.name,
           sourceColumn,
@@ -126,34 +146,7 @@ export class FKDetector {
         }
       }
 
-      // GATE 5: Fan-out limiter — keep only top 3 candidates per source column
-      // When a column matches many targets (e.g., BusinessEntityID in 9 tables),
-      // the correct FK is almost always among the top 3 by confidence.
-      const MAX_TARGETS_PER_COLUMN = 3;
-      if (columnCandidates.length > MAX_TARGETS_PER_COLUMN) {
-        columnCandidates.sort((a, b) => b.confidence - a.confidence);
-        const cut = columnCandidates.length - MAX_TARGETS_PER_COLUMN;
-        console.log(`[FKDetector] GATE5: ${sourceColumn.name} has ${columnCandidates.length} targets, keeping top ${MAX_TARGETS_PER_COLUMN}, cutting ${cut}`);
-        columnCandidates.length = MAX_TARGETS_PER_COLUMN;
-      }
-
-      // Fan-out penalty: when a source column has multiple FK targets,
-      // reduce confidence proportionally. This ensures multi-target FKs
-      // drop below the interim ground truth lock threshold (90) so the
-      // pruner can evaluate and pick the correct one.
-      if (columnCandidates.length > 1) {
-        let fanoutMultiplier = 1.0;
-        if (columnCandidates.length === 2) fanoutMultiplier = 0.85;
-        else if (columnCandidates.length === 3) fanoutMultiplier = 0.75;
-        else fanoutMultiplier = 0.65;
-        
-        for (const c of columnCandidates) {
-          const before = c.confidence;
-          c.confidence = Math.round(c.confidence * fanoutMultiplier);
-          console.log(`[FKDetector] Fan-out penalty: ${sourceColumn.name} -> ${c.targetTable}.${c.targetColumn} conf ${before} -> ${c.confidence} (x${fanoutMultiplier}, ${columnCandidates.length} targets)`);
-        }
-      }
-
+      this.applyFanoutGates(sourceColumn.name, columnCandidates, scope?.ExistingTableFKs);
       candidates.push(...columnCandidates);
     }
 
@@ -170,9 +163,37 @@ export class FKDetector {
     sourceSchema: string,
     sourceTable: TableDefinition,
     discoveredPKs: PKCandidate[],
-    iteration: number
+    iteration: number,
+    scope?: FKDetectionScope
   ): Promise<FKCandidate[]> {
-    return this.DetectFKCandidates(schemas, sourceSchema, sourceTable, discoveredPKs, iteration);
+    return this.DetectFKCandidates(schemas, sourceSchema, sourceTable, discoveredPKs, iteration, scope);
+  }
+
+  private applyFanoutGates(
+    sourceColumnName: string,
+    columnCandidates: FKCandidate[],
+    existingTableFKs?: FKCandidate[]
+  ): void {
+    if (columnCandidates.length === 0) return;
+    const priorForCol = (existingTableFKs ?? []).filter(
+      fk => fk.status !== 'rejected' && fk.sourceColumn.toLowerCase() === sourceColumnName.toLowerCase()
+    );
+    const MAX_TARGETS_PER_COLUMN = 3;
+    const combinedCount = priorForCol.length + columnCandidates.length;
+
+    if (combinedCount > MAX_TARGETS_PER_COLUMN) {
+      columnCandidates.sort((a, b) => b.confidence - a.confidence);
+      const allowedNew = Math.max(0, MAX_TARGETS_PER_COLUMN - priorForCol.length);
+      columnCandidates.length = allowedNew;
+    }
+
+    const effectiveTotal = priorForCol.length + columnCandidates.length;
+    if (effectiveTotal > 1 && columnCandidates.length > 0) {
+      const fanoutMultiplier = effectiveTotal === 2 ? 0.85 : effectiveTotal === 3 ? 0.75 : 0.65;
+      for (const c of columnCandidates) {
+        c.confidence = Math.round(c.confidence * fanoutMultiplier);
+      }
+    }
   }
 
   /**
@@ -296,7 +317,23 @@ export class FKDetector {
       }
     }
 
-    return targets;
+    return this.deduplicateTargets(targets);
+  }
+
+  private deduplicateTargets(
+    targets: Array<{ schemaName: string; tableName: string; columnName: string; isPK: boolean }>
+  ): Array<{ schemaName: string; tableName: string; columnName: string; isPK: boolean }> {
+    const byKey = new Map<string, { schemaName: string; tableName: string; columnName: string; isPK: boolean }>();
+    for (const target of targets) {
+      const key = `${target.schemaName}.${target.tableName}.${target.columnName}`.toLowerCase();
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, target);
+      } else if (target.isPK && !existing.isPK) {
+        existing.isPK = true;
+      }
+    }
+    return Array.from(byKey.values());
   }
 
   /**
@@ -386,6 +423,7 @@ export class FKDetector {
    * Analyze a specific FK candidate
    */
   private async analyzeFKCandidate(
+    schemas: SchemaDefinition[],
     sourceSchema: string,
     sourceTable: string,
     sourceColumn: ColumnDefinition,
@@ -395,11 +433,17 @@ export class FKDetector {
     targetIsPK: boolean,
     iteration: number
   ): Promise<FKCandidate | null> {
-    // Get target column info
-    const targetColumnDef = await this.driver.getColumnInfo(targetSchema, targetTable, targetColumn);
+    // Get target column type from in-memory schemas first, falling back to driver catalog query
+    const inMemoryTargetCol = schemas
+      .find(s => s.name === targetSchema)?.tables
+      .find(t => t.name === targetTable)?.columns
+      .find(c => c.name === targetColumn);
+    const targetDataType = inMemoryTargetCol
+      ? inMemoryTargetCol.dataType
+      : (await this.driver.getColumnInfo(targetSchema, targetTable, targetColumn)).type;
 
     // Check data type match
-    const dataTypeMatch = this.isDataTypeCompatible(sourceColumn.dataType, targetColumnDef.type);
+    const dataTypeMatch = this.isDataTypeCompatible(sourceColumn.dataType, targetDataType);
     if (!dataTypeMatch) {
       return null; // Data types must match
     }
@@ -426,20 +470,18 @@ export class FKDetector {
       return null;
     }
 
-    // Get column statistics for cardinality analysis
-    const sourceStats = await this.driver.getColumnStatisticsForDiscovery(
+    // Get column statistics for cardinality analysis (reuse statsCache when available)
+    const sourceStats = await this.resolveDiscoveryColumnCounts(
       sourceSchema,
       sourceTable,
       sourceColumn.name,
-      sourceColumn.dataType,
-      this.config.sampling.maxRowsPerTable
+      sourceColumn.dataType
     );
-    const targetStats = await this.driver.getColumnStatisticsForDiscovery(
+    const targetStats = await this.resolveDiscoveryColumnCounts(
       targetSchema,
       targetTable,
       targetColumn,
-      targetColumnDef.type,
-      this.config.sampling.maxRowsPerTable
+      targetDataType
     );
 
     // Calculate cardinality ratio (should be many:one for FK)
@@ -562,6 +604,25 @@ export class FKDetector {
     return ['varchar', 'char', 'nvarchar', 'nchar', 'text', 'ntext'].some(t => normalized.includes(t));
   }
 
+  private async resolveDiscoveryColumnCounts(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    dataType: string
+  ): Promise<{ totalRows: number; nullCount: number; distinctCount: number }> {
+    const cached = this.statsCache?.getColumnStats(schemaName, tableName, columnName);
+    if (cached) {
+      return cached;
+    }
+    return this.driver.getColumnStatisticsForDiscovery(
+      schemaName,
+      tableName,
+      columnName,
+      dataType,
+      this.config.sampling.maxRowsPerTable
+    );
+  }
+
   /**
    * Tier 2: Sample a few values from a string column and check if they look like
    * key values (UUIDs, numeric strings, short codes) vs data values (emails, URLs,
@@ -573,7 +634,10 @@ export class FKDetector {
     columnName: string
   ): Promise<boolean> {
     try {
-      const samples = await this.driver.getSampleValues(schemaName, tableName, columnName, 10);
+      const cachedSamples = this.statsCache?.getColumnStats(schemaName, tableName, columnName)?.sampleValues;
+      const samples = cachedSamples && cachedSamples.length > 0
+        ? cachedSamples
+        : await this.driver.getSampleValues(schemaName, tableName, columnName, 10);
       if (!samples || samples.length === 0) return false;
 
       // Filter out nulls and empty strings

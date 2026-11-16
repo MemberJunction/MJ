@@ -22,6 +22,9 @@ export * from './state/index.js';
 export * from './core/index.js';
 export * from './core/AnalysisOrchestrator.js';
 
+// Incremental analysis
+export * from './incremental/index.js';
+
 // Generators
 export * from './generators/index.js';
 
