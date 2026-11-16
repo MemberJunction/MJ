@@ -157,6 +157,19 @@ describe('DDLGenerator', () => {
             expect(sql).toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', N'COLUMN', N'__mj_integration_SyncStatus')");
             expect(sql).toContain('IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty');
         });
+
+        it('should emit COMMENT ON TABLE and COMMENT ON COLUMN statements for PostgreSQL', () => {
+            const config = MakeTableConfig({
+                Description: "HubSpot's primary contact table",
+                Columns: [
+                    MakeColumn({ TargetColumnName: 'Email', Description: "Contact's primary email" }),
+                ],
+            });
+            const sql = gen.GenerateCreateTable(config, 'postgresql');
+            expect(sql).toContain(`COMMENT ON TABLE "hubspot"."Contact" IS 'HubSpot''s primary contact table';`);
+            expect(sql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Email" IS 'Contact''s primary email';`);
+            expect(sql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."__mj_integration_SyncStatus" IS`);
+        });
     });
 
     describe('GenerateAlterTableAddColumn', () => {
@@ -170,6 +183,7 @@ describe('DDLGenerator', () => {
             expect(sql).toContain('IF NOT EXISTS (SELECT 1 FROM sys.columns');
             expect(sql).toContain("OBJECT_ID(N'[hubspot].[Contact]')");
             expect(sql).toContain("name = N'Phone'");
+            expect(sql).not.toContain('sp_addextendedproperty');
         });
 
         it('should generate PostgreSQL ADD COLUMN with native IF NOT EXISTS (idempotent re-apply)', () => {
@@ -177,6 +191,34 @@ describe('DDLGenerator', () => {
             const sql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'postgresql');
             expect(sql).toContain('ALTER TABLE "hubspot"."Contact"');
             expect(sql).toContain('ADD COLUMN IF NOT EXISTS "Phone" VARCHAR(50) NULL');
+            expect(sql).not.toContain('COMMENT ON');
+        });
+
+        it('should emit guarded MS_Description on SQL Server ADD column when Description is set', () => {
+            const col = MakeColumn({
+                TargetColumnName: 'Phone',
+                TargetSqlType: 'NVARCHAR(50)',
+                IsNullable: true,
+                Description: "Contact's phone number",
+            });
+            const sql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'sqlserver');
+            expect(sql).toContain('ADD [Phone] NVARCHAR(50) NULL');
+            expect(sql).toContain("IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', N'COLUMN', N'Phone'))");
+            expect(sql).toContain("EXEC sp_addextendedproperty");
+            expect(sql).toContain("@value = N'Contact''s phone number'");
+            expect(sql).toContain("@level2type = N'COLUMN', @level2name = 'Phone'");
+        });
+
+        it('should emit COMMENT ON COLUMN on PostgreSQL ADD column when Description is set', () => {
+            const col = MakeColumn({
+                TargetColumnName: 'Phone',
+                TargetSqlType: 'VARCHAR(50)',
+                IsNullable: true,
+                Description: "Contact's phone number",
+            });
+            const sql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'postgresql');
+            expect(sql).toContain('ADD COLUMN IF NOT EXISTS "Phone" VARCHAR(50) NULL');
+            expect(sql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Phone" IS 'Contact''s phone number';`);
         });
     });
 

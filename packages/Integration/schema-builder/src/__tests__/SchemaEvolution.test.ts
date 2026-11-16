@@ -268,6 +268,27 @@ describe('SchemaEvolution', () => {
             expect(sql).toContain('ADD [Phone]');
         });
 
+        it('should emit column descriptions on added columns for SQL Server and PostgreSQL', () => {
+            const diff = {
+                AddedColumns: [
+                    { SourceFieldName: 'phone', TargetColumnName: 'Phone', TargetSqlType: 'NVARCHAR(50)', IsNullable: true, MaxLength: 50, Precision: null, Scale: null, DefaultValue: null, Description: 'Primary business phone number' },
+                ],
+                ModifiedColumns: [],
+                RemovedColumns: [],
+            };
+            const ssSql = evo.GenerateEvolutionMigration(diff, 'hubspot', 'Contact', 'sqlserver');
+            expect(ssSql).toContain('sp_addextendedproperty');
+            expect(ssSql).toContain("@value = N'Primary business phone number'");
+            expect(ssSql).toContain("@level2name = 'Phone'");
+
+            const pgDiff = {
+                ...diff,
+                AddedColumns: [{ ...diff.AddedColumns[0], TargetSqlType: 'VARCHAR(50)' }],
+            };
+            const pgSql = evo.GenerateEvolutionMigration(pgDiff, 'hubspot', 'Contact', 'postgresql');
+            expect(pgSql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."Phone" IS 'Primary business phone number';`);
+        });
+
         it('should produce ALTER TABLE ALTER for modified columns', () => {
             const diff = {
                 AddedColumns: [],

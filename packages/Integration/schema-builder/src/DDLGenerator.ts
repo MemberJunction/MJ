@@ -9,6 +9,22 @@ import type { DatabasePlatform, TargetColumnConfig, TargetTableConfig, ColumnMod
 /** Characters allowed in identifiers (schema, table, column names). */
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+/** Standard descriptions for the `__mj_integration_*` tracking columns on every integration table. */
+export const STANDARD_COLUMN_DESCRIPTIONS: Record<string, string> = {
+    '__mj_integration_SyncStatus': 'Current per-record sync status: Active, Archived, Error, or Conflict (both sides changed the same field; the record awaits resolution per the entity map ConflictResolution policy).',
+    '__mj_integration_LastSyncedAt': 'Timestamp of the last successful sync for this record',
+    '__mj_integration_LastSyncedSnapshot': 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
+    '__mj_integration_SyncMessage': 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
+    '__mj_integration_ContentHash': 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark.',
+    '__mj_integration_CustomOverflow': 'Backend staging (system) column: JSON of source fields a record returned that have no field map yet — the "extra" keys this table has no column for. A post-sync Runtime-Schema-Updation pass promotes pervasive keys to real columns and clears them here. Not user-facing metadata; transient until promotion.',
+    '__mj_integration_ExternalVersion': 'The external system’s version/etag/modified token for the last-synced state, used for optimistic-concurrency (OCC) detection on bidirectional push. Null when the source exposes no version token.',
+    '__mj_integration_LastSeenModifiedValue': 'The watermark / last-modified value observed for THIS record on the last sync (per-record, independent of the entity-map-level CompanyIntegrationSyncWatermark).',
+    '__mj_integration_LastReconciledAt': 'Timestamp this record was last confirmed against the source system. Lets a reconcile find records not seen recently (delete-detection candidates).',
+    '__mj_integration_LastWriterDirection': 'Which side last wrote this row: "Pull" (external→MJ) or "Push" (MJ→external). Informs conflict handling and audit.',
+    '__mj_integration_IsTombstoned': 'Explicit soft-delete flag, set when the record is detected as deleted/archived upstream. A queryable tombstone, distinct from the SyncStatus="Archived" text status.',
+    '__mj_integration_DeletedDetectedAt': 'Timestamp the upstream deletion was detected (set alongside IsTombstoned). Null while the record is live.',
+};
+
 /**
  * Generates DDL SQL for creating and altering integration tables.
  */
@@ -127,9 +143,11 @@ export class DDLGenerator {
         const createTable = this.generateIdempotentCreateTableStatement(fullTable, body, platform);
 
         const trailing: string[] = [...softIndexes];
-        // Generate extended properties for descriptions (SQL Server only)
+        // Generate extended properties for descriptions (SQL Server) or COMMENT ON (PostgreSQL)
         if (platform === 'sqlserver') {
             trailing.push(...this.GenerateExtendedProperties(config));
+        } else if (platform === 'postgresql') {
+            trailing.push(...this.GeneratePostgresComments(config));
         }
 
         if (trailing.length > 0) {
@@ -167,7 +185,7 @@ export class DDLGenerator {
         const props: string[] = [];
 
         // Table-level description
-        if (config.Description) {
+        if (config.Description && config.Description.trim().length > 0) {
             const escaped = EscapeSQLString(config.Description);
             const exec =
                 `EXEC sp_addextendedproperty\n` +
@@ -179,22 +197,13 @@ export class DDLGenerator {
         }
 
         // Standard column descriptions
-        const standardDescriptions: Record<string, string> = {
-            '__mj_integration_SyncStatus': 'Current per-record sync status: Active, Archived, Error, or Conflict (both sides changed the same field; the record awaits resolution per the entity map ConflictResolution policy).',
-            '__mj_integration_LastSyncedAt': 'Timestamp of the last successful sync for this record',
-            '__mj_integration_LastSyncedSnapshot': 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
-            '__mj_integration_SyncMessage': 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
-            '__mj_integration_ContentHash': 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark.',
-            '__mj_integration_CustomOverflow': 'Backend staging (system) column: JSON of source fields a record returned that have no field map yet — the "extra" keys this table has no column for. A post-sync Runtime-Schema-Updation pass promotes pervasive keys to real columns and clears them here. Not user-facing metadata; transient until promotion.',
-        };
-
-        for (const [colName, desc] of Object.entries(standardDescriptions)) {
+        for (const [colName, desc] of Object.entries(STANDARD_COLUMN_DESCRIPTIONS)) {
             props.push(this.makeColumnExtendedProperty(config.SchemaName, config.TableName, colName, desc));
         }
 
         // User-configured column descriptions
         for (const col of config.Columns) {
-            if (col.Description) {
+            if (col.Description && col.Description.trim().length > 0) {
                 props.push(this.makeColumnExtendedProperty(
                     config.SchemaName, config.TableName, col.TargetColumnName, col.Description
                 ));
@@ -202,6 +211,38 @@ export class DDLGenerator {
         }
 
         return props;
+    }
+
+    /**
+     * Generate PostgreSQL COMMENT ON TABLE and COMMENT ON COLUMN statements for descriptions.
+     */
+    GeneratePostgresComments(config: TargetTableConfig): string[] {
+        const comments: string[] = [];
+        const fullTable = `${QuotePostgres(config.SchemaName)}.${QuotePostgres(config.TableName)}`;
+
+        if (config.Description && config.Description.trim().length > 0) {
+            comments.push(`COMMENT ON TABLE ${fullTable} IS '${EscapeSQLString(config.Description)}';`);
+        }
+
+        for (const [colName, desc] of Object.entries(STANDARD_COLUMN_DESCRIPTIONS)) {
+            comments.push(this.makePostgresColumnComment(config.SchemaName, config.TableName, colName, desc));
+        }
+
+        for (const col of config.Columns) {
+            if (col.Description && col.Description.trim().length > 0) {
+                comments.push(this.makePostgresColumnComment(
+                    config.SchemaName, config.TableName, col.TargetColumnName, col.Description
+                ));
+            }
+        }
+
+        return comments;
+    }
+
+    private makePostgresColumnComment(
+        schemaName: string, tableName: string, columnName: string, description: string
+    ): string {
+        return `COMMENT ON COLUMN ${QuotePostgres(schemaName)}.${QuotePostgres(tableName)}.${QuotePostgres(columnName)} IS '${EscapeSQLString(description)}';`;
     }
 
     private makeColumnExtendedProperty(
@@ -259,15 +300,25 @@ export class DDLGenerator {
         // fail because the column already exists. SQL Server has no `ADD COLUMN IF NOT EXISTS`, so we
         // gate with a single-statement IF over sys.columns (no BEGIN/END, so RSU's ';\n' batch chunker
         // can't split it — same shape as GuardExtendedProperty). Postgres has native IF NOT EXISTS.
+        let alterStmt: string;
         if (platform === 'sqlserver') {
             const addStmt = `ALTER TABLE ${fullTable}\n    ADD ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
-            return (
+            alterStmt =
                 `IF NOT EXISTS (SELECT 1 FROM sys.columns ` +
                 `WHERE object_id = OBJECT_ID(N'${q(schemaName)}.${q(tableName)}') ` +
-                `AND name = N'${column.TargetColumnName}')\n${addStmt}`
-            );
+                `AND name = N'${column.TargetColumnName}')\n${addStmt}`;
+        } else {
+            alterStmt = `ALTER TABLE ${fullTable}\n    ADD COLUMN IF NOT EXISTS ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
         }
-        return `ALTER TABLE ${fullTable}\n    ADD COLUMN IF NOT EXISTS ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
+
+        if (column.Description && column.Description.trim().length > 0) {
+            const descStmt = platform === 'sqlserver'
+                ? this.makeColumnExtendedProperty(schemaName, tableName, column.TargetColumnName, column.Description)
+                : this.makePostgresColumnComment(schemaName, tableName, column.TargetColumnName, column.Description);
+            return `${alterStmt}\n\n${descStmt}`;
+        }
+
+        return alterStmt;
     }
 
     /**

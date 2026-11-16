@@ -13,7 +13,7 @@ import type {
     TargetColumnConfig,
     TargetTableConfig,
 } from './interfaces.js';
-import { DDLGenerator, ValidateIdentifier } from './DDLGenerator.js';
+import { DDLGenerator, STANDARD_COLUMN_DESCRIPTIONS, ValidateIdentifier } from './DDLGenerator.js';
 import { TypeMapper } from './TypeMapper.js';
 
 /**
@@ -224,7 +224,7 @@ export class SchemaEvolution {
             { SourceFieldName: '__mj_integration_LastWriterDirection', TargetColumnName: '__mj_integration_LastWriterDirection', TargetSqlType: isSql ? 'NVARCHAR(10)' : 'VARCHAR(10)', IsNullable: true, MaxLength: 10, Precision: null, Scale: null, DefaultValue: null },
             { SourceFieldName: '__mj_integration_IsTombstoned', TargetColumnName: '__mj_integration_IsTombstoned', TargetSqlType: isSql ? 'BIT' : 'BOOLEAN', IsNullable: false, MaxLength: null, Precision: null, Scale: null, DefaultValue: isSql ? '0' : 'FALSE' },
             { SourceFieldName: '__mj_integration_DeletedDetectedAt', TargetColumnName: '__mj_integration_DeletedDetectedAt', TargetSqlType: isSql ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
-        ];
+        ].map(c => ({ ...c, Description: STANDARD_COLUMN_DESCRIPTIONS[c.TargetColumnName] }));
         return std.filter(c => !have.has(c.TargetColumnName.toLowerCase()));
     }
 
