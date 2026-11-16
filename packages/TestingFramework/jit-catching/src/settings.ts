@@ -15,6 +15,8 @@ export const SettingsSchema = z.object({
         TpProbModel: z.string(),
         BucketModels: z.array(z.object({ Vendor: z.enum(['Anthropic', 'OpenAI', 'Gemini']), Model: z.string() })).min(1),
         Staged: z.boolean(),
+        /** The caller check: one model with read tools on the head revision checks each catch the rules would report. */
+        CallerCheck: z.object({ Enabled: z.boolean(), Vendor: z.enum(['Anthropic', 'OpenAI', 'Gemini']), Model: z.string() }),
     }),
     /**
      * TokensPerSession counts input, cache reads and output (D37); UsdPerSession is the cap that acts first on a normal session (D42).
@@ -48,7 +50,8 @@ export type { GenerationLimits, Bucket, Vendor };
 export const DEFAULT_SETTINGS: Settings = {
     GeneratorModel: 'claude-opus-5-5',
     AnalyzerModel: 'claude-sonnet-5-5',
-    Judges: { TpProbModel: 'gpt-4.1-mini', BucketModels: [{ Vendor: 'Anthropic', Model: 'claude-opus-5-5' }, { Vendor: 'Gemini', Model: 'gemini-4-argon' }, { Vendor: 'OpenAI', Model: 'gpt-5.1' }], Staged: true },
+    Judges: { TpProbModel: 'gpt-4.1-mini', BucketModels: [{ Vendor: 'Anthropic', Model: 'claude-opus-5-5' }, { Vendor: 'Gemini', Model: 'gemini-4-argon' }, { Vendor: 'OpenAI', Model: 'gpt-5.1' }], Staged: true,
+        CallerCheck: { Enabled: false, Vendor: 'Anthropic', Model: 'claude-opus-5-5' } },
     Limits: { TestsPerPackage: 5, RisksPerPackage: 3, TestsPerRisk: 2, PackagesPerPR: 3, ParallelSessions: 4, TurnsPerSession: 30, TokensPerSession: 2_000_000, UsdPerSession: 3, RisksPerSession: 1 },
     Repeats: 3,
     Coverage: true,

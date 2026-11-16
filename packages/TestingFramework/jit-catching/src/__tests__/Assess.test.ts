@@ -9,9 +9,10 @@ import { RuleFilter } from '../rules/RuleFilter';
 import { AllRules } from '../rules/index';
 import { FileCatchStore } from '../store/FileCatchStore';
 import { RedactionCheck } from '../sandbox/Redaction';
-import { DEFAULT_SETTINGS } from '../settings';
+import { DEFAULT_SETTINGS, type Settings } from '../settings';
 import type { PanelResult } from '../judges/JudgePanel';
-import type { CatchContext } from '../types';
+import type { CallerCheckResult } from '../judges/CallerCheck';
+import type { Bucket, CatchContext } from '../types';
 import { candidate, FULL_ENV, generation, ID_A, ID_B, ID_C, PKG_DIR, results, RUN_ID } from './helpers/pipelineFixtures';
 
 const SVC = 'export class Svc { private secret = 1; public Open(): number { return 4; } }\n';
@@ -115,5 +116,47 @@ describe('AssessStep', () => {
     await expect(AssessStep({ RunID: 'nope', RepoRoot: fresh, Settings: DEFAULT_SETTINGS, StoreDir: store, Env: FULL_ENV })).rejects.toThrow('run nope not found');
     expect(existsSync(store)).toBe(false);
     expect(existsSync(join(fresh, '.jit-catch', 'runs', 'nope'))).toBe(false);
+  });
+  describe('caller check', () => {
+    const enabled: Settings = { ...DEFAULT_SETTINGS, Judges: { ...DEFAULT_SETTINGS.Judges, CallerCheck: { Enabled: true, Vendor: 'Anthropic', Model: 'check-model' } } };
+    const panel = (median: Bucket) => vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: 0.8, Buckets: [{ Model: 'm', Bucket: median, Reason: 'r' }], Median: median, Usage: [] }));
+    const checkSays = (r: Partial<CallerCheckResult>) => vi.fn(async (_c: CatchContext): Promise<CallerCheckResult> => ({ Label: 'Bug', Confidence: 'High', Reason: 'a real caller passes an empty list', Model: 'check-model',
+      Usage: { Model: 'check-model', InputTokens: 30, OutputTokens: 4, CacheReadTokens: 0, CostUSD: 0.5 }, ...r }));
+    const assess = async (median: Bucket, check: ReturnType<typeof checkSays>, settings = enabled) => {
+      const store = new FileCatchStore(storeDir, redaction);
+      const out = await AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: settings, StoreDir: storeDir, Env: FULL_ENV,
+        Deps: { JudgePanel: { Judge: panel(median) }, Rules: new RuleFilter(AllRules()), Store: store, Redaction: redaction, CallerCheck: { Check: check } } });
+      return { a: out.Catches.find((c) => c.CandidateTestID === ID_A), store };
+    };
+
+    it('checks only the catches the rules report, keeps a Bug reported, stores the result and adds the usage', async () => {
+      const check = checkSays({});
+      const { a, store } = await assess('High', check);
+      expect(check).toHaveBeenCalledTimes(1); expect(check.mock.calls[0][0].Test.ID).toBe(ID_A);
+      expect(a).toMatchObject({ Reported: true, Check: { Label: 'Bug', Confidence: 'High', Reason: 'a real caller passes an empty list', Model: 'check-model' } });
+      expect((await store.GetRun(RUN_ID))?.TokensByModel).toContainEqual({ Model: 'check-model', Role: 'Check', InputTokens: 30, OutputTokens: 4, CacheReadTokens: 0, CostUSD: 0.5 });
+    });
+    it('does not report a catch that the check calls Intended with High confidence', async () => {
+      const { a } = await assess('High', checkSays({ Label: 'Intended', Confidence: 'High' }));
+      expect(a).toMatchObject({ Reported: false, Check: { Label: 'Intended' } });
+    });
+    it('reports a TestFault with Medium confidence when the judges gave High', async () => {
+      const { a } = await assess('High', checkSays({ Label: 'TestFault', Confidence: 'Medium' }));
+      expect(a).toMatchObject({ Reported: true, Check: { Label: 'TestFault', Confidence: 'Medium' } });
+    });
+    it('does not report a TestFault with Medium confidence when the judges gave Medium', async () => {
+      const { a } = await assess('Medium', checkSays({ Label: 'TestFault', Confidence: 'Medium' }));
+      expect(a?.Reported).toBe(false);
+    });
+    it('keeps the catch reported when the check failed', async () => {
+      const { a } = await assess('Medium', checkSays({ Label: null, Confidence: null, Reason: 'provider error' }));
+      expect(a).toMatchObject({ Reported: true, Check: { Label: null, Reason: 'provider error' } });
+    });
+    it('does not call the check when it is disabled', async () => {
+      const check = checkSays({ Label: 'Intended' });
+      const { a } = await assess('High', check, DEFAULT_SETTINGS);
+      expect(check).not.toHaveBeenCalled();
+      expect(a).toMatchObject({ Reported: true, Check: null });
+    });
   });
 });

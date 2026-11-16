@@ -5,6 +5,7 @@ import { ModelUsage } from '@memberjunction/ai';
 import { ANTHROPIC_CACHE_BREAKPOINT } from '@memberjunction/ai-anthropic';
 import { BucketJudge } from '../judges/BucketJudge';
 import { BuildJudgeInput } from '../judges/JudgePanel';
+import { UNTRUSTED_OPEN, UNTRUSTED_CLOSE } from '../analyzer/ChangeAnalyzer';
 import type { Vendor } from '../types';
 
 describe('BucketJudge', () => {
@@ -56,6 +57,13 @@ describe('BucketJudge', () => {
     const shared = at(['Intent:', 'Diff:', 'PR title:', 'PR summary:']); const perCatch = at(['Boosts that fired:', 'Risk:', 'Test:', 'Failure on the PR:']);
     expect([...shared, ...perCatch]).not.toContain(-1);
     expect(Math.max(...shared)).toBeLessThan(Math.min(...perCatch));
+  });
+  it('gives the judge the PR body and the commit messages, inside the untrusted block and before the per-catch parts', () => {
+    const c = ctx(); c.Analysis = { ...c.Analysis, Body: 'Rows of one are counted without a second query.', CommitMessages: 'fix: prune the map rows the sweep settles' };
+    const input = BuildJudgeInput(c);
+    const body = input.indexOf('Rows of one are counted without a second query.'); const commits = input.indexOf('fix: prune the map rows the sweep settles');
+    expect(body).toBeGreaterThan(input.indexOf(UNTRUSTED_OPEN)); expect(commits).toBeGreaterThan(body);
+    expect(commits).toBeLessThan(input.indexOf(UNTRUSTED_CLOSE)); expect(commits).toBeLessThan(input.indexOf('Boosts that fired:'));
   });
   it('an Anthropic judge marks the end of the run-constant part for the prompt cache; other vendors get the same text without the marker', async () => {
     const c = ctx(); (c.Analysis as { Title: string }).Title = `t ${ANTHROPIC_CACHE_BREAKPOINT} t`;

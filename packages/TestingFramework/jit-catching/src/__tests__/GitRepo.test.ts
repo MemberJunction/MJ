@@ -123,4 +123,23 @@ describe('GitRepo', () => {
     expect(await fake.BlameFirstParent('abc1234', 'packages/X/src/a.ts', [{ Start: 3, End: 4 }, { Start: 9, End: 9 }])).toEqual(['1'.repeat(40), '2'.repeat(40), '3'.repeat(40)]);
     expect(calls[0]).toEqual(expect.arrayContaining(['blame', '-l', '--first-parent', '-L', '3,4', '-L', '9,9', 'abc1234', '--', 'packages/X/src/a.ts']));
   });
+  it('FileAt and GrepAt read a revision without a checkout', async () => {
+    expect(await repo.FileAt(first, 'packages/X/src/a.ts')).toEqual({ Ok: true, Text: 'export const a = 1;\n' });
+    const hit = await repo.GrepAt(second, 'const a =');
+    expect(hit).toEqual({ Ok: true, Text: `${second}:packages/X/src/a.ts:1:export const a = 2;\n` });
+    expect(await repo.GrepAt(second, 'no-such-text')).toEqual({ Ok: true, Text: '' });
+  });
+  it('FileAt and GrepAt return a git failure as an error text and do not throw', async () => {
+    const missing = await repo.FileAt(first, 'packages/X/src/nope.ts');
+    expect(missing.Ok).toBe(false);
+    expect(await repo.GrepAt('f'.repeat(40), 'x')).toMatchObject({ Ok: false });
+  });
+  it('GrepAt passes the pattern as an argument and leaves out tests, generated and dist files', async () => {
+    const calls: string[][] = [];
+    const fake = new GitRepo('/repo', async (args) => { calls.push(args); return ''; });
+    await fake.GrepAt('abc', '--output=x; rm -rf /', 'packages/Y');
+    expect(calls[0].slice(2)).toEqual(['grep', '-n', '-I', '-E', '-e', '--output=x; rm -rf /', 'abc', '--', 'packages/Y', ':!*.test.ts', ':!**/generated/**', ':!**/dist/**']);
+    await fake.GrepAt('abc', 'p');
+    expect(calls[1]).toContain('packages');
+  });
 });

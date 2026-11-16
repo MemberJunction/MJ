@@ -12,7 +12,7 @@ const test: CandidateTest = { ID: 't1', RunID: 'r', Package: '@memberjunction/co
   FilePath: 'packages/MJCore/src/__tests__/jit/0b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b.jit.test.ts', Source: 'x', GenerationOutcome: 'Produced', FailureReason: null,
   Tokens: { Model: 'm', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 }, TranscriptURL: null };
 const catchRecord: Catch = { ID: 'c1', RunID: 'r', CandidateTestID: 't1', Verdict: { Label: 'WeakCatch', Timeout: false, Reason: '' }, DroppedByRule: null, Boosts: [],
-  TPProb: 0.5, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null };
+  TPProb: 0.5, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null, Check: null };
 const session: SessionRecord = { RunID: 'A', Package: '@memberjunction/core', Method: 'IntentAware', RiskID: 'R1', EndReason: 'success', Turns: 4,
   Tokens: { Model: 'm', Role: 'Generator', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 }, TranscriptURL: null, Produced: 1, Failed: 0 };
 

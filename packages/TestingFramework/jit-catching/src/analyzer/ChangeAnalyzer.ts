@@ -64,7 +64,7 @@ export class ChangeAnalyzer {
         const sourceLines = changedFiles.reduce((s, f) => s + f.AddedLines.length + f.RemovedLineCount, 0);
         return {
             RunID: run.ID, IntentType: intent, Summary: answer.summary, Risks: risks, PackagesToTest: packagesToTest, ChangedFiles: changedFiles,
-            CommitPrefix: prefix, Title: pr.Title, Body: pr.Body, Fallback: asked === null,
+            CommitPrefix: prefix, Title: pr.Title, Body: pr.Body, CommitMessages: await this.o.Repo.Messages(run.BaseSHA, run.HeadSHA), Fallback: asked === null,
             RiskScore: ComputeRiskScore({ ChangedPaths: paths, IntentType: intent, CommitPrefix: prefix, ChangedSourceLines: sourceLines, PackageCount: changedPackages.size, RiskPaths: this.o.Settings.RiskPaths }),
         };
     }

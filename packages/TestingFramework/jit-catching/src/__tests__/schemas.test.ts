@@ -36,6 +36,10 @@ describe('record schemas', () => {
     const c = { ID: 'c1', RunID: 'r1', CandidateTestID: 't1', Verdict: { Label: 'WeakCatch', Timeout: false, Reason: '' }, DroppedByRule: null, Boosts: [], TPProb: null, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null };
     expect(CatchSchema.parse(c).Median).toBeNull();
   });
+  it('reads a stored catch of an older run without Check as Check null', () => {
+    const c = { ID: 'c1', RunID: 'r1', CandidateTestID: 't1', Verdict: { Label: 'WeakCatch', Timeout: false, Reason: '' }, DroppedByRule: null, Boosts: [], TPProb: null, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null };
+    expect(CatchSchema.parse(c).Check).toBeNull();
+  });
   it('reads a generation file without Sessions as an empty list', () => {
     const run = { ID: 'r1', Trigger: 'Local', PRNumber: null, BaseSHA: 'a'.repeat(40), HeadSHA: 'b'.repeat(40), Status: 'Generated',
       GeneratorModel: 'claude-haiku-5-5', TokensByModel: [], RunnerMinutes: 0, StartedAt: '2026-11-05T00:00:00.000Z', EndedAt: null };

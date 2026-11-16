@@ -15,7 +15,7 @@ export type RuleKind = 'Drop' | 'Boost';
 export type Vendor = 'Anthropic' | 'OpenAI' | 'Gemini';
 
 /** The pipeline part that spent tokens. */
-export type TokenRole = 'Generator' | 'Analyzer' | 'Judge';
+export type TokenRole = 'Generator' | 'Analyzer' | 'Judge' | 'Check';
 /**
  * InputTokens = uncached input + cache-creation tokens; CacheReadTokens = cache reads (priced as cached input).
  * `Role` keeps usage of parts that share a model apart in run totals.
@@ -33,7 +33,7 @@ export interface Risk { ID: string; File: string; Symbol: string; WhatCouldBreak
 /** `Fallback` is true when the analyzer reply was invalid twice; the analysis then has no risks and no LLM-ranked packages. It is null in an analysis that did not record it. */
 export interface ChangeAnalysis {
     RunID: string; IntentType: IntentType; Summary: string; Risks: Risk[]; PackagesToTest: string[];
-    ChangedFiles: ChangedFile[]; CommitPrefix: string | null; RiskScore: number; Title: string; Body: string;
+    ChangedFiles: ChangedFile[]; CommitPrefix: string | null; RiskScore: number; Title: string; Body: string; CommitMessages: string;
     Fallback: boolean | null;
 }
 
@@ -58,9 +58,16 @@ export interface Verdict { Label: VerdictLabel; Timeout: boolean; Reason: string
 /** One bucket judge's answer. `Bucket` is null when the judge errored; `Reason` then holds the error. */
 export interface JudgeBucket { Model: string; Bucket: Bucket | null; Reason: string; }
 
+/** The caller check's label for a catch: a reachable defect, an intended change, or a wrong test. */
+export type CheckLabel = 'Bug' | 'Intended' | 'TestFault';
+/** The caller check's answer. `Label` and `Confidence` are null when the check failed; `Reason` then says why. */
+export interface CatchCheck { Label: CheckLabel | null; Confidence: Bucket | null; Reason: string; Model: string; }
+
+/** `Check` is null when the caller check did not run on the catch. */
 export interface Catch {
     ID: string; RunID: string; CandidateTestID: string; Verdict: Verdict; DroppedByRule: string | null; Boosts: string[];
     TPProb: number | null; JudgeBuckets: JudgeBucket[]; Median: Bucket | null; Rank: number | null; Reported: boolean; CommentID: string | null;
+    Check: CatchCheck | null;
 }
 
 export interface Feedback { CatchID: string; User: string; Answer: FeedbackAnswer; Source: 'Comment' | 'Label' | 'Recheck'; At: string; }

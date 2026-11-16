@@ -40,7 +40,7 @@ function runOf(id: string, tokens: TokenUsage[] = []): Run {
 }
 function catchOf(id: string, runID: string, testID: string, o: Partial<Catch> = {}): Catch {
   return { ID: id, RunID: runID, CandidateTestID: testID, Verdict: { Label: 'WeakCatch', Timeout: false, Reason: '' }, DroppedByRule: null, Boosts: [],
-    TPProb: null, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null, ...o };
+    TPProb: null, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null, Check: null, ...o };
 }
 function buckets(a: JudgeBucket['Bucket'], b: JudgeBucket['Bucket']): JudgeBucket[] { return [{ Model: 'jA', Bucket: a, Reason: '' }, { Model: 'jB', Bucket: b, Reason: '' }]; }
 function feedback(catchID: string, answer: Feedback['Answer'], at: string): Feedback { return { CatchID: catchID, User: 'u', Answer: answer, Source: 'Label', At: at }; }
