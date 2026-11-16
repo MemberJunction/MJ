@@ -1,8 +1,10 @@
-/** `PublishRecords` (Task M3.2): the evidence hash is over canonical JSON, and the finders read only the rows their index guards. */
+/** `PublishRecords` (Task M3.2): the evidence hash is over `Canonicalize`'s canonical JSON, and the finders read only the rows their index guards. */
 import { describe, expect, it } from 'vitest';
+import { Canonicalize } from '@memberjunction/global';
 import type { EvidenceSnapshot } from '@memberjunction/predictive-studio-core';
 
 import { GateTestStore, GateWorld } from '../../__tests__/fakes/gate-test-store';
+import { SnapshotHash } from '../../snapshot/snapshot-hash';
 import { PublishRecords } from '../publish-records';
 
 const evidence: EvidenceSnapshot = {
@@ -12,12 +14,33 @@ const evidence: EvidenceSnapshot = {
   leakageFlags: [], dataWindow: { from: '2026-01-01', to: '2026-01-01' }, snapshotHash: 'a'.repeat(64),
 };
 
-describe('PublishRecords.CanonicalJson and EvidenceSha256', () => {
-  it('orders keys at every level, so equal values hash equally whatever their key order', () => {
-    expect(PublishRecords.CanonicalJson({ b: 1, a: { d: [2, { f: 1, e: 0 }], c: null } })).toBe('{"a":{"c":null,"d":[2,{"e":0,"f":1}]},"b":1}');
+describe('PublishRecords.EvidenceSha256', () => {
+  it('is the SHA-256 of Canonicalize(evidence), so equal values hash equally whatever their key order', () => {
+    expect(PublishRecords.EvidenceSha256(evidence)).toBe(SnapshotHash.Sha256Hex(Canonicalize(evidence)));
     const reordered: EvidenceSnapshot = { snapshotHash: evidence.snapshotHash, dataWindow: evidence.dataWindow, leakageFlags: [], gate: evidence.gate, comparisons: evidence.comparisons, holdoutPrimary: evidence.holdoutPrimary };
     expect(PublishRecords.EvidenceSha256(reordered)).toBe(PublishRecords.EvidenceSha256(evidence));
     expect(PublishRecords.EvidenceSha256(evidence)).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe('PublishRecords.EvidenceSha256 — the canonical form itself (golden value)', () => {
+  /** A fully populated evidence value; its hash was computed once from its canonical text (task M4.1 report, fix round 2). */
+  const golden: EvidenceSnapshot = {
+    holdoutPrimary: { metric: 'log-loss', value: 0.4320454626766007, interval: { level: 0.95, lower: 0.4136896095564584, upper: 0.44989924751973154 }, n: 3392 },
+    comparisons: {
+      modelVsDummy: { value: 0.056623936327318214, ci: [0.046566916167292124, 0.06737886653926327], beats: true },
+      'modelVs:glm': { value: 0, ci: [0, 0], beats: false },
+    },
+    gate: { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'glm', shippedRole: 'simpleBaseline', note: null },
+    leakageFlags: [
+      { kind: 'single-feature-auc', sourceColumn: 'cancelled_flag', heldOutAuc: 0.97 },
+      { kind: 'time-shifted-label', scoreWithShiftedLabel: 0.91 },
+    ],
+    dataWindow: { from: '2026-11-15', to: '2026-11-15' },
+    snapshotHash: 'bed391e080f946d2dfbd57a82b6f39561d28e2b1ab27a27b21344818f362e73f',
+  };
+  it('hashes to the pinned SHA-256: a change to the canonical form changes every stored EvidenceSha256', () => {
+    expect(PublishRecords.EvidenceSha256(golden)).toBe('ce0a8f7589aa00f0a5d2592a98f5efb62d32332e37f8ba9a5fc1416bc707ace8');
   });
 });
 

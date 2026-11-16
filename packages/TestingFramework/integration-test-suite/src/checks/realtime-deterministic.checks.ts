@@ -86,6 +86,7 @@ import {
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLModelEntity,
     MJMLModelPublishRecordEntity,
+    MJMLOutputBindingEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJUserEntity,
@@ -96,7 +97,7 @@ import { BaseRealtimeBridge } from '@memberjunction/ai-bridge-base';
 import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '@memberjunction/ai-bridge-server';
 import { HandoffOfferRegistry, LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, RoomAuthorizationService, OFFER_UNAVAILABLE } from '@memberjunction/livekit-room-server';
 import { InteractionLifecycleService } from '@memberjunction/telephony-adapters';
-import { DetectSingleFeatureDominance, GateContexts, LifecycleGate } from '@memberjunction/predictive-studio';
+import { DetectSingleFeatureDominance, GateContexts, LifecycleGate, type GateContext, type PublishRequest } from '@memberjunction/predictive-studio';
 import {
     EvaluationProtocol,
     GateRules,
@@ -105,9 +106,11 @@ import {
     TrainingRunResultsParser,
     type Actor,
     type LeakageFlag,
+    type OutputSemantics,
     type StoredGateRecord,
     type StoredTrainerResult,
     type TrainingRunResults,
+    type TransitionRefusal,
 } from '@memberjunction/predictive-studio-core';
 import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -184,6 +187,13 @@ const RD9_TRAINER: StoredTrainerResult = {
     importance: [], leakageFlags: [RD9_LEAKAGE_FLAG], predictionIntervalCoverage: [], residualDiagnostics: null, forecast: null, innerSplitContrast: null,
 };
 
+/**
+ * RD9's model's stored semantics: binary over the artifact's class order `['0', '1']` ({@link RD9_TRAINER}), adverse
+ * class `'0'`. Evaluate parses it before the status write (an unparseable one is refused `not-servable`, D4-129) and
+ * creates the model's four `MJ: ML Output Bindings` rows from it.
+ */
+const RD9_OUTPUT_SEMANTICS: OutputSemantics = { task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 } };
+
 /** RD9's fixture rows: a pipeline, a finished run storing {@link RD9_GATE} and {@link RD9_TRAINER}, and a Draft model naming it. */
 class Rd9Fixture {
     /** The run's `ValidationResults`: the completed v2 envelope. */
@@ -222,6 +232,7 @@ class Rd9Fixture {
         model.AlgorithmID = a.AlgorithmID;
         model.FeatureSchema = JSON.stringify([{ Name: 'leaky_feature', Kind: 'numeric' }]);
         model.FeatureImportance = JSON.stringify(RD9_IMPORTANCE);
+        model.OutputSemantics = JSON.stringify(RD9_OUTPUT_SEMANTICS);
         model.TargetVariable = 'Renewed';
         model.ProblemType = 'classification';
         model.Status = 'Draft';
@@ -239,6 +250,15 @@ class Rd9Fixture {
         return String(r.Results[0]?.Status);
     }
 
+    /** The number of the model's `MJ: ML Output Bindings` rows, read past the cache. */
+    public static async BindingCount(modelId: string, user: UserInfo): Promise<number> {
+        const r = await new RunView().RunView<Pick<MJMLOutputBindingEntity, 'ID'>>(
+            { EntityName: 'MJ: ML Output Bindings', ExtraFilter: `ModelID='${modelId}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, user,
+        );
+        Assert(r.Success, `rd9 output binding read failed: ${r.ErrorMessage}`);
+        return r.Results.length;
+    }
+
     /** The model's `publish` records, read past the cache. */
     public static async PublishCount(modelId: string, user: UserInfo): Promise<number> {
         const r = await new RunView().RunView<Pick<MJMLModelPublishRecordEntity, 'ID'>>(
@@ -248,7 +268,11 @@ class Rd9Fixture {
         return r.Results.length;
     }
 
-    /** Deletes, each Delete() checked (D4-62's order): the model's publish records, the model after clearing the run's ResultingModelID, the run, the pipeline. */
+    /**
+     * Deletes, each Delete() checked (D4-62's order): the model's publish records, its output bindings (Evaluate creates
+     * four; `FK_MLOutputBinding_Model` blocks the model's delete while they stand), the model after clearing the run's
+     * ResultingModelID, the run, the pipeline.
+     */
     public static async Delete(pipeline: MJMLTrainingPipelineEntity, run: MJMLTrainingRunEntity, model: MJMLModelEntity, user: UserInfo): Promise<void> {
         if (model.IsSaved) {
             const records = await new RunView().RunView<MJMLModelPublishRecordEntity>(
@@ -258,6 +282,13 @@ class Rd9Fixture {
             for (const record of records.Results) {
                 Assert(await record.Delete(), `rd9 publish record ${record.ID} delete failed: ${record.LatestResult?.CompleteMessage}`);
             }
+            const bindings = await new RunView().RunView<MJMLOutputBindingEntity>(
+                { EntityName: 'MJ: ML Output Bindings', ExtraFilter: `ModelID='${model.ID}'`, ResultType: 'entity_object', BypassCache: true }, user,
+            );
+            Assert(bindings.Success, `rd9 output binding read for cleanup failed: ${bindings.ErrorMessage}`);
+            for (const binding of bindings.Results) {
+                Assert(await binding.Delete(), `rd9 output binding ${binding.ID} delete failed: ${binding.LatestResult?.CompleteMessage}`);
+            }
             if (run.IsSaved && run.ResultingModelID) {
                 run.ResultingModelID = null;
                 Assert(await run.Save(), `rd9 training run ResultingModelID clear failed: ${run.LatestResult?.CompleteMessage}`);
@@ -266,6 +297,20 @@ class Rd9Fixture {
         }
         if (run.IsSaved) Assert(await run.Delete(), `rd9 training run delete failed: ${run.LatestResult?.CompleteMessage}`);
         if (pipeline.IsSaved) Assert(await pipeline.Delete(), `rd9 pipeline delete failed: ${pipeline.LatestResult?.CompleteMessage}`);
+    }
+}
+
+/**
+ * RD9's lifecycle gate with its leakage step exposed. A Publish of RD9's hand-made model is refused `not-servable` at
+ * its stored inputs — the fixture names no Training Snapshot, so no evidence can be rebuilt (D4-128) — before the
+ * leakage check runs, so RD9 drives that check directly over the model's stored run. The end-to-end leakage refusal of
+ * a Publish, over a fixture with every stored input, is pinned by the governance lane's D(ii) control
+ * (`governance.adversarial.db.test.ts`).
+ */
+class Rd9Gate extends LifecycleGate {
+    /** {@link LifecycleGate.CheckLeakageFlags} for `request` over the model's stored run. */
+    public LeakageRefusal(model: MJMLModelEntity, request: PublishRequest, ctx: GateContext): Promise<TransitionRefusal | null> {
+        return this.CheckLeakageFlags(model, request, ctx);
     }
 }
 
@@ -1421,7 +1466,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Id: 'realtime-deterministic.RD9',
         Name: 'RD9: the lifecycle gate refuses deterministically — non-UUID id, leakage, missing reason, illegal jump',
         Fn: async (ctx): Promise<void> => {
-            const gate = new LifecycleGate();
+            const gate = new Rd9Gate();
             const gateCtx = GateContexts.ForRequest({ ContextUser: ctx.User, Provider: ctx.Provider });
             const actor: Actor = { kind: 'human', userId: ctx.User.ID };
 
@@ -1456,15 +1501,24 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 Assert(jump.Kind === 'withheld' && jump.Refusal.kind === 'illegal-transition', `Publish of a Draft model must be withheld illegal-transition (got ${JSON.stringify(jump)})`);
                 AssertEqual(await Rd9Fixture.Status(model.ID, ctx.User), 'Draft', 'the illegal jump must leave the model Draft');
 
-                // (3) Leakage: Evaluate moves it to Validated (the gate's own authorised write); Publish is withheld on the stored flag.
+                // (3) Leakage: Evaluate moves it to Validated (the gate's own authorised write) and creates its four output
+                // bindings from the stored semantics. A Publish is withheld at the stored inputs (no Training Snapshot,
+                // D4-128), not thrown; the gate's leakage check refuses the stored flag.
                 const evaluated = await gate.Evaluate({ modelId: model.ID }, actor, gateCtx);
                 Assert(evaluated.Kind === 'evaluated' && evaluated.To === 'Validated', `Evaluate must move the model to Validated (got ${JSON.stringify(evaluated)})`);
-                const flagged = await gate.Publish({ modelId: model.ID, purpose: 'publish', initiator: actor, signOffId: null, reason: null }, gateCtx);
+                AssertEqual(await Rd9Fixture.BindingCount(model.ID, ctx.User), 4, 'Evaluate must create the four output bindings from the stored OutputSemantics');
+                const request: PublishRequest = { modelId: model.ID, purpose: 'publish', initiator: actor, signOffId: null, reason: null };
+                const withheld = await gate.Publish(request, gateCtx);
                 Assert(
-                    flagged.Kind === 'withheld' && flagged.Refusal.kind === 'unacknowledged-leakage-flags' && flagged.Refusal.flags.join(',') === 'single-feature-auc' && flagged.Transient === false,
-                    `Publish of a leakage-flagged model must be withheld unacknowledged-leakage-flags [single-feature-auc], not transient (got ${JSON.stringify(flagged)})`,
+                    withheld.Kind === 'withheld' && withheld.Refusal.kind === 'not-servable' && withheld.Refusal.reason.includes('names no Training Snapshot') && withheld.Transient === false,
+                    `Publish of a model with no Training Snapshot must be withheld not-servable, not transient (got ${JSON.stringify(withheld)})`,
                 );
-                AssertEqual(await Rd9Fixture.Status(model.ID, ctx.User), 'Validated', 'the leakage refusal must leave the model Validated');
+                const flagged = await gate.LeakageRefusal(model, request, gateCtx);
+                Assert(
+                    flagged !== null && flagged.kind === 'unacknowledged-leakage-flags' && flagged.flags.join(',') === 'single-feature-auc',
+                    `the leakage check of a leakage-flagged model must refuse unacknowledged-leakage-flags [single-feature-auc] (got ${JSON.stringify(flagged)})`,
+                );
+                AssertEqual(await Rd9Fixture.Status(model.ID, ctx.User), 'Validated', 'the withheld publish must leave the model Validated');
 
                 // (4) Missing reason: an archive without a reason is refused before any write.
                 const archive = await gate.Archive(model.ID, '', actor, gateCtx);

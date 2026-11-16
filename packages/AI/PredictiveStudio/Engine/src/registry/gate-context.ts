@@ -28,22 +28,28 @@ import type { RegistryContext } from './registry-context';
  */
 export type ScoringActionSync = Pick<ModelScoringActionGenerator, 'GenerateForModel' | 'DisableForModel'>;
 
-/** Builds the evidence a publish (or a sign-off) freezes, from stored rows only (M3: stored rows; M4.1 refines it). */
+/** Builds the evidence a publish (or a sign-off) freezes, from stored rows only (production: `StoredEvidenceBuilder`). */
 export interface IGateEvidenceBuilder {
   /** The evidence for `modelId` as the stored rows hold it now. */
   Build(modelId: string, ctx: RegistryContext): Promise<EvidenceSnapshot>;
 }
 
-/** The pre-publication semantics check of the model's output bindings (M3: always passes; M4.2 runs the real check). */
+/** The pre-publication semantics check of the model's output bindings (production: `StoredSemanticsCheck`). */
 export interface IGateSemanticsCheck {
   /** The check of `model`'s output bindings against its declared semantics. */
   Check(model: MJMLModelEntity, ctx: RegistryContext): Promise<SemanticsCheck>;
 }
 
-/** Finds the approving human sign-off a publish may consume (M3: finds none; M4.1 reads the sign-off records). */
+/** The members of a publish request the sign-off lookup reads. */
+export type SignOffRequest = Pick<PublishRequest, 'modelId' | 'purpose' | 'signOffId'>;
+
+/** Finds the approving human sign-off a publish may consume (production: `StoredSignOffLookup`, over the sign-off records). */
 export interface IGateSignOffLookup {
-  /** The newest approving sign-off of `modelId` for `purpose`, or null. */
-  FindApproving(modelId: string, purpose: PublishRequest['purpose'], ctx: RegistryContext): Promise<SignOff | null>;
+  /**
+   * The approving sign-off the request names (`signOffId`) for its model and purpose, made over the evidence whose
+   * SHA-256 is `evidenceSha256` (the evidence the publish rebuilt from stored rows); null when there is none.
+   */
+  FindApproving(request: SignOffRequest, evidenceSha256: string, ctx: RegistryContext): Promise<SignOff | null>;
 }
 
 /** What every gate call runs under: the request's user and provider, plus the evidence, semantics and sign-off seams. */

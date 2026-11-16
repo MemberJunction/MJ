@@ -16,27 +16,32 @@
  * **Production construction:** `new LifecycleGate()` — the storage-provider artifact loader, the system clock and the
  * production {@link ModelScoringActionGenerator}. Tests pass an in-memory loader, a fake clock and a recording scoring-
  * Action seam (`new LifecycleGate(loader, clock, scoringActions)`), so the 30 s lock wait runs without waiting. The
- * context is `GateContexts.ForRequest({ ContextUser, Provider })` for M3's seams.
+ * context is `GateContexts.ForRequest({ ContextUser, Provider })` for the production seams.
  */
 import { LogError } from '@memberjunction/core';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJMLOutputBindingEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import {
   GateRules,
   LifecycleStates,
   PublishRules,
+  RegistrySchemas,
+  SemanticsRules,
   StatusWriteRules,
   type Actor,
   type ArtifactLoad,
   type ListsEveryMember,
+  type OutputSemantics,
   type PersistedModelStatus,
   type PublishReverification,
+  type SignOff,
   type StoredGateRecord,
   type StoredPublishInputs,
   type TransitionRefusal,
 } from '@memberjunction/predictive-studio-core';
 
 import { ModelScoringActionGenerator } from '../actions/model-scoring-action-generator';
+import { SemanticsChecker } from '../governance/semantics-checker';
 import { ModelReadiness } from '../scoring/model-readiness';
 import { StorageProviderArtifactLoader } from '../scoring/storage-provider-artifact-loader';
 import type { IArtifactLoader } from '../scoring/types';
@@ -109,7 +114,11 @@ export class LifecycleGate {
    * Draft → Validated | KeepBaseline from the run's stored gate decision (`model` → Validated, `keep-simple-baseline`
    * → KeepBaseline with the decision's reason as `StatusReason`). A `{ trainingRunId }` subject is resolved to the run's
    * `ResultingModelID`; a run with no model row (no-signal, or a kept incumbent-heuristic rule) changes no status and gets
-   * one run-level refusal record, however often it is evaluated. A model-level refusal writes no record.
+   * one run-level refusal record, however often it is evaluated. A model-level refusal writes no record. A model whose
+   * `OutputSemantics` does not parse (empty or malformed) is refused `not-servable` before its status is written, so it
+   * stays Draft (D4-129). An applied evaluation also creates the model's missing output bindings from its semantics
+   * ({@link CreateOutputBindings}), in the same transaction; a refused one creates none. A publish, rollback or restore fills them again before its
+   * semantics check (D4-112), so a model past Draft with none is never refused for rows only derived truth would hold.
    */
   public async Evaluate(subject: EvaluateSubject, actor: Actor, ctx: GateContext): Promise<EvaluateOutcome> {
     if ('trainingRunId' in subject) return this.evaluateRun(subject.trainingRunId, actor, ctx);
@@ -119,7 +128,7 @@ export class LifecycleGate {
   /**
    * Validated / KeepBaseline → Published (`purpose: 'publish'`) or Archived → Published (`purpose: 'rollback'`), under
    * the pipeline and model locks in one transaction: idempotency first (a retry of an applied run is
-   * `already-published`), then the persisted status, the leakage flags, the stored inputs and the publish checks; then
+   * `already-published`), then the persisted status, the stored inputs, the leakage flags and the publish checks; then
    * the status change with the archive of the replaced model, the `publish` record and the `Pending` monitoring job. A
    * refusal rolls the transaction back, and the refusal record and the model's `StatusReason` are written in a second one.
    * After an applied publish commits, the published model's scoring Action is generated and the replaced model's disabled.
@@ -183,16 +192,29 @@ export class LifecycleGate {
   }
 
   /**
-   * The run's stored leakage flags (`ValidationResults.trainer.leakageFlags`): `unacknowledged-leakage-flags` naming each
-   * flag kind, unless the sign-off lookup returns an approving sign-off whose `OverridesFlags` covers every one.
+   * The run's stored leakage flags (`ValidationResults.trainer.leakageFlags`): null when there are none, or when the
+   * request's approving sign-off (made over the evidence the stored rows give now, {@link FindRequestSignOff}) overrides
+   * every flag kind; otherwise `unacknowledged-leakage-flags` naming each kind it does not cover, once.
    */
-  protected async CheckLeakageFlags(model: MJMLModelEntity, ctx: GateContext): Promise<TransitionRefusal | null> {
+  protected async CheckLeakageFlags(model: MJMLModelEntity, request: PublishRequest, ctx: GateContext): Promise<TransitionRefusal | null> {
     const run = model.TrainingRunID ? await StoredRuns.Read(model.TrainingRunID, ctx) : null;
     const kinds = [...new Set((run?.Trainer?.leakageFlags || []).map((f) => f.kind))];
     if (kinds.length === 0) return null;
-    const signOff = await ctx.SignOffLookup.FindApproving(model.ID, 'publish', ctx);
-    if (signOff !== null && kinds.every((k) => signOff.OverridesFlags.includes(k))) return null;
-    return { kind: 'unacknowledged-leakage-flags', flags: kinds };
+    const evidenceSha256 = request.signOffId === null ? null : PublishRecords.EvidenceSha256(await ctx.EvidenceBuilder.Build(model.ID, ctx));
+    const signOff = evidenceSha256 === null ? null : await this.FindRequestSignOff(request, evidenceSha256, ctx);
+    const uncovered = kinds.filter((k) => !(signOff?.OverridesFlags || []).includes(k));
+    return uncovered.length === 0 ? null : { kind: 'unacknowledged-leakage-flags', flags: uncovered };
+  }
+
+  /**
+   * The approving sign-off the request names (`signOffId`) for its model and purpose, whose `EvidenceSha256` equals
+   * `evidenceSha256` — the hash of the evidence this publish rebuilt from stored rows — through the context's sign-off
+   * lookup; null when the request names none or the lookup returns null (a reject, another model's or purpose's record, or
+   * a sign-off over evidence that has changed since).
+   */
+  protected async FindRequestSignOff(request: PublishRequest, evidenceSha256: string, ctx: GateContext): Promise<SignOff | null> {
+    if (request.signOffId === null) return null;
+    return ctx.SignOffLookup.FindApproving(request, evidenceSha256, ctx);
   }
 
   /** The stored publish inputs of the model for this attempt's initiator, or the refusal naming what the stored rows lack. */
@@ -203,9 +225,14 @@ export class LifecycleGate {
   /**
    * Every check of a publish over stored inputs, in order: `PublishRules.ReverifyPublish` (a rollback re-derives with no
    * incumbent and replaces the current Published model); the calibration hold and servability of the old promotion
-   * gate (D4-57); the semantics check; the artifact verified inside the transaction (a load that throws is transient, a
-   * definite non-verified load is not and records the model's `ArtifactStatus`); the sign-off, only when the pinned
-   * protocol sets `requiresHumanSignOff`; then the evidence and who approved.
+   * gate (D4-57); the semantics check — first filling the model's missing output bindings from its semantics
+   * ({@link CreateOutputBindings}: missing surfaces only, an existing row never overwritten, so a stored row that
+   * disagrees is still refused `semantics-check-failed`), in the caller's transaction, so a refused attempt keeps none
+   * of them; the artifact verified inside the transaction (a load that throws is transient, a
+   * definite non-verified load is not and records the model's `ArtifactStatus`); then the evidence, rebuilt from stored
+   * rows, and the request's sign-off over it ({@link FindRequestSignOff}): required (`no-sign-off` without one) when
+   * the pinned protocol sets `requiresHumanSignOff`, and consumed (recorded on the publish, its approver the approver)
+   * whenever the request names one that matches; then who approved.
    */
   protected async CheckPublishable(model: MJMLModelEntity, inputs: StoredPublishInputs, request: PublishRequest, ctx: GateContext): Promise<PublishCheck> {
     const rollback = request.purpose === 'rollback';
@@ -213,16 +240,18 @@ export class LifecycleGate {
     if (reverified.Ok === false) return LifecycleGate.refused(LifecycleGate.reverificationRefusal(reverified, inputs));
     const held = this.servingRefusal(model);
     if (held !== null) return LifecycleGate.refused(held);
+    await this.CreateOutputBindings(model, { task: inputs.Task }, ctx);
     const semantics = await ctx.SemanticsCheck.Check(model, ctx);
     if (semantics.Result.Status === 'failed') return LifecycleGate.refused({ kind: 'semantics-check-failed', mismatches: semantics.Result.Mismatches });
     const artifact = await this.verifyArtifact(model, ctx);
     if (artifact !== null) return artifact;
-    const signOff = inputs.ProtocolRow.Promotion.requiresHumanSignOff ? await ctx.SignOffLookup.FindApproving(model.ID, request.purpose, ctx) : null;
-    if (inputs.ProtocolRow.Promotion.requiresHumanSignOff && signOff === null) return LifecycleGate.refused({ kind: 'no-sign-off' });
     const evidence = await ctx.EvidenceBuilder.Build(model.ID, ctx);
+    const evidenceSha256 = PublishRecords.EvidenceSha256(evidence);
+    const signOff = await this.FindRequestSignOff(request, evidenceSha256, ctx);
+    if (inputs.ProtocolRow.Promotion.requiresHumanSignOff && signOff === null) return LifecycleGate.refused({ kind: 'no-sign-off' });
     return {
       Ok: true, Reverified: reverified, Replaces: rollback ? inputs.CurrentPublishedModelID : reverified.Replaces, Evidence: evidence,
-      EvidenceSha256: PublishRecords.EvidenceSha256(evidence), SignOff: signOff, Approver: LifecycleGate.approverOf(request.initiator, signOff?.Approver.userId || null),
+      EvidenceSha256: evidenceSha256, SignOff: signOff, Approver: LifecycleGate.approverOf(request.initiator, signOff?.Approver.userId || null),
     };
   }
 
@@ -246,6 +275,36 @@ export class LifecycleGate {
       await MonitoringJobs.DisableForModel(old.ID, ctx);
     }
     await LifecycleGate.saveAuthorised(model, to, initiator, replaces);
+  }
+
+  /**
+   * Creates the model's `MJ: ML Output Bindings` rows that are missing: `SemanticsRules.DefaultBindings` of the
+   * model's parsed `OutputSemantics`, one per surface the model has no row for. An existing row is never overwritten, so
+   * an operator's edit survives a re-evaluation. Runs in the Evaluate transaction after the status write, and in a
+   * publish's, rollback's or restore's transaction before its semantics check ({@link CheckPublishable}); each row is
+   * saved through the entity (its server subclass checks it against the semantics). The caller hands in the semantics
+   * it already parsed, so the column is parsed once per attempt: Evaluate parses it before the status write and refuses
+   * `not-servable` when it does not parse (D4-129); a publish takes `StoredPublishInputs.Task`, whose loader refuses
+   * `not-servable` for the same reason. A failed read or save throws on either path and rolls that transaction back (a
+   * publish never succeeds without its rows).
+   *
+   * @param semantics the model's `OutputSemantics`, already parsed by the caller
+   * @throws Error when the existing rows cannot be read or a save fails (with the entity's `LatestResult` message), so
+   *   the caller's transaction rolls the attempt back
+   */
+  protected async CreateOutputBindings(model: MJMLModelEntity, semantics: OutputSemantics, ctx: GateContext): Promise<void> {
+    const existing = await SemanticsChecker.ReadBindings(model.ID, ctx);
+    const missing = SemanticsRules.DefaultBindings(semantics).filter((d) => !existing.some((e) => e.Surface === d.Surface));
+    for (const spec of missing) {
+      const row = await ctx.Provider.GetEntityObject<MJMLOutputBindingEntity>('MJ: ML Output Bindings', ctx.ContextUser);
+      row.NewRecord();
+      row.ModelID = model.ID;
+      row.Surface = spec.Surface;
+      row.SortsBy = spec.SortsBy;
+      row.DriverDirectionRelativeTo = spec.DriverDirectionRelativeTo;
+      row.Label = spec.Label;
+      if (!(await row.Save())) throw new Error(`Saving the ${spec.Surface} output binding of ML Model ${model.ID} failed: ${row.LatestResult?.CompleteMessage || 'unknown error'}`);
+    }
   }
 
   /** Writes the `publish` record of an applied publish (the re-derived decision, the evidence and its hash, the approver). */
@@ -355,17 +414,25 @@ export class LifecycleGate {
     if (prior !== null && request.purpose === 'publish' && LifecycleGate.RESTORABLE_STATUSES.some((s) => s === locked.Status)) {
       return this.restorePublish(locked, request, prior.ID, ctx);
     }
-    const before = this.CheckPersistedStatus(locked, 'Published') || (await this.checkPurpose(locked, request, ctx)) || (await this.CheckLeakageFlags(locked, ctx));
+    const before = this.CheckPersistedStatus(locked, 'Published') || (await this.checkPurpose(locked, request, ctx));
     if (before !== null) return LifecycleGate.refusedAttempt(before, false, null, locked.Status);
     const checked = await this.checkFromStoredRows(locked, request, ctx);
     if (checked.Ok === false) return LifecycleGate.refusedAttempt(checked.Refusal, checked.Transient, checked.Artifact, locked.Status);
     return { Kind: 'applied', Outcome: await this.applyPublish(locked, request, checked, ctx) };
   }
 
-  /** The stored inputs and every publish check over them. */
+  /**
+   * The stored inputs, then the leakage flags, then every publish check over the inputs — the one order of a publish,
+   * rollback and restore. The stored inputs come first (D4-128): they refuse `not-servable` for a model whose evidence
+   * cannot be built from stored rows (no run, gate record, trainer result or Training Snapshot), and both
+   * {@link CheckLeakageFlags} (for a request naming a sign-off) and {@link CheckPublishable} build that evidence, which
+   * throws on those rows. The leakage check keeps its own run read: `StoredPublishInputs` carries no leakage flags.
+   */
   private async checkFromStoredRows(model: MJMLModelEntity, request: PublishRequest, ctx: GateContext): Promise<PublishCheck> {
     const inputs = await this.LoadStoredPublishInputs(model.ID, request.initiator, ctx);
     if (LifecycleGate.isRefusal(inputs)) return LifecycleGate.refused(inputs);
+    const leakage = await this.CheckLeakageFlags(model, request, ctx);
+    if (leakage !== null) return LifecycleGate.refused(leakage);
     return this.CheckPublishable(model, inputs, request, ctx);
   }
 
@@ -384,8 +451,6 @@ export class LifecycleGate {
    * names the run's existing record. The model's monitoring job is created only when it has no open one.
    */
   private async restorePublish(model: MJMLModelEntity, request: PublishRequest, recordId: string, ctx: GateContext): Promise<PublishAttempt> {
-    const leakage = await this.CheckLeakageFlags(model, ctx);
-    if (leakage !== null) return LifecycleGate.refusedAttempt(leakage, false, null, model.Status);
     const checked = await this.checkFromStoredRows(model, request, ctx);
     if (checked.Ok === false) return LifecycleGate.refusedAttempt(checked.Refusal, checked.Transient, checked.Artifact, model.Status);
     model.StatusReason = null;
@@ -465,7 +530,12 @@ export class LifecycleGate {
     return ProviderTransactions.Run(ctx, `the evaluation of ML Model ${model.ID}`, () => this.evaluateLocked(model, target, run.Gate.reason.text, actor, ctx), (o) => o.Kind === 'evaluated');
   }
 
-  /** Evaluate's status change under both locks, re-checking the status the lock read. */
+  /**
+   * Evaluate's status change under both locks: re-checks the status the lock read, then parses the locked row's
+   * `OutputSemantics` — one that does not parse is refused `not-servable` before anything is written (D4-129: Draft
+   * stays Draft; as for Evaluate's other model-level refusals, no record is written and the transaction rolls back
+   * empty) — then writes the status and creates the model's missing output bindings from the parsed semantics.
+   */
   private async evaluateLocked(
     model: MJMLModelEntity, to: Extract<MJMLModelEntity['Status'], 'Validated' | 'KeepBaseline'>, reason: string, actor: Actor, ctx: GateContext,
   ): Promise<EvaluateOutcome> {
@@ -475,8 +545,13 @@ export class LifecycleGate {
     if (locked === null) return { Kind: 'refused', Refusal: { kind: 'model-not-found', modelId: model.ID } };
     const status = this.CheckPersistedStatus(locked, to);
     if (status !== null) return { Kind: 'refused', Refusal: status };
+    const semantics = RegistrySchemas.ParseOutputSemantics(locked.OutputSemantics);
+    if (semantics.Ok === false) {
+      return { Kind: 'refused', Refusal: { kind: 'not-servable', reason: `ML Model ${locked.ID}'s OutputSemantics does not parse: ${semantics.Errors.join('; ')}` } };
+    }
     locked.StatusReason = reason;
     await this.ApplyTransition(locked, to, null, actor, ctx);
+    await this.CreateOutputBindings(locked, semantics.Value, ctx);
     return { Kind: 'evaluated', ModelID: locked.ID, From: 'Draft', To: to };
   }
 

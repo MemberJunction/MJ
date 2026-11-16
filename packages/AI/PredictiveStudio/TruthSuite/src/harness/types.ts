@@ -73,6 +73,8 @@ export interface AgentStepResult {
   /** The pipelines the run created (whether or not it succeeded), so cleanup can delete them. */
   PipelineIDs: string[];
   WallMs: number;
+  /** The experiment report the run delivered (its payload's `Markdown`); null when the run delivered none. */
+  ReportMarkdown: string | null;
 }
 
 /** What a gate body returns: whether its threshold is met, the measured values and one plain sentence. */

@@ -9,48 +9,57 @@
  * sub-agents (Goal Analyst / Data Scout / Experiment Designer) accumulate the plan; THIS agent commits
  * it to metadata, so the structure created is type-safe and deterministic — never LLM-emitted.
  *
+ * The experiment report ({@link ExperimentReports}) reads every number it prints from the build's stored rows — the
+ * training run's `ValidationResults` and the model's `FeatureImportance` — and returns each one as a
+ * {@link TracedNumber}, so a test or a gate can recompute it from the row.
+ *
  * Registered by DriverClass `'PredictiveStudioPipelineBuilderAgent'` so the Model Development Agent's
  * metadata can route to it after the user approves.
  */
 
 import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
+import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import { ImportanceDisplay, EvaluationLineage, TrustVerdicts, type Actor, type GateOutcome, type ModelingPlanSpec, type OutcomeTitleText, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
+import {
+  ImportanceDisplay, EvaluationLineage, GateRules, InnerScoreSelection, JsonParse, TracedNumbers, TrainingRunResultsParser, TrustVerdicts,
+  type Actor, type GateOutcome, type JsonValue, type MetricKey, type ModelingPlanSpec, type OutcomeTitleText, type FeatureStepWarning,
+  type StoredGateRecord, type StoredTrainerResult, type TracedNumber, type TrainingRunResults, type TrustVerdict,
+} from '@memberjunction/predictive-studio-core';
 
-import { PredictiveStudioPipelineBuilder, type BuildGateDecision, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
+import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
 export type { MLLeaderboardEntryPayload };
 
 /** The compact, payload-safe outcome the builder writes back so the agent can narrate the result. */
 export interface PredictiveStudioBuildOutcome {
-  success: boolean;
-  pipelineId?: string;
-  modelId?: string;
+  success: boolean;  // case-violation-ok-legacy-back-compat: agent payload JSON key
+  pipelineId?: string;  // case-violation-ok-legacy-back-compat: agent payload JSON key
+  modelId?: string;  // case-violation-ok-legacy-back-compat: agent payload JSON key
   /** The trust verdict's title (`TrustVerdicts.OutcomeTitle`); absent when the build trained no model. */
   trustTitle?: OutcomeTitleText;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /** The trust verdict's headline ("Beats the flat guess by X [lo, hi] …"); absent when the build trained no model. */
   headline?: string;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
-  published: boolean;
+  published: boolean;  // case-violation-ok-legacy-back-compat: agent payload JSON key
   /**
    * True when the model is not published only because this build does not publish: it clears the bar (kept in Draft, or
    * evaluated to Validated or KeepBaseline through the lifecycle gate), so the user may ask for it to be published
    * (Promote ML Model: `evaluate` for a Draft model, then `publish`).
    */
-  readyToPublish: boolean;
+  readyToPublish: boolean;  // case-violation-ok-legacy-back-compat: agent payload JSON key
   /** When not published, the plain reason (the stored gate decision's reason, leakage, a calibration hold, kept in Draft, evaluated, or the lifecycle gate's refusal); else null. */
-  heldReason: string | null;
+  heldReason: string | null;  // case-violation-ok-legacy-back-compat: agent payload JSON key
   /** A clean error message when the build failed; else null. */
-  errorMessage: string | null;
+  errorMessage: string | null;  // case-violation-ok-legacy-back-compat: agent payload JSON key
   /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
-  warnings?: FeatureStepWarning[];
+  warnings?: FeatureStepWarning[];  // case-violation-ok-legacy-back-compat: agent payload JSON key
 }
 
 
 /** Feature importance entry matching MLExperimentResultsSpec. */
 export interface MLFeatureImportancePayload {
-  feature: string;
-  importance: number;
+  feature: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  importance: number;  // case-violation-ok-legacy-back-compat: artifact JSON key
 }
 
 /**
@@ -98,12 +107,6 @@ export interface PredictiveStudioBuilderPayload extends Omit<ModelingPlanSpec, '
 /** Where a build's model stands in the catalog, as the report's Outcome line says it. */
 export type CatalogStatus = 'published' | 'ready-to-publish' | 'held';
 
-/** The catalog status of a build's outcome. */
-export function CatalogStatusOf(o: Pick<PredictiveStudioBuildOutcome, 'published' | 'readyToPublish'>): CatalogStatus {
-  if (o.published) return 'published';
-  return o.readyToPublish ? 'ready-to-publish' : 'held';
-}
-
 /** The report's words for a catalog status. */
 const CATALOG_STATUS_TEXT: Readonly<Record<CatalogStatus, string>> = {
   'published': 'Published to Catalog',
@@ -111,215 +114,409 @@ const CATALOG_STATUS_TEXT: Readonly<Record<CatalogStatus, string>> = {
   'held': 'Held for Review',
 };
 
-/** Project the rich {@link BuildPredictionResult} into the compact, payload-safe outcome (pure → testable). */
-export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
-  return {
-    success: result.success,
-    pipelineId: result.pipelineId,
-    modelId: result.modelId,
-    trustTitle: result.trust === undefined ? undefined : TrustVerdicts.OutcomeTitle(result.trust),
-    headline: result.trust?.Headline,
-    published: result.published,
-    readyToPublish: result.readyToPublish,
-    heldReason: result.heldReason,
-    errorMessage: result.errorMessage,
-    warnings: result.warnings && result.warnings.length > 0 ? result.warnings : undefined,
-  };
-}
-
-/** A plain, user-facing sentence describing what the build did (for the agent's reasoning/message). */
-export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
-  const warningText = o.warnings && o.warnings.length > 0
-    ? ` Note: ${o.warnings.length} candidate feature(s) could not be mapped to pipeline steps (${o.warnings.map(w => `${w.FeatureName}: ${w.Reason}`).join('; ')}).`
-    : '';
-  if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
-  // a published build always carries its verdict's title (only a verdict that lets a user act on it publishes)
-  if (o.published) return `Done — I built and published your prediction (${o.trustTitle}). It's now in your Predictions.${warningText}`;
-  if (o.readyToPublish) return `Done — I built and trained your prediction (${o.trustTitle}). It clears the bar to publish; it is published only when you ask.${warningText}`;
-  const heldMessage = o.heldReason
-    ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
-    : 'it needs review before it can be published.';
-  return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${warningText}`;
-}
-
-/** Parse raw feature importance off the trained MLModel entity. */
-export function ParseFeatureImportance(raw: unknown): MLFeatureImportancePayload[] {
-  if (!raw) return [];
-  try {
-    const val = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw;
-    if (Array.isArray(val)) {
-      return val.map((item: unknown) => {
-        if (item && typeof item === 'object') {
-          const rec = item as Record<string, unknown>;
-          const feature = String(rec['feature'] ?? rec['name'] ?? rec['Feature'] ?? 'Unknown');
-          const importance = Number(rec['importance'] ?? rec['weight'] ?? rec['value'] ?? rec['Importance'] ?? 0);
-          return { feature, importance: isNaN(importance) ? 0 : importance };
-        }
-        return { feature: String(item), importance: 0 };
-      });
-    } else if (typeof val === 'object' && val !== null) {
-      return Object.entries(val as Record<string, unknown>).map(([k, v]) => {
-        const importance = typeof v === 'number' ? v : parseFloat(String(v));
-        return { feature: k, importance: isNaN(importance) ? 0 : importance };
-      });
-    }
-  } catch {
-    // Ignore JSON parse failure
-  }
-  return [];
-}
-
 /** The hidden-list note for a model whose stored weights are not of a kind shown as drivers but are not split/impurity counts. */
 export const UNSHOWN_IMPORTANCE_KIND_NOTE = "This model's feature weights are not of a kind we show as drivers yet.";
 
-/**
- * The note shown where a hidden feature-importance list would be, chosen from the model's stored importance kind:
- * split/impurity counts get the reason they are hidden; any other kind (unknown, `none`) gets a neutral note.
- */
-export function HiddenImportanceNote(lineageJSON: string | null | undefined): string {
-  return EvaluationLineage.Read(lineageJSON || null)?.ImportanceKind === 'split_or_impurity'
-    ? ImportanceDisplay.HiddenNote
-    : UNSHOWN_IMPORTANCE_KIND_NOTE;
+/** What the experiment report is generated from: the build's words and its stored rows. */
+export interface ExperimentReportInput {
+  /** The report's title (the plan's name). */
+  readonly Name: string;
+  /** The plan's goal. */
+  readonly Goal: string;
+  /** The plan's target column. */
+  readonly TargetVariable: string;
+  /** The plan's metric label, used only when the run stores no comparison. */
+  readonly TargetMetric: string;
+  /** The build's one training run; null when no run stored results (then every measurement renders "not measured"). */
+  readonly Run: { readonly ID: string; readonly ValidationResults: string | null } | null;
+  /** The trained model; null when the build shipped none. */
+  readonly Model: { readonly ID: string; readonly FeatureImportance: string | null; readonly Lineage: string | null } | null;
+  /** The trust verdict rendered from the run (`TrustVerdicts.DeriveTrustVerdict`); null → 'No model shipped'. */
+  readonly Trust: TrustVerdict | null;
+  /** Where the build's model stands in the catalog. */
+  readonly Status: CatalogStatus;
 }
 
 /**
- * Generate a clean markdown results report for the ML Experiment Results artifact. `trustTitle` and `headline` come
- * from the trust verdict (`TrustVerdicts.OutcomeTitle`, `TrustVerdict.Headline`). A `null` score means the model was
- * not measured; the report says so rather than standing in a number.
- * `hiddenImportanceNote` is the note printed when `importanceHidden` (see {@link HiddenImportanceNote});
- * it defaults to the split/impurity note.
+ * The stored rows a build's report is regenerated from (a gate re-reads them): the plan's words, the build's training
+ * run and its model with the model's catalog status.
  */
-export function GenerateMarkdownReport(
-  name: string,
-  goal: string,
-  targetVar: string,
-  targetMetric: string,
-  score: number | null,
-  trustTitle: string,
-  headline: string,
-  status: CatalogStatus,
-  features: MLFeatureImportancePayload[],
-  leaderboard: MLLeaderboardEntryPayload[] | undefined,
-  gate: BuildGateDecision | null,
-  importanceHidden: boolean,
-  hiddenImportanceNote: string = ImportanceDisplay.HiddenNote,
-): string {
-  return renderMarkdownReport(name, targetVar, targetMetric, score, trustTitle, headline, status, features, leaderboard, gate, importanceHidden, hiddenImportanceNote);
+export interface ExperimentReportRows {
+  /** The report's title (the plan's name). */
+  readonly Name: string;
+  /** The plan's goal. */
+  readonly Goal: string;
+  /** The plan's target column. */
+  readonly TargetVariable: string;
+  /** The plan's metric label. */
+  readonly TargetMetric: string;
+  /** The training run row; null when the build has none. */
+  readonly Run: ExperimentReportInput['Run'];
+  /** The model row and its status; null when the build shipped no model. */
+  readonly Model: (NonNullable<ExperimentReportInput['Model']> & { readonly Status: MJMLModelEntity['Status'] }) | null;
 }
 
-/** The report body. */
-function renderMarkdownReport(
-  name: string,
-  targetVar: string,
-  targetMetric: string,
-  score: number | null,
-  trustTitle: string,
-  headline: string,
-  status: CatalogStatus,
-  features: MLFeatureImportancePayload[],
-  leaderboard: MLLeaderboardEntryPayload[] | undefined,
-  gate: BuildGateDecision | null,
-  importanceHidden: boolean,
-  hiddenImportanceNote: string,
-): string {
-  const topFeatures = features.length > 0
-    ? features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% of the model's weight`).join('\n')
-    : importanceHidden
-      ? `- ${hiddenImportanceNote}`
-      : '- No feature importance weights were recorded for this model.';
-  const isTournament = (leaderboard?.length ?? 0) > 1;
-  const hasWinner = (leaderboard ?? []).some((r) => r.isWinner === true);
-  const shipped = finalistShipped(gate);
+/** The experiment report: its Markdown and every number it renders, each traced to the stored row it was read from. */
+export interface ExperimentReport {
+  /** The report body. */
+  readonly Markdown: string;
+  /** Every number `Markdown` renders (leaderboard ranks are positions, not numbers read from a row). */
+  readonly Numbers: readonly TracedNumber[];
+}
 
-  return `# Model Development Results: ${name}
+/** One feature-importance entry as stored on the model, with the JSON path of its weight when the weight is a stored number. */
+interface StoredFeatureWeight {
+  readonly Feature: string;
+  readonly Importance: number;
+  /** The path of the weight in `FeatureImportance`; null when the stored weight is not a number (a numeric string, a bare name). */
+  readonly Path: string | null;
+}
+
+/** The completed results a run stores, with the row they were read from. */
+interface StoredRun {
+  readonly ID: string;
+  readonly Json: string;
+  readonly Results: Extract<TrainingRunResults, { status: 'completed' }>;
+}
+
+/** One leaderboard row of the report: a candidate's inner-fold mean and interval, traced to its stored inner score. */
+interface ReportRow {
+  readonly Rank: number;
+  readonly Candidate: string;
+  readonly Metric: MetricKey;
+  readonly IsFinalist: boolean;
+  readonly Mean: TracedNumber | null;
+  readonly Lower: TracedNumber | null;
+  readonly Upper: TracedNumber | null;
+  /** The interval's level, as a percentage; null when it is not a stored number. */
+  readonly Level: TracedNumber | null;
+}
+
+/**
+ * The ML Experiment Results report. Every number it prints is read from the build's stored rows — the training run's
+ * `ValidationResults` (`MJ: ML Training Runs`) and the model's `FeatureImportance` (`MJ: ML Models`) — and returned with
+ * the path it was read at. A measurement the rows do not hold renders "not measured", never a stand-in number.
+ */
+export class ExperimentReports {
+  /** The entity a feature weight is read from. */
+  public static readonly ModelEntityName = 'MJ: ML Models';
+
+  /** How many of the model's weights the report lists. */
+  private static readonly maxFeatures = 8;
+
+  /**
+   * The report for a build: the executive summary (the verdict's words around its traced headline numbers), the
+   * performance section (the primary metric, the outcome, the inner-fold leaderboard), the features the model weighted
+   * most, and how the result was measured (the finalist's selection score and the leakage audit's result).
+   */
+  public static GenerateMarkdownReport(input: ExperimentReportInput): ExperimentReport {
+    const numbers: TracedNumber[] = [];
+    const run = ExperimentReports.readRun(input.Run);
+    const gate = run === null ? null : run.Results.gate;
+    const trainer = run === null ? null : run.Results.trainer;
+    const rows = ExperimentReports.leaderboardRows(run);
+    const summary = ExperimentReports.summary(input.Trust, run, numbers);
+    const why = ExperimentReports.whyLine(gate, run, numbers);
+    const primary = ExperimentReports.primaryMetricLine(input, run, numbers);
+    const leaderboard = ExperimentReports.leaderboardSection(rows, gate, numbers);
+    const features = ExperimentReports.featureLines(input.Model, numbers);
+    const measured = ExperimentReports.measurementLines(rows, trainer, gate, numbers);
+    const title = input.Trust === null ? 'No model shipped' : TrustVerdicts.OutcomeTitle(input.Trust);
+    const markdown = `# Model Development Results: ${input.Name}
 
 ## Executive Summary
-${headline}
+${summary}
 
-## ${performanceHeading(gate, isTournament, hasWinner)}
-${gate !== null && !shipped ? `- **Why**: ${gate.Reason}\n` : ''}- **Target Variable**: \`${targetVar}\`
-- **Primary Metric**: **${targetMetric}** = **${score !== null && score !== undefined ? score.toFixed(3) : 'not measured'}**
-- **Outcome**: **${trustTitle}** (${CATALOG_STATUS_TEXT[status]})
-${renderLeaderboardSection(leaderboard, targetMetric, hasWinner, gate)}
+## ${ExperimentReports.performanceHeading(gate, rows)}
+${why}- **Target Variable**: \`${input.TargetVariable}\`
+${primary}
+- **Outcome**: **${title}** (${CATALOG_STATUS_TEXT[input.Status]})
+${leaderboard}
 ## Features the model weighted most (associations, not causes)
-${topFeatures}
+${features}
 
 ## How this was measured
-- ${measurementNote(isSearchLeaderboard(leaderboard), shipped)}
+${measured}
 - Registered in the Predictive Studio Models catalog; the Outcome line above says whether it was published.
 `;
-}
-
-/**
- * Whether the marked finalist shipped: only when the stored gate outcome is `model`. A finalist the gate did not ship,
- * or one whose run stores no gate record (not evaluated), is never called the winner.
- */
-function finalistShipped(gate: BuildGateDecision | null): boolean {
-  return gate !== null && gate.Outcome === 'model';
-}
-
-/** The marked finalist's status cell: the winner only when it shipped; else whether the gate decided or never ran. */
-function finalistStatus(gate: BuildGateDecision | null): string {
-  if (finalistShipped(gate)) return '🏆 Winner (Selected)';
-  return gate === null ? 'Finalist (not evaluated)' : 'Finalist (not shipped)';
-}
-
-/** The performance section's heading: the winning model's, or what the stored gate decided instead. */
-function performanceHeading(gate: BuildGateDecision | null, isTournament: boolean, hasWinner: boolean): string {
-  if (gate !== null && gate.Outcome === 'no-signal') return 'No model shipped';
-  if (gate !== null && gate.Outcome === 'keep-simple-baseline') return 'Kept a simple baseline';
-  if (!isTournament) return 'Model Performance';
-  return hasWinner && finalistShipped(gate) ? 'Winning Model Performance' : 'Selected Model Performance';
-}
-
-/** Whether a leaderboard holds a search's inner-fold scores (optimistic by construction) rather than a holdout score. */
-function isSearchLeaderboard(leaderboard: readonly MLLeaderboardEntryPayload[] | undefined): boolean {
-  return (leaderboard || []).some((r) => r.optimistic === true);
-}
-
-/**
- * The leaderboard table. A search prints each candidate's inner-fold mean with its interval under a header that says
- * those scores are optimistic; any other leaderboard prints its score. An unmeasured row says so, and a leaderboard of
- * several rows with no measured one says it has no winner.
- */
-function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | undefined, targetMetric: string, hasWinner: boolean, gate: BuildGateDecision | null): string {
-  if (!leaderboard || leaderboard.length === 0) {
-    return '';
+    return { Markdown: markdown, Numbers: numbers };
   }
-  const search = isSearchLeaderboard(leaderboard);
-  const rows = leaderboard
-    .map((r) => {
-      const measured = typeof r.score === 'number';
-      const scoreText = typeof r.score === 'number' ? leaderboardScoreText(r, r.score, search) : 'not measured';
-      const status = r.isWinner ? finalistStatus(gate) : measured ? 'Evaluated' : 'Not measured';
-      return `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${scoreText} | ${status} |`;
-    })
-    .join('\n');
-  const noWinner = leaderboard.length > 1 && !hasWinner ? '\nNo candidate was measured, so no winner was picked.\n' : '';
-  // A search ranks on its inner-fold metric (the protocol's primary score), which may differ from the plan's metric.
-  const header = search ? `Inner-CV ${leaderboard[0].metricName || targetMetric} [95% interval] (optimistic)` : `Score (${targetMetric})`;
-  return `\n## Tournament Leaderboard\n| Rank | Algorithm | ${header} | Status |\n|---|---|---|---|\n${rows}\n${noWinner}`;
-}
 
-/** A measured row's score cell: `mean [lower, upper]` for a search row with an interval, else the score and its metric. */
-function leaderboardScoreText(r: MLLeaderboardEntryPayload, score: number, search: boolean): string {
-  if (search && typeof r.innerLower === 'number' && typeof r.innerUpper === 'number') {
-    return `${score.toFixed(3)} [${r.innerLower.toFixed(3)}, ${r.innerUpper.toFixed(3)}]`;
+  /**
+   * The report input of a build, from its stored rows, as {@link PredictiveStudioPipelineBuilderAgent.ReportPayload}
+   * builds it: the trust verdict rendered from the run with the model's lineage (none without a model, as a build that
+   * shipped no model has no verdict), and the catalog status read from the model's status ({@link CatalogStatusOfModel}).
+   */
+  public static InputFromRows(rows: ExperimentReportRows): ExperimentReportInput {
+    const model = rows.Model;
+    return {
+      Name: rows.Name, Goal: rows.Goal, TargetVariable: rows.TargetVariable, TargetMetric: rows.TargetMetric, Run: rows.Run,
+      Model: model === null ? null : { ID: model.ID, FeatureImportance: model.FeatureImportance, Lineage: model.Lineage },
+      Trust: model === null ? null : TrustVerdicts.DeriveTrustVerdict({ ValidationResults: rows.Run === null ? null : rows.Run.ValidationResults, Lineage: model.Lineage }),
+      Status: ExperimentReports.CatalogStatusOfModel(model === null ? null : model.Status),
+    };
   }
-  return `${score.toFixed(3)}${r.metricName ? ` (${r.metricName})` : ''}`;
-}
 
-/**
- * How the result was measured. A search picked its winner on inner-fold scores over the training rows and read the
- * held-back rows once, for the winner; a single model was scored on the held-back rows. A finalist the gate did not
- * ship is called the finalist, not the winner.
- */
-function measurementNote(search: boolean, shipped: boolean): string {
-  if (search) {
-    const picked = shipped ? 'winner' : 'finalist';
+  /**
+   * A model's catalog status from its stored status: `Published` is published; `Validated` and `KeepBaseline` (the
+   * lifecycle gate evaluated it, and a person may publish it) are ready to publish; any other status, or no model, is
+   * held. A Draft model a build kept only because publishing was off reads as held: its row does not store why it is Draft.
+   */
+  public static CatalogStatusOfModel(status: MJMLModelEntity['Status'] | null): CatalogStatus {
+    if (status === 'Published') return 'published';
+    return status === 'Validated' || status === 'KeepBaseline' ? 'ready-to-publish' : 'held';
+  }
+
+  /**
+   * The feature importance stored on a model, as the artifact lists it: a `{ feature: weight }` object, or an array of
+   * `{ feature|name|Feature, importance|weight|value|Importance }` objects (a bare array item is a feature of weight 0).
+   * A weight stored as a numeric string is read as that number; anything unreadable is 0. Empty for absent or
+   * malformed JSON.
+   */
+  public static ParseFeatureImportance(json: string | null | undefined): MLFeatureImportancePayload[] {
+    return ExperimentReports.storedFeatureWeights(json).map((w) => ({ feature: w.Feature, importance: w.Importance }));
+  }
+
+  /**
+   * The note shown where a hidden feature-importance list would be, chosen from the model's stored importance kind:
+   * split/impurity counts get the reason they are hidden; any other kind (unknown, `none`) gets a neutral note.
+   */
+  public static HiddenImportanceNote(lineageJSON: string | null | undefined): string {
+    return EvaluationLineage.Read(lineageJSON || null)?.ImportanceKind === 'split_or_impurity'
+      ? ImportanceDisplay.HiddenNote
+      : UNSHOWN_IMPORTANCE_KIND_NOTE;
+  }
+
+  /** The completed envelope the run stores; null when there is no run, no results, or results that are not a completed envelope. */
+  private static readRun(run: ExperimentReportInput['Run']): StoredRun | null {
+    if (run === null || run.ValidationResults === null) return null;
+    const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
+    if (parsed.Ok === false || parsed.Value.status !== 'completed') return null;
+    return { ID: run.ID, Json: run.ValidationResults, Results: parsed.Value };
+  }
+
+  /** A number of the run's stored results at `path`; null when the results do not hold a finite number there. */
+  private static fromRun(run: StoredRun, path: string, format: (value: number) => string): TracedNumber | null {
+    return TracedNumbers.FromStoredPath(TrustVerdicts.RunEntityName, run.ID, run.Json, path, format);
+  }
+
+  /** Record `n` as a rendered number and return its token. */
+  private static cite(numbers: TracedNumber[], n: TracedNumber): string {
+    if (!numbers.some((m) => m.Text === n.Text && m.Source.Path === n.Source.Path && m.Source.RecordID === n.Source.RecordID)) numbers.push(n);
+    return n.Text;
+  }
+
+  /** A score with three decimals (the leaderboard's and the primary metric's precision). */
+  private static threeDecimals(v: number): string {
+    return v.toFixed(3);
+  }
+
+  /** A fraction as a percentage with one decimal (a feature's share of the weight). */
+  private static percentOneDecimal(v: number): string {
+    return `${(v * 100).toFixed(1)}%`;
+  }
+
+  /** An interval level as a percentage, without trailing zeros (`0.95` → `95%`). */
+  private static levelPercent(v: number): string {
+    return `${Number((v * 100).toFixed(2))}%`;
+  }
+
+  /**
+   * The executive summary: the verdict's headline with its numbers traced to the stored comparison
+   * ({@link TrustVerdicts.ComparisonNumbers}); the headline as is when it quotes no number; "No model shipped." without a
+   * verdict, and the outcome title alone when the headline's numbers cannot be traced to a stored run.
+   */
+  private static summary(trust: TrustVerdict | null, run: StoredRun | null, numbers: TracedNumber[]): string {
+    if (trust === null) return 'No model shipped.';
+    const c = trust.Comparison;
+    if (c === null) return trust.Headline;
+    const quoted = GateRules.FormatInterval({ value: c.Value, lower: c.Lower, upper: c.Upper });
+    const at = trust.Headline.indexOf(quoted);
+    const traced = run === null ? [] : TrustVerdicts.ComparisonNumbers(trust, run.ID);
+    if (at < 0 || traced.length !== 3) return `${TrustVerdicts.OutcomeTitle(trust)}.`;
+    const [value, lower, upper] = traced.map((n) => ExperimentReports.cite(numbers, n));
+    return `${trust.Headline.slice(0, at)}${value} [${lower}, ${upper}]${trust.Headline.slice(at + quoted.length)}`;
+  }
+
+  /** The stored reason of a gate that shipped no trained model, with the numbers it quotes traced; empty otherwise. */
+  private static whyLine(gate: StoredGateRecord | null, run: StoredRun | null, numbers: TracedNumber[]): string {
+    if (gate === null || run === null || gate.decision.outcome === 'model') return '';
+    for (const n of TrustVerdicts.ReasonNumbers(gate, run.ID)) ExperimentReports.cite(numbers, n);
+    return `- **Why**: ${gate.reason.text}\n`;
+  }
+
+  /**
+   * The primary metric: the shipped comparison's gain over the flat guess, read from the stored interval the verdict
+   * quotes; "not measured" under the plan's metric label when the run stores no comparison.
+   */
+  private static primaryMetricLine(input: ExperimentReportInput, run: StoredRun | null, numbers: TracedNumber[]): string {
+    const trust = input.Trust;
+    const c = trust === null ? null : trust.Comparison;
+    const path = trust === null || run === null ? undefined : TrustVerdicts.ComparisonNumbers(trust, run.ID)[0]?.Source.Path;
+    const n = run === null || path === undefined ? null : ExperimentReports.fromRun(run, path, ExperimentReports.threeDecimals);
+    if (c === null || n === null) return `- **Primary Metric**: **${input.TargetMetric}** = **not measured**`;
+    return `- **Primary Metric**: **${c.Metric} gain over the flat guess** = **${ExperimentReports.cite(numbers, n)}**`;
+  }
+
+  /** The search's leaderboard, best-first by inner-fold mean, each row traced to its stored inner score's index. */
+  private static leaderboardRows(run: StoredRun | null): ReportRow[] {
+    const trainer = run === null ? null : run.Results.trainer;
+    if (run === null || trainer === null) return [];
+    const ranked = InnerScoreSelection.RankByInnerScore(trainer.innerScores);
+    return InnerScoreSelection.LeaderboardFromInnerScores(trainer.innerScores, trainer.finalist).map((row, i) => {
+      const base = `$.trainer.innerScores[${trainer.innerScores.indexOf(ranked[i])}].inner`;
+      return {
+        Rank: row.Rank, Candidate: row.Candidate, Metric: row.Metric, IsFinalist: row.IsFinalist,
+        Mean: ExperimentReports.fromRun(run, `${base}.value`, ExperimentReports.threeDecimals),
+        Lower: ExperimentReports.fromRun(run, `${base}.interval.lower`, ExperimentReports.threeDecimals),
+        Upper: ExperimentReports.fromRun(run, `${base}.interval.upper`, ExperimentReports.threeDecimals),
+        Level: ExperimentReports.fromRun(run, `${base}.interval.level`, ExperimentReports.levelPercent),
+      };
+    });
+  }
+
+  /** The finalist row, when its mean is a stored number (a finalist without one is not called the winner). */
+  private static measuredFinalist(rows: readonly ReportRow[]): ReportRow | null {
+    return rows.find((r) => r.IsFinalist && r.Mean !== null) || null;
+  }
+
+  /**
+   * Whether the marked finalist shipped: only when the stored gate outcome is `model`. A finalist the gate did not ship,
+   * or one whose run stores no gate record (not evaluated), is never called the winner.
+   */
+  private static finalistShipped(gate: StoredGateRecord | null): boolean {
+    return gate !== null && gate.decision.outcome === 'model';
+  }
+
+  /** The marked finalist's status cell: the winner only when it shipped; else whether the gate decided or never ran. */
+  private static finalistStatus(gate: StoredGateRecord | null): string {
+    if (ExperimentReports.finalistShipped(gate)) return '🏆 Winner (Selected)';
+    return gate === null ? 'Finalist (not evaluated)' : 'Finalist (not shipped)';
+  }
+
+  /** The performance section's heading: the winning model's, or what the stored gate decided instead. */
+  private static performanceHeading(gate: StoredGateRecord | null, rows: readonly ReportRow[]): string {
+    if (gate !== null && gate.decision.outcome === 'no-signal') return 'No model shipped';
+    if (gate !== null && gate.decision.outcome === 'keep-simple-baseline') return 'Kept a simple baseline';
+    if (rows.length <= 1) return 'Model Performance';
+    return ExperimentReports.measuredFinalist(rows) !== null && ExperimentReports.finalistShipped(gate) ? 'Winning Model Performance' : 'Selected Model Performance';
+  }
+
+  /**
+   * The leaderboard table: each candidate's inner-fold mean with its interval under a header that says those scores
+   * are optimistic (and the interval's stored level, when it is a stored number). An unmeasured row says so, and a
+   * leaderboard of several rows with no measured finalist says it has no winner.
+   */
+  private static leaderboardSection(rows: readonly ReportRow[], gate: StoredGateRecord | null, numbers: TracedNumber[]): string {
+    if (rows.length === 0) return '';
+    const body = rows.map((r) => `| ${r.Rank} | ${r.Candidate} | ${ExperimentReports.scoreCell(r, numbers)} | ${ExperimentReports.statusCell(r, gate)} |`).join('\n');
+    const noWinner = rows.length > 1 && ExperimentReports.measuredFinalist(rows) === null ? '\nNo candidate was measured, so no winner was picked.\n' : '';
+    const level = rows[0].Level;
+    const interval = level === null ? 'interval' : `${ExperimentReports.cite(numbers, level)} interval`;
+    return `\n## Tournament Leaderboard\n| Rank | Algorithm | Inner-CV ${rows[0].Metric} [${interval}] (optimistic) | Status |\n|---|---|---|---|\n${body}\n${noWinner}`;
+  }
+
+  /** A row's score cell: `mean [lower, upper]` when the bounds are stored numbers, the mean and its metric otherwise. */
+  private static scoreCell(r: ReportRow, numbers: TracedNumber[]): string {
+    if (r.Mean === null) return 'not measured';
+    const mean = ExperimentReports.cite(numbers, r.Mean);
+    if (r.Lower === null || r.Upper === null) return `${mean} (${r.Metric})`;
+    return `${mean} [${ExperimentReports.cite(numbers, r.Lower)}, ${ExperimentReports.cite(numbers, r.Upper)}]`;
+  }
+
+  /** A row's status cell. */
+  private static statusCell(r: ReportRow, gate: StoredGateRecord | null): string {
+    if (r.Mean === null) return 'Not measured';
+    return r.IsFinalist ? ExperimentReports.finalistStatus(gate) : 'Evaluated';
+  }
+
+  /**
+   * The features the model weighted most, each weight traced to the model's stored `FeatureImportance` (a weight not
+   * stored as a number is named without one); the hidden-list note when the lineage keeps the list hidden.
+   */
+  private static featureLines(model: ExperimentReportInput['Model'], numbers: TracedNumber[]): string {
+    const json = model === null ? null : model.FeatureImportance;
+    const weights = ExperimentReports.storedFeatureWeights(json);
+    if (model === null || json === null || weights.length === 0) return '- No feature importance weights were recorded for this model.';
+    if (!ImportanceDisplay.GlobalDriversShowable(model.Lineage)) return `- ${ExperimentReports.HiddenImportanceNote(model.Lineage)}`;
+    return [...weights].sort((a, b) => b.Importance - a.Importance).slice(0, ExperimentReports.maxFeatures).map((w) => {
+      const n = w.Path === null ? null : TracedNumbers.FromStoredPath(ExperimentReports.ModelEntityName, model.ID, json, w.Path, ExperimentReports.percentOneDecimal);
+      return n === null ? `- **${w.Feature}**: weight not recorded as a number` : `- **${w.Feature}**: ${ExperimentReports.cite(numbers, n)} of the model's weight`;
+    }).join('\n');
+  }
+
+  /**
+   * How the result was measured: how the finalist was picked (or that one candidate was scored on the held-back rows),
+   * the finalist's selection score read from its stored inner score, and the leakage audit's result from the stored
+   * flags. A run without a stored trainer result measured nothing and ran no audit.
+   */
+  private static measurementLines(rows: readonly ReportRow[], trainer: StoredTrainerResult | null, gate: StoredGateRecord | null, numbers: TracedNumber[]): string {
+    return [
+      `- ${ExperimentReports.measurementNote(rows, trainer, gate)}`,
+      `- ${ExperimentReports.selectionScoreLine(rows, numbers)}`,
+      `- ${ExperimentReports.leakageLine(trainer)}`,
+    ].join('\n');
+  }
+
+  /**
+   * A search picked its finalist on inner-fold scores over the training rows and read the held-back rows once, for the
+   * finalist; a single candidate was scored on the held-back rows. A finalist the gate did not ship, or one without a
+   * measured mean, is called the finalist, not the winner.
+   */
+  private static measurementNote(rows: readonly ReportRow[], trainer: StoredTrainerResult | null, gate: StoredGateRecord | null): string {
+    if (trainer === null) return 'The run stores no trainer result, so nothing was measured.';
+    if (rows.length <= 1) return 'The score comes from the rows held back from training.';
+    const picked = ExperimentReports.finalistShipped(gate) && ExperimentReports.measuredFinalist(rows) !== null ? 'winner' : 'finalist';
     return `The ${picked} is the simplest candidate whose inner-fold score is within one standard error of the best; inner-fold scores are optimistic, and the held-back rows were read once, for the ${picked}.`;
   }
-  return 'The score comes from the rows held back from training.';
+
+  /** The finalist's selection (inner-fold) score, traced to its stored inner score; "not measured" without one. */
+  private static selectionScoreLine(rows: readonly ReportRow[], numbers: TracedNumber[]): string {
+    const finalist = ExperimentReports.measuredFinalist(rows);
+    if (finalist === null || finalist.Mean === null) return 'Selection score: not measured.';
+    return `Selection score: the finalist **${finalist.Candidate}** scored ${ExperimentReports.cite(numbers, finalist.Mean)} (inner-fold ${finalist.Metric} mean, optimistic).`;
+  }
+
+  /** The leakage audit's result from the stored flags: their kinds, none raised, or not run (no stored trainer result). */
+  private static leakageLine(trainer: StoredTrainerResult | null): string {
+    if (trainer === null) return 'Leakage audit: not run.';
+    const kinds = [...new Set(trainer.leakageFlags.map((f) => f.kind))];
+    return kinds.length === 0 ? 'Leakage audit: no flags raised.' : `Leakage audit raised: ${kinds.join(', ')}.`;
+  }
+
+  /** The stored feature weights with the path of each weight that is a stored number; empty for absent or malformed JSON. */
+  private static storedFeatureWeights(json: string | null | undefined): StoredFeatureWeight[] {
+    if (json === null || json === undefined) return [];
+    const parsed = JsonParse.ParseJsonText(json, 'FeatureImportance');
+    if (parsed.Ok === false) return [];
+    const value = parsed.Value;
+    if (Array.isArray(value)) return value.map((item, i) => ExperimentReports.arrayWeight(item, i));
+    if (!JsonParse.IsJsonObject(value)) return [];
+    return Object.entries(value).map(([feature, weight]) => ({
+      Feature: feature,
+      Importance: ExperimentReports.weightOf(weight),
+      Path: typeof weight === 'number' ? `$[${JSON.stringify(feature)}]` : null,
+    }));
+  }
+
+  /** One array entry: an object naming its feature and weight, or a bare value naming a feature of weight 0. */
+  private static arrayWeight(item: JsonValue, index: number): StoredFeatureWeight {
+    if (!JsonParse.IsJsonObject(item)) return { Feature: String(item), Importance: 0, Path: null };
+    const nameKey = ['feature', 'name', 'Feature'].find((k) => item[k] !== undefined && item[k] !== null);
+    const weightKey = ['importance', 'weight', 'value', 'Importance'].find((k) => item[k] !== undefined && item[k] !== null);
+    const weight = weightKey === undefined ? 0 : item[weightKey];
+    return {
+      Feature: nameKey === undefined ? 'Unknown' : String(item[nameKey]),
+      Importance: ExperimentReports.weightOf(weight),
+      Path: weightKey !== undefined && typeof weight === 'number' ? `$[${index}].${weightKey}` : null,
+    };
+  }
+
+  /** A stored weight as a number: a number as is, a numeric string parsed, anything else (or NaN) 0. */
+  private static weightOf(weight: JsonValue | undefined): number {
+    const n = typeof weight === 'number' ? weight : typeof weight === 'string' ? parseFloat(weight) : Number.NaN;
+    return Number.isNaN(n) ? 0 : n;
+  }
 }
 
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
@@ -346,6 +543,43 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     return params.data?.[PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY] === true;
   }
 
+  /** The catalog status of a build's outcome. */
+  public static CatalogStatusOf(o: Pick<PredictiveStudioBuildOutcome, 'published' | 'readyToPublish'>): CatalogStatus {
+    if (o.published) return 'published';
+    return o.readyToPublish ? 'ready-to-publish' : 'held';
+  }
+
+  /** Project the rich {@link BuildPredictionResult} into the compact, payload-safe outcome (pure → testable). */
+  public static SummarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
+    return {
+      success: result.success,
+      pipelineId: result.pipelineId,
+      modelId: result.modelId,
+      trustTitle: result.trust === undefined ? undefined : TrustVerdicts.OutcomeTitle(result.trust),
+      headline: result.trust?.Headline,
+      published: result.published,
+      readyToPublish: result.readyToPublish,
+      heldReason: result.heldReason,
+      errorMessage: result.errorMessage,
+      warnings: result.warnings && result.warnings.length > 0 ? result.warnings : undefined,
+    };
+  }
+
+  /** A plain, user-facing sentence describing what the build did (for the agent's reasoning/message). */
+  public static BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
+    const warningText = o.warnings && o.warnings.length > 0
+      ? ` Note: ${o.warnings.length} candidate feature(s) could not be mapped to pipeline steps (${o.warnings.map(w => `${w.FeatureName}: ${w.Reason}`).join('; ')}).`
+      : '';
+    if (!o.success) return `I couldn't build the prediction: ${o.errorMessage || 'unknown error'}.${warningText}`;
+    // a published build always carries its verdict's title (only a verdict that lets a user act on it publishes)
+    if (o.published) return `Done — I built and published your prediction (${o.trustTitle}). It's now in your Predictions.${warningText}`;
+    if (o.readyToPublish) return `Done — I built and trained your prediction (${o.trustTitle}). It clears the bar to publish; it is published only when you ask.${warningText}`;
+    const heldMessage = o.heldReason
+      ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
+      : 'it needs review before it can be published.';
+    return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${warningText}`;
+  }
+
   /**
    * Run the deterministic build once. Reads the approved plan off `params.payload`, builds the
    * pipeline + trains (+ publishes-gated-on-trust when {@link AutoPublishOf} is on), writes the outcome to the payload, and terminates
@@ -356,14 +590,15 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     params: ExecuteAgentParams,
     _config: AgentConfiguration,
   ): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
-    const payload = (params.payload ?? {}) as PredictiveStudioBuilderPayload;
+    // `ExecuteAgentParams` carries the framework's untyped payload; this agent's payload is the builder payload.
+    const payload: PredictiveStudioBuilderPayload = params.payload || {};
     const user = params.contextUser;
     if (!user) {
-      return this.codeStep<P>('Failed', payload as unknown as P, 'No context user — cannot build the pipeline.');
+      return this.codeStep<P>('Failed', payload, 'No context user — cannot build the pipeline.');
     }
     const provider = this.ProviderToUse;
     if (!provider) {
-      return this.codeStep<P>('Failed', payload as unknown as P, 'No metadata provider available — cannot build the pipeline.');
+      return this.codeStep<P>('Failed', payload, 'No metadata provider available — cannot build the pipeline.');
     }
 
     let result: BuildPredictionResult;
@@ -377,19 +612,21 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       result = { success: false, published: false, readyToPublish: false, leakageFlagged: false, heldReason: null, errorMessage };
     }
 
-    const outcome = SummarizeBuildResult(result);
+    const outcome = PredictiveStudioPipelineBuilderAgent.SummarizeBuildResult(result);
     const newPayload: PredictiveStudioBuilderPayload = result.success
       ? PredictiveStudioPipelineBuilderAgent.ReportPayload(payload, result, outcome)
       : { ...payload, BuildResult: outcome };
     const directive: ArtifactDirective | undefined = result.success
       ? { behavior: 'create-new', name: `ML Experiment Results - ${newPayload.Name}`, description: `Experiment results and performance evaluation for ${newPayload.Name}` }
       : undefined;
-    return this.codeStep<P>('Success', newPayload as unknown as P, BuildOutcomeMessage(outcome), directive);
+    return this.codeStep<P>('Success', newPayload, PredictiveStudioPipelineBuilderAgent.BuildOutcomeMessage(outcome), directive);
   }
 
   /**
    * The payload of a build that ran: the outcome plus the experiment report (name, goal, target metric, leaderboard,
    * the feature importance the lineage lets us show, the best model when one shipped, the summary and its markdown).
+   * The report is generated from the build's stored rows (its training run and its model); its traced numbers are not
+   * put in the payload (G3.7 regenerates the report from the stored rows).
    */
   public static ReportPayload(payload: PredictiveStudioBuilderPayload, result: BuildPredictionResult, outcome: PredictiveStudioBuildOutcome): PredictiveStudioBuilderPayload {
     const targetVar = payload.TargetDefinition?.TargetVariable || 'Target';
@@ -397,20 +634,17 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     const goal = payload.Goal || `Predict ${targetVar}`;
     const isReg = payload.TargetDefinition?.ProblemType === 'regression';
     const targetMetric = payload.TargetDefinition?.SuccessMetric || (isReg ? 'R²' : 'AUC');
-    // The report's number is the stored comparison the verdict quotes; no stored comparison means no number.
-    const comparison = result.trust?.Comparison || null;
-    const reportMetric = comparison === null ? targetMetric : `${comparison.Metric} gain over the flat guess`;
-    const rawFeatures = ParseFeatureImportance(result.model?.FeatureImportance).sort((a, b) => b.importance - a.importance);
-    const showable = ImportanceDisplay.GlobalDriversShowable(result.model?.Lineage);
-    const featureBars = showable ? rawFeatures : [];
+    const rawFeatures = ExperimentReports.ParseFeatureImportance(result.model?.FeatureImportance).sort((a, b) => b.importance - a.importance);
+    const featureBars = ImportanceDisplay.GlobalDriversShowable(result.model?.Lineage) ? rawFeatures : [];
     const leaderboard: MLLeaderboardEntryPayload[] = result.leaderboard || [];
-    const summaryText = result.trust?.Headline || BuildOutcomeMessage(outcome);
-    const reportMarkdown = GenerateMarkdownReport(
-      name, goal, targetVar, reportMetric, comparison === null ? null : comparison.Value,
-      result.trust === undefined ? 'No model shipped' : TrustVerdicts.OutcomeTitle(result.trust),
-      summaryText, CatalogStatusOf(outcome), featureBars, leaderboard, result.Gate || null,
-      rawFeatures.length > 0 && !showable, HiddenImportanceNote(result.model?.Lineage),
-    );
+    const summaryText = result.trust?.Headline || PredictiveStudioPipelineBuilderAgent.BuildOutcomeMessage(outcome);
+    const report = ExperimentReports.GenerateMarkdownReport({
+      Name: name, Goal: goal, TargetVariable: targetVar, TargetMetric: targetMetric,
+      Run: result.run || null,
+      Model: result.model ? { ID: result.model.ID, FeatureImportance: result.model.FeatureImportance, Lineage: result.model.Lineage } : null,
+      Trust: result.trust || null,
+      Status: PredictiveStudioPipelineBuilderAgent.CatalogStatusOf(outcome),
+    });
     return {
       ...payload,
       BuildResult: outcome,
@@ -423,7 +657,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       BestModel: result.model ? { ID: result.model.ID, Name: `${name} (v${result.model.Version})`, Version: result.model.Version } : undefined,
       BestModelID: result.model ? result.model.ID : undefined,
       Summary: summaryText,
-      Markdown: reportMarkdown,
+      Markdown: report.Markdown,
       GateOutcome: result.Gate?.Outcome,
       GateReason: result.Gate?.Reason,
     };
@@ -434,10 +668,13 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     return new PredictiveStudioPipelineBuilder();
   }
 
-  /** Shape a terminal code-agent step (no chat loop), mirroring the Database Designer base code agent. */
+  /**
+   * Shape a terminal code-agent step (no chat loop), mirroring the Database Designer base code agent. A failed step
+   * carries the reasoning as its message and its error message.
+   */
   private codeStep<P>(
     step: 'Success' | 'Failed',
-    newPayload: P,
+    newPayload: PredictiveStudioBuilderPayload,
     reasoning: string,
     artifactDirective?: ArtifactDirective,
   ): { finalStep: BaseAgentNextStep<P>; stepCount: number } {
@@ -445,18 +682,12 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       terminate: true,
       step,
       reasoning,
-      newPayload,
+      // The base class's generic `P` is the caller's name for this agent's payload type, which is always the builder
+      // payload; TypeScript cannot relate a type parameter to a concrete type without this one assertion.
+      newPayload: newPayload as P,
       ...(artifactDirective ? { artifactDirective } : {}),
-    } as BaseAgentNextStep<P>;
-    if (step === 'Failed') {
-      (finalStep as { message?: string; errorMessage?: string }).message = reasoning;
-      (finalStep as { message?: string; errorMessage?: string }).errorMessage = reasoning;
-    }
+      ...(step === 'Failed' ? { message: reasoning, errorMessage: reasoning } : {}),
+    };
     return { finalStep, stepCount: 1 };
   }
-}
-
-/** Tree-shaking anchor — call from a manifest/loader so the @RegisterClass side effect survives bundling. */
-export function LoadPredictiveStudioPipelineBuilderAgent(): void {
-  /* no-op */
 }

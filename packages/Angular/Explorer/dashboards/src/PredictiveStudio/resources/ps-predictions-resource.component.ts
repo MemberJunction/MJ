@@ -4,7 +4,7 @@ import { CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJConversationEntity, MJMLModelEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { TrustVerdicts, AtRiskRules, ImportanceDisplay, type AtRiskRow, type OutcomeTitleText } from '@memberjunction/predictive-studio-core';
+import { TrustVerdicts, AtRiskRules, ImportanceDisplay, JsonParse, type AtRiskRow, type OutcomeTitleText, type SemanticsCheckBinding, type TracedNumber, type TrustEvidence } from '@memberjunction/predictive-studio-core';
 import type { PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
@@ -131,12 +131,14 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                         <ps-predictions-grid
                           data-testid="ps-atrisk-list"
                           #atriskList
-                          [modelId]="Selected.modelId"
-                          [runId]="LatestRunId"
-                          [title]="Selected.title"
-                          [entityName]="SelectedTargetEntityName"
-                          [problemType]="SelectedProblemType"
-                          height="580px"
+                          Surface="at-risk-list"
+                          [Provider]="Provider"
+                          [ModelId]="Selected.modelId"
+                          [RunId]="LatestRunId"
+                          [Title]="Selected.title"
+                          [EntityName]="SelectedTargetEntityName"
+                          [ProblemType]="SelectedProblemType"
+                          Height="580px"
                           (RowsLoaded)="OnAtRiskRowsLoaded($event)"
                           (RowsLoadFailed)="OnAtRiskRowsLoadFailed($event)">
                         </ps-predictions-grid>
@@ -148,12 +150,13 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                       @if (Selected.canOpen) {
                         <button mjButton variant="primary" size="sm" data-testid="ps-act-review" (click)="ScrollToList()"><i class="fa-solid fa-list-check"></i> Review the call list</button>
                         <button mjButton variant="secondary" size="sm" data-testid="ps-act-save" (click)="AskAgentTo('Save these prediction scores onto the records so my team can use them.')"><i class="fa-solid fa-floppy-disk"></i> Save scores to records</button>
-                        <button mjButton variant="secondary" size="sm" data-testid="ps-act-list" [disabled]="CreatingList || AtRiskRows.length === 0" (click)="SendToList()"><i class="fa-solid" [class.fa-paper-plane]="!CreatingList" [class.fa-spinner]="CreatingList" [class.fa-spin]="CreatingList"></i> Send to a list</button>
+                        <button mjButton variant="secondary" size="sm" data-testid="ps-act-list" [disabled]="CreatingList || AtRiskRows.length === 0 || !AtRiskListRanked" [title]="AtRiskListRanked ? '' : NoRankingReason" (click)="SendToList()"><i class="fa-solid" [class.fa-paper-plane]="!CreatingList" [class.fa-spinner]="CreatingList" [class.fa-spin]="CreatingList"></i> Send to a list</button>
                         <button mjButton variant="secondary" size="sm" data-testid="ps-act-export" [disabled]="AtRiskRows.length === 0" (click)="ExportList()"><i class="fa-solid fa-file-export"></i> Share / export</button>
                       } @else {
                         <div class="ps-action-locked"><i class="fa-solid fa-lock"></i> {{ Selected.trust.Reason }}</div>
                       }
                     </div>
+                    @if (Selected.canOpen && !AtRiskListRanked) { <div class="ps-list-result muted" data-testid="ps-act-list-reason">{{ NoRankingReason }}</div> }
                     @if (Selected.canOpen && AtRiskCapped) { <div class="ps-list-result muted" data-testid="ps-atrisk-capped">The latest run has more than {{ MaxRunDetailRowsLabel }} predictions; this list shows the first {{ MaxRunDetailRowsLabel }}.</div> }
                     @if (ListResult) { <div class="ps-list-result muted" data-testid="ps-list-result">{{ ListResult }}</div> }
                   </div>
@@ -332,16 +335,14 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     }
   }
 
+  /** Restores the saved split layout; an absent, malformed or non-object setting leaves the defaults. */
   private loadLayoutPrefs(): void {
-    const saved = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.predictions.layout');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (typeof parsed.copilotSizePct === 'number' && parsed.copilotSizePct >= 20 && parsed.copilotSizePct <= 60) {
-          this.CopilotSizePct = parsed.copilotSizePct;
-          this.MainSizePct = 100 - this.CopilotSizePct;
-        }
-      } catch {}
+    const parsed = JsonParse.ParseJsonText(UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.predictions.layout'), 'mj.predictiveStudio.predictions.layout');
+    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return;
+    const copilotSizePct = JsonParse.JsonNumber(parsed.Value, 'copilotSizePct');
+    if (copilotSizePct !== null && copilotSizePct >= 20 && copilotSizePct <= 60) {
+      this.CopilotSizePct = copilotSizePct;
+      this.MainSizePct = 100 - this.CopilotSizePct;
     }
   }
 
@@ -355,6 +356,17 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
 
   /** The ranked at-risk rows for the open prediction's latest run (empty until loaded / when no run yet). */
   public AtRiskRows: AtRiskRow[] = [];
+
+  /** The open prediction's `at-risk-list` binding row, from the embedded grid; null when the model has none. */
+  public AtRiskBinding: SemanticsCheckBinding | null = null;
+
+  /** Why "Send to a list" is off for a list that is not a risk ranking (Core's one sentence). */
+  public readonly NoRankingReason = AtRiskRules.NoRankingReason;
+
+  /** True when the at-risk list is a risk ranking, so "Send to a list" can pick members by the risk floor. */
+  public get AtRiskListRanked(): boolean {
+    return AtRiskRules.ListIsRanked(this.AtRiskBinding);
+  }
 
   /** The features the model weighted most for the open prediction (coefficient models only). */
   public Drivers: string[] = [];
@@ -399,20 +411,42 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     // the engine loads runs newest first, so the first run naming a model is its latest
     const runByModel = IndexByUUID(this.engine.TrainingRuns, (r) => r.ResultingModelID);
     return BusinessPredictions.BuildBusinessCatalog(
-      this.engine.PublishedModels.map((m: MJMLModelEntity) => ({
-        ModelID: m.ID,
-        Name: this.engine.ModelDisplayName(m),
-        // an empty column is not a stored record
-        ValidationResults: runByModel.Get(m.ID)?.ValidationResults || null,
-        Lineage: m.Lineage || null,
-        UpdatedAt: m.__mj_UpdatedAt || null,
-      })),
+      this.engine.PublishedModels.map((m: MJMLModelEntity) => {
+        const run = runByModel.Get(m.ID);
+        return {
+          ModelID: m.ID,
+          Name: this.engine.ModelDisplayName(m),
+          // an empty column is not a stored record
+          ValidationResults: run?.ValidationResults || null,
+          Lineage: m.Lineage || null,
+          UpdatedAt: m.__mj_UpdatedAt || null,
+          RunID: run?.ID || null,
+        };
+      }),
     );
   }
 
   /** "Checked against N past records it had never seen." — N is the locked holdout the stored decision was measured on. */
   public Evidence(c: BusinessPredictionCard): string {
-    return TrustVerdicts.TrustEvidenceLine({ count: c.trust.HoldoutRows, noun: 'records' });
+    return this.evidenceLine(c).Text;
+  }
+
+  /**
+   * Every number the trust banner renders (the evidence line's holdout count, the headline's comparison with the flat
+   * guess, and the numbers the stored reason quotes), each traced to the card's training run, so a test or a gate can
+   * recompute it from the stored row.
+   */
+  public TrustNumbers(c: BusinessPredictionCard): readonly TracedNumber[] {
+    const runId = c.runId;
+    if (runId === null) return this.evidenceLine(c).Numbers;
+    const run = this.engine.TrainingRuns.find((r) => UUIDsEqual(r.ID, runId));
+    const reason = TrustVerdicts.StoredReasonNumbers(run?.ValidationResults || null, runId);
+    return [...this.evidenceLine(c).Numbers, ...TrustVerdicts.ComparisonNumbers(c.trust, runId), ...reason];
+  }
+
+  /** The card's evidence line, its count traced to the card's training run. */
+  private evidenceLine(c: BusinessPredictionCard): TrustEvidence {
+    return TrustVerdicts.TrustEvidenceLine({ count: c.trust.HoldoutRows, noun: 'records', runId: c.runId });
   }
 
   /** The card's or banner's title: the stored outcome in words. */
@@ -542,6 +576,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   private resetAtRiskState(): void {
     this.AtRiskRows = [];
     this.AtRiskCapped = false;
+    this.AtRiskBinding = null;
     this.Drivers = [];
     this.AtRiskError = null;
     this.LatestRunId = null;
@@ -588,6 +623,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     // Copies: the label lookup below writes Label onto these rows, and the grid owns the originals.
     this.AtRiskRows = event.Rows.map((r) => ({ ...r }));
     this.AtRiskCapped = event.Capped;
+    this.AtRiskBinding = event.Binding;
     this.AtRiskError = null;
     const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, selected.modelId));
     await this.resolveAtRiskLabels(model);
@@ -600,6 +636,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public OnAtRiskRowsLoadFailed(message: string): void {
     this.AtRiskRows = [];
     this.AtRiskCapped = false;
+    this.AtRiskBinding = null;
     this.AtRiskError = message;
     this.AtRiskLoading = false;
     this.publishAgentContext();
@@ -702,11 +739,13 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
    * P1 #4 — "Send to a list" as a one-click server action (no agent sentence to parse): create an MJ List
    * over the model's target entity and add the at-risk members (risk at least `AT_RISK_LIST_MIN_RISK_PCT`, highest
    * first, at most {@link AtRiskListLimit}, in one transaction group) so a team can act on it immediately; the result
-   * line says how many of the qualifying records were added.
+   * line says how many of the qualifying records were added. Does nothing for a list that is not a risk ranking
+   * ({@link AtRiskListRanked}: its at-risk-list binding sorts by `none`).
    */
   public async SendToList(): Promise<void> {
     const selected = this.Selected;
-    if (this.CreatingList || this.AtRiskRows.length === 0 || !selected) return;
+    // A list that is not a risk ranking has no members to pick by the risk floor (D4-121): nothing is written.
+    if (this.CreatingList || this.AtRiskRows.length === 0 || !selected || !this.AtRiskListRanked) return;
     const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, selected.modelId));
     const target = this.targetEntityForModel(model);
     const entityId = target?.id;

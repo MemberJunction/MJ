@@ -5,10 +5,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { RunView } from '@memberjunction/core';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
-import { MonitoringJobSpecs, type Actor, type SemanticsCheck, type SignOff, type StoredPublishInputs, type TransitionRefusal } from '@memberjunction/predictive-studio-core';
+import { MonitoringJobSpecs, SemanticsRules, type Actor, type OutputSemantics, type SemanticsCheck, type SignOff, type StoredPublishInputs, type TransitionRefusal } from '@memberjunction/predictive-studio-core';
 
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 import { FakeClock, GateTestStore, GateWorld, type WorldModel } from '../../__tests__/fakes/gate-test-store';
+import { RecordingScoringActions } from '../../__tests__/fakes/scoring-action-fakes';
 import { MemoryStorageAccount, ProviderRow, RegisterMemoryStorage, ServeStorageProviders } from '../../__tests__/fakes/storage-fakes';
 import { StorageProviderArtifactLoader } from '../../scoring/storage-provider-artifact-loader';
 import type { EvaluateSubject, GateContext, PublishCheck, PublishRequest } from '../gate-context';
@@ -22,7 +23,8 @@ import { StoredRuns } from '../stored-publish-inputs';
 class StepGate extends LifecycleGate {
   public Lock(pipelineId: string, modelId: string, ctx: GateContext) { return this.LockPipelineAndModel(pipelineId, modelId, ctx); }
   public Status(model: MJMLModelEntity, to: MJMLModelEntity['Status']) { return this.CheckPersistedStatus(model, to); }
-  public Leakage(model: MJMLModelEntity, ctx: GateContext) { return this.CheckLeakageFlags(model, ctx); }
+  public Leakage(model: MJMLModelEntity, request: PublishRequest, ctx: GateContext) { return this.CheckLeakageFlags(model, request, ctx); }
+  public RequestSignOff(request: PublishRequest, evidenceSha256: string, ctx: GateContext) { return this.FindRequestSignOff(request, evidenceSha256, ctx); }
   public Inputs(modelId: string, initiator: Actor, ctx: GateContext) { return this.LoadStoredPublishInputs(modelId, initiator, ctx); }
   public Publishable(model: MJMLModelEntity, inputs: StoredPublishInputs, request: PublishRequest, ctx: GateContext) { return this.CheckPublishable(model, inputs, request, ctx); }
   public Apply(model: MJMLModelEntity, to: MJMLModelEntity['Status'], replaces: string | null, initiator: Actor, ctx: GateContext) { return this.ApplyTransition(model, to, replaces, initiator, ctx); }
@@ -31,6 +33,7 @@ class StepGate extends LifecycleGate {
     return this.WriteRefusalRecord(subject, initiator, request, refusal, transient, ctx);
   }
   public Job(model: MJMLModelEntity, ctx: GateContext) { return this.CreateMonitoringJob(model, ctx); }
+  public Bindings(model: MJMLModelEntity, semantics: OutputSemantics, ctx: GateContext) { return this.CreateOutputBindings(model, semantics, ctx); }
 }
 
 const agent: Actor = { kind: 'agent', agentRunId: '7A2B3C4D-0000-4000-8000-0000000000C1' };
@@ -69,7 +72,7 @@ beforeEach(() => {
   incumbent = world.Model('Published', 'model');
   candidate = world.Model('Validated', 'model', { IncumbentID: incumbent.ID });
   clock = new FakeClock();
-  gate = new StepGate(new StorageProviderArtifactLoader(), clock);
+  gate = new StepGate(new StorageProviderArtifactLoader(), clock, new RecordingScoringActions());
   ctx = GateContexts.ForRequest({ ContextUser: GateWorld.User, Provider: store.Provider() });
   request = { modelId: candidate.ID, purpose: 'publish', initiator: agent, signOffId: null, reason: null };
 });
@@ -141,18 +144,39 @@ describe('LifecycleGate.CheckLeakageFlags', () => {
     OverridesFlags: kinds,
   });
   it('is null for a run with no stored flags', async () => {
-    expect(await gate.Leakage(await Model(candidate.ID), ctx)).toBeNull();
+    expect(await gate.Leakage(await Model(candidate.ID), request, ctx)).toBeNull();
   });
   it('names each flag kind once', async () => {
     store.FlagLeakage(candidate.ID, flags);
-    expect(await gate.Leakage(await Model(candidate.ID), ctx)).toEqual({ kind: 'unacknowledged-leakage-flags', flags: ['single-feature-auc', 'high-cardinality-id'] });
+    expect(await gate.Leakage(await Model(candidate.ID), request, ctx)).toEqual({ kind: 'unacknowledged-leakage-flags', flags: ['single-feature-auc', 'high-cardinality-id'] });
   });
-  it('passes when an approving sign-off overrides every flag kind, and refuses a partial override', async () => {
+  it('passes when the request\'s approving sign-off overrides every flag kind, and names only the kinds a partial override leaves', async () => {
     store.FlagLeakage(candidate.ID, flags);
+    const signed: PublishRequest = { ...request, signOffId: 'S1' };
     const full: GateContext = { ...ctx, SignOffLookup: { FindApproving: async () => signOff(['single-feature-auc', 'high-cardinality-id']) } };
     const partial: GateContext = { ...ctx, SignOffLookup: { FindApproving: async () => signOff(['single-feature-auc']) } };
-    expect(await gate.Leakage(await Model(candidate.ID), full)).toBeNull();
-    expect(await gate.Leakage(await Model(candidate.ID), partial)).toMatchObject({ kind: 'unacknowledged-leakage-flags' });
+    expect(await gate.Leakage(await Model(candidate.ID), signed, full)).toBeNull();
+    expect(await gate.Leakage(await Model(candidate.ID), signed, partial)).toEqual({ kind: 'unacknowledged-leakage-flags', flags: ['high-cardinality-id'] });
+  });
+  it('asks the lookup with the hash of the evidence rebuilt from stored rows, and never for a request that names no sign-off', async () => {
+    store.FlagLeakage(candidate.ID, flags);
+    const asked: string[] = [];
+    const recording: GateContext = { ...ctx, SignOffLookup: { FindApproving: async (_r, sha) => { asked.push(sha); return signOff(['single-feature-auc', 'high-cardinality-id']); } } };
+    expect(await gate.Leakage(await Model(candidate.ID), request, recording)).toMatchObject({ kind: 'unacknowledged-leakage-flags' });
+    expect(asked).toEqual([]);
+    await gate.Leakage(await Model(candidate.ID), { ...request, signOffId: 'S1' }, recording);
+    expect(asked).toEqual([PublishRecords.EvidenceSha256(await ctx.EvidenceBuilder.Build(candidate.ID, ctx))]);
+  });
+});
+
+describe('LifecycleGate.FindRequestSignOff', () => {
+  it('is null without a signOffId; otherwise the lookup answers for the request and the evidence hash', async () => {
+    const seen: string[] = [];
+    const lookup: GateContext = { ...ctx, SignOffLookup: { FindApproving: async (r, sha) => { seen.push(`${r.signOffId}:${sha}`); return null; } } };
+    expect(await gate.RequestSignOff(request, 'h', lookup)).toBeNull();
+    expect(seen).toEqual([]);
+    expect(await gate.RequestSignOff({ ...request, signOffId: 'S9' }, 'h', lookup)).toBeNull();
+    expect(seen).toEqual(['S9:h']);
   });
 });
 
@@ -172,6 +196,50 @@ describe('LifecycleGate.LoadStoredPublishInputs', () => {
     if (row) row['TrainingRunID'] = null;
     expect(await gate.Inputs(candidate.ID, agent, ctx)).toMatchObject({ kind: 'not-servable' });
   });
+  it('a Publish of a model whose snapshot reference is null is withheld not-servable before the evidence is built, with a refusal record and the status unchanged (D4-128)', async () => {
+    const row = store.Row('MJ: ML Models', candidate.ID);
+    if (row) row['TrainingSnapshotID'] = null;
+    const reason = `ML Model ${candidate.ID} names no Training Snapshot to build evidence from`;
+    expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'withheld', ModelID: candidate.ID, Status: 'Validated', Transient: false, Refusal: { kind: 'not-servable', reason } });
+    expect(store.Status(candidate.ID)).toBe('Validated');
+    expect(store.StatusReason(candidate.ID)).toBe(`Automatic publish withheld: The model cannot be served: ${reason}`);
+    const records = store.PublishRecords(candidate.ID);
+    expect(records.map((r) => [r['Kind'], r['Purpose']])).toEqual([['refusal', 'publish']]);
+    expect(GateTestStore.JsonObjectColumn(records[0], 'Refusal')).toEqual({ kind: 'not-servable', reason });
+  });
+
+  /** A leakage-flagged candidate whose request names a sign-off overriding the flag, with its snapshot reference cleared. */
+  function flaggedSignedWithoutSnapshot(): { readonly Signed: PublishRequest; readonly Lookups: string[]; readonly Ctx: GateContext; readonly Reason: string } {
+    store.FlagLeakage(candidate.ID, [{ kind: 'single-feature-auc', sourceColumn: 'cancelled_flag', heldOutAuc: 0.97 }]);
+    const row = store.Row('MJ: ML Models', candidate.ID);
+    if (row) row['TrainingSnapshotID'] = null;
+    const lookups: string[] = [];
+    // The lookup is never reached: the stored inputs refuse before anything builds the evidence it is asked about.
+    const recording: GateContext = { ...ctx, SignOffLookup: { FindApproving: async (_r, sha) => { lookups.push(sha); return null; } } };
+    return { Signed: { ...request, signOffId: '5E1A0FF0-0000-4000-8000-0000000000D1' }, Lookups: lookups, Ctx: recording, Reason: `ML Model ${candidate.ID} names no Training Snapshot to build evidence from` };
+  }
+
+  it('a Publish of a leakage-flagged model naming a sign-off, whose snapshot reference is null, is withheld not-servable before the leakage check builds evidence, with a refusal record and the status unchanged (D4-128, R1)', async () => {
+    const f = flaggedSignedWithoutSnapshot();
+    expect(await gate.Publish(f.Signed, f.Ctx)).toMatchObject({ Kind: 'withheld', ModelID: candidate.ID, Status: 'Validated', Transient: false, Refusal: { kind: 'not-servable', reason: f.Reason } });
+    expect(f.Lookups).toEqual([]);
+    expect(store.Status(candidate.ID)).toBe('Validated');
+    const records = store.PublishRecords(candidate.ID);
+    expect(records.map((r) => [r['Kind'], r['Purpose']])).toEqual([['refusal', 'publish']]);
+    expect(GateTestStore.JsonObjectColumn(records[0], 'Refusal')).toEqual({ kind: 'not-servable', reason: f.Reason });
+  });
+
+  it('a restore (R1) of a leakage-flagged model naming a sign-off, whose snapshot reference is null, is withheld not-servable with a refusal record and the status unchanged (D4-128, R1)', async () => {
+    expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'published', ModelID: candidate.ID });
+    store.SetStatus(candidate.ID, 'Validated');
+    const f = flaggedSignedWithoutSnapshot();
+    expect(await gate.Publish(f.Signed, f.Ctx)).toMatchObject({ Kind: 'withheld', ModelID: candidate.ID, Status: 'Validated', Transient: false, Refusal: { kind: 'not-servable', reason: f.Reason } });
+    expect(f.Lookups).toEqual([]);
+    expect(store.Status(candidate.ID)).toBe('Validated');
+    const records = store.PublishRecords(candidate.ID);
+    expect(records.map((r) => [r['Kind'], r['Purpose']])).toEqual([['publish', 'publish'], ['refusal', 'publish']]);
+    expect(GateTestStore.JsonObjectColumn(records[1], 'Refusal')).toEqual({ kind: 'not-servable', reason: f.Reason });
+  });
 });
 
 describe('LifecycleGate.CheckPublishable', () => {
@@ -185,6 +253,14 @@ describe('LifecycleGate.CheckPublishable', () => {
     world.CorruptArtifact(candidate.ID);
     expect(await gate.Publishable(await Model(candidate.ID), await Inputs(), request, ctx)).toMatchObject({
       Ok: false, Refusal: { kind: 'artifact-unverifiable' }, Transient: false, Artifact: { Status: 'hash-mismatch', CheckedAt: expect.any(Date) },
+    });
+  });
+  it("refuses a model whose stored output bindings break its semantics, naming the mismatch (the production check)", async () => {
+    const row = store.OutputBindings(candidate.ID).find((r) => r['Surface'] === 'at-risk-list');
+    if (!row) throw new Error('the candidate has no at-risk-list binding');
+    row['SortsBy'] = 'score-asc';
+    expect(await gate.Publishable(await Model(candidate.ID), await Inputs(), request, ctx)).toMatchObject({
+      Ok: false, Refusal: { kind: 'semantics-check-failed', mismatches: ['at-risk-list: SortsBy is score-asc, the semantics require adverse-probability-desc'] },
     });
   });
   it('a failing semantics check is semantics-check-failed', async () => {
@@ -208,7 +284,8 @@ describe('LifecycleGate.CheckPublishable', () => {
       OverridesFlags: [],
     };
     const seams: GateContext = { ...ctx, SignOffLookup: { FindApproving: async () => approving } };
-    expect(await gate.Publishable(await Model(candidate.ID), await Inputs(), request, seams)).toMatchObject({ Ok: true, SignOff: { ID: 'S2' }, Approver: { Kind: 'user', UserID: 'U-APPROVER' } });
+    expect(await gate.Publishable(await Model(candidate.ID), await Inputs(), request, seams)).toMatchObject({ Ok: false, Refusal: { kind: 'no-sign-off' } });
+    expect(await gate.Publishable(await Model(candidate.ID), await Inputs(), { ...request, signOffId: 'S2' }, seams)).toMatchObject({ Ok: true, SignOff: { ID: 'S2' }, Approver: { Kind: 'user', UserID: 'U-APPROVER' } });
   });
 });
 
@@ -275,5 +352,131 @@ describe('LifecycleGate.CreateMonitoringJob', () => {
     expect(store.Row('MJ: Scheduled Jobs', id)).toMatchObject({
       Status: 'Pending', JobTypeID: GateWorld.JobTypeID, OwnerUserID: GateWorld.User.ID, CronExpression: '0 3 1 * *', Timezone: 'UTC', Configuration: JSON.stringify(spec),
     });
+  });
+});
+
+describe('LifecycleGate.CreateOutputBindings (inside Evaluate)', () => {
+  /** The model's binding rows as surface → (sort, direction, label). */
+  const shapes = (modelId: string) => store.OutputBindings(modelId).map((r) => [r['Surface'], r['SortsBy'], r['DriverDirectionRelativeTo'], r['Label']]);
+  /** The world's models' stored semantics (`GateWorld`: binary, classes '0'/'1', adverse 0). */
+  const binary: OutputSemantics = { task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 } };
+  const defaults = SemanticsRules.DefaultBindings(binary).map((b) => [b.Surface, b.SortsBy, b.DriverDirectionRelativeTo, b.Label]);
+
+  it("an applied Evaluate creates the four rows from the model's stored semantics, in the evaluation's transaction", async () => {
+    const draft = world.Model('Draft', 'model');
+    expect(store.OutputBindings(draft.ID)).toEqual([]);
+    expect(await gate.Evaluate({ modelId: draft.ID }, agent, ctx)).toMatchObject({ Kind: 'evaluated', To: 'Validated' });
+    expect(shapes(draft.ID)).toEqual(defaults);
+    expect(store.Transactions).toEqual(['begin', 'commit']);
+  });
+  it('a KeepBaseline evaluation creates them too', async () => {
+    const draft = world.Model('Draft', 'keep');
+    expect(await gate.Evaluate({ modelId: draft.ID }, agent, ctx)).toMatchObject({ Kind: 'evaluated', To: 'KeepBaseline' });
+    expect(store.OutputBindings(draft.ID)).toHaveLength(4);
+  });
+  it('a second Evaluate creates none: it is refused, and the step itself never overwrites an existing row', async () => {
+    const draft = world.Model('Draft', 'model');
+    await gate.Evaluate({ modelId: draft.ID }, agent, ctx);
+    const edited = store.OutputBindings(draft.ID).find((r) => r['Surface'] === 'record-panel');
+    if (!edited) throw new Error('no record-panel row');
+    edited['Label'] = 'Risk of 0 (edited)';
+    const saves = store.SaveCount();
+    expect(await gate.Evaluate({ modelId: draft.ID }, agent, ctx)).toMatchObject({ Kind: 'refused', Refusal: { kind: 'illegal-transition' } });
+    await gate.Bindings(await Model(draft.ID), binary, ctx);
+    expect(store.SaveCount()).toBe(saves);
+    expect(store.OutputBindings(draft.ID)).toHaveLength(4);
+    expect(store.OutputBindings(draft.ID).find((r) => r['Surface'] === 'record-panel')?.['Label']).toBe('Risk of 0 (edited)');
+  });
+  it('completes a partial set, creating only the missing surfaces', async () => {
+    const draft = world.Model('Draft', 'model');
+    store.Insert('MJ: ML Output Bindings', { ID: '7A2B3C4D-0000-4000-8000-0000000000D1', ModelID: draft.ID, Surface: 'why-badge', SortsBy: 'none', DriverDirectionRelativeTo: 'adverse-class', Label: '0 risk' });
+    await gate.Evaluate({ modelId: draft.ID }, agent, ctx);
+    expect(store.Saves.filter((x) => x.startsWith('MJ: ML Output Bindings '))).toHaveLength(3);
+    expect(store.OutputBindings(draft.ID).map((r) => r['Surface']).sort()).toEqual(['at-risk-list', 'predictions-grid', 'record-panel', 'why-badge']);
+    expect(store.OutputBindings(draft.ID).filter((r) => r['Surface'] === 'why-badge')).toHaveLength(1);
+  });
+  it('a refused Evaluate writes no rows', async () => {
+    const draft = world.Model('Draft', 'model');
+    store.SetStatus(draft.ID, 'Archived');
+    expect(await gate.Evaluate({ modelId: draft.ID }, agent, ctx)).toMatchObject({ Kind: 'refused' });
+    expect(store.OutputBindings(draft.ID)).toEqual([]);
+  });
+  it('a failed binding save throws with the entity message and rolls the evaluation back', async () => {
+    const draft = world.Model('Draft', 'model');
+    store.FailingSaves.set('MJ: ML Output Bindings', 'at-risk-list: SortsBy is none, the semantics require adverse-probability-desc');
+    await expect(gate.Evaluate({ modelId: draft.ID }, agent, ctx)).rejects.toThrow(`Saving the at-risk-list output binding of ML Model ${draft.ID} failed: at-risk-list: SortsBy is none`);
+    expect([store.Status(draft.ID), store.OutputBindings(draft.ID)]).toEqual(['Draft', []]);
+    expect(store.Transactions).toEqual(['begin', 'rollback']);
+  });
+  it.each([
+    ['empty', '', 'OutputSemantics is empty; it must hold JSON'],
+    ['malformed', '{"task":{"kind":"sideways"}}', 'TaskType kind "sideways" is not one of'],
+  ])('an Evaluate of a Draft model whose OutputSemantics is %s is refused not-servable before the status write: Draft kept, no rows, nothing committed (D4-129)', async (_label, stored, error) => {
+    const draft = world.Model('Draft', 'model');
+    const row = store.Row('MJ: ML Models', draft.ID);
+    if (row === undefined) throw new Error('no model row');
+    row['OutputSemantics'] = stored;
+    const outcome = await gate.Evaluate({ modelId: draft.ID }, agent, ctx);
+    expect(outcome).toMatchObject({ Kind: 'refused', Refusal: { kind: 'not-servable' } });
+    if (outcome.Kind !== 'refused' || outcome.Refusal.kind !== 'not-servable') throw new Error('not a not-servable refusal');
+    expect(outcome.Refusal.reason).toContain(`ML Model ${draft.ID}'s OutputSemantics does not parse: `);
+    expect(outcome.Refusal.reason).toContain(error);
+    expect([store.Status(draft.ID), store.OutputBindings(draft.ID), store.Transactions]).toEqual(['Draft', [], ['begin', 'rollback']]);
+    expect(store.Saves.filter((x) => x.startsWith('MJ: ML Models ') || x.startsWith('MJ: ML Model Publish Records '))).toEqual([]);
+  });
+  it('throws for a failed read of the existing rows', async () => {
+    store.ReadLog.FailNext('MJ: ML Output Bindings');
+    await expect(gate.Bindings(await Model(candidate.ID), binary, ctx)).rejects.toThrow(`Reading the output bindings of ML Model ${candidate.ID} failed`);
+  });
+});
+
+describe('LifecycleGate.CheckPublishable fills missing output bindings before the semantics check (D4-112)', () => {
+  /** The model's binding rows as surface → (sort, direction, label), in surface order. */
+  const shapes = (modelId: string) =>
+    store.OutputBindings(modelId).map((r) => [r['Surface'], r['SortsBy'], r['DriverDirectionRelativeTo'], r['Label']]).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  const defaults = SemanticsRules.DefaultBindings({ task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 } })
+    .map((b) => [b.Surface, b.SortsBy, b.DriverDirectionRelativeTo, b.Label]).sort((a, b) => a[0].localeCompare(b[0]));
+  const bindingSaves = () => store.Saves.filter((x) => x.startsWith('MJ: ML Output Bindings ')).length;
+  const dropBindings = (modelId: string, surfaces?: readonly string[]) => {
+    store.Tables['MJ: ML Output Bindings'] = (store.Tables['MJ: ML Output Bindings'] || []).filter((r) => !(String(r['ModelID']) === modelId && (surfaces === undefined || surfaces.includes(String(r['Surface'])))));
+  };
+
+  it('a publish of a Validated model with no rows creates the four default rows and proceeds', async () => {
+    dropBindings(candidate.ID);
+    expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'published', ModelID: candidate.ID });
+    expect(shapes(candidate.ID)).toEqual(defaults);
+    expect(bindingSaves()).toBe(4);
+  });
+  it('with three of four rows present, creates only the missing one', async () => {
+    dropBindings(candidate.ID, ['why-badge']);
+    expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'published' });
+    expect(store.Saves.filter((x) => x.startsWith('MJ: ML Output Bindings '))).toHaveLength(1);
+    expect(shapes(candidate.ID)).toEqual(defaults);
+  });
+  it('a present row that disagrees is still refused, and the attempt keeps no row it created and changes none', async () => {
+    dropBindings(candidate.ID, ['why-badge']);
+    const atRisk = store.OutputBindings(candidate.ID).find((r) => r['Surface'] === 'at-risk-list');
+    if (!atRisk) throw new Error('no at-risk-list row');
+    atRisk['SortsBy'] = 'score-asc';
+    const before = store.OutputBindings(candidate.ID).map((r) => ({ ...r }));
+    expect(await gate.Publish(request, ctx)).toMatchObject({
+      Kind: 'withheld', Refusal: { kind: 'semantics-check-failed', mismatches: ['at-risk-list: SortsBy is score-asc, the semantics require adverse-probability-desc'] },
+    });
+    expect(store.OutputBindings(candidate.ID)).toEqual(before);
+    expect(store.Status(candidate.ID)).toBe('Validated');
+  });
+  it('a rollback fills the missing rows', async () => {
+    await gate.Publish(request, ctx);
+    await gate.Archive(candidate.ID, 'retired', agent, ctx);
+    dropBindings(candidate.ID);
+    expect(await gate.Publish({ ...request, purpose: 'rollback', reason: 'the newer model degraded' }, ctx)).toMatchObject({ Kind: 'published', ModelID: candidate.ID });
+    expect(shapes(candidate.ID)).toEqual(defaults);
+  });
+  it('a restore (R1) fills the missing rows', async () => {
+    const first = await gate.Publish(request, ctx);
+    store.SetStatus(candidate.ID, 'Validated');   // a write outside the gate
+    dropBindings(candidate.ID);
+    expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'published', PublishRecordID: first.Kind === 'published' ? first.PublishRecordID : '' });
+    expect(shapes(candidate.ID)).toEqual(defaults);
   });
 });

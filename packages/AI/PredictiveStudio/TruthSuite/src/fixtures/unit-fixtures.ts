@@ -10,7 +10,7 @@ import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
-  EvaluationProtocolRules, PredictionUnit,
+  EvaluationProtocolRules, PredictionUnit, UtcDay,
   type ColumnEncodingKind, type DecisionDateRule, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
   type PredictionUnitSpec, type SliceSpec, type TaskType, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
@@ -364,6 +364,32 @@ export class UnitFixtures {
       UnitFixtures.ScenarioAlgorithm(task),
       o.Protocol,
     );
+  }
+
+  /** The C3 task (W9-multiclass s42): the three attendance outcomes in the artifact's order, `NoShow` the adverse class. */
+  public static readonly W9MulticlassTask: TaskType = { kind: 'multiclass', classOrder: ['Attended', 'Cancelled', 'NoShow'], adverseIndices: [2] };
+
+  /**
+   * The C3 attendance unit over W9's event registrations ({@link W9MulticlassTask}), labelled by `Outcome`. W9 has no
+   * change history, so the unit is decided on today (advancing each run) and an uncovered row is excluded and counted,
+   * as the pipeline migration builds a legacy unit, so features read as they stand.
+   */
+  public static W9MulticlassUnitDraft(h: TruthHarness): UnitDraft {
+    const today = UtcDay.UtcDayIso(new Date());
+    const tomorrow = UtcDay.UtcDayIso(new Date(Date.now() + 86_400_000));
+    return {
+      Name: `C3 attendance (multiclass) ${h.RunID}`, Description: null,
+      UnitRows: { kind: 'grain', grainEntity: UnitFixtures.TruthEntityName(h, 'W9_EventRegistration'), decisionDate: { kind: 'fixed', date: today, advance: 'each-run' }, filter: [] },
+      LabelRule: { kind: 'column', column: 'Outcome' }, LabelWindowDays: 1, LabelGapDays: 0, TaskType: UnitFixtures.W9MulticlassTask,
+      Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: tomorrow } },
+      ChangeHistoryPolicy: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' }, GroupKey: null, TemporalSpec: null,
+      DecisionSpec: { action: 'reminder', actorRole: 'events team', capacityPerPeriod: null, period: 'year' }, IncumbentHeuristic: { kind: 'none' },
+    };
+  }
+
+  /** The C3 pipeline: the W9 multiclass unit, logistic regression over three registration columns, a seeded 25% holdout. */
+  public static ProvisionW9MulticlassPipeline(h: TruthHarness): Promise<ProvisionedUnitPipeline> {
+    return UnitFixtures.provision(h, UnitFixtures.W9MulticlassUnitDraft(h), ['TicketTier', 'DaysRegisteredBefore', 'PriorAttendance'], 'Logistic Regression', { Kind: 'seeded-random', Fraction: 0.25 });
   }
 
   /** The newest training run of a pipeline, read-only: the fields the gate checks read. */

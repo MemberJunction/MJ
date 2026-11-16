@@ -44,6 +44,14 @@ export interface SignOff {
   readonly OverridesFlags: readonly LeakageFlag['kind'][];
 }
 
+/** Why a sign-off was not recorded: the caller is not a person, flags were overridden without a reason, or the model is Archived. */
+export type SignOffRefusal = 'not-human' | 'overrides-without-reason' | 'model-archived';
+
+/** The result of recording a sign-off (in-process, PascalCase): its record and evidence hash, or the refusal. */
+export type SignOffRecordResult =
+  | { readonly Ok: true; readonly SignOffRecordID: string; readonly EvidenceSha256: string }
+  | { readonly Ok: false; readonly Refusal: SignOffRefusal };
+
 /** One dashboard surface's output binding (a `MJ: ML Output Bindings` row), as the semantics check reads it. */
 export interface SemanticsCheckBinding {
   readonly BindingID: string;
@@ -60,7 +68,8 @@ export interface SemanticsCheckBinding {
  */
 export interface SemanticsCheck {
   readonly ModelID: string;
-  readonly Semantics: OutputSemantics;
+  /** The model's parsed `OutputSemantics`; null when they do not parse (the check has then failed, saying why). */
+  readonly Semantics: OutputSemantics | null;
   readonly BindingSource: 'MJ: ML Output Bindings';
   readonly UIBindings: readonly SemanticsCheckBinding[];
   readonly Result: { readonly Status: 'passed' } | { readonly Status: 'failed'; readonly Mismatches: readonly string[] };

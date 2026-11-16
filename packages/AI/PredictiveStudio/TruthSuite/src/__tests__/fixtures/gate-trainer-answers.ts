@@ -1,7 +1,8 @@
 /**
- * The trainer answers the lifecycle-gate harness (`lifecycle-gate.adversarial.db.test.ts`) stores, the way the trainer
- * returns them to `TrainingEngine`: a completed binary run under the protocol's budgets whose finalist `xgb` beats the
- * dummy and the best simple baseline (the gate ships the model), and the same run whose comparisons show no signal.
+ * The trainer answers the lifecycle-gate and governance harnesses (`lifecycle-gate.adversarial.db.test.ts`,
+ * `governance.adversarial.db.test.ts`) store, the way the trainer returns them to `TrainingEngine`: a completed binary
+ * run under the protocol's budgets whose finalist `xgb` beats the dummy and the best simple baseline (the gate ships the
+ * model), the same run whose comparisons show no signal, and a multiclass run over the W9 classes that ships its model.
  * A model answer carries one returned artifact — the shipped candidate's bytes, unique per run — with its real SHA-256;
  * the no-signal answer carries none (nothing ships).
  * The harness stores these through the production writers only (the artifact registry, `GateRecords`,
@@ -16,6 +17,17 @@ export type IncumbentDiff = NonNullable<StoredGateRecord['incumbentDiff']>;
 /** The binary task every harness unit, protocol and artifact uses. */
 export const GATE_TASK: TaskType = { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 };
 
+/**
+ * The multiclass task of the governance harness's synthetic model: the W9 classes, `NoShow` and `Cancelled` adverse
+ * (a C3 model: more than one adverse class).
+ */
+export const MULTICLASS_TASK: TaskType = { kind: 'multiclass', classOrder: ['Attended', 'NoShow', 'Cancelled'], adverseIndices: [1, 2] };
+
+/** The class order an artifact of `task` declares: a classification task's classes, null for a regression kind. */
+function classOrderOf(task: TaskType): readonly string[] | null {
+  return task.kind === 'binary' || task.kind === 'multiclass' ? task.classOrder : null;
+}
+
 /** The feature schema hash every harness artifact declares (the harness stores no snapshot to take one from). */
 export const GATE_FEATURE_SCHEMA_HASH = 'f'.repeat(64);
 
@@ -26,12 +38,15 @@ export class GateTrainerAnswers {
     return { metric, value, interval: { level: 0.95, lower, upper }, n };
   }
 
-  /** A returned artifact for `candidate`: a ps-predictor/v2 envelope unique to `tag` and the call, with its real SHA-256. */
-  public static Artifact(candidate: string, tag: string): ReturnedArtifact {
+  /**
+   * A returned artifact for `candidate`: a ps-predictor/v2 envelope unique to `tag` and the call, with its real SHA-256,
+   * declaring `task`'s class order (the binary harness task's by default).
+   */
+  public static Artifact(candidate: string, tag: string, task: TaskType = GATE_TASK): ReturnedArtifact {
     const bytes = Buffer.from(JSON.stringify({ format: 'ps-predictor/v2', version: 2, candidate, tag, nonce: randomBytes(16).toString('hex') }), 'utf8');
     return {
       candidate, bytesBase64: bytes.toString('base64'), sha256: createHash('sha256').update(bytes).digest('hex'),
-      featureSchemaHash: GATE_FEATURE_SCHEMA_HASH, classOrder: ['0', '1'],
+      featureSchemaHash: GATE_FEATURE_SCHEMA_HASH, classOrder: classOrderOf(task),
     };
   }
 
@@ -89,5 +104,33 @@ export class GateTrainerAnswers {
       gate: { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null },
       artifacts: [],
     };
+  }
+
+  /**
+   * {@link ModelWins} for {@link MULTICLASS_TASK}: the same comparisons (the gate ships `xgb`), every score the
+   * multiclass proper score (`multiclass-log-loss`, the default protocol's primary for a multiclass unit), the
+   * multiclass default secondaries (`accuracy`, `f1`), the multinomial GLM baseline and an artifact declaring the W9
+   * class order.
+   */
+  public static MulticlassModelWins(trainingRunId: string, protocol: Pick<EvaluationProtocolSpec, 'budgets'>, tag: string): TrainerCompleted {
+    const base = GateTrainerAnswers.ModelWins(trainingRunId, protocol, tag, null);
+    const score = (value: number, lower: number, upper: number, n = 1205): MetricWithInterval => GateTrainerAnswers.Mwi('multiclass-log-loss', value, lower, upper, n);
+    return {
+      ...base,
+      innerScores: [{ candidate: 'xgb', inner: score(0.81, 0.79, 0.83, 3668), folds: 15, optimistic: true }],
+      holdout: { primary: score(0.82, 0.8, 0.84), secondary: [GateTrainerAnswers.Mwi('accuracy', 0.61, 0.58, 0.64, 1205), GateTrainerAnswers.Mwi('f1', 0.55, 0.52, 0.58, 1205)] },
+      baselines: [
+        { baseline: { kind: 'dummy', name: 'base-rate' }, role: 'dummy', holdout: score(0.95, 0.93, 0.97) },
+        { baseline: { kind: 'one-feature', selection: 'best-single-feature-inner-cv' }, role: 'simple', holdout: score(0.88, 0.86, 0.9) },
+        { baseline: { kind: 'glm', family: 'multinomial', penalty: 'l2' }, role: 'simple', holdout: score(0.83, 0.81, 0.85) },
+      ],
+      artifacts: [GateTrainerAnswers.Artifact('xgb', tag, MULTICLASS_TASK)],
+    };
+  }
+
+  /** {@link ModelWins} whose stored holdout carries the primary metric and no secondary metric. */
+  public static ModelWinsWithoutSecondary(trainingRunId: string, protocol: Pick<EvaluationProtocolSpec, 'budgets'>, tag: string): TrainerCompleted {
+    const base = GateTrainerAnswers.ModelWins(trainingRunId, protocol, tag, null);
+    return { ...base, holdout: { primary: base.holdout.primary, secondary: [] } };
   }
 }

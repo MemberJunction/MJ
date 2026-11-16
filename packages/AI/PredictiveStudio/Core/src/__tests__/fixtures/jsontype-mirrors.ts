@@ -2,17 +2,21 @@
  * Compile-time drift check for the JSONType mirrors (PR 4 Task M1.5). `metadata/entities/JSONType-interfaces/` holds
  * the JSONType sources CodeGen emits inline on `MJMLModelEntity` and `MJMLModelPublishRecordEntity`, and
  * `metadata/remote-operations/types/predictive-studio-promote-model.output.ts` the `PredictiveStudio.PromoteModel` output
- * CodeGen emits into `remote_operations.ts` (its `refusal`, Task M3.4); each mirrored type must equal its Core type exactly. `jsontype-mirrors.compile.test.ts` compiles this file and expects no diagnostics, so
+ * CodeGen emits into `remote_operations.ts` (its `refusal`, Task M3.4), and the `PredictiveStudio.GetModelEvidence` output
+ * and `PredictiveStudio.SignOffModel` input (`predictive-studio-get-model-evidence.output.ts`,
+ * `predictive-studio-sign-off-model.input.ts`, Task M4.1); each mirrored type must equal its Core type exactly. `jsontype-mirrors.compile.test.ts` compiles this file and expects no diagnostics, so
  * a Core change that is not mirrored (or a mirror edit that drifts) fails the Core test run.
  */
 import type * as Models from '../../../../../../../metadata/entities/JSONType-interfaces/IMLModelJsonTypes';
 import type * as PublishRecords from '../../../../../../../metadata/entities/JSONType-interfaces/IMLModelPublishRecordJsonTypes';
 import type * as PromoteModelOutput from '../../../../../../../metadata/remote-operations/types/predictive-studio-promote-model.output';
-import type { CodeVersion } from '../../trainer-contract';
-import type { OutputSemantics, RegisteredDeliveryView, TransitionRefusal } from '../../registry-contracts';
+import type * as GetModelEvidenceOutput from '../../../../../../../metadata/remote-operations/types/predictive-studio-get-model-evidence.output';
+import type * as SignOffModelInput from '../../../../../../../metadata/remote-operations/types/predictive-studio-sign-off-model.input';
+import type { CodeVersion, LeakageFlag } from '../../trainer-contract';
+import type { OutputSemantics, PublishRecord, RegisteredDeliveryView, TransitionRefusal } from '../../registry-contracts';
 import type { Actor } from '../../prediction-unit';
 import type { GateDecision } from '../../gate';
-import type { EvidenceSnapshot } from '../../governance-contracts';
+import type { EvidenceSnapshot, SignOff } from '../../governance-contracts';
 
 /** Compiles only when `T` is `true`. */
 type Expect<T extends true> = T;
@@ -27,3 +31,8 @@ export type MirrorGateDecision = Expect<Equal<PublishRecords.GateDecision, GateD
 export type MirrorEvidenceSnapshot = Expect<Equal<PublishRecords.EvidenceSnapshot, EvidenceSnapshot>>;
 export type MirrorTransitionRefusal = Expect<Equal<PublishRecords.TransitionRefusal, TransitionRefusal>>;
 export type MirrorPromoteModelRefusal = Expect<Equal<NonNullable<PromoteModelOutput.PredictiveStudioPromoteModelOutput['refusal']>, TransitionRefusal>>;
+export type MirrorGetModelEvidence = Expect<Equal<GetModelEvidenceOutput.PredictiveStudioGetModelEvidenceOutput['evidence'], EvidenceSnapshot>>;
+export type MirrorLeakageFlagKind = Expect<Equal<SignOffModelInput.PredictiveStudioLeakageFlagKind, LeakageFlag['kind']>>;
+/** The Engine's `PublishRequest['purpose']` is this same Core-side union (`'publish' | 'rollback'`); Core cannot import the Engine. */
+export type MirrorSignOffPurpose = Expect<Equal<SignOffModelInput.PredictiveStudioSignOffModelInput['purpose'], Exclude<PublishRecord['purpose'], 'evaluate' | 'adopt'>>>;
+export type MirrorSignOffDecision = Expect<Equal<SignOffModelInput.PredictiveStudioSignOffModelInput['decision'], SignOff['Decision']>>;

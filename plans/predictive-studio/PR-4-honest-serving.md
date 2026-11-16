@@ -340,6 +340,8 @@ packages/TestingFramework/integration-test-suite/rigs/ps-inproc-scheduled-scorin
 packages/Angular/Explorer/dashboards/src/__tests__/production-distribution.test.ts
 # M4.3: its lines 25, 29, 35, 63, 111, 149 read the four @deprecated grid aliases M4.3 deletes
 packages/Angular/Explorer/dashboards/src/__tests__/predictive-studio-grid-record-names.test.ts
+# M4.4: its BusinessPredictionInput literals gain the RunID that M4.4's traced trust line requires (D-082, D4-118)
+packages/Angular/Explorer/dashboards/src/__tests__/business-predictions.test.ts
 # M3.4: IT51's RD9 imports ProductionModelPromotionGate and PromoteModelRequest, which M3.4 deletes
 packages/TestingFramework/integration-test-suite/src/checks/realtime-deterministic.checks.ts
 # M3.4, M5.6: the live rigs send targetStatus/signOff, read promoted and Score Record Set's removed counts
@@ -363,6 +365,8 @@ packages/React/runtime/src/__tests__/runtime-utilities-ml.test.ts
 packages/TestingFramework/integration-test-suite/docs/platform-suite.md
 # M2.4: the unit test of PR 4's own new gate helper ps-gates/ps-gate-registry.ts (D-082, D4-70: a test of PR 4's own code)
 packages/TestingFramework/integration-test-suite/src/__tests__/ps-gate-registry.test.ts
+# M4.5: the unit test of PR 4's own seeded sampler for G3.7 (D4-70: a test of PR 4's own code)
+packages/TestingFramework/integration-test-suite/src/__tests__/ps-gate-sampling.test.ts
 # The bundle barrel and the pinned bundle counts
 packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts
 packages/TestingFramework/integration-test-suite/src/index.ts
@@ -1523,11 +1527,11 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 **Mutation check G3.3:** make `StatusWriteRules.DecideStatusWrite` allow `Draft → Published` without an authorisation → `ps-gate-w3-s7-2` counts 0 of 5 refused.
 **Mutation check G3.4:** store negative outcomes without their reason (`LifecycleGate.Evaluate` saves `StatusReason = null` and `WriteRefusalRecord` writes `Reason = null`) → `ps-gate-w2-s6-5-2` fails "100% of the rest … with its reason" on every seed that does not publish (at least 372 of 400 under `noise-publish-400`, D4-64). The Outline's mutation (drop the `autoPublishKeepBaseline` test from `PublishRules.ReverifyPublish`) reaches "more than 28 of 400 `Published`" only when at least 29 − (the `model` count) W2 seeds store `keep-simple-baseline` with an artifact; it is run as well when Task M1.1's 400-seed mix shows that many, its output pasted beside this one.
 **Mutation check G3.5:** let the live incumbent comparison, `PublishRules.checkIncumbent`, pass a challenger that does not clear the margin (`GateRules.BeatsByMargin(diff, margin)` → `diff.value >= margin`; D4-103 — `IncumbentCheck.Compare` was on no publish path and is deleted, and a retrain on unchanged data has a paired diff of exactly `0 [0, 0]`, so a point-estimate mutation cannot go red) → `ps-gate-c1-s4-2-2` fails "incumbent kept on the unchanged data, 0 of 1" (the challenger replaces the incumbent).
-**Mutation check G3.6:** skip `WritePublishRecord` when the approver is `automated-gate` → `ps-gate-c1-s9-1` finds a `Published` model with no publish record (below 100%).
+**Mutation check G3.6:** skip `WritePublishRecord` when the approver is `automated-gate` → `ps-gate-c1-s9-1` finds a `Published` model with no publish record (below 100%). As run at M4 (D4-125): on M4's tree every publish the suite can make is interactive, so the `automated-gate` skip stays green until M4b's `AutomatedPublisher` exists; M4's §11 records the same skip for the `user` approver (red, 0 of 1), and the `automated-gate` variant is run at M4b, where G3.6 is re-checked.
 **Mutation check G3.7:** restore `score × 0.98` as the story's cross-validation figure → `ps-gate-c1-s9-2` finds a sampled number that does not recompute from its stored row.
 **Mutation check G3.8:** re-add the canned "Trained with honest holdout evaluation" line to the agent report → `ps-gate-w1-s9-2` counts 1 fixed sentence (expected 0).
 **Mutation check G3.9:** index the probability vector by sorted class name instead of the artifact's `classOrder` → `ps-gate-w9-s9-5` matches fewer than 20 of 20 sampled rows.
-**Mutation check G3.10:** remove the adverse-class comparison from `SemanticsChecker.Run` → `ps-gate-c3-s9-5` fails "swapped binding refused, 1 of 1".
+**Mutation check G3.10:** remove the adverse-class comparison from Core's `SemanticsRules.CheckRow` (`semantics-rules.ts:147`, the label/adverse-class check; amended at M4's exit per the M4.2 review's finding 3 — `SemanticsChecker.Run` holds no such comparison) → `ps-gate-c3-s9-5` fails "swapped binding refused, 1 of 1".
 **Mutation check G3.11:** drop the agent-actor refusal for the protocol's `margin` field → `ps-gate-w1-c1-2` counts 3 of 4 refused.
 **Mutation check G5.1:** remove the input-schema check (C6 check 2) from `ScoringService` → `ps-gate-r1-s7-3` sees rows written and no error naming `DistanceZ`.
 **Mutation check G5.2:** restore the `/predict` fallback to `output_columns` when `feature_schema` is absent → `ps-gate-w1-s7-3-2` gets 200 instead of 400, 1 of 2.
@@ -1563,7 +1567,7 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 | The promote gate's refusal of a missing/empty sign-off reason on a flagged model, and of Published without an artifact (#5295) | Kept as `LifecycleTransition` checks (the part of D-012 that D-029 did not supersede) | M3 exit test |
 | Scoring `Preflight()` refuses the whole run once instead of failing every record (#5295) | Kept and reused (the part of D-012 that D-029 did not supersede) | M5 exit test |
 | Unattended training **and publishing** by auto-train (`Configuration.autoTrain`, #5295) and by the agent (`autoPublish`) — MoreCheese's daily renewal process depends on it (D-030) | D-029: a supported path; this PR changes how it publishes, not whether. MoreCheese's shipped pipelines have no Prediction Unit, so §5.6 cannot retrain them before PR 6: their pre-change Published model keeps serving, `Unevaluated` and flagged (`ServingWhileUnevaluated`, D4-61), and its daily scoring continues | M4b exit tests (auto-train publishes a W1-signal model automatically with a publish record; G0.2/G0.3); M7's `pre-gate-model-migration.test.ts › a legacy Published model without evidence keeps serving, Unevaluated and flagged` |
-| IT51's RD9 (`realtime-deterministic.checks.ts:1264`): the promotion gate refuses deterministically — a non-UUID id, a leakage flag, a missing reason, an illegal jump — and no refusal changes the model | Four refusals, now asserted against `LifecycleGate`/`StatusWriteRules`; RD9 and the `ps-live-*` rigs (`ps-live-multimodel-lifecycle.ts:357`, `ps-live-renewal-lifecycle.ts:235`, `rigs/lib/ps-promote.ts`) are rewritten in M3.4 as caller maintenance (owner ruling 2026-11-10, D4-57, D4-69) and `ProductionModelPromotionGate` is deleted (D-042) | `Integration Tests — Deterministic` (IT51's rewritten RD9) → 0 failed; `lifecycle-gate.test.ts`'s `model-not-found`, `illegal-transition` and `reason-required` cases (M3.2). Three legs keep their meaning; the third, "sign-off without a reason", becomes "archive without a reason" at M3 (a sign-off is a `SignOffModel` record), and the sign-off refusal is pinned at M4 by `sign-off-service.test.ts › refuses overridesFlags without a reason` (M4 exit test). The rigs' `PromoteToPublished` no longer gets a leakage-flagged model to `Published` (it sent `signOff: true`); a flagged model now stops the rig with the gate's refusal (D4-04, M3.4) |
+| IT51's RD9 (`realtime-deterministic.checks.ts:1264`): the promotion gate refuses deterministically — a non-UUID id, a leakage flag, a missing reason, an illegal jump — and no refusal changes the model | Four refusals, now asserted against `LifecycleGate`/`StatusWriteRules`; RD9 and the `ps-live-*` rigs (`ps-live-multimodel-lifecycle.ts:357`, `ps-live-renewal-lifecycle.ts:235`, `rigs/lib/ps-promote.ts`) are rewritten in M3.4 as caller maintenance (owner ruling 2026-11-10, D4-57, D4-69) and `ProductionModelPromotionGate` is deleted (D-042) | `Integration Tests — Deterministic` (IT51's rewritten RD9) → 0 failed; `lifecycle-gate.test.ts`'s `model-not-found`, `illegal-transition` and `reason-required` cases (M3.2). Three legs keep their meaning; the third, "sign-off without a reason", becomes "archive without a reason" at M3 (a sign-off is a `SignOffModel` record), and the sign-off refusal is pinned at M4 by `sign-off-service.test.ts › refuses overridesFlags without a reason` (M4 exit test). The rigs' `PromoteToPublished` no longer gets a leakage-flagged model to `Published` (it sent `signOff: true`); a flagged model now stops the rig with the gate's refusal (D4-04, M3.4). M4 exit (D4-128/D4-129): RD9's hand-made model stores no Training Snapshot, protocol row or Delivery, so its Publish is withheld `not-servable` before the leakage check; RD9 asserts that withhold and drives `CheckLeakageFlags` through a subclass, while the Publish-level leakage refusal over complete stored inputs is the governance DB lane's D(ii) control (`governance.adversarial.db.test.ts`, run at milestone exits — OF4-26: no CI workflow runs the DB lane) |
 | PR 1's Feature Pipeline writes and reads: `Pipeline` and `Human` Feature Value rows keep their key, writer, history and visibility (the view-gate filter matches only `Source = 'Model'` rows) | D-058 adds a source to PR 1's store; it must not change PR 1's behaviour | PR 1's FeaturePipelines unit tests and its gates (`C1 → C2.1`, `C1 → C2.2`, `C1 → C2.3`, `C1 → C2.5`, `C1 → C3.3`) by name; an M5b test reads pipeline rows as a user without any prediction authorization and gets them all |
 | PR 1's human-value guard on column write-back (a person's value is kept unless the run is told to overwrite) | Reused by the binding's column copy (§5.8.3) | PR 1's writeBack tests + an M5 copy test |
 | Existing apps that read a model's score from an entity column (MoreCheese `MemberProfile.RenewalProbability`, PR 6) | The binding's `TargetColumn` copy keeps the column filled (D-058 decision 3) | M5 copy test; PR 6 re-applies it |
@@ -5030,7 +5034,7 @@ HumanActor, ctx): Promise<SignOffRecordResult>` (§5.2; refusals `not-human`, `o
 comparisons, decision), PR 3's stored leakage audit and the snapshot's data window and `ContentHash`; `EvidenceSha256`
 = SHA-256 of `Canonicalize(evidence)` (`@memberjunction/global`)
 
-- [ ] Step 1: Write the failing tests:
+- [x] Step 1: Write the failing tests:
   ```ts
   it('builds the evidence only from stored rows: a caller-supplied number never reaches it', async () => {
     const e = await service.BuildEvidence(model.ID, ctx);
@@ -5064,6 +5068,7 @@ comparisons, decision), PR 3's stored leakage audit and the snapshot's data wind
     expect(e.holdoutPrimary).toEqual(StoredMemberHoldout(keepRun, 'glm'));
   });
   it('a sign-off over stale evidence does not authorise a publish', async () => {
+    store.PinProtocol(model.ID, { requiresHumanSignOff: true });
     const signed = await service.Record(approve, human, ctx);
     RewriteSnapshotHash(run, 'other');
     expect(await gate.Publish({ ...request, signOffId: signed.SignOffRecordID }, ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'no-sign-off' } });
@@ -5077,8 +5082,8 @@ comparisons, decision), PR 3's stored leakage audit and the snapshot's data wind
     expect(out).toMatchObject({ Kind: 'published', Approver: 'user' });
   });
   ```
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/governance` → fails to import.
-- [ ] Step 3: Implement `export class SignOffService { public BuildEvidence(modelId: string, ctx: GateContext):
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/governance` → fails to import.
+- [x] Step 3: Implement `export class SignOffService { public BuildEvidence(modelId: string, ctx: GateContext):
   Promise<EvidenceSnapshot>; public Record(input: SignOffInput, approver: HumanActor, ctx: GateContext):
   Promise<SignOffRecordResult> }` (`Engine/src/governance/sign-off-service.ts`), `export class StoredEvidenceBuilder {
   public Build(modelId: string, ctx: GateContext): Promise<EvidenceSnapshot> }` (`evidence-builder.ts`, the
@@ -5090,8 +5095,8 @@ comparisons, decision), PR 3's stored leakage audit and the snapshot's data wind
   `ExecuteServer`, `:309`, runs `Authorize` first and is not overridden; the tests call `ExecuteServer`); `Record` writes one `MJMLModelPublishRecordEntity` row (`Kind = 'sign-off'`, `ApproverKind = 'user'`,
   `UserID`, `Decision`, `Reason`, `Evidence`, `EvidenceSha256`, `OverridesFlags`) and checks `Save()`; the op maps the
   refusals to `ResultCode`s `NOT_HUMAN`, `OVERRIDES_WITHOUT_REASON`, `MODEL_ARCHIVED`.
-- [ ] Step 4: Step 2's command → pass; `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 0 failed.
-- [ ] Step 5: Runtime on MJAPI: `PredictiveStudio.GetModelEvidence` for a validated W1-signal model returns the
+- [x] Step 4: Step 2's command → pass; `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 0 failed.
+- [x] Step 5: Runtime on MJAPI: `PredictiveStudio.GetModelEvidence` for a validated W1-signal model returns the
   snapshot hash equal to `SELECT ContentHash FROM __mj.MLTrainingSnapshot WHERE ID = @s`; `PredictiveStudio.SignOffModel`
   with an API key header → refused `NOT_HUMAN`, 0 new rows.
 
@@ -5107,7 +5112,7 @@ Test `Core/src/__tests__/semantics-rules.test.ts`, `packages/MJCoreEntitiesServe
 **Interfaces:** the four surfaces of §5.1 (`at-risk-list` sorted `adverse-probability-desc`, `why-badge` relative to
 `adverse-class`, `predictions-grid`, `record-panel`), one row each per model (`UQ_MLOutputBinding_ModelSurface`)
 
-- [ ] Step 1: Write the failing tests:
+- [x] Step 1: Write the failing tests:
   ```ts
   // semantics-rules.test.ts
   const c3: OutputSemantics = { task: { kind: 'multiclass', classOrder: ['Bronze', 'Silver', 'Gold'], adverseIndices: [0] } };
@@ -5135,9 +5140,9 @@ Test `Core/src/__tests__/semantics-rules.test.ts`, `packages/MJCoreEntitiesServe
   (`WithAdverse` and `SavedBinding` are the files' own helpers; the C3 literal is Core's `TaskType` `multiclass`
   variant, `{ kind, classOrder, adverseIndices }`, `Core/src/task-type.ts:15`; `SemanticsCheck` is in-process, so its
   members are PascalCase, §5.2.)
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Core && pnpm vitest run src/__tests__/semantics-rules.test.ts` → fails to import;
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Core && pnpm vitest run src/__tests__/semantics-rules.test.ts` → fails to import;
   `cd packages/MJCoreEntitiesServer && pnpm vitest run src/__tests__/ml-output-binding.test.ts` → fails.
-- [ ] Step 3: Implement `export class SemanticsRules { public static Check(semantics: OutputSemantics, bindings: readonly
+- [x] Step 3: Implement `export class SemanticsRules { public static Check(semantics: OutputSemantics, bindings: readonly
   SemanticsCheck['UiBindings'][number][]): SemanticsCheck['Result']; public static DefaultBindings(semantics:
   OutputSemantics): SemanticsCheck['UiBindings'][number][] }` (`Core/src/semantics-rules.ts`), `export class
   SemanticsChecker { public static Run(model: MJMLModelEntity, bindings: readonly MJMLOutputBindingEntity[]):
@@ -5146,8 +5151,8 @@ Test `Core/src/__tests__/semantics-rules.test.ts`, `packages/MJCoreEntitiesServe
   override ValidateAsync(): Promise<ValidationResult>` (the check reads the model, so it is async), which loads the
   model's `OutputSemantics` through the entity's own provider (`this.ProviderToUse`, narrowed as PR 3's
   `VersionedRowGuard.IsMetadataProvider` does), never the global one.
-- [ ] Step 4: Step 2's commands → pass; `cd packages/MJCoreEntitiesServer && pnpm test` → 0 failed.
-- [ ] Step 5: After `Evaluate` of a C3 model on MJAPI, `SELECT Surface, SortsBy, DriverDirectionRelativeTo FROM __mj.MLOutputBinding WHERE ModelID = @m`
+- [x] Step 4: Step 2's commands → pass; `cd packages/MJCoreEntitiesServer && pnpm test` → 0 failed.
+- [x] Step 5: After `Evaluate` of a C3 model on MJAPI, `SELECT Surface, SortsBy, DriverDirectionRelativeTo FROM __mj.MLOutputBinding WHERE ModelID = @m`
   → 4 rows as above.
 
 #### Task M4.3: The surfaces render from their binding rows
@@ -5155,6 +5160,7 @@ Test `Core/src/__tests__/semantics-rules.test.ts`, `packages/MJCoreEntitiesServe
 **Files:** Modify `packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/ps-predictions-grid.component.ts`
 and its `.html` (the template moves to the current members),
 `…/components/ps-row-drivers.component.ts`, `…/resources/ps-predictions-resource.component.ts` (the At-Risk list),
+`…/components/ps-production.component.ts` (a caller of the grid's renamed inputs; its 50 `@deprecated` aliases removed, as built),
 `Core/src/at-risk-rules.ts` (`AtRiskRules.BuildAtRiskOptions(model, binding)` takes the model and its binding row; the
 renewal polarity heuristic goes when a binding is given), its two other callers
 `packages/AI/PredictiveStudio/TruthSuite/src/harness/containment-probe.ts` (`:152`) and
@@ -5176,7 +5182,7 @@ the grid that test touches (`grep -noE "component(\[|\.)[A-Za-z']+"` over it); t
 `…/__tests__/predictive-studio-score-history.test.ts` calls its `LoadRecordScoreHistory({ provider, recordId,
 InvertedRisk })`, so the call sites derive `InvertedRisk` from the binding row
 
-- [ ] Step 1: Write the failing DOM tests, one per surface, each giving the surface a binding whose semantics differ
+- [x] Step 1: Write the failing DOM tests, one per surface, each giving the surface a binding whose semantics differ
   from the old heuristic's guess (a model named "Renewal" whose adverse class is `Renewed = false`, so the name-based
   polarity would invert it):
   ```ts
@@ -5196,8 +5202,8 @@ InvertedRisk })`, so the call sites derive `InvertedRisk` from the binding row
   ```
   (`RenderResource`, `RenderDrivers`, `RenderGrid`, `AtRiskRowScores`, `DriverArrows` are helpers in the three DOM test
   files, over the components' existing test setup.)
-- [ ] Step 2: `cd packages/Angular/Explorer/dashboards && pnpm vitest run src/PredictiveStudio` → the three fail.
-- [ ] Step 3: Implement `AtRiskRules.BuildAtRiskOptions(model: OutcomeModelLike, binding: OutputBindingRow | null):
+- [x] Step 2: `cd packages/Angular/Explorer/dashboards && pnpm vitest run src/PredictiveStudio` → the three fail.
+- [x] Step 3: Implement `AtRiskRules.BuildAtRiskOptions(model: OutcomeModelLike, binding: OutputBindingRow | null):
   AtRiskModelOptions` (`Core/src/at-risk-rules.ts:120`; `OutputBindingRow` = `SemanticsCheck['UiBindings'][number]`; a
   `null` binding keeps today's outcome-config rule; its callers `ps-predictions-grid.component.ts:836`,
   `TruthSuite/src/harness/containment-probe.ts:152` and `integration-test-suite/src/checks/ps-gate-w1-s9-5.checks.ts:36`
@@ -5212,10 +5218,16 @@ InvertedRisk })`, so the call sites derive `InvertedRisk` from the binding row
   the grid's `.html` (today `[columnDefs]="columnDefs"` at `:91`, `:260`) and `setGridOption('columnDefs', …)` in the
   `.ts` (`:686`, `:689`); for every other removed alias `git grep -nw "<alias>" -- packages` → 0 hits); the release note
   (§10) names each removed alias.
-- [ ] Step 4: Step 2's command → pass; `cd packages/Angular/Explorer/dashboards && pnpm test` → 0 failed (total measured
+  *As built (corrected at M4's exit):* `LoadOutputBinding(modelId)` is `protected LoadModelWithBindings(modelId: string):
+  Promise<PredictionGridModelRead>`, returning `{ Model, Binding, WhyBadge }` from one batched `RunViews` (the model, its
+  surface's row and its why-badge row; ruling 1), the binding reads past the server's RunView cache (`BypassCache`: an
+  SQL change to a row was otherwise invisible, M4.3 runtime); the grid's inputs `modelId`/`title`/`height` are
+  `ModelId`/`Title`/`Height` (callers moved); a `SortsBy 'none'` binding disables "Send to a list" (D4-121); a model with
+  no binding row keeps the old rule — the UI never backfills (D4-112).
+- [x] Step 4: Step 2's command → pass; `cd packages/Angular/Explorer/dashboards && pnpm test` → 0 failed (total measured
   at M4: the local tree's package differs from `599c288dee`), `predictive-studio-grid-record-names.test.ts` passing on
   the current members; `npm run check:ui` → exit 0.
-- [ ] Step 5: `cd packages/AI/PredictiveStudio/Core && pnpm test` → 0 failed.
+- [x] Step 5: `cd packages/AI/PredictiveStudio/Core && pnpm test` → 0 failed.
 
 #### Task M4.4: Numbers from stored records, each traced
 
@@ -5229,7 +5241,7 @@ selection score and the leakage result read from the run's stored rows), `Engine
 
 **Interfaces:** a rendered number is `TracedNumber.Text`; tests and G3.7 recompute `Value` from `Source`
 
-- [ ] Step 1: Write the failing tests:
+- [x] Step 1: Write the failing tests:
   ```ts
   it('every number in the report traces to a stored row and recomputes from it', () => {
     const r = ExperimentReports.GenerateMarkdownReport(ReportInputFrom(storedRun, storedModel));
@@ -5251,8 +5263,8 @@ selection score and the leakage result read from the run's stored rows), `Engine
   });
   ```
   (`ReportInputFrom`, `StoredJson`, `WithoutPrimary` are the test file's helpers over stored-row fixtures.)
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/agent/__tests__/pipeline-builder-agent.test.ts` → fail.
-- [ ] Step 3: Implement `export interface TracedNumberSource { readonly EntityName: string; readonly RecordID: string;
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/agent/__tests__/pipeline-builder-agent.test.ts` → fail.
+- [x] Step 3: Implement `export interface TracedNumberSource { readonly EntityName: string; readonly RecordID: string;
   readonly Path: string }`, `export interface TracedNumber { readonly Value: number; readonly Text: string; readonly
   Source: TracedNumberSource }`, `export class TracedNumbers { public static FromStoredPath(entityName: string, recordId:
   string, json: string, path: string, format: (value: number) => string): TracedNumber | null; public static
@@ -5262,8 +5274,15 @@ selection score and the leakage result read from the run's stored rows), `Engine
   `ExperimentReportInput` = the free function's parameters as one PascalCase object, with the stored `ValidationResults`
   and `Lineage` it reads); `TrustVerdicts.TrustEvidenceLine(opts?: TrustEvidenceOptions): { readonly Text: string;
   readonly Numbers: readonly TracedNumber[] }` (`Core/src/trust.ts:149`, callers moved).
-- [ ] Step 4: Step 2's command → pass; Core and Engine `pnpm test` → 0 failed.
-- [ ] Step 5: `git grep -n "\* 0\.98\|?? 0\.85\|honest holdout" -- packages/AI/PredictiveStudio packages/Angular/Explorer/dashboards/src/PredictiveStudio`
+  *As built (corrected at M4's exit):* `ExperimentReportInput { Name, Goal, TargetVariable, TargetMetric, Run, Model,
+  Trust, Status }` (D4-114: the leaderboard comes from the run's stored `trainer.innerScores`, never the payload);
+  `BuildPredictionResult.run?` carries the run's `ID` and `ValidationResults` (D4-117); `TrustEvidenceOptions.runId`
+  (D4-118); `PredictiveStudioPipelineBuilder.ResolveEntity(nameOrView, provider: Pick<IMetadataProvider, 'EntityByName' | 'Entities'>)`
+  (narrowed so no test double needs a cast); `codeStep<P>` keeps one documented `newPayload as P` (the base class's
+  generic cannot be related to the concrete payload; BASE had three `as unknown as P`).
+- [x] Step 4: Step 2's command → pass; Core and Engine `pnpm test` → 0 failed.
+- [x] Step 5: `git grep -n "\* 0\.98\|?? 0\.85\|honest holdout" -- packages/AI/PredictiveStudio packages/Angular/Explorer/dashboards/src/PredictiveStudio ':!packages/AI/PredictiveStudio/Engine/src/maintenance/psi-drift-detector.ts' ':!**/__tests__/**'`
+  (the two exclusions, D4-119 and D4-122: `psi-drift-detector.ts:569`'s `?? 0.85` is a maintenance threshold default, not a report number; test files hold the plan's own test name and the ×0.98 mutation test)
   → only `ps-studio-resource.component.ts:390`'s "Compare runs on the honest holdout score." help text (no number), or
   that sentence reworded in this task.
 
@@ -5277,7 +5296,7 @@ selection score and the leakage result read from the run's stored rows), `Engine
 
 **Interfaces:** §4.1a rows G3.6, G3.7, G3.8, G3.10, shipped in one commit with their mutation checks (D-064)
 
-- [ ] Step 1: Write the checks: G3.6 — 100% of `Published` models in the suite database have a `publish` record naming
+- [x] Step 1: Write the checks: G3.6 — 100% of `Published` models in the suite database have a `publish` record naming
   the approver, `RecordedAt`, `GateDecision` and `Evidence` with holdout intervals, baseline comparison, leakage audit
   and data window; G3.7 — 10 numbers sampled (seeded) from the C1 agent report and the model detail's rendered trust
   line each recompute from their `TracedNumber.Source`, 10 of 10; G3.8 — the W1-signal s42 agent report states the
@@ -5298,12 +5317,12 @@ selection score and the leakage result read from the run's stored rows), `Engine
   ```
   (`PublishRecordAudit` is a new helper in `packages/TestingFramework/integration-test-suite/src/checks/ps-gates/ps-gate-publish-records.ts`:
   `PublishedModels(h: TruthHarness): Promise<PublishedModelRecord[]>`, `HasCompleteRecord(m: PublishedModelRecord): boolean`.)
-- [ ] Step 2: Run each with its §4.1a mutation applied → fails as §4.1a's breaking scenario says; paste the failing
+- [x] Step 2: Run each with its §4.1a mutation applied → fails as §4.1a's breaking scenario says; paste the failing
   assertions into §11 as `**Mutation output G3.6:**`, `G3.7`, `G3.8`, `G3.10`.
-- [ ] Step 3: Restore.
-- [ ] Step 4: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Registry and Gate"`
+- [x] Step 3: Restore.
+- [x] Step 4: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Registry and Gate"`
   → 9 passed (G3.1–G3.3, G3.5–G3.8, G3.10, G3.11), 0 failed.
-- [ ] Step 5: `cd packages/TestingFramework/integration-test-suite && pnpm test` → 0 failed.
+- [x] Step 5: `cd packages/TestingFramework/integration-test-suite && pnpm test` → 0 failed.
 
 **Coverage table**
 
@@ -5330,19 +5349,20 @@ milestone; counts, cells and claims go to §11.
 
 **Files:** Create `packages/AI/PredictiveStudio/TruthSuite/src/__tests__/governance.adversarial.db.test.ts`
 
-- [ ] Step 1: On `MJ_PS_PR4_<agent>`: a C3 model with each adverse-class swap and each sort/direction combination saved
+- [x] Step 1: On `MJ_PS_PR4_<agent>`: a C3 model with each adverse-class swap and each sort/direction combination saved
   through `MJMLOutputBindingEntityServer`; a protocol version with `requiresHumanSignOff: true` and a sign-off made, then
   the snapshot row's hash changed by SQL; a sign-off attempted through the op with an API key, as the system user, and
   as the suite's restricted user; an entity delete through `spDeleteEntityWithCoreDependencies` with output bindings; a
   report rendered for a run whose stored holdout lacks a secondary metric.
-- [ ] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- governance'`
+- [x] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm exec vitest run --config vitest.db.config.ts src/__tests__/governance.adversarial.db.test.ts'`
+  (amended at M4's exit: `pnpm run test:db -- governance` passes the literal `--` to vitest, which then runs every file)
   → each case refused or rendered as the cell says; counts measured at M4.
-- [ ] Step 3: The reviewer flips the Outline's M4 mutations one at a time — evidence-hash equality at publish; the
+- [x] Step 3: The reviewer flips the Outline's M4 mutations one at a time — evidence-hash equality at publish; the
   non-human refusal of `SignOffService.Record`; `overridesFlags` without a reason; sign-off required only when the
   protocol or an override asks; `MJMLOutputBindingEntityServer.Validate()` running the semantics rule — and names the
   failing case for each.
-- [ ] Step 4: A broken claim is fixed at the invariant and the harness re-run → 0 broken.
-- [ ] Step 5: Counts, cells, claims and each mutation's failing case written to §11.
+- [x] Step 4: A broken claim is fixed at the invariant and the harness re-run → 0 broken.
+- [x] Step 5: Counts, cells, claims and each mutation's failing case written to §11.
 
 **Exit tests:**
 
@@ -5354,21 +5374,21 @@ milestone; counts, cells and claims go to §11.
   model under a protocol version with `requiresHumanSignOff: true` (the seeded user signs off and publishes; approver the
   user, `SignOffID` set); `sqlcmd`: both `publish` records (`ApproverKind`, `RecordedAt`, `GateDecision`,
   `EvidenceSha256`), the `sign-off` row, and the Record Changes rows of both status changes.
-- The TruthSuite DB lane `pnpm run test:db -- governance` → 0 failed; sidecar and truth-suite pytest → 0 failed
+- The TruthSuite DB lane `pnpm run test:db` (every file) and the governance file alone (`pnpm exec vitest run --config vitest.db.config.ts src/__tests__/governance.adversarial.db.test.ts`) → 0 failed; sidecar and truth-suite pytest → 0 failed
   (counts measured at M4; the sidecar suite also in CI, Task M1.6); `Integration Tests — Deterministic` (D4-79's two forms) and the §4.2 keep-list suites → 0 failed.
 
 **Milestone exit, in order (design §6.5; M4 changes how existing dashboard surfaces read their polarity but ships no
 new surface, D-076's browser walk is M5b's and M7's; the DOM tests of Task M4.3 cover the change):**
 
-- [ ] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
+- [x] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
-- [ ] Task M4.6's harness run by the reviewer (D-071), its counts, cells and claims in §11
-- [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
-- [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M4` with the counts, the four `**Mutation output G3.x:**` lines, the grid's
+- [x] Task M4.6's harness run by the reviewer (D-071), its counts, cells and claims in §11
+- [x] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed *(M4 exit pass: findings listed in `m4-exit-report.md` §3 for the controller's ruling)*
+- [x] tasks ticked
+- [x] §11 entry `### <date> — <agent> — M4` with the counts, the four `**Mutation output G3.x:**` lines, the grid's
   `git grep -c "@deprecated"` → 0
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M4` → exit 0, summary in the commit body
 - [ ] one checkpoint commit on the working branch (`ps/pr-4-honest-serving`; `…--m4` only under D4-63's parallel option), each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
@@ -9801,6 +9821,12 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `StoredRowReads` (`BypassCache`): a direct-SQL write is invisible to a cached read, and the pin check exists for exactly
   that write. The trainer's `RunViewEvaluationProtocolStore` stays as it is (training-time reads); the `MJ: Files` row
   stays cached (the artifact's content is verified by SHA-256 on load).
+  *Note (M4.3 runtime, recorded at M4's exit):* the same cache hides a direct-SQL write from the UI. The grid's two
+  binding reads (its own surface's row and the why-badge row, one batched `RunViews` in `LoadModelWithBindings`) read
+  past MJAPI's server RunView cache (`BypassCache: true`, `ps-predictions-grid.component.ts`; DOM test "reads its own
+  and the why-badge binding rows past the server cache"): measured over MJAPI, a default read returned the pre-`UPDATE`
+  label `0 risk` and the `BypassCache` read `Review me` (a SQL write fires no entity event, so the cache is not
+  invalidated). The model read stays cached.
 - **D4-109 · A retime that moves this migration past next's migrations that touch its objects** (M4 start, controller
   ruling; amended in its pass 2). At the M4 start next brought `V202611120915` (re-creates
   `spDeleteEntityWithCoreDependencies` with the `Artifact.DelegateEntityID` clear), `V202611121645` (every `spUpdate*`
@@ -9824,6 +9850,86 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   key): `TargetVariable`, `ProblemType`, `Status`, `ArtifactSha256`, `SnapshotHash`, `FeatureSchemaHash`,
   `ArtifactStatus`. `applyNameFieldUpdates` emits `SET IsNameField = 1` only for a winner whose `AutoUpdateIsNameField`
   is true, so no such statement can be emitted for the entity. Choosing a name field is OF4-17.
+- **D4-111 · A classification task with no adverse class has no adverse ranking** (M4.2, controller ruling on concern 2).
+  A classification task that declares no adverse class (`adverseIndices: []`, which the pipeline migration produces
+  when no class is styled red) has no adverse probability and no adverse class, so the semantics require
+  `SortsBy:'none'` (at-risk-list, predictions-grid), `DriverDirectionRelativeTo:'raw-contribution'` (all four surfaces)
+  and a label naming no class (`Predicted class`); `adverse-probability-desc`/`adverse-class` on such a model is a claim
+  nothing can back and fails the check. Cost if wrong: M4.3's surfaces render such models unsorted with raw driver
+  contributions — the honest fallback.
+- **D4-112 · The gate fills missing binding rows before the semantics check** (M4.2 review, observation 5). A model past
+  Draft with no binding rows (evaluated before M4.2, or rows deleted) is not refused with four "no binding row"
+  mismatches: default rows are derived truth, not a human claim, so the gate fills the MISSING surfaces (the same
+  idempotent `CreateOutputBindings`) before the semantics check on publish, rollback and restore; an existing mismatching
+  row is still refused. No M7 SQL backfill duplicates the rule table (one source of truth). The UI never backfills (no
+  row → the old rule). Cost if wrong: a publish recreates defaults for rows someone deleted on purpose — deleting a
+  binding row is not a semantics claim, so nothing honest is lost.
+- **D4-113 · `TracedNumbers` path grammar** (M4.4 brief). `$`, `.key`, `["key"]`, `[i]`; a null never throws. Why: a
+  report must never invent or crash on a number. Cost if wrong: a stored shape the grammar cannot name renders as text,
+  not a number.
+- **D4-114 · `ExperimentReportInput { Name, Goal, TargetVariable, TargetMetric, Run, Model, Trust, Status }`** (M4.4
+  brief). The report derives leaderboard rows from the envelope's `trainer.innerScores` itself (the same
+  `LeaderboardFromInnerScores` call as `pipeline-builder.ts:438`), never from the payload. Why: a payload holds derived
+  numbers with no source. Cost: one duplicated call.
+- **D4-115 · Every numeric token in the report's Markdown is a `TracedNumber.Text`** (M4.4 brief), except Rank cells
+  (positions); a sweep test holds it. The interval level is traced when stored, else the header drops the digits.
+- **D4-116 · G3.8's lines** (M4.4 brief). The selection score is traced to the finalist's inner mean; the leakage result
+  is the flag kinds in words (no count digit).
+- **D4-117 · `BuildPredictionResult.run?`** (M4.4 brief) carries the run's ID and `ValidationResults` for
+  `ReportPayload`; `Numbers` are NOT in the LLM payload.
+- **D4-118 · The traced trust line** (M4.4 brief). `TrustEvidenceOptions.runId?`, `TrustEvidenceLine → { Text, Numbers }`,
+  `TrustVerdicts.ComparisonNumbers(verdict, runId)` shared by the report and the UI; `BusinessPredictionInput.RunID`,
+  `BusinessPredictionCard.runId`, `TrustNumbers(c)` in the predictions resource with a DOM sweep test
+  (`business-predictions.test.ts` allowlisted as its caller, D-082).
+- **D4-119 · Step 5's grep does not reach `psi-drift-detector.ts`** (M4.4 brief). The grep hits
+  `psi-drift-detector.ts:569` (`input.MinAgreementRate ?? 0.85`, an operator threshold default, not a report number;
+  last changed on next `8ae2c569ca`); M4.4 does not edit it, and Step 5 excludes the file. Cost if wrong: a `??` default
+  remains in a maintenance file outside M4's scope.
+- **D4-120 · "C3" is W9-multiclass s42** (M4.5 brief). The suite has no ScenarioID `C3`; `reference/datasets.md:58` and
+  PR 3's `.gate-C3-S4.1.json` already define C3 as W9 s42. The test name and `dataset:C3` tag are kept; the Description
+  says W9-multiclass s42. Further M4.5 rulings: G3.6 audits every Published model unfiltered; G3.7's pool is the report's
+  Numbers ∪ the trust line's Numbers (∪ `StoredReasonNumbers`, M4.5 review F5), a seeded sample of 10 (mulberry32, seed
+  42), fresh row reads by Source, recompute within 1e-12 relative plus token/Value agreement at printed precision; G3.8
+  reads the delivered artifact Markdown (`AgentStepResult.ReportMarkdown`) and sweeps every numeric token against the
+  regenerated report, skipping the Algorithm column and bold feature names; G3.10 is 3 classes matched plus a
+  swapped-label `Save()` refused, 1 of 1; `MaxExecutionTimeMS` = measured + 50% (D4-102). Cost if wrong: a gate tag that
+  reads C3 for a W9 fixture, as G2.18 already does.
+- **D4-121 · "Send to a list" is disabled for a `SortsBy 'none'` binding** (M4.3, controller ruling on concern 4). A
+  model whose list is not ranked (`ListIsRanked` false) shows the control disabled with Core's `NoRankingReason`;
+  `SelectAtRiskListMembers` is unchanged. Cost if wrong: a no-adverse model cannot send a list.
+- **D4-122 · Step 5's grep excludes `__tests__`** (M4.4, concern 2). The plan's own test name and assertion and the
+  ×0.98 mutation test match the grep; test files are not report numbers.
+- **D4-123 · The gate copy `auc-interval-contains-chance` carries no digit** (M4.4, concern 3). Its stored reason carried
+  "0.5"; it is reworded with no digit, with a `RefusedBy` sweep fixture and a Why-line test.
+- **D4-124 · `TrustNumbers` = evidence + headline + `ReasonNumbers`** (M4.4, concern 4). `.ps-trust-explain` rendered the
+  stored reason's quoted intervals outside `TrustNumbers`; `TrustNumbers` appends `ReasonNumbers(gate, runId)`
+  (`StoredReasonNumbers`), and the DOM sweep covers the whole banner.
+- **D4-125 · G3.6's mutation output at M4 is the `user`-approver skip** (M4.5, ruling 1). On M4's tree every publish the
+  suite can make is interactive, so the planned `automated-gate` skip (`:1528`) stays green (`✓ … 1 of 1`); M4's §11
+  records the `user` variant (b), and variant (a) is re-run at M4b, where G3.6 is re-checked (`:1445`). Cost if wrong:
+  G3.6's automated-approver blindness goes unnoticed until M4b.
+- **D4-126 · The harness deletes the agent runs it created** (M4.5 review, F1). With their prompt-run children, by ID, in
+  D4-62's order (`cleanup.ts`'s agent-run stage: examples/notes, media, steps highest first, prompt runs children first,
+  sub-runs deepest first, conversation details/conversations); the census gains AR|APR with MJAPI's scheduled-job Memory
+  Manager runs excluded by name like ProcessRun; deletes of `CascadeDeletes=1` entities in that stage and the gate
+  stage's `MJ: Actions` run serially (`HarnessCleanup.SERIAL_DELETES`, M4.6 review R2). Cost if wrong: audit rows of a
+  deleted fixture run disappear (they are the suite's own).
+- **D4-127 · `Name Conversation` prompt runs are excluded from the census by name** (M4.5 fix round 1). `AgentRunner`
+  writes one, linked to no agent run, conversation or step, after every client `RunAIAgent`; the harness cannot delete it
+  by ID (OF4-21). Cost if wrong: one orphan prompt-run row per agent gate run.
+- **D4-128 · Missing evidence inputs are a `not-servable` refusal, never a throw** (M4.6, finding F1; completed by fix
+  round 2 on the review's R1). `StoredPublishInputsLoader.Load` refuses `not-servable` naming the missing input
+  (snapshot, run, gate record, trainer result) before the evidence builder, with a refusal record and `StatusReason`; on
+  every publish, rollback and restore path the order is status, purpose, stored inputs, leakage, publish checks, so the
+  leakage check never builds evidence for a model whose inputs are gone. The sign-off and evidence operations throw
+  `EXECUTION_ERROR` by contract on a missing snapshot, no row (R3, accepted). Further M4.6 rulings: the bootstrap user
+  is the MJ system user (the lanes' `human()`), so Case B signs off as the seeded person `it-rls-a` with a Developer
+  grant (F2); an unpermitted person's sign-off is `EXECUTION_ERROR` by entity permission with no row — `CheckInitiator`
+  is M4b.1's (F3); TruthSuite depends on `@memberjunction/generic-database-provider` for `UserCache.Dispose()`. Cost if
+  wrong: a withheld publish that used to crash now records a reason.
+  *Note (M4.6 review, recorded at M4's exit):* Record Changes rows written for the lanes' and gates' fixture models are
+  the platform's audit trail, not fixture rows: the harness does not delete them and no census counts them (the M4
+  exit runtime reads them by `RecordID` as evidence before the fixture rows are deleted).
 
 #### Kickoff review (D-070)
 
@@ -9917,7 +10023,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Twelve flags remain (OF4-12…OF4-15 added at M3, OF4-17 at M4's start), each decided out of scope with its
+updated as caller maintenance (§2.6). Nineteen flags remain (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-23 at M4), each decided out of scope with its
 default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
@@ -9996,10 +10102,43 @@ default implemented:
   the tier (recommended); a client-transport `mj test` does not load the server manifest; the subclass checks the
   provider it is constructed with. **Default, implemented:** the three lines stay; the harness's raw-mutation sidestep
   is refused (D4-107).
+- **OF4-16 · next's Explorer dev server does not boot** (recorded at M3's exit, M4 checkpoint). `ng serve` fails
+  `Failed to resolve import "xlsx"`: `ng-artifacts`' `xlsx-preview.component.ts:209` dynamically imports `xlsx`, which
+  `MJExplorer/package.json` dropped in #4016 (`5ac8ab87f1`), and Vite resolves the bundled chunk's bare import from
+  `packages/MJExplorer`. Outside the allowlist (next's). **Default, implemented:** PR 4's UI walks use
+  `ng build --configuration development` served statically on :4201 (`m3-exit-report.md` §1).
 - **OF4-17 · `MJ: ML Models` has no name field** (recorded at M4's start, D4-110). The entity has no `Name` column, and
   HAND EDIT (5) keeps CodeGen from choosing one. Choosing one (a virtual pipeline-name field is the candidate) cascades
   a joined name column into the Feature Values, ML Training Runs and ML Model Scoring Bindings views — outside PR 4.
   **Default, implemented:** no name field.
+- **OF4-18 · `predictive:execute` has no application ceiling** (recorded at M4.1, corrected by the M4.1 review's M-3).
+  The scope row exists (`__mj.APIScope` `2d7a1fab-7e7f-4082-b705-20fd3ded1484`,
+  `metadata/api-scopes/.predictive-scopes.json`), but no `__mj.APIApplicationScope` row (metadata
+  `metadata/api-application-scopes`; 0 of 57 rows name `predictive`) lets MJAPI's application ceiling
+  (`ScopeEvaluator.evaluateApplicationCeiling`) admit `predictive:execute` for any application, so MJAPI rejects every
+  user-API-key call to a Predictive Studio remote operation (PR 3's ops, M3.4's Promote, M4.1's GetModelEvidence and
+  SignOffModel) before the operation runs; interactive (JWT) callers are unaffected. The fix is one metadata row in
+  `metadata/api-application-scopes` — outside PR 4's allowlist (D-082); which application(s) get it, and whether keys
+  reach PS operations at all, is the owner's call. **Default, implemented:** no row; the operation's API-key branch
+  (D4-04, `NOT_HUMAN`) is proven by its unit case and by the system-key runtime path.
+- **OF4-19 · The grid's score and status column labels still derive from the target name** (recorded at M4.3, concern 6).
+  When a binding row exists only polarity, sort, driver direction and the risk/badge label come from the row; the score
+  and status column labels and the band colours still come from `OutcomeConfig.ScoreLabel`/`StatusLabel` (target name and
+  Lineage). Whether they should derive from `ScoreSemantics` is the owner's call. **Default, implemented:** as built.
+- **OF4-20 · Default binding labels use the stored class names verbatim** (recorded at the M4.3 review, observation 7).
+  W1's classes are literally `0`/`1`, so its default label reads `0 risk`. Whether classes get display names for labels
+  is the owner's call. **Default, implemented:** the class names as stored.
+- **OF4-21 · A client `RunAIAgent` writes an unlinked `Name Conversation` prompt run** (recorded at M4.5, D4-127).
+  `AgentRunner.startConversationNaming` writes one for every client agent run, with no agent-run, conversation or step
+  ID, so the harness cannot delete it by ID. next's code, outside the allowlist. **Default, implemented:** excluded from
+  every census by name; one orphan row per agent gate run.
+- **OF4-22 · A PR 3 rig is not strict-clean** (recorded at the M4.5 re-review). `rigs/ps-experiment-budget-check.ts:69`
+  passes `string | null` where `string` is required under a forced strict scratch tsconfig; it passes the rigs tsconfig
+  that `pnpm test` runs. **Default, implemented:** as is (not M4's file; the rigs config is the gate).
+- **OF4-23 · Engine's test files are not strict-clean** (recorded at the M4.6 re-review). A forced strict scratch
+  tsconfig over Engine with its tests shows 27 errors; the package's own (non-strict) config passes with 0. Whether
+  Engine moves to `strict` is the owner's call (OF4-10's typecheck gap is the related flag). **Default, implemented:** the
+  package config as is.
 
 ## 10. PR description draft
 
@@ -10046,9 +10185,9 @@ are monitored on real outcomes.
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
 - Migration: <!-- gen:migration -->migrations/v6/V202611131725__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, STORAGE_LOCAL_ROOT<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->6<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->6<!-- /gen:checks -->
-- Head: <!-- gen:head -->ec9109c060<!-- /gen:head -->
+- Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->10<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->10<!-- /gen:checks -->
+- Head: <!-- gen:head -->18c5f13b0f<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -10070,7 +10209,7 @@ no longer publish it (M4b routes automatic publishing through the gate); Score R
 failed runs; direct status writes are refused; `MJ: ML Model Scoring Bindings` loses `MLModelID`,
 `MaterializedResultID` and the `'Materialized'` mode (a binding names `MLTrainingPipelineID`), and `ModeBadgeClass`
 loses its `'Materialized'` case; Score Record Set writes predictions only when called with a `BindingID`; every
-`@deprecated` alias of a file this PR modifies is removed (M8.2 writes the full list here). No compatibility shim keeps an old form
+`@deprecated` alias of a file this PR modifies is removed (M8.2 writes the full list here). M4.3: `PSPredictionsGridComponent` (`ps-predictions-grid.component.ts`) loses its 95 `@deprecated` members, 70 names: `activeView`, `allRows`, `chartGridOptions`, `classBreakdown`, `clearDecileFilter`, `clearSearch`, `closeDetail`, `columnDefs`, `defaultColDef`, `detailOpen`, `drawerWidthPx`, `drillThrough`, `entityDisplayName`, `exportCSV`, `filteredRows`, `getBadgeColorVar`, `getOutcomeBadgeClass`, `highAvg`, `highAvgRisk`, `highCount`, `highPct`, `histogramBins`, `historyLoading`, `historyPoints`, `isRegression`, `isRenewalModel`, `lowAvg`, `lowAvgRisk`, `lowCount`, `lowPct`, `meanScoreFormatted`, `meanScorePct`, `mediumAvg`, `mediumAvgRisk`, `mediumCount`, `mediumPct`, `onCellClicked`, `onChartGridReady`, `onDrawerWidthChanged`, `onGridReady`, `onRowClicked`, `onSearchInput`, `onViewToggle`, `openDetail`, `openSubjectRecord`, `outcomeConfig`, `problemType`, `readOnly`, `reload`, `resolvedEntityId`, `resolvedEntityName`, `runId`, `scheduleVisibleRowsLookup`, `searchText`, `selectDecile`, `selectedDecileIndex`, `selectedDecileLabel`, `selectedRow`, `selectedTier`, `setTier`, `setTierAndGrid`, `setupColumnDefs`, `subjectEntityName`, `subjectRecordId`, `subjectRecordName`, `trendlineAreaPoints`, `trendlineLinePoints`, `trendlinePlotPoints`, `viewOptions`, `visibleBands` (their PascalCase members stay; the inputs `runId`, `problemType`, `readOnly` are `RunId`, `ProblemType`, `ReadOnly`, and `modelId`, `title`, `height` are now `ModelId`, `Title`, `Height`); `PSProductionComponent` (`ps-production.component.ts`) loses its 50, 35 names: `boundModelCount`, `closeRun`, `deployBadge`, `deployIcon`, `deployLabel`, `detailSizePct`, `idleModelCount`, `isDeploymentCollapsed`, `isHeaderCollapsed`, `isListCollapsed`, `isRunFocused`, `listSizePct`, `loadingDetails`, `loadingRuns`, `modeBadge`, `models`, `onOperateClose`, `onSplitDragEnd`, `openRun`, `operateOpen`, `runBadge`, `runDetails`, `runGridHeight`, `runs`, `scheduledModelCount`, `select`, `selected`, `selectedBindings`, `selectedModelId`, `selectedRunId`, `selectedTargetEntityName`, `toggleDeploymentCollapse`, `toggleHeaderCollapse`, `toggleList`, `toggleRunFocus`; `AtRiskRules.BuildAtRiskOptions(model, binding)` takes the surface's `MJ: ML Output Bindings` row (`null` keeps the outcome-config rule). No compatibility shim keeps an old form
 working (program D-042, D-053).
 
 **Coordination with #6180 (merged `fa33e94dbe`).** #6180 merged into `next` on 2026-11-10 (`fa33e94dbe`); its
@@ -11174,6 +11313,194 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
 - **Next step (exact):** M4, Task M4.1 Step 1.
 - **Gotchas / decisions:** D4-109 (c) as amended; D4-110 (seven columns, not four: `char` is a name-field type);
   OF4-17. A database built before HAND EDIT (5) needs the seven UPDATEs by hand (the migration does not re-run).
+
+### 2026-11-15 21:30 CST — Claude (Fable 5.1, M4.5) — M4.5 mutation outputs (D-064; provisional entry, completed by the M4 exit pass)
+
+- **Mutation output G3.6:** `✗ ps-gate-c1-s9-1.G3.6: 0 of 1 Published models have a publish record with approver, time, gate decision and evidence; incomplete: D542456A-68D7-4312-B7A0-266946F05DD2 (PSTruth: fixture W1 s42 published 6102b92f-ebc6-4636-ac88-b7bab3a9b61c v1) lacks no publish record` (`lifecycle-gate.ts` `applyPublish`: the `WritePublishRecord` call skipped for the `user` approver — D4-125: on M4's tree every publish the suite can make is interactive, so the planned `automated-gate` skip at `:1528` stays green (`✓ … 1 of 1`) until M4b's `AutomatedPublisher` exists; the `automated-gate` variant is re-run at M4b, where G3.6 is re-checked).
+- **Mutation output G3.7:** `✗ ps-gate-c1-s9-2.G3.7: 9 of 10 sampled numbers (from 12 in the C1 report and trust line) recompute from their stored row; first failure: 0.022 at MJ: ML Training Runs 377F7FBC-9B20-45C3-908B-7CA07B4C13C3 $.gate.intervals.memberVsDummy["glm"].value: shown 0.022054177816390134, the stored row holds 0.022504263077949116` (`ExperimentReports` primary metric `Value × 0.98`, check process).
+- **Mutation output G3.8:** `✗ ps-gate-w1-s9-2.G3.8: the W1 s42 agent report holds 1 "honest holdout" sentence(s) and 0 cvScore; 12 of 12 numeric tokens trace to the stored rows; selection score recomputes (…); leakage sentence "- Leakage audit: no flags raised." present` (the canned "Trained with honest holdout evaluation." line re-added to the report's measurement section; the delivered report is generated inside MJAPI, so Engine rebuilt and MJAPI restarted).
+- **Mutation output G3.10:** `✗ ps-gate-c3-s9-5.G3.10: semantics check passed for 3 of 3 C3 classes; a binding labelled "Attended risk" (the adverse class swapped) was saved, row changed: 0 of 1` (`Core/src/semantics-rules.ts:147`, the adverse-class comparison reduced to a length check — the `:1530` site as amended by M4.2's review).
+- Each mutation restored by reverse edit, `cmp` identical against a copy taken first; the green suite run `F0FBEBD5-689E-4190-912B-D8D3E4AD22D5` (9/9 passed, 378,725 ms) followed the restores.
+
+### 2026-11-16 00:40 EST — Claude (Opus 5.5 exit agent under Fable 5.1 control, exit pass) — M4
+
+- **Branch / HEAD:** `ps/pr-4-honest-serving` @ `18c5f13b0f` before this checkpoint commit (M4.1–M4.6 uncommitted in the
+  working tree; base `origin/next` @ `4570337d37`). `origin/next` is now `dbd5e800a9`, 59 commits past the base. CI on
+  `18c5f13b0f` (PR #6517): 11 runs success; red, all three next's own defects (M4 start pass 2): Unit Tests
+  `43544928704` (ng-artifacts `horizon1-ergonomics.test.ts` types), MJ standards `43544928676` (COLLATE in
+  `V202611131724:11`), Integration Tier `43544928794` (MC9 on `MJ: Artifact Types`). next has fixed all three since the
+  base: `b22cf37a68` adds the `COLLATE` to `V202611131724` in place (an applied migration edited — its checksum moves on
+  every database that ran it, ours included) and `0d253a1d31` fixes MC9 and the `test:types` errors; next's tip
+  `dbd5e800a9` has Unit Tests `43770906696` and Integration Tier `43770906700` success. They reach this branch with the
+  next merge of next (M4b's or M5's start).
+- **Database / ports:** `MJ_PS_PR4_claude`, MJAPI :4041 (this pass's instance stopped by pid at the end), truth sidecar
+  `:64203` up. Census (`m4exit/census.sql`: models, runs, snapshots, pipelines, publish records, bindings, protocols,
+  units, scheduled jobs, Actions, Files, user roles, users, agent runs without Memory Manager, prompt runs without
+  Memory Manager and `Name Conversation`, conversations) before the runtime proof, after it and after every
+  Predictive Studio suite: `M 0 · R 0 · S 0 · P 0 · PR 0 · B 0 · EP 0 · PU 0 · SJ 10 · A 588 · F 0 · UR 18 · U 15 · AR 0 ·
+  APR 453 · CV 0`; after the two deterministic runs and the DB lane the PS columns are still 0, AR 6 and APR 2288 (next's
+  deterministic checks' agent and prompt runs, below).
+- **Tests (D4-87: the exit tier once):**
+  - Package suites (this exit seat, logs `m4exit/t-*.log`, each `EXIT=0`): Core `39 passed (39)` / `531 passed (531)`;
+    Engine `110` / `1581`; MJCoreEntitiesServer `101` / `1510` (stderr: next's 4 blocks from
+    `MJArtifactVersionEntityServer.test.ts`, the only noise); dashboards `254` / `3109`, Predictive Studio files 260
+    (noise: next's jsdom `Not implemented: navigation` and 3 `Could not parse CSS stylesheet` from
+    `Actions/components/executions-list-view.component.dom.test.ts`); TruthSuite `22` / `132`; integration-test-suite
+    `71` / `1044` with the rigs `tsc` (noise: 11 stderr and 8 stdout blocks, all from next's files
+    `anchored-record-comments`, `fls-closeout-skips`, `run-with-compliance`, `video-studio-fakes`,
+    `runview-features.checks`, `schema-mutating-rig` tests, none changed by PR 4); Core, Engine, MJCoreEntities,
+    MJCoreEntitiesServer, TruthSuite, integration-test-suite builds `EXIT=0`. Stdout/stderr in Core, Engine and TruthSuite: 0.
+  - `Predictive Studio Gates — Registry and Gate` (`RUN_MUTATION_TESTS=1`) → `Completed (9/9 passed)`, run
+    `0C50C440-BA16-42CE-9F6C-562936ADBC00`, 304,291 ms: W1 -> S7.1 81,869 ✓ · R1 -> S7.1 6,911 ✓ · W3 -> S7.2 28,467 ✓ ·
+    C1 -> S4.2 #2 52,042 ✓ · W1 -> C1.2 47,389 ✓ · C1 -> S9.1 24,799 ✓ · C1 -> S9.2 25,303 ✓ · W1 -> S9.2 26,710 ✓ ·
+    C3 -> S9.5 10,215 ✓. Measured: G3.6 `{"published":1,"withCompletePublishRecord":1,"approvers":"user:1",…,"incomplete":"none"}`;
+    G3.7 `{"pool":12,"sampled":10,"recomputed":10,"seed":42,…}`; G3.8 `{"honestHoldout":0,"cvScore":0,…}` (12 of 12
+    numeric tokens traced; selection score `logistic_regression` 0.439 against stored 0.4389023728498059); G3.10
+    `{"check":"passed","bindingRows":4,"classesMatched":3,"classes":3,"classOrderSource":"artifact Attended,Cancelled,NoShow","swappedRefused":1,"of":1,…}`.
+    OF4-15's `MJ: Actions` construct-fallback line: 4.
+  - TruthSuite DB lane (`pnpm run test:db`, MJAPI stopped) → `6 passed (6)` / `66 passed (66)` (governance 13, lifecycle-gate 15, artifact-registry 13, serving-schema 21,
+    isolation 2, dataset-loader 2), stdout 0, stderr 0, OF4-15's line 0; the governance file alone (`pnpm exec vitest run
+    --config vitest.db.config.ts src/__tests__/governance.adversarial.db.test.ts`) → `1 passed (1)` / `13 passed (13)`. A first lane run without `STORAGE_LOCAL_ROOT` (this pass's command
+    error) failed 3 files at setup (`STORAGE_LOCAL_ROOT is unset`, 25 passed / 41 skipped, no rows written) and is not counted.
+  - Sidecar `pnpm run test:python` → `495 passed in 100.40s`; TruthSuite `pnpm run test:python` → `24 passed in 23.01s`
+    and `Success: no issues found in 48 source files`.
+  - `Integration Tests — Deterministic`, CI's PR-lane form → `Failed (121/150 passed, 25 SKIPPED — not executed)`, 4 failed, `Skip gate: PASSED`, run
+    `1C115A6F-860A-4AE8-8142-9E5F3D07B293` (1127 s): **IT51 `realtime-deterministic.RD9` ✗ — PR 4's** ("Predictive Studio
+    lifecycle gate: ML Model …'s OutputSemantics does not parse, so its output bindings cannot be created: OutputSemantics
+    is empty; it must hold JSON": M4.2's `evaluateLocked` calls `CreateOutputBindings` (`lifecycle-gate.ts:543`), which
+    throws at `:293` for a model with no `OutputSemantics`; RD9's fixture model (`realtime-deterministic.checks.ts:218-227`,
+    PR 4's M3 rewrite) sets none, so its step (3) `gate.Evaluate` at `:1460` throws — a fix round for the controller, the
+    exit test is not met); IT128 `PB18` (6 CPU metrics, `Aggregate Primitives Slowness Factor 2.42x`, host load average
+    9.40 with three `Cursor Helper (Renderer)` processes at 100% CPU; PR 4 changes no MJCore, Global, Templates or provider
+    source); IT170 `DSL4` and IT171 `DSLC3` (`MJ_FROZEN_BLOCK_HMAC_SECRET` / `MJ_ARTIFACT_COLLAB_HMAC_SECRET` unset: CI
+    sets both in `integration.yml:597-598`, `.env.MJ_PS_PR4_claude` has neither — next's #6644 checks, a host-environment
+    gap of PR 4's databases). The tier has 150 tests (146 at M3: next's IT170/IT171 and others since). IT166's PSD1 the
+    named D4-94 skip. With `RUN_MUTATION_TESTS=1` → `Failed (144/150 passed, 1 SKIPPED — not executed)`, run `68F11DE3-45A8-4DE3-9F5C-C659D495E3E2`
+    (1440 s): IT51 RD9 ✗ (PR 4's, as above); IT01 `server-cache.S34` "a delete upserts nothing — expected 0, got 1" (next's
+    #6316, OF4-8); IT128 `PB18` "PB7 Sage step storage (99895 B) exceeded 65000 B ceiling" (next's agent benchmark);
+    IT170 `DSL3` "UQ_ArtifactWorkingState_ArtifactID must reject a second working state for the same ArtifactID" (next's
+    mutation-only check against next's `MJArtifactWorkingStateEntityServer.Save`, which probes the row by `ArtifactID` and
+    updates it, so the duplicate save succeeds as an update; the constraint exists in the database) and `DSL4`; IT171
+    `DSLC3` (the secrets above); the skip is IT52 (`RUN_SEARCH_TESTS` unset); the skip gate FAILED on 8 unexpected skips:
+    `server-cache.S30`, `role-elevation.RE6` (back among them since M3), `realtime-session-verification.RSV1`, `RSV2`,
+    `RSV4`, `RSV5`, `RSV6`, `entity-server-invariants.ESI9` (OF4-7's host-environment set). The census after the two
+    deterministic runs holds 6 `Infographic Agent` runs and 1,835 more prompt runs than before them (`SQL Query Parameter
+    Extraction` 886 + 887) written by next's deterministic checks; 0 Predictive Studio rows.
+  - Keep-list (`RUN_MUTATION_TESTS=1`, one at a time): Containment `Completed (10/10 passed)`
+    `4796DAED-F54F-4CFE-857A-E12994C7640F` (591 s); Prediction Units `12/12` `29527A8F-AE2D-43DC-B384-82CC07886E4B`
+    (262 s); Training `35/35` `379A10E1-CEFA-47D1-850B-E0C916C89CE8` (1021 s); Training (statistical) `6/6`
+    `7CBA520E-D8C1-4C90-83E4-5FD8D9CF7480` (2575 s); Feature Pipelines `Failed (0/5 passed)`, environment-blocked (D3-78:
+    `fp-live-jobtitle.L1` "the job-title pipeline is installed (bizapps-common)"), run
+    `0F590654-9D4D-483B-BD8E-A7B70EC660AA` (3 s).
+  - Repo checks: `check:guards` → exit 0 (one notice: `check:dynamic-imports` skipped next's
+    `packages/AI/Vectors/scripts/test-vectorize-entity.ts`, no enclosing `package.json`); `check:ui` → exit 0;
+    `check:standards` → `✗ 1 error(s), 14526 warning(s)`, the one error next's `migration-string-collation`
+    `V202611131724__v6.3.x__ArtifactType_Configuration.sql:11` (fixed on next by `b22cf37a68`); `check:changeset` →
+    `✅ 1 changeset(s) … bump levels are correct` (minor: migration + metadata); `check:codegen-tail` (CI's first step,
+    `node .github/scripts/check-codegen-tail.mjs`) → `461 entities across 3 generated artifacts; scanned all 801
+    migration(s)` / `OK`; `check-migration-entityfield-sequence.mjs` → `✓ no literal EntityField sequences`;
+    `check:claude-md` → `✅ all checks passed`.
+  - The grid's `git grep -c "@deprecated" -- …/ps-predictions-grid.component.ts` → 0 (no line; `ps-production.component.ts`
+    0 too). Task M4.4 Step 5's grep → only `ps-studio-resource.component.ts:390` "Compare runs on the honest holdout score."
+- **Runtime verification (MJAPI :4041, this pass):** two C1 assembly pipelines on C1's reference split, each re-pinned to
+  a v2 protocol (A `autoPublishKeepBaseline: true` `04086740-3394-4A2B-B0BE-683D26B4A690`; B `requiresHumanSignOff: true`
+  `583434BD-5B64-4D8A-AFD9-9C021243D5F0`), trained through `PredictiveStudio.TrainModel` and evaluated through
+  `PredictiveStudio.PromoteModel` over MJAPI with the system API key (A `F12D234E-1DB0-4EEB-AA87-EAEB34207A57`, B
+  `3062C0D7-1E12-4F64-A664-F9676674A6E1`, both `KeepBaseline`). Then, in-process on the same database: A published by
+  `LifecycleGate.Publish` with initiator `{kind:'system', component:'m4-exit-runtime'}` →
+  `{"Kind":"published",…,"Approver":"automated-gate"}`; B's publish without a sign-off through the PromoteModel operation →
+  `{"applied":false,"status":"KeepBaseline","refusal":{"kind":"no-sign-off"}}`; the seeded person `it-rls-a` (Developer
+  granted for the call, revoked after: `M4EXIT_REVOKE … true`) signs off through `PredictiveStudio.SignOffModel` →
+  `signOffRecordId D0588362-…`, `evidenceSha256 82afd118…`; B's publish naming it → `{"applied":true,"status":"Published"}`.
+  `sqlcmd`:
+  ```
+  Kind|Purpose|ApproverKind|Email|RecordedAt|Decision|GateDecision.outcome|EvidenceSha256|SignOffID
+  A publish  |publish|automated-gate|NULL     |2026-11-16T03:18:33.046Z|NULL   |keep-simple-baseline|fd9d07e2…eadb|NULL
+  B refusal  |publish|user|it-rls-a@integration.test|…03:18:33.589Z|NULL|NULL|NULL|NULL   (Refusal {"kind":"no-sign-off"})
+  B sign-off |publish|user|it-rls-a@integration.test|…03:18:33.630Z|approve|NULL|82afd118…7cce|NULL
+  B publish  |publish|user|it-rls-a@integration.test|…03:18:33.724Z|NULL|keep-simple-baseline|82afd118…7cce|d0588362-…
+  ```
+  Record Changes (`MJ: ML Models`): A `Status changed from KeepBaseline to Published` (03:18:32.827Z); B `StatusReason
+  changed …` (the withheld publish, 03:18:33.373Z) and `Status changed from KeepBaseline to Published` (03:18:33.510Z); each
+  model's Create and Draft → KeepBaseline rows. Both models `Published`, `StatusReason` NULL. Rows deleted by ID
+  (`M4EXIT_CLEANUP_FAILURES []`; publish records for both models 0; the grant row 0; storage root 0 files); census
+  before = after; the temporary scripts deleted from the package (copies in scratch).
+- **Mutation outputs G3.6, G3.7, G3.8, G3.10 (D-064):** the four `**Mutation output G3.x:**` lines are M4.5's, in the
+  provisional M4.5 entry above (`2026-11-15 21:30 CST`), which this entry completes; the green suite above is the run
+  after their restores on this tree.
+- **Task M4.6's harness (D-071; the reviewer's runs, `task-M4.6-review.md` and `task-M4.6-re-review.md`):** cases 12 →
+  13 after fix round 2 (D(ii)'s leakage-flagged case); cells: A (C3, 32 sort × direction pairs → accepted 4 / refused
+  28; 4 labels → 1 / 3, saved through `MJMLOutputBindingEntityServer`), B (v2 `requiresHumanSignOff`, SQL `ContentHash`
+  change: automatic → `no-sign-off`, tampered → `no-sign-off`, restored → `published` with `SignOffID`), C(i)–(v)
+  (`NOT_HUMAN` ×2, `EXECUTION_ERROR` by entity permission for `it-nogrant` (F3), `OVERRIDES_WITHOUT_REASON`, control
+  `SUCCESS`), D(i) (bindings deleted before the model, static and live), D(ii) ×2 (snapshot deleted → `not-servable`
+  with a refusal record, flag-free and leakage-flagged), E1–E3 (report without secondary metrics, binary and multiclass,
+  and without a trainer result: no stand-in number). Claims broken 2, both fixed (0 open): F1 by the implementer
+  (D4-128: a missing snapshot threw from `StoredEvidenceBuilder.Build`), R1 by the review (the leakage check built
+  evidence before the stored-inputs refusal). Mutations caught 5/5, each turning exactly its case red:
+  - **Mutation output M4.1:** `sign-off-lookup.ts:31` drops `|| row.EvidenceSha256 !== evidenceSha256` → red `a sign-off over evidence that changed › sign-off evidence: …`: `AssertionError: expected { Kind: 'published', …(4) } to match object { Kind: 'withheld', …(3) }` at `governance.adversarial.db.test.ts:1060:29` (the tampered publish); `Tests 1 failed | 11 passed (12)`.
+  - **Mutation output M4.2:** `sign-off-model.operation.ts:132` `IsNotHuman` → `return false;` → red `(i) a call with an MJ API key …` and `(ii) a call as the MJ system user …`: `AssertionError: expected { ResultCode: 'SUCCESS', …(4) } to deeply equal { ResultCode: 'NOT_HUMAN', …(4) }` (`SignOffRowsAdded: 1`); `Tests 2 failed | 10 passed (12)`.
+  - **Mutation output M4.3:** `sign-off-service.ts:54` without the overrides-without-reason check → red `(iv) … overriding single-feature-auc with a blank reason …`: `AssertionError: expected { ResultCode: 'EXECUTION_ERROR', …(4) } to deeply equal { …(5) }` (the database's `CK_MLModelPublishRecord_Reason` refused the INSERT); `Tests 1 failed | 11 passed (12)`.
+  - **Mutation output M4.4:** `lifecycle-gate.ts:249` `inputs.ProtocolRow.Promotion.requiresHumanSignOff &&` → `false &&` → red `a sign-off over evidence that changed › …`: `AssertionError: expected { Kind: 'published', …(4) } to match object { Kind: 'withheld', …(3) }` at `:1048:30` (the automatic publish); `Tests 1 failed | 11 passed (12)`; re-run on the 13-case file after fix round 2: `1 failed | 12 passed (13)`, same case.
+  - **Mutation output M4.5:** `MJMLOutputBindingEntityServer.server.ts:31` `CheckRow(semantics, this)` → `CheckRow(semantics, this).slice(0, 0)` → red `every binding combination … › output-binding semantics: …`: `AssertionError: expected { Object (Tried, Accepted, ...) } to deeply equal { Tried: 32, Accepted: 4, Refused: 28 }` (`Accepted: 32, Refused: 0`) at `:1006:85`; `Tests 1 failed | 11 passed (12)`.
+  Each restored by reverse edit, `cmp` identical against the copy taken first, rebuilt; governance 13/13 and the lane
+  66/66 on the review stack after fix round 2.
+- **next's defects met at M4 (recorded, not fixed; outside the allowlist):** CI's three above (COLLATE
+  `V202611131724:11`, ng-artifacts `horizon1-ergonomics.test.ts` types, MC9 on `MJ: Artifact Types`; all fixed on next
+  after the base); MJCoreEntitiesServer's 4 stderr blocks (`MJArtifactVersionEntityServer.test.ts`); MJCoreEntitiesServer
+  `tsc` with tests fails in 47 of next's test files (216 errors; PR 4's test files 0; the package tsconfig excludes tests,
+  build green); dashboards' jsdom noise from `executions-list-view.component.dom.test.ts`; the integration-test-suite's
+  `tsc`-with-tests errors in next's rigs/tests (`task-M4.5-report.md` F7); the generated cascade `Delete()` reads the
+  global `Metadata.Provider` (`__mj.ts:50481`); `AgentRunner.startConversationNaming`'s unlinked `Name Conversation`
+  prompt run (OF4-21); next's Explorer dev server (`xlsx`, OF4-16); IT128 rewrites three tracked files
+  (`integration-test-suite/benchmark-logs/history.jsonl`, `latest.json`, `latest.md`) on every deterministic run, which
+  the allowlist check then reports; IT170's DSL3 contradicts `MJArtifactWorkingStateEntityServer.Save`'s upsert; IT170
+  DSL4 and IT171 DSLC3 need HMAC secrets PR 4's env files do not set.
+- **Anchors** (`check-anchors.mjs`, reading `origin/next` @ `e32dd804a6`): `# ok 108 · moved 30 · changed 2 · missing 0 ·
+  skipped 0` (140). `p4-agent-canned-copy`, `p4-agent-invented-importance`, `p4-agent-score-fallback` are `ok` (`:191`,
+  `:401`, `:407`): the tool reads next, where M4.4's rewrite does not exist yet, so the queued re-anchor has nothing to
+  move them to; they turn `changed` when PR 4 lands in next, and are left as they are. The two `changed`,
+  `n-auto-train-startup` (`startup-register.ts:71` now passes `deps, new PipelineAutoTrainer(), shadowCoordinator`) and
+  `m6-sidecar-predict` (`Predict(req, signal?)`), were already changed on the base `4570337d37`; not M4's.
+- **Self-audit (coding standards) of every added and changed line:** listed in `m4-exit-report.md` §3 for the
+  controller's ruling; nothing changed by this pass.
+- **Done this session:** the exit tier; the runtime proof; the queued plan edits (D4-111…D4-128 in §9.1, the §9 notes
+  beside D4-108 and D4-128, OF4-16 and OF4-18…OF4-23 in §9.4 (count nineteen), the `:1528` G3.6 and `:1534` G3.10
+  amendments, M4.3's and M4.4's as-built task text, Step 5's two exclusions, M4.6 Step 2's single-file form, the exit
+  list's DB-lane line); M4's 30 task boxes and the exit boxes above `milestone-exit`'s ticked (the self-audit box with
+  "findings listed for the controller's ruling"); `pr-body.mjs` (no `--edit-pr`) → §10 gates/checks 6 → 10, changeset
+  unchanged. `milestone-exit --milestone M4` (full) → `# checks 38 · failed 2`, EXIT=1: `allowlist` (the three tracked
+  `integration-test-suite/benchmark-logs/{history.jsonl,latest.json,latest.md}` files IT128 rewrote during this pass's two
+  deterministic runs — this pass's writes, reversed: the two appended `history.jsonl` lines removed, `latest.*` back to
+  HEAD, `git status` clean for them) and `cmd:check:standards` (next's COLLATE error, the only one); the other 27
+  commands exit 0 (build; Core, Engine, Sidecar, TruthSuite, Bootstrap, BootstrapLite, core-entity-forms, dashboards,
+  CodeGenLib, MJCoreEntities, MJCoreEntitiesServer, MJServer, ServerBootstrap, ServerBootstrapLite,
+  integration-test-suite tests; both pytest; check:ui, guards, esm, changeset, entityfield-sequence, codegen-tail,
+  browser-manifest-leakage; three test:types). After the reversal, `--skip-commands` → `# checks 10 · failed 0`, EXIT=0.
+  The full form exits 0 only once next's `b22cf37a68` (the COLLATE fix) is merged in.
+- **State left behind:** the owner's 7 untracked files; MJAPI :4041 stopped; sidecars `:64203` (implementer) and the
+  review sidecar as before; nothing staged or committed (the controller commits and pushes).
+- **Next step (exact):** the checkpoint commit `feat(ps): PR 4 M4 — sign-offs, evidence, output bindings and traced
+  numbers`, each path staged by name (`m4-exit-report.md` §6), then `git push` and `pr-body.mjs --edit-pr`.
+- **Gotchas / decisions:** D4-125 (G3.6's mutation is the `user` variant until M4b); D4-126/D4-127 (agent-run cleanup;
+  `Name Conversation` excluded by name); D4-128 (missing evidence inputs refuse, never throw); `test:db -- governance`
+  runs every file (use the single-file form); next's in-place edit of `V202611131724` changes its checksum, which the
+  next merge of next must handle on both PR 4 databases.
+- **Exit fix round 1 (2026-11-16, `m4-exit-fix-report.md`):** D4-129 — Evaluate parses the locked row's
+  `OutputSemantics` before the status write and refuses `not-servable` ("ML Model <id>'s OutputSemantics does not parse:
+  …"; no record, as Evaluate's other model-level refusals), `CreateOutputBindings` takes the parsed semantics (publish
+  passes `StoredPublishInputs.Task`); RD9's fixture stores a binary `OutputSemantics`, asserts the 4 bindings, deletes
+  them in teardown, and — D4-128 stops its Publish at the stored inputs (no Training Snapshot) — asserts that
+  `not-servable` withhold and drives `CheckLeakageFlags` directly for the leakage claim; OF4-24 — both HMAC secrets in
+  `.env.MJ_PS_PR4_claude`/`_review`; items 4a (`ps-production.component.ts:232`, `:518`, `:522` strict) and 4b
+  (`gate-test-store.ts:499` `||`). Re-run per D4-87 (only what the round's inputs touched: Engine runtime code → Engine,
+  DB lane, gate suite, deterministic tier; the ITS check → ITS; the component → dashboards PS + build): Engine 1584
+  (110 files) + build + tsc-with-tests 0; MJCoreEntitiesServer build 0; ITS 1044 (71) + build; dashboards PS 260 (25) +
+  build; DB lane 66 (6 files), governance file 13; Registry and Gate 9/9 (`DC6093DD-…`); Deterministic PR lane
+  `124/150 passed, 25 skipped`, 1 ✗ PB18 (host load) (`EB28F85C-…`), mutation form `146/150, 1 skipped`, 3 ✗ S34 (OF4-8),
+  DSL3 (next's), PB18 (PB7 storage 84220 B) (`40B15AE2-…`); RD9, DSL4, DSLC3 ✓ in both; check:guards 0, check:ui 0,
+  check:standards next's `V202611131724:11` only; milestone-exit `--mode pre-push --skip-commands` → `# checks 21 · failed 0`,
+  full `--milestone M4` → `# checks 38 · failed 1` (only `cmd:check:standards`, next's COLLATE; benchmark-log writes reversed first).
 
 ## 12. Refresh log (append-only)
 

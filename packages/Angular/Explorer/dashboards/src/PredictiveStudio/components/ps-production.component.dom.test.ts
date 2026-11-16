@@ -52,7 +52,7 @@ const makeModel = (over: Record<string, unknown> = {}) =>
 
 const render = (publishedModels: unknown[]) =>
   renderComponentFixture(PSProductionComponent, {
-    inputs: { engine: makeEngine(publishedModels), Provider: createFakeProvider({ runViewResults: [] }) },
+    inputs: { Engine: makeEngine(publishedModels), Provider: createFakeProvider({ runViewResults: [] }) },
   });
 
 describe('PSProductionComponent (DOM)', () => {

@@ -330,6 +330,66 @@ export interface PredictiveStudioCreateScoringProcessOutput {
     scoringBindingId?: string;
 }
 
+/** Input for `PredictiveStudio.GetModelEvidence`. */
+export interface PredictiveStudioGetModelEvidenceInput {
+    /** Id of the `MJ: ML Models` row whose evidence to build. */
+    modelId: string;
+}
+
+/**
+ * The evidence of an ML Model as the server builds it from stored rows: what a sign-off approver is shown and what a
+ * publish freezes on its `MJ: ML Model Publish Records` row (`Evidence`).
+ *
+ * **Lockstep contract**: `PredictiveStudioEvidenceSnapshot` equals `EvidenceSnapshot` in
+ * `@memberjunction/predictive-studio-core` (`governance-contracts.ts`), member for member; the referenced types are
+ * written inline because a Remote Operation type file cannot import another. Core's
+ * `src/__tests__/fixtures/jsontype-mirrors.ts` pins the two as exactly equal (`MirrorGetModelEvidence`), so a member
+ * added, dropped or changed on either side fails Core's `jsontype-mirrors.compile.test.ts`.
+ */
+export type PredictiveStudioEvidenceSnapshot = {
+    /** The holdout primary score of what ships, with its interval. */
+    readonly holdoutPrimary: {
+        readonly metric:
+            | 'log-loss' | 'brier' | 'multiclass-log-loss' | 'rmse' | 'mae' | 'poisson-deviance' | 'tweedie-deviance' | 'mase'
+            | 'auc' | 'accuracy' | 'f1' | 'precision' | 'recall' | 'r2' | 'calibration-slope';
+        readonly value: number;
+        readonly interval: { readonly level: number; readonly lower: number; readonly upper: number };
+        readonly n: number;
+    };
+    /** The run's paired comparisons, by name. */
+    readonly comparisons: Readonly<Record<string, { readonly value: number; readonly ci: readonly [number, number]; readonly beats: boolean }>>;
+    /** The run's stored gate decision. */
+    readonly gate:
+        | {
+            readonly outcome: 'model';
+            readonly branch: 'a:beats-best-simple' | 'a:Q15-only-model-beats-dummy';
+            readonly shipped: string;
+            readonly shippedRole: 'model';
+            readonly note: 'no simple baseline carries demonstrable signal' | null;
+        }
+        | { readonly outcome: 'keep-simple-baseline'; readonly branch: 'b:keep-simple-baseline'; readonly shipped: string; readonly shippedRole: 'simpleBaseline'; readonly note: null }
+        | { readonly outcome: 'no-signal'; readonly branch: 'c:no-signal'; readonly shipped: null; readonly shippedRole: null; readonly note: null };
+    /** The run's stored leakage-audit findings. */
+    readonly leakageFlags: readonly (
+        | { readonly kind: 'single-feature-auc'; readonly sourceColumn: string; readonly heldOutAuc: number }
+        | { readonly kind: 'time-shifted-label'; readonly scoreWithShiftedLabel: number }
+        | { readonly kind: 'drop-column'; readonly sourceColumn: string; readonly scoreDrop: number }
+        | { readonly kind: 'high-cardinality-id'; readonly sourceColumn: string; readonly distinctRatio: number }
+    )[];
+    /** The training data window, as ISO dates (yyyy-mm-dd). */
+    readonly dataWindow: { readonly from: string; readonly to: string };
+    /** The `ContentHash` of the Training Snapshot the model was trained on. */
+    readonly snapshotHash: string;
+};
+
+/** Output of `PredictiveStudio.GetModelEvidence`: the evidence and the SHA-256 a sign-off over it records. */
+export interface PredictiveStudioGetModelEvidenceOutput {
+    /** The evidence, built from stored rows only. */
+    evidence: PredictiveStudioEvidenceSnapshot;
+    /** Lower-case hex SHA-256 of the canonical JSON of `evidence`; a sign-off records it as `EvidenceSha256`. */
+    evidenceSha256: string;
+}
+
 /**
  * A lifecycle transition the gate applies to an ML Model: `evaluate` (Draft → Validated or KeepBaseline from the
  * training run's stored gate decision), `publish` (Validated or KeepBaseline → Published), `archive` (→ Archived, with a
@@ -504,6 +564,36 @@ export interface PredictiveStudioScoreRecordSetOutput {
     wroteBack: boolean;
     /** Ephemeral predictions, present only when `wroteBack` is false. */
     predictions?: PredictiveStudioEphemeralPrediction[];
+}
+
+/** A leakage-audit flag kind a sign-off overrides (the stored `LeakageFlag['kind']` values). */
+export type PredictiveStudioLeakageFlagKind = 'single-feature-auc' | 'time-shifted-label' | 'drop-column' | 'high-cardinality-id';
+
+/** Input for `PredictiveStudio.SignOffModel`. */
+export interface PredictiveStudioSignOffModelInput {
+    /** Id of the `MJ: ML Models` row signed off. */
+    modelId: string;
+    /** What the sign-off approves or rejects: a `publish` (Validated or KeepBaseline → Published) or a `rollback` (Archived → Published). */
+    purpose: 'publish' | 'rollback';
+    /** The approver's decision. */
+    decision: 'approve' | 'reject';
+    /** Why; required (non-blank) when `overridesFlags` names any flag. */
+    reason: string;
+    /** The model's leakage flag kinds this sign-off overrides; empty for none. */
+    overridesFlags: PredictiveStudioLeakageFlagKind[];
+}
+
+/**
+ * Output of `PredictiveStudio.SignOffModel`: the recorded sign-off (`MJ: ML Model Publish Records`, Kind `sign-off`) and
+ * the SHA-256 of the evidence it was made over. A `Success: true` result always carries both fields. A refused sign-off
+ * carries no output: it arrives as the operation's `ResultCode` (`NOT_HUMAN`, `INVALID_INPUT`, `OVERRIDES_WITHOUT_REASON`,
+ * `MODEL_ARCHIVED`) with `Success: false` and the reason in `ErrorMessage`, and writes no row.
+ */
+export interface PredictiveStudioSignOffModelOutput {
+    /** Id of the recorded sign-off; pass it as `signOffId` to `PredictiveStudio.PromoteModel`. */
+    signOffRecordId: string;
+    /** The `EvidenceSha256` the sign-off recorded. */
+    evidenceSha256: string;
 }
 
 /**
@@ -2070,6 +2160,23 @@ export class PredictiveStudioCreateScoringProcessOperation extends BaseRemotable
 }
 
 // ============================================================
+// PredictiveStudio.GetModelEvidence — Get ML Model Evidence
+// ============================================================
+/**
+ * Get ML Model Evidence
+ * Build the evidence of an MJ: ML Models row from stored rows only, the way a sign-off records it and a publish freezes it: the holdout primary score of what ships (the kept simple member's for keep-simple-baseline) with its interval, the training run's paired comparisons, its stored gate decision and leakage flags, the Training Snapshot's data window and ContentHash. Returns the evidence and its SHA-256 (the EvidenceSha256 a sign-off over it records). Read-only: writes no row. Delegates to SignOffService in @memberjunction/predictive-studio-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.GetModelEvidence'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioGetModelEvidenceOperation extends BaseRemotableOperation<PredictiveStudioGetModelEvidenceInput, PredictiveStudioGetModelEvidenceOutput> {
+    public readonly OperationKey = "PredictiveStudio.GetModelEvidence";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_58ae71e740bbf717";
+}
+
+// ============================================================
 // PredictiveStudio.PromoteModel — Promote ML Model
 // ============================================================
 /**
@@ -2118,6 +2225,23 @@ export class PredictiveStudioScoreRecordSetOperation extends BaseRemotableOperat
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_30d16c7f220f7b3a";
+}
+
+// ============================================================
+// PredictiveStudio.SignOffModel — Sign Off ML Model
+// ============================================================
+/**
+ * Sign Off ML Model
+ * Record a person's sign-off of an MJ: ML Models row for a publish or a rollback: an MJ: ML Model Publish Records row of Kind sign-off with the approver, the decision (approve or reject), the reason, the leakage flag kinds it overrides, and the evidence built from stored rows with its SHA-256. The lifecycle gate consumes an approving sign-off (PromoteModel's signOffId) only while its EvidenceSha256 equals a fresh recomputation. Refused with NOT_HUMAN for an API-key caller or the system user, INVALID_INPUT (naming the field) for an input outside its contract (a missing field, an unknown purpose, decision or leakage flag kind), OVERRIDES_WITHOUT_REASON when flags are overridden without a reason, and MODEL_ARCHIVED for an Archived model. Delegates to SignOffService in @memberjunction/predictive-studio-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.SignOffModel'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioSignOffModelOperation extends BaseRemotableOperation<PredictiveStudioSignOffModelInput, PredictiveStudioSignOffModelOutput> {
+    public readonly OperationKey = "PredictiveStudio.SignOffModel";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_0d274cfb21ed2782";
 }
 
 // ============================================================

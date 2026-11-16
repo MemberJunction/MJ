@@ -1,7 +1,7 @@
 /**
  * @module refusal-codes
  *
- * The machine-readable reasons Predictive Studio refuses a training or scoring request. They travel as the remote
+ * The machine-readable reasons Predictive Studio refuses a training, scoring or sign-off request. They travel as the remote
  * operation's `ResultCode`, so callers (the UI, the gate checks) branch on the code and never on the message text.
  */
 
@@ -32,9 +32,17 @@ const REFUSAL_CODES = [
   'ARTIFACT_HASH_MISMATCH',
   /** A model row has no registered `ArtifactSha256`, so its artifact cannot be verified and is not served (`artifact-unverified`). */
   'ARTIFACT_UNVERIFIED',
+  /** A sign-off was attempted by an API-key caller or the system user: only a person can sign off (D4-04, `not-human`). */
+  'NOT_HUMAN',
+  /** A sign-off overrides leakage flags with a blank reason (`overrides-without-reason`). */
+  'OVERRIDES_WITHOUT_REASON',
+  /** A sign-off names an Archived model (D4-19, `model-archived`). */
+  'MODEL_ARCHIVED',
+  /** A remote operation's input breaks its wire contract (a missing field, or a value outside its declared set); the message names the field. */
+  'INVALID_INPUT',
 ] as const;
 
-/** Why a Train or Score request was refused. */
+/** Why a Train, Score or SignOffModel request was refused. */
 export type PredictiveStudioRefusalCode = (typeof REFUSAL_CODES)[number];
 
 /** The refusal codes and the check that a result code is one of them. */

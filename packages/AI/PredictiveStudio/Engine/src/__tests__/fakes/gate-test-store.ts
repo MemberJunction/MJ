@@ -15,14 +15,18 @@ import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   GateRecords,
+  GateRules,
   JsonParse,
+  SemanticsRules,
+  TrainingRunResultsParser,
   type EvaluationProtocolColumns,
   type JsonObject,
-  type JsonValue,
   type LeakageFlag,
+  type MetricWithInterval,
   type PromotionRule,
   type RegisteredDeliveryView,
   type StoredGateRecord,
+  type StoredTrainerResult,
   type TaskType,
   type TrainerCompleted,
 } from '@memberjunction/predictive-studio-core';
@@ -39,7 +43,11 @@ export type Cell = string | number | boolean | null | Date;
 export type Row = Record<string, Cell>;
 
 /** The members of a fake entity that are not columns. */
-const RECORD_MEMBERS = new Set(['Save', 'Delete', 'NewRecord', 'LatestResult', 'RefusalObject', 'IsSaved', 'then']);
+const RECORD_MEMBERS = new Set(['Save', 'Delete', 'NewRecord', 'LatestResult', 'IsSaved', 'then']);
+/** The generated `<Column>Object` accessors of JSON-typed columns, answered with the column's parsed JSON (null when unset). */
+const JSON_OBJECT_ACCESSORS = new Set(['RefusalObject', 'EvidenceObject', 'InitiatorObject', 'GateDecisionObject']);
+/** The database defaults a save fills when a new row leaves them unset (`DF_MLModelPublishRecord_RecordedAt`). */
+const INSERT_DEFAULTS: Readonly<Record<string, () => Row>> = { 'MJ: ML Model Publish Records': () => ({ RecordedAt: new Date() }) };
 
 /** The store's read log: every read in order, and reads set to fail (the guard tests' fail-closed cases). */
 export class ReadLog {
@@ -149,6 +157,13 @@ export class GateTestStore {
     return this.Row('MJ: ML Models', modelId)?.['Status'] ?? null;
   }
 
+  /** Sets the model's persisted status directly, as a write outside the gate would (a test's starting state). */
+  public SetStatus(modelId: string, status: string): void {
+    const row = this.Row('MJ: ML Models', modelId);
+    if (!row) throw new Error(`GateTestStore: no ML Model ${modelId}`);
+    row['Status'] = status;
+  }
+
   /** The model's persisted `StatusReason`. */
   public StatusReason(modelId: string): Cell {
     return this.Row('MJ: ML Models', modelId)?.['StatusReason'] ?? null;
@@ -164,6 +179,11 @@ export class GateTestStore {
     return (this.Tables['MJ: ML Model Publish Records'] || []).filter((r) => UUIDsEqual(String(r['TrainingRunID']), trainingRunId));
   }
 
+  /** The model's output-binding rows (`MJ: ML Output Bindings`). */
+  public OutputBindings(modelId: string): Row[] {
+    return (this.Tables['MJ: ML Output Bindings'] || []).filter((r) => UUIDsEqual(String(r['ModelID']), modelId));
+  }
+
   /** The scheduled jobs whose configuration names the model. */
   public ScheduledJobs(modelId: string): Row[] {
     return (this.Tables['MJ: Scheduled Jobs'] || []).filter((j) => typeof j['Configuration'] === 'string' && j['Configuration'].includes(`"modelId":"${modelId}"`));
@@ -177,6 +197,39 @@ export class GateTestStore {
   /** Stores `flags` as the leakage audit of the model's training run (PR 3's `LeakageFlag[]`). */
   public FlagLeakage(modelId: string, flags: readonly LeakageFlag[]): void {
     this.world().FlagLeakage(modelId, flags);
+  }
+
+  /** The Training Snapshot row the model was trained on (its `TrainingSnapshotID`). */
+  public SnapshotOf(modelId: string): Row {
+    const snapshot = this.Row('MJ: ML Training Snapshots', String(this.Row('MJ: ML Models', modelId)?.['TrainingSnapshotID']));
+    if (!snapshot) throw new Error(`GateTestStore: ML Model ${modelId} has no Training Snapshot row`);
+    return snapshot;
+  }
+
+  /** Rewrites the `ContentHash` of the Training Snapshot row `run` trained on (the run row's `TrainingSnapshotID`). */
+  public RewriteSnapshotHash(run: Pick<WorldModel, 'RunID'>, contentHash: string): void {
+    const snapshot = this.Row('MJ: ML Training Snapshots', String(this.Row('MJ: ML Training Runs', run.RunID)?.['TrainingSnapshotID']));
+    if (!snapshot) throw new Error(`GateTestStore: training run ${run.RunID} names no Training Snapshot row`);
+    snapshot['ContentHash'] = contentHash;
+  }
+
+  /** The holdout primary score in the run's stored trainer result, read back from its `ValidationResults`. */
+  public StoredHoldoutPrimary(run: Pick<WorldModel, 'RunID'>): MetricWithInterval {
+    return this.storedTrainer(run).holdout.primary;
+  }
+
+  /** The holdout score of the simple baseline member `member` (e.g. `glm`) in the run's stored trainer result. */
+  public StoredMemberHoldout(run: Pick<WorldModel, 'RunID'>, member: string): MetricWithInterval {
+    const found = this.storedTrainer(run).baselines.find((b) => b.role === 'simple' && GateRules.BaselineMemberName(b.baseline) === member);
+    if (!found) throw new Error(`GateTestStore: training run ${run.RunID} stores no simple baseline '${member}'`);
+    return found.holdout;
+  }
+
+  private storedTrainer(run: Pick<WorldModel, 'RunID'>): StoredTrainerResult {
+    const cell = this.Row('MJ: ML Training Runs', run.RunID)?.['ValidationResults'];
+    const parsed = TrainingRunResultsParser.ParseTrainingRunResults(typeof cell === 'string' ? cell : null);
+    if (parsed.Ok === false || parsed.Value.status !== 'completed') throw new Error(`GateTestStore: training run ${run.RunID} stores no completed results`);
+    return parsed.Value.trainer;
   }
 
   /** Appends a row another session has already committed: an open transaction's rollback keeps it. */
@@ -302,7 +355,10 @@ export class GateTestStore {
           state.latest = { CompleteMessage: failure };
           return false;
         }
-        if (!values['ID']) values['ID'] = randomUUID().toUpperCase();
+        if (!values['ID']) {
+          values['ID'] = randomUUID().toUpperCase();
+          for (const [k, v] of Object.entries(INSERT_DEFAULTS[entityName]?.() || {})) if (values[k] === undefined || values[k] === null) values[k] = v;
+        }
         const table = (store.Tables[entityName] ||= []);
         const at = table.findIndex((r) => UUIDsEqual(String(r['ID']), String(values['ID'])));
         if (at >= 0) table[at] = { ...table[at], ...values };
@@ -324,10 +380,13 @@ export class GateTestStore {
       get(t, prop) {
         if (prop === 'LatestResult') return state.latest;
         if (prop === 'IsSaved') return state.saved;
-        if (prop === 'RefusalObject') {
-          if (typeof values['Refusal'] !== 'string') return null;
-          const refusal: JsonValue = JSON.parse(values['Refusal']);
-          return refusal;
+        const jsonColumn = typeof prop === 'string' && JSON_OBJECT_ACCESSORS.has(prop) ? prop.slice(0, -'Object'.length) : null;
+        if (jsonColumn !== null) {
+          const cell = values[jsonColumn];
+          if (typeof cell !== 'string') return null;
+          const parsed = JsonParse.ParseJsonText(cell, jsonColumn);
+          if (parsed.Ok === false) throw new Error(`GateTestStore: ${entityName}.${jsonColumn} is not JSON: ${parsed.Errors.join('; ')}`);
+          return parsed.Value;
         }
         if (typeof prop === 'string' && RECORD_MEMBERS.has(prop)) return Reflect.get(t, prop);
         return typeof prop === 'string' ? (values[prop] ?? null) : undefined;
@@ -435,7 +494,9 @@ export class GateWorld {
       : TrainerResultFixtures.CannedCompleted(runId, ProtocolRowFixture.Spec());
     const result: TrainerCompleted = o.IncumbentID ? { ...base, incumbentDiff: { incumbentModelId: o.IncumbentID, value: 0.02, lower: 0.01, upper: 0.03 } } : base;
     const run = this.storeRun(runId, result, modelId);
-    this.storeModel(modelId, run, status, o.Version ?? this.next);
+    const snapshotId = this.storeSnapshot(run);
+    // ML Model versions start at 1, so `||` falls back to the counter only for an absent Version.
+    this.storeModel(modelId, run, snapshotId, status, o.Version || this.next);
     return { ID: modelId, RunID: runId };
   }
 
@@ -502,7 +563,22 @@ export class GateWorld {
     return run;
   }
 
-  private storeModel(modelId: string, run: WorldRun, status: string, version: number): void {
+  /**
+   * The Training Snapshot row the run trained on (its own content hash, the fixtures' data cutoff), linked from the run
+   * row; returns its ID.
+   */
+  private storeSnapshot(run: WorldRun): string {
+    const snapshotId = this.id();
+    this.Store.Insert('MJ: ML Training Snapshots', {
+      ID: snapshotId, PipelineID: GateWorld.PipelineID, PredictionUnitID: GateWorld.UnitID, ContentHash: SnapshotHash.Sha256Hex(new TextEncoder().encode(`snapshot ${snapshotId}`)),
+      DataCutoff: new Date('2026-01-01T00:00:00Z'),
+    });
+    const row = this.Store.Row('MJ: ML Training Runs', run.RunID);
+    if (row) row['TrainingSnapshotID'] = snapshotId;
+    return snapshotId;
+  }
+
+  private storeModel(modelId: string, run: WorldRun, snapshotId: string, status: string, version: number): void {
     const decision = run.Gate.decision;
     if (decision.outcome === 'no-signal') throw new Error('GateWorld: a no-signal run has no model row');
     const shipped = decision.shipped;
@@ -519,9 +595,16 @@ export class GateWorld {
       ID: modelId, PipelineID: GateWorld.PipelineID, Version: version, Status: status, StatusReason: null, TrainingRunID: run.RunID,
       EvaluationProtocolID: run.ProtocolID, PredictionUnitID: GateWorld.UnitID, OutputSemantics: JSON.stringify({ task: GATE_TASK }),
       Delivery: JSON.stringify(delivery), ArtifactFileID: fileId, ArtifactSha256: sha, ArtifactStatus: 'verified', ArtifactCheckedAt: null,
-      Lineage: null, FeatureSchema: JSON.stringify([{ Name: 'EventsAttended' }, { Name: 'Tenure' }]), SnapshotHash: 'a'.repeat(64),
+      Lineage: null, FeatureSchema: JSON.stringify([{ Name: 'EventsAttended' }, { Name: 'Tenure' }]), TrainingSnapshotID: snapshotId,
+      SnapshotHash: this.Store.Row('MJ: ML Training Snapshots', snapshotId)?.['ContentHash'] || null,
       ServingWhileUnevaluated: false,
     });
+    if (status !== 'Draft' && status !== 'Unevaluated') this.storeDefaultBindings(modelId);
+  }
+
+  /** The output bindings Evaluate creates, stored for a model the world puts past Draft (it was evaluated). */
+  private storeDefaultBindings(modelId: string): void {
+    for (const b of SemanticsRules.DefaultBindings({ task: GATE_TASK })) this.Store.Insert('MJ: ML Output Bindings', { ID: this.id(), ModelID: modelId, ...b });
   }
 
   private runOf(modelId: string): WorldRun {

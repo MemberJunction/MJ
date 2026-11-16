@@ -266,7 +266,7 @@ export class ModelTransitionDelegation {
   public static readonly Transitions: readonly PredictiveStudioModelTransition[] = MODEL_TRANSITIONS;
 
   /**
-   * Apply `request` through the gate on `ctx` (the caller's provider and user, M3's seams).
+   * Apply `request` through the gate on `ctx` (the caller's provider and user, the production seams).
    *
    * @param gate the lifecycle gate (defaults to the production {@link LifecycleGate})
    */

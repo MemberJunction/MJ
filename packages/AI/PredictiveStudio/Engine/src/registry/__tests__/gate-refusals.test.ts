@@ -21,6 +21,16 @@ describe('GateRefusals.Describe', () => {
       'The training run was compared with model A, but model B is Published now; retrain to compare with it.',
     ]);
   });
+  it('words the not-servable refusals of a publish whose evidence cannot be built from stored rows (D4-128)', () => {
+    expect(GateRefusals.Describe({ kind: 'not-servable', reason: 'ML Model M names no Training Snapshot to build evidence from' }))
+      .toBe('The model cannot be served: ML Model M names no Training Snapshot to build evidence from');
+    expect(GateRefusals.Describe({ kind: 'not-servable', reason: 'Training Snapshot S that ML Model M names does not exist, so no evidence can be built from it' }))
+      .toBe('The model cannot be served: Training Snapshot S that ML Model M names does not exist, so no evidence can be built from it');
+  });
+  it('words the not-servable refusal of an Evaluate whose OutputSemantics does not parse (D4-129)', () => {
+    expect(GateRefusals.Describe({ kind: 'not-servable', reason: "ML Model M's OutputSemantics does not parse: OutputSemantics is empty; it must hold JSON" }))
+      .toBe("The model cannot be served: ML Model M's OutputSemantics does not parse: OutputSemantics is empty; it must hold JSON");
+  });
   it('prefixes the StatusReason "Automatic publish withheld" for an automated initiator only', () => {
     expect(GateRefusals.WithheldStatusReason({ kind: 'no-sign-off' }, { kind: 'scheduled-job', scheduledJobRunId: 'J' })).toMatch(/^Automatic publish withheld: /);
     expect(GateRefusals.WithheldStatusReason({ kind: 'no-sign-off' }, { kind: 'human', userId: 'U' })).toMatch(/^Publish withheld: /);

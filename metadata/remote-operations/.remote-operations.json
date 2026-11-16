@@ -378,6 +378,52 @@
   },
   {
     "fields": {
+      "Name": "Get ML Model Evidence",
+      "OperationKey": "PredictiveStudio.GetModelEvidence",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Build the evidence of an MJ: ML Models row from stored rows only, the way a sign-off records it and a publish freezes it: the holdout primary score of what ships (the kept simple member's for keep-simple-baseline) with its interval, the training run's paired comparisons, its stored gate decision and leakage flags, the Training Snapshot's data window and ContentHash. Returns the evidence and its SHA-256 (the EvidenceSha256 a sign-off over it records). Read-only: writes no row. Delegates to SignOffService in @memberjunction/predictive-studio-engine.",
+      "InputTypeName": "PredictiveStudioGetModelEvidenceInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-get-model-evidence.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioGetModelEvidenceOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-get-model-evidence.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D37FB471-978B-474E-A9CD-BA674366203E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sign Off ML Model",
+      "OperationKey": "PredictiveStudio.SignOffModel",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Record a person's sign-off of an MJ: ML Models row for a publish or a rollback: an MJ: ML Model Publish Records row of Kind sign-off with the approver, the decision (approve or reject), the reason, the leakage flag kinds it overrides, and the evidence built from stored rows with its SHA-256. The lifecycle gate consumes an approving sign-off (PromoteModel's signOffId) only while its EvidenceSha256 equals a fresh recomputation. Refused with NOT_HUMAN for an API-key caller or the system user, INVALID_INPUT (naming the field) for an input outside its contract (a missing field, an unknown purpose, decision or leakage flag kind), OVERRIDES_WITHOUT_REASON when flags are overridden without a reason, and MODEL_ARCHIVED for an Archived model. Delegates to SignOffService in @memberjunction/predictive-studio-engine.",
+      "InputTypeName": "PredictiveStudioSignOffModelInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-sign-off-model.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioSignOffModelOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-sign-off-model.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "09BA5B09-D639-43EC-8421-088F4AF0F68B"
+    }
+  },
+  {
+    "fields": {
       "Name": "Export AI Skill Markdown",
       "OperationKey": "AISkill.ExportMarkdown",
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=AI Skills",

@@ -5,6 +5,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { PredictiveStudioPromoteModelInput } from '@memberjunction/core-entities';
+import { PredictiveStudioRefusalCodes } from '@memberjunction/predictive-studio-core';
 
 import { GateTestStore, GateWorld, type WorldModel } from '../../__tests__/fakes/gate-test-store';
 import { RecordingScoringActions } from '../../__tests__/fakes/scoring-action-fakes';
@@ -62,8 +63,8 @@ describe('PredictiveStudio.PromoteModel — transition only, on the lifecycle ga
     const reads = store.ReadCount();
     // Test-double cast: the removed shape (no transition), which the compiler otherwise refuses.
     const out = await op.ExecuteServer({ modelId: validated.ID } as PredictiveStudioPromoteModelInput, context);
-    expect(out).toMatchObject({ Success: false });
-    expect(out.ErrorMessage).toContain('transition');
+    expect(out).toMatchObject({ Success: false, ResultCode: 'INVALID_INPUT' });
+    expect(out.ErrorMessage).toContain('input: transition ');
     expect(store.ReadCount()).toBe(reads);
   });
   it('the interactive caller is the initiator and the approver of the publish record, and the scoring Action is generated', async () => {
@@ -90,7 +91,23 @@ describe('PredictiveStudio.PromoteModel — transition only, on the lifecycle ga
     const reads = store.ReadCount();
     // Test-double cast: the one way to send a transition the input type does not have (the compiler refuses it otherwise).
     const out = await op.ExecuteServer({ modelId: validated.ID, transition: 'Published' } as unknown as PredictiveStudioPromoteModelInput, context);
-    expect([out.Success, out.ErrorMessage]).toEqual([false, expect.stringContaining('transition')]);
+    expect([out.Success, out.ResultCode, out.ErrorMessage]).toEqual([false, 'INVALID_INPUT', expect.stringContaining('input: transition ')]);
     expect(store.ReadCount()).toBe(reads);
+  });
+  it('a malformed input is the typed INVALID_INPUT refusal from Core\'s catalog, and the model and its records stay as they were', async () => {
+    const before = [store.Status(validated.ID), store.PublishRecords(validated.ID).length, store.SaveCount()];
+    // Test-double casts: wire inputs that break the contract (they arrive as untyped JSON; the compiler refuses the shapes).
+    const bad = [
+      { modelId: validated.ID, transition: 'promote' },
+      { modelId: '', transition: 'publish' },
+      { modelId: validated.ID, transition: 'publish', reason: 42 },
+    ] as unknown as PredictiveStudioPromoteModelInput[];
+    for (const input of bad) {
+      const out = await op.ExecuteServer(input, context);
+      expect(out).toMatchObject({ Success: false, ResultCode: 'INVALID_INPUT' });
+      expect(PredictiveStudioRefusalCodes.IsRefusal(out.ResultCode)).toBe(true);
+      expect(out.Output).toBeUndefined();
+    }
+    expect([store.Status(validated.ID), store.PublishRecords(validated.ID).length, store.SaveCount()]).toEqual(before);
   });
 });

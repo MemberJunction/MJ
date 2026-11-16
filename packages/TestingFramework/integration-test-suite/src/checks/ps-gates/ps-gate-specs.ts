@@ -121,7 +121,8 @@ export class PsGateSpecs {
       TruthCsv: path.join(w1.Dir, 'truth.csv'),
       Dataset: w1,
       Details: run.Details.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
-      Model: { Lineage: model.LineageJSON, TargetVariable: 'Renewed', ProblemType: 'classification' },
+      // OutputSemantics null: the probes read no binding row (`BuildAtRiskOptions(model, null)`), so the semantics are not consulted.
+      Model: { Lineage: model.LineageJSON, TargetVariable: 'Renewed', ProblemType: 'classification', OutputSemantics: null },
     };
   }
 }

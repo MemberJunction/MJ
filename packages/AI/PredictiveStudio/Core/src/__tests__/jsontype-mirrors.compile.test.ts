@@ -1,8 +1,12 @@
 /**
  * The JSONType mirrors in `metadata/entities/JSONType-interfaces/IMLModelJsonTypes.ts` and
- * `IMLModelPublishRecordJsonTypes.ts`, and the `PredictiveStudio.PromoteModel` output's refusal in
- * `metadata/remote-operations/types/predictive-studio-promote-model.output.ts`, equal their Core types: `fixtures/jsontype-mirrors.ts`, compiled with the
- * TypeScript compiler API under this package's options, has no diagnostics. A drifted mirror (one member changed in
+ * `IMLModelPublishRecordJsonTypes.ts`, the `PredictiveStudio.PromoteModel` output's refusal in
+ * `metadata/remote-operations/types/predictive-studio-promote-model.output.ts`, the `PredictiveStudio.GetModelEvidence`
+ * output's evidence (`MirrorGetModelEvidence`, `predictive-studio-get-model-evidence.output.ts`), and the
+ * `PredictiveStudio.SignOffModel` input's leakage flag kind, purpose and decision (`MirrorLeakageFlagKind`,
+ * `MirrorSignOffPurpose`, `MirrorSignOffDecision`, `predictive-studio-sign-off-model.input.ts`) equal their Core types:
+ * `fixtures/jsontype-mirrors.ts`, compiled with the TypeScript compiler API under this package's options, has no
+ * diagnostics. A drifted mirror (one member changed in
  * memory) fails on exactly the assertion for that type, so the check cannot pass vacuously.
  */
 import { describe, it, expect } from 'vitest';
@@ -17,6 +21,7 @@ const TSCONFIG = resolve(here, '../../tsconfig.json');
 const MODELS_MIRROR = resolve(here, '../../../../../../metadata/entities/JSONType-interfaces/IMLModelJsonTypes.ts');
 const PUBLISH_MIRROR = resolve(here, '../../../../../../metadata/entities/JSONType-interfaces/IMLModelPublishRecordJsonTypes.ts');
 const PROMOTE_OUTPUT_MIRROR = resolve(here, '../../../../../../metadata/remote-operations/types/predictive-studio-promote-model.output.ts');
+const EVIDENCE_OUTPUT_MIRROR = resolve(here, '../../../../../../metadata/remote-operations/types/predictive-studio-get-model-evidence.output.ts');
 
 /** The package's compiler options with emit off; `rootDir` is dropped because the mirrors live outside `src`. */
 function compilerOptions(): ts.CompilerOptions {
@@ -55,7 +60,7 @@ function failingMirrors(output: string): string[] {
 }
 
 describe('JSONType mirrors equal their Core types', () => {
-  it('compiles with no diagnostics (all eight mirrors equal Core)', () => {
+  it('compiles with no diagnostics (all twelve mirrors equal Core)', () => {
     expect(compile()).toBe('');
   }, 120_000);
 
@@ -72,6 +77,13 @@ describe('JSONType mirrors equal their Core types', () => {
     expect(drifted).not.toBe(text);
     // Actor is referenced by TransitionRefusal (`Actor['kind']`), so both assertions fail.
     expect(failingMirrors(compile(new Map([[PUBLISH_MIRROR, drifted]])))).toEqual(['MirrorActor', 'MirrorTransitionRefusal']);
+  }, 120_000);
+
+  it('fails on exactly the drifted mirror (GetModelEvidence output: an evidence member dropped)', () => {
+    const text = readFileSync(EVIDENCE_OUTPUT_MIRROR, 'utf8');
+    const drifted = text.replace('    readonly snapshotHash: string;\n', '');
+    expect(drifted).not.toBe(text);
+    expect(failingMirrors(compile(new Map([[EVIDENCE_OUTPUT_MIRROR, drifted]])))).toEqual(['MirrorGetModelEvidence']);
   }, 120_000);
 
   it('fails on exactly the drifted mirror (PromoteModel output: a refusal kind dropped)', () => {

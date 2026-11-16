@@ -12,12 +12,15 @@
 // transaction stack each, as MJAPI's per-request providers do). The adversary's writes the task prescribes "by direct
 // SQL" are the only SQL DML here, each labelled; every other SQL statement is a verification read. Teardown deletes
 // what the file created by ID through `HarnessCleanup.DeleteRecorded` (D4-62's order) and requires the starting census.
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readdirSync, rmdirSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import sql from 'mssql';
 import { DatabaseProviderBase, RunView, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
-import type { MJMLAlgorithmEntity, MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import type {
+  MJMLAlgorithmEntity, MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity,
+} from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   Delivery,
@@ -67,8 +70,10 @@ import { GATE_TASK, GateTrainerAnswers, type IncumbentDiff } from './fixtures/ga
 interface HarnessCensus {
   readonly Models: number;
   readonly Runs: number;
+  readonly Snapshots: number;
   readonly Pipelines: number;
   readonly PublishRecords: number;
+  readonly OutputBindings: number;
   readonly ScheduledJobs: number;
   readonly ScheduledJobRuns: number;
   readonly Protocols: number;
@@ -77,6 +82,10 @@ interface HarnessCensus {
   readonly Actions: number;
   readonly ActionParams: number;
   readonly ActionCategories: number;
+  /** `MJ: AI Agent Runs`, less the Memory Manager's (MJAPI's scheduled job writes them while it is up), by agent name. */
+  readonly AgentRuns: number;
+  /** `MJ: AI Prompt Runs`, less the Memory Manager's prompts' (`Memory Manager - …`), by prompt name. */
+  readonly PromptRuns: number;
   readonly ArtifactObjects: number;
   readonly ArtifactDirectories: number;
 }
@@ -194,7 +203,7 @@ function registryCtx(provider: IMetadataProvider = server.Provider): RegistryCon
   return { ContextUser: server.User, Provider: provider };
 }
 
-/** M3's production gate context (stored-rows evidence, passing semantics check, no sign-off lookup) on `provider`. */
+/** The production gate context (stored-rows evidence, the sign-off lookup over the publish records, the semantics check) on `provider`. */
 function gateCtx(provider: IMetadataProvider = server.Provider): GateContext {
   return GateContexts.ForRequest(registryCtx(provider));
 }
@@ -288,8 +297,58 @@ function registeredDeliveryOf(gate: StoredGateRecord, answer: TrainerCompleted, 
   return registered.Registered;
 }
 
+/** The lower-case hex SHA-256 of `text`. */
+function sha256Hex(text: string): string {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+/**
+ * The Training Snapshot row a training trains on, as the snapshot builder leaves it: its three files stored write-once
+ * (through the artifact registry, so teardown deletes their objects with their rows), a complete read, five hashes and
+ * the data cutoff. The rows' contents are not read by the gate; its evidence reads the `ContentHash` and `DataCutoff`.
+ */
+async function storeSnapshot(fix: PipelineFixture, label: string, ctx: RegistryContext): Promise<MJMLTrainingSnapshotEntity> {
+  const registry = ArtifactRegistry.ForContext(ctx, new StorageProviderArtifactLoader());
+  const files: StoredFile[] = [];
+  for (const part of ['matrix', 'row-manifest', 'provenance']) {
+    const file = await registry.Store(Buffer.from(`${TAG}:${label}:${part}`), `snapshot-${label}-${part}.txt`, ctx);
+    storedKeys.push(file.providerKey);
+    files.push(file);
+  }
+  const [matrix, manifest, provenance] = files;
+  const snapshot = await ctx.Provider.GetEntityObject<MJMLTrainingSnapshotEntity>('MJ: ML Training Snapshots', server.User);
+  snapshot.NewRecord();
+  snapshot.ContentHash = sha256Hex(`${TAG}:${label}:${randomUUID()}`);
+  snapshot.PipelineID = fix.PipelineID;
+  snapshot.PredictionUnitID = unitId;
+  snapshot.LabelVersion = 1;
+  snapshot.FeatureSpecVersion = 1;
+  snapshot.EvaluationProtocolID = fix.Protocol.Row.ID;
+  snapshot.StorageProviderID = matrix.storageProviderId;
+  [snapshot.MatrixFileID, snapshot.MatrixSha256, snapshot.MatrixSizeBytes] = [matrix.fileId, matrix.sha256, matrix.sizeBytes];
+  [snapshot.RowManifestFileID, snapshot.RowManifestSha256, snapshot.RowManifestSizeBytes] = [manifest.fileId, manifest.sha256, manifest.sizeBytes];
+  [snapshot.ProvenanceFileID, snapshot.ProvenanceSha256, snapshot.ProvenanceSizeBytes] = [provenance.fileId, provenance.sha256, provenance.sizeBytes];
+  snapshot.ManifestRowCount = 8;
+  snapshot.HoldoutRowCount = 2;
+  snapshot.RowsRead = 8;
+  snapshot.ReadComplete = true;
+  snapshot.CensoredRowsExcluded = 0;
+  snapshot.LabelKnownRowsExcluded = 0;
+  snapshot.EmptyLabelRowsExcluded = 0;
+  snapshot.FeatureSpec = '{}';
+  snapshot.FeatureSchema = JSON.stringify([{ Name: 'EventsAttended' }, { Name: 'Tenure' }]);
+  snapshot.FeatureSchemaHash = sha256Hex('lifecycle-gate-harness feature schema');
+  snapshot.ColumnProvenance = '{}';
+  snapshot.DataCutoff = new Date('2026-01-01T00:00:00Z');
+  snapshot.AssemblyCodeVersion = 'lifecycle-gate-harness';
+  if (!(await snapshot.Save())) throw new Error(`the training snapshot of ${label} did not save: ${snapshot.LatestResult?.CompleteMessage}`);
+  return snapshot;
+}
+
 /** The trainer's model row for the shipped artifact (Draft; its version is allocated by the save). */
-async function newModelRow(fix: PipelineFixture, runId: string, stored: StoredFile, delivery: RegisteredDelivery, provider: IMetadataProvider): Promise<MJMLModelEntity> {
+async function newModelRow(
+  fix: PipelineFixture, runId: string, snapshot: MJMLTrainingSnapshotEntity, stored: StoredFile, delivery: RegisteredDelivery, provider: IMetadataProvider,
+): Promise<MJMLModelEntity> {
   const model = await provider.GetEntityObject<MJMLModelEntity>('MJ: ML Models', server.User);
   model.NewRecord();
   model.PipelineID = fix.PipelineID;
@@ -305,7 +364,8 @@ async function newModelRow(fix: PipelineFixture, runId: string, stored: StoredFi
   model.ArtifactCheckedAt = new Date();
   model.FittedPreprocessing = '{}';
   model.FeatureSchema = JSON.stringify([{ Name: 'EventsAttended' }, { Name: 'Tenure' }]);
-  model.SnapshotHash = 'a'.repeat(64);
+  model.TrainingSnapshotID = snapshot.ID;
+  model.SnapshotHash = snapshot.ContentHash;
   model.TargetVariable = 'IsActive';
   model.ProblemType = 'classification';
   model.TrainedAt = new Date();
@@ -329,21 +389,26 @@ async function completeRun(run: MJMLTrainingRunEntity, answer: TrainerCompleted,
 }
 
 /**
- * One training of the pipeline that ships its model, written the way the trainer writes it: the run opened, the
- * artifact stored, the gate record and delivery built, the model row saved by `ModelVersions.SaveNewRow` (the
- * trainer's transaction around the pipeline lock, the version Query and the save), then the run completed.
+ * One training of the pipeline that ships its model, written the way the trainer writes it: the run opened, the gate
+ * record built, the artifact stored, the delivery built, the model row saved by `ModelVersions.SaveNewRow` (the
+ * trainer's transaction around the pipeline lock, the version Query and the save), then the run completed. A step that
+ * throws after the artifact is stored completes the run without a model first, so teardown finds the stored artifact
+ * through the run's trainer result.
  */
 async function trainModel(fix: PipelineFixture, label: string, o: TrainOptions = {}): Promise<TrainedModel> {
   const provider = o.Provider || server.Provider;
   const ctx = registryCtx(provider);
   const run = await startRun(fix, provider);
+  const snapshot = await storeSnapshot(fix, label, ctx);
+  run.TrainingSnapshotID = snapshot.ID;
   const answer = GateTrainerAnswers.ModelWins(run.ID, fix.Protocol.Spec, `${TAG}:${label}`, o.IncumbentDiff || null);
-  const stored = await storeArtifacts(answer, ctx);
   const gate = gateRecordOf(answer, o.RecordProtocol || fix.Protocol.Spec);
-  const shipped = stored.get('xgb');
-  if (!shipped) throw new Error('the shipped artifact was not stored');
-  const model = await newModelRow(fix, run.ID, shipped, registeredDeliveryOf(gate, answer, shipped), provider);
+  const stored = await storeArtifacts(answer, ctx);
+  let model: MJMLModelEntity;
   try {
+    const shipped = stored.get('xgb');
+    if (!shipped) throw new Error('the shipped artifact was not stored');
+    model = await newModelRow(fix, run.ID, snapshot, shipped, registeredDeliveryOf(gate, answer, shipped), provider);
     await ModelVersions.SaveNewRow(model, ctx);
   } catch (error) {
     // The run is completed without a model, so teardown still finds the stored artifact through the run's trainer result.
@@ -401,10 +466,6 @@ function beats(incumbentId: string): IncumbentDiff {
   return { incumbentModelId: incumbentId, value: 0.02, lower: 0.01, upper: 0.03 };
 }
 
-/**
- * `work` with both console channels captured: its result, every line (log, then error) and the lines that are not
- * {@link EXPECTED_LINES} (a case requires none).
- */
 /** The error message `work` fails with, or null when it completes (an adversary's write the database may refuse). */
 async function failureOf(work: () => Promise<void>): Promise<string | null> {
   try {
@@ -415,6 +476,10 @@ async function failureOf(work: () => Promise<void>): Promise<string | null> {
   }
 }
 
+/**
+ * `work` with both console channels captured: its result, every line (log, then error) and the lines that are not
+ * {@link EXPECTED_LINES} (a case requires none).
+ */
 async function quietly<T>(work: () => Promise<T>): Promise<{ Result: T; Lines: string[]; Unexpected: string[] }> {
   const errors = await ConsoleCapture.During('error', () => ConsoleCapture.During('log', work));
   const lines = [...errors.Result.Lines, ...errors.Lines];
@@ -506,15 +571,29 @@ async function recordChangesSince(since: Date): Promise<number> {
   return r.recordset[0]?.N || 0;
 }
 
+/**
+ * How many `MJ: Action Categories` rows carry the shared models category's name. The census leaves the category out by
+ * name, so this is what catches a duplicate creation of it (two first publishes racing `ensureModelsActionCategory`).
+ */
+async function sharedModelsCategoryCount(): Promise<number> {
+  const r = await pool.request().input('Name', sql.NVarChar, SHARED_MODELS_CATEGORY).query<{ N: number }>(
+    `SELECT COUNT(*) AS N FROM ${tableOf('MJ: Action Categories')} WHERE Name = @Name`,
+  );
+  return r.recordset[0]?.N || 0;
+}
+
 /** Row counts and model-artifact objects/directories under the storage root. */
 async function census(): Promise<HarnessCensus> {
   const t = (n: string): string => `(SELECT COUNT(*) FROM ${tableOf(n)})`;
   const r = await pool.request().query<Omit<HarnessCensus, 'ArtifactObjects' | 'ArtifactDirectories'>>(`SELECT
-    ${t('MJ: ML Models')} AS Models, ${t('MJ: ML Training Runs')} AS Runs, ${t('MJ: ML Training Pipelines')} AS Pipelines,
-    ${t('MJ: ML Model Publish Records')} AS PublishRecords, ${t('MJ: Scheduled Jobs')} AS ScheduledJobs, ${t('MJ: Scheduled Job Runs')} AS ScheduledJobRuns,
+    ${t('MJ: ML Models')} AS Models, ${t('MJ: ML Training Runs')} AS Runs, ${t('MJ: ML Training Snapshots')} AS Snapshots,
+    ${t('MJ: ML Training Pipelines')} AS Pipelines,
+    ${t('MJ: ML Model Publish Records')} AS PublishRecords, ${t('MJ: ML Output Bindings')} AS OutputBindings, ${t('MJ: Scheduled Jobs')} AS ScheduledJobs, ${t('MJ: Scheduled Job Runs')} AS ScheduledJobRuns,
     ${t('MJ: ML Evaluation Protocols')} AS Protocols, ${t('MJ: ML Prediction Units')} AS Units, ${t('MJ: Files')} AS Files,
     ${t('MJ: Actions')} AS Actions, ${t('MJ: Action Params')} AS ActionParams,
-    (SELECT COUNT(*) FROM ${tableOf('MJ: Action Categories')} WHERE Name <> N'${SHARED_MODELS_CATEGORY}') AS ActionCategories`);
+    (SELECT COUNT(*) FROM ${tableOf('MJ: Action Categories')} WHERE Name <> N'${SHARED_MODELS_CATEGORY}') AS ActionCategories,
+    (SELECT COUNT(*) FROM ${tableOf('MJ: AI Agent Runs')} WHERE AgentID NOT IN (SELECT ID FROM ${tableOf('MJ: AI Agents')} WHERE Name = N'Memory Manager')) AS AgentRuns,
+    (SELECT COUNT(*) FROM ${tableOf('MJ: AI Prompt Runs')} WHERE PromptID NOT IN (SELECT ID FROM ${tableOf('MJ: AI Prompts')} WHERE Name LIKE N'Memory Manager - %')) AS PromptRuns`);
   let objects = 0;
   let directories = 0;
   const walk = (dir: string): void => {
@@ -581,6 +660,7 @@ async function teardown(): Promise<void> {
   expect(failures.Result).toEqual([]);
   expect(failures.Unexpected).toEqual([]);
   expect(await census()).toEqual(startCensus);
+  expect(await sharedModelsCategoryCount()).toBeLessThanOrEqual(1);
   // The audit trail the platform keeps of every save and delete above (Record Changes): counted, not a leak (§11).
   expect(await recordChangesSince(startedAt)).toBeGreaterThan(0);
 }

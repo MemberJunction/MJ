@@ -73,6 +73,10 @@ interface HarnessCensus {
   readonly Files: number;
   readonly Models: number;
   readonly Pipelines: number;
+  /** `MJ: AI Agent Runs`, less the Memory Manager's (MJAPI's scheduled job writes them while it is up), by agent name. */
+  readonly AgentRuns: number;
+  /** `MJ: AI Prompt Runs`, less the Memory Manager's prompts' (`Memory Manager - …`), by prompt name. */
+  readonly PromptRuns: number;
   readonly ArtifactObjects: number;
   readonly ArtifactDirectories: number;
 }
@@ -242,10 +246,12 @@ async function fileRowsWithKey(providerKey: string): Promise<string[]> {
 /** Files, models and pipelines in the database, and model-artifact objects and directories under the storage root. */
 async function census(): Promise<HarnessCensus> {
   const p = server.Provider;
-  const r = await pool.request().query<Pick<HarnessCensus, 'Files' | 'Models' | 'Pipelines'>>(`SELECT
+  const r = await pool.request().query<Pick<HarnessCensus, 'Files' | 'Models' | 'Pipelines' | 'AgentRuns' | 'PromptRuns'>>(`SELECT
     (SELECT COUNT(*) FROM ${tableOf(p, 'MJ: Files')}) AS Files,
     (SELECT COUNT(*) FROM ${tableOf(p, 'MJ: ML Models')}) AS Models,
-    (SELECT COUNT(*) FROM ${tableOf(p, 'MJ: ML Training Pipelines')}) AS Pipelines`);
+    (SELECT COUNT(*) FROM ${tableOf(p, 'MJ: ML Training Pipelines')}) AS Pipelines,
+    (SELECT COUNT(*) FROM ${tableOf(p, 'MJ: AI Agent Runs')} WHERE AgentID NOT IN (SELECT ID FROM ${tableOf(p, 'MJ: AI Agents')} WHERE Name = N'Memory Manager')) AS AgentRuns,
+    (SELECT COUNT(*) FROM ${tableOf(p, 'MJ: AI Prompt Runs')} WHERE PromptID NOT IN (SELECT ID FROM ${tableOf(p, 'MJ: AI Prompts')} WHERE Name LIKE N'Memory Manager - %')) AS PromptRuns`);
   const artifactsRoot = path.join(storageRoot, StorageProviderArtifactStore.KEY_PREFIX);
   let objects = 0;
   let directories = 0;

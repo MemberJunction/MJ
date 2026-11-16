@@ -7,8 +7,8 @@
  * as its user. The rows are immutable once saved (`MJMLModelPublishRecordEntityServer.Validate()`).
  */
 import type { MJMLModelPublishRecordEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, OrdinalCompare } from '@memberjunction/global';
-import type { Actor, EvidenceSnapshot, GateDecision, JsonValue, TransitionRefusal } from '@memberjunction/predictive-studio-core';
+import { Canonicalize, EscapeSQLString } from '@memberjunction/global';
+import type { Actor, EvidenceSnapshot, GateDecision, TransitionRefusal } from '@memberjunction/predictive-studio-core';
 
 import { SnapshotHash } from '../snapshot/snapshot-hash';
 import { GateRefusals } from './gate-refusals';
@@ -146,18 +146,12 @@ export class PublishRecords {
     return row ? { ID: row.ID, Refusal: row.RefusalObject } : null;
   }
 
-  /** The lower-case hex SHA-256 of the canonical JSON of `evidence` (keys sorted at every level), stored as `EvidenceSha256`. Pure. */
+  /**
+   * The lower-case hex SHA-256 of `Canonicalize(evidence)` (`@memberjunction/global`: keys sorted at every level, arrays
+   * in order), stored as `EvidenceSha256`; a sign-off and a publish over equal evidence store equal hashes. Pure.
+   */
   public static EvidenceSha256(evidence: EvidenceSnapshot): string {
-    const plain: JsonValue = JSON.parse(JSON.stringify(evidence));
-    return SnapshotHash.Sha256Hex(PublishRecords.CanonicalJson(plain));
-  }
-
-  /** JSON text with every object's keys in ordinal order, so equal values have one text. Pure. */
-  public static CanonicalJson(value: JsonValue): string {
-    if (value === null || typeof value !== 'object') return JSON.stringify(value);
-    if (Array.isArray(value)) return `[${value.map((v) => PublishRecords.CanonicalJson(v)).join(',')}]`;
-    const keys = Object.keys(value).sort(OrdinalCompare);
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${PublishRecords.CanonicalJson(value[k])}`).join(',')}}`;
+    return SnapshotHash.Sha256Hex(Canonicalize(evidence));
   }
 
   /** A new row created on the caller's provider as its user. */

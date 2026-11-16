@@ -1,11 +1,11 @@
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { TrustVerdicts } from '@memberjunction/predictive-studio-core';
-import { PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
+import { ExperimentReports, PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
 import type { RunContext } from './run-fixtures';
 import type { AgentStepResult } from './types';
 
@@ -58,7 +58,13 @@ export class HarnessAgent {
       BuildErrorMessage: build?.errorMessage || null,
       PipelineIDs: pipelineIds,
       WallMs: wallMs,
+      ReportMarkdown: HarnessAgent.ReportMarkdownOf(result.payload),
     };
+  }
+
+  /** The experiment report a Pipeline Builder run delivered: its payload's `Markdown`, or null when it has none. */
+  public static ReportMarkdownOf(payload: Pick<PredictiveStudioBuilderPayload, 'Markdown'> | undefined): string | null {
+    return payload?.Markdown || null;
   }
 
   /** One Model Development Agent report for `modelId` (the user-facing text of the run's final step); null if none. */
@@ -81,10 +87,10 @@ export class HarnessAgent {
    */
   public static StoryRequest(model: MJMLModelEntity, validationResults: string | null): string {
     const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: validationResults, Lineage: model.Lineage || null });
-    const weights = Object.entries(SafeJSONParse<Record<string, number>>(model.FeatureImportance || '{}') || {})
-      .sort((a, b) => b[1] - a[1])
+    const weights = ExperimentReports.ParseFeatureImportance(model.FeatureImportance)
+      .sort((a, b) => b.importance - a.importance)
       .slice(0, 5)
-      .map(([f, w]) => `${f} (${(w * 100).toFixed(1)}%)`)
+      .map((w) => `${w.feature} (${(w.importance * 100).toFixed(1)}%)`)
       .join(', ');
     return [
       `Our model predicting ${model.TargetVariable} is already built and trained (ML Model ${model.ID}, version ${model.Version}).`,

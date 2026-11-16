@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { InMemoryLocalStorageProvider, UserInfo } from '@memberjunction/core';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { IntegrationCheckRegistry, InstrumentedLocalStorageProvider } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 // Side effect: evaluates EVERY checks module so the auto-derived guard at the bottom of this
 // file sees the complete registry (the explicit imports below cover only the hand-pinned
@@ -125,6 +127,19 @@ import { GeminiDecisionsChecks } from '../checks/gemini-decisions.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
+/**
+ * A real, unconnected check context: an unconfigured client provider (no global singleton), a user on it and an
+ * in-memory instrumented cache. Enough for a lifecycle that reads nothing from it.
+ */
+function lifecycleContext(): IntegrationCheckContext {
+    const provider = new GraphQLDataProvider(true);
+    return {
+        User: new UserInfo(provider, { ID: '00000000-0000-4000-8000-000000000161', Name: 'lifecycle test user' }),
+        Provider: provider,
+        Storage: new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider()),
+    };
+}
+
 describe('IntegrationCheckRegistry', () => {
     it('registers and retrieves a check by Id', () => {
         const reg = IntegrationCheckRegistry.Instance;
@@ -158,7 +173,7 @@ describe('IntegrationCheckRegistry', () => {
         });
         const lc = reg.GetLifecycle('lifecycletest');
         expect(lc).toBeDefined();
-        const ctx = {} as unknown as IntegrationCheckContext; // unused by this lifecycle
+        const ctx = lifecycleContext(); // unused by this lifecycle
         await lc!.Setup(ctx);
         await lc!.Teardown(ctx);
         expect(calls).toEqual(['setup', 'teardown']);
@@ -460,6 +475,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-c1-s4-2-2': 1,
         'ps-gate-c1-s6-1': 1,
         'ps-gate-c1-s6-4': 1,
+        'ps-gate-c1-s9-1': 1,
+        'ps-gate-c1-s9-2': 1,
         'ps-gate-c2-s1-2': 1,
         'ps-gate-c2-s2-5': 1,
         'ps-gate-c2-s4-1': 1,
@@ -467,6 +484,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-c2-s6-2': 1,
         'ps-gate-c2-s6-2-2': 1,
         'ps-gate-c3-s4-1': 1,
+        'ps-gate-c3-s9-5': 1,
         'ps-gate-c4-s2-4': 1,
         'ps-gate-d1c-s6-4': 1,
         'ps-gate-n1c-s6-5': 1,
@@ -500,6 +518,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w1-s7-3': 1,
         'ps-gate-w1-s7-5': 1,
         'ps-gate-w1-s7-5-2': 1,
+        'ps-gate-w1-s9-2': 1,
         'ps-gate-w1-s9-3': 1,
         'ps-gate-w1-s9-4': 1,
         'ps-gate-w1-s9-5': 1,
@@ -615,7 +634,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(248);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(252);
     });
 });
 
@@ -877,6 +896,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-c1-s4-2.G2.7',
         'ps-gate-c1-s6-1.G2.6',
         'ps-gate-c1-s6-4.G2.36',
+        'ps-gate-c1-s9-1.G3.6',
+        'ps-gate-c1-s9-2.G3.7',
         'ps-gate-c2-s1-2.G2.21',
         'ps-gate-c2-s2-5.G2.23',
         'ps-gate-c2-s4-1.G2.19',
@@ -884,6 +905,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-c2-s6-2-2.G2.35',
         'ps-gate-c2-s6-2.G2.34',
         'ps-gate-c3-s4-1.G2.18',
+        'ps-gate-c3-s9-5.G3.10',
         'ps-gate-c4-s2-4.G2.9',
         'ps-gate-d1c-s6-4.G2.37',
         'ps-gate-n1c-s6-5.G2.1',
@@ -917,6 +939,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-w1-s7-3.G0.7',
         'ps-gate-w1-s7-5-2.G1.9',
         'ps-gate-w1-s7-5.G0.1',
+        'ps-gate-w1-s9-2.G3.8',
         'ps-gate-w1-s9-3.G0.6',
         'ps-gate-w1-s9-4.G0.4',
         'ps-gate-w1-s9-5.G0.5',

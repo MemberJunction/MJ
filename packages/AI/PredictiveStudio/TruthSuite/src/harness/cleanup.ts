@@ -1,6 +1,6 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type {
-  MJActionParamEntity, MJMLEvaluationProtocolEntity, MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLTrainingPipelineEntity,
+  MJActionParamEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJConversationDetailEntity, MJMLEvaluationProtocolEntity, MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLTrainingPipelineEntity,
   MJMLTrainingRunEntity, MJMLPredictionUnitEntity, MJRecordProcessEntity, MJMLTrainingSnapshotEntity, MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
 import { MonitoringJobs } from '@memberjunction/predictive-studio';
@@ -58,6 +58,8 @@ export class RunRecords {
   public readonly ModelIDs = new RecordIDSet();
   public readonly PredictionUnitIDs = new RecordIDSet();
   public readonly EvaluationProtocolIDs = new RecordIDSet();
+  /** The `MJ: AI Agent Runs` the harness started (each builder-agent run's root run). */
+  public readonly AgentRunIDs = new RecordIDSet();
   private readonly agentPipelineNames = new Set<string>();
 
   /** The exact pipeline names of every builder-agent run the harness started (cleanup looks them up again). */
@@ -96,8 +98,9 @@ export class RunRecords {
     if (p.EvaluationProtocolID) this.RecordEvaluationProtocol(p.EvaluationProtocolID);
   }
 
-  /** Record what a builder-agent run created: its pipelines (a failed run's too) and the model it built, if any. */
-  public RecordAgentRun(run: Pick<AgentStepResult, 'PipelineIDs' | 'BuildModelID'>): void {
+  /** Record what a builder-agent run created: the agent run itself, its pipelines (a failed run's too) and the model it built, if any. */
+  public RecordAgentRun(run: Pick<AgentStepResult, 'AgentRunID' | 'PipelineIDs' | 'BuildModelID'>): void {
+    if (run.AgentRunID) this.AgentRunIDs.Add(run.AgentRunID);
     for (const id of run.PipelineIDs) this.RecordPipeline(id);
     if (run.BuildModelID) this.RecordModel(run.BuildModelID);
   }
@@ -178,6 +181,18 @@ export type CleanupActionParamRow = CleanupRow & Pick<MJActionParamEntity, 'Acti
 /** An `MJ: Files` row: a cleanup row with the provider and key of the object it records. */
 export type CleanupFileRow = CleanupRow & Pick<MJFileEntity, 'ProviderID' | 'ProviderKey'>;
 
+/** An `MJ: AI Agent Runs` row: a cleanup row with its parent run (a sub-agent run names it) and the conversation it ran in. */
+export type CleanupAgentRunRow = CleanupRow & Pick<MJAIAgentRunEntity, 'ParentRunID' | 'ConversationID'>;
+
+/** An `MJ: AI Agent Run Steps` row: a cleanup row with its number, its type and the log row it names (a Prompt step names its prompt run). */
+export type CleanupAgentRunStepRow = CleanupRow & Pick<MJAIAgentRunStepEntity, 'StepNumber' | 'StepType' | 'TargetLogID'>;
+
+/** An `MJ: AI Prompt Runs` row: a cleanup row with its parent prompt run. */
+export type CleanupPromptRunRow = CleanupRow & Pick<MJAIPromptRunEntity, 'ParentID'>;
+
+/** An `MJ: Conversation Details` row: a cleanup row with the detail it replies to. */
+export type CleanupConversationDetailRow = CleanupRow & Pick<MJConversationDetailEntity, 'ParentID'>;
+
 /** Where cleanup reads the rows it deletes and removes stored objects (the entity layer in a run; a fake in a unit test). */
 export interface CleanupStore {
   Models(filter: string): Promise<CleanupModelRow[]>;
@@ -195,8 +210,33 @@ export interface CleanupStore {
   ActionParams(filter: string): Promise<CleanupActionParamRow[]>;
   /** The `MJ: ML Model Publish Records` rows matching the filter, with the sign-off each consumed. */
   PublishRecords(filter: string): Promise<CleanupPublishRecordRow[]>;
+  /** The `MJ: AI Agent Runs` rows matching the filter, with their parent run and conversation. */
+  AgentRuns(filter: string): Promise<CleanupAgentRunRow[]>;
+  /** The `MJ: AI Agent Run Steps` rows matching the filter, with their number, type and target log row. */
+  AgentRunSteps(filter: string): Promise<CleanupAgentRunStepRow[]>;
+  /** The `MJ: AI Prompt Runs` rows matching the filter, with their parent prompt run. */
+  PromptRuns(filter: string): Promise<CleanupPromptRunRow[]>;
+  /** The `MJ: Conversation Details` rows matching the filter, with the detail each replies to. */
+  ConversationDetails(filter: string): Promise<CleanupConversationDetailRow[]>;
   /** Delete the object a file row records, through its provider's driver; null when deleted, else why not. */
   DeleteStoredObject(file: CleanupFileRow): Promise<string | null>;
+}
+
+/**
+ * What the recorded agent runs left: the rows that reference a run or its conversation (agent examples and notes drawn
+ * from them, run media), the runs' steps, the prompt runs their Prompt steps name, the runs (sub-agent runs before the
+ * run that started them) and the conversations they ran in with their details.
+ */
+interface AgentRows {
+  readonly Examples: CleanupRow[];
+  readonly Notes: CleanupRow[];
+  readonly Media: CleanupRow[];
+  readonly Steps: CleanupAgentRunStepRow[];
+  readonly PromptRuns: CleanupPromptRunRow[];
+  /** Deepest sub-agent runs first, the recorded runs last. */
+  readonly RunsByDepth: CleanupAgentRunRow[][];
+  readonly Details: CleanupConversationDetailRow[];
+  readonly Conversations: CleanupRow[];
 }
 
 /** The scoring rows hanging off the recorded models. */
@@ -212,8 +252,8 @@ interface ScoringRows {
  * What the lifecycle gate wrote for the recorded models and runs: their publish records (a published model's record, a
  * sign-off, a refusal record, a run-level refusal), split into the records that name a sign-off and the rest (a record
  * references the sign-off it consumed, `FK_MLModelPublishRecord_SignOff`); the models' monitoring jobs with their job
- * runs; and the per-model scoring Actions generated on publish with their params. All reference the models or runs, so
- * they are deleted first.
+ * runs; the per-model scoring Actions generated on publish with their params; and the models' output bindings, which
+ * Evaluate creates. All reference the models or runs, so they are deleted first.
  */
 interface GateRows {
   readonly SignOffConsumers: CleanupRow[];
@@ -222,6 +262,7 @@ interface GateRows {
   readonly MonitoringJobs: CleanupRow[];
   readonly ScoringActionParams: CleanupRow[];
   readonly ScoringActions: CleanupRow[];
+  readonly OutputBindings: CleanupRow[];
 }
 
 /** Every row `HarnessCleanup.DeleteRecorded` deletes before the recorded protocol and unit versions. */
@@ -246,6 +287,14 @@ export class HarnessCleanup {
    */
   public static readonly MAX_CONCURRENT_DELETES = 8;
 
+  /**
+   * The in-flight limit of a stage whose rows' generated `Delete()` opens its own transaction on the shared provider
+   * (`CascadeDeletes`: `MJ: Actions` and every agent-run-stage entity but the examples, notes and media). Two such deletes
+   * in flight at once make the second join the first's transaction as a savepoint, which the provider reports on stderr
+   * (#4786), so these stages delete one row at a time — the agent-run stage whole, in D4-62's order.
+   */
+  public static readonly SERIAL_DELETES = 1;
+
   /** The entity-layer store on `provider` as `user`. */
   public static EntityStore(provider: IMetadataProvider, user: UserInfo): CleanupStore {
     return {
@@ -265,6 +314,10 @@ export class HarnessCleanup {
       },
       ActionParams: (filter) => HarnessCleanup.load<MJActionParamEntity>(provider, user, 'MJ: Action Params', filter),
       PublishRecords: (filter) => HarnessCleanup.load<MJMLModelPublishRecordEntity>(provider, user, 'MJ: ML Model Publish Records', filter),
+      AgentRuns: (filter) => HarnessCleanup.load<MJAIAgentRunEntity>(provider, user, 'MJ: AI Agent Runs', filter),
+      AgentRunSteps: (filter) => HarnessCleanup.load<MJAIAgentRunStepEntity>(provider, user, 'MJ: AI Agent Run Steps', filter),
+      PromptRuns: (filter) => HarnessCleanup.load<MJAIPromptRunEntity>(provider, user, 'MJ: AI Prompt Runs', filter),
+      ConversationDetails: (filter) => HarnessCleanup.load<MJConversationDetailEntity>(provider, user, 'MJ: Conversation Details', filter),
       DeleteStoredObject: (file) => HarnessCleanup.deleteStoredObject(provider, user, file),
     };
   }
@@ -274,13 +327,14 @@ export class HarnessCleanup {
    * pipelines of recorded models), children first: scoring bindings; the models' scoring Record Processes with their
    * runs, run details and watermarks; what the lifecycle gate wrote for the models and runs (publish records — those
    * naming a sign-off before the rest, run-level refusals included —, the monitoring jobs' runs, the jobs, the generated
-   * scoring Actions and their params); then the run/model cycle (a run names the model it produced in `ResultingModelID`,
+   * scoring Actions and their params, the models' output bindings); then the run/model cycle (a run names the model it produced in `ResultingModelID`,
    * and the model names the run in `TrainingRunID`): each run's `ResultingModelID` that names a model being deleted is
    * cleared and saved, then the models, then the training runs; then the Training Snapshots the runs trained on and the
    * recorded pipelines' snapshots, each deleted snapshot's three files (stored object, then `MJ: Files` row), the models'
    * artifact files and every artifact file a run's stored trainer result names (stored object, then row), pipelines,
    * the recorded Evaluation Protocol versions (pipelines, runs and snapshots reference them), and last the recorded
-   * Prediction Unit versions (pipelines and snapshots reference them).
+   * Prediction Unit versions (pipelines and snapshots reference them); and last the recorded agent runs
+   * ({@link deleteAgentRuns}: what references them, their steps, their prompt runs, the runs, their conversations).
    * Every row is attempted, at most {@link MAX_CONCURRENT_DELETES} at a time; deleted IDs leave `records`. Returns one
    * line per row whose `Delete()` failed and per stored object that could not be deleted.
    */
@@ -298,7 +352,8 @@ export class HarnessCleanup {
       ...(await HarnessCleanup.deleteAll('MJ: Scheduled Job Runs', r.MonitoringJobRuns)),
       ...(await HarnessCleanup.deleteAll('MJ: Scheduled Jobs', r.MonitoringJobs)),
       ...(await HarnessCleanup.deleteAll('MJ: Action Params', r.ScoringActionParams)),
-      ...(await HarnessCleanup.deleteAll('MJ: Actions', r.ScoringActions)),
+      ...(await HarnessCleanup.deleteAll('MJ: Actions', r.ScoringActions, undefined, HarnessCleanup.SERIAL_DELETES)),
+      ...(await HarnessCleanup.deleteAll('MJ: ML Output Bindings', r.OutputBindings)),
       ...(await HarnessCleanup.detachRunsFromModels(r.Runs, new RecordIDSet(r.Models.map((m) => m.ID)))),
       ...(await HarnessCleanup.deleteAll('MJ: ML Models', r.Models, (id) => records.ModelIDs.Delete(id))),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Runs', r.Runs)),
@@ -307,8 +362,87 @@ export class HarnessCleanup {
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Pipelines', r.Pipelines, (id) => records.PipelineIDs.Delete(id))),
       ...(await HarnessCleanup.deleteEvaluationProtocols(store, records)),
       ...(await HarnessCleanup.deletePredictionUnits(store, records)),
+      ...(await HarnessCleanup.deleteAgentRuns(store, records)),
     ];
   }
+
+  /**
+   * Delete the recorded agent runs and every row they left, children first (D4-62): the agent examples and notes drawn
+   * from a run or its conversation and the runs' media (each references a run or the conversation); the runs' steps,
+   * highest step number first (a step references earlier steps as its parent or payload source); the prompt runs the
+   * Prompt steps name, child prompt runs before their parent; the runs, sub-agent runs before the run that started
+   * them; then the conversations the runs ran in (a run names its conversation and detail), replies before the details
+   * they reply to, then the conversations. Every delete is serial ({@link SERIAL_DELETES}): most of these entities'
+   * generated `Delete()` opens its own transaction on the shared provider. Deleted run IDs leave `records`. Returns one
+   * line per failed delete.
+   */
+  private static async deleteAgentRuns(store: CleanupStore, records: RunRecords): Promise<string[]> {
+    const a = await HarnessCleanup.readAgentRows(store, records.AgentRunIDs);
+    const serial = HarnessCleanup.SERIAL_DELETES;
+    const failures = [
+      ...(await HarnessCleanup.deleteAll('MJ: AI Agent Examples', a.Examples, undefined, serial)),
+      ...(await HarnessCleanup.deleteAll('MJ: AI Agent Notes', a.Notes, undefined, serial)),
+      ...(await HarnessCleanup.deleteAll('MJ: AI Agent Run Medias', a.Media, undefined, serial)),
+      ...(await HarnessCleanup.deleteHighestFirst('MJ: AI Agent Run Steps', a.Steps, (step) => step.StepNumber, () => undefined, serial)),
+      ...(await HarnessCleanup.deleteChildrenFirst('MJ: AI Prompt Runs', a.PromptRuns, serial)),
+    ];
+    for (const level of a.RunsByDepth) failures.push(...(await HarnessCleanup.deleteAll('MJ: AI Agent Runs', level, (id) => records.AgentRunIDs.Delete(id), serial)));
+    failures.push(...(await HarnessCleanup.deleteChildrenFirst('MJ: Conversation Details', a.Details, serial)));
+    failures.push(...(await HarnessCleanup.deleteAll('MJ: Conversations', a.Conversations, undefined, serial)));
+    return failures;
+  }
+
+  /** The rows {@link deleteAgentRuns} deletes, read before any is deleted. */
+  private static async readAgentRows(store: CleanupStore, recorded: RecordIDSet): Promise<AgentRows> {
+    const runsByDepth = await HarnessCleanup.agentRunsByDepth(store, recorded);
+    const runs = runsByDepth.flat();
+    const runIds = new RecordIDSet(runs.map((r) => r.ID));
+    const conversationIds = new RecordIDSet(runs.flatMap((r) => (r.ConversationID ? [r.ConversationID] : [])));
+    const runFilter = HarnessCleanup.anyIn([['AgentRunID', runIds]]);
+    const steps = runFilter ? await store.AgentRunSteps(runFilter) : [];
+    const promptIds = new RecordIDSet(steps.flatMap((s) => (s.StepType === 'Prompt' && s.TargetLogID ? [s.TargetLogID] : [])));
+    const promptFilter = HarnessCleanup.anyIn([['ID', promptIds], ['ParentID', promptIds]]);
+    const derivedFilter = HarnessCleanup.anyIn([['SourceAIAgentRunID', runIds], ['SourceConversationID', conversationIds]]);
+    const conversationFilter = HarnessCleanup.anyIn([['ConversationID', conversationIds]]);
+    const idFilter = HarnessCleanup.anyIn([['ID', conversationIds]]);
+    return {
+      Examples: derivedFilter ? await store.Rows('MJ: AI Agent Examples', derivedFilter) : [],
+      Notes: derivedFilter ? await store.Rows('MJ: AI Agent Notes', derivedFilter) : [],
+      Media: runFilter ? await store.Rows('MJ: AI Agent Run Medias', runFilter) : [],
+      Steps: steps,
+      PromptRuns: promptFilter ? await store.PromptRuns(promptFilter) : [],
+      RunsByDepth: runsByDepth,
+      Details: conversationFilter ? await store.ConversationDetails(conversationFilter) : [],
+      Conversations: idFilter ? await store.Rows('MJ: Conversations', idFilter) : [],
+    };
+  }
+
+  /** The recorded runs and their sub-agent runs (any depth), deepest level first; empty when nothing was recorded. */
+  private static async agentRunsByDepth(store: CleanupStore, recorded: RecordIDSet): Promise<CleanupAgentRunRow[][]> {
+    const rootFilter = HarnessCleanup.anyIn([['ID', recorded]]);
+    if (rootFilter === null) return [];
+    const levels: CleanupAgentRunRow[][] = [await store.AgentRuns(rootFilter)];
+    const seen = new RecordIDSet(levels[0].map((r) => r.ID));
+    for (let parents = levels[0]; parents.length > 0;) {
+      const childFilter = HarnessCleanup.anyIn([['ParentRunID', new RecordIDSet(parents.map((r) => r.ID))]]);
+      const children = childFilter ? (await store.AgentRuns(childFilter)).filter((r) => !seen.Has(r.ID)) : [];
+      for (const c of children) seen.Add(c.ID);
+      if (children.length > 0) levels.push(children);
+      parents = children;
+    }
+    return levels.reverse();
+  }
+
+  /** Rows that may reference another row of the same set as their `ParentID`: the children first, then their parents, at most `maxInFlight` at a time. */
+  private static async deleteChildrenFirst(
+    entityName: string, rows: ReadonlyArray<CleanupRow & { readonly ParentID: string | null }>, maxInFlight: number = HarnessCleanup.MAX_CONCURRENT_DELETES,
+  ): Promise<string[]> {
+    const ids = new RecordIDSet(rows.map((r) => r.ID));
+    const children = rows.filter((r) => r.ParentID !== null && ids.Has(r.ParentID));
+    const parents = rows.filter((r) => !(r.ParentID !== null && ids.Has(r.ParentID)));
+    return [...(await HarnessCleanup.deleteAll(entityName, children, undefined, maxInFlight)), ...(await HarnessCleanup.deleteAll(entityName, parents, undefined, maxInFlight))];
+  }
+
 
   /**
    * Clears and saves `ResultingModelID` on every run that names one of `modelIds`, so the models can be deleted before
@@ -317,7 +451,7 @@ export class HarnessCleanup {
    */
   private static async detachRunsFromModels(runs: readonly CleanupTrainingRunRow[], modelIds: RecordIDSet): Promise<string[]> {
     const attached = runs.filter((r) => r.ResultingModelID !== null && modelIds.Has(r.ResultingModelID));
-    const failures = await HarnessCleanup.mapBounded(attached, async (run) => {
+    const failures = await HarnessCleanup.mapBounded(attached, HarnessCleanup.MAX_CONCURRENT_DELETES, async (run) => {
       run.ResultingModelID = null;
       if (await run.Save()) return null;
       return `MJ: ML Training Runs ${run.ID}: could not clear ResultingModelID before its model is deleted: ${run.LatestResult?.CompleteMessage || 'Save() returned false'}`;
@@ -351,7 +485,8 @@ export class HarnessCleanup {
    * What the lifecycle gate wrote for the models and runs: publish records naming either (as the model, the model it
    * replaced, or the run — a run-level refusal names only the run), split by whether they name a sign-off; the
    * monitoring jobs whose configuration names a model, every status, with their job runs; and the generated scoring
-   * Actions (child Actions whose `ModelID` param defaults to a model) with all their params.
+   * Actions (child Actions whose `ModelID` param defaults to a model) with all their params; and the models' output
+   * bindings.
    */
   private static async readGateRows(store: CleanupStore, modelIds: RecordIDSet, runIds: RecordIDSet): Promise<GateRows> {
     const recordFilter = HarnessCleanup.anyIn([['ModelID', modelIds], ['ReplacesModelID', modelIds], ['TrainingRunID', runIds]]);
@@ -364,6 +499,7 @@ export class HarnessCleanup {
     const paramFilter = HarnessCleanup.anyIn([['ActionID', actionIds]]);
     const actionFilter = HarnessCleanup.anyIn([['ID', actionIds]]);
     const records = recordFilter ? await store.PublishRecords(recordFilter) : [];
+    const bindingFilter = HarnessCleanup.anyIn([['ModelID', modelIds]]);
     return {
       SignOffConsumers: records.filter((r) => r.SignOffID !== null),
       OtherPublishRecords: records.filter((r) => r.SignOffID === null),
@@ -371,6 +507,7 @@ export class HarnessCleanup {
       MonitoringJobs: jobs,
       ScoringActionParams: paramFilter ? await store.ActionParams(paramFilter) : [],
       ScoringActions: actionFilter ? await store.Rows('MJ: Actions', `ParentID IS NOT NULL AND (${actionFilter})`) : [],
+      OutputBindings: bindingFilter ? await store.Rows('MJ: ML Output Bindings', bindingFilter) : [],
     };
   }
 
@@ -490,10 +627,17 @@ export class HarnessCleanup {
 
   /** Delete versioned rows one Version at a time, highest first, so no row is deleted while a later version references it. */
   private static async deleteNewestVersionFirst(entityName: string, rows: ReadonlyArray<CleanupRow & { readonly Version: number }>, onDeleted: (id: string) => void): Promise<string[]> {
-    const versions = [...new Set(rows.map((r) => r.Version))].sort((a, b) => b - a);
+    return HarnessCleanup.deleteHighestFirst(entityName, rows, (r) => r.Version, onDeleted);
+  }
+
+  /** Delete rows one `orderOf` value at a time, highest first (at most `maxInFlight` at a time), so no row is deleted while a higher-numbered row references it. */
+  private static async deleteHighestFirst<T extends CleanupRow>(
+    entityName: string, rows: readonly T[], orderOf: (row: T) => number, onDeleted: (id: string) => void, maxInFlight: number = HarnessCleanup.MAX_CONCURRENT_DELETES,
+  ): Promise<string[]> {
+    const orders = [...new Set(rows.map(orderOf))].sort((a, b) => b - a);
     const failures: string[] = [];
-    for (const v of versions) {
-      failures.push(...(await HarnessCleanup.deleteAll(entityName, rows.filter((r) => r.Version === v), onDeleted)));
+    for (const o of orders) {
+      failures.push(...(await HarnessCleanup.deleteAll(entityName, rows.filter((r) => orderOf(r) === o), onDeleted, maxInFlight)));
     }
     return failures;
   }
@@ -510,14 +654,10 @@ export class HarnessCleanup {
     });
   }
 
-  /** The `modelId` a scoring Record Process's configuration names, or null. */
+  /** The `modelId` a scoring Record Process's configuration names, or null (also for absent or malformed configuration). */
   private static configuredModelId(configuration: string | null): string | null {
-    try {
-      const parsed: { modelId?: string | number | boolean | null } = JSON.parse(configuration ?? '{}');
-      return typeof parsed.modelId === 'string' ? parsed.modelId : null;
-    } catch {
-      return null;
-    }
+    const json = JsonParse.ParseJsonText(configuration, 'Configuration');
+    return json.Ok && JsonParse.IsJsonObject(json.Value) ? JsonParse.JsonString(json.Value, 'modelId') : null;
   }
 
   /** `Col IN ('a','b') OR Other IN (…)` over the non-empty ID sets, each ID as recorded; null when every set is empty. */
@@ -539,11 +679,14 @@ export class HarnessCleanup {
   }
 
   /**
-   * Delete each row (one stage of the FK order, so the rows are independent), at most {@link MAX_CONCURRENT_DELETES} at
-   * a time; the failures.
+   * Delete each row (one stage of the FK order, so the rows are independent), at most `maxInFlight` at a time
+   * ({@link MAX_CONCURRENT_DELETES} by default, {@link SERIAL_DELETES} for a stage whose deletes open transactions); the
+   * failures.
    */
-  private static async deleteAll(entityName: string, rows: CleanupRow[], onDeleted: (id: string) => void = () => undefined): Promise<string[]> {
-    const failures = await HarnessCleanup.mapBounded(rows, async (row) => {
+  private static async deleteAll(
+    entityName: string, rows: CleanupRow[], onDeleted: (id: string) => void = () => undefined, maxInFlight: number = HarnessCleanup.MAX_CONCURRENT_DELETES,
+  ): Promise<string[]> {
+    const failures = await HarnessCleanup.mapBounded(rows, maxInFlight, async (row) => {
       const id = row.ID; // read before Delete(): a deleted entity object no longer carries its field values
       if (await row.Delete()) {
         onDeleted(id);
@@ -555,10 +698,10 @@ export class HarnessCleanup {
   }
 
   /**
-   * `fn` over every item with at most {@link MAX_CONCURRENT_DELETES} calls in flight; the results in item order. Each
+   * `fn` over every item with at most `maxInFlight` calls in flight; the results in item order. Each
    * worker takes the next item when its call settles, so one slow request never holds back the rest of the stage.
    */
-  private static async mapBounded<T, R>(items: readonly T[], fn: (item: T) => Promise<R>): Promise<R[]> {
+  private static async mapBounded<T, R>(items: readonly T[], maxInFlight: number, fn: (item: T) => Promise<R>): Promise<R[]> {
     const results: R[] = new Array<R>(items.length);
     let next = 0;
     const worker = async (): Promise<void> => {
@@ -567,7 +710,7 @@ export class HarnessCleanup {
         results[i] = await fn(items[i]);
       }
     };
-    await Promise.all(Array.from({ length: Math.min(HarnessCleanup.MAX_CONCURRENT_DELETES, items.length) }, () => worker()));
+    await Promise.all(Array.from({ length: Math.min(maxInFlight, items.length) }, () => worker()));
     return results;
   }
 }

@@ -8,7 +8,7 @@
  * one the publish would replace (N8); the PreSave status guard (M3.3) calls it to re-derive an authorised publish. Every
  * read runs on `ctx.Provider` as `ctx.ContextUser` and every ID comparison uses `UUIDsEqual`.
  */
-import type { MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import type { MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
   EvaluationProtocol,
@@ -43,7 +43,7 @@ const protocolColumnsComplete: ListsEveryMember<keyof EvaluationProtocolColumns,
 void protocolColumnsComplete;
 
 /** The model columns publish re-verification reads. */
-type PublishModelColumns = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'TrainingRunID' | 'OutputSemantics' | 'Delivery' | 'ArtifactSha256'>;
+type PublishModelColumns = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'TrainingRunID' | 'TrainingSnapshotID' | 'OutputSemantics' | 'Delivery' | 'ArtifactSha256'>;
 
 /** A completed training run as stored: its gate record, trainer result and unit counts (each null when absent). */
 export interface StoredRunRecord {
@@ -116,7 +116,9 @@ export class StoredPublishInputsLoader {
   /**
    * The stored publish inputs of `modelId` for an attempt `initiator` started, or the refusal naming what the stored
    * rows lack: `model-not-found` for no row; `not-servable` for a row with no training run, a run with no stored gate
-   * record or trainer result (a pre-change model), a protocol row that is gone, or a model column that does not parse.
+   * record or trainer result (a pre-change model), a row that names no Training Snapshot or one that is gone (the
+   * evidence a publish rebuilds reads the snapshot, so a publish is refused before `StoredEvidenceBuilder.Build`, which
+   * throws on each of these, is reached — D4-128), a protocol row that is gone, or a model column that does not parse.
    * Call it after the publish locks are held: the pipeline's current Published model is read here.
    *
    * @throws Error when a read fails (a failed read is not an absent row)
@@ -128,6 +130,8 @@ export class StoredPublishInputsLoader {
     if (run === null || run.Gate === null || run.Trainer === null) {
       return StoredPublishInputsLoader.notServable(`ML Model ${modelId} has no stored training run with a gate record and trainer result`);
     }
+    const snapshot = await StoredPublishInputsLoader.snapshotProblem(model, ctx);
+    if (snapshot !== null) return StoredPublishInputsLoader.notServable(snapshot);
     const protocol = await StoredRuns.ReadProtocol(run.EvaluationProtocolID || run.Gate.evaluationProtocolId, ctx);
     if (protocol === null) return StoredPublishInputsLoader.notServable(`the protocol version its training run names is gone`);
     const pinnedVersion = await StoredPublishInputsLoader.pinnedVersion(run.Gate, protocol, ctx);
@@ -176,12 +180,28 @@ export class StoredPublishInputsLoader {
     const r = await StoredRowReads.Run<PublishModelColumns>(
       {
         EntityName: 'MJ: ML Models', ExtraFilter: `ID='${EscapeSQLString(modelId)}'`,
-        Fields: ['ID', 'PipelineID', 'TrainingRunID', 'OutputSemantics', 'Delivery', 'ArtifactSha256'], MaxRows: 1, ResultType: 'simple',
+        Fields: ['ID', 'PipelineID', 'TrainingRunID', 'TrainingSnapshotID', 'OutputSemantics', 'Delivery', 'ArtifactSha256'], MaxRows: 1, ResultType: 'simple',
       },
       ctx,
     );
     if (!r.Success) throw new Error(`Reading ML Model ${modelId} for publish re-verification failed: ${r.ErrorMessage || 'unknown error'}`);
     return r.Results[0] || null;
+  }
+
+  /**
+   * Why the evidence cannot be built from the model's Training Snapshot, in the words `StoredEvidenceBuilder.Build`
+   * throws with: the model names no snapshot, or the snapshot row it names is gone; null when the row is there.
+   *
+   * @throws Error when the read fails
+   */
+  private static async snapshotProblem(model: PublishModelColumns, ctx: RegistryContext): Promise<string | null> {
+    if (!model.TrainingSnapshotID) return `ML Model ${model.ID} names no Training Snapshot to build evidence from`;
+    const r = await StoredRowReads.Run<Pick<MJMLTrainingSnapshotEntity, 'ID'>>(
+      { EntityName: 'MJ: ML Training Snapshots', ExtraFilter: `ID='${EscapeSQLString(model.TrainingSnapshotID)}'`, Fields: ['ID'], MaxRows: 1, ResultType: 'simple' },
+      ctx,
+    );
+    if (!r.Success) throw new Error(`Reading Training Snapshot ${model.TrainingSnapshotID} for publish re-verification failed: ${r.ErrorMessage || 'unknown error'}`);
+    return r.Results.length > 0 ? null : `Training Snapshot ${model.TrainingSnapshotID} that ML Model ${model.ID} names does not exist, so no evidence can be built from it`;
   }
 
   /** The pipeline's Published model other than this one; null when there is none. */

@@ -24,7 +24,7 @@ import type {
   MJRecordProcessEntity,
 } from '@memberjunction/core-entities';
 import { MJMLModelSchema } from '@memberjunction/core-entities';
-import type { PersistedModelStatus } from '@memberjunction/predictive-studio-core';
+import { SemanticsRules, type OutputSemantics, type PersistedModelStatus } from '@memberjunction/predictive-studio-core';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { BootstrapIntegrationServer, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
 import { TruthConnection } from '../db/connection';
@@ -75,6 +75,11 @@ const ARTIFACT_STATUSES: Record<MJMLModelEntity['ArtifactStatus'], true> = {
   unverified: true, verified: true, missing: true, 'hash-mismatch': true, 'legacy-local': true,
 };
 const TAG = `PSServingSchema-${Date.now()}`;
+/**
+ * The semantics of every fixture model (its `ProblemType` is classification): an output binding is saved only when it
+ * agrees with them (`MJMLOutputBindingEntityServer`).
+ */
+const PROBE_SEMANTICS: OutputSemantics = { task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 } };
 
 let server: IntegrationBootstrapContext;
 let pool: sql.ConnectionPool;
@@ -263,6 +268,7 @@ async function createFixtures(): Promise<ServingFixtures> {
       m.FeatureSchema = '[]';
       m.TargetVariable = 'Probe';
       m.ProblemType = 'classification';
+      m.OutputSemantics = JSON.stringify(PROBE_SEMANTICS);
     });
   const run = await NewTrainingRun(pipeline.ID, algorithmId);
   const model = await newModel(1);
@@ -672,14 +678,16 @@ function NewMonitoringResult(modelId: string, challengerRunId: string): Promise<
   return createRow<MJMLMonitoringResultEntity>('MJ: ML Monitoring Results', fillMonitoringResult(modelId, challengerRunId));
 }
 
-/** Fills a record-panel output binding of `modelId`. */
+/** Fills the default `record-panel` output binding of `modelId` under {@link PROBE_SEMANTICS}. */
 function fillOutputBinding(modelId: string): (b: MJMLOutputBindingEntity) => void {
+  const spec = SemanticsRules.DefaultBindings(PROBE_SEMANTICS).find((d) => d.Surface === 'record-panel');
+  if (!spec) throw new Error('the semantics rules give no record-panel binding');
   return (b) => {
     b.ModelID = modelId;
-    b.Surface = 'record-panel';
-    b.SortsBy = 'none';
-    b.DriverDirectionRelativeTo = 'raw-contribution';
-    b.Label = TAG;
+    b.Surface = spec.Surface;
+    b.SortsBy = spec.SortsBy;
+    b.DriverDirectionRelativeTo = spec.DriverDirectionRelativeTo;
+    b.Label = spec.Label;
   };
 }
 
@@ -711,6 +719,7 @@ async function createDoomedPipeline(algorithmId: string): Promise<DoomedPipeline
     m.FeatureSchema = '[]';
     m.TargetVariable = 'Probe';
     m.ProblemType = 'classification';
+    m.OutputSemantics = JSON.stringify(PROBE_SEMANTICS);
     m.TrainingRunID = run.ID;
     m.TrainingSnapshotID = snapshot.SnapshotID;
   });

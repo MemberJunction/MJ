@@ -147,8 +147,11 @@ export class ContainmentProbe {
     return null;
   }
 
-  /** The rows the Predictions resource builds for a model's scored details (same options as `loadAtRisk`). */
+  /**
+   * The rows the At-Risk list builds for a model's scored details under the outcome-config rule: the gate's W1 model is
+   * read without its `MJ: ML Output Bindings` rows (`null` binding), which is the rule a model with no row renders by.
+   */
   private static resourceRows(details: RunDetailLike[], model: OutcomeModelLike): AtRiskRow[] {
-    return AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(model));
+    return AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(model, null));
   }
 }

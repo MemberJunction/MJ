@@ -1,4 +1,4 @@
-import type { RemoteOpResult } from '@memberjunction/core';
+import { RemoteOperationError, type RemoteOpResult } from '@memberjunction/core';
 import { InvalidMajorityBaselineRuleError, type PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
 import { ReadCapExceededError } from '../feature-assembly/read-cap-error';
 import { TrainingRefusedError } from '../training/training-refusal';
@@ -56,6 +56,20 @@ export class PredictiveStudioRefusals {
       case 'trainer-failed': return reason.stage === 'budget-exceeded' ? 'BUDGET_EXCEEDED' : null;
       default: return null;
     }
+  }
+
+  /**
+   * The typed refusal a remote operation throws from `InternalExecute`: a `RemoteOperationError` whose `ResultCode` is a
+   * code from Core's catalog (`PredictiveStudioRefusalCodes`), which the base `ExecuteServer` returns as
+   * `Success: false` with that code and `message` as `ErrorMessage`.
+   */
+  public static Refusal(code: PredictiveStudioRefusalCode, message: string): RemoteOperationError {
+    return new RemoteOperationError(code, message);
+  }
+
+  /** The `INVALID_INPUT` refusal of an input that breaks the operation's wire contract, naming the field and the problem. */
+  public static InvalidInput(operationKey: string, field: string, problem: string): RemoteOperationError {
+    return PredictiveStudioRefusals.Refusal('INVALID_INPUT', `${operationKey} input: ${field} ${problem}`);
   }
 
   /** The operation's server-side run with refusal errors returned as their codes. */

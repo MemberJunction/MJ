@@ -9,9 +9,11 @@
  * transition → gate mapping is {@link ModelTransitionDelegation}, shared with the Promote action. The caller is the
  * initiator (`{ kind: 'human', userId }`), so an interactive user is recorded as the approver of a publish.
  *
- * An input without a valid `transition` is refused before any read (a thrown error the framework wraps as
- * `EXECUTION_ERROR`). A gate refusal is not an error: it is returned as `{ applied: false, status, refusal }`, the
- * refusal being the gate's `TransitionRefusal`, so a caller can say in words why nothing changed.
+ * An input that breaks the wire contract (no `modelId`, a `transition` the contract does not have, a non-string `reason`
+ * or `signOffId`) is refused before any read with `INVALID_INPUT` naming the field (`PredictiveStudioRefusals.InvalidInput`,
+ * a code from Core's catalog), so no transition is attempted and no row is written. A gate refusal is not an error: it is
+ * returned as `{ applied: false, status, refusal }`, the refusal being the gate's `TransitionRefusal`, so a caller can say
+ * in words why nothing changed.
  */
 
 import { RegisterClass } from '@memberjunction/global';
@@ -26,6 +28,7 @@ import {
 import { LifecycleGate } from '../registry/lifecycle-gate';
 import { GateContexts } from '../registry/gate-seams';
 import { ModelTransitionDelegation, type ModelTransitionResult } from './delegation';
+import { PredictiveStudioRefusals } from './refusals';
 
 /**
  * Server implementation of `PredictiveStudio.PromoteModel`. Extends the CodeGen-emitted
@@ -41,12 +44,16 @@ export class PredictiveStudioPromoteModelServerOperation extends PredictiveStudi
     user: UserInfo,
     _context: RemoteOpServerContext,
   ): Promise<PredictiveStudioPromoteModelOutput> {
-    if (!input?.modelId) {
-      throw new Error('modelId is required');
+    if (!input || typeof input.modelId !== 'string' || input.modelId.trim().length === 0) {
+      throw PredictiveStudioRefusals.InvalidInput(this.OperationKey, 'modelId', 'is required');
     }
     const transition = ModelTransitionDelegation.ParseTransition(input.transition);
     if (transition === null) {
-      throw new Error(`transition is required (one of: ${ModelTransitionDelegation.Transitions.join(', ')})`);
+      throw PredictiveStudioRefusals.InvalidInput(this.OperationKey, 'transition', `is required (one of: ${ModelTransitionDelegation.Transitions.join(', ')})`);
+    }
+    for (const field of ['reason', 'signOffId'] as const) {
+      const value = input[field];
+      if (value !== undefined && value !== null && typeof value !== 'string') throw PredictiveStudioRefusals.InvalidInput(this.OperationKey, field, 'must be a string when given');
     }
     const result = await ModelTransitionDelegation.Apply(
       { ModelID: input.modelId, Transition: transition, Reason: input.reason || null, SignOffID: input.signOffId || null, Initiator: { kind: 'human', userId: user.ID } },

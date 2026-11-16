@@ -81,34 +81,29 @@ const ALGORITHM_ALIASES: Readonly<Record<string, string>> = {
   neuralnetwork: 'multilayerperceptron',
 };
 
-/** A name as the tolerant matchers compare it: lower-case letters and digits only (`Random Forest` → `randomforest`). */
-function normalizeName(s: string | null | undefined): string {
-  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
 /** An `MJ: ML Algorithms` row an experiment's algorithm name resolved to. */
 export type ResolvedAlgorithm = Pick<MJMLAlgorithmEntity, 'ID' | 'DriverClass'>;
 /** The `MJ: ML Algorithms` columns an algorithm name is matched on. */
 export type AlgorithmRow = Pick<MJMLAlgorithmEntity, 'ID' | 'Name' | 'DriverClass'>;
 
-/** Inputs for {@link PredictiveStudioPipelineBuilder.build}. */
+/** Inputs for {@link PredictiveStudioPipelineBuilder.Build}. */
 export interface BuildPredictionInput {
   /** The approved modeling plan the agent accumulated. */
-  spec: ModelingPlanSpec;
+  spec: ModelingPlanSpec;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** The owning provider (multi-provider correctness). */
-  provider: IMetadataProvider;
+  provider: IMetadataProvider;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** The acting user (isolation/audit). */
-  user: UserInfo;
+  user: UserInfo;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /**
    * Evaluate the trained model through the lifecycle gate when the trust verdict clears the bar. Default true. The
    * Model Development Agent's build turns it off, so the model it trains stays in Draft until the user asks for it to be
    * published. Nothing is published by the build (M4b routes automatic publishing through the gate's automated publisher).
    */
-  autoPublish?: boolean;
+  autoPublish?: boolean;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** Who started the build, recorded by the lifecycle gate: the agent run when the agent builds; default the user. */
-  initiator?: Actor;
+  initiator?: Actor;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** Sidecar version marker recorded in lineage. */
-  sidecarVersion?: string;
+  sidecarVersion?: string;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
 }
 
 /**
@@ -156,39 +151,41 @@ export interface BuildGateDecision {
 /** The outcome of building a prediction from a plan. */
 export interface BuildPredictionResult {
   /** Whether the build (pipeline create + train) succeeded. */
-  success: boolean;
+  success: boolean;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** The created `MJ: ML Training Pipelines` id (present once the pipeline is created). */
-  pipelineId?: string;
+  pipelineId?: string;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** The trained `MJ: ML Models` id (present once training completes). */
-  modelId?: string;
+  modelId?: string;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** The plain-language trust verdict: the training run's stored gate decision rendered as copy. */
-  trust?: TrustVerdict;
+  trust?: TrustVerdict;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** Whether the model was published into the business catalog. */
-  published: boolean;
+  published: boolean;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /**
    * True when the model was not published only because auto-publish was off: it shipped under its protocol, training
    * flagged no leakage and it holds no calibration hold, so the lifecycle gate may be asked to evaluate and publish it.
    */
-  readyToPublish: boolean;
+  readyToPublish: boolean;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** Whether training flagged a leakage warning (held for analyst review). */
-  leakageFlagged: boolean;
+  leakageFlagged: boolean;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /**
    * When not published, the plain reason (leakage, a calibration hold, the trust verdict, auto-publish off, or the
    * lifecycle gate's refusal); else null.
    */
-  heldReason: string | null;
+  heldReason: string | null;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** A clean error message when the build failed; else null. */
-  errorMessage: string | null;
+  errorMessage: string | null;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** The trained model entity (present on successful build). */
-  model?: MJMLModelEntity;
+  model?: MJMLModelEntity;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** The created pipeline entity (present once pipeline is created). */
-  pipeline?: MJMLTrainingPipelineEntity;
+  pipeline?: MJMLTrainingPipelineEntity;  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** The leaderboard of the build's one training run. */
-  leaderboard?: MLLeaderboardEntryPayload[];
+  leaderboard?: MLLeaderboardEntryPayload[];  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
+  /** The build's one training run (its ID and stored results), present once it trained: what the experiment report reads. */
+  run?: { readonly ID: string; readonly ValidationResults: string | null };  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
   /** The training run's stored gate decision; absent when the build failed before a run stored one. */
   Gate?: BuildGateDecision;
   /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
-  warnings?: FeatureStepWarning[];
+  warnings?: FeatureStepWarning[];  // case-violation-ok-legacy-back-compat: existing camelCase build interface; its callers build object literals against it
 }
 
 /** One training of the build's pipeline: the engine's result, the leaderboard it produced and its stored gate decision. */
@@ -268,6 +265,7 @@ export class PredictiveStudioPipelineBuilder {
     return {
       success: true, pipelineId: pipeline.ID, modelId: model.ID, model, pipeline, trust, published, readyToPublish, leakageFlagged, heldReason,
       errorMessage: null, leaderboard: training.Leaderboard, Gate: training.Gate || undefined,
+      run: PredictiveStudioPipelineBuilder.runOf(training),
       warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
@@ -318,8 +316,19 @@ export class PredictiveStudioPipelineBuilder {
       success: true, pipelineId: pipeline.ID, pipeline, published: false, readyToPublish: false, leakageFlagged: WasTrainingLeakageFlagged(training.Train),
       heldReason,
       errorMessage: null, leaderboard: training.Leaderboard, Gate: training.Gate || undefined,
+      run: PredictiveStudioPipelineBuilder.runOf(training),
       warnings: warnings.length > 0 ? warnings : undefined,
     };
+  }
+
+  /** The build's training run as the experiment report reads it: its ID and its stored results. */
+  private static runOf(training: BuildTraining): NonNullable<BuildPredictionResult['run']> {
+    return { ID: training.Train.run.ID, ValidationResults: training.Train.run.ValidationResults };
+  }
+
+  /** A name as the tolerant matchers compare it: lower-case letters and digits only (`Random Forest` → `randomforest`). */
+  private static normalizeName(s: string | null | undefined): string {
+    return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
   /** The plan's proposed experiments, highest priority (lowest `Priority`) first; ties keep plan order. */
@@ -357,9 +366,9 @@ export class PredictiveStudioPipelineBuilder {
    * @throws Error listing the available algorithms when nothing matches, or naming both rows when two match
    */
   public static MatchAlgorithm(algorithmName: string, rows: readonly AlgorithmRow[]): ResolvedAlgorithm {
-    const normalized = normalizeName(algorithmName);
+    const normalized = PredictiveStudioPipelineBuilder.normalizeName(algorithmName);
     const want = ALGORITHM_ALIASES[normalized] || normalized;
-    const matches = rows.filter((a) => normalizeName(a.Name) === want || normalizeName(a.DriverClass) === want);
+    const matches = rows.filter((a) => PredictiveStudioPipelineBuilder.normalizeName(a.Name) === want || PredictiveStudioPipelineBuilder.normalizeName(a.DriverClass) === want);
     if (matches.length === 0) {
       const available = rows.map((a) => a.Name).join(', ');
       throw new Error(`Algorithm '${algorithmName}' was not found in MJ: ML Algorithms. Available: ${available || '(none)'}.`);
@@ -477,7 +486,7 @@ export class PredictiveStudioPipelineBuilder {
    * behind — and canonicalize its names. Returns the target entity.
    */
   private preparePipelineConfig(config: PipelineConfig, provider: IMetadataProvider): EntityInfo {
-    const entity = ResolveEntity(config.targetEntityName, provider);
+    const entity = PredictiveStudioPipelineBuilder.ResolveEntity(config.targetEntityName, provider);
     if (!entity) {
       throw new Error(`Target entity '${config.targetEntityName}' was not found in metadata. The plan must reference a real entity.`);
     }
@@ -485,8 +494,8 @@ export class PredictiveStudioPipelineBuilder {
     config.targetEntityName = entity.Name;
 
     // Canonicalize any source bindings referencing target entity view or aliases
-    for (const sb of config.sourceBindings ?? []) {
-      if (UUIDsEqual(ResolveEntity(sb.Ref, provider)?.ID, entity.ID)) {
+    for (const sb of config.sourceBindings || []) {
+      if (UUIDsEqual(PredictiveStudioPipelineBuilder.ResolveEntity(sb.Ref, provider)?.ID, entity.ID)) {
         sb.Ref = entity.Name;
       }
     }
@@ -515,7 +524,7 @@ export class PredictiveStudioPipelineBuilder {
     pipeline.LeakageGuard = JSON.stringify(config.leakageGuard);
     pipeline.ValidationStrategy = JSON.stringify(config.validation);
     if (!(await pipeline.Save())) {
-      throw new Error(`Failed to create training pipeline: ${pipeline.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      throw new Error(`Failed to create training pipeline: ${pipeline.LatestResult?.CompleteMessage || 'unknown error'}`);
     }
     return pipeline;
   }
@@ -540,16 +549,15 @@ export class PredictiveStudioPipelineBuilder {
     const validDenyFields: string[] = [];
     for (const entry of config.leakageGuard.DenyFields) {
       const lower = entry.trim().toLowerCase();
-      if (fieldMap.has(lower)) {
-        validDenyFields.push(fieldMap.get(lower)!);
-      } else if (aliases[lower] && fieldMap.has(aliases[lower])) {
-        validDenyFields.push(fieldMap.get(aliases[lower])!);
+      const canonical = fieldMap.get(lower) || fieldMap.get(aliases[lower] || '');
+      if (canonical !== undefined) {
+        validDenyFields.push(canonical);
       } else {
         // Check if field exists on any other bound source entity
         let foundOnBoundSource = false;
-        for (const sb of config.sourceBindings ?? []) {
+        for (const sb of config.sourceBindings || []) {
           if (sb.Kind === 'Entity') {
-            const srcEntity = ResolveEntity(sb.Ref, provider);
+            const srcEntity = PredictiveStudioPipelineBuilder.ResolveEntity(sb.Ref, provider);
             if (srcEntity?.Fields.some((f) => f.Name.toLowerCase() === lower)) {
               foundOnBoundSource = true;
               break;
@@ -583,8 +591,8 @@ export class PredictiveStudioPipelineBuilder {
         missing.push(`target field '${config.targetVariable}'`);
       }
     }
-    const steps = (config.featureSteps?.Steps ?? []) as Array<{ Kind?: string; Columns?: string[]; Column?: string }>;
-    for (const s of steps) {
+    // The plan's steps came from an LLM-written plan, so the column shapes are checked at runtime too.
+    for (const s of config.featureSteps?.Steps || []) {
       if (s.Kind === 'select' && Array.isArray(s.Columns)) {
         s.Columns = s.Columns.map((c) => {
           const canonical = fieldMap.get(c.toLowerCase());
@@ -701,38 +709,36 @@ export class PredictiveStudioPipelineBuilder {
   protected CreateLifecycleGate(): LifecycleGate {
     return new LifecycleGate();
   }
-}
 
-/**
- * Resolve an entity identifier to an `EntityInfo`. Tolerant of LLM variations:
- * matches entity Name (e.g. 'MJ: AI Prompt Runs'), BaseView ('vwAIPromptRuns'),
- * BaseTable ('AIPromptRun'), schema prefixes ('__mj.vwAIPromptRuns'), and name without
- * app prefix ('AI Prompt Runs').
- */
-export function ResolveEntity(nameOrView: string, provider: IMetadataProvider): EntityInfo | undefined {
-  if (!nameOrView) return undefined;
-  const direct = provider.EntityByName(nameOrView);
-  if (direct) return direct;
+  /**
+   * Resolve an entity identifier to an `EntityInfo`. Tolerant of LLM variations:
+   * matches entity Name (e.g. 'MJ: AI Prompt Runs'), BaseView ('vwAIPromptRuns'),
+   * BaseTable ('AIPromptRun'), schema prefixes ('__mj.vwAIPromptRuns'), and name without
+   * app prefix ('AI Prompt Runs'). Reads only the provider's entity lookup and entity list.
+   */
+  public static ResolveEntity(nameOrView: string, provider: Pick<IMetadataProvider, 'EntityByName' | 'Entities'>): EntityInfo | undefined {
+    if (!nameOrView) return undefined;
+    const direct = provider.EntityByName(nameOrView);
+    if (direct) return direct;
 
-  const trimmed = nameOrView.trim().toLowerCase();
-  const normalizedTarget = normalizeName(nameOrView);
+    const trimmed = nameOrView.trim().toLowerCase();
+    const normalizedTarget = PredictiveStudioPipelineBuilder.normalizeName(nameOrView);
 
-  for (const e of provider.Entities) {
-    if (e.Name.trim().toLowerCase() === trimmed) return e;
-    if (e.BaseView && e.BaseView.trim().toLowerCase() === trimmed) return e;
-    if (e.BaseTable && e.BaseTable.trim().toLowerCase() === trimmed) return e;
+    for (const e of provider.Entities) {
+      if (e.Name.trim().toLowerCase() === trimmed) return e;
+      if (e.BaseView && e.BaseView.trim().toLowerCase() === trimmed) return e;
+      if (e.BaseTable && e.BaseTable.trim().toLowerCase() === trimmed) return e;
 
-    if (e.SchemaName && e.BaseView && `${e.SchemaName}.${e.BaseView}`.trim().toLowerCase() === trimmed) return e;
-    if (e.SchemaName && e.BaseTable && `${e.SchemaName}.${e.BaseTable}`.trim().toLowerCase() === trimmed) return e;
+      if (e.SchemaName && e.BaseView && `${e.SchemaName}.${e.BaseView}`.trim().toLowerCase() === trimmed) return e;
+      if (e.SchemaName && e.BaseTable && `${e.SchemaName}.${e.BaseTable}`.trim().toLowerCase() === trimmed) return e;
 
-    if (normalizeName(e.Name) === normalizedTarget) return e;
-    if (e.BaseView && normalizeName(e.BaseView) === normalizedTarget) return e;
-    if (e.BaseTable && normalizeName(e.BaseTable) === normalizedTarget) return e;
+      if (PredictiveStudioPipelineBuilder.normalizeName(e.Name) === normalizedTarget) return e;
+      if (e.BaseView && PredictiveStudioPipelineBuilder.normalizeName(e.BaseView) === normalizedTarget) return e;
+      if (e.BaseTable && PredictiveStudioPipelineBuilder.normalizeName(e.BaseTable) === normalizedTarget) return e;
 
-    const strippedPrefix = e.Name.replace(/^[^:]+:\s*/, '').trim().toLowerCase();
-    if (strippedPrefix === trimmed || normalizeName(strippedPrefix) === normalizedTarget) return e;
+      const strippedPrefix = e.Name.replace(/^[^:]+:\s*/, '').trim().toLowerCase();
+      if (strippedPrefix === trimmed || PredictiveStudioPipelineBuilder.normalizeName(strippedPrefix) === normalizedTarget) return e;
+    }
+    return undefined;
   }
-  return undefined;
 }
-
-

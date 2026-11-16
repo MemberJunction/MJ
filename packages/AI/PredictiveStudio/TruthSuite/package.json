@@ -24,6 +24,7 @@
     "@memberjunction/ai-core-plus": "6.3.0-edge.0",
     "@memberjunction/core": "6.3.0-edge.0",
     "@memberjunction/core-entities": "6.3.0-edge.0",
+    "@memberjunction/generic-database-provider": "6.3.0-edge.0",
     "@memberjunction/global": "6.3.0-edge.0",
     "@memberjunction/graphql-dataprovider": "6.3.0-edge.0",
     "@memberjunction/predictive-studio": "6.3.0-edge.0",

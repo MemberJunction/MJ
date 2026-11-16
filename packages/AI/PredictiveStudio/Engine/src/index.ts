@@ -49,6 +49,10 @@ export * from './training';
 // and ArtifactRegistry (write-once artifact storage, and a verified ArtifactLoad on every load).
 export * from './registry';
 
+// Governance — StoredEvidenceBuilder (a model's evidence from stored rows), SignOffService (a person's recorded sign-off,
+// evidence-hashed) and StoredSignOffLookup (the gate's read of the request's approving sign-off).
+export * from './governance';
+
 // The registry's PreSave guards, registered once per process by every process that loads the Engine (MJAPI among
 // them): the status guard (only the lifecycle gate changes MJ: ML Models.Status, re-derived on every publish) and the
 // evidence guard (stored evidence is write-once). Both are idempotent, across copies of this module too.

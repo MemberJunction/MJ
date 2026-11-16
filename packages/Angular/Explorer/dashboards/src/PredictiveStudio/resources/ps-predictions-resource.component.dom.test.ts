@@ -1,19 +1,20 @@
 import '@angular/compiler';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { ComponentFixture } from '@angular/core/testing';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { of, Subject } from 'rxjs';
-import type { IMetadataProvider } from '@memberjunction/core';
-import { ResourceData, type MJListDetailEntity, type MJListEntity, type MJMLModelEntity, type MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
+import { ResourceData, type MJListDetailEntity, type MJListEntity, type MJMLModelEntity, type MJMLOutputBindingEntity, type MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RenderComponentFixture, CreateFakeProvider, Query } from '@memberjunction/ng-test-utils';
-import { AtRiskRules, TRAINING_RUN_RESULTS_SCHEMA, type AtRiskRow, type GateDecision, type StoredGateRecord } from '@memberjunction/predictive-studio-core';
+import { AtRiskRules, GateRules, TRAINING_RUN_RESULTS_SCHEMA, TracedNumbers, type AtRiskRow, type GateDecision, type SemanticsCheckBinding, type StoredGateRecord, type TrainerRequestConfig } from '@memberjunction/predictive-studio-core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import type { PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
+import { PSPredictionsGridComponent, type PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
+import type { PSRunDetailRow } from '../engine/predictive-studio.engine';
 import { PSPredictionsResourceComponent } from './ps-predictions-resource.component';
 
 try {
@@ -64,12 +65,14 @@ class LoadingStub {
 /** Stands in for <ps-predictions-grid>: records its run input and lets the test emit its outputs. */
 @Component({ standalone: true, selector: 'ps-predictions-grid', template: '<div data-testid="grid-stub"></div>' })
 class GridStub {
-  @Input() modelId: string | null = null;
-  @Input() runId: string | null = null;
-  @Input() title: string | null = null;
-  @Input() entityName: string | null = null;
-  @Input() problemType: string | null = null;
-  @Input() height = '';
+  @Input() ModelId: string | null = null;
+  @Input() RunId: string | null = null;
+  @Input() Surface = '';
+  @Input() Provider: IMetadataProvider | null = null;
+  @Input() Title: string | null = null;
+  @Input() EntityName: string | null = null;
+  @Input() ProblemType: string | null = null;
+  @Input() Height = '';
   @Output() RowsLoaded = new EventEmitter<PredictionGridRowsLoadedEvent>();
   @Output() RowsLoadFailed = new EventEmitter<string>();
 }
@@ -94,20 +97,28 @@ const SHIPPED: GateDecision = { outcome: 'model', branch: 'a:Q15-only-model-beat
 const NO_SIGNAL: GateDecision = { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null };
 const KEEP_GLM: GateDecision = { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'glm', shippedRole: 'simpleBaseline', note: null };
 
+/** What a stored run may hold besides its decision: other intervals, and the trainer request naming the candidates' drivers. */
+interface StoredResultsOptions {
+  readonly Intervals?: Partial<StoredGateRecord['intervals']>;
+  readonly TrainerRequest?: TrainerRequestConfig | null;
+  /** The stored reason; absent, a fixed sentence that quotes no number. */
+  readonly Reason?: StoredGateRecord['reason'];
+}
+
 /** The `ValidationResults` a unit training run stores, with this gate decision measured on 1,205 holdout rows. */
-function storedResults(decision: GateDecision): string {
+function storedResults(decision: GateDecision, o: StoredResultsOptions = {}): string {
   const gate: StoredGateRecord = {
     evaluationProtocolId: 'EP-1', margin: 0, primaryMetric: 'log-loss', holdoutRows: 1205,
-    intervals: { modelName: 'xgb', modelVsDummy: { value: 0.0177, lower: 0.0098, upper: 0.0254 }, modelVsBestSimple: null, memberVsDummy: {}, memberScores: {}, deliveredMember: null },
+    intervals: { modelName: 'xgb', modelVsDummy: { value: 0.0177, lower: 0.0098, upper: 0.0254 }, modelVsBestSimple: null, memberVsDummy: {}, memberScores: {}, deliveredMember: null, ...o.Intervals },
     guards: { taskKind: 'binary', holdoutClassCounts: { '0': 900, '1': 305 }, modelAucInterval: { level: 0.95, lower: 0.6, upper: 0.7 }, minMinorityClassRows: 20 },
     transcribed: decision, decision, guardRefusal: null,
-    reason: { code: decision.outcome === 'no-signal' ? 'nothing-beats-dummy' : 'only-model-beats-dummy', text: decision.outcome === 'no-signal' ? 'Nothing beats the flat guess.' : 'The model beats the flat guess.' },
+    reason: o.Reason || { code: decision.outcome === 'no-signal' ? 'nothing-beats-dummy' : 'only-model-beats-dummy', text: decision.outcome === 'no-signal' ? 'Nothing beats the flat guess.' : 'The model beats the flat guess.' },
     incumbentDiff: null, sliceCoverage: { missingSubgroups: [], missingPeriods: [], slicesWithoutInterval: 0 },
   };
   return JSON.stringify({
     schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
     unitResolution: { rowsRead: 1205, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 1205, dataCutoff: '2026-07-30' },
-    trainer: null, trainerRequest: null, carve: null, gate,
+    trainer: null, trainerRequest: o.TrainerRequest || null, carve: null, gate,
   });
 }
 
@@ -116,16 +127,13 @@ function storedResults(decision: GateDecision): string {
  * driver); the comparison between them is not 0 [0, 0].
  */
 function keptGlmResults(): string {
-  const parsed: { gate: StoredGateRecord } & Record<string, unknown> = JSON.parse(storedResults(KEEP_GLM));
-  parsed.gate = {
-    ...parsed.gate,
-    intervals: { ...parsed.gate.intervals, modelName: 'lr-tuned', modelVsBestSimple: { value: 0.004, lower: -0.001, upper: 0.009 }, memberVsDummy: { glm: { value: 0.0239, lower: 0.011, upper: 0.036 } }, memberScores: { glm: 0.3652 } },
-  };
-  parsed['trainerRequest'] = {
-    evaluationProtocolId: 'EP-1', seed: 7, threads: 1, timeoutSeconds: 600, maxRetries: 0,
-    candidates: [{ name: 'lr-tuned', algorithmId: 'A-1', driverKey: 'logistic_regression', hyperparameters: {} }],
-  };
-  return JSON.stringify(parsed);
+  return storedResults(KEEP_GLM, {
+    Intervals: { modelName: 'lr-tuned', modelVsBestSimple: { value: 0.004, lower: -0.001, upper: 0.009 }, memberVsDummy: { glm: { value: 0.0239, lower: 0.011, upper: 0.036 } }, memberScores: { glm: 0.3652 } },
+    TrainerRequest: {
+      evaluationProtocolId: 'EP-1', seed: 7, threads: 1, timeoutSeconds: 600, maxRetries: 0,
+      candidates: [{ name: 'lr-tuned', algorithmId: 'A-1', driverKey: 'logistic_regression', hyperparameters: {} }],
+    },
+  });
 }
 
 /** The engine members the workspace reads. `LoadRunDetails` must never be called: the grid reads the run. */
@@ -169,11 +177,11 @@ const settle = async (fixture: ComponentFixture<PSPredictionsResourceComponent>)
   fixture.detectChanges();
 };
 
-async function renderCatalog(provider: IMetadataProvider, validationResults?: string | null, lineage: string | null = null) {
+async function renderCatalog(provider: IMetadataProvider, validationResults?: string | null, lineage: string | null = null, grid: typeof GridStub | typeof PSPredictionsGridComponent = GridStub) {
   const engine = fakeEngine(validationResults, lineage);
   vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(engine as unknown as PredictiveStudioEngine);
   const fixture = RenderComponentFixture(PSPredictionsResourceComponent, {
-    imports: [MJButtonDirective, PageHeaderInteriorStub, PageBodyInteriorStub, SplitStub, SplitAreaStub, LoadingStub, GridStub],
+    imports: [MJButtonDirective, PageHeaderInteriorStub, PageBodyInteriorStub, SplitStub, SplitAreaStub, LoadingStub, grid],
     declarations: [PSPredictionsResourceComponent],
     providers: [{ provide: NavigationService, useValue: fakeNavigation() }],
     setup: (instance) => {
@@ -203,6 +211,59 @@ const gridStub = (fixture: ComponentFixture<PSPredictionsResourceComponent>): Gr
 
 afterEach(() => vi.restoreAllMocks());
 
+/** The `MJ: ML Output Bindings` fields the embedded grid reads. */
+type BindingRow = Pick<MJMLOutputBindingEntity, 'ID' | 'ModelID' | 'Surface' | 'SortsBy' | 'DriverDirectionRelativeTo' | 'Label'>;
+
+/** The model fields the embedded grid reads. */
+type GridModelRow = Pick<MJMLModelEntity, 'ID' | 'ProblemType' | 'TargetVariable' | 'Lineage' | 'OutputSemantics'>;
+
+/** What {@link RenderResource} renders: the model, its at-risk-list binding row's fields under test, the latest run's scores. */
+interface RenderResourceOptions {
+  model: GridModelRow;
+  binding: Partial<SemanticsCheckBinding>;
+  scores: number[];
+}
+
+/** A scored detail of the latest run. */
+const scoredDetail = (recordId: string, score: number): PSRunDetailRow => ({
+  ID: `d-${recordId}`, RecordID: recordId, ResultPayload: JSON.stringify({ score }), Status: 'Succeeded',
+  CompletedAt: new Date('2026-10-01T00:00:00Z'), __mj_CreatedAt: new Date('2026-10-01T00:00:00Z'),
+});
+
+/**
+ * Opens the prediction in the workspace with the real embedded grid (appended to `host`): the provider serves the model
+ * and its at-risk-list binding row, the latest run holds `scores` in that stored order.
+ */
+async function RenderResource(host: HTMLElement, options: RenderResourceOptions): Promise<void> {
+  vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails').mockResolvedValue({ Rows: options.scores.map((s, i) => scoredDetail(`r${i}`, s)), Capped: false });
+  const binding: BindingRow = {
+    ID: 'B-list', ModelID: options.model.ID, Surface: options.binding.Surface || 'at-risk-list', SortsBy: options.binding.SortsBy || 'adverse-probability-desc',
+    DriverDirectionRelativeTo: options.binding.DriverDirectionRelativeTo || 'adverse-class', Label: options.binding.Label || 'false risk',
+  };
+  const served = (p: RunViewParams): Array<GridModelRow | BindingRow> => {
+    if (p.EntityName === 'MJ: ML Models') return [options.model];
+    if (p.EntityName === 'MJ: ML Output Bindings') return (typeof p.ExtraFilter === 'string' ? p.ExtraFilter : '').includes(`Surface='${binding.Surface}'`) ? [binding] : [];
+    return [];
+  };
+  const provider = CreateFakeProvider<GridModelRow | BindingRow>({ entities: [{ ID: ENTITY_ID, Name: 'Members' }], runViewResults: served });
+  const { fixture, resource } = await renderCatalog(provider, undefined, null, PSPredictionsGridComponent);
+  resource.Open(resource.Cards[0]);
+  await settle(fixture);
+  await settle(fixture);
+  host.appendChild(fixture.nativeElement);
+}
+
+/** The scores of the at-risk list's rows as the embedded grid shows them, top row first. */
+const AtRiskRowScores = (host: HTMLElement): number[] =>
+  Array.from(host.querySelectorAll('[data-testid="ps-atrisk-list"] .ag-center-cols-container .ag-row'))
+    .sort((a, b) => Number(a.getAttribute('row-index')) - Number(b.getAttribute('row-index')))
+    .map((r) => Number(r.querySelector('[data-testid="ps-score-cell"]')?.getAttribute('data-score')));
+
+/** The open prediction's at-risk-list binding row with `sortsBy`. */
+const atRiskListBinding = (sortsBy: SemanticsCheckBinding['SortsBy']): SemanticsCheckBinding => ({
+  BindingID: 'B-list', Surface: 'at-risk-list', SortsBy: sortsBy, DriverDirectionRelativeTo: sortsBy === 'none' ? 'raw-contribution' : 'adverse-class', Label: sortsBy === 'none' ? 'Predicted class' : 'false risk',
+});
+
 /** A List Detail double: the group it joined, its latest result, and a save that queues it (or refuses it). */
 interface ListDetailDouble { ListID: string; RecordID: string; TransactionGroup: object | null; LatestResult: { CompleteMessage: string }; Save: () => Promise<boolean> }
 
@@ -230,9 +291,9 @@ function listProvider(submit: () => Promise<boolean>, queues: (i: number) => boo
 }
 
 /** Loads 250 records at or above the list's risk floor (plus 10 below it) and sends them to a list. */
-async function sendAtRisk(fixture: ComponentFixture<PSPredictionsResourceComponent>, resource: PSPredictionsResourceComponent): Promise<void> {
+async function sendAtRisk(fixture: ComponentFixture<PSPredictionsResourceComponent>, resource: PSPredictionsResourceComponent, binding: SemanticsCheckBinding | null = null): Promise<void> {
   const rows = [...Array.from({ length: 250 }, (_, i) => row(`hi-${i}`, 80)), ...Array.from({ length: 10 }, (_, i) => row(`lo-${i}`, 10))];
-  gridStub(fixture)?.RowsLoaded.emit({ Rows: rows, Capped: false });
+  gridStub(fixture)?.RowsLoaded.emit({ Rows: rows, Capped: false, Binding: binding });
   await settle(fixture);
   await resource.SendToList();
   fixture.detectChanges();
@@ -280,6 +341,46 @@ describe('PSPredictionsResourceComponent (DOM) — trust renders the stored gate
     expect(card?.querySelector('[data-testid="ps-open-prediction"]')).toBeNull();
   });
 
+  it("every number the trust banner renders is a traced number of the card's run, and recomputes from the run's stored JSON", async () => {
+    const decision: GateDecision = { outcome: 'model', branch: 'a:beats-best-simple', shipped: 'xgb', shippedRole: 'model', note: null };
+    const intervals = { modelName: 'xgb', modelVsDummy: { value: 0.02, lower: 0.01, upper: 0.03 }, modelVsBestSimple: { value: 0.006, lower: -0.001, upper: 0.011 }, memberVsDummy: {}, memberScores: {}, deliveredMember: null };
+    const reason = GateRules.DescribeGate(intervals, { Transcribed: decision, Decision: decision, GuardRefusal: null }, 'log-loss');
+    expect(reason.code).toBe('model-beats-best-simple');
+    const json = storedResults(decision, { Intervals: intervals, Reason: reason });
+    const { fixture, resource } = await renderCatalog(defaultProvider(), json);
+    resource.Open(resource.Cards[0]);
+    await settle(fixture);
+    const card = resource.Selected;
+    expect(card?.runId).toBe('run-new');
+    if (card === null) return;
+    const numbers = resource.TrustNumbers(card);
+    const vsDummy = ['value', 'lower', 'upper'].map((k) => `$.gate.intervals.modelVsDummy.${k}`);
+    const vsBest = ['value', 'lower', 'upper'].map((k) => `$.gate.intervals.modelVsBestSimple.${k}`);
+    expect(numbers.map((n) => [n.Text, n.Source.Path])).toEqual([
+      ['1,205', '$.gate.holdoutRows'],
+      ['0.0200', vsDummy[0]], ['0.0100', vsDummy[1]], ['0.0300', vsDummy[2]],
+      ['0.0200', vsDummy[0]], ['0.0100', vsDummy[1]], ['0.0300', vsDummy[2]],
+      ['0.0060', vsBest[0]], ['-0.0010', vsBest[1]], ['0.0110', vsBest[2]],
+    ]);
+    const banner = Query(fixture, '[data-testid="ps-trust-banner"]');
+    const rendered = ['.ps-trust-evidence', '.ps-trust-line', '.ps-trust-explain'].map((sel) => banner?.querySelector(sel)?.textContent || '').join(' ');
+    const tokens = rendered.match(/-?\d[\d,]*(?:\.\d+)?%?/g) || [];
+    expect(tokens).toEqual(['1,205', '0.0200', '0.0100', '0.0300', '0.0200', '0.0100', '0.0300', '0.0060', '-0.0010', '0.0110']);
+    const texts = new Set(numbers.map((n) => n.Text));
+    for (const token of tokens) expect(texts.has(token)).toBe(true);
+    for (const n of numbers) {
+      expect(n.Source).toEqual({ EntityName: 'MJ: ML Training Runs', RecordID: 'run-new', Path: n.Source.Path });
+      expect(TracedNumbers.Recompute(n, json)).toBeCloseTo(n.Value, 12);
+    }
+  });
+
+  it('a card without a training run renders the trust line without a count and traces no number', async () => {
+    const { resource } = await renderCatalog(defaultProvider());
+    const cardWithoutRun = { ...resource.Cards[0], runId: null };
+    expect(resource.Evidence(cardWithoutRun)).toBe('Checked against past records it had never seen.');
+    expect(resource.TrustNumbers(cardWithoutRun)).toEqual([]);
+  });
+
   it('a published model whose run stores no gate decision is not evaluated and does not open', async () => {
     const { fixture, resource } = await renderCatalog(defaultProvider(), null);
     const card = Query(fixture, '[data-testid="ps-prediction-card"]');
@@ -295,8 +396,9 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
   it('passes the resolved latest run to the grid and takes its rows from RowsLoaded, never reading the run itself', async () => {
     const { fixture, resource, engine } = await renderWorkspace();
     const grid = gridStub(fixture);
-    expect(grid?.runId).toBe('run-1');
-    grid?.RowsLoaded.emit({ Rows: [row('a', 90), row('b', 20)], Capped: false });
+    expect(grid?.RunId).toBe('run-1');
+    expect(grid?.Surface).toBe('at-risk-list');
+    grid?.RowsLoaded.emit({ Rows: [row('a', 90), row('b', 20)], Capped: false, Binding: null });
     await settle(fixture);
     expect(resource.AtRiskRows.map((r) => r.RecordID)).toEqual(['a', 'b']);
     expect(resource.AtRiskLoading).toBe(false);
@@ -306,7 +408,7 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
 
   it('shows the capped notice without promising list coverage', async () => {
     const { fixture } = await renderWorkspace();
-    gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: true });
+    gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: true, Binding: null });
     await settle(fixture);
     expect(Query(fixture, '[data-testid="ps-atrisk-capped"]')?.textContent?.trim()).toBe(
       'The latest run has more than 50,000 predictions; this list shows the first 50,000.',
@@ -315,7 +417,7 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
 
   it('resets the rows and the capped notice when the prediction is reopened', async () => {
     const { fixture, resource } = await renderWorkspace();
-    gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: true });
+    gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: true, Binding: null });
     await settle(fixture);
     resource.BackToCatalog();
     resource.Open(resource.Cards[0]);
@@ -331,6 +433,30 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
     await sendAtRisk(fixture, resource);
     expect(lists.Details.length).toBe(200);
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 200 of 250 at-risk records (highest risk first)');
+  });
+
+  it("a list whose at-risk-list binding sorts by 'none' cannot be sent: the control is off, says why, and nothing is written", async () => {
+    const lists = listProvider(async () => true);
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource, atRiskListBinding('none'));
+    const button = Query(fixture, '[data-testid="ps-act-list"]');
+    expect(button instanceof HTMLButtonElement && button.disabled).toBe(true);
+    expect(Query(fixture, '[data-testid="ps-act-list-reason"]')?.textContent?.trim()).toBe('This list is not ranked by risk: its At-Risk list binding sorts by none.');
+    expect(button?.getAttribute('title')).toBe(AtRiskRules.NoRankingReason);
+    expect([lists.Details.length, lists.Submit.mock.calls.length, Query(fixture, '[data-testid="ps-list-result"]')]).toEqual([0, 0, null]);
+    expect(vi.mocked(lists.Provider.GetEntityObject)).not.toHaveBeenCalled();
+  });
+
+  it("a list whose at-risk-list binding sorts by adverse probability is sent as before", async () => {
+    const lists = listProvider(async () => true);
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    gridStub(fixture)?.RowsLoaded.emit({ Rows: [row('a', 90)], Capped: false, Binding: atRiskListBinding('adverse-probability-desc') });
+    await settle(fixture);
+    const button = Query(fixture, '[data-testid="ps-act-list"]');
+    expect(button instanceof HTMLButtonElement && button.disabled).toBe(false);
+    expect(Query(fixture, '[data-testid="ps-act-list-reason"]')).toBeNull();
+    await sendAtRisk(fixture, resource, atRiskListBinding('adverse-probability-desc'));
+    expect(lists.Details.length).toBe(200);
   });
 
   it('queues every member on one transaction group and submits it once, so the adds take one round trip', async () => {
@@ -372,5 +498,29 @@ describe('PSPredictionsResourceComponent (DOM) — the co-pilot agent lookup', (
     expect(config.mock.calls.map((c) => c[2] === provider)).toEqual([true]);
     // the stubbed engine holds no agents, so the lookup logs that chat falls back to default routing
     expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining("'Model Development Agent' not found")]);
+  });
+});
+
+describe('PSPredictionsResourceComponent (DOM) — the At-Risk list from its binding row', () => {
+  /** A model named for renewal whose adverse class is `Renewed = false`: the score is P(not renewed), so it is not inverted. */
+  const renewalNamed: GridModelRow = {
+    ID: MODEL_ID, ProblemType: 'classification', TargetVariable: 'Renewed', Lineage: null,
+    OutputSemantics: JSON.stringify({ task: { kind: 'binary', classOrder: ['true', 'false'], adverseIndex: 1 } }),
+  };
+  let fixture: HTMLElement;
+  beforeEach(() => {
+    fixture = document.createElement('div');
+    document.body.appendChild(fixture);
+  });
+  afterEach(() => fixture.remove());
+
+  it('sorts the At-Risk list by the binding row', async () => {
+    await RenderResource(fixture, { model: renewalNamed, binding: { Surface: 'at-risk-list', SortsBy: 'adverse-probability-desc' }, scores: [0.9, 0.2, 0.6] });
+    expect(AtRiskRowScores(fixture)).toEqual([0.9, 0.6, 0.2]);   // adverse probability, highest first
+  });
+
+  it("keeps the stored scoring order when the binding row sorts by 'none'", async () => {
+    await RenderResource(fixture, { model: renewalNamed, binding: { Surface: 'at-risk-list', SortsBy: 'none' }, scores: [0.9, 0.2, 0.6] });
+    expect(AtRiskRowScores(fixture)).toEqual([0.9, 0.2, 0.6]);
   });
 });
