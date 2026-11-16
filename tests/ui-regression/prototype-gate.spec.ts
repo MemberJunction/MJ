@@ -43,7 +43,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
 
     // Look 1: MJ Default (light)
     await expect(page).toHaveScreenshot(`gate-mj-light-${testInfo.project.name}.png`, {
-      fullPage: true,
+      fullPage: false,
     });
 
     // Look 2: LXP (Sidecar Learning Hub: warm cream, sage, 16px surface radius, 20px padding)
@@ -58,7 +58,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     expect(lxpSelectedBg).not.toBe('rgb(230, 243, 249)');
 
     await expect(page).toHaveScreenshot(`gate-lxp-light-${testInfo.project.name}.png`, {
-      fullPage: true,
+      fullPage: false,
     });
 
     // Look 3: Editorial (dense, flat, square corners, serif)
@@ -67,7 +67,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(firstSurface).toHaveCSS('padding-top', '8px');
     await expect(firstSurface).toHaveCSS('font-family', /Georgia/);
     await expect(page).toHaveScreenshot(`gate-editorial-light-${testInfo.project.name}.png`, {
-      fullPage: true,
+      fullPage: false,
     });
 
     // Dark mode check on MJ Default
@@ -76,7 +76,7 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.waitForTimeout(250);
     await expect(page).toHaveScreenshot(`gate-mj-dark-${testInfo.project.name}.png`, {
-      fullPage: true,
+      fullPage: false,
     });
 
     expect(errors).toEqual([]);

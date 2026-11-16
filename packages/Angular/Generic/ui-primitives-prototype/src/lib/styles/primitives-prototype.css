@@ -133,6 +133,9 @@
     align-items: center;
     justify-content: flex-end;
     gap: var(--mj-space-2);
+  }
+
+  .mj-surface-footer:not(:first-child) {
     padding-top: var(--mj-space-2);
     border-top: 1px solid var(--mj-border-subtle);
   }
