@@ -43,4 +43,4 @@ Reports by label: tuning 4 *Bug*; held-out 4 *Bug*, 6 *Intended*, 8 *TestFault*.
 - The catch-rate changes (N25) raised known-bug catches from 3 to 6 of 10, but the held-out clean set fails the false-alarm gate by a wide margin. The two clean sets hold different PRs, so part of the difference can be the PR mix.
 - The 8 *TestFault* reports share one cause: the test gives a mock or an input that no real caller can produce (string timestamp, Invalid Date, `..` path, padded UUID). The prompt now asks for edge inputs after the exact trigger.
 - The 6 *Intended* reports are behaviour that the PR text or a commit in the PR states. The judges rated them High or Medium.
-- 8 of the 22 reports are real defects that no fix PR was linked to, and 3 of those were fixed later.
+- 8 of the 22 reports are real defects that no fix PR was linked to, and later commits on `next` fixed or changed 5 of those (#3624 twice, #4276 twice, #3872).
