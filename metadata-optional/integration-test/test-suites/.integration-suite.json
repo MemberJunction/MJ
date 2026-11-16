@@ -175,7 +175,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT174 - List Refresh From Source",
+            "TestID": "@lookup:MJ: Tests.Name=IT175 - List Refresh From Source",
             "Sequence": 14,
             "Status": "Active"
           },

@@ -201,7 +201,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
         ['lists', ListsChecks, 3],
-        ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT174)
+        ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
@@ -615,7 +615,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(243);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(244);
     });
 });
 
