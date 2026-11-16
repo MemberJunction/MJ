@@ -54,13 +54,13 @@ Every Wave 0+ primitive ships with:
 
 ### 2.2 Open axes (D2)
 Closed union types for visual axes (`role`, `tone`, `density`, `emphasis`) are prohibited unless they are defaults over an open string axis.
-- **Inputs accept `string` with documented defaults** (e.g. `Tone = input<string>('neutral', { alias: 'tone' })`, `VisualRole = input<string>('surface', { alias: 'visual-role' })`). Note: the visual role axis uses `VisualRole` / `visual-role` so it never collides with HTML's native ARIA `role` attribute.
+- **Inputs accept `string` with documented defaults** (e.g. `Tone = input<string>('neutral')`, `VisualRole = input<string>('surface')`). Note: the visual role axis uses `VisualRole` (`visual-role` in Custom Elements) so it never collides with HTML's native ARIA `role` attribute.
 - **Runtime variable mapping**: primitives bind runtime private variables on their host (`--_mj-tone-text: var(--mj-tone-<name>-text, ...)`, `--_mj-role-bg: var(--mj-role-<name>-bg, ...)`) so a brand adds a custom tone or role purely by declaring `--mj-tone-<name>-*` or `--mj-role-<name>-*` tokens in `:root` without writing CSS selectors against primitive internals.
 
-### 2.3 PascalCase public members vs. HTML / Angular Elements attribute aliases
-MemberJunction's TypeScript naming standard requires PascalCase public class members (`Density`, `Interactive`, `AllowPhoneSheet`), while HTML parsers lowercase custom-element attribute names (`density`, `interactive`, `allow-phone-sheet`).
-- **Rule**: Every primitive declares PascalCase signal properties in TypeScript with an explicit lowercase/kebab-case `alias` (`public readonly AllowPhoneSheet = input(true, { alias: 'allow-phone-sheet', transform: booleanAttribute })`).
-- **Why**: TypeScript consumers and `mj standards check` see PascalCase class members, while Angular templates and `createCustomElement`'s native `observedAttributes` share one standard kebab-case HTML attribute contract with zero `MutationObserver` workarounds. Primitives run zoneless (`provideZonelessChangeDetection()`) and never bundle `zone.js` into Angular Elements.
+### 2.3 PascalCase Angular inputs vs. kebab-case Custom Element attributes
+MemberJunction's Angular convention uses PascalCase inputs in both TypeScript and Angular templates (`[Density]="'sm'"`, `[AllowPhoneSheet]="true"`), while HTML parsers lowercase Custom Element attributes (`density="sm"`, `allow-phone-sheet="true"`). Note that Angular's `input(..., { alias: 'density' })` would replace the Angular template binding name and create two dialects across MJ components, so `alias` is **not** used.
+- **Rule**: Components declare standard unaliased PascalCase `input()` properties (`Density`, `Interactive`, `AllowPhoneSheet`) so Angular templates keep `[Density]` everywhere. In the Angular Elements registrar (`defineElement`), `reflectComponentType(component)` derives kebab-case attribute names (`AllowPhoneSheet` -> `allow-phone-sheet`) and extends `ctor.observedAttributes` and `ctor.prototype.attributeChangedCallback` / `connectedCallback` automatically.
+- **Why**: Zero dialect split in Angular templates, zero `MutationObserver`, and native Custom Element attribute reactivity. Primitives run zoneless (`provideZonelessChangeDetection()`) and never bundle `zone.js` into Angular Elements.
 
 ---
 
@@ -211,9 +211,9 @@ A horizontal flex/grid item primitive for list items, nav rows, menu items, pick
   - `Tone: string = 'neutral'` (open axis)
 - **Named parts**: `mjRowLeading` (icon/avatar/checkbox), `mjRowContent` (primary + secondary text), `mjRowTrailing` (badge/action/chevron). Any part can be omitted or reordered in the template without breaking layout.
 - **Exposed tokens**: `--mj-row-min-height`, `--mj-row-padding-inline`, `--mj-row-padding-block`, `--mj-row-gap`, `--mj-row-bg`, `--mj-row-bg-hover`, `--mj-row-bg-selected`, `--mj-row-radius`.
-- **Accessibility (WCAG 4.1.2)**:
+- **Accessibility (WCAG 4.1.2 & APG Listbox)**:
   - When `Interactive` is `false` (default), `mj-row` is a pure layout container with no `role` and no `tabindex`; rows that pair a primary link/button with a trailing action button MUST keep `Interactive="false"` so interactive controls are siblings, never nested.
-  - When `Interactive` is `true`, `mj-row` requires an explicit `ItemRole` (`'option' | 'menuitem' | 'menuitemradio' | 'button'`, defaulting to `'option'`), emits the matching `aria-selected` / `aria-checked` / `aria-pressed` state, renders `--mj-focus-ring`, enforces a 44px minimum target on `pointer: coarse`, and guards against nested interactive children.
+  - When `Interactive` is `true`, `ItemRole` (`'button' | 'option' | 'menuitem' | 'menuitemradio'`) defaults to `'button'` so standalone interactive rows never emit an orphaned `role="option"` outside a listbox. When `ItemRole="option"` inside `[role="listbox"]` (or `@angular/cdk/listbox`), `mj-row` uses roving `tabindex` (one Tab stop per listbox) and `ArrowDown` / `ArrowUp` / `Home` / `End` navigation, guards against missing `[role="listbox"]` ancestors or nested interactive children, renders `--mj-focus-ring`, and enforces a 44px minimum target on `pointer: coarse`.
 
 ---
 
