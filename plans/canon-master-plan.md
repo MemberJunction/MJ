@@ -8,7 +8,7 @@ One coordinating plan for all open Canon work across MemberJunction, Skip and th
 - **Created**: 2026-11-16
 - **Deadline**: **2026-12-01**. By that date every pull request listed here is merged, closed, or converted to a `canon` issue. See [What done means](#what-done-means-on-december-1).
 - **Sponsor**: Amith Nagarajan (`AN-BC`)
-- **Where to discuss**: comments on this plan's pull request. Scope changes are agreed there first, then this file is updated.
+- **Where to discuss**: comments on this plan's pull request, [MJ 6675](https://github.com/MemberJunction/MJ/pull/6675). Scope changes are agreed there first, then this file is updated.
 - **How it changes**: this file is expected to change as we build. Edit it through its pull request and add a line to the [Change log](#change-log).
 
 ## Why this plan exists
