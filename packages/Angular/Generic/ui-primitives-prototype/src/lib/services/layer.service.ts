@@ -1,82 +1,105 @@
-import { Injectable, inject, DOCUMENT } from '@angular/core';
+import { Injectable, TemplateRef, ViewContainerRef, inject, DOCUMENT } from '@angular/core';
+import { Overlay, OverlayConfig, OverlayRef } from '@angular/cdk/overlay';
+import { TemplatePortal } from '@angular/cdk/portal';
 import { ConfigurableFocusTrap, ConfigurableFocusTrapFactory } from '@angular/cdk/a11y';
+import { Subscription } from 'rxjs';
 
-export interface MJLayerRegistration {
+export interface MJLayerOpenRequest {
   Id: string;
-  Container: HTMLElement;
+  Template: TemplateRef<unknown>;
+  ViewContainerRef: ViewContainerRef;
+  Kind: string;
+  Placement: string;
   Modal: boolean;
   Closeable: boolean;
+  AllowPhoneSheet: boolean;
   OnRequestClose: (reason: 'escape' | 'backdrop' | 'programmatic') => void;
 }
 
-interface ActiveLayerEntry {
-  Registration: MJLayerRegistration;
+interface ActiveOverlayEntry {
+  Id: string;
+  OverlayRef: OverlayRef;
   FocusTrap: ConfigurableFocusTrap | null;
   PreviousFocus: HTMLElement | null;
+  Subscriptions: Subscription;
+  Request: MJLayerOpenRequest;
 }
 
 /**
- * Single overlay stack manager for Wave 0 layers (dialog, sheet, popover, menu, tooltip, toast).
- * Coordinates LIFO Escape handling, CDK focus trapping/restore, and ref-counted body scroll lock.
+ * Single CDK-backed overlay stack manager for Wave 0 layers.
+ * Uses @angular/cdk/overlay for portal rendering outside transformed ancestors,
+ * open-order stacking, scroll blocking, backdrop clicks, Escape handling, and focus trap/restore.
  */
 @Injectable({ providedIn: 'root' })
 export class MJLayerService {
   private readonly doc = inject(DOCUMENT);
+  private readonly overlay = inject(Overlay);
   private readonly focusTrapFactory = inject(ConfigurableFocusTrapFactory);
 
-  private readonly stack: ActiveLayerEntry[] = [];
-  private scrollLockCount = 0;
-  private priorBodyOverflow = '';
-  private keyListenerAttached = false;
+  private readonly stack: ActiveOverlayEntry[] = [];
 
-  private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Escape' || this.stack.length === 0) {
-      return;
-    }
-    const top = this.stack[this.stack.length - 1];
-    if (top.Registration.Closeable) {
-      event.stopPropagation();
-      top.Registration.OnRequestClose('escape');
-    }
-  };
-
-  /** Registers an open layer on top of the stack and activates trap/scroll-lock when modal. */
-  public Register(registration: MJLayerRegistration): void {
-    this.Unregister(registration.Id);
+  /** Opens a layer via CDK Overlay and registers it on top of the LIFO stack. */
+  public Open(request: MJLayerOpenRequest): OverlayRef {
+    this.Close(request.Id);
 
     const previousFocus =
       this.doc.activeElement instanceof HTMLElement ? this.doc.activeElement : null;
 
+    const config = this.buildOverlayConfig(request);
+    const overlayRef = this.overlay.create(config);
+    const portal = new TemplatePortal(request.Template, request.ViewContainerRef);
+    overlayRef.attach(portal);
+
     let focusTrap: ConfigurableFocusTrap | null = null;
-    if (registration.Modal) {
-      focusTrap = this.focusTrapFactory.create(registration.Container);
-      this.acquireScrollLock();
-      this.focusInitial(registration.Container);
+    if (request.Modal) {
+      focusTrap = this.focusTrapFactory.create(overlayRef.overlayElement);
+      this.focusInitial(overlayRef.overlayElement);
     }
 
+    const subs = new Subscription();
+
+    subs.add(
+      overlayRef.backdropClick().subscribe(() => {
+        if (request.Closeable && this.IsTopmost(request.Id)) {
+          request.OnRequestClose('backdrop');
+        }
+      })
+    );
+
+    subs.add(
+      overlayRef.keydownEvents().subscribe((event) => {
+        if (event.key === 'Escape' && request.Closeable && this.IsTopmost(request.Id)) {
+          event.stopPropagation();
+          request.OnRequestClose('escape');
+        }
+      })
+    );
+
     this.stack.push({
-      Registration: registration,
+      Id: request.Id,
+      OverlayRef: overlayRef,
       FocusTrap: focusTrap,
       PreviousFocus: previousFocus,
+      Subscriptions: subs,
+      Request: request,
     });
 
-    this.syncKeyListener();
+    return overlayRef;
   }
 
-  /** Unregisters a layer, tears down its focus trap, releases scroll lock, and restores focus. */
-  public Unregister(id: string): void {
-    const index = this.stack.findIndex((entry) => entry.Registration.Id === id);
+  /** Closes and disposes the CDK Overlay for a layer id and restores focus. */
+  public Close(id: string): void {
+    const index = this.stack.findIndex((entry) => entry.Id === id);
     if (index === -1) {
       return;
     }
 
     const [removed] = this.stack.splice(index, 1);
+    removed.Subscriptions.unsubscribe();
     if (removed.FocusTrap) {
       removed.FocusTrap.destroy();
-      this.releaseScrollLock();
     }
-
-    this.syncKeyListener();
+    removed.OverlayRef.dispose();
 
     if (removed.PreviousFocus && removed.PreviousFocus.isConnected) {
       removed.PreviousFocus.focus();
@@ -88,12 +111,44 @@ export class MJLayerService {
     if (this.stack.length === 0) {
       return false;
     }
-    return this.stack[this.stack.length - 1].Registration.Id === id;
+    return this.stack[this.stack.length - 1].Id === id;
   }
 
   /** Current number of active registered layers (useful for tests). */
   public get ActiveCount(): number {
     return this.stack.length;
+  }
+
+  private buildOverlayConfig(request: MJLayerOpenRequest): OverlayConfig {
+    let positionStrategy = this.overlay.position().global().centerHorizontally().centerVertically();
+
+    if (request.Kind === 'sheet') {
+      if (request.Placement === 'bottom') {
+        positionStrategy = this.overlay.position().global().centerHorizontally().bottom('0');
+      } else if (request.Placement === 'start') {
+        positionStrategy = this.overlay.position().global().left('0').top('0');
+      } else {
+        positionStrategy = this.overlay.position().global().right('0').top('0');
+      }
+    } else if (request.Kind === 'popover') {
+      positionStrategy = this.overlay.position().global().left('24px').top('72px');
+    }
+
+    const panelClasses: string[] = [];
+    if (request.Kind === 'dialog' && request.AllowPhoneSheet) {
+      panelClasses.push('mj-layer-pane-phone-sheet');
+    }
+
+    return new OverlayConfig({
+      hasBackdrop: request.Modal,
+      backdropClass: 'mj-layer-backdrop',
+      panelClass: panelClasses,
+      positionStrategy,
+      scrollStrategy: request.Modal
+        ? this.overlay.scrollStrategies.block()
+        : this.overlay.scrollStrategies.noop(),
+      disposeOnNavigation: true,
+    });
   }
 
   private focusInitial(container: HTMLElement): void {
@@ -113,35 +168,8 @@ export class MJLayerService {
         firstTabbable.focus();
         return;
       }
-      container.focus();
+      const panel = container.querySelector<HTMLElement>('.mj-layer-panel');
+      panel?.focus();
     });
-  }
-
-  private acquireScrollLock(): void {
-    if (this.scrollLockCount === 0) {
-      this.priorBodyOverflow = this.doc.body.style.overflow;
-      this.doc.body.style.overflow = 'hidden';
-    }
-    this.scrollLockCount++;
-  }
-
-  private releaseScrollLock(): void {
-    if (this.scrollLockCount <= 0) {
-      return;
-    }
-    this.scrollLockCount--;
-    if (this.scrollLockCount === 0) {
-      this.doc.body.style.overflow = this.priorBodyOverflow;
-    }
-  }
-
-  private syncKeyListener(): void {
-    if (this.stack.length > 0 && !this.keyListenerAttached) {
-      this.doc.addEventListener('keydown', this.onKeyDown, true);
-      this.keyListenerAttached = true;
-    } else if (this.stack.length === 0 && this.keyListenerAttached) {
-      this.doc.removeEventListener('keydown', this.onKeyDown, true);
-      this.keyListenerAttached = false;
-    }
   }
 }

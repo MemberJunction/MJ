@@ -13,20 +13,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  const themeBtn = document.getElementById('toggle-theme');
-  themeBtn?.addEventListener('click', () => {
+  document.getElementById('toggle-theme')?.addEventListener('click', () => {
     const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     root.setAttribute('data-theme', next);
   });
 
   const wireLayer = (openBtnId, layerEl, closeBtnId) => {
-    const openBtn = document.getElementById(openBtnId);
-    const closeBtn = document.getElementById(closeBtnId);
-    openBtn?.addEventListener('click', () => {
-      if (layerEl) layerEl.setAttribute('open', 'true');
+    document.getElementById(openBtnId)?.addEventListener('click', () => {
+      layerEl?.setAttribute('open', 'true');
     });
-    closeBtn?.addEventListener('click', () => {
-      if (layerEl) layerEl.setAttribute('open', 'false');
+    document.getElementById(closeBtnId)?.addEventListener('click', () => {
+      layerEl?.setAttribute('open', 'false');
     });
     layerEl?.addEventListener('mj-after-close', () => {
       layerEl.setAttribute('open', 'false');

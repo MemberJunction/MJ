@@ -1,9 +1,26 @@
-/* Hostile host CSS + 3-look theme switcher + unlayered host override test (zero !important) */
+/* Hostile host CSS + 3 radically different looks + runtime open-axis tokens */
 
-/* Hostile global rules that would break unlayered / poorly isolated components */
+/* Hostile reset in @layer reset + unlayered hostile rules */
+@layer reset {
+  * {
+    box-sizing: content-box;
+  }
+}
+
+div {
+  border-radius: 0;
+}
+
+h1,
+h2 {
+  margin: 20px 0;
+  font-family: 'Comic Sans MS', cursive;
+}
+
 body {
   margin: 0;
   padding: 24px;
+  min-height: 120vh;
   font-family: system-ui, sans-serif;
   background: var(--mj-bg-canvas, #f1f5f9);
   color: var(--mj-text-primary, #1e293b);
@@ -28,13 +45,18 @@ body {
   font: inherit;
 }
 
+.host-btn:focus-visible {
+  outline: 2px solid var(--mj-brand-primary, #0076b6);
+  outline-offset: 2px;
+}
+
 .host-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 16px;
 }
 
-/* Unlayered host override: must beat @layer primitives without !important */
+/* Unlayered host override: beats @layer primitives without !important */
 .host-override-surface {
   border-style: dashed;
   border-width: 2px;
@@ -45,12 +67,18 @@ body {
   --mj-brand-primary: #0076b6;
 }
 
-/* Look 2: LXP (warm violet/teal pill look) */
+/* Look 2: LXP (airy, pill-shaped, violet, distinct type + spacing + elevation) */
 [data-look='lxp'] {
+  --mj-font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  --mj-font-family-display: 'Trebuchet MS', 'Segoe UI', sans-serif;
   --mj-brand-primary: #7c3aed;
   --mj-radius-control: var(--mj-radius-pill);
-  --mj-radius-surface: var(--mj-radius-xl);
-  --mj-radius-overlay: var(--mj-radius-xl);
+  --mj-radius-surface: 20px;
+  --mj-radius-overlay: 24px;
+  --mj-surface-padding: var(--mj-space-6);
+  --mj-surface-gap: var(--mj-space-4);
+  --mj-row-min-height: var(--mj-control-height-lg);
+  --mj-row-padding-inline: var(--mj-space-4);
   --mj-surface-base-bg: #faf5ff;
   --mj-surface-elevated-bg: #ffffff;
   --mj-surface-base-border: #e9d5ff;
@@ -63,7 +91,7 @@ body {
   --mj-surface-base-border: #4c1d95;
 }
 
-/* Look 3: Dense, flat, square-cornered serif look (shares nothing with MJ or LXP) */
+/* Look 3: Editorial (dense, flat, square corners, Georgia serif, sharp borders) */
 [data-look='editorial'] {
   --mj-font-family: Georgia, 'Times New Roman', serif;
   --mj-font-family-display: Georgia, 'Times New Roman', serif;
@@ -77,6 +105,7 @@ body {
   --mj-surface-elevated-shadow: none;
   --mj-surface-overlay-shadow: none;
   --mj-surface-padding: var(--mj-space-2);
+  --mj-surface-gap: var(--mj-space-2);
   --mj-row-min-height: var(--mj-control-height-sm);
   --mj-brand-primary: #111827;
   --mj-surface-base-border: #111827;
@@ -89,13 +118,14 @@ body {
   --mj-surface-elevated-border: #94a3b8;
 }
 
-/* Open-axis custom tone not shipped in the library */
-.mj-row[data-tone='plum'] {
-  --mj-row-text: #701a75;
-  --mj-row-bg-selected: #fae8ff;
+/* Open-axis custom tone and role tokens defined purely as CSS custom properties (no .mj-row selectors) */
+:root {
+  --mj-tone-plum-text: #701a75;
+  --mj-tone-plum-bg-selected: #fae8ff;
+  --mj-role-nav-item-padding-inline: var(--mj-space-4);
 }
 
-[data-theme='dark'] .mj-row[data-tone='plum'] {
-  --mj-row-text: #f0abfc;
-  --mj-row-bg-selected: #4a044e;
+[data-theme='dark'] {
+  --mj-tone-plum-text: #f0abfc;
+  --mj-tone-plum-bg-selected: #4a044e;
 }

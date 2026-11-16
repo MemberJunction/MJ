@@ -1,19 +1,15 @@
 import { build } from 'esbuild';
 import { transformAsync } from '@babel/core';
 import linkerPlugin from '@angular/compiler-cli/linker/babel';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, '..');
-const cssPath = resolve(packageRoot, 'src/lib/styles/primitives-prototype.css');
-const generatedCssTsPath = resolve(packageRoot, 'src/lib/styles/prototype-css.generated.ts');
 const distEntry = resolve(packageRoot, 'dist/element-entry.js');
 const outDir = resolve(packageRoot, 'dist/element');
 
-// 1. Ensure prototype-css.generated.ts is in sync if running standalone after ngc,
-//    or fail loudly if dist/element-entry.js is missing.
 if (!existsSync(distEntry)) {
   console.error(
     `[build-element] Missing ${distEntry}. Run \`pnpm run build\` (ngc && node scripts/build-element.mjs).`
@@ -42,7 +38,6 @@ const angularLinker = {
   },
 };
 
-rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
 await build({
@@ -61,6 +56,4 @@ await build({
   plugins: [angularLinker],
 });
 
-// Also copy raw CSS into dist/element/ for CSP hosts that prefer <link rel="stylesheet">.
-writeFileSync(resolve(outDir, 'mj-wave0-prototype.css'), readFileSync(cssPath, 'utf8'), 'utf8');
-console.log('[build-element] Built dist/element/mj-wave0-prototype.js and mj-wave0-prototype.css');
+console.log('[build-element] Built dist/element/mj-wave0-prototype.js');

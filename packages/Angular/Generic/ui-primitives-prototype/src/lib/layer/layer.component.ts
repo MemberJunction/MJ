@@ -3,6 +3,8 @@ import {
   Directive,
   ElementRef,
   OnDestroy,
+  TemplateRef,
+  ViewContainerRef,
   ViewEncapsulation,
   booleanAttribute,
   computed,
@@ -10,6 +12,8 @@ import {
   inject,
   input,
   output,
+  signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { MJLayerService } from '../services/layer.service';
@@ -47,67 +51,59 @@ export class MJLayerBodyDirective {}
 export class MJLayerFooterDirective {}
 
 /**
- * Wave 0 overlay primitive for dialog, sheet, popover, menu, tooltip, and toast.
- * Delegates LIFO Escape, focus trap/restore, and ref-counted scroll lock to MJLayerService.
+ * Wave 0 overlay primitive rendered via CDK Overlay (MJLayerService).
+ * Uses two-way `open` model so Escape/backdrop dismissal cannot leave a zombie DOM panel.
  */
 @Component({
   selector: 'mj-layer',
   standalone: true,
   encapsulation: ViewEncapsulation.None,
   template: `
-    @if (Open()) {
-      @if (Modal()) {
-        <div
-          class="mj-layer-backdrop"
-          (click)="OnBackdropClick()"
-        ></div>
-      }
+    <ng-template #layerTemplate>
       <div
-        class="mj-layer-host"
-        [attr.data-kind]="Kind()"
-        [attr.data-placement]="Placement()"
-        [attr.data-allow-phone-sheet]="AllowPhoneSheet()"
+        class="mj-layer-panel mj-surface-overlay"
+        tabindex="-1"
+        [attr.role]="ariaRole()"
+        [attr.aria-modal]="modal() ? 'true' : null"
+        [attr.aria-label]="label() || null"
+        [attr.data-kind]="kind()"
+        [attr.data-placement]="placement()"
+        [attr.data-size]="size()"
+        [attr.data-allow-phone-sheet]="allowPhoneSheet()"
       >
-        <div
-          #layerPanel
-          class="mj-layer mj-surface-overlay"
-          tabindex="-1"
-          [attr.role]="ariaRole()"
-          [attr.aria-modal]="Modal() ? 'true' : null"
-          [attr.aria-label]="Label() || null"
-          [attr.data-kind]="Kind()"
-          [attr.data-size]="Size()"
-        >
-          <ng-content />
-        </div>
+        <ng-content />
       </div>
-    }
+    </ng-template>
   `,
 })
 export class MJLayerComponent implements OnDestroy {
   private readonly hostEl = inject(ElementRef<HTMLElement>);
+  private readonly viewContainerRef = inject(ViewContainerRef);
   private readonly layerService = inject(MJLayerService);
   private readonly announcer = inject(MJAnnouncerService);
   private readonly layerId = `mj-layer-${++nextLayerId}`;
 
-  private readonly layerPanel = viewChild<ElementRef<HTMLElement>>('layerPanel');
+  private readonly layerTemplate = viewChild<TemplateRef<unknown>>('layerTemplate');
 
-  public readonly Kind = input<string>('dialog');
-  public readonly Placement = input<string>('center');
-  public readonly Modal = input(true, { transform: booleanAttribute });
-  public readonly Closeable = input(true, { transform: booleanAttribute });
-  public readonly Size = input<string>('md');
-  public readonly Open = input(false, { transform: booleanAttribute });
-  public readonly AllowPhoneSheet = input(true, { transform: booleanAttribute });
-  public readonly Label = input<string>('');
-  public readonly AnnounceOnOpen = input<string>('');
+  public readonly kind = input<string>('dialog');
+  public readonly placement = input<string>('center');
+  public readonly modal = input(true, { transform: booleanAttribute });
+  public readonly closeable = input(true, { transform: booleanAttribute });
+  public readonly size = input<string>('md');
+  public readonly open = input(false, { transform: booleanAttribute });
+  public readonly allowPhoneSheet = input(true, { transform: booleanAttribute });
+  public readonly label = input<string>('');
+  public readonly announceOnOpen = input<string>('');
 
-  public readonly BeforeClose = output<MJBeforeEvent<'escape' | 'backdrop' | 'programmatic'>>();
-  public readonly AfterOpen = output<MJAfterEvent<'open'>>();
-  public readonly AfterClose = output<MJAfterEvent<'escape' | 'backdrop' | 'programmatic'>>();
+  public readonly beforeClose = output<MJBeforeEvent<'escape' | 'backdrop' | 'programmatic'>>();
+  public readonly afterOpen = output<MJAfterEvent<'open'>>();
+  public readonly afterClose = output<MJAfterEvent<'escape' | 'backdrop' | 'programmatic'>>();
+
+  private readonly isOpenState = signal(false);
+  private isCurrentlyOpen = false;
 
   protected readonly ariaRole = computed(() => {
-    const kind = this.Kind();
+    const kind = this.kind();
     if (kind === 'toast') {
       return 'status';
     }
@@ -119,54 +115,65 @@ export class MJLayerComponent implements OnDestroy {
 
   constructor() {
     effect(() => {
-      const isOpen = this.Open();
-      const panel = this.layerPanel()?.nativeElement;
-      if (isOpen && panel) {
-        this.layerService.Register({
-          Id: this.layerId,
-          Container: panel,
-          Modal: this.Modal(),
-          Closeable: this.Closeable(),
-          OnRequestClose: (reason) => this.RequestClose(reason),
+      this.isOpenState.set(this.open());
+    });
+
+    effect(() => {
+      const shouldBeOpen = this.isOpenState();
+      const template = this.layerTemplate();
+
+      if (shouldBeOpen && template && !this.isCurrentlyOpen) {
+        this.isCurrentlyOpen = true;
+        untracked(() => {
+          this.layerService.Open({
+            Id: this.layerId,
+            Template: template,
+            ViewContainerRef: this.viewContainerRef,
+            Kind: this.kind(),
+            Placement: this.placement(),
+            Modal: this.modal(),
+            Closeable: this.closeable(),
+            AllowPhoneSheet: this.allowPhoneSheet(),
+            OnRequestClose: (reason) => this.RequestClose(reason),
+          });
+          const announcement = this.announceOnOpen();
+          if (announcement) {
+            void this.announcer.Announce(announcement, 'polite');
+          }
+          const after: MJAfterEvent<'open'> = { Reason: 'open' };
+          this.afterOpen.emit(after);
+          dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-open', after);
         });
-        const announcement = this.AnnounceOnOpen();
-        if (announcement) {
-          void this.announcer.Announce(announcement, 'polite');
-        }
-        const after: MJAfterEvent<'open'> = { Reason: 'open' };
-        this.AfterOpen.emit(after);
-        dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-open', after);
-      } else {
-        this.layerService.Unregister(this.layerId);
+      } else if (!shouldBeOpen && this.isCurrentlyOpen) {
+        this.isCurrentlyOpen = false;
+        this.layerService.Close(this.layerId);
       }
     });
   }
 
-  /** Requests closing the layer, honoring cancelable BeforeClose guards. */
+  /** Requests closing the layer, honoring cancelable beforeClose guards. */
   public RequestClose(reason: 'escape' | 'backdrop' | 'programmatic' = 'programmatic'): void {
     const before: MJBeforeEvent<'escape' | 'backdrop' | 'programmatic'> = {
       Cancel: false,
       Reason: reason,
     };
-    this.BeforeClose.emit(before);
+    this.beforeClose.emit(before);
     dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-before-close', before);
     if (before.Cancel) {
       return;
     }
 
-    this.layerService.Unregister(this.layerId);
+    this.isCurrentlyOpen = false;
+    this.isOpenState.set(false);
+    this.layerService.Close(this.layerId);
+
     const after: MJAfterEvent<'escape' | 'backdrop' | 'programmatic'> = { Reason: reason };
-    this.AfterClose.emit(after);
+    this.afterClose.emit(after);
     dispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-close', after);
   }
 
-  protected OnBackdropClick(): void {
-    if (this.Closeable() && this.layerService.IsTopmost(this.layerId)) {
-      this.RequestClose('backdrop');
-    }
-  }
-
   ngOnDestroy(): void {
-    this.layerService.Unregister(this.layerId);
+    this.isCurrentlyOpen = false;
+    this.layerService.Close(this.layerId);
   }
 }

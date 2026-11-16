@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"
+      content="default-src 'self'; script-src 'self'; style-src 'self';"
     />
     <title>Project Lego Wave 0 Prototype Gate</title>
+    <link rel="stylesheet" href="../dist/element/mj-wave0-prototype.css" />
     <link rel="stylesheet" href="./gate.css" />
     <script defer src="../dist/element/mj-wave0-prototype.js"></script>
     <script defer src="./gate.js"></script>
@@ -33,13 +34,15 @@
           <div class="mj-surface-body">
             <mj-row interactive="true" selected="true">
               <span class="mj-row-leading" aria-hidden="true">★</span>
-              <span class="mj-row-content">Selected Row (default tone)</span>
+              <span class="mj-row-content">Selected Row (follows brand primary)</span>
               <span class="mj-row-trailing">12</span>
             </mj-row>
-            <mj-row interactive="true" tone="plum" mj-role="nav-item">
+            <mj-row interactive="true" tone="plum" visual-role="nav-item">
               <span class="mj-row-leading" aria-hidden="true">◆</span>
-              <span class="mj-row-content">Custom Open-Axis Tone (plum)</span>
-              <span class="mj-row-trailing">New</span>
+              <span class="mj-row-content">Open-Axis Tone (plum) + Role (nav-item)</span>
+              <span class="mj-row-trailing">
+                <button type="button" class="host-btn">Action</button>
+              </span>
             </mj-row>
           </div>
           <div class="mj-surface-footer">
@@ -48,8 +51,11 @@
         </mj-surface>
 
         <mj-surface level="elevated" elevation="md" class="host-override-surface">
+          <div class="mj-surface-footer">
+            <span>Reordered footer first</span>
+          </div>
           <div class="mj-surface-body">
-            <span>Reordered / headerless elevated surface with unlayered host dashed border</span>
+            <span>Headerless elevated surface with unlayered host dashed border</span>
             <mj-row density="sm" interactive="true">
               <span class="mj-row-content">Compact sm row (44px on coarse pointer)</span>
             </mj-row>
@@ -59,7 +65,7 @@
 
       <mj-layer id="proto-dialog" kind="dialog" modal="true" closeable="true" label="Prototype Dialog">
         <div class="mj-layer-header">
-          <h2 class="mj-layer-title">Dialog on MJLayerService</h2>
+          <h2 class="mj-layer-title">Dialog on CDK Overlay</h2>
         </div>
         <div class="mj-layer-body">
           <p>Focus is trapped here, Escape closes it, and it collapses to a bottom sheet on phones.</p>
@@ -71,10 +77,10 @@
 
       <mj-layer id="proto-sheet" kind="sheet" placement="end" modal="true" closeable="true" label="Prototype Sheet">
         <div class="mj-layer-header">
-          <h2 class="mj-layer-title">Slide Sheet on MJLayerService</h2>
+          <h2 class="mj-layer-title">Slide Sheet on CDK Overlay</h2>
         </div>
         <div class="mj-layer-body">
-          <p>Shares the same layer base, Escape handling, and ref-counted scroll lock.</p>
+          <p>Shares the same CDK Overlay base, Escape handling, and scroll block.</p>
         </div>
         <div class="mj-layer-footer">
           <button type="button" class="host-btn" id="close-sheet" data-autofocus>Done</button>
@@ -83,7 +89,7 @@
 
       <mj-layer id="proto-popover" kind="popover" modal="false" closeable="true" label="Prototype Popover">
         <div class="mj-layer-body">
-          <p>Non-modal popover on MJLayerService.</p>
+          <p>Non-modal popover on CDK Overlay.</p>
           <button type="button" class="host-btn" id="close-popover">Dismiss</button>
         </div>
       </mj-layer>

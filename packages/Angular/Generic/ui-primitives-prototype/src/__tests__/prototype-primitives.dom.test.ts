@@ -41,18 +41,18 @@ import { MJBeforeEvent } from '../lib/types/events';
     MJLayerFooterDirective,
   ],
   template: `
-    <mj-surface [Level]="level()" [Tone]="tone()" [VisualRole]="role()">
+    <mj-surface [level]="level()" [tone]="tone()" [visualRole]="role()">
       <div mjSurfaceHeader>Header</div>
       <div mjSurfaceBody>Body</div>
       <div mjSurfaceFooter>Footer</div>
     </mj-surface>
 
     <mj-row
-      [Interactive]="true"
-      [Selected]="rowSelected()"
-      [Tone]="tone()"
-      (BeforeSelect)="onBeforeSelect($event)"
-      (AfterSelect)="afterSelectCount = afterSelectCount + 1"
+      [interactive]="true"
+      [selected]="rowSelected()"
+      [tone]="tone()"
+      (beforeSelect)="onBeforeSelect($event)"
+      (afterSelect)="afterSelectCount = afterSelectCount + 1"
     >
       <span mjRowLeading>L</span>
       <span mjRowContent>Main content</span>
@@ -60,12 +60,12 @@ import { MJBeforeEvent } from '../lib/types/events';
     </mj-row>
 
     <mj-layer
-      [Open]="layerOpen()"
-      [Kind]="'dialog'"
-      [Modal]="true"
-      [Closeable]="true"
-      (BeforeClose)="onBeforeClose($event)"
-      (AfterClose)="onAfterClose()"
+      [open]="layerOpen()"
+      [kind]="'dialog'"
+      [modal]="true"
+      [closeable]="true"
+      (beforeClose)="onBeforeClose($event)"
+      (afterClose)="layerOpen.set(false); afterCloseCount = afterCloseCount + 1"
     >
       <div mjLayerHeader>
         <h2 mjLayerTitle>Dialog Title</h2>
@@ -81,7 +81,7 @@ import { MJBeforeEvent } from '../lib/types/events';
 })
 class TestHostComponent {
   level = signal('elevated');
-  tone = signal('brand-custom');
+  tone = signal('plum');
   role = signal('callout');
   rowSelected = signal(false);
   layerOpen = signal(false);
@@ -99,13 +99,7 @@ class TestHostComponent {
   onBeforeClose(ev: MJBeforeEvent<'escape' | 'backdrop' | 'programmatic'>): void {
     if (this.cancelNextClose) {
       ev.Cancel = true;
-      return;
     }
-  }
-
-  onAfterClose(): void {
-    this.afterCloseCount++;
-    this.layerOpen.set(false);
   }
 }
 
@@ -116,27 +110,30 @@ describe('Wave 0 prototype primitives', () => {
     }).compileComponents();
   });
 
-  it('applies .mj-surface-<level> and open-axis attributes on mj-surface', () => {
+  it('applies .mj-surface-<level> and runtime open-axis CSS variables on mj-surface', () => {
     const fixture = TestBed.createComponent(TestHostComponent);
     fixture.detectChanges();
 
     const surface = fixture.nativeElement.querySelector('mj-surface') as HTMLElement;
     expect(surface.classList.contains('mj-surface')).toBe(true);
     expect(surface.classList.contains('mj-surface-elevated')).toBe(true);
-    expect(surface.getAttribute('data-tone')).toBe('brand-custom');
+    expect(surface.getAttribute('data-tone')).toBe('plum');
     expect(surface.getAttribute('data-role')).toBe('callout');
+    expect(surface.style.getPropertyValue('--_mj-tone-text')).toContain('--mj-tone-plum-text');
+    expect(surface.style.getPropertyValue('--_mj-role-bg')).toContain('--mj-role-callout-bg');
     expect(surface.querySelector('.mj-surface-header')).toBeTruthy();
     expect(surface.querySelector('.mj-surface-body')).toBeTruthy();
     expect(surface.querySelector('.mj-surface-footer')).toBeTruthy();
   });
 
-  it('supports cancelable BeforeSelect and AfterSelect on mj-row', () => {
+  it('supports cancelable beforeSelect and afterSelect on mj-row', () => {
     const fixture = TestBed.createComponent(TestHostComponent);
     fixture.detectChanges();
 
     const row = fixture.nativeElement.querySelector('mj-row') as HTMLElement;
     expect(row.classList.contains('mj-row')).toBe(true);
     expect(row.getAttribute('tabindex')).toBe('0');
+    expect(row.getAttribute('role')).toBeNull();
 
     row.click();
     expect(fixture.componentInstance.afterSelectCount).toBe(1);
@@ -146,7 +143,7 @@ describe('Wave 0 prototype primitives', () => {
     expect(fixture.componentInstance.afterSelectCount).toBe(1);
   });
 
-  it('locks body scroll when mj-layer opens and releases on Escape via MJLayerService', () => {
+  it('opens mj-layer in CDK OverlayContainer and closes cleanly on Escape via MJLayerService', () => {
     const fixture = TestBed.createComponent(TestHostComponent);
     const layerService = TestBed.inject(MJLayerService);
     fixture.detectChanges();
@@ -157,34 +154,36 @@ describe('Wave 0 prototype primitives', () => {
     fixture.detectChanges();
 
     expect(layerService.ActiveCount).toBe(1);
-    expect(document.body.style.overflow).toBe('hidden');
-    expect(fixture.nativeElement.querySelector('[role="dialog"][aria-modal="true"]')).toBeTruthy();
+    const dialog = document.body.querySelector('.cdk-overlay-container [role="dialog"][aria-modal="true"]');
+    expect(dialog).toBeTruthy();
 
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
 
     expect(fixture.componentInstance.afterCloseCount).toBe(1);
+    expect(fixture.componentInstance.layerOpen()).toBe(false);
     expect(layerService.ActiveCount).toBe(0);
-    expect(document.body.style.overflow).toBe('');
+    expect(document.body.querySelector('.cdk-overlay-container [role="dialog"]')).toBeNull();
   });
 
-  it('honors cancelable BeforeClose on Escape', () => {
+  it('honors cancelable beforeClose on Escape without leaving zombie state', () => {
     const fixture = TestBed.createComponent(TestHostComponent);
     const layerService = TestBed.inject(MJLayerService);
     fixture.componentInstance.layerOpen.set(true);
     fixture.detectChanges();
 
     fixture.componentInstance.cancelNextClose = true;
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
 
     expect(fixture.componentInstance.afterCloseCount).toBe(0);
+    expect(fixture.componentInstance.layerOpen()).toBe(true);
     expect(layerService.ActiveCount).toBe(1);
 
-    // Clean up
     fixture.componentInstance.cancelNextClose = false;
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
     expect(layerService.ActiveCount).toBe(0);
+    expect(fixture.componentInstance.layerOpen()).toBe(false);
   });
 });
