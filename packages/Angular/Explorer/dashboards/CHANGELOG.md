@@ -1,5 +1,73 @@
 # @memberjunction/ng-dashboards
 
+## 6.1.7
+
+### Patch Changes
+
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/ai-engine-base@6.1.7
+  - @memberjunction/ai-core-plus@6.1.7
+  - @memberjunction/tag-engine-base@6.1.7
+  - @memberjunction/api-keys-base@6.1.7
+  - @memberjunction/actions-base@6.1.7
+  - @memberjunction/ng-base-application@6.1.7
+  - @memberjunction/ng-core-entity-forms@6.1.7
+  - @memberjunction/ng-explorer-settings@6.1.7
+  - @memberjunction/ng-shared@6.1.7
+  - @memberjunction/ng-testing@6.1.7
+  - @memberjunction/ng-action-gallery@6.1.7
+  - @memberjunction/ng-actions@6.1.7
+  - @memberjunction/ng-agent-requests@6.1.7
+  - @memberjunction/ng-agents@6.1.7
+  - @memberjunction/ng-ai-test-harness@6.1.7
+  - @memberjunction/ng-archive-manager@6.1.7
+  - @memberjunction/ng-base-forms@6.1.7
+  - @memberjunction/ng-base-types@6.1.7
+  - @memberjunction/ng-clustering@6.1.7
+  - @memberjunction/ng-code-editor@6.1.7
+  - @memberjunction/ng-composer@6.1.7
+  - @memberjunction/ng-container-directives@6.1.7
+  - @memberjunction/ng-conversations@6.1.7
+  - @memberjunction/ng-credentials@6.1.7
+  - @memberjunction/ng-dashboard-viewer@6.1.7
+  - @memberjunction/ng-entity-relationship-diagram@6.1.7
+  - @memberjunction/ng-entity-viewer@6.1.7
+  - @memberjunction/ng-filter-builder@6.1.7
+  - @memberjunction/ng-list-management@6.1.7
+  - @memberjunction/ng-media-player@6.1.7
+  - @memberjunction/ng-map-view@6.1.7
+  - @memberjunction/ng-notifications@6.1.7
+  - @memberjunction/ng-query-viewer@6.1.7
+  - @memberjunction/ng-react@6.1.7
+  - @memberjunction/ng-record-process-studio@6.1.7
+  - @memberjunction/ng-resource-permissions@6.1.7
+  - @memberjunction/ng-scheduling@6.1.7
+  - @memberjunction/ng-search@6.1.7
+  - @memberjunction/ng-shared-generic@6.1.7
+  - @memberjunction/ng-task-graph-editor@6.1.7
+  - @memberjunction/ng-trees@6.1.7
+  - @memberjunction/ng-user-routines@6.1.7
+  - @memberjunction/ng-versions@6.1.7
+  - @memberjunction/credentials@6.1.7
+  - @memberjunction/graphql-dataprovider@6.1.7
+  - @memberjunction/integration-engine-base@6.1.7
+  - @memberjunction/interactive-component-types@6.1.7
+  - @memberjunction/templates-base-types@6.1.7
+  - @memberjunction/testing-engine-base@6.1.7
+  - @memberjunction/ng-tabstrip@6.1.7
+  - @memberjunction/ng-export-service@6.1.7
+  - @memberjunction/ng-markdown@6.1.7
+  - @memberjunction/ng-ui-components@6.1.7
+  - @memberjunction/ng-word-cloud@6.1.7
+  - @memberjunction/predictive-studio-core@6.1.7
+  - @memberjunction/lists-base@6.1.7
+  - @memberjunction/export-engine@6.1.7
+  - @memberjunction/global@6.1.7
+  - @memberjunction/theme-engine@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

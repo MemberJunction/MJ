@@ -1,5 +1,19 @@
 # @memberjunction/integration-engine
 
+## 6.1.7
+
+### Patch Changes
+
+- 4a790a4: Fix "Maximum call stack size exceeded" in the full-sync orphan sweep and full push on large record maps. The record-map loader set `IgnoreMaxRows`, which also drops `MaxRows`, so its first "page" was the whole map (~126k rows on one HubSpot portal) and `rows.push(...page)` overflowed the stack. It now pages at `MaxRows` and appends without spreading.
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/integration-engine-base@6.1.7
+  - @memberjunction/integration-pk-classifier@6.1.7
+  - @memberjunction/integration-progress-artifacts@6.1.7
+  - @memberjunction/global@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/core
 
+## 6.1.7
+
+### Patch Changes
+
+- 1e9bd0f: Eliminate N+1 `RunView` / `RunViews` round-trips during IS-A parent/child entity hydration:
+  - **In-memory engine & batch cache resolution** (`BaseEntity.LoadFromDataBatchAsISAParent`, `BaseEngine.IsPropertyLoaded`, `BaseEngineRegistry.FindCachedEntity`, `TransformSimpleObjectToEntityObject`): Before issuing any database or network queries for upward IS-A parent hydration or downward IS-A child discovery, resolve records from the caller-supplied `batchUnfilteredCache` map or from unfiltered in-memory `BaseEngine` caches registered in `BaseEngineRegistry` (including `_dataMap` properties already populated mid-`Config()` while `Loaded === false`, and skipped on `Database` providers when a user has an active `UserViewRunView` RLS policy on the entity). Inherited parent fields on raw child rows are omitted when linking onto a freshly read parent so the parent's own fetched columns remain authoritative.
+  - **Single-pass `RunViews` fallback** (`BaseEntity.discoverAndLoadDisjointChildrenViaRunViews`, `BaseEntity.hydrateDisjointChildrenForGroup`, `BaseEntity.hydrateOverlappingChildrenForGroup`): When a target IS-A child entity is not cached in memory and the provider lacks `FindISAChildEntitiesBatch` (e.g. `GraphQLDataProvider`), collapse `2N` per-entity discovery + load calls into a single batched `RunViews` call per hierarchy level using `WHERE [PK] IN (...)` filters (`BypassCache: true`), and recurse level-by-level for multi-level IS-A subtype chains.
+  - **Two-phase `RunViews` batch transformation** (`ProviderBase.TransformBatchRunViewResults`): Transform `RunViews` batches in two phases — collecting an invocation-scoped `batchUnfilteredCache` of unfiltered, unpaged, uncapped (`IgnoreMaxRows: true` or below `UserViewMaxRows`), full-field sibling views first, then passing that cache explicitly into `TransformSimpleObjectToEntityObject` so `BaseEngine.Load()` calls that fetch an IS-A parent and its subtypes in the same `RunViews` batch hydrate entirely in memory with `0` extra queries.
+
+- 12663f0: Fix bugs in batched IS-A hydration: `FindCachedEntity` no longer serves a permission-denied or failed engine property as a cache; batched child reads set `IgnoreMaxRows`; batch-linked children hydrate inherited mirror fields from the parent so edits record the real old value, and keep their own `__mj_` timestamps and ancestors' virtual columns; a known-subtype parent missing from a child engine cache is read from the DB, without re-reading a child whose answer cannot change; subtype-hint misses log like the per-row path, and a failed read is not reported as a miss.
+  - @memberjunction/global@6.1.7
+  - @memberjunction/sql-dialect@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

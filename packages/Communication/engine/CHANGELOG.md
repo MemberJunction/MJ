@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/communication-engine
 
+## 6.1.7
+
+### Patch Changes
+
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/communication-types@6.1.7
+  - @memberjunction/lists@6.1.7
+  - @memberjunction/templates@6.1.7
+  - @memberjunction/lists-base@6.1.7
+  - @memberjunction/global@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

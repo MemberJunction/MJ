@@ -76,3 +76,51 @@ describe('ComponentCacheManager — other resources are unchanged', () => {
     expect(m.getCachedComponent(DRIVER, '', APP, 'MJ: Companies')).not.toBeNull();
   });
 });
+
+describe('ComponentCacheManager — entity record tabs (IS-A hierarchies)', () => {
+  const RECORD_DRIVER = 'RecordResource';
+  const SHARED_PK = 'ID|65960000-1111-4420-8420-000000006596';
+
+  function cacheAndDetachRecord(m: ComponentCacheManager, recordId: string, entity: string): void {
+    const resourceData = {
+      ResourceType: 'Records',
+      ResourceRecordID: recordId,
+      Configuration: { applicationId: APP, resourceTypeDriverClass: RECORD_DRIVER, Entity: entity },
+    } as unknown as CacheArgs[2];
+    const componentRef = { instance: {}, destroy: vi.fn() } as unknown as CacheArgs[0];
+    m.cacheComponent(componentRef, {} as HTMLElement, resourceData, 'tab-record');
+    m.markAsDetached(RECORD_DRIVER, recordId, APP, entity);
+  }
+
+  it('keeps record tabs of different entities apart even when they share the exact same PK (IS-A hierarchy)', () => {
+    const m = manager();
+    cacheAndDetachRecord(m, SHARED_PK, 'MJ_BizApps_Tasks: Tasks');
+    // Looking up the child entity with the same PK must NOT return the parent entity's component
+    expect(m.getCachedComponent(RECORD_DRIVER, SHARED_PK, APP, 'MJ_BizApps_Tasks_GitHub: Git Hub Pull Request Tasks')).toBeNull();
+  });
+
+  it('still reuses a record tab of the same entity and same PK', () => {
+    const m = manager();
+    cacheAndDetachRecord(m, SHARED_PK, 'MJ_BizApps_Tasks: Tasks');
+    expect(m.getCachedComponent(RECORD_DRIVER, SHARED_PK, APP, 'MJ_BizApps_Tasks: Tasks')).not.toBeNull();
+  });
+
+  it('preserves entity discriminator when rekeying a newly saved record', () => {
+    const m = manager();
+    const entity = 'MJ_BizApps_Tasks: Tasks';
+    const resourceData = {
+      ResourceType: 'Records',
+      ResourceRecordID: '',
+      Configuration: { applicationId: APP, resourceTypeDriverClass: RECORD_DRIVER, Entity: entity },
+    } as unknown as CacheArgs[2];
+    const componentRef = { instance: {}, destroy: vi.fn() } as unknown as CacheArgs[0];
+    m.cacheComponent(componentRef, {} as HTMLElement, resourceData, 'tab-new');
+    m.rekeyComponent(RECORD_DRIVER, '', SHARED_PK, APP, entity);
+    m.markAsDetached(RECORD_DRIVER, SHARED_PK, APP, entity);
+
+    // Should find the component under the new PK with the same entity
+    expect(m.getCachedComponent(RECORD_DRIVER, SHARED_PK, APP, entity)).not.toBeNull();
+    // But not under another entity with the same PK
+    expect(m.getCachedComponent(RECORD_DRIVER, SHARED_PK, APP, 'MJ_BizApps_Tasks_GitHub: Git Hub Pull Request Tasks')).toBeNull();
+  });
+});

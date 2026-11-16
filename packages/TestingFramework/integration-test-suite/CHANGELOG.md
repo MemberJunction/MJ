@@ -1,5 +1,61 @@
 # @memberjunction/integration-test-suite
 
+## 6.1.7
+
+### Patch Changes
+
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/server-bootstrap-lite@6.1.7
+  - @memberjunction/ai-agent-harness@6.1.7
+  - @memberjunction/ai-agents@6.1.7
+  - @memberjunction/ai-engine-base@6.1.7
+  - @memberjunction/ai-core-plus@6.1.7
+  - @memberjunction/aiengine@6.1.7
+  - @memberjunction/predictive-studio@6.1.7
+  - @memberjunction/ai-prompts@6.1.7
+  - @memberjunction/ai-bridge-base@6.1.7
+  - @memberjunction/ai-bridge-server@6.1.7
+  - @memberjunction/api-keys@6.1.7
+  - @memberjunction/actions-base@6.1.7
+  - @memberjunction/actions@6.1.7
+  - @memberjunction/auth-providers@6.1.7
+  - @memberjunction/codegen-lib@6.1.7
+  - @memberjunction/communication-types@6.1.7
+  - @memberjunction/communication-engine@6.1.7
+  - @memberjunction/notifications@6.1.7
+  - @memberjunction/communication-ms-graph@6.1.7
+  - @memberjunction/communication-expo-push@6.1.7
+  - @memberjunction/communication-gmail@6.1.7
+  - @memberjunction/communication-sendgrid@6.1.7
+  - @memberjunction/communication-twilio@6.1.7
+  - @memberjunction/content-autotagging@6.1.7
+  - @memberjunction/conversations-runtime@6.1.7
+  - @memberjunction/generic-database-provider@6.1.7
+  - @memberjunction/graphql-dataprovider@6.1.7
+  - @memberjunction/queue@6.1.7
+  - @memberjunction/storage@6.1.7
+  - @memberjunction/metadata-sync@6.1.7
+  - @memberjunction/open-app-engine@6.1.7
+  - @memberjunction/query-processor@6.1.7
+  - @memberjunction/record-set-processor-base@6.1.7
+  - @memberjunction/record-set-processor@6.1.7
+  - @memberjunction/redis-provider@6.1.7
+  - @memberjunction/sqlserver-dataprovider@6.1.7
+  - @memberjunction/scheduling-engine@6.1.7
+  - @memberjunction/search-engine@6.1.7
+  - @memberjunction/task-graph@6.1.7
+  - @memberjunction/templates-base-types@6.1.7
+  - @memberjunction/templates@6.1.7
+  - @memberjunction/testing-engine@6.1.7
+  - @memberjunction/testing-integration@6.1.7
+  - @memberjunction/ai@6.1.7
+  - @memberjunction/predictive-studio-core@6.1.7
+  - @memberjunction/global@6.1.7
+  - @memberjunction/unit-testing@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

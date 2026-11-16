@@ -1,5 +1,52 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.1.7
+
+### Patch Changes
+
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+- Updated dependencies [d3da8ab]
+- Updated dependencies [4a790a4]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/react-linter@6.1.7
+  - @memberjunction/integration-engine@6.1.7
+  - @memberjunction/ai-agent-manager@6.1.7
+  - @memberjunction/ai-agents@6.1.7
+  - @memberjunction/ai-engine-base@6.1.7
+  - @memberjunction/clustering-engine@6.1.7
+  - @memberjunction/ai-core-plus@6.1.7
+  - @memberjunction/aiengine@6.1.7
+  - @memberjunction/ai-mcp-client@6.1.7
+  - @memberjunction/ai-prompts@6.1.7
+  - @memberjunction/ai-vector-sync@6.1.7
+  - @memberjunction/actions-base@6.1.7
+  - @memberjunction/code-execution@6.1.7
+  - @memberjunction/actions@6.1.7
+  - @memberjunction/communication-types@6.1.7
+  - @memberjunction/communication-engine@6.1.7
+  - @memberjunction/content-autotagging@6.1.7
+  - @memberjunction/external-change-detection@6.1.7
+  - @memberjunction/generic-database-provider@6.1.7
+  - @memberjunction/interactive-component-types@6.1.7
+  - @memberjunction/lists@6.1.7
+  - @memberjunction/core-entities-server@6.1.7
+  - @memberjunction/storage@6.1.7
+  - @memberjunction/record-set-processor-base@6.1.7
+  - @memberjunction/record-set-processor@6.1.7
+  - @memberjunction/sqlserver-dataprovider@6.1.7
+  - @memberjunction/search-engine@6.1.7
+  - @memberjunction/esignature@6.1.7
+  - @memberjunction/geo-core@6.1.7
+  - @memberjunction/ai@6.1.7
+  - @memberjunction/ai-betty-bot@6.1.7
+  - @memberjunction/lists-base@6.1.7
+  - @memberjunction/export-engine@6.1.7
+  - @memberjunction/global@6.1.7
+  - @memberjunction/network-utils@6.1.7
+  - @memberjunction/sql-dialect@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

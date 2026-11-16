@@ -500,6 +500,76 @@ describe('GetBusinessCentralGeneralLedgerEntriesAction', () => {
     expect(result.Success).toBe(true);
     expect(result.Message).toBe('Successfully retrieved 0 general ledger entries from Business Central');
   });
+
+  // Business Central API v2.0 generalLedgerEntry has debitAmount / creditAmount but no amount.
+  const bcEntry = (id: string, debitAmount: number, creditAmount: number) => ({
+    id,
+    entryNumber: 1,
+    postingDate: '2026-01-15',
+    documentNumber: 'DOC-1',
+    documentType: 'Payment',
+    accountId: '',
+    accountNumber: '1000',
+    description: '',
+    debitAmount,
+    creditAmount,
+    lastModifiedDateTime: '2026-01-15T00:00:00Z',
+  });
+
+  it('should not select or filter on amount, which Business Central does not have', async () => {
+    const spy = vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({ value: [] } as never);
+
+    await run(action, inputs({ CompanyID: 'comp-1', MinAmount: 10, MaxAmount: 500 }));
+
+    const endpoint = String(spy.mock.calls[0][0]);
+    const select = endpoint.match(/\$select=([^&]*)/)?.[1].split(',') ?? [];
+    expect(select).toContain('debitAmount');
+    expect(select).toContain('creditAmount');
+    expect(select).not.toContain('amount');
+    expect(endpoint).not.toMatch(/\bamount (ge|le)\b/);
+  });
+
+  it('should compute amount as debitAmount - creditAmount', async () => {
+    vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({
+      value: [bcEntry('e1', 250, 0), bcEntry('e2', 0, 75.5)],
+    } as never);
+    const params = inputs({ CompanyID: 'comp-1' });
+
+    const result = await run(action, params);
+
+    expect(result.Success).toBe(true);
+    const entries = params.find((p) => p.Name === 'GLEntries')?.Value as { id: string; amount: number }[];
+    expect(entries.map((e) => [e.id, e.amount])).toEqual([
+      ['e1', 250],
+      ['e2', -75.5],
+    ]);
+    const summary = params.find((p) => p.Name === 'Summary')?.Value as { netAmount: number };
+    expect(summary.netAmount).toBeCloseTo(174.5);
+  });
+
+  it('should apply MinAmount and MaxAmount to the computed amount, inclusive', async () => {
+    vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({
+      value: [bcEntry('debit-600', 600, 0), bcEntry('debit-100', 100, 0), bcEntry('debit-50', 50, 0), bcEntry('credit-100', 0, 100)],
+    } as never);
+    const params = inputs({ CompanyID: 'comp-1', MinAmount: '50', MaxAmount: 100 });
+
+    await run(action, params);
+
+    const entries = params.find((p) => p.Name === 'GLEntries')?.Value as { id: string }[];
+    expect(entries.map((e) => e.id)).toEqual(['debit-100', 'debit-50']);
+    expect(params.find((p) => p.Name === 'TotalCount')?.Value).toBe(2);
+  });
+
+  it('should ignore blank or non-numeric MinAmount / MaxAmount', async () => {
+    vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({
+      value: [bcEntry('e1', 10, 0), bcEntry('e2', 0, 10)],
+    } as never);
+    const params = inputs({ CompanyID: 'comp-1', MinAmount: '', MaxAmount: 'abc' });
+
+    await run(action, params);
+
+    expect(params.find((p) => p.Name === 'TotalCount')?.Value).toBe(2);
+  });
 });
 
 // ─── Business Central: GetBusinessCentralGLAccountsAction ───────────────────

@@ -1,5 +1,7 @@
 # @memberjunction/sql-dialect
 
+## 6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

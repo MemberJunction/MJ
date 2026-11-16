@@ -1,5 +1,32 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 6.1.7
+
+### Patch Changes
+
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/ai-engine-base@6.1.7
+  - @memberjunction/ai-core-plus@6.1.7
+  - @memberjunction/ai-vectors-memory@6.1.7
+  - @memberjunction/actions-base@6.1.7
+  - @memberjunction/ng-auth-services@6.1.7
+  - @memberjunction/ng-core-entity-forms@6.1.7
+  - @memberjunction/ng-explorer-core@6.1.7
+  - @memberjunction/ng-shared@6.1.7
+  - @memberjunction/ng-artifacts@6.1.7
+  - @memberjunction/ng-conversations@6.1.7
+  - @memberjunction/ng-dashboard-viewer@6.1.7
+  - @memberjunction/ng-entity-action-ux@6.1.7
+  - @memberjunction/ng-entity-viewer@6.1.7
+  - @memberjunction/ng-file-storage@6.1.7
+  - @memberjunction/communication-types@6.1.7
+  - @memberjunction/entity-communications-base@6.1.7
+  - @memberjunction/graphql-dataprovider@6.1.7
+  - @memberjunction/ai-realtime-client@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes
