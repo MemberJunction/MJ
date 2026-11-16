@@ -9162,12 +9162,19 @@ export class MarkdownArtifactViewerComponent
         (elm.style?.fontStyle ?? '').toLowerCase() === 'italic';
 
       const splitWhitespace = (raw: string): { lead: string; core: string; trail: string } => {
-        const leadMatch = /^(\s*)/.exec(raw);
-        const lead = leadMatch ? leadMatch[1] : '';
-        const trailMatch = /(\s*)$/.exec(raw.slice(lead.length));
-        const trail = trailMatch ? trailMatch[1] : '';
-        const core = raw.slice(lead.length, raw.length - trail.length);
-        return { lead, core, trail };
+        let leadEnd = 0;
+        while (leadEnd < raw.length && /\s/.test(raw[leadEnd])) {
+          leadEnd++;
+        }
+        let trailStart = raw.length;
+        while (trailStart > leadEnd && /\s/.test(raw[trailStart - 1])) {
+          trailStart--;
+        }
+        return {
+          lead: raw.slice(0, leadEnd),
+          core: raw.slice(leadEnd, trailStart),
+          trail: raw.slice(trailStart),
+        };
       };
 
       if (tag === 'CODE') {
@@ -9965,6 +9972,14 @@ export class MarkdownArtifactViewerComponent
     const idx = this.resolveActiveSegmentIndex();
     this.ActiveSlashTargetSegmentID = null;
 
+    const trimTrailingNewlines = (raw: string): string => {
+      let end = raw.length;
+      while (end > 0 && raw[end - 1] === '\n') {
+        end--;
+      }
+      return raw.slice(0, end);
+    };
+
     if (idx >= 0 && idx < this.DocumentSegments.length) {
       const targetSeg = this.DocumentSegments[idx];
       if (targetSeg && !this.CanEditSegment(targetSeg)) {
@@ -9973,7 +9988,7 @@ export class MarkdownArtifactViewerComponent
         return;
       }
       if (this.ViewMode === 'suggest' && targetSeg) {
-        const trimmedSnippet = snippet.replace(/\n+$/, '');
+        const trimmedSnippet = trimTrailingNewlines(snippet);
         if (trimmedSnippet.trim().length > 0) {
           this.ApplyInPlaceSegmentChange(
             targetSeg,
@@ -9985,7 +10000,7 @@ export class MarkdownArtifactViewerComponent
       }
       const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
       const cleanedTarget = blocks[idx].replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '').trim();
-      const trimmedSnippet = snippet.replace(/\n+$/, '');
+      const trimmedSnippet = trimTrailingNewlines(snippet);
       if (trimmedSnippet.trim().length === 0) {
         const nextIdx = cleanedTarget.length === 0 ? idx : idx + 1;
         if (cleanedTarget.length > 0) {
@@ -10013,7 +10028,7 @@ export class MarkdownArtifactViewerComponent
     }
 
     const cleanedBase = this.MarkdownContent.replace(/(?:^|\n)\/[A-Za-z0-9_-]*$/, '');
-    const trimmedSnippet = snippet.replace(/\n+$/, '');
+    const trimmedSnippet = trimTrailingNewlines(snippet);
     if (trimmedSnippet.trim().length === 0) {
       this.AppendOrFocusTrailingParagraph();
       return;
@@ -16032,9 +16047,13 @@ export class MarkdownArtifactViewerComponent
         };
       }
       if (
-        snapshot.tableRowIndex !== undefined &&
-        snapshot.tableRowIndex !== null &&
-        parsed.Rows[snapshot.tableRowIndex]
+        typeof snapshot.tableRowIndex === 'number' &&
+        Number.isInteger(snapshot.tableRowIndex) &&
+        snapshot.tableRowIndex >= 0 &&
+        snapshot.tableRowIndex < parsed.Rows.length &&
+        Number.isInteger(colIdx) &&
+        colIdx >= 0 &&
+        colIdx < (parsed.Rows[snapshot.tableRowIndex]?.length ?? 0)
       ) {
         const rowIdx = snapshot.tableRowIndex;
         return {
@@ -16042,7 +16061,9 @@ export class MarkdownArtifactViewerComponent
           isCodeBlock: false,
           applySubMarkdown: (nextSubMd) => {
             const nextRows = parsed.Rows.map((r) => [...r]);
-            nextRows[rowIdx][colIdx] = nextSubMd.replace(/\|/g, '/');
+            if (rowIdx >= 0 && rowIdx < nextRows.length && colIdx >= 0 && colIdx < nextRows[rowIdx].length) {
+              nextRows[rowIdx][colIdx] = nextSubMd.replace(/\|/g, '/');
+            }
             return this.serializeParsedTable(parsed.Headers, nextRows, parsed.Alignments);
           },
         };

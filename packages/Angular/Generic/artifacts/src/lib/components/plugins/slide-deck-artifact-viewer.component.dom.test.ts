@@ -879,9 +879,10 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
     const hasBackendSpy = vi.spyOn(DocumentCollaborationService.prototype, 'HasCollaborationBackend').mockReturnValue(true);
     const verifyServerSpy = vi.spyOn(DocumentCollaborationService.prototype, 'VerifyFrozenSnapshotOnServer');
     const resolvePermSpy = vi.spyOn(DocumentCollaborationService.prototype, 'ResolvePermissionsFromServer');
+    const runViewSpy = vi.fn(async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }));
     const fakeProvider = {
       CurrentUser: new UserInfo(undefined, { ID: 'u-guest-1', Name: 'Signed In Visitor' }),
-      RunView: vi.fn(async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' })),
+      RunView: runViewSpy,
     } as Partial<IMetadataProvider> as IMetadataProvider;
 
     const f = renderComponentFixture(SlideDeckArtifactViewerComponent, {
@@ -910,13 +911,13 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
     expect(hasBackendSpy).not.toHaveBeenCalled();
     expect(verifyServerSpy).not.toHaveBeenCalled();
     expect(resolvePermSpy).not.toHaveBeenCalled();
-    expect(fakeProvider.RunView).not.toHaveBeenCalled();
+    expect(runViewSpy).not.toHaveBeenCalled();
   });
 
   it('re-applies pre-init ViewMode/NavigationAnchor on deck init (NW-6) and replaces only OriginalText slice (NW-3)', () => {
     const deck = makeThreeSlideDeck();
     const slide2 = deck.Slides[1];
-    const bodyRegion = slide2.Regions.find((r) => r.Role === 'Body') ?? slide2.Regions[0];
+    const bodyRegion = slide2.Regions.find((r) => r.Label.toLowerCase().includes('body')) ?? slide2.Regions[0];
     bodyRegion.MarkdownContent = 'Keep bullet A\nbullet B\nKeep bullet C';
 
     const f = renderComponentFixture(SlideDeckArtifactViewerComponent, {
@@ -947,6 +948,7 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
         SlideID: '',
         SlideNumber: 2,
         RegionID: bodyRegion.RegionID,
+        Field: 'region-markdown',
         AuthorID: 'agent-1',
         AuthorName: 'DeckAgent',
         OriginalText: 'bullet B',

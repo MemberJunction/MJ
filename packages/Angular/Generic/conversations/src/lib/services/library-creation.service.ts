@@ -984,11 +984,22 @@ export class LibraryCreationService {
       options.TargetFileName?.trim() ||
       (isFileMode && options.VersionFileName ? this.stripExtension(options.VersionFileName) : '') ||
       this.sanitizeFileName(options.ArtifactName);
-    const baseFileName = extension
-      ? rawBaseName.replace(new RegExp(`\\.${extension}$`, 'i'), '')
-      : rawBaseName;
+    const cleanExt = extension ? `.${extension.toLowerCase()}` : '';
+    const baseFileName =
+      cleanExt && rawBaseName.toLowerCase().endsWith(cleanExt)
+        ? rawBaseName.slice(0, rawBaseName.length - cleanExt.length)
+        : rawBaseName;
     const finalFileName = extension ? `${baseFileName}.${extension}` : baseFileName;
-    const cleanPrefix = (options.TargetFolderPrefix ?? '').replace(/^\/+|\/+$/g, '');
+    const rawPrefix = options.TargetFolderPrefix ?? '';
+    let prefixStart = 0;
+    while (prefixStart < rawPrefix.length && rawPrefix[prefixStart] === '/') {
+      prefixStart++;
+    }
+    let prefixEnd = rawPrefix.length;
+    while (prefixEnd > prefixStart && rawPrefix[prefixEnd - 1] === '/') {
+      prefixEnd--;
+    }
+    const cleanPrefix = rawPrefix.slice(prefixStart, prefixEnd);
     const objectPath = cleanPrefix ? `${cleanPrefix}/${finalFileName}` : finalFileName;
 
     const storageClient =

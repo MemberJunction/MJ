@@ -53,15 +53,23 @@ function getConfiguredPurifier(): ReturnType<typeof createDOMPurify> | null {
     if (!URI_ATTR_NAMES.has(attrName)) {
       return;
     }
-    const normalized = (data.attrValue || '').replace(/[\u0000-\u0020]+/g, '').toLowerCase();
-    if (
-      normalized.startsWith('javascript:') ||
-      normalized.startsWith('vbscript:') ||
-      normalized.startsWith('data:text/html') ||
-      normalized.startsWith('data:image/svg+xml') ||
-      normalized.startsWith('data:application/xhtml+xml')
-    ) {
-      data.keepAttr = false;
+    const normalized = (data.attrValue || '').replace(/[\s\u0000-\u001f\u007f]+/g, '').toLowerCase();
+    const schemeSep = normalized.indexOf(':');
+    const firstSlash = normalized.indexOf('/');
+    const firstQuery = normalized.indexOf('?');
+    const firstHash = normalized.indexOf('#');
+    const firstNonSchemeDelim = [firstSlash, firstQuery, firstHash]
+      .filter((idx) => idx >= 0)
+      .reduce((min, idx) => Math.min(min, idx), Number.MAX_SAFE_INTEGER);
+    if (schemeSep > 0 && schemeSep < firstNonSchemeDelim) {
+      const scheme = normalized.slice(0, schemeSep);
+      if (scheme === 'data') {
+        if (!/^data:image\/(?:png|jpe?g|gif|webp);/.test(normalized)) {
+          data.keepAttr = false;
+        }
+      } else if (scheme !== 'http' && scheme !== 'https' && scheme !== 'mailto' && scheme !== 'tel' && scheme !== 'blob') {
+        data.keepAttr = false;
+      }
     }
   });
   cachedPurifier = instance;
@@ -140,6 +148,15 @@ function generateRandomToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+function serializeJsonForInlineScript(value: string): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\//g, '\\u002f')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
 /**
  * Wraps already-trusted container markup + sanitized body HTML in a full HTML5 document with a strict CSP meta tag.
  */
@@ -152,12 +169,13 @@ export function BuildSandboxedHtmlDocument(options: {
 }): string {
   const escapedTitle = EscapeHtml(options.Title);
   const safeCss = options.TrustedPrintCss ? `<style>${options.TrustedPrintCss}</style>` : '';
-  const csp = options.ScriptNonce
-    ? `default-src 'none'; img-src https: http: data: blob:; style-src 'unsafe-inline'; font-src https: http: data:; script-src 'nonce-${options.ScriptNonce}'; connect-src 'none';`
+  const safeNonce = (options.ScriptNonce ?? '').replace(/[^A-Za-z0-9+/=_-]/g, '');
+  const csp = safeNonce
+    ? `default-src 'none'; img-src https: http: data: blob:; style-src 'unsafe-inline'; font-src https: http: data:; script-src 'nonce-${safeNonce}'; connect-src 'none';`
     : STRICT_PREVIEW_CSP;
   const printScript =
-    options.ScriptNonce && options.TrustedPrintId
-      ? `<script nonce="${options.ScriptNonce}">window.addEventListener('load', () => { window.focus(); window.print(); }); window.addEventListener('afterprint', () => parent.postMessage({ type: 'mj-print-done', id: ${JSON.stringify(options.TrustedPrintId)} }, '*'));</script>`
+    safeNonce && options.TrustedPrintId
+      ? `<script nonce="${safeNonce}">window.addEventListener('load', () => { window.focus(); window.print(); }); window.addEventListener('afterprint', () => parent.postMessage({ type: 'mj-print-done', id: ${serializeJsonForInlineScript(options.TrustedPrintId)} }, '*'));</script>`
       : '';
   return `<!DOCTYPE html>
 <html>

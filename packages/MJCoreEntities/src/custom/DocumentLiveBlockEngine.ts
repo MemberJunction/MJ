@@ -2487,6 +2487,35 @@ function validateEntityViewOrderBy(
     return { Valid: true };
 }
 
+function hasQualifiedSqlIdentifier(maskedSql: string): boolean {
+    let searchFrom = 0;
+    while (searchFrom < maskedSql.length) {
+        const dotIdx = maskedSql.indexOf('.', searchFrom);
+        if (dotIdx === -1) {
+            return false;
+        }
+        let left = dotIdx - 1;
+        while (left >= 0 && /\s/.test(maskedSql[left])) {
+            left--;
+        }
+        let right = dotIdx + 1;
+        while (right < maskedSql.length && /\s/.test(maskedSql[right])) {
+            right++;
+        }
+        if (left >= 0 && right < maskedSql.length && /[A-Za-z_]/.test(maskedSql[right])) {
+            let identStart = left;
+            while (identStart > 0 && /[A-Za-z0-9_]/.test(maskedSql[identStart - 1])) {
+                identStart--;
+            }
+            if (/[A-Za-z_]/.test(maskedSql[identStart]) && identStart <= left) {
+                return true;
+            }
+        }
+        searchFrom = dotIdx + 1;
+    }
+    return false;
+}
+
 function validateEntityViewExtraFilter(
     extraFilter: string,
     entityInfo?: EntityInfo,
@@ -2593,7 +2622,7 @@ function validateEntityViewExtraFilter(
     }
 
     // Reject schema/table-qualified identifiers (e.g. __mj.fnSecret(ID), dbo.Users.ID, or [dbo].[Users]) and SQL function calls
-    if (/(?:[A-Za-z_][A-Za-z0-9_]*|__BRACKET_ID_\d+__)\s*\.\s*(?:[A-Za-z_]|__BRACKET_ID_\d+__)/.test(masked)) {
+    if (hasQualifiedSqlIdentifier(masked)) {
         return {
             Valid: false,
             ErrorMessage: 'Schema- or table-qualified identifiers and user-defined functions are not permitted in ExtraFilter.'

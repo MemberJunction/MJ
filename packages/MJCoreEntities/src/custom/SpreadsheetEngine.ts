@@ -3529,31 +3529,59 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return `${absR ? '$' : ''}${rIdx}`;
         };
 
-        let resolved = formulaStable.replace(
-            /@SHEET_RANGE\(([^,]+),([^,]+),([^,]+),([^,]+),([^)]+)\)/g,
-            (_full, sId: string, r1: string, c1: string, r2: string, c2: string) => {
-                const cross = getCrossLookup(sId.trim());
-                if (!cross) return '#REF!';
-                const start = resolveTokenAgainst(cross, r1.trim(), c1.trim());
-                const end = resolveTokenAgainst(cross, r2.trim(), c2.trim());
-                if (start === '#REF!' || end === '#REF!') {
-                    return '#REF!';
+        const replaceFormulaMacro = (
+            input: string,
+            prefix: string,
+            expectedArgs: number,
+            formatter: (args: string[]) => string
+        ): string => {
+            let out = '';
+            let cursor = 0;
+            while (cursor < input.length) {
+                const start = input.indexOf(prefix, cursor);
+                if (start === -1) {
+                    out += input.slice(cursor);
+                    break;
                 }
-                return `${formatSheetQualifier(cross.ws.Name)}${start}:${end}`;
+                const argStart = start + prefix.length;
+                const end = input.indexOf(')', argStart);
+                if (end === -1) {
+                    out += input.slice(cursor);
+                    break;
+                }
+                const args = input.slice(argStart, end).split(',');
+                if (args.length !== expectedArgs || args.some((a) => a.length === 0)) {
+                    out += input.slice(cursor, argStart);
+                    cursor = argStart;
+                    continue;
+                }
+                out += input.slice(cursor, start) + formatter(args);
+                cursor = end + 1;
             }
-        );
+            return out;
+        };
 
-        resolved = resolved.replace(
-            /@SHEET_COLS\(([^,]+),([^,]+),([^)]+)\)/g,
-            (_full, sId: string, c1: string, c2: string) => {
-                const cross = getCrossLookup(sId.trim());
-                if (!cross) return '#REF!';
-                const startC = resolveColTokenAgainst(cross, c1.trim());
-                const endC = resolveColTokenAgainst(cross, c2.trim());
-                if (startC === '#REF!' || endC === '#REF!') return '#REF!';
-                return `${formatSheetQualifier(cross.ws.Name)}${startC}:${endC}`;
+        let resolved = replaceFormulaMacro(formulaStable, '@SHEET_RANGE(', 5, (args) => {
+            const [sId, r1, c1, r2, c2] = args;
+            const cross = getCrossLookup(sId.trim());
+            if (!cross) return '#REF!';
+            const start = resolveTokenAgainst(cross, r1.trim(), c1.trim());
+            const end = resolveTokenAgainst(cross, r2.trim(), c2.trim());
+            if (start === '#REF!' || end === '#REF!') {
+                return '#REF!';
             }
-        );
+            return `${formatSheetQualifier(cross.ws.Name)}${start}:${end}`;
+        });
+
+        resolved = replaceFormulaMacro(resolved, '@SHEET_COLS(', 3, (args) => {
+            const [sId, c1, c2] = args;
+            const cross = getCrossLookup(sId.trim());
+            if (!cross) return '#REF!';
+            const startC = resolveColTokenAgainst(cross, c1.trim());
+            const endC = resolveColTokenAgainst(cross, c2.trim());
+            if (startC === '#REF!' || endC === '#REF!') return '#REF!';
+            return `${formatSheetQualifier(cross.ws.Name)}${startC}:${endC}`;
+        });
 
         resolved = resolved.replace(
             /@SHEET_ROWS\(([^,]+),([^,]+),([^)]+)\)/g,
@@ -13291,17 +13319,59 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const files = this.extractZipArchive(u8);
         const sanitized = this.cloneWorkbookWithoutViewerScopedData(workbook);
 
+        const stripSelfClosingTagsWithAttr = (xml: string, openTagPrefix: string, attrPredicate: (tagBody: string) => boolean): string => {
+            let out = '';
+            let cursor = 0;
+            const lowerXml = xml.toLowerCase();
+            const lowerPrefix = openTagPrefix.toLowerCase();
+            while (cursor < xml.length) {
+                const start = lowerXml.indexOf(lowerPrefix, cursor);
+                if (start === -1) {
+                    out += xml.slice(cursor);
+                    break;
+                }
+                const afterPrefix = xml[start + openTagPrefix.length] ?? '';
+                if (!/\s/.test(afterPrefix)) {
+                    out += xml.slice(cursor, start + openTagPrefix.length);
+                    cursor = start + openTagPrefix.length;
+                    continue;
+                }
+                const closeIdx = xml.indexOf('>', start + openTagPrefix.length);
+                if (closeIdx === -1) {
+                    out += xml.slice(cursor);
+                    break;
+                }
+                const tagText = xml.slice(start, closeIdx + 1);
+                const isSelfClosing = xml[closeIdx - 1] === '/';
+                if (isSelfClosing && attrPredicate(tagText)) {
+                    out += xml.slice(cursor, start);
+                } else {
+                    out += xml.slice(cursor, closeIdx + 1);
+                }
+                cursor = closeIdx + 1;
+            }
+            return out;
+        };
+
         // Item 13: Remove stale xl/calcChain.xml and its references so Excel recalculates cleanly without repair prompts
         if (files.has('xl/calcChain.xml')) {
             files.delete('xl/calcChain.xml');
             if (files.has('[Content_Types].xml')) {
                 const ctXml = this.decodeUtf8(files.get('[Content_Types].xml')!);
-                const cleanedCt = ctXml.replace(/<Override\b[^>]*PartName="\/?xl\/calcChain\.xml"[^>]*\/>/gi, '');
+                const cleanedCt = stripSelfClosingTagsWithAttr(
+                    ctXml,
+                    '<Override',
+                    (tag) => /PartName="\/?xl\/calcChain\.xml"/i.test(tag)
+                );
                 files.set('[Content_Types].xml', this.encodeUtf8(cleanedCt));
             }
             if (files.has('xl/_rels/workbook.xml.rels')) {
                 const relsXml = this.decodeUtf8(files.get('xl/_rels/workbook.xml.rels')!);
-                const cleanedRels = relsXml.replace(/<Relationship\b[^>]*Target="\/?(?:xl\/)?calcChain\.xml"[^>]*\/>/gi, '');
+                const cleanedRels = stripSelfClosingTagsWithAttr(
+                    relsXml,
+                    '<Relationship',
+                    (tag) => /Target="\/?(?:xl\/)?calcChain\.xml"/i.test(tag)
+                );
                 files.set('xl/_rels/workbook.xml.rels', this.encodeUtf8(cleanedRels));
             }
         }
@@ -17531,13 +17601,71 @@ export function ValidateExtraFilter(extraFilter: string): {
         }
     }
 
+    const hasSqlFunctionCall = (sqlText: string): boolean => {
+        let searchFrom = 0;
+        while (searchFrom < sqlText.length) {
+            const openParen = sqlText.indexOf('(', searchFrom);
+            if (openParen === -1) {
+                return false;
+            }
+            let pos = openParen - 1;
+            while (pos >= 0 && /\s/.test(sqlText[pos])) {
+                pos--;
+            }
+            if (pos >= 0 && /[A-Za-z0-9_]/.test(sqlText[pos])) {
+                let identStart = pos;
+                while (identStart > 0 && /[A-Za-z0-9_]/.test(sqlText[identStart - 1])) {
+                    identStart--;
+                }
+                if (/[A-Za-z_]/.test(sqlText[identStart])) {
+                    return true;
+                }
+            }
+            searchFrom = openParen + 1;
+        }
+        return false;
+    };
+
+    const splitSqlAndClauses = (sqlText: string): string[] => {
+        const parts: string[] = [];
+        const upper = sqlText.toUpperCase();
+        let clauseStart = 0;
+        let scan = 0;
+        while (scan < upper.length) {
+            const andIdx = upper.indexOf('AND', scan);
+            if (andIdx === -1) {
+                break;
+            }
+            const beforeOk = andIdx > clauseStart && /\s/.test(sqlText[andIdx - 1]);
+            const afterIdx = andIdx + 3;
+            const afterOk = afterIdx < sqlText.length && /\s/.test(sqlText[afterIdx]);
+            if (beforeOk && afterOk) {
+                let leftWs = andIdx - 1;
+                while (leftWs > clauseStart && /\s/.test(sqlText[leftWs - 1])) {
+                    leftWs--;
+                }
+                let rightWs = afterIdx + 1;
+                while (rightWs < sqlText.length && /\s/.test(sqlText[rightWs])) {
+                    rightWs++;
+                }
+                parts.push(sqlText.slice(clauseStart, leftWs));
+                clauseStart = rightWs;
+                scan = rightWs;
+            } else {
+                scan = andIdx + 3;
+            }
+        }
+        parts.push(sqlText.slice(clauseStart));
+        return parts;
+    };
+
     // Reject SQL comments, statement separators, @@/@variables, unbracketed niladic session tokens, DDL/DML keywords, and all function calls!
     if (
         /;|--|\/\*|\*\/|@@?[A-Za-z_]/.test(masked) ||
         /\b(DROP|DELETE|UPDATE|INSERT|EXEC|EXECUTE|UNION|SELECT|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|WAITFOR|OPENROWSET|OPENQUERY|OPENDATASOURCE|USER|SYSTEM_USER|CURRENT_USER|SESSION_USER|CURRENT_ROLE|CURRENT_CATALOG|CURRENT_SCHEMA)\b/i.test(
             masked
         ) ||
-        /(?:[A-Za-z_][A-Za-z0-9_]*|__MJ_COL_\d+__)\s*\(/.test(masked)
+        hasSqlFunctionCall(masked)
     ) {
         return {
             Valid: false,
@@ -17546,7 +17674,7 @@ export function ValidateExtraFilter(extraFilter: string): {
         };
     }
 
-    const maskedClauses = masked.split(/\s+\bAND\b\s+/i);
+    const maskedClauses = splitSqlAndClauses(masked);
     const parsedClauses: string[] = [];
     for (const maskedClause of maskedClauses) {
         const simpleCmp =

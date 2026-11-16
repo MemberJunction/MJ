@@ -1809,7 +1809,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         const headers = parseCells(tableLines[0]);
         const dividers = parseCells(tableLines[1]);
         const rows = tableLines.slice(2).map((line) => parseCells(line));
-        const escapeCell = (val: string): string => val.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
+        const escapeCell = (val: string): string => val.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
 
         switch (operation) {
             case 'add_row': {

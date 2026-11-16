@@ -584,7 +584,6 @@ describe('BuildSheetsContextMenu', () => {
           CurrentFormat: 'general',
           HasAdjacentHiddenCols: false,
           ProtectedReason: null,
-          CurrentFormat: 'general',
           RangeThreadCount: 0,
         },
       });

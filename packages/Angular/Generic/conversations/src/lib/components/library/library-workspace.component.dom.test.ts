@@ -1,4 +1,6 @@
-import { Component, EventEmitter, Input, NO_ERRORS_SCHEMA, Output } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BaseEntity, IMetadataProvider, IRunViewProvider, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
@@ -13,7 +15,7 @@ import {
 } from '@memberjunction/core-entities';
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { LibraryWorkspaceComponent } from './library-workspace.component';
 import { LibraryFullViewComponent } from './library-full-view.component';
 import { LibraryCreationService } from '../../services/library-creation.service';
@@ -30,6 +32,7 @@ import type { LibraryItemSummary } from './library.models';
   `,
 })
 class StubEmptyStateComponent {
+  @Input() public Variant = '';
   @Input() public Icon = '';
   @Input() public Title = '';
   @Input() public Message = '';
@@ -37,6 +40,300 @@ class StubEmptyStateComponent {
   @Input() public ActionIcon = '';
   @Output() public Action = new EventEmitter<void>();
 }
+
+@Component({
+  standalone: false,
+  selector: 'mj-loading',
+  template: '<div class="stub-loading">{{ text }}</div>',
+})
+class StubLoadingComponent {
+  @Input() public text = '';
+  @Input() public size = '';
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-page-layout',
+  template: '<div class="stub-page-layout"><ng-content></ng-content></div>',
+})
+class StubPageLayoutComponent {}
+
+@Component({
+  standalone: false,
+  selector: 'mj-page-header',
+  template: '<div class="stub-page-header"><ng-content></ng-content></div>',
+})
+class StubPageHeaderComponent {
+  @Input() public Title = '';
+  @Input() public Icon = '';
+  @Input() public Subtitle = '';
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-page-body',
+  template: '<div class="stub-page-body"><ng-content></ng-content></div>',
+})
+class StubPageBodyComponent {
+  @Input() public Padding = false;
+  @Input() public Flex = false;
+  @Input() public Direction = 'row';
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-stat-badge',
+  template: '<span class="stub-stat-badge">{{ Count }} {{ Label }}</span>',
+})
+class StubStatBadgeComponent {
+  @Input() public Count = 0;
+  @Input() public Label = '';
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-page-search',
+  template: '<div class="stub-page-search"></div>',
+})
+class StubPageSearchComponent {
+  @Input() public AriaLabel = '';
+  @Input() public Placeholder = '';
+  @Input() public Value = '';
+  @Output() public ValueChange = new EventEmitter<string>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-filter-popover',
+  template: '<div class="stub-filter-popover"><ng-content></ng-content></div>',
+})
+class StubFilterPopoverComponent {
+  @Input() public Label = '';
+  @Input() public ActiveCount = 0;
+  @Output() public Cleared = new EventEmitter<void>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-filter-panel',
+  template: '<div class="stub-filter-panel"></div>',
+})
+class StubFilterPanelComponent {
+  @Input() public Fields: object[] = [];
+  @Input() public Values: Record<string, string | number | boolean | null> = {};
+  @Output() public ValuesChange = new EventEmitter<Record<string, string | number | boolean | null>>();
+  @Output() public Reset = new EventEmitter<void>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-refresh-button',
+  template: '<button type="button" class="stub-refresh-btn"></button>',
+})
+class StubRefreshButtonComponent {
+  @Input() public Loading = false;
+  @Output() public Clicked = new EventEmitter<void>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-artifact-type-plugin-viewer',
+  template: '<div class="stub-plugin-viewer"></div>',
+})
+class StubArtifactTypePluginViewerComponent {
+  @Input() public artifactVersion: object | null = null;
+  @Input() public ArtifactTypeName = '';
+  @Input() public DriverClass?: string;
+  @Input() public PreVerifiedFrozenSnapshots: object | null = null;
+  @Input() public GuestSnapshotMode = false;
+  @Input() public readonly = true;
+  @Input() public height = '100%';
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-artifact-viewer-panel',
+  template: '<div class="stub-viewer-panel"></div>',
+})
+class StubArtifactViewerPanelComponent {
+  @Input() public artifactId: string | null = null;
+  @Input() public VersionNumber: number | null | undefined;
+  @Input() public CurrentUser: object | null = null;
+  @Input() public EnvironmentId = '';
+  @Input() public ViewContext: string | null = null;
+  @Input() public ContextCollectionId?: string;
+  @Input() public canEdit = false;
+  @Input() public canShare = false;
+  @Input() public HasConnectedDriveLink = false;
+  @Input() public IsMaximized = false;
+  @Input() public ShowMaximizeButton = false;
+  @Input() public ShowCloseButton = false;
+  @Input() public RefreshTrigger: object | null = null;
+  @Output() public Closed = new EventEmitter<void>();
+  @Output() public MaximizeToggled = new EventEmitter<void>();
+  @Output() public ShareRequested = new EventEmitter<object>();
+  @Output() public SaveToCollectionRequested = new EventEmitter<object>();
+  @Output() public OpenEntityRecord = new EventEmitter<object>();
+  @Output() public NavigateToLink = new EventEmitter<object>();
+  @Output() public VersionSaved = new EventEmitter<object>();
+  @Output() public ConnectedDriveSyncRequested = new EventEmitter<object>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-library-remote-drive-pane',
+  template: '<div class="stub-remote-drive-pane"></div>',
+})
+class StubRemoteDrivePaneComponent {
+  @Input() public Account: object | null = null;
+  @Input() public CurrentPrefix = '';
+  @Input() public CurrentUser: object | null = null;
+  @Input() public EnvironmentId = '';
+  @Input() public Collections: object[] = [];
+  @Input() public ShowBackButton = false;
+  @Input() public StorageClientOverride: object | null = null;
+  @Output() public PrefixChange = new EventEmitter<string>();
+  @Output() public ArtifactConverted = new EventEmitter<object>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-library-create-dialog',
+  template: '',
+})
+class StubLibraryCreateDialogComponent {
+  @Input() public IsOpen = false;
+  @Input() public InitialTab: string | null = null;
+  @Input() public InitialStarterKind: string | null = null;
+  @Input() public DefaultCollectionId: string | null = null;
+  @Input() public Collections: object[] = [];
+  @Input() public AvailableItems: object[] = [];
+  @Input() public DefaultSelectedArtifactIds: string[] = [];
+  @Input() public EnvironmentId = '';
+  @Input() public CurrentUser: object | null = null;
+  @Output() public Created = new EventEmitter<object>();
+  @Output() public Synthesized = new EventEmitter<object>();
+  @Output() public Cancelled = new EventEmitter<void>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-library-export-drive-dialog',
+  template: '',
+})
+class StubLibraryExportDriveDialogComponent {
+  @Input() public IsOpen = false;
+  @Input() public Item: object | null = null;
+  @Input() public VersionNumber: number | null | undefined;
+  @Input() public Drives: object[] = [];
+  @Input() public CurrentUser: object | null = null;
+  @Input() public StorageClientOverride: object | null = null;
+  @Output() public Published = new EventEmitter<void>();
+  @Output() public Cancelled = new EventEmitter<void>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-collection-form-modal',
+  template: '',
+})
+class StubCollectionFormModalComponent {
+  @Input() public isOpen = false;
+  @Input() public collection: object | null = null;
+  @Input() public parentCollection: object | null = null;
+  @Input() public environmentId = '';
+  @Input() public currentUser: object | null = null;
+  @Output() public saved = new EventEmitter<object>();
+  @Output() public cancelled = new EventEmitter<void>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-collection-share-modal',
+  template: '',
+})
+class StubCollectionShareModalComponent {
+  @Input() public isOpen = false;
+  @Input() public collection: object | null = null;
+  @Input() public currentUser: object | null = null;
+  @Input() public currentUserPermissions: object | null = null;
+  @Output() public saved = new EventEmitter<void>();
+  @Output() public cancelled = new EventEmitter<void>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-artifact-share-modal',
+  template: '',
+})
+class StubArtifactShareModalComponent {
+  @Input() public isOpen = false;
+  @Input() public artifact: object | null = null;
+  @Input() public currentUser: object | null = null;
+  @Output() public saved = new EventEmitter<void>();
+  @Output() public cancelled = new EventEmitter<void>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-artifact-collection-picker-modal',
+  template: '',
+})
+class StubArtifactCollectionPickerModalComponent {
+  @Input() public isOpen = false;
+  @Input() public artifactVersionId: string | null = null;
+  @Input() public artifactName = '';
+  @Input() public artifactVersionNumber: number | null = null;
+  @Input() public excludeCollectionIds: string[] = [];
+  @Input() public environmentId = '';
+  @Input() public currentUser: object | null = null;
+  @Output() public completed = new EventEmitter<void>();
+  @Output() public cancelled = new EventEmitter<void>();
+}
+
+@Component({
+  standalone: false,
+  selector: 'as-split',
+  template: '<div class="stub-split"><ng-content></ng-content></div>',
+})
+class StubSplitComponent {
+  @Input() public direction = 'horizontal';
+  @Input() public unit = 'percent';
+}
+
+@Component({
+  standalone: false,
+  selector: 'as-split-area',
+  template: '<div class="stub-split-area"><ng-content></ng-content></div>',
+})
+class StubSplitAreaComponent {
+  @Input() public size = 50;
+  @Input() public minSize = 10;
+}
+
+const LIBRARY_WORKSPACE_STUB_DECLARATIONS = [
+  StubEmptyStateComponent,
+  StubLoadingComponent,
+  StubPageLayoutComponent,
+  StubPageHeaderComponent,
+  StubPageBodyComponent,
+  StubStatBadgeComponent,
+  StubPageSearchComponent,
+  StubFilterPopoverComponent,
+  StubFilterPanelComponent,
+  StubRefreshButtonComponent,
+  StubArtifactTypePluginViewerComponent,
+  StubArtifactViewerPanelComponent,
+  StubRemoteDrivePaneComponent,
+  StubLibraryCreateDialogComponent,
+  StubLibraryExportDriveDialogComponent,
+  StubCollectionFormModalComponent,
+  StubCollectionShareModalComponent,
+  StubArtifactShareModalComponent,
+  StubArtifactCollectionPickerModalComponent,
+  StubSplitComponent,
+  StubSplitAreaComponent,
+];
 
 const TEST_USER = {
   ID: '11111111-1111-4111-8111-111111111111',
@@ -116,8 +413,8 @@ describe('LibraryWorkspaceComponent & LibraryFullViewComponent (DOM)', () => {
 
   function setupTestBed(confirmMock = vi.fn().mockResolvedValue(true)) {
     TestBed.configureTestingModule({
-      schemas: [NO_ERRORS_SCHEMA],
-      declarations: [LibraryWorkspaceComponent, StubEmptyStateComponent],
+      imports: [CommonModule, FormsModule, MJButtonDirective],
+      declarations: [LibraryWorkspaceComponent, ...LIBRARY_WORKSPACE_STUB_DECLARATIONS],
       providers: [
         {
           provide: ArtifactIconService,
@@ -409,8 +706,8 @@ describe('LibraryWorkspaceComponent & LibraryFullViewComponent (DOM)', () => {
     );
 
     TestBed.configureTestingModule({
-      schemas: [NO_ERRORS_SCHEMA],
-      declarations: [LibraryFullViewComponent],
+      imports: [CommonModule, FormsModule],
+      declarations: [LibraryFullViewComponent, StubEmptyStateComponent, StubLoadingComponent],
       providers: [
         { provide: ArtifactIconService, useValue: { GetIcon: () => 'fa-solid fa-file' } },
       ],

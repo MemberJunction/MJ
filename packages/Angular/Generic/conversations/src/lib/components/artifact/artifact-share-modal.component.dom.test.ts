@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RunView, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, RunView, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import {
   CreateGuestShareLinkOperation,
   MJArtifactEntity,
@@ -310,7 +310,7 @@ describe('ArtifactShareModalComponent (DOM — Guest Share Links & Setter Reload
       Entities: [],
       EntityByName: () => undefined,
       ExecuteGQL: executeGqlMock,
-    } as typeof f.componentInstance.Provider;
+    } as Partial<IMetadataProvider> & { ExecuteGQL: typeof executeGqlMock } as typeof f.componentInstance.Provider;
 
     f.componentRef.setInput('Artifact', TEST_ARTIFACT);
     await flushMicrotasks();

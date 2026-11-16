@@ -728,7 +728,16 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
   }
 
   public get Breadcrumbs(): FolderEntry[] {
-    const clean = (this.CurrentPrefix ?? '').replace(/^\/+|\/+$/g, '');
+    const rawPrefix = this.CurrentPrefix ?? '';
+    let start = 0;
+    while (start < rawPrefix.length && rawPrefix[start] === '/') {
+      start++;
+    }
+    let end = rawPrefix.length;
+    while (end > start && rawPrefix[end - 1] === '/') {
+      end--;
+    }
+    const clean = rawPrefix.slice(start, end);
     if (!clean) return [];
     const segments = clean.split('/').filter((s) => s.length > 0);
     const crumbs: FolderEntry[] = [];

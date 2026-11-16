@@ -12030,7 +12030,7 @@ export class SpreadsheetArtifactViewerComponent
         const cols: string[] = [];
         for (let c = bounds.minC; c <= bounds.maxC; c++) {
           const cell = sheet.Cells[FormatCellAddress(r, c)];
-          const val = String(cell?.DisplayValue ?? cell?.ComputedValue ?? cell?.RawValue ?? '').replace(/\|/g, '\\|');
+          const val = String(cell?.DisplayValue ?? cell?.ComputedValue ?? cell?.RawValue ?? '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
           cols.push(val);
         }
         mdRows.push(`| ${cols.join(' | ')} |`);

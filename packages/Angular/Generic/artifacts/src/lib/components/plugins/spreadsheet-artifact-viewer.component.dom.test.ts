@@ -1147,8 +1147,9 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
     const hasBackendSpy = vi.spyOn(DocumentCollaborationService.prototype, 'HasCollaborationBackend').mockReturnValue(true);
     const verifyServerSpy = vi.spyOn(DocumentCollaborationService.prototype, 'VerifyFrozenSnapshotOnServer');
     const resolvePermSpy = vi.spyOn(DocumentCollaborationService.prototype, 'ResolvePermissionsFromServer');
+    const runViewSpy = vi.fn(async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }));
     const fakeProvider = {
-      RunView: vi.fn(async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' })),
+      RunView: runViewSpy,
     } as Partial<IMetadataProvider> as IMetadataProvider;
 
     const f = renderComponentFixture(SpreadsheetArtifactViewerComponent, {
@@ -1176,7 +1177,7 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
     expect(hasBackendSpy).not.toHaveBeenCalled();
     expect(verifyServerSpy).not.toHaveBeenCalled();
     expect(resolvePermSpy).not.toHaveBeenCalled();
-    expect(fakeProvider.RunView).not.toHaveBeenCalled();
+    expect(runViewSpy).not.toHaveBeenCalled();
   });
 
   it('re-applies pre-init ViewMode/NavigationAnchor on workbook init (NW-6) and matches sheet names + errors on missing sheet (NW-3)', () => {
