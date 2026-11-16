@@ -41,24 +41,38 @@ import { MJBeforeEvent } from '../lib/types/events';
     MJLayerFooterDirective,
   ],
   template: `
-    <mj-surface [level]="level()" [tone]="tone()" [visual-role]="role()">
+    <mj-surface [Level]="level()" [Tone]="tone()" [VisualRole]="role()">
       <div mjSurfaceHeader>Header</div>
       <div mjSurfaceBody role="listbox" aria-label="Items">
         <mj-row
-          [interactive]="true"
-          [item-role]="'option'"
-          [selected]="rowSelected()"
-          [tone]="tone()"
+          class="opt-1"
+          [Interactive]="true"
+          [ItemRole]="'option'"
+          [Selected]="selectedIdx() === 0"
+          [Tone]="tone()"
           (BeforeSelect)="onBeforeSelect($event)"
-          (AfterSelect)="afterSelectCount = afterSelectCount + 1"
+          (AfterSelect)="selectedIdx.set(0); afterSelectCount = afterSelectCount + 1"
         >
-          <span mjRowLeading>L</span>
-          <span mjRowContent>Main content</span>
-          <span mjRowTrailing>T</span>
+          <span mjRowLeading>L1</span>
+          <span mjRowContent>First option</span>
+        </mj-row>
+        <mj-row
+          class="opt-2"
+          [Interactive]="true"
+          [ItemRole]="'option'"
+          [Selected]="selectedIdx() === 1"
+          (AfterSelect)="selectedIdx.set(1); afterSelectCount = afterSelectCount + 1"
+        >
+          <span mjRowLeading>L2</span>
+          <span mjRowContent>Second option</span>
         </mj-row>
       </div>
       <div mjSurfaceFooter>Footer</div>
     </mj-surface>
+
+    <mj-row class="standalone-interactive-row" [Interactive]="true">
+      <span mjRowContent>Standalone Button Row</span>
+    </mj-row>
 
     <mj-row class="layout-only-row">
       <span mjRowContent><button type="button">Primary</button></span>
@@ -66,10 +80,10 @@ import { MJBeforeEvent } from '../lib/types/events';
     </mj-row>
 
     <mj-layer
-      [open]="layerOpen()"
-      [kind]="'dialog'"
-      [modal]="true"
-      [closeable]="true"
+      [Open]="layerOpen()"
+      [Kind]="'dialog'"
+      [Modal]="true"
+      [Closeable]="true"
       (BeforeClose)="onBeforeClose($event)"
       (AfterClose)="layerOpen.set(false); afterCloseCount = afterCloseCount + 1"
     >
@@ -89,7 +103,7 @@ class TestHostComponent {
   level = signal('elevated');
   tone = signal('plum');
   role = signal('callout');
-  rowSelected = signal(false);
+  selectedIdx = signal(0);
   layerOpen = signal(false);
   cancelNextSelect = false;
   cancelNextClose = false;
@@ -116,7 +130,7 @@ describe('Wave 0 prototype primitives', () => {
     }).compileComponents();
   });
 
-  it('applies .mj-surface-<level>, PascalCase inputs via aliases, and runtime open-axis CSS variables', () => {
+  it('binds standard MJ PascalCase inputs ([Level], [Tone], [VisualRole]) and runtime open-axis CSS variables', () => {
     const fixture = TestBed.createComponent(TestHostComponent);
     fixture.detectChanges();
 
@@ -129,25 +143,34 @@ describe('Wave 0 prototype primitives', () => {
     expect(surface.style.getPropertyValue('--_mj-role-bg')).toContain('--mj-role-callout-bg');
   });
 
-  it('enforces WCAG 4.1.2 roles on interactive mj-row and keeps layout-only rows non-focusable', () => {
+  it('defaults standalone interactive mj-row to role="button", keeps layout rows non-focusable, and navigates listbox options with roving tabindex + ArrowDown', () => {
     const fixture = TestBed.createComponent(TestHostComponent);
     fixture.detectChanges();
 
-    const interactiveRow = fixture.nativeElement.querySelector('[role="listbox"] mj-row') as HTMLElement;
-    expect(interactiveRow.getAttribute('role')).toBe('option');
-    expect(interactiveRow.getAttribute('aria-selected')).toBe('false');
-    expect(interactiveRow.getAttribute('tabindex')).toBe('0');
+    const standalone = fixture.nativeElement.querySelector('mj-row.standalone-interactive-row') as HTMLElement;
+    expect(standalone.getAttribute('role')).toBe('button');
+    expect(standalone.getAttribute('tabindex')).toBe('0');
 
     const layoutRow = fixture.nativeElement.querySelector('mj-row.layout-only-row') as HTMLElement;
     expect(layoutRow.getAttribute('role')).toBeNull();
     expect(layoutRow.getAttribute('tabindex')).toBeNull();
 
-    interactiveRow.click();
-    expect(fixture.componentInstance.afterSelectCount).toBe(1);
+    const opt1 = fixture.nativeElement.querySelector('mj-row.opt-1') as HTMLElement;
+    const opt2 = fixture.nativeElement.querySelector('mj-row.opt-2') as HTMLElement;
+    expect(opt1.getAttribute('tabindex')).toBe('0');
+    expect(opt2.getAttribute('tabindex')).toBe('-1');
+
+    opt1.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.selectedIdx()).toBe(1);
+    expect(opt1.getAttribute('tabindex')).toBe('-1');
+    expect(opt2.getAttribute('tabindex')).toBe('0');
 
     fixture.componentInstance.cancelNextSelect = true;
-    interactiveRow.click();
-    expect(fixture.componentInstance.afterSelectCount).toBe(1);
+    opt2.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    fixture.detectChanges();
+    expect(fixture.componentInstance.selectedIdx()).toBe(1);
   });
 
   it('opens mj-layer in CDK OverlayContainer and closes cleanly on Escape via MJLayerService', () => {

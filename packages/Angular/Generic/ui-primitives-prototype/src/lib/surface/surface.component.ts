@@ -29,8 +29,8 @@ export class MJSurfaceBodyDirective {}
 export class MJSurfaceFooterDirective {}
 
 /**
- * Wave 0 surface primitive. Public inputs stay PascalCase for Angular/MJ standards
- * while exposing lowercase/kebab-case aliases for HTML templates and Angular Elements.
+ * Wave 0 surface primitive. Uses standard MJ PascalCase inputs (`[Level]`, `[Tone]`, `[VisualRole]`);
+ * the Angular Elements entry maps kebab-case HTML attributes onto these properties automatically.
  */
 @Component({
   selector: 'mj-surface',
@@ -56,13 +56,13 @@ export class MJSurfaceFooterDirective {}
   },
 })
 export class MJSurfaceComponent {
-  public readonly Level = input<string>('base', { alias: 'level' });
-  public readonly Elevation = input<string>('none', { alias: 'elevation' });
-  public readonly Interactive = input(false, { alias: 'interactive', transform: booleanAttribute });
-  public readonly Selected = input(false, { alias: 'selected', transform: booleanAttribute });
-  public readonly Padding = input<string>('md', { alias: 'padding' });
-  public readonly Tone = input<string>('neutral', { alias: 'tone' });
-  public readonly VisualRole = input<string>('surface', { alias: 'visual-role' });
+  public readonly Level = input<string>('base');
+  public readonly Elevation = input<string>('none');
+  public readonly Interactive = input(false, { transform: booleanAttribute });
+  public readonly Selected = input(false, { transform: booleanAttribute });
+  public readonly Padding = input<string>('md');
+  public readonly Tone = input<string>('neutral');
+  public readonly VisualRole = input<string>('surface');
 
   protected readonly hostClasses = computed(
     () => `mj-surface mj-surface-${this.Level()}`

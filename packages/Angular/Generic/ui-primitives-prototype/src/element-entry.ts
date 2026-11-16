@@ -1,6 +1,12 @@
 import { createApplication } from '@angular/platform-browser';
 import { createCustomElement } from '@angular/elements';
-import { ApplicationRef, CSP_NONCE, provideZonelessChangeDetection, Type } from '@angular/core';
+import {
+  ApplicationRef,
+  CSP_NONCE,
+  provideZonelessChangeDetection,
+  reflectComponentType,
+  Type,
+} from '@angular/core';
 import { MJSurfaceComponent } from './lib/surface/surface.component';
 import { MJLayerComponent } from './lib/layer/layer.component';
 import { MJRowComponent } from './lib/row/row.component';
@@ -34,6 +40,19 @@ function ensureStylesLoaded(nonce: string | null): void {
   document.head.prepend(style);
 }
 
+function toKebabCase(propName: string): string {
+  return propName
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
+}
+
+/**
+ * Registers an Angular component as a Custom Element while preserving MJ's PascalCase
+ * Angular input contract (`[Density]`, `[AllowPhoneSheet]`) AND supporting standard
+ * lowercase/kebab-case HTML attributes (`density`, `allow-phone-sheet`) via native
+ * `observedAttributes` + `attributeChangedCallback` derived from `reflectComponentType()`.
+ */
 function defineElement<T>(appRef: ApplicationRef, tag: string, component: Type<T>): void {
   if (customElements.get(tag)) {
     return;
@@ -41,6 +60,62 @@ function defineElement<T>(appRef: ApplicationRef, tag: string, component: Type<T
   const ctor = createCustomElement(component, {
     injector: appRef.injector,
   });
+
+  const mirror = reflectComponentType(component);
+  const kebabToProp: Record<string, string> = {};
+  for (const inputMeta of mirror?.inputs ?? []) {
+    const kebab = toKebabCase(inputMeta.propName);
+    if (kebab !== inputMeta.templateName) {
+      kebabToProp[kebab] = inputMeta.propName;
+    }
+  }
+
+  const extraAttrs = Object.keys(kebabToProp);
+  if (extraAttrs.length > 0) {
+    const baseObserved: string[] = Array.isArray(ctor.observedAttributes)
+      ? ctor.observedAttributes
+      : [];
+    Object.defineProperty(ctor, 'observedAttributes', {
+      configurable: true,
+      get: () => [...baseObserved, ...extraAttrs],
+    });
+
+    const proto = ctor.prototype as HTMLElement & {
+      connectedCallback?: () => void;
+      attributeChangedCallback?: (
+        name: string,
+        oldValue: string | null,
+        newValue: string | null,
+        namespace?: string | null
+      ) => void;
+    };
+
+    const origConnected = proto.connectedCallback;
+    proto.connectedCallback = function connectedWithKebabAttrs(this: HTMLElement): void {
+      origConnected?.call(this);
+      for (const attr of extraAttrs) {
+        if (this.hasAttribute(attr)) {
+          Reflect.set(this, kebabToProp[attr], this.getAttribute(attr));
+        }
+      }
+    };
+
+    const origAttrChanged = proto.attributeChangedCallback;
+    proto.attributeChangedCallback = function attrChangedWithKebabAttrs(
+      this: HTMLElement,
+      name: string,
+      oldValue: string | null,
+      newValue: string | null,
+      namespace?: string | null
+    ): void {
+      if (name in kebabToProp && newValue !== null) {
+        Reflect.set(this, kebabToProp[name], newValue);
+        return;
+      }
+      origAttrChanged?.call(this, name, oldValue, newValue, namespace);
+    };
+  }
+
   customElements.define(tag, ctor);
 }
 

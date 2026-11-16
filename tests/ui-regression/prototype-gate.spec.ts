@@ -32,6 +32,24 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
       expect(entry.nestedControls).toBe(0);
     }
 
+    // Listbox roving tabindex + ArrowDown keyboard navigation (one Tab stop for all 3 options)
+    const listboxOptions = page.locator('[role="listbox"] > mj-row[role="option"]');
+    await expect(listboxOptions.nth(0)).toHaveAttribute('tabindex', '0');
+    await expect(listboxOptions.nth(1)).toHaveAttribute('tabindex', '-1');
+    await expect(listboxOptions.nth(2)).toHaveAttribute('tabindex', '-1');
+
+    await listboxOptions.nth(0).focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(listboxOptions.nth(1)).toBeFocused();
+    await expect(listboxOptions.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(listboxOptions.nth(1)).toHaveAttribute('tabindex', '0');
+    await expect(listboxOptions.nth(0)).toHaveAttribute('tabindex', '-1');
+
+    // Restore option 0 before baseline screenshot so selection stays on lesson 01
+    await page.keyboard.press('ArrowUp');
+    await expect(listboxOptions.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+
     // Hostile @layer reset rules must not break primitives
     const firstSurface = page.locator('mj-surface').first();
     await expect(firstSurface).toHaveCSS('box-sizing', 'border-box');

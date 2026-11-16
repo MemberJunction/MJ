@@ -12,7 +12,7 @@ import {
 } from '@angular/core';
 import { MJAfterEvent, MJBeforeEvent, dispatchMJElementEvent } from '../types/events';
 
-export type MJRowItemRole = 'option' | 'menuitem' | 'menuitemradio' | 'button';
+export type MJRowItemRole = 'button' | 'option' | 'menuitem' | 'menuitemradio';
 
 @Directive({
   selector: '[mjRowLeading]',
@@ -37,11 +37,10 @@ export class MJRowTrailingDirective {}
 
 /**
  * Wave 0 horizontal row primitive.
- * - Non-interactive (`Interactive = false`, default): pure layout container for rows that hold
- *   independent sibling controls (e.g. primary link/button + trailing action button).
- * - Interactive (`Interactive = true`): composite item exposing an explicit ARIA `ItemRole`
- *   (`option`, `menuitem`, `menuitemradio`, or `button`) and matching selection state (WCAG 4.1.2).
- *   Interactive rows must never contain nested focusable controls.
+ * - Non-interactive (`Interactive = false`, default): pure layout container for rows holding sibling controls.
+ * - Interactive (`Interactive = true`): defaults `ItemRole` to `'button'` so standalone rows are valid ARIA
+ *   without a listbox parent. When `ItemRole === 'option'` inside `[role="listbox"]`, uses roving `tabindex`
+ *   (one Tab stop per listbox) and ArrowDown/ArrowUp/Home/End navigation.
  */
 @Component({
   selector: 'mj-row',
@@ -66,26 +65,25 @@ export class MJRowTrailingDirective {}
     '[style.--_mj-role-padding-block]': 'rolePaddingBlockVar()',
     '[style.--_mj-role-padding-inline]': 'rolePaddingInlineVar()',
     '[attr.role]': 'ariaRole()',
-    '[attr.tabindex]': 'Interactive() && !Disabled() ? 0 : null',
+    '[attr.tabindex]': 'rovingTabIndex()',
     '[attr.aria-selected]': 'ariaSelected()',
     '[attr.aria-checked]': 'ariaChecked()',
     '[attr.aria-pressed]': 'ariaPressed()',
     '[attr.aria-disabled]': 'Interactive() && Disabled() ? true : null',
     '(click)': 'onActivate($event)',
-    '(keydown.enter)': 'onActivate($event)',
-    '(keydown.space)': 'onActivate($event)',
+    '(keydown)': 'onKeyDown($event)',
   },
 })
 export class MJRowComponent {
-  private readonly hostEl = inject(ElementRef<HTMLElement>);
+  private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  public readonly Density = input<string>('md', { alias: 'density' });
-  public readonly Interactive = input(false, { alias: 'interactive', transform: booleanAttribute });
-  public readonly Selected = input(false, { alias: 'selected', transform: booleanAttribute });
-  public readonly Disabled = input(false, { alias: 'disabled', transform: booleanAttribute });
-  public readonly Tone = input<string>('neutral', { alias: 'tone' });
-  public readonly VisualRole = input<string>('row', { alias: 'visual-role' });
-  public readonly ItemRole = input<MJRowItemRole>('option', { alias: 'item-role' });
+  public readonly Density = input<string>('md');
+  public readonly Interactive = input(false, { transform: booleanAttribute });
+  public readonly Selected = input(false, { transform: booleanAttribute });
+  public readonly Disabled = input(false, { transform: booleanAttribute });
+  public readonly Tone = input<string>('neutral');
+  public readonly VisualRole = input<string>('row');
+  public readonly ItemRole = input<MJRowItemRole>('button');
 
   public readonly BeforeSelect = output<MJBeforeEvent<'user'>>();
   public readonly AfterSelect = output<MJAfterEvent<'user'>>();
@@ -93,6 +91,17 @@ export class MJRowComponent {
   protected readonly ariaRole = computed(() =>
     this.Interactive() ? this.ItemRole() : null
   );
+
+  protected readonly rovingTabIndex = computed(() => {
+    if (!this.Interactive() || this.Disabled()) {
+      return null;
+    }
+    const role = this.ItemRole();
+    if (role === 'option' || role === 'menuitemradio' || role === 'menuitem') {
+      return this.Selected() ? 0 : -1;
+    }
+    return 0;
+  });
 
   protected readonly ariaSelected = computed(() =>
     this.Interactive() && this.ItemRole() === 'option' ? String(this.Selected()) : null
@@ -156,15 +165,71 @@ export class MJRowComponent {
       if (!this.Interactive()) {
         return;
       }
-      const nestedControl = this.hostEl.nativeElement.querySelector(
-        'button, a[href], input, select, textarea'
-      );
+      const el = this.hostEl.nativeElement;
+      const nestedControl = el.querySelector('button, a[href], input, select, textarea');
       if (nestedControl) {
         console.error(
-          '[mj-row] WCAG 4.1.2 violation: interactive="true" mj-row must not contain nested interactive controls. Keep mj-row non-interactive and place sibling buttons/links inside mj-row-content and mj-row-trailing.'
+          '[mj-row] WCAG 4.1.2 violation: interactive mj-row must not contain nested interactive controls.'
         );
       }
+      if (this.ItemRole() === 'option') {
+        const listbox = el.closest<HTMLElement>('[role="listbox"]');
+        if (!listbox) {
+          console.error(
+            '[mj-row] WCAG 4.1.2 violation: ItemRole="option" requires an ancestor [role="listbox"].'
+          );
+        } else if (!listbox.querySelector('[role="option"][tabindex="0"]')) {
+          // Ensure at least the first enabled option is a Tab stop when none starts selected.
+          const firstOption = listbox.querySelector<HTMLElement>(
+            '[role="option"]:not([aria-disabled="true"])'
+          );
+          if (firstOption === el) {
+            el.setAttribute('tabindex', '0');
+          }
+        }
+      }
     });
+  }
+
+  protected onKeyDown(event: KeyboardEvent): void {
+    if (!this.Interactive() || this.Disabled()) {
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.onActivate(event);
+      return;
+    }
+    if (
+      this.ItemRole() === 'option' &&
+      ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)
+    ) {
+      const listbox = this.hostEl.nativeElement.closest<HTMLElement>('[role="listbox"]');
+      if (!listbox) {
+        return;
+      }
+      const options = Array.from(
+        listbox.querySelectorAll<HTMLElement>('[role="option"]:not([aria-disabled="true"])')
+      );
+      if (options.length === 0) {
+        return;
+      }
+      event.preventDefault();
+      const currentIndex = options.indexOf(this.hostEl.nativeElement);
+      let nextIndex = 0;
+      if (event.key === 'ArrowDown') {
+        nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % options.length;
+      } else if (event.key === 'ArrowUp') {
+        nextIndex = currentIndex <= 0 ? options.length - 1 : currentIndex - 1;
+      } else if (event.key === 'End') {
+        nextIndex = options.length - 1;
+      }
+      const target = options[nextIndex];
+      if (target) {
+        target.focus();
+        target.click();
+      }
+    }
   }
 
   protected onActivate(event?: Event): void {

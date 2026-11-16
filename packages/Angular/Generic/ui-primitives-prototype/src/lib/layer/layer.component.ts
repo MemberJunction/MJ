@@ -50,8 +50,8 @@ export class MJLayerFooterDirective {}
 
 /**
  * Wave 0 overlay primitive rendered via CDK Overlay + DomPortal (MJLayerService).
- * Public members stay PascalCase for MJ standards while exposing lowercase/kebab-case
- * attribute aliases for HTML templates and Angular Elements.
+ * Uses standard MJ PascalCase inputs (`[Open]`, `[Kind]`, `[AllowPhoneSheet]`);
+ * the Angular Elements entry maps kebab-case HTML attributes onto these properties automatically.
  */
 @Component({
   selector: 'mj-layer',
@@ -77,23 +77,23 @@ export class MJLayerFooterDirective {}
   `,
 })
 export class MJLayerComponent implements OnDestroy {
-  private readonly hostEl = inject(ElementRef<HTMLElement>);
+  private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly layerService = inject(MJLayerService);
   private readonly announcer = inject(MJAnnouncerService);
   private readonly layerId = `mj-layer-${++nextLayerId}`;
 
   private readonly layerPanel = viewChild<ElementRef<HTMLElement>>('layerPanel');
 
-  public readonly Kind = input<string>('dialog', { alias: 'kind' });
-  public readonly Placement = input<string>('center', { alias: 'placement' });
-  public readonly Modal = input(true, { alias: 'modal', transform: booleanAttribute });
-  public readonly Closeable = input(true, { alias: 'closeable', transform: booleanAttribute });
-  public readonly Size = input<string>('md', { alias: 'size' });
-  public readonly Open = input(false, { alias: 'open', transform: booleanAttribute });
-  public readonly AllowPhoneSheet = input(true, { alias: 'allow-phone-sheet', transform: booleanAttribute });
-  public readonly Anchor = input<string | HTMLElement | null>(null, { alias: 'anchor' });
-  public readonly Label = input<string>('', { alias: 'label' });
-  public readonly AnnounceOnOpen = input<string>('', { alias: 'announce-on-open' });
+  public readonly Kind = input<string>('dialog');
+  public readonly Placement = input<string>('center');
+  public readonly Modal = input(true, { transform: booleanAttribute });
+  public readonly Closeable = input(true, { transform: booleanAttribute });
+  public readonly Size = input<string>('md');
+  public readonly Open = input(false, { transform: booleanAttribute });
+  public readonly AllowPhoneSheet = input(true, { transform: booleanAttribute });
+  public readonly Anchor = input<string | HTMLElement | null>(null);
+  public readonly Label = input<string>('');
+  public readonly AnnounceOnOpen = input<string>('');
 
   public readonly BeforeClose = output<MJBeforeEvent<'escape' | 'backdrop' | 'programmatic'>>();
   public readonly AfterOpen = output<MJAfterEvent<'open'>>();
