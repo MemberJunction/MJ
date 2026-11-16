@@ -96,6 +96,7 @@
       <mj-layer id="proto-dialog" kind="dialog" modal="true" closeable="true" label="Prototype Dialog">
         <div class="mj-layer-header">
           <h2 class="mj-layer-title">Publish Wave 0 Tokens?</h2>
+          <button type="button" class="host-btn host-btn-sm" data-close-layer="proto-dialog" aria-label="Close dialog">✕</button>
         </div>
         <div class="mj-layer-body">
           <p class="gate-dialog-copy">
@@ -111,6 +112,7 @@
       <mj-layer id="proto-sheet" kind="sheet" placement="end" modal="true" closeable="true" label="Prototype Sheet">
         <div class="mj-layer-header">
           <h2 class="mj-layer-title">Layer Inspector</h2>
+          <button type="button" class="host-btn host-btn-sm" data-close-layer="proto-sheet" aria-label="Close sheet">✕</button>
         </div>
         <div class="mj-layer-body">
           <p class="gate-dialog-copy">
@@ -141,7 +143,15 @@
       <mj-layer id="proto-popover" kind="popover" modal="false" closeable="true" anchor="#open-popover" label="Prototype Popover">
         <div class="mj-layer-body">
           <p class="gate-popover-title">Quick Actions</p>
-          <p class="gate-dialog-copy">Anchored to the trigger via CDK FlexibleConnectedPositionStrategy.</p>
+          <mj-row density="sm" interactive="true" data-popover-action="mj">
+            <span class="mj-row-content">Switch to MJ Default</span>
+          </mj-row>
+          <mj-row density="sm" interactive="true" data-popover-action="lxp">
+            <span class="mj-row-content">Switch to LXP</span>
+          </mj-row>
+          <mj-row density="sm" interactive="true" data-popover-action="editorial">
+            <span class="mj-row-content">Switch to Editorial</span>
+          </mj-row>
         </div>
         <div class="mj-layer-footer">
           <button type="button" class="host-btn host-btn-sm" id="close-popover">Dismiss</button>

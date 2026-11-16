@@ -96,7 +96,8 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(dialog).toBeVisible();
     await expect(page.locator('html')).toHaveClass(/cdk-global-scrollblock/);
 
-    // axe scan with dialog OPEN
+    // axe scan with dialog OPEN (wait for 160ms entrance animation to settle)
+    await page.waitForTimeout(200);
     const openDialogAxe = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
