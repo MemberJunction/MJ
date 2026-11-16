@@ -4,8 +4,16 @@ import {
     EntityPermissionType, EntitySaveOptions, LogError, Metadata,
     RunView, RunViewParams, StripServerOnlyRunViewParams, UserInfo
 } from '@memberjunction/core';
+import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { EntityCRUDHandler } from './EntityCRUDHandler.js';
 import { ViewOperationsHandler } from './ViewOperationsHandler.js';
+
+/** The scope + resource an incoming REST request must be authorized for (API-key auth only). */
+interface RESTScopeRequirement {
+    ScopePath: string;
+    Resource: string;
+}
 
 /**
  * Configuration options for RESTEndpointHandler
@@ -158,7 +166,13 @@ export class RESTEndpointHandler {
     private setupRoutes() {
         // Middleware to verify MJ user was set by upstream auth
         this.router.use(this.extractMJUser.bind(this));
-        
+
+        // SECURITY: API-key scope enforcement. GraphQL gates these same operations through
+        // ResolverBase.CheckAPIKeyScopeAuthorization; without this middleware a key scoped to e.g.
+        // only 'query:run' would get full entity CRUD and view access over /api/v1/*. JWT/OAuth
+        // callers carry no apiKeyHash and pass straight through.
+        this.router.use(this.enforceApiKeyScope.bind(this));
+
         // Middleware to check entity allowlist/blocklist
         this.router.use('/entities/:entityName', this.checkEntityAccess.bind(this));
         this.router.use('/views/:entityName', this.checkEntityAccess.bind(this));
@@ -240,6 +254,112 @@ export class RESTEndpointHandler {
             return;
         }
         next();
+    }
+
+    /**
+     * Maps an incoming REST request to the API-key scope it requires, mirroring the GraphQL
+     * resolvers' scope vocabulary: entity CRUD → entity:read/create/update/delete, views →
+     * view:run (batch → view:batch), queries → query:run, transactions → transaction:execute.
+     * Returns null for routes that carry no scope requirement (metadata, favorites, current user).
+     */
+    private resolveScopeForRequest(req: express.Request): RESTScopeRequirement | null {
+        const segments = req.path.split('/').filter(Boolean).map(s => {
+            try { return decodeURIComponent(s); } catch { return s; }
+        });
+        const root = segments[0]?.toLowerCase();
+
+        switch (root) {
+            case 'entities': {
+                const resource = segments[1] || '*';
+                switch (req.method.toUpperCase()) {
+                    case 'GET': return { ScopePath: 'entity:read', Resource: resource };
+                    case 'POST': return { ScopePath: 'entity:create', Resource: resource };
+                    case 'PUT':
+                    case 'PATCH': return { ScopePath: 'entity:update', Resource: resource };
+                    case 'DELETE': return { ScopePath: 'entity:delete', Resource: resource };
+                    default: return { ScopePath: 'entity:read', Resource: resource };
+                }
+            }
+            case 'views': {
+                if (segments[1]?.toLowerCase() === 'batch') {
+                    return { ScopePath: 'view:batch', Resource: '*' };
+                }
+                const resource = segments[1] && segments[1].toLowerCase() !== 'entity' ? segments[1] : '*';
+                return { ScopePath: 'view:run', Resource: resource };
+            }
+            case 'queries':
+                return { ScopePath: 'query:run', Resource: '*' };
+            case 'transactions':
+                return { ScopePath: 'transaction:execute', Resource: '*' };
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * SECURITY middleware: evaluates API-key scopes for the REST transport, mirroring
+     * ResolverBase.CheckAPIKeyScopeAuthorization on the GraphQL path (full_access fast path,
+     * then the specific scope through the API Key Engine). No-op for JWT/OAuth callers
+     * (no apiKeyHash on the payload).
+     */
+    private async enforceApiKeyScope(req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> {
+        try {
+            const apiKeyHash = req.userPayload?.apiKeyHash;
+            if (!apiKeyHash) {
+                next();
+                return;
+            }
+
+            const requirement = this.resolveScopeForRequest(req);
+            if (!requirement) {
+                next();
+                return;
+            }
+
+            // System user runs the engine's internal lookups (same as the GraphQL path); the API
+            // key's own user remains the permission ceiling when the operation itself executes.
+            const systemUser = UserCache.Instance.GetSystemUser();
+            if (!systemUser) {
+                res.status(500).json({ error: 'System user not found for API key scope authorization' });
+                return;
+            }
+
+            const apiKeyEngine = GetAPIKeyEngine();
+            const requestContext = { endpoint: req.originalUrl || req.path, method: req.method };
+
+            // full_access fast path — skipLogging because this probe is not the real decision
+            const fullAccess = await apiKeyEngine.Authorize(apiKeyHash, 'MJAPI', 'full_access', '*', systemUser, requestContext, { skipLogging: true });
+            if (fullAccess.Allowed) {
+                next();
+                return;
+            }
+
+            const sessionUser = req.userPayload?.userRecord as UserInfo | undefined;
+            const result = await apiKeyEngine.Authorize(
+                apiKeyHash,
+                'MJAPI',
+                requirement.ScopePath,
+                requirement.Resource,
+                systemUser,
+                requestContext,
+                { actingContext: sessionUser?.APIKeyActingContext }
+            );
+
+            if (!result.Allowed) {
+                res.status(403).json({
+                    error: `Access denied. This API key requires the '${requirement.ScopePath}' scope ` +
+                        `for resource '${requirement.Resource}' to perform this operation. ` +
+                        `Denial reason: ${result.Reason}`
+                });
+                return;
+            }
+
+            next();
+        } catch (error) {
+            LogError(error);
+            // Fail closed: a scope-evaluation failure must never grant access.
+            res.status(403).json({ error: 'API key scope authorization failed' });
+        }
     }
 
     /**

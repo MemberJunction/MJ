@@ -22,7 +22,7 @@
  */
 
 import { PropertyConstraint, ConstraintViolation } from '@memberjunction/interactive-component-types';
-import { RegisterClass } from '@memberjunction/global';
+import { DefaultExpressionEvaluator, RegisterClass } from '@memberjunction/global';
 import { SemanticValidator } from './semantic-validator';
 import { ValidationContext } from './validation-context';
 
@@ -65,15 +65,17 @@ export class RequiredWhenValidator extends SemanticValidator {
       return violations;
     }
 
-    // Evaluate the condition
+    // Evaluate the condition.
+    // SECURITY: the condition string comes from a ComponentSpec (LLM/registry-supplied) and this
+    // linter runs server-side, so it must NEVER be eval'd. SafeExpressionEvaluator parses the
+    // expression to an AST and screens it against an allowlist before compiling — arbitrary code
+    // can never execute. On refusal or parse failure we fail safe: treat the condition as not met.
     let conditionMet = false;
-    try {
-      // Create a safe evaluation context
-      const siblingProp = dependentPropValue;
-      // eslint-disable-next-line no-eval
-      conditionMet = eval(condition);
-    } catch (error) {
-      console.error(`Error evaluating required-when condition "${condition}":`, error);
+    const evaluation = DefaultExpressionEvaluator.Evaluate(condition, { siblingProp: dependentPropValue });
+    if (evaluation.success) {
+      conditionMet = evaluation.value === true;
+    } else {
+      console.error(`Error evaluating required-when condition "${condition}": ${evaluation.error}`);
       return violations;
     }
 

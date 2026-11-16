@@ -3664,7 +3664,20 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
         
         // Links
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="markdown-link">$1</a>');
+        // SECURITY: this HTML goes through bypassSecurityTrustHtml, so the URL must be scheme-checked
+        // here — a model response containing [x](javascript:...) would otherwise be click-to-XSS.
+        // Only http:, https: and mailto: become anchors; anything else renders as plain text.
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_fullMatch: string, text: string, url: string) => {
+            try {
+                const scheme = new URL(url, 'https://placeholder.invalid').protocol;
+                if (scheme === 'http:' || scheme === 'https:' || scheme === 'mailto:') {
+                    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="markdown-link">${text}</a>`;
+                }
+            } catch {
+                // Unparseable URL — fall through to plain text
+            }
+            return text;
+        });
         
         // Unordered lists
         html = html.replace(/^[*-+] (.+)$/gm, '<li>$1</li>');
