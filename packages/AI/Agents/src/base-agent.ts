@@ -20721,6 +20721,10 @@ The context is now within limits. Please retry your request with the recovered c
         stepEntity: MJAIAgentRunStepEntityExtended,
         previousDecision: BaseAgentNextStep
     ): Promise<void> {
+        // The step's INSERT is fire-and-forget (createStepEntity), and the request row has a foreign key to it
+        // (FK_AIAgentRequest_OriginatingStep). Without this wait the request's INSERT can reach the database
+        // first and fail; the coordinator logs that and returns null, and the run pauses with no request to answer.
+        await this._stepSaveQueue.Settled(stepEntity);
         const requestId = await this._feedbackCoordinator.CreateFeedbackRequest({
             Params: params,
             StepEntity: stepEntity,
