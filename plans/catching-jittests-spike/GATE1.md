@@ -348,3 +348,24 @@ Generator `gemini-4-hydrogen`. All decisions of this night, with their options, 
 - `Sandbox.EnsureImage` builds the image at each start and needs the registry for the base image. A registry failure stops the run although the image exists locally (seen three times in the match step).
 - One PR failed at `gh pr view` on a network error and passed on a second attempt (`--retry-failed`).
 
+
+## Catch-rate work, corpus audit and clean sets (2026-11-15)
+
+Details and options are in [OVERNIGHT-DECISIONS.md](OVERNIGHT-DECISIONS.md) N21 to N28. The corpus audit is in [CORPUS-AUDIT.md](CORPUS-AUDIT.md).
+
+**Corpus.** A test written on the base revision can find the bug on 12 of the 45 known-bug entries, and on 3 more with heavy mocking. The other 30 are out of reach: the bug was there before the PR (14), is in all-new code (14), or came from a different PR (2). The target of 25% of all entries is near the ceiling of 27% to 33%.
+
+**Changes kept.** Packages are chosen by risk rank (N21). A proof mutant must be within 10 lines of a changed hunk, and the first test of a risk uses the exact trigger input (N25). `Sandbox.BuildImage` (N22). The first judge stays Opus with the current prompt (N24).
+
+**Known bugs, 10 PRs that a base test can find, one run each.**
+
+| | Before | Final code | Final code and one session per package |
+|---|---|---|---|
+| Reported catch that is the known bug | 3 of 10 | 6 of 10 | 4 of 10 |
+| Cost per PR (USD) | about 1.15 | 1.13 | 1.00 |
+
+One session per package is rejected (N27). The 10 PRs were also used to find the miss causes, and 4 of them are from the held-out slice, so this is not a blind result.
+
+**Clean sets.** Tuning slice with the code before N25: reports on 2 of 15 PRs (4 reports, 13.32 USD). Held-out slice with the final code: reports on 9 of 15 PRs (18 reports, 14.05 USD). No report is labelled by a person yet, and several read as real defects (N28). The 7 held-out bug PRs that were kept back were not run (N26).
+
+**Open for the user.** The gate 1 denominator or a corpus repair (N23); a second test mode for new code (N23 D); labels for the 22 clean reports, and if the report rate on clean PRs is acceptable (N28); the fix-merge fallback of the match step, which can give a false match (#4782); `PackagesPerPR 3` (N21 C).

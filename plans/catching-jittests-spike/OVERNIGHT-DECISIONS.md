@@ -272,6 +272,122 @@ Reading of the result (no setting was changed after it):
 - The first judge is now the step that loses a found bug (#4782 here; #4450 in round 8). The stored data before this night showed that an Opus Low was never reported, but that says nothing about bugs it filters out.
 - The next work with the most value is on catch rate, not on cost: what the first judge sees for catches that match the bug, and why the risk notes do not name the bug on most PRs.
 
+## N21. Package choice follows the risk rank
+
+The analyzer ranked the risks, but the package list came from the LLM's own order. On #5481 the top risk named the fix package and that package was not tested.
+
+| Option | For | Against |
+|---|---|---|
+| A. Keep the LLM's package order | No change | Fix package in the first 2 packages on 14 of 18 PRs |
+| **B. Packages of the risks in rank order, then the LLM's list, then other changed packages (chosen)** | 16 of 18 with the same cap; no added cost | A wrong top risk now also moves the package choice |
+| C. B and `PackagesPerPR 3` | 17 of 18 | About 50% more generator cost per PR |
+
+Decision: B. C stays open for the user (see N27).
+
+## N22. `Sandbox.BuildImage` setting
+
+A cached `docker build` takes about 1 second but contacts the registry, so a run fails when the registry is not reachable.
+
+| Option | For | Against |
+|---|---|---|
+| A. Always build | The image is always current | A registry outage stops every run |
+| **B. Setting `Sandbox.BuildImage`, default `true`; `false` uses the local image and fails clearly when it is absent (chosen)** | Backtests do not depend on the registry; turn it off by one settings line | A stale local image is used until someone builds again |
+| C. Build, and fall back to the local image on failure | No setting to manage | A silent fallback hides a broken build |
+
+Decision: B. `false` is in the backtest settings only. It does not make runs faster.
+
+## N23. Corpus audit and the gate 1 denominator
+
+Two sub agents classified all 45 known-bug entries ([CORPUS-AUDIT.md](CORPUS-AUDIT.md)). A test written on the base revision can find the bug on 12 entries, and on 3 more only with heavy mocking. On 14 the bug was there before the PR, on 14 it is in all-new code, and 2 name the wrong PR. Two verdicts were checked by hand against the code; the rest are not checked by a person.
+
+| Option | For | Against |
+|---|---|---|
+| A. Keep the target as 25% of all 45 entries | No change to the gate | The ceiling is 27% to 33%, so the target needs almost every possible catch |
+| B. Count only entries a base test can find | Measures the tool on what it can do | The denominator rests on sub agent verdicts; looks like moving the goal |
+| C. Repair the miner (the fixed lines must exist at the bug head, and behaviour must differ from base) and mine a new corpus | A sound corpus | Days of work; new labels |
+| D. Add a second test mode that tests new code on head against the stated intent | Reaches the 14 new-code entries | A design change; no base run to compare with, so false reports are harder to control |
+
+Decision: none taken. This is the user's choice. Results below are reported against both denominators.
+
+## N24. First judge: model and prompt stay
+
+93 stored catches were judged again (18 that match a known bug, 74 others), about 10.1 USD.
+
+| First judge | Known-bug catches passed | Other catches passed | Cost (USD) |
+|---|---|---|---|
+| **Opus, current prompt (kept)** | 11 of 18 | 18 of 74 | 2.75 |
+| Opus, new prompt | 11 of 18 | 25 of 74 | 2.98 |
+| GPT-5.1, current prompt | 18 of 18 | 64 of 74 | 0.45 |
+| GPT-5.1, new prompt | 18 of 18 | 71 of 74 | — |
+| Argon | 6 of 18 | 7 of 74 | 1.28 |
+| Sonnet, current prompt | 8 of 18 | 20 of 74 | 1.33 |
+| Sonnet, new prompt | 9 of 18 | 29 of 74 | 1.39 |
+
+Decision: keep Opus with the current prompt. GPT-5.1 passes almost everything, so it does not filter. Argon and Sonnet lose known-bug catches. The new prompt adds passes on other catches and none on known-bug catches.
+
+Also rejected: one judge call per group of sibling tests. It removes 76 of 184 calls, but 9 groups have mixed verdicts, so it can lose catches; the judges are only 15% of the cost.
+
+## N25. Proof mutants must be in the changed code; first test uses the exact trigger
+
+In the stored runs, risk tests whose proof mutant was within 10 lines of a changed hunk gave 103 weak catches and 14 matches from 198 tests. Tests with a mutant farther away or in another file gave 0 from 29. On #4126 the test mocked the buggy branch; on #5513 and #5729 the tests used ordinary inputs.
+
+| Option | For | Against |
+|---|---|---|
+| A. Prompt text only | No code | The model already ignored softer text |
+| **B. The run-test tool refuses a mutant more than 10 lines from every changed hunk, and the prompt asks for the exact trigger input first, then other edge inputs, and forbids mocking the changed function (chosen)** | Removes tests that never catch; pushes tests onto the changed lines | A real risk in code that the PR only calls, not changes, can no longer get a proof |
+| C. B with a file-level rule (same file is enough) | Fewer refused mutants | Keeps the far-away mutants that gave nothing |
+
+Decision: B, merged to the design branch (`02bc3c6052`). Round V measures it.
+
+## N26. Two sandbox jobs at the same time, and the held-out bug PRs that were kept back
+
+The user approved both on 2026-11-15 to cut about 8 hours of serial runs to about 3.5.
+
+| Option | For | Against |
+|---|---|---|
+| A. One job at a time, all sets | Earlier rule; no risk to Docker | About 8 hours |
+| **B. Two jobs at a time, each 6 CPUs and 12 GB, in two worktrees with separate ledgers and stores (chosen)** | Half the wall time; a trial with #3831 and #4450 ended without errors | Stage times grow a little (prepare base 105 s alone, up to 229 s in the pair); not tested with three jobs |
+| **C. Do not run the 7 held-out bug PRs that were kept back (chosen)** | The audit says none can be found; the clean set measures false reports | Those 7 stay unmeasured |
+
+## N27. Rounds V and W: the catch-rate changes are kept, one session per package is rejected
+
+Both rounds ran at the same time on the 10 PRs that a base test can find (#5481, #5513, #5729, #4126, #5703, #3831, #4450, #4120, #5040, #4451). Round V = kept settings with N21 and N25. Round W = the same and `Limits.OneSessionPerPackage` (the DodgyDiff tests are written inside the first risk session of the package).
+
+| | Before (stored runs) | Round V | Round W |
+|---|---|---|---|
+| Reported catch that is the known bug | 3 of 10 (#3831, #4450, #4120) | 6 of 10 (#3831, #4450, #5481, #4126, #5703, #5513) | 4 of 10 (#3831, #4450, #5481, #4126) |
+| Cost per PR (USD) | about 1.15 | 1.13 | 1.00 |
+
+- #5481 and #4450 matched through the fix-merge fallback of the match step. The reports on #5481, #4126, #5703 and #5513 were read and each describes the known bug.
+- #4120 was caught before and is missed in both rounds. The new tests assert on the error list, not on the orphan sweep, and the first judge rated them Low as intended behaviour. The stored run had one test of each kind. This looks like variation in which effect the test asserts.
+- #5040, #4451 and #5729 are missed in all runs.
+
+| Option | For | Against |
+|---|---|---|
+| **A. Keep the session structure, keep N21 and N25 (chosen)** | 6 of 10 | No cost cut |
+| B. One session per package | 11% cheaper | Loses #5703 and #5513 |
+
+Decision: A. The code for B stays on the local branch `CB-jit-one-session` and is not merged. One run per PR; the 10 PRs were also used to find the miss causes, so this is not a blind result.
+
+## N28. Clean sets: more reports after the catch-rate changes
+
+| Set | Code | PRs | PRs with a report | Reports | Cost (USD) |
+|---|---|---|---|---|---|
+| Clean, tuning slice | Before N25 (`8a14b23f05`) | 15 | 2 (#3624, #3823) | 4 | 13.32 |
+| Clean, held-out slice | Final (`02bc3c6052`) | 15 | 9 (#3525, #3907, #3892, #3872, #3895, #3968, #4123, #4276, #4470) | 18 | 14.05 |
+
+- The two sets hold different PRs, so the rise from 2 to 9 is not a clean measure of N25. It is still the most likely cause: tests now target the changed lines with edge inputs.
+- A "clean" PR in the corpus means that no later fix PR was linked to it. It does not mean that the PR has no bug. Several reports read as real defects (for example #3872: a trailing slash in the migrations directory cuts the first letter of each file name; #4123: a caller filter with `or` is joined without parentheses). Others rest on unlikely inputs (#3872 `..` path, #4470 a test subclass).
+- No report is labelled by a person yet. The false report rate of gate 1 needs those labels.
+
+| Option | For | Against |
+|---|---|---|
+| **A. Keep N25 and label the 22 reports (chosen, pending the user)** | Keeps the catch gain; the labels say if the reports have value | Up to 9 of 15 clean PRs get a comment, which is too many if most are false |
+| B. Run the tuning clean set again with the final code | Separates the effect of N25 from the PR mix | About 13 USD and 2 hours |
+| C. Report only catches with median High | Cuts 7 of the 18 held-out reports; all 6 known-bug PRs in round V keep a report only if their catch is High (#5703 is Medium and would be lost) | Loses #5703 |
+
+Decision: A, with B and C open for the user.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -290,3 +406,8 @@ Reading of the result (no setting was changed after it):
 | J | Judge-only rerun of the stored #4450 run (prompt cache check) | 0.34 | 51.93 |
 | R | Phase 3 rehearsal, PR #3831 (task 3.13) | 0.46 | 52.39 |
 | H | Held-out, first 8 bug PRs, kept settings | 9.23 | 61.62 |
+| JE | First-judge comparison on 93 stored catches (7 judge and prompt pairs) | 10.10 | 71.72 |
+| C | Clean, tuning slice, 15 PRs, code before N25 | 13.32 | 85.04 |
+| V | Catch-rate validation, 10 PRs | 11.26 | 96.30 |
+| W | One session per package, 10 PRs | 10.01 | 106.31 |
+| HC | Clean, held-out slice, 15 PRs, final code | 14.05 | 120.36 |
