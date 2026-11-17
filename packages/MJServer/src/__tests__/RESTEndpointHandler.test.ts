@@ -214,13 +214,15 @@ describe('RESTEndpointHandler.isEntityAllowed', () => {
         expect(wildcard.isEntityAllowed('Users')).toBe(true);
     });
 
-    it('SECURITY GAP: a mixed-case exact exclusion silently fails to exclude', () => {
-        // isEntityAllowed lowercases the entity name but compares it with === against
-        // the RAW configured pattern (only the wildcard branch lowercases patterns).
-        // An operator writing excludeEntities: ['Secrets'] — the natural casing —
-        // gets NO exclusion. Pinned so a normalization fix flips this test.
+    it('a mixed-case exact exclusion excludes (lists are normalized to lowercase)', () => {
         const handler = makeHandler({ ExcludeEntities: ['Secrets'] });
-        expect(handler.isEntityAllowed('Secrets')).toBe(true); // exclusion ineffective!
+        expect(handler.isEntityAllowed('Secrets')).toBe(false);
+        expect(handler.isEntityAllowed('Users')).toBe(true);
+    });
+
+    it('mixed-case schema lists match whatever casing the caller passes', () => {
+        expect(makeHandler({ ExcludeSchemas: ['VAULT'] }).isEntityAllowed('Secrets')).toBe(false);
+        expect(makeHandler({ IncludeSchemas: ['CRM'] }).isEntityAllowed('Users')).toBe(true);
     });
 
     it('exclusions override inclusions for the same entity', () => {
@@ -236,9 +238,10 @@ describe('RESTEndpointHandler.isEntityAllowed', () => {
         expect(handler.isEntityAllowed('Secrets')).toBe(false);
     });
 
-    it('SECURITY GAP: a mixed-case exact inclusion fails to include (same raw-pattern comparison)', () => {
+    it('a mixed-case exact inclusion includes (lists are normalized to lowercase)', () => {
         const handler = makeHandler({ IncludeEntities: ['Users'] });
-        expect(handler.isEntityAllowed('Users')).toBe(false); // include list active, but never matches
+        expect(handler.isEntityAllowed('Users')).toBe(true);
+        expect(handler.isEntityAllowed('Secrets')).toBe(false);
     });
 });
 

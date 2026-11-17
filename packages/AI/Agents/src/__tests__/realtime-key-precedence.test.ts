@@ -246,6 +246,25 @@ describe('probe: BaseAgent.StartBridgeRealtimeSession mints on the run\'s key', 
         expect(build.mock.calls.map(([input]) => input.AvatarDelivery)).toEqual(['room', undefined]);
     });
 
+    it("hands the session prep the run's validated scope and active skills, built from the run (#5624)", async () => {
+        const build = vi.spyOn(proto, 'buildSessionParams');
+        await new BaseAgent().StartBridgeRealtimeSession({
+            agent: coAgent,
+            conversationMessages: [],
+            contextUser: { ID: 'u1' } as unknown as UserInfo,
+            apiKeys: RUN_KEYS,
+            PrimaryScopeEntityName: 'Organizations',
+            PrimaryScopeRecordID: ' TENANT-A ',
+            parentActivatedSkillIDs: ['SKILL-1'],
+        });
+        await start(RUN_KEYS);
+        const [scoped, unscoped] = build.mock.calls.map(([input]) => input);
+        expect(scoped.RunScope).toEqual({ PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'TENANT-A', SecondaryScopes: null });
+        expect(scoped.ActiveSkillIDs).toEqual(['SKILL-1']);
+        expect(unscoped.RunScope).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null });
+        expect(unscoped.ActiveSkillIDs).toEqual([]);
+    });
+
     it('marks the session prep as server-side, with or without room delivery', async () => {
         const build = vi.spyOn(proto, 'buildSessionParams');
         await start(RUN_KEYS, { realtimeAvatarDelivery: 'room' });

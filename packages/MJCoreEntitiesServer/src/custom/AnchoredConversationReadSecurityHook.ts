@@ -6,6 +6,7 @@ import {
     Metadata,
     PostRunViewHook,
     RegisterDataHook,
+    RegisterPostRunViewProtectedEntity,
     RunView,
     RunViewParams,
     RunViewResult,
@@ -18,6 +19,7 @@ import {
     FilterAnchoredConversationsForUser,
     type MJConversationEntity
 } from '@memberjunction/core-entities';
+import { EntityNamesMatch, ResolveTargetEntityNameAsync } from './ArtifactSecurityHookHelpers';
 
 const INTERNAL_SECURITY_QUERY_PARAMS = new WeakSet<object>();
 
@@ -96,10 +98,11 @@ function isConversationOrISADescendant(
     provider: IMetadataProvider | null,
     entityName: string
 ): boolean {
+    const normalized = entityName.trim().toLowerCase();
     if (
-        entityName === 'MJ: Conversations' ||
-        entityName === 'MJ: Comments' ||
-        entityName === 'MJ: Field Suggestions'
+        normalized === 'mj: conversations' ||
+        normalized === 'mj: comments' ||
+        normalized === 'mj: field suggestions'
     ) {
         return true;
     }
@@ -108,11 +111,12 @@ function isConversationOrISADescendant(
     }
     const entityInfo =
         (typeof provider.EntityByName === 'function'
-            ? provider.EntityByName(entityName)
-            : undefined) ?? provider.Entities?.find((e) => e.Name === entityName);
+            ? provider.EntityByName(entityName.trim())
+            : undefined) ??
+        provider.Entities?.find((e) => e.Name.trim().toLowerCase() === normalized);
     let cur = entityInfo?.ParentEntityInfo ?? null;
     while (cur) {
-        if (cur.Name === 'MJ: Conversations') {
+        if (cur.Name.trim().toLowerCase() === 'mj: conversations') {
             return true;
         }
         cur = cur.ParentEntityInfo;
@@ -135,14 +139,16 @@ export const AnchoredConversationPostRunViewHook: PostRunViewHook = async (
         return results;
     }
 
-    const entityName = resolveTargetEntityName(params);
+    const provider = resolveProviderForUser(contextUser);
+    const entityName =
+        (await ResolveTargetEntityNameAsync(params, provider, contextUser)) ??
+        resolveTargetEntityName(params);
     if (!entityName) {
         return results;
     }
 
-    const provider = resolveProviderForUser(contextUser);
     const isConvFamily = isConversationOrISADescendant(provider, entityName);
-    if (!isConvFamily && entityName !== 'MJ: Conversation Details') {
+    if (!isConvFamily && !EntityNamesMatch(entityName, 'MJ: Conversation Details', provider)) {
         return results;
     }
 
@@ -471,10 +477,20 @@ async function fetchDetailConversationIdsByIds(
  * Ensures {@link AnchoredConversationPostRunViewHook} is registered in the global `PostRunView`
  * data hooks store. Safe to call multiple times (idempotent).
  */
+export const ANCHORED_CONVERSATION_POST_RUN_VIEW_PROTECTED_ENTITIES: readonly string[] = [
+    'MJ: Conversations',
+    'MJ: Comments',
+    'MJ: Field Suggestions',
+    'MJ: Conversation Details'
+];
+
 export function EnsureAnchoredConversationReadHookRegistered(): void {
     const existing = GetDataHooks<PostRunViewHook>('PostRunView');
     if (!existing.includes(AnchoredConversationPostRunViewHook)) {
         RegisterDataHook('PostRunView', AnchoredConversationPostRunViewHook);
+    }
+    for (const entityName of ANCHORED_CONVERSATION_POST_RUN_VIEW_PROTECTED_ENTITIES) {
+        RegisterPostRunViewProtectedEntity(entityName);
     }
 }
 

@@ -29,12 +29,12 @@
  *   IT: Payload Child   → PayloadDownstreamPaths=["customer.*"], PayloadUpstreamPaths=["analysis.*:add,update"].
  *   IT: Payload Scoped Child → PayloadScope="/analysis".
  *   IT: Payload Empty-Grant Child → PayloadUpstreamPaths=[] (PG4), same prompt as IT: Payload Child.
+ *   IT: Payload Malformed-Downstream Child → PayloadDownstreamPaths='not-valid-json {[' (PG9), same prompt.
  *   IT: Self-Write Restricted → PayloadSelfWritePaths=["notes.*"].
  *
- * SELF-CLEANING: every run tree a check spawns is FK-ordered deep-deleted in Teardown. A check that
- * must vary un-seeded config (PG9 malformed-downstream) snapshots the field, saves, runs, and
- * RESTORES in a finally — the AL7 "deactivate-in-fixture" pattern. Prefer a seeded fixture: a
- * run-time save reaches the server's cached agent only after its debounced engine refresh.
+ * SELF-CLEANING: every run tree a check spawns is FK-ordered deep-deleted in Teardown. Every agent
+ * configuration a check needs is seeded rather than saved at run time: a run-time save reaches the
+ * server's cached agent only after its debounced engine refresh, so the run could use the old value.
  */
 import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext, SkipCheck } from '@memberjunction/testing-integration';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
@@ -55,6 +55,7 @@ interface PayloadGuardsFixture {
     ChildID: string;
     ScopedChildID: string;
     EmptyGrantChildID: string;
+    MalformedChildID: string;
     /** Every root run ID a check produced, deep-deleted in Teardown. */
     CreatedRootRunIds: string[];
     Skip?: string;
@@ -151,30 +152,6 @@ async function runParent(
     const result = await RunAgentClient(fx.Client, fx.Parent, parts.join(' '), payload);
     await Settle();
     return track(fx, RunIdOf(result));
-}
-
-/** Snapshot a field, run body, restore in finally — for the un-seeded-config guard checks. */
-async function withAgentFieldOverride<K extends 'PayloadDownstreamPaths' | 'PayloadUpstreamPaths' | 'Status'>(
-    ctx: IntegrationCheckContext, agentName: string, field: K, value: MJAIAgentEntity[K],
-    body: () => Promise<void>
-): Promise<void> {
-    const agent = await LoadAgentByName(ctx.Provider, ctx.User, agentName);
-    Assert(!!agent, `override target '${agentName}' loads`);
-    const original = agent![field];
-    agent![field] = value;
-    const saved = await agent!.Save();
-    Assert(saved, `override save on '${agentName}.${field}': ${agent!.LatestResult?.CompleteMessage}`);
-    try {
-        await body();
-    } finally {
-        const fresh = await LoadAgentByName(ctx.Provider, ctx.User, agentName);
-        if (fresh) {
-            fresh[field] = original;
-            if (!(await fresh.Save())) {
-                console.error(`  ✗ FAILED TO RESTORE '${agentName}.${field}' — manual fix needed: ${fresh.LatestResult?.CompleteMessage}`);
-            }
-        }
-    }
 }
 
 const CUSTOMER_SENTINEL = 'IT-CUST';
@@ -512,44 +489,43 @@ export const PayloadGuardsChecks: NamedCheck[] = [
             const fx = guardOrSkip();
             const marker = NewMarker('IT-PG9');
             const secretVal = `${SECRET_SENTINEL}-${marker}`;
-            // Set the downstream paths column to non-JSON text; the getter/parse must fall open to ["*"].
-            await withAgentFieldOverride(ctx, 'IT: Payload Child', 'PayloadDownstreamPaths', 'not-valid-json {[', async () => {
-                const rootRunId = await RunWithCompliance(
-                    () => runParent(ctx, fx, { customer: { name: `${CUSTOMER_SENTINEL}-${marker}` }, secret: { key: secretVal }, __marker: marker }, 'IT: Payload Child'),
-                    (id) => childDelegated(ctx, id, fx.ChildID),
-                    'PG9 malformed-downstream'
-                );
-                // THE AUTHORITATIVE SURFACE is what the CHILD RUN received (childReceived): the child run
-                // starts from the DOWNSTREAM-FILTERED payload.
-                //
-                // Do not use the PARENT's Sub-Agent-step PayloadAtStart (`previousDecision.newPayload`):
-                // that is the parent's UNFILTERED payload, recorded before scoping, so it contains the
-                // sentinel no matter what the downstream paths were. Asserting on it passes vacuously.
-                const received = await childReceived(ctx, rootRunId, fx.ChildID);
-                Assert(received.ChildRunIds.length > 0,
-                    `model-noncompliance: PG9 — the parent never produced a linked child run, so no downstream ` +
-                    `payload was ever computed and the fail-open rule was not exercised.`);
-                const receivedByChild = received.Text;
+            // IT: Payload Malformed-Downstream Child is seeded with non-JSON downstream paths; the parse must
+            // fall open to ["*"].
+            const rootRunId = await RunWithCompliance(
+                () => runParent(ctx, fx, { customer: { name: `${CUSTOMER_SENTINEL}-${marker}` }, secret: { key: secretVal }, __marker: marker }, 'IT: Payload Malformed-Downstream Child'),
+                (id) => childDelegated(ctx, id, fx.MalformedChildID),
+                'PG9 malformed-downstream'
+            );
+            // THE AUTHORITATIVE SURFACE is what the CHILD RUN received (childReceived): the child run
+            // starts from the DOWNSTREAM-FILTERED payload.
+            //
+            // Do not use the PARENT's Sub-Agent-step PayloadAtStart (`previousDecision.newPayload`):
+            // that is the parent's UNFILTERED payload, recorded before scoping, so it contains the
+            // sentinel no matter what the downstream paths were. Asserting on it passes vacuously.
+            const received = await childReceived(ctx, rootRunId, fx.MalformedChildID);
+            Assert(received.ChildRunIds.length > 0,
+                `model-noncompliance: PG9 — the parent never produced a linked child run, so no downstream ` +
+                `payload was ever computed and the fail-open rule was not exercised.`);
+            const receivedByChild = received.Text;
 
-                // CURRENT contract (Q4a, unresolved): malformed downstream JSON ⇒ ["*"] ⇒ the FULL payload
-                // reaches the child, so the `secret` sentinel IS present in what the child received (the
-                // inverse of PG1). This PINS that behavior so a future fail-CLOSED ruling surfaces loudly.
-                // The rule itself is pure and synchronous and is ALSO pinned deterministically by
-                // packages/AI/Agents/src/__tests__/subagent-payload-paths-failopen.test.ts — this check adds
-                // the end-to-end evidence that the computed paths really do govern what the child receives.
-                Assert(receivedByChild.includes(secretVal),
-                    `PG9: malformed downstream JSON did NOT fail open to ["*"] — the child run did NOT receive ` +
-                    `the \`secret\` sentinel; behavior changed. Reconcile with Amith Q4a and update this pin. ` +
-                    `Child-run PayloadAtStart: ${receivedByChild.slice(0, 400) || '(empty)'}`);
+            // CURRENT contract (Q4a, unresolved): malformed downstream JSON ⇒ ["*"] ⇒ the FULL payload
+            // reaches the child, so the `secret` sentinel IS present in what the child received (the
+            // inverse of PG1). This PINS that behavior so a future fail-CLOSED ruling surfaces loudly.
+            // The rule itself is pure and synchronous and is ALSO pinned deterministically by
+            // packages/AI/Agents/src/__tests__/subagent-payload-paths-failopen.test.ts — this check adds
+            // the end-to-end evidence that the computed paths really do govern what the child receives.
+            Assert(receivedByChild.includes(secretVal),
+                `PG9: malformed downstream JSON did NOT fail open to ["*"] — the child run did NOT receive ` +
+                `the \`secret\` sentinel; behavior changed. Reconcile with Amith Q4a and update this pin. ` +
+                `Child-run PayloadAtStart: ${receivedByChild.slice(0, 400) || '(empty)'}`);
 
-                // Corroborating only, and deliberately NOT fatal on its own: if the child received the
-                // sentinel but never surfaced it in prompt text, that is template/model rendering variance.
-                const childText = await childPromptText(ctx, rootRunId, fx.ChildID);
-                if (!childText.includes(secretVal)) {
-                    console.log('      → PG9 note: the child RECEIVED the sentinel (contract satisfied) but did not render it into prompt text — template/model variance, not a guard failure.');
-                }
-                console.log('      → PG9: malformed PayloadDownstreamPaths failed OPEN to ["*"] (current, unratified behavior — see proposal Q4a)');
-            });
+            // Corroborating only, and deliberately NOT fatal on its own: if the child received the
+            // sentinel but never surfaced it in prompt text, that is template/model rendering variance.
+            const childText = await childPromptText(ctx, rootRunId, fx.MalformedChildID);
+            if (!childText.includes(secretVal)) {
+                console.log('      → PG9 note: the child RECEIVED the sentinel (contract satisfied) but did not render it into prompt text — template/model variance, not a guard failure.');
+            }
+            console.log('      → PG9: malformed PayloadDownstreamPaths failed OPEN to ["*"] (current, unratified behavior — see proposal Q4a)');
         }
     }
 ];
@@ -588,16 +564,17 @@ for (const check of PayloadGuardsChecks) {
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-payload-guards', {
     Setup: async (ctx: IntegrationCheckContext) => {
-        fixture = { ChildID: '', ScopedChildID: '', EmptyGrantChildID: '', CreatedRootRunIds: [] };
+        fixture = { ChildID: '', ScopedChildID: '', EmptyGrantChildID: '', MalformedChildID: '', CreatedRootRunIds: [] };
         const client = ResolveClient(ctx.Provider, ctx.User);
-        const [parent, child, scoped, emptyGrant, selfWrite] = await Promise.all([
+        const [parent, child, scoped, emptyGrant, malformed, selfWrite] = await Promise.all([
             LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Parent'),
             LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Child'),
             LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Scoped Child'),
             LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Empty-Grant Child'),
+            LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Malformed-Downstream Child'),
             LoadAgentByName(ctx.Provider, ctx.User, 'IT: Self-Write Restricted')
         ]);
-        if (!parent || !child || !scoped || !emptyGrant || !selfWrite) {
+        if (!parent || !child || !scoped || !emptyGrant || !malformed || !selfWrite) {
             fixture.Skip = 'IT payload roster not seeded — run: npx mj sync push --dir=metadata-optional/integration-test';
             return;
         }
@@ -607,6 +584,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-payload-guards', {
         fixture.ChildID = child.ID;
         fixture.ScopedChildID = scoped.ID;
         fixture.EmptyGrantChildID = emptyGrant.ID;
+        fixture.MalformedChildID = malformed.ID;
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const fx = fixture;

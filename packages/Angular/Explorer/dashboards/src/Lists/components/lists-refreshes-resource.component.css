@@ -1,0 +1,310 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.rf-loading {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.rf-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rf-muted {
+  color: var(--mj-text-muted);
+  font-size: 12px;
+}
+
+.rf-strong {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+/* Stat tiles */
+.rf-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rf-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+}
+
+.rf-stat__value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+}
+
+.rf-stat__label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+}
+
+.rf-stat--warning {
+  border-color: var(--mj-status-warning-border);
+  background: color-mix(in srgb, var(--mj-status-warning) 6%, var(--mj-bg-surface));
+}
+
+.rf-stat--danger {
+  border-color: var(--mj-status-error-border);
+  background: color-mix(in srgb, var(--mj-status-error) 6%, var(--mj-bg-surface));
+}
+
+/* Layout */
+.rf-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+
+.rf-main,
+.rf-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rf-card {
+  padding: 16px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+}
+
+.rf-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rf-card__title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.rf-card__header .rf-card__title {
+  margin: 0;
+}
+
+.rf-empty,
+.rf-note {
+  margin: 0 0 8px;
+}
+
+/* Attention cards */
+.rf-attention {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  margin-top: 8px;
+  border: 1px solid var(--mj-border-default);
+  border-left-width: 4px;
+  border-radius: 6px;
+}
+
+.rf-attention--warning {
+  border-left-color: var(--mj-status-warning);
+  background: color-mix(in srgb, var(--mj-status-warning) 5%, var(--mj-bg-surface));
+}
+
+.rf-attention--danger {
+  border-left-color: var(--mj-status-error);
+  background: color-mix(in srgb, var(--mj-status-error) 5%, var(--mj-bg-surface));
+}
+
+.rf-attention__body {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.rf-attention__title {
+  margin-top: 6px;
+  color: var(--mj-text-primary);
+}
+
+.rf-attention__text {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+}
+
+.rf-attention__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Status pills */
+.rf-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-card);
+}
+
+.rf-pill--success {
+  color: var(--mj-status-success-text);
+  background: var(--mj-status-success-bg);
+  border-color: var(--mj-status-success-border);
+}
+
+.rf-pill--warning {
+  color: var(--mj-status-warning-text);
+  background: var(--mj-status-warning-bg);
+  border-color: var(--mj-status-warning-border);
+}
+
+.rf-pill--danger {
+  color: var(--mj-status-error-text);
+  background: var(--mj-status-error-bg);
+  border-color: var(--mj-status-error-border);
+}
+
+/* Owner filter */
+.rf-owner-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Table */
+.rf-table-wrap {
+  overflow-x: auto;
+}
+
+.rf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rf-table th {
+  text-align: left;
+  padding: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+  border-bottom: 1px solid var(--mj-border-default);
+  white-space: nowrap;
+}
+
+.rf-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-primary);
+  vertical-align: top;
+}
+
+.rf-table tbody tr {
+  cursor: pointer;
+}
+
+.rf-table tbody tr:hover,
+.rf-table tbody tr:focus-visible {
+  background: var(--mj-bg-surface-hover);
+  outline: none;
+}
+
+/* Defaults */
+.rf-defaults {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.rf-defaults dt {
+  color: var(--mj-text-muted);
+}
+
+.rf-defaults dd {
+  margin: 0;
+  color: var(--mj-text-primary);
+}
+
+/* Next 24 hours */
+.rf-upcoming {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.rf-upcoming li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.rf-upcoming__when {
+  min-width: 64px;
+  color: var(--mj-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-upcoming__when--paused {
+  color: var(--mj-status-warning-text);
+}
+
+.rf-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--mj-text-link);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rf-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 960px) {
+  .rf-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .rf-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

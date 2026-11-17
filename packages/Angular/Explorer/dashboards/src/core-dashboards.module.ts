@@ -56,6 +56,7 @@ import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.
 // via the lazy loading system when ApplicationManager calls CreateInstanceAsync.
 import { HomeApplication } from './Home/home-application';
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
+import { HealthObservatoryComponent } from './HealthObservatory/health-observatory.component';
 import { ThemeStudioDashboardComponent } from './ThemeStudio/theme-studio-dashboard.component';
 import { ThemeStudioResourceComponent } from './ThemeStudio/theme-studio-resource.component';
 import { ThemeManagerDashboardComponent } from './ThemeStudio/theme-manager-dashboard.component';
@@ -130,6 +131,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ActionPinConfigDialogComponent,
     ActionPinRunnerDialogComponent,
     SystemDiagnosticsComponent,
+    HealthObservatoryComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
     ClassRegistryInspectorComponent,
@@ -236,6 +238,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ThemeManagerDashboardComponent,
     ThemeManagerResourceComponent,
     SystemDiagnosticsComponent,
+    HealthObservatoryComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
     ClassRegistryInspectorComponent,

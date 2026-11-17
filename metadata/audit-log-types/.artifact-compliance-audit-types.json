@@ -1,0 +1,47 @@
+[
+  {
+    "fields": {
+      "Name": "Artifact Block Frozen",
+      "Description": "Logged when a live data block inside a Document or Presentation is frozen to a static snapshot."
+    },
+    "primaryKey": {
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000001"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifact Connected Drive Sync",
+      "Description": "Logged when an artifact version is pushed to or pulled from a linked external Connected Drive (OneDrive, SharePoint, or Google Drive)."
+    },
+    "primaryKey": {
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000002"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifact Exported",
+      "Description": "Logged when a governed artifact is exported to DOCX, PPTX, XLSX, PDF, Markdown, or HTML."
+    },
+    "primaryKey": {
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000003"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifact Permission Changed",
+      "Description": "Logged when Read/Edit/Delete/Share access on a governed artifact or collection is granted or updated."
+    },
+    "primaryKey": {
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000004"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifact Guest Share Link",
+      "Description": "Logged when an external Frozen-only guest share link is created or revoked."
+    },
+    "primaryKey": {
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000005"
+    }
+  }
+]

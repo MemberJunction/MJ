@@ -16,7 +16,7 @@ import { configInfo, dbDatabase, MjCoreSchema } from '../../../Config/config';
 import { MSSQLConnection, GetSqlConfig } from '../../../Config/db-connection';
 import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { UserCache, GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
 import { ClassifySQLServerDefaultValue } from './sqlServerDefaultValues';
 import { DescribeSQLBatchObject, NormalizeSQLServerRoutineDefinition, SplitSQLServerBatches } from './sqlServerScriptText';
@@ -83,8 +83,10 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         connectionInfo += '/' + cfg.database;
 
         await UserCache.Instance.Refresh(provider);
-        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-        const currentUser = userMatch ?? UserCache.Users[0];
+        const currentUser = GetServerPrincipal();
+        if (!currentUser) {
+            throw new Error('No active system user or Owner found in SQL Server; CodeGen needs one to run as.');
+        }
 
         SucceedSpinner('SQL Server connection initialized: ' + connectionInfo);
         return { provider, connection: conn, currentUser, connectionInfo };
@@ -596,15 +598,18 @@ AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE
-        [${entity.SchemaName}].[${entity.BaseTable}]
-    SET
-        ${EntityInfo.UpdatedAtFieldName} = GETUTCDATE()
-    FROM
-        [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
+    IF NOT UPDATE([${EntityInfo.UpdatedAtFieldName}])
+    BEGIN
+        UPDATE
+            [${entity.SchemaName}].[${entity.BaseTable}]
+        SET
+            ${EntityInfo.UpdatedAtFieldName} = GETUTCDATE()
+        FROM
+            [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
+        INNER JOIN
+            INSERTED AS I ON
+            ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
+    END
 END;
 GO`;
     }
@@ -614,8 +619,9 @@ GO`;
     /**
      * Generates conditional `CREATE INDEX` statements for all foreign key columns on an entity.
      * Each index uses the naming convention `IDX_AUTO_MJ_FKEY_{Table}_{Column}`, truncated
-     * to 128 characters (SQL Server's identifier length limit). Wraps each statement in an
-     * `IF NOT EXISTS` check against `sys.indexes` to avoid duplicate index creation.
+     * to 128 characters (SQL Server's identifier length limit). Each statement is guarded by an
+     * `IF NOT EXISTS` that skips it when the generated name exists **or** when another unfiltered
+     * index already leads with the column (#6466), so a hand-written index is not duplicated.
      */
     protected tableToken(entity: EntityInfo): string {
         return entity.BaseTableCodeName;
@@ -626,18 +632,49 @@ GO`;
     }
 
     protected formatIndexStatement(entity: EntityInfo, f: EntityFieldInfo, indexName: string): string {
-        // NOTE: the trailing space after the index name below is intentional — it reproduces
-        // the historical output byte-for-byte. `writeFileIfChanged` compares generated file
-        // content, so altering even insignificant whitespace would rewrite every entity's
-        // .index.generated.sql on the next run for no functional gain.
+        // The guard changed once for #6466 (every entity's .index.generated.sql is rewritten on
+        // the first run after it). Keep it stable from here: `writeFileIfChanged` compares
+        // generated file content, so even a whitespace change rewrites every index file.
         return `-- Index for foreign key ${f.Name} in table ${entity.BaseTable}
+-- Skipped when the index exists or another unfiltered index already leads with the column.
 IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = '${indexName}' 
-    AND object_id = OBJECT_ID('[${entity.SchemaName}].[${entity.BaseTable}]')
+${this.existingIndexGuard(entity, [f], indexName)}
 )
 CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`;
+    }
+
+    /**
+     * The body of the `IF NOT EXISTS (...)` guard on a generated index (#6466): one row when the
+     * generated name already exists on the table, or when any other enabled, unfiltered index on
+     * the table has `fields` as its leading key columns, in order. Included columns do not count.
+     *
+     * Kept inside ONE `EXISTS (...)` (a `UNION ALL`) so the statement keeps the
+     * `IF NOT EXISTS (...) CREATE INDEX` shape the PostgreSQL migration converter recognizes.
+     */
+    protected existingIndexGuard(entity: EntityInfo, fields: EntityFieldInfo[], indexName: string): string {
+        const table = `OBJECT_ID('[${entity.SchemaName}].[${entity.BaseTable}]')`;
+        const leading = fields
+            .map((f, i) => `(ic.key_ordinal = ${i + 1} AND COL_NAME(ic.object_id, ic.column_id) = '${f.Name.replace(/'/g, "''")}')`)
+            .join(' OR ');
+        return `    SELECT 1
+    FROM sys.indexes
+    WHERE name = '${indexName}'
+    AND object_id = ${table}
+    UNION ALL
+    SELECT 1
+    FROM sys.indexes i
+    WHERE i.object_id = ${table}
+    AND i.has_filter = 0
+    AND i.is_disabled = 0
+    AND i.is_hypothetical = 0
+    AND (
+        SELECT COUNT(*)
+        FROM sys.index_columns ic
+        WHERE ic.object_id = i.object_id
+        AND ic.index_id = i.index_id
+        AND ic.is_included_column = 0
+        AND (${leading})
+    ) = ${fields.length}`;
     }
 
     protected softPrimaryKeyIndexPrefix(): string {
@@ -677,11 +714,9 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
         return `-- Index for the soft primary key (${fields.map(f => f.Name).join(', ')}) in table ${entity.BaseTable}.
 -- The key is metadata-only — no PRIMARY KEY constraint — so without this the per-record
 -- existence check on the create path scans the whole table.
+-- Skipped when the index exists or another unfiltered index already leads with these columns.
 IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = '${indexName}'
-    AND object_id = OBJECT_ID('[${entity.SchemaName}].[${entity.BaseTable}]')
+${this.existingIndexGuard(entity, fields, indexName)}
 )
 CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] (${cols});`;
     }
@@ -869,12 +904,17 @@ RETURN
     )
     SELECT TOP 1
         a.[${primaryKey}] AS [RootID],
-        (SELECT MAX([Depth]) FROM CTE_Ancestors) AS [Depth],
-        (SELECT TOP 1 [Path] FROM CTE_Ancestors ORDER BY [Depth] DESC) AS [Path],
-        CAST(CASE WHEN EXISTS (SELECT 1 FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
-        (SELECT COUNT(1) FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) AS [ChildCount]
+        a.[Depth] AS [Depth],
+        a.[Path] AS [Path],
+        CAST(CASE WHEN ch.[ChildCount] > 0 THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
+        ch.[ChildCount] AS [ChildCount]
     FROM
         CTE_Ancestors a
+    OUTER APPLY (
+        SELECT COUNT(1) AS [ChildCount]
+        FROM [${schemaName}].[${tableName}]
+        WHERE [${fieldName}] = @RecordID
+    ) ch
     WHERE
         a.[${fieldName}] IS NULL OR @ParentID IS NULL
     ORDER BY
@@ -2053,7 +2093,7 @@ IF OBJECT_ID('tempdb..#__mj__CodeGen__vwForeignKeys') IS NOT NULL DROP TABLE #__
 IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTablePrimaryKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTablePrimaryKeys;
 IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTableUniqueKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
 
-SELECT [column], [table], [schema_name], referenced_table, referenced_column, [referenced_schema]
+SELECT FK_NAME, [column], [table], [schema_name], referenced_table, referenced_column, [referenced_schema]
 INTO #__mj__CodeGen__vwForeignKeys
 FROM [${schema}].[vwForeignKeys];
 
@@ -2070,6 +2110,27 @@ INTO #__mj__CodeGen__vwTableUniqueKeys
 FROM [${schema}].[vwTableUniqueKeys]
 WHERE KeyColumnCount = 1
   AND IsFiltered = 0;
+
+-- A column of a multi-column foreign key is a usable single-column reference only when the column
+-- it references is unique on its own. Joined alone, any other component matches many referenced
+-- rows and the base view's label join multiplies rows, so it gets no related entity.
+DELETE fk
+FROM #__mj__CodeGen__vwForeignKeys fk
+WHERE EXISTS (
+          SELECT 1 FROM #__mj__CodeGen__vwForeignKeys sibling
+          WHERE sibling.FK_NAME = fk.FK_NAME AND sibling.[schema_name] = fk.[schema_name]
+            AND sibling.[table] = fk.[table] AND sibling.[column] <> fk.[column]
+      )
+  AND NOT EXISTS (
+          SELECT 1 FROM #__mj__CodeGen__vwTablePrimaryKeys pk
+          WHERE pk.SchemaName = fk.referenced_schema AND pk.TableName = fk.referenced_table
+            AND pk.ColumnName = fk.referenced_column AND pk.KeyColumnCount = 1
+      )
+  AND NOT EXISTS (
+          SELECT 1 FROM #__mj__CodeGen__vwTableUniqueKeys uk
+          WHERE uk.SchemaName = fk.referenced_schema AND uk.TableName = fk.referenced_table
+            AND uk.ColumnName = fk.referenced_column
+      );
 `;
     }
 

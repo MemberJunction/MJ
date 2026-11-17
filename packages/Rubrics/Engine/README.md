@@ -46,14 +46,14 @@ const result = await ProviderRubricEngine(provider, contextUser).EvaluateRecord(
 
 `EvaluateRecord` also accepts `evaluatorConfig`, an evaluator selection in the `AIAgentRubric.EvaluatorConfig` shape. `ResolveRubricEvaluatorSelection` turns it into a name and settings; `evaluator` and `settings` on the call override them.
 
-The services are what the engine lends an evaluator. `ProviderRubricEngine` supplies all three, bound to the caller's provider and user:
+The services are what the engine lends an evaluator. `ProviderRubricEngine` supplies them, bound to the caller's provider and user:
 
 | Service | Provider implementation | Used by |
 |---|---|---|
 | `Prompts.Run({ Prompt, Judge, Data, Subject, ModelID, ModelSelection, TimeoutMS })` | `ProviderPromptService` — `AIPromptRunner.ExecutePrompt` with the judge as a child prompt in the evaluator's `judgePrompt` slot and the subject as a user message | LLM |
 | `Prompts.RenderCriteria({ Prompt, Items })` | `ProviderPromptService` — `AIPromptRunner.RenderChildPromptTemplates`, no model call | LLM, Decision |
 | `Prompts.Preview({ Prompt, Judge, Data })` | `ProviderPromptService` — the composed system message `Run` would send, no model call | previews, checks |
-| `Decisions.Decide(prompt, state, questions, modelId)` | `ProviderDecisionService` — `AIDecisionRunner` on the prompt's Decision-type models | Decision |
+| `Decisions.Decide(prompt, state, questions, modelId)` | `ProviderDecisionService` — `AIDecisionRunner` on the prompt's Decision-type models; returns the answers, the prompt run, and the `ModelName` / `ResolvedModel` that answered | Decision, DecisionThenLLM |
 | `Agent.Run(...)` | the runner `@memberjunction/ai-agents` registers with `RegisterRubricAgentRunner` | Agent |
 
 A call can replace any of them through `EvaluateParams.services`.
@@ -64,10 +64,11 @@ The draft stores the evaluator's `EvaluatorType` and `EvaluatorName`, the prompt
 
 ## Evaluators
 
-Each registers under `BaseRubricEvaluator` by the name in bold. `ListRubricEvaluators()` reports every registered one. `AI` is an alias for Agent and `AIPrompt` for LLM.
+Each registers under `BaseRubricEvaluator` by the name in bold. `ListRubricEvaluators()` reports every registered one. `AI` is an alias for Agent, `AIPrompt` for LLM, and `hybrid` for DecisionThenLLM. LLM is the default.
 
 - **LLM** (stored as AIPrompt) — three metadata prompts composed into one call: **Rubric Evaluator** (the parent, which owns the JSON reply contract), a **judge** in its `judgePrompt` slot (`Rubric Evaluator - Default Judge` unless `PromptID` or `PromptName` names another, for example `Rubric Judge - Sage`), and **Rubric Criterion**, which renders each criterion. `SystemPromptID`/`Name` and `CriterionPromptID`/`Name` swap the other two. The subject is a separate, nonce-delimited user message and never passes through a template. `SinglePass` is one call for the whole rubric; `PerCriterion` is one call per leaf. `Samples` runs it up to 9 times and keeps each criterion's median level. `ModelID` pins the model; `ModelSelection: "Judge"` lets the judge's bindings choose it. A quote that is not in the subject text is dropped.
-- **Decision** (stored as AIPrompt) — every leaf with a level scale becomes a typed Score question, and all of them go to a Decision-type model in one call, Default Decision (Jev, then LLM Decision) unless a prompt is named. Each question is the criterion as Rubric Criterion renders it, after the rubric's instructions. The most probable level is the answer and its probability is the confidence. It refuses a rubric with an evidence-required leaf before calling anything, and leaves numeric-scale leaves unanswered.
+- **Decision** (stored as AIPrompt) — every leaf becomes a typed Score question, and all of them go to a Decision-type model in one call, Default Decision (Jev, then LLM Decision) unless a prompt is named. Each question is the criterion as Rubric Criterion renders it, after the rubric's instructions. A level scale answers with its most probable level. A numeric scale is asked as numbers — one level per step when that is at most `NUMERIC_SCORE_MAX_STEP_LEVELS` (11), else `NUMERIC_SCORE_BUCKETS` (5) evenly spaced values — and answers with the probability-weighted value, snapped onto the step. A numeric scale with no Min or Max cannot be asked; it is left unanswered and listed as `UnaskedCriteria`. The confidence is the model's raw probability, calibrated only when the answering model declares a fit (`AIEngineBase.Instance.CalibrateDecisionProbability`) for use `rubric-evaluation` (`RUBRIC_DECISION_USE`), question = the criterion's key, on the model that answered. It refuses a rubric with an evidence-required leaf before calling anything.
+- **DecisionThenLLM** (stored as AIPrompt) — the Decision pass, then one SinglePass LLM call for just the leaves it did not settle: evidence required, not askable, unanswered, or a **calibrated** confidence below `DecisionConfidenceThreshold` (default 0.7; a raw confidence is never thresholded). Both halves are scored together. When the decision cannot run or answer, the whole rubric goes to the LLM evaluator and `FallbackReason` records why; the decision never fails an evaluation. `DecisionPromptID`/`Name` and `DecisionModelID` configure the decision half, so `PromptID`/`Name` and `ModelID` keep configuring the LLM judge. Opt in per agent rubric link with `EvaluatorConfig.EvaluatorName = "DecisionThenLLM"`, or per call. `RunRubricDecisionPass` is exported for custom evaluators that want the same decision pass.
 - **Agent** (stored as Agent) — one run of the Rubric Evaluation Agent, or the agent `AgentID` names. That agent is a Loop agent. Its tools are Get Rubric and Get Rubric Subject. Get Rubric Consensus is not one of its tools. It does not publish.
 - **Deterministic** — a rule on the criterion's evaluator config. No model call.
 - **Human** — not run by the engine. `HumanRubricEvaluator.Start` creates a Draft evaluation and a task titled `Score <rubric>`. It does not score. `StartHumanEvaluation` constructs that class. The person answers in the form, and submit runs `RubricScoring`.

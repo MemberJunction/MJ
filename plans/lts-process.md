@@ -1,6 +1,7 @@
 # MemberJunction LTS Release Process
 
-> **Status: CANON** — v1.3.8, adopted 2026-08-03 (PR #3241 merged with exec acceptance: "until we determine at some point what would improve it, yes, I'm 100% on board" — Amith). Owner: Craig Adam (certification owner).
+> **Status: CANON** — v1.3.9, adopted 2026-08-03 (PR #3241 merged with exec acceptance: "until we determine at some point what would improve it, yes, I'm 100% on board" — Amith). Owner: Craig Adam (certification owner).
+> v1.3.9 corrects when a line patch takes its labels (§6, §9.4, §10 scenario 3). The text said gates 1–3 pass first, but `publish.yml` moves `lts-x.y`, and `latest` for the newest certified line, when it publishes; 6.1.7 (2026-11-10) did exactly that. The mini-cert runs on the published build.
 > v1.3.8 adds §9.4, when a line patch ships. §5.3 says what may go on a line, but nothing said when to release it, so fixes could wait on a line indefinitely: by 2026-11-09 `lts/6.1` was 39 commits past 6.1.6 (released 2026-10-16), including a fix a production deployment was working around by hand.
 > v1.3.7 adds §5.3, the backport eligibility bar. v1.3.6 established that backporting is opt-in and defaults to no (§10 edge case 9), but never said what clears the bar, so the phrase "fixes that *should* have been labeled" carried the whole decision undefined and every case relitigated from first principles (#3425's cache freeze being the first). §5.3 names what qualifies, what queues, and why the line is not simply "the last release with every bug fixed." It also puts the `backport-declined` decision on the record, which was named in v1.3 but never created as a label.
 > v1.3.6 amends §5.2 rule 2 after the first real backport (#3525, 2026-08-06): the label mechanism silently failed on a branch containing merge-of-`next` commits — the action refused the backport yet exited 0, leaving a green run. The invariant is now **assert-the-backport** — `merge_commits: skip` (payload must live in non-merge commits) plus a workflow step that fails red when any labeled target does not land.
@@ -227,7 +228,7 @@ None of this makes the line frozen. It takes fixes it has a reason to take, and 
 | 7 | **Zero open `cert-blocker`s** | Process | Label query returns empty |
 | 8 | **Certification sign-off** | Authority | Craig approves the `release-lines.json` PR — the only way the label applies |
 
-**Mini-certification for line releases:** every post-certification line patch — code-only, `metadata-migration`, or `security-exception` — re-runs the automated gates (1–3) before the new build inherits the LTS label. No human cert week — but never a silent inherit.
+**Mini-certification for line releases:** every post-certification line patch — code-only, `metadata-migration`, or `security-exception` — re-runs the automated gates (1–3) on the published build. The build takes the line's labels when it publishes (`lts-x.y`, and `latest` if the line is the newest certified), so the gates run right after, and the result goes in `certifications/x.y.z.md`. No human cert week, but never an unrecorded patch. If a gate finds a regression, the certification owner moves the labels back to the previous patch and the fix ships as the next one.
 
 ## 7. RACI
 
@@ -314,7 +315,7 @@ The argument for monthly: more practice cycles to harden the gates fast. If chos
 1. **A due patch does not wait for a fix that isn't on the line yet.** It ships with what is merged; the late fix takes the next patch.
 2. **Security fixes stay terse in public.** Release notes and PR titles say "security fix" and the affected surface, not the hole, until every supported line has the patch. Reports that arrive privately stay private until then.
 3. **The threshold applies to every supported line**, including one in grace (§9.3), where only security and critical fixes qualify anyway.
-4. **Each patch runs the mini-cert** (§6): gates 1–3 before the build inherits the label. When a patch lands during a certification window, its gate 3 run competes with the cycle's gates for the same crew (§16 risk 5); the patch still ships on time, and the certification owner reschedules.
+4. **Each patch runs the mini-cert** (§6): gates 1–3 on the published build. When a patch lands during a certification window, its gate 3 run competes with the cycle's gates for the same crew (§16 risk 5); the patch still ships on time, and the certification owner reschedules.
 5. **The certification owner dispatches.** The maintenance loop flags a due line on the LTS hub and to the certification owner; it never dispatches.
 
 ## 10. Worked Examples
@@ -325,7 +326,7 @@ The core walkthrough (this is the scenario from the PR discussion, and the gramm
 |---|---|---|---|
 | 1 | First 6-era certification | **6.1.1** | Candidate 6.1.0 was cut (pre-exit dance); cert fixes produced 6.1.1; gates passed on it. `latest` → 6.1.1; line branch `lts/6.1` live |
 | 2 | Dev ships a feature with a migration | **6.2.0-edge.0** | Edge (pre-mode) targets the next line's tuple; migration satisfies the minor-tuple rule by construction |
-| 3 | Non-migration bug found in 6.1.1 | **6.1.2** | Fix on `next` first → `backport lts/6.1` → line patch; mini-cert (gates 1–3); label inherits; `latest` → 6.1.2. `dbImpact: none` |
+| 3 | Non-migration bug found in 6.1.1 | **6.1.2** | Fix on `next` first → `backport lts/6.1` → line patch; label and `latest` → 6.1.2 at publish; mini-cert (gates 1–3) recorded. `dbImpact: none` |
 | 4 | More Edge work, then a bug fix to it | **6.2.0-edge.1**, **6.2.0-edge.2** | Counter increments per publish; tuple holds at 6.2.0 |
 | 5 | **Security hole requiring a migration on the LTS line** | **6.1.3** + twin on Edge (**6.2.0-edge.3**) | Fix + migration land on `next` first (rides the Edge stream); backported **byte-identical** (same Flyway version string + content) with `security-exception` → ships as a **patch** carrying a migration. `dbImpact: schema`; mini-cert; `latest` → 6.1.3. A 6.1.3 DB later upgrading to line 6.2+ skips the migration (same Flyway version) |
 | 6 | Cycle #2 candidate cut | **6.2.0** | Pre-exit dance: suffix comes off the stream's tuple; branch `lts/6.2`; Edge resumes at **6.3.0-edge.0** |

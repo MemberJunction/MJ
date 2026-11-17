@@ -1063,6 +1063,35 @@ export type ExecuteAgentResult<P = any> = {
      * @since 5.24.0
      */
     resolvedStorageAccountId?: string;
+
+    /**
+     * Collaborative governed `MJ: Artifacts` (Docs, Slides, Sheets, Whiteboards) created,
+     * synthesized, or mutated mid-run via `artifact_tool` or `GovernedArtifactService` actions.
+     * Ensures `AgentRunner` and realtime delegation link these artifacts even when `payload` is empty.
+     */
+    touchedArtifacts?: GovernedRunArtifactSummary[];
+}
+
+/**
+ * Summary of a governed `MJ: Artifacts` record touched during an agent run via workspace tools
+ * or governed CoreActions. Carried on {@link ExecuteAgentResult.touchedArtifacts} so conversation
+ * detail links and realtime delegation channels can surface collaborative Docs/Slides/Sheets.
+ */
+export interface GovernedRunArtifactSummary {
+    /** `MJ: Artifacts` primary key UUID. */
+    ArtifactID: string;
+    /** Latest `MJ: Artifact Versions` primary key UUID produced or updated during the run. */
+    ArtifactVersionID: string;
+    /** Monotonic version number corresponding to {@link ArtifactVersionID}. */
+    VersionNumber: number;
+    /** Display name of the artifact. */
+    Name: string;
+    /** Canonical `MJ: Artifact Types` Name (e.g. `'Markdown Document'`, `'Presentation'`, `'Excel Spreadsheet'`). */
+    ArtifactTypeName: string;
+    /** Optional `DriverClass` from `MJ: Artifact Types` (used for channel partitioning). */
+    DriverClass?: string;
+    /** Highest-precedence operation performed on this artifact during the run. */
+    Operation: 'created' | 'mutated' | 'synthesized';
 }
 
 /**
@@ -1287,6 +1316,7 @@ export interface AgentPostRunCompactionConfig {
  *   agent: myFlowAgent,
  *   conversationMessages: messages,
  *   agentTypeParams: {
+ *     executionMode: 'inRun',       // startAtStep and skipSteps are honoured only in-run
  *     startAtStep: someStepEntity,  // Start at a specific step
  *     skipSteps: [stepToSkip]       // Skip certain steps
  *   }
@@ -1691,7 +1721,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * `paused: true` is start-paused — nothing is claimed until Resume/Step.
      * Must travel with the submit; Pause-after-submit races the first dispatcher poll.
      */
-    taskGraphDebug?: { paused?: boolean };
+    taskGraphDebug?: { paused?: boolean; breakpointStepIDs?: string[] };
 
     /**
      * The security envelope of the task-graph node this run executes, set by the task-graph agent runner
@@ -2089,7 +2119,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * type-specific configuration that doesn't belong in the general ExecuteAgentParams.
      *
      * Examples:
-     * - Flow agents: FlowAgentExecuteParams with startAtStep, skipSteps
+     * - Flow agents: FlowAgentExecuteParams with executionMode, startAtStep, skipSteps. A Flow run
+     *   on the task-graph dispatcher (the default for a top-level run) refuses startAtStep and a
+     *   non-empty skipSteps; set executionMode to 'inRun' to use them.
      * - Loop agents: Could define LoopAgentExecuteParams with custom iteration controls
      *
      * The type is determined by the TAgentTypeParams generic parameter.
@@ -2103,6 +2135,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      *   agent: myFlowAgent,
      *   conversationMessages: messages,
      *   agentTypeParams: {
+     *     executionMode: 'inRun',
      *     startAtStep: AIEngine.Instance.GetAgentSteps(agentId).find(s => s.Name === 'Approval'),
      *     skipSteps: [debugStep, testStep]
      *   }

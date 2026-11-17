@@ -30,7 +30,7 @@ import {
     OracleResult,
     SuiteFixtureContext
 } from '@memberjunction/testing-engine';
-import { Metadata, ProviderType } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, ProviderType } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -50,7 +50,7 @@ import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types'
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
 import { IsCheckSkip, TestOutcome, WriteOutcomesFile } from './test-runner';
 import { DiscoverRlsFixture } from './rls-fixture';
-import { INTEGRATION_TARGET_TYPE, AllowedSkipGate, SkippedCheckDetails } from './skip-gate';
+import { INTEGRATION_TARGET_TYPE, AllowedSkipGate, AllowedSkipTransport, SkippedCheckDetails } from './skip-gate';
 
 const TARGET_TYPE = INTEGRATION_TARGET_TYPE;
 
@@ -150,6 +150,10 @@ export class IntegrationTestDriver extends BaseTestDriver {
             return this.buildErrorResult(context, startTime, (err as Error).message);
         }
 
+        const selectors = Array.isArray(config.checks) ? config.checks : [];
+        const transport: AllowedSkipTransport =
+            config.transport ?? (selectors.some(s => this.bundleTransport(s.type) === 'client') ? 'client' : 'server');
+
         // 2) Whole-test tier gate (gated-tier / local-dev safety net). The tier decides the
         //    env var via TIER_ENV_GATE; an explicit `requiresEnv` overrides it. When the gate
         //    is unmet, report a REAL 'Skipped' result (Track A/A1) — a gated run must never
@@ -164,16 +168,12 @@ export class IntegrationTestDriver extends BaseTestDriver {
             // The tier's own gate is an allowed skip. An explicit `requiresEnv` parks a test for some
             // other reason: allowed only when every bundle it selects has a bundle-level allowlist
             // entry, otherwise the skip gate reports it as unexpected.
-            const allowance = explicitGate ? this.parkedTestAllowance(config)
+            const allowance = explicitGate ? this.parkedTestAllowance(config, transport)
                 : tier === 'mutation' ? MUTATION_GATE_ALLOWANCE
                 : tier === 'live-model' ? LIVE_MODEL_GATE_ALLOWANCE
                 : undefined;
             return this.buildSkipResult(context, startTime, note, allowance);
         }
-
-        const selectors = Array.isArray(config.checks) ? config.checks : [];
-        const transport: 'server' | 'client' =
-            config.transport ?? (selectors.some(s => this.bundleTransport(s.type) === 'client') ? 'client' : 'server');
 
         // 2b) D1 host check. These suites must own their process — install the instrumented
         //     cache as the FIRST caller of LocalCacheManager.Initialize. Inside a live MJAPI
@@ -196,7 +196,9 @@ export class IntegrationTestDriver extends BaseTestDriver {
         const effectiveTimeout = this.getEffectiveTimeout(context.test);
         const deadline = Date.now() + effectiveTimeout;
         let timedOut = false;
-        const timer = setTimeout(() => { timedOut = true; }, effectiveTimeout);
+        const markTimedOut = (): void => { timedOut = true; };
+        const isBudgetExhausted = (): boolean => timedOut || Date.now() >= deadline;
+        const timer = setTimeout(markTimedOut, effectiveTimeout);
 
         const oracleResults: OracleResult[] = [];
         const outcomes: TestOutcome[] = []; // parallel array for the EMIT_OUTCOMES sidecar
@@ -205,12 +207,12 @@ export class IntegrationTestDriver extends BaseTestDriver {
 
             // 4) Run each selected bundle's checks IN ORDER against ONE shared context.
             for (const sel of selectors) {
-                if (timedOut) {
+                if (isBudgetExhausted()) {
                     // Bundles the loop never reached: each registered check is a budget skip.
                     this.recordBudgetSkips(context, IntegrationCheckRegistry.Instance.GetBundle(sel.type), new Set(), oracleResults, outcomes);
                     continue;
                 }
-                await this.runBundle(context, checkCtx, sel.type, sel.config, oracleResults, outcomes, () => timedOut, deadline);
+                await this.runBundle(context, checkCtx, sel.type, sel.config, transport, oracleResults, outcomes, isBudgetExhausted, markTimedOut, deadline);
             }
         } catch (bootErr) {
             clearTimeout(timer);
@@ -239,16 +241,16 @@ export class IntegrationTestDriver extends BaseTestDriver {
         }
 
         // 5b) Assemble the DriverExecutionResult (counts mirror AgentEvalDriver).
-        return this.buildResult(context, startTime, oracleResults, timedOut);
+        return this.buildResult(context, startTime, oracleResults, isBudgetExhausted());
     }
 
     /**
      * The allowance for a Test parked by an explicit `requiresEnv` gate: the bundle-level allowlist
      * entry when every selected bundle has one (the first one's gate and reason), else undefined.
      */
-    private parkedTestAllowance(config: IntegrationTestConfig): SkipAllowance | undefined {
+    private parkedTestAllowance(config: IntegrationTestConfig, transport: AllowedSkipTransport): SkipAllowance | undefined {
         const bundles = Array.isArray(config.checks) ? config.checks.map(c => c.type) : [];
-        const entries = bundles.map(b => IntegrationCheckRegistry.Instance.GetAllowedSkip(b));
+        const entries = bundles.map(b => IntegrationCheckRegistry.Instance.GetAllowedSkip(b, transport));
         const first = entries[0];
         if (!first || entries.some(e => e === undefined)) {
             return undefined;
@@ -267,9 +269,11 @@ export class IntegrationTestDriver extends BaseTestDriver {
         checkCtx: IntegrationCheckContext,
         bundleType: string,
         selConfig: IntegrationCheckSelectionConfig | undefined,
+        transport: AllowedSkipTransport,
         oracleResults: OracleResult[],
         outcomes: TestOutcome[],
         isTimedOut: () => boolean,
+        markTimedOut: () => void,
         deadline: number
     ): Promise<void> {
         const bundle = IntegrationCheckRegistry.Instance.GetBundle(bundleType);
@@ -338,7 +342,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
                         LIVE_MODEL_GATE_ALLOWANCE);
                     continue;
                 }
-                await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, deadline);
+                await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, transport, oracleResults, outcomes, markTimedOut, deadline);
             }
 
             // A bundle whose every check was gated out ran NOTHING, and used to report PASS for it.
@@ -445,12 +449,16 @@ export class IntegrationTestDriver extends BaseTestDriver {
         id: string,
         fn: (ctx: IntegrationCheckContext) => Promise<void>,
         checkCtx: IntegrationCheckContext,
-        remaining: number
+        remaining: number,
+        markTimedOut: () => void
     ): Promise<void> {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timeout = new Promise<never>((_, reject) => {
             timer = setTimeout(
-                () => reject(new Error(`check '${id}' exceeded the ${remaining}ms remaining run budget (hung check)`)),
+                () => {
+                    markTimedOut();
+                    reject(new Error(`check '${id}' exceeded the ${remaining}ms remaining run budget (hung check)`));
+                },
                 remaining
             );
         });
@@ -494,15 +502,24 @@ export class IntegrationTestDriver extends BaseTestDriver {
             `− ${id}: ${reason}${allowance ? ` [allowed: ${allowance.Gate}]` : ' [NOT on the skip allowlist]'}`);
     }
 
-    /** Run one check in try/catch and append one OracleResult + one TestOutcome. */
+    /**
+     * Run one check in try/catch and append one OracleResult + one TestOutcome.
+     *
+     * After the check settles (pass, fail, skip or timeout), any transaction it left open on the
+     * shared provider is rolled back and the check is failed with "left a transaction open"
+     * (#5389). Without this, every later check joins that transaction as a savepoint and one hung
+     * check stalls the rest of the run.
+     */
     private async runCheck(
         context: DriverExecutionContext,
         checkCtx: IntegrationCheckContext,
         id: string,
         name: string,
         fn: (ctx: IntegrationCheckContext) => Promise<void>,
+        transport: AllowedSkipTransport,
         oracleResults: OracleResult[],
         outcomes: TestOutcome[],
+        markTimedOut: () => void,
         deadline: number
     ): Promise<void> {
         const checkStart = Date.now();
@@ -511,30 +528,74 @@ export class IntegrationTestDriver extends BaseTestDriver {
             this.recordSkippedCheck(context, oracleResults, outcomes, id, name, budgetSkipReason(id), undefined);
             return;
         }
+        let failure: string | undefined;
+        let skipReason: string | undefined;
         try {
-            await this.runWithDeadline(id, fn, checkCtx, remaining);
-            const durationMs = Date.now() - checkStart;
-            oracleResults.push({
-                oracleType: id,
-                passed: true,
-                score: 1,
-                message: name,
-                details: { DurationMs: durationMs, runViewCacheSets: checkCtx.Storage.SetCount('RunViewCache') }
-            });
-            outcomes.push({ Name: name, Passed: true, DurationMs: durationMs });
-            this.logToTestRun(context, 'info', `✓ ${id}`);
+            await this.runWithDeadline(id, fn, checkCtx, remaining, markTimedOut);
         } catch (checkErr) {
             if (IsCheckSkip(checkErr)) {
-                this.recordSkippedCheck(context, oracleResults, outcomes, id, name, `SKIPPED: ${checkErr.message}`,
-                    IntegrationCheckRegistry.Instance.GetAllowedSkip(id));
-                return;
+                skipReason = `SKIPPED: ${checkErr.message}`;
+            } else {
+                failure = (checkErr as Error).message;
             }
-            const durationMs = Date.now() - checkStart;
-            const message = (checkErr as Error).message;
-            oracleResults.push({ oracleType: id, passed: false, score: 0, message, details: { DurationMs: durationMs } });
-            outcomes.push({ Name: name, Passed: false, DurationMs: durationMs, Error: message });
-            this.logToTestRun(context, 'error', `✗ ${id}: ${message}`);
         }
+        const leftOpen = await this.rollBackLeftoverTransaction(context, checkCtx, id);
+        if (leftOpen) {
+            failure = failure ? `${failure}; ${leftOpen}` : leftOpen;
+        }
+        if (failure === undefined && skipReason !== undefined) {
+            this.recordSkippedCheck(context, oracleResults, outcomes, id, name, skipReason,
+                IntegrationCheckRegistry.Instance.GetAllowedSkip(id, transport));
+            return;
+        }
+        const durationMs = Date.now() - checkStart;
+        if (failure !== undefined) {
+            oracleResults.push({ oracleType: id, passed: false, score: 0, message: failure, details: { DurationMs: durationMs } });
+            outcomes.push({ Name: name, Passed: false, DurationMs: durationMs, Error: failure });
+            this.logToTestRun(context, 'error', `✗ ${id}: ${failure}`);
+            return;
+        }
+        oracleResults.push({
+            oracleType: id,
+            passed: true,
+            score: 1,
+            message: name,
+            details: { DurationMs: durationMs, runViewCacheSets: checkCtx.Storage.SetCount('RunViewCache') }
+        });
+        outcomes.push({ Name: name, Passed: true, DurationMs: durationMs });
+        this.logToTestRun(context, 'info', `✓ ${id}`);
+    }
+
+    /**
+     * Roll back a transaction a check left open on the context's database provider (#5389).
+     * Returns the failure note when one was open, undefined otherwise. A rollback that throws
+     * falls back to `ResetTransactionState`, the same route `ReleaseIndependentInstance` takes.
+     */
+    private async rollBackLeftoverTransaction(
+        context: DriverExecutionContext,
+        checkCtx: IntegrationCheckContext,
+        id: string
+    ): Promise<string | undefined> {
+        const provider = checkCtx.Provider;
+        if (!(provider instanceof DatabaseProviderBase) || provider.TransactionDepth === 0) {
+            return undefined;
+        }
+        const depth = provider.TransactionDepth;
+        this.logToTestRun(context, 'error',
+            `check '${id}' left a transaction open (depth ${depth}); rolling it back so later checks start at depth 0`);
+        try {
+            for (let i = 0; i < depth && provider.TransactionDepth > 0; i++) {
+                await provider.RollbackTransaction();
+            }
+            if (provider.TransactionDepth > 0) {
+                await provider.ResetTransactionState();
+            }
+        } catch (rollbackErr) {
+            this.logToTestRun(context, 'warn',
+                `rollback after '${id}' failed (${(rollbackErr as Error).message}); resetting the transaction state`);
+            await provider.ResetTransactionState();
+        }
+        return `left a transaction open (depth ${depth}); rolled back`;
     }
 
     /** client-cache / rls-isolation-client run on the GraphQL client transport; others on SQL server. */

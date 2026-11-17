@@ -6,6 +6,7 @@ import {
     DatabaseProviderBase,
     EntityInfo,
     IMetadataProvider,
+    IsPostRunViewProtectedEntity,
     Metadata,
     QueryInfo,
     RunView,
@@ -928,6 +929,16 @@ export class AgentDataPolicyGuard {
     ): QueryPolicyGuardOutcome {
         const deniedPatterns = new Set<string>();
         for (const entity of entities) {
+            if (IsPostRunViewProtectedEntity(entity.Name)) {
+                return {
+                    Blocked: {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message: `Cannot execute ${ queryLabel }: entity "${ entity.Name }" enforces PostRunView row-level security that raw/stored SQL cannot bypass. Read "${ entity.Name }" with Get Records instead.`,
+                        Params: params.Params,
+                    },
+                };
+            }
             const evalResult = AgentUserPolicyEngine.Instance.EvaluateEntityAccess({
                 policy,
                 contextUser,

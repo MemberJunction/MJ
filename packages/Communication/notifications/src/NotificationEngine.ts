@@ -1,4 +1,4 @@
-import { BaseEngine, IMetadataProvider, Metadata, UserInfo, LogError, LogStatus, RegisterForStartup } from '@memberjunction/core';
+import { BaseEngine, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus, RegisterForStartup } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserNotificationEntity, MJUserNotificationTypeEntity, MJUserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -22,6 +22,26 @@ import {
  * recipient's preference where an application, a role or a notice's origin can speak.
  */
 export class NotificationEngine extends BaseEngine<NotificationEngine> {
+  /**
+   * Communication provider that sends notification email (#5983). Order: this property (a host sets it from
+   * `mj.config.cjs` `notifications.emailProvider`), then `NOTIFICATION_EMAIL_PROVIDER`, then `SendGrid`.
+   * MS Graph sends as the From mailbox, so `NOTIFICATION_FROM_EMAIL` must be a mailbox the app registration may send as.
+   */
+  public static EmailProviderName: string | undefined;
+
+  /** Communication provider that sends notification SMS. Order: this property, `NOTIFICATION_SMS_PROVIDER`, `Twilio`. */
+  public static SMSProviderName: string | undefined;
+
+  /** The email provider name in effect, and the setting it came from (for error messages). */
+  public static ResolveEmailProvider(): { name: string; setting: string } {
+    return ResolveProviderSetting(NotificationEngine.EmailProviderName, 'notifications.emailProvider', 'NOTIFICATION_EMAIL_PROVIDER', 'SendGrid');
+  }
+
+  /** The SMS provider name in effect, and the setting it came from (for error messages). */
+  public static ResolveSMSProvider(): { name: string; setting: string } {
+    return ResolveProviderSetting(NotificationEngine.SMSProviderName, 'notifications.smsProvider', 'NOTIFICATION_SMS_PROVIDER', 'Twilio');
+  }
+
   /**
    * Returns the singleton instance of the NotificationEngine
    */
@@ -74,13 +94,60 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    * What the scoped configs say for this notice, for the recipient and the roles they hold. Public so a host can
    * see the decision a notice got, and so tests can drive it without sending.
    */
-  public ResolveScopedChannels(params: SendNotificationParams, typeId: string): ScopedChannelDecisions {
-    const recipient = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, params.userId));
-    const roleIds = (recipient?.UserRoles ?? []).map((r) => r.RoleID).filter((id): id is string => !!id);
+  public ResolveScopedChannels(params: SendNotificationParams, typeId: string, roleIds?: string[]): ScopedChannelDecisions {
     return CreateScopedNotificationConfigResolver().Resolve(this.ScopedNotificationConfigs, typeId, params.scope, {
       userId: params.userId,
-      roleIds,
+      roleIds: roleIds ?? this.cachedRoleIds(params.userId) ?? [],
     });
+  }
+
+  /** The recipient's role IDs from `UserCache`, or null when the recipient is not cached. */
+  private cachedRoleIds(userId: string): string[] | null {
+    const recipient = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, userId));
+    return recipient ? (recipient.UserRoles ?? []).map((r) => r.RoleID).filter((id): id is string => !!id) : null;
+  }
+
+  /**
+   * The recipient's role IDs for scoped-config resolution (#5492). A recipient missing from `UserCache` (created after
+   * the cache loaded, say) used to resolve with no roles, so a locked Deny scoped to one of their roles stopped
+   * applying. On a miss the roles are read from `MJ: User Roles`; if that read fails too, the result fails closed: the
+   * recipient is treated as holding every role that has a locked Deny for this type, so those Denies still apply.
+   */
+  public async ResolveRecipientRoleIds(userId: string, typeId: string, contextUser: UserInfo): Promise<string[]> {
+    const cached = this.cachedRoleIds(userId);
+    if (cached) return cached;
+    try {
+      const rv = this.ProviderToUse ? RunView.FromMetadataProvider(this.ProviderToUse) : new RunView();
+      const result = await rv.RunView<{ RoleID: string }>(
+        {
+          EntityName: 'MJ: User Roles',
+          ExtraFilter: `UserID='${userId.replace(/'/g, "''")}'`,
+          Fields: ['RoleID'],
+          ResultType: 'simple',
+        },
+        contextUser,
+      );
+      if (result.Success) {
+        LogStatus(`[NotificationEngine] Recipient ${userId} is not in UserCache; read ${result.Results.length} role(s) from MJ: User Roles.`);
+        return result.Results.map((r) => r.RoleID).filter((id): id is string => !!id);
+      }
+      LogError(`[NotificationEngine] Could not read roles of recipient ${userId}: ${result.ErrorMessage}. Applying every role-scoped locked Deny.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`[NotificationEngine] Could not read roles of recipient ${userId}: ${message}. Applying every role-scoped locked Deny.`);
+    }
+    return this.lockedDenyRoleIds(typeId);
+  }
+
+  /** The roles named by a locked Deny row of this type: the fail-closed role set when a recipient's roles are unknown. */
+  private lockedDenyRoleIds(typeId: string): string[] {
+    const rolesEntityId = this.ProviderToUse?.EntityByName('MJ: Roles')?.ID;
+    if (!rolesEntityId) return [];
+    return this.ScopedNotificationConfigs
+      .filter((c) => UUIDsEqual(c.NotificationTypeID, typeId) && c.IsLocked && !!c.PrimaryScopeRecordID)
+      .filter((c) => !!c.PrimaryScopeEntityID && UUIDsEqual(c.PrimaryScopeEntityID, rolesEntityId))
+      .filter((c) => c.InApp === 'Deny' || c.Email === 'Deny' || c.SMS === 'Deny')
+      .map((c) => c.PrimaryScopeRecordID as string);
   }
 
   /**
@@ -134,8 +201,11 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
       // looks up user preference from cache
       const prefs = this.getUserPreferences(params.userId, type.ID);
 
+      // The recipient's roles, read when they are not cached, so role-scoped configs apply to them (#5492)
+      const roleIds = params.forceDeliveryChannels ? [] : await this.ResolveRecipientRoleIds(params.userId, type.ID, contextUser);
+
       // Determine delivery channels
-      const channels = this.resolveDeliveryChannels(params, prefs, type);
+      const channels = this.resolveDeliveryChannels(params, prefs, type, roleIds);
       result.deliveryChannels = channels;
 
       // Early return if user has opted out (all channels disabled)
@@ -185,8 +255,9 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     params: SendNotificationParams,
     prefs: MJUserNotificationPreferenceEntity | null,
     type: MJUserNotificationTypeEntity,
+    roleIds: string[],
   ): DeliveryChannels {
-    return this.applyChannelCeiling(this.resolvePreferredChannels(params, prefs, type), params.allowedDeliveryChannels);
+    return this.applyChannelCeiling(this.resolvePreferredChannels(params, prefs, type, roleIds), params.allowedDeliveryChannels);
   }
 
   /**
@@ -212,6 +283,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     params: SendNotificationParams,
     prefs: MJUserNotificationPreferenceEntity | null,
     type: MJUserNotificationTypeEntity,
+    roleIds: string[],
   ): DeliveryChannels {
     // If forceDeliveryChannels is specified, use it directly
     if (params.forceDeliveryChannels) {
@@ -224,9 +296,10 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     }
     // Each channel, most specific wins: the recipient's preference (if the type allows one and it is set), then the
     // scoped configs (global, application, role, recipient; Deny beats Allow at equal specificity), then the type's
-    // default. A locked Deny at the scoped level caps the recipient's preference.
+    // default. A locked Deny at the scoped level turns the channel off regardless of specificity and caps the
+    // recipient's preference.
     const allowUserPref = type.AllowUserPreference !== false;
-    const scoped = this.ResolveScopedChannels(params, type.ID);
+    const scoped = this.ResolveScopedChannels(params, type.ID, roleIds);
     const pref = (value: boolean | null | undefined) => (allowUserPref && value != null ? value : null);
     const inApp = ResolveChannel({ typeDefault: type.DefaultInApp ?? false, scoped: scoped.inApp, userPreference: pref(prefs?.InAppEnabled) });
     const email = ResolveChannel({ typeDefault: type.DefaultEmail ?? false, scoped: scoped.email, userPreference: pref(prefs?.EmailEnabled) });
@@ -351,7 +424,8 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
       `(template=${templateEntity.Name ?? emailTemplateId})`
     );
 
-    const sendResult = await commEngine.SendSingleMessage('SendGrid', 'Email', message, undefined, false);
+    const provider = this.requireConfiguredProvider(commEngine, NotificationEngine.ResolveEmailProvider());
+    const sendResult = await commEngine.SendSingleMessage(provider, 'Email', message, undefined, false);
 
     const success = sendResult?.Success === true;
 
@@ -413,7 +487,8 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     message.BodyTemplate = templateEntity;
     message.ContextData = params.templateData || {};
 
-    const sendResult = await commEngine.SendSingleMessage('Twilio', 'Standard SMS', message, undefined, false);
+    const provider = this.requireConfiguredProvider(commEngine, NotificationEngine.ResolveSMSProvider());
+    const sendResult = await commEngine.SendSingleMessage(provider, 'Standard SMS', message, undefined, false);
 
     const success = sendResult?.Success === true;
 
@@ -423,4 +498,32 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
 
     return success;
   }
+
+  /**
+   * The provider name when Communication Engine knows it; otherwise an error naming the setting to fix, so a typo in
+   * the configuration reads as one instead of a generic "provider not found".
+   */
+  private requireConfiguredProvider(commEngine: CommunicationEngine, choice: { name: string; setting: string }): string {
+    const known = commEngine.Providers.some((p) => p.Name.trim().toLowerCase() === choice.name.trim().toLowerCase());
+    if (!known) {
+      throw new Error(`Notification provider '${choice.name}' (from ${choice.setting}) is not a configured Communication Provider.`);
+    }
+    return choice.name;
+  }
+}
+
+/**
+ * Picks a notification provider name: the host setting, then the environment variable, then the default, reporting
+ * which one won.
+ */
+export function ResolveProviderSetting(
+  hostValue: string | undefined,
+  hostSetting: string,
+  envVar: string,
+  fallback: string,
+): { name: string; setting: string } {
+  if (hostValue && hostValue.trim()) return { name: hostValue.trim(), setting: `mj.config.cjs ${hostSetting}` };
+  const env = process.env[envVar];
+  if (env && env.trim()) return { name: env.trim(), setting: envVar };
+  return { name: fallback, setting: `the default (set ${envVar} or ${hostSetting} to change it)` };
 }

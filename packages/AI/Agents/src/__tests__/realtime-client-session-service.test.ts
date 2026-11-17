@@ -1603,6 +1603,35 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         expect(passed.autoPopulateLastRunPayload).toBeUndefined();
     });
 
+    it("threads the session's run scope and active skills into the delegated run (#5624)", async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput({
+            RunScope: { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'TENANT-A', SecondaryScopes: { Region: 'EU' }, SearchScopeIDs: ['S-1'] },
+            ActiveSkillIDs: ['SKILL-1'],
+        }), makeDelegateRequest());
+
+        const passed = runAgentMock.mock.calls[0][0];
+        expect(passed.PrimaryScopeEntityName).toBe('Organizations');
+        expect(passed.PrimaryScopeRecordID).toBe('TENANT-A');
+        expect(passed.SecondaryScopes).toEqual({ Region: 'EU' });
+        expect(passed.SearchScopeIDs).toEqual(['S-1']);
+        expect(passed.parentActivatedSkillIDs).toEqual(['SKILL-1']);
+    });
+
+    it('starts an unscoped delegated run when the session has no scope', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        const passed = runAgentMock.mock.calls[0][0];
+        for (const key of ['PrimaryScopeEntityName', 'PrimaryScopeRecordID', 'SecondaryScopes', 'SearchScopeIDs', 'parentActivatedSkillIDs']) {
+            expect(passed).not.toHaveProperty(key);
+        }
+    });
+
     it('threads AttributionUserID into the run as userId (issue #3371)', async () => {
         runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
         const svc = new DelegateTestService();
@@ -2610,6 +2639,40 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             const calledRunParams = runSpy.mock.calls[0][0];
             expect(calledRunParams.Action.Name).toBe('SendEmail');
             expect(calledRunParams.Params).toEqual([{ Name: 'To', Value: 'test@domain.com', Type: 'Input' }]);
+        });
+
+        describe('run scope (#5624)', () => {
+            /** Runs one allowed SendEmail direct call with `extra` on the relayed input and returns the engine's params. */
+            async function runDirect(extra: Partial<ExecuteRelayedToolInput>) {
+                const service = new TestableService();
+                service.TargetActions = [mockEmailAction];
+                const cfg: RealtimeCoAgentConfig = { realtime: { directActions: { enabled: true, actionNames: ['SendEmail'] } } };
+                const targetAgent = { ID: 'target-1', Name: 'Sales Agent', TypeConfiguration: JSON.stringify(cfg) } as unknown as MJAIAgentEntityExtended;
+                vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+                const actionResult = new ActionResult();
+                actionResult.Success = true;
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+                const call: RealtimeToolCall = { CallID: 'call-scope', ToolName: 'SendEmail', Arguments: JSON.stringify({ PrimaryScopeRecordID: 'TENANT-B' }) };
+                await service.ExposeExecuteNonTargetTool(call, { AgentSessionID: 'sess-1', TargetAgentID: 'target-1', Call: call, ...extra }, contextUser);
+                expect(runSpy).toHaveBeenCalledTimes(1);
+                return runSpy.mock.calls[0][0];
+            }
+
+            it("passes the session's run scope and active skills, copied", async () => {
+                const scope = { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'TENANT-A', SecondaryScopes: { Teams: ['t1'] } };
+                const skills = ['SKILL-1'];
+                const params = await runDirect({ RunScope: scope, ActiveSkillIDs: skills });
+                expect(params.RunScope).toEqual(scope);
+                expect(params.RunScope).not.toBe(scope);
+                expect(params.RunScope?.SecondaryScopes?.Teams).not.toBe(scope.SecondaryScopes.Teams);
+                expect(params.Context).toEqual({ AgentID: 'target-1', AgentName: 'Sales Agent', ActiveSkillIDs: ['SKILL-1'] });
+            });
+
+            it('passes an unscoped run scope, never none, when the session has no scope', async () => {
+                const params = await runDirect({});
+                expect(params.RunScope).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null });
+                expect(params.Context).toEqual({ AgentID: 'target-1', AgentName: 'Sales Agent', ActiveSkillIDs: [] });
+            });
         });
 
         it('rejects execution when action is not in directActions allowlist', async () => {
@@ -3957,4 +4020,51 @@ describe('RealtimeClientSessionService — the mint snapshot persisted on the ow
         expect(model.MintCount).toBe(1);
     });
 });
+
+describe('ConversationArtifacts & ArtifactWorkspace ContextTool framing', () => {
+    it('frames existing conversation artifacts and ArtifactWorkspace ContextTool instructions in the system prompt', async () => {
+        const model = new MockRealtimeModel();
+        const svc = new TestableService();
+        svc.ResolveModelResult = { Model: model, ModelID: 'm1', VendorID: 'v1', APIName: 'mock-realtime' };
+        const user = { ID: 'u-1', Name: 'Caller', Email: 'c@test.com' } as UserInfo;
+        const provider = {} as IMetadataProvider;
+
+        const prep = await svc.PrepareClientSession(
+            makePrepInput({
+                AgentSessionID: 'b0b0b0b0-0000-4000-8000-000000000001',
+                ExtraTools: [
+                    { Name: 'ContextTool', Description: 'Runs client context & channel verbs', ParametersSchema: { type: 'object' } },
+                ],
+                ConversationArtifacts: [
+                    {
+                        ArtifactID: '9905B267-9D57-4F24-ACC1-8CFCA099D518',
+                        Name: 'AI That Thinks in Pictures',
+                        Type: 'Markdown Document',
+                        LatestVersionID: '2ADF5E7D-6A31-44C5-8A46-48401C8E6E9C',
+                        LatestVersionNumber: 3,
+                    },
+                    {
+                        ArtifactID: '9DE9F9A2-3EA1-40F1-9C8E-62F4D8C03561',
+                        Name: 'Diffusion Model Comparison',
+                        Type: 'Excel Spreadsheet',
+                        LatestVersionNumber: 2,
+                    },
+                ],
+            }),
+            user,
+            provider,
+        );
+
+        expect(prep.Success).toBe(true);
+        const prompt = model.LastParams?.SystemPrompt ?? '';
+        expect(prompt).toContain('ArtifactWorkspace');
+        expect(prompt).toContain('Artifacts already in this conversation');
+        expect(prompt).toContain('9905B267-9D57-4F24-ACC1-8CFCA099D518');
+        expect(prompt).toContain('AI That Thinks in Pictures');
+        expect(prompt).toContain('Markdown Document');
+        expect(prompt).toContain('LatestVersion: v3');
+        expect(prompt).toContain('9DE9F9A2-3EA1-40F1-9C8E-62F4D8C03561');
+    });
+});
+
 

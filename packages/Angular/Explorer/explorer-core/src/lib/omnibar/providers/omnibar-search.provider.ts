@@ -5,6 +5,7 @@ import type { MentionSuggestion, ComposerSuggestionRequest } from '@memberjuncti
 import type { SearchResultItem } from '@memberjunction/ng-search';
 import { OmnibarProvider, OMNIBAR_NAV_KEY, OmnibarNavPayload } from '../omnibar-provider';
 import { CanOpenInDashboardTab, DashboardMatchLike, DashboardMatchSplit, SplitDashboardMatches } from '../omnibar-dashboard-matches';
+import { OmnibarSemanticIndexService } from '../omnibar-semantic-index.service';
 
 /** Most dashboard rows in the results: name matches and description or category matches together. */
 const MAX_DASHBOARD_ROWS = 3;
@@ -47,20 +48,107 @@ export class OmnibarSearchProvider extends OmnibarProvider {
     public async GetSuggestions(request: ComposerSuggestionRequest): Promise<MentionSuggestion[]> {
         const search = this.context.Search;
         const query = request.Query.trim();
-        if (!search || query.length === 0) {
+        if (query.length === 0) {
+            return [];
+        }
+
+        const dashboards = this.dashboardSuggestions(query, request);
+        const semanticSuggestions = await this.semanticMetadataSuggestions(query, request.MaxResults);
+        const isOffline = this.isOfflineMode();
+
+        if (!search && semanticSuggestions.length === 0 && dashboards.NameMatches.length === 0 && dashboards.DescriptionOrCategoryMatches.length === 0) {
+            return [];
+        }
+
+        const localMerged = this.mergeLocalSuggestions(
+            dashboards.NameMatches,
+            semanticSuggestions,
+            dashboards.DescriptionOrCategoryMatches
+        );
+
+        // Offline / client-only mode: return local semantic + cached dashboard matches with zero PreviewSearch GraphQL calls
+        if (isOffline || !search) {
+            const cappedLocal = localMerged.slice(0, Math.max(0, request.MaxResults - 1));
+            return [...cappedLocal, this.seeAllSuggestion(query)];
+        }
+
+        const localCount = localMerged.length;
+        try {
+            // Search fills the rows left after local matches and the trailing "see all".
+            const remaining = Math.max(1, request.MaxResults - 1 - localCount);
+            const response = await search.PreviewSearch(query, remaining);
+            const remoteSuggestions = (response.Success ? response.Results : []).map((item) => this.toSuggestion(item));
+            const combined = this.dedupeSuggestions([
+                ...dashboards.NameMatches,
+                ...remoteSuggestions,
+                ...semanticSuggestions,
+                ...dashboards.DescriptionOrCategoryMatches,
+            ]);
+            return [...combined.slice(0, Math.max(1, request.MaxResults - 1)), this.seeAllSuggestion(query)];
+        } catch {
+            // Fail soft — the palette still offers local semantic/dashboard matches and the full-search escape hatch.
+            return [...localMerged.slice(0, Math.max(0, request.MaxResults - 1)), this.seeAllSuggestion(query)];
+        }
+    }
+
+    /**
+     * Client-only `< 15 ms` semantic + lexical metadata suggestions with zero
+     * `SearchService.PreviewSearch` GraphQL calls.
+     */
+    public async GetLocalSuggestions(request: ComposerSuggestionRequest): Promise<MentionSuggestion[]> {
+        const query = request.Query.trim();
+        if (query.length === 0) {
             return [];
         }
         const dashboards = this.dashboardSuggestions(query, request);
-        const dashboardCount = dashboards.NameMatches.length + dashboards.DescriptionOrCategoryMatches.length;
-        try {
-            // Search fills the rows left after the dashboards and the trailing "see all".
-            const response = await search.PreviewSearch(query, Math.max(1, request.MaxResults - 1 - dashboardCount));
-            const suggestions = (response.Success ? response.Results : []).map((item) => this.toSuggestion(item));
-            return [...dashboards.NameMatches, ...suggestions, ...dashboards.DescriptionOrCategoryMatches, this.seeAllSuggestion(query)];
-        } catch {
-            // Fail soft — the palette still offers the dashboards and the full-search escape hatch.
-            return [...dashboards.NameMatches, ...dashboards.DescriptionOrCategoryMatches, this.seeAllSuggestion(query)];
+        const semantic = await this.semanticMetadataSuggestions(query, request.MaxResults);
+        const merged = this.mergeLocalSuggestions(
+            dashboards.NameMatches,
+            semantic,
+            dashboards.DescriptionOrCategoryMatches
+        );
+        return merged.slice(0, Math.max(1, request.MaxResults - 1));
+    }
+
+    private isOfflineMode(): boolean {
+        if (this.context.OfflineOnly === true) {
+            return true;
         }
+        return typeof navigator !== 'undefined' && navigator.onLine === false;
+    }
+
+    private async semanticMetadataSuggestions(query: string, maxResults: number): Promise<MentionSuggestion[]> {
+        const index = OmnibarSemanticIndexService.Instance;
+        if (!index.IsReady) {
+            return [];
+        }
+        try {
+            const result = await index.Query(query, { MaxResults: Math.max(1, maxResults) });
+            return result.Suggestions;
+        } catch {
+            return [];
+        }
+    }
+
+    private mergeLocalSuggestions(
+        nameMatches: MentionSuggestion[],
+        semanticMatches: MentionSuggestion[],
+        descMatches: MentionSuggestion[]
+    ): MentionSuggestion[] {
+        return this.dedupeSuggestions([...nameMatches, ...semanticMatches, ...descMatches]);
+    }
+
+    private dedupeSuggestions(items: MentionSuggestion[]): MentionSuggestion[] {
+        const seen = new Set<string>();
+        const out: MentionSuggestion[] = [];
+        for (const item of items) {
+            if (seen.has(item.id)) {
+                continue;
+            }
+            seen.add(item.id);
+            out.push(item);
+        }
+        return out;
     }
 
     /**

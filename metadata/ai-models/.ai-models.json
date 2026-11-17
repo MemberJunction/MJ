@@ -27422,7 +27422,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "ChatCompletionsToolsRequireNoReasoning": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "7C84DCEE-1E6C-4616-8C0F-56819A91F67D"
@@ -29015,11 +29020,11 @@
   },
   {
     "fields": {
-      "Name": "Nano Banana 2.1",
+      "Name": "Nano Banana 2.1 (retired duplicate)",
       "PowerRank": 18,
-      "Description": "Google's current high-efficiency image generation and editing model, officially gemini-nano-banana-2.1 (released 2026-10-06, straight to general availability). Improved visual quality, typography and multi-turn consistency over Nano Banana 2, which it succeeds; conversational editing; 1K, 2K and 4K output (no 512px). Google lists it as New Stable.",
+      "Description": "Retired duplicate of Nano Banana 2.1 (defined in .gemini-image-models.json, which is the row to use). Kept inactive so existing references resolve; see issue #6121. Google's current high-efficiency image generation and editing model, officially gemini-nano-banana-2.1 (released 2026-10-06, straight to general availability). Improved visual quality, typography and multi-turn consistency over Nano Banana 2, which it succeeds; conversational editing; 1K, 2K and 4K output (no 512px). Google lists it as New Stable.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 9,
       "CostRank": 3,
       "InheritTypeModalities": true
@@ -29031,7 +29036,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Inactive",
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
@@ -29050,7 +29055,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GeminiImageGenerator",
             "APIName": "gemini-nano-banana-2.1",
             "MaxInputTokens": 12000,
@@ -29074,7 +29079,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "StartedAt": "2026-10-06T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Image Generation",
             "InputPricePerUnit": 0,
@@ -29083,7 +29088,8 @@
             "ProcessingType": "Realtime",
             "Comments": "Nano Banana 2.1 (gemini-nano-banana-2.1) pricing as of October 2026 (Standard tier). Per output image: 1K $0.0336 (the representative figure here), 2K $0.0504, 4K $0.113; text/image/video input $1.50 per 1M tokens. Source: https://ai.google.dev/gemini-api/docs/pricing (last updated 2026-10-13).",
             "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-11-03T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "96B433D1-06B8-408C-BB92-A7ECCB71642A"
@@ -31384,6 +31390,172 @@
     "sync": {
       "lastModified": "2026-11-10T23:41:24.359Z",
       "checksum": "402391107cc2cea1b545ac1432e92ed705ce699639f849de35850980079dd175"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 4 Hydrogen (Medium)",
+      "PowerRank": 26,
+      "Description": "Google Gemini 4 Hydrogen (Medium effort) — high-speed, high-intelligence coding and reasoning model",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718221"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-4-hydrogen-medium",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718222"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-10-13T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.8,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Hydrogen (Medium) baseline pricing tier for cost accounting when run outside Google Antigravity CLI.",
+            "CacheReadPricePerUnit": 0.045,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "D7B15F24-A4C7-4E16-8045-1F6D7B829221"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B5F93D02-82A5-4C94-AE23-9D4B5F607111"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 4 Hydrogen (High)",
+      "PowerRank": 27,
+      "Description": "Google Gemini 4 Hydrogen (High effort) — high-reasoning coding and architecture model via Google Antigravity CLI and Gemini API.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718331"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-4-hydrogen-high",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718333"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-10-13T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.8,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Hydrogen (High) baseline pricing tier for cost accounting when run outside Google Antigravity CLI.",
+            "CacheReadPricePerUnit": 0.045,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "D7B15F24-A4C7-4E16-8045-1F6D7B829331"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B5F93D02-82A5-4C94-AE23-9D4B5F607222"
     }
   }
 ]

@@ -783,6 +783,28 @@ export interface ILocalStorageProvider {
     SetItem<T>(key: string, value: T, category?: string, options?: LocalStorageWriteOptions): Promise<void>;
 
     /**
+     * Stores a structured object directly without requiring caller-side serialization.
+     * When implemented by providers like `BrowserIndexedDBStorageProvider`, the underlying
+     * store uses native structured cloning rather than JSON stringification.
+     *
+     * @typeParam T - Type of the object being stored
+     * @param key - The key to store under
+     * @param value - The object to store
+     * @param category - Optional category for key isolation
+     */
+    SetObject?<T>(key: string, value: T, category?: string): Promise<void>;
+
+    /**
+     * Retrieves a structured object directly without requiring caller-side parsing.
+     * Returns `null` if the key is missing or not present.
+     *
+     * @typeParam T - Expected type of the retrieved object
+     * @param key - The key to retrieve
+     * @param category - Optional category for key isolation
+     */
+    GetObject?<T>(key: string, category?: string): Promise<T | null>;
+
+    /**
      * Removes an item from storage.
      * @param key - The key to remove
      * @param category - Optional category for key isolation
@@ -844,12 +866,39 @@ export interface ILocalStorageProvider {
      * next process waiting for it can proceed. Does nothing for a lease held by someone else.
      */
     ReleaseLease?(name: string): Promise<void>;
+
+    /**
+     * Applies an incremental row-level delta to an existing `RunViewCache` entry in place without
+     * serializing or transmitting the full row array.
+     *
+     * Implemented by two-tier L1+L2 and Redis HASH storage providers so single-row saves/deletes on
+     * large cached views update only the mutated row keys in $O(\Delta)$ instead of rewriting the
+     * entire multi-megabyte snapshot.
+     *
+     * @param fingerprint - The `RunViewCache` slot key
+     * @param deltaPayloadJson - Compact JSON string encoding `CacheRowDeltaPayload`
+     * @param updatedSlotValue - Full post-mutation slot object (`CachedRunViewData`) already held in memory by `LocalCacheManager` (so L1 reference-sharing tiers can adopt the frozen reference in $O(1)$ without re-parsing)
+     * @param options - Per-write TTL, `IndexGroup`, `PrimaryKeyFields`, and pub/sub hints
+     * @returns `true` when the provider applied the delta in place (skipping `SetItem`), or `false` when the slot was absent/incompatible and the caller should fall back to `SetItem`.
+     */
+    ApplyRunViewRowDelta?<T = unknown>(
+        fingerprint: string,
+        deltaPayloadJson: string,
+        updatedSlotValue: T,
+        options?: LocalStorageWriteOptions
+    ): Promise<boolean>;
 }
 
 /**
  * Per-write options for {@link ILocalStorageProvider.SetItem}.
  */
 export interface LocalStorageWriteOptions {
+    /**
+     * Ordered primary-key field names for `RunViewCache` entries so storage providers like
+     * Redis HASH / TwoTier L1+L2 can index rows by PK without heuristics.
+     */
+    PrimaryKeyFields?: string[];
+
     /**
      * Seconds until the entry expires, overriding the provider's default. `0` stores the entry
      * without expiry. Omit to use the provider's default.

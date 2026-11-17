@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, EntityInfo, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, EntityInfo, EntityPermissionType, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, ToEpochMs, UUIDMap, UUIDSet, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
@@ -23,6 +23,7 @@ import {
 import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
+import { CONVERSATION_DELETE_REFUSED_REASON, ConversationDeleteAllowed } from "../custom/ConversationWriteAccess";
 import {
     ConversationAnchorMetadata,
     ConversationAnchorType,
@@ -1459,6 +1460,16 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * True when the user may delete the conversation for everyone: they own it, hold an
+     * Owner-level grant on it, or are in the Developer or Integration role. An Edit grant
+     * is not enough. Mirrors the server's delete gate in `MJConversationEntityServer`, so
+     * the UI never offers a delete the server would refuse.
+     */
+    public CanDeleteConversation(conversation: MJConversationEntity, user: UserInfo): boolean {
+        return ConversationDeleteAllowed(conversation.UserID, user, this.GetSharedByInfo(conversation.ID)?.Level ?? null);
+    }
+
+    /**
      * True when the user may move the conversation to another folder or change whether it inherits its
      * folder's access: only its owner. Both decide who else sees it, so an Edit or Owner grant is not
      * enough. Mirrors the server's rule in `MJConversationEntityServer`.
@@ -1953,6 +1964,44 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * True when one of the user's roles grants this kind of write on folders (`MJ: Projects`) with no row-level
+     * filter. A user whose folder writes are all filtered (the UI role: own folders only) writes only folders they
+     * own: they cannot make a folder Public (no owner) or rename, move or delete a Public folder or someone else's.
+     * Answers false when the folder entity's metadata is not loaded.
+     *
+     * @param provider the metadata provider the caller works against; defaults to the engine's.
+     */
+    public CanWriteAnyProject(
+        user: UserInfo | null | undefined,
+        type: Exclude<EntityPermissionType, 'Read'>,
+        provider?: IMetadataProvider | null
+    ): boolean {
+        if (!user) {
+            return false;
+        }
+        const entity = (provider ?? this.ProviderToUse)?.EntityByName('MJ: Projects');
+        return !!entity && entity.UserExemptFromRowLevelSecurity(user, type);
+    }
+
+    /**
+     * True when the user may rename or delete this folder from the sidebar: they own it, or their folder writes
+     * are not row-filtered (see {@link CanWriteAnyProject}).
+     */
+    public CanManageProject(
+        project: MJProjectEntity | null | undefined,
+        user: UserInfo | null | undefined,
+        provider?: IMetadataProvider | null
+    ): boolean {
+        if (!project || !user) {
+            return false;
+        }
+        if (project.OwnerUserID && UUIDsEqual(project.OwnerUserID, user.ID)) {
+            return true;
+        }
+        return this.CanWriteAnyProject(user, EntityPermissionType.Update, provider);
+    }
+
+    /**
      * Returns the three-tier visibility mode (`'Private' | 'Shared' | 'Public'`) for a folder:
      * - `'Public'`: `OwnerUserID == null` (environment-wide)
      * - `'Shared'`: `OwnerUserID != null` and the folder itself has approved `MJ: Resource Permissions` grants
@@ -2359,6 +2408,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *   2. Reparents direct child folders to this folder's parent (one level up).
      *   3. Deletes the now-unreferenced folder.
      * Conversations and subfolders are preserved — only the folder itself is removed.
+     * Steps 1 and 2 cover the rows the caller can change; the server's folder delete
+     * (`MJProjectEntityServer.Delete`) moves the rest in the delete's transaction.
      *
      * Note: this does NOT reassign Tasks that reference the project; if a Task still
      * references it, the final delete will fail and this throws with the DB message.
@@ -2384,9 +2435,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const newParentId = project.ParentID ?? null;
 
         // 1. Unassign conversations directly in this folder that the caller can edit.
-        // View-only conversations owned by other users in a shared folder cannot be edited
-        // by this caller; if any still exist in the DB, the delete below will surface
-        // FK_Conversation_Project via ExplainProjectDeleteFailure.
+        // Conversations owned by other users in a shared folder cannot be edited by this
+        // caller; the server's folder delete takes them out of the folder in the delete's
+        // transaction (on a server without that, the delete below surfaces
+        // FK_Conversation_Project via ExplainProjectDeleteFailure).
         const directConversations = this._conversations$.value.filter(
             c => c.ProjectID && UUIDsEqual(c.ProjectID, id)
         );
@@ -2406,21 +2458,27 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // RESTRICT foreign key with no ON DELETE clause, so the delete below would then fail
         // with a raw constraint message, about a row the user is not allowed to know exists.
         //
-        // The read carries NO ownership clause, deliberately. Deleting a folder needs
-        // CanDelete on the entity, which the UI role does not hold; the roles that do also
-        // hold unfiltered read, which makes them exempt from the row-level filter — so this
-        // read returns the complete child set for every principal that can actually reach
-        // here. Should a deployment grant delete to a filtered role anyway, the server still
-        // narrows the read, and step 3's guard turns the resulting FK failure into something
-        // legible rather than "Failed to save project".
+        // The read carries no ownership clause; the server narrows it to what the caller
+        // may read. A subfolder another user owns may refuse the move (only its owner moves
+        // it, and a row-filtered caller writes only their own folders): that one is left in
+        // place, and the server's folder delete moves it, as the system user and in the
+        // delete's transaction, once the caller's Delete permission and row filter pass. On a
+        // server without that, the delete below fails on the foreign key and step 3's guard
+        // explains it.
         const childFolders = await this.readChildFolders(id, contextUser);
         if (childFolders.length > 0) {
             this._selfMutating = true;
             try {
                 for (const child of childFolders) {
+                    const previousParentId = child.ParentID;
                     child.ParentID = newParentId;
                     const saved = await child.Save();
                     if (!saved) {
+                        const ownedByOther = !!child.OwnerUserID && !!contextUser?.ID && !UUIDsEqual(child.OwnerUserID, contextUser.ID);
+                        if (ownedByOther) {
+                            child.ParentID = previousParentId;   // left for the server's folder delete
+                            continue;
+                        }
                         throw new Error(child.LatestResult?.CompleteMessage || 'Failed to reparent subfolder');
                     }
                 }
@@ -3204,7 +3262,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param id - The conversation ID to delete
      * @param contextUser - The current user context
      * @returns true if successful
-     * @throws Error if conversation not found or delete fails
+     * @throws Error if conversation not found, the user may not delete it ({@link CanDeleteConversation}), or delete fails
      */
     public async DeleteConversation(id: string, contextUser: UserInfo): Promise<boolean> {
         // Try to use the cached entity object first to avoid a DB round-trip
@@ -3217,6 +3275,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (!loaded) {
                 throw new Error('Conversation not found');
             }
+        }
+
+        // Refuse before the optimistic removal below, so a refused conversation never leaves the list.
+        if (!this.CanDeleteConversation(conversation, contextUser)) {
+            throw new Error(CONVERSATION_DELETE_REFUSED_REASON);
         }
 
         // Remove from the list and cache BEFORE calling Delete(), because
@@ -3353,6 +3416,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /**
      * Deletes multiple conversations in a batch operation with per-item error tracking.
+     * Conversations the user may not delete ({@link CanDeleteConversation}) are reported
+     * as failed, by name, without a delete.
      *
      * @param ids - Array of conversation IDs to delete
      * @param contextUser - The current user context
@@ -3405,6 +3470,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         try {
             for (const entity of entitiesToDelete) {
                 const name = entity.Name || 'Unknown';
+                if (!this.CanDeleteConversation(entity, contextUser)) {
+                    failed.push({ ID: entity.ID, Name: name, Error: CONVERSATION_DELETE_REFUSED_REASON });
+                    continue;
+                }
                 try {
                     // Use DeleteConversation which handles Load + Delete properly
                     // and removes from list/cache on success
@@ -4659,9 +4728,101 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Client-safe query descriptor loading `MJ: Conversation Details.ID` values visible in `scope`,
+     * optionally narrowed to `candidateDetailIds`. Runs directly against `MJ: Conversation Details`
+     * so server `PostRunView` security hooks apply and `ClientClauseScreen` never rejects a base-view subquery.
+     */
+    public static BuildScopedDetailIdsQuery(
+        scope: ConversationScope,
+        candidateDetailIds?: ReadonlyArray<string>
+    ): RunViewParams {
+        let filter = ConversationEngine.ScopeFilter(scope);
+        if (candidateDetailIds && candidateDetailIds.length > 0) {
+            const uniqueEscaped = [...new Set(candidateDetailIds.map((id) => id.trim()).filter(Boolean))]
+                .map((id) => `'${EscapeSQLString(id)}'`);
+            if (uniqueEscaped.length > 0) {
+                filter = `(${filter}) AND [ID] IN (${uniqueEscaped.join(',')})`;
+            }
+        }
+        return {
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: filter,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            IgnoreMaxRows: true
+        };
+    }
+
+    /**
+     * Loads lowercased `MJ: Conversation Details.ID` values visible in `scope` via `RunView`, returning
+     * `null` if the read fails so callers can fail closed. Avoids emitting `[__mj].[vwConversationDetails]`
+     * subqueries from GraphQL client filters.
+     */
+    public static async LoadScopedDetailIds(
+        scope: ConversationScope,
+        provider: IMetadataProvider,
+        contextUser?: UserInfo,
+        candidateDetailIds?: ReadonlyArray<string>
+    ): Promise<Set<string> | null> {
+        if (candidateDetailIds) {
+            const unique = candidateDetailIds.map((id) => id.trim()).filter(Boolean);
+            if (unique.length === 0) {
+                return new Set<string>();
+            }
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+        const res = await rv.RunView<{ ID: string }>(
+            ConversationEngine.BuildScopedDetailIdsQuery(scope, candidateDetailIds),
+            contextUser
+        );
+        if (!res?.Success || !Array.isArray(res.Results)) {
+            return null;
+        }
+        const ids = new Set<string>();
+        for (const row of res.Results) {
+            const id = typeof row.ID === 'string' ? row.ID.trim().toLowerCase() : '';
+            if (id) {
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Filters artifact versions to those visible in `scope` (`{@link ArtifactVersionScopeFilter}` semantics):
+     * keeps versions linked in any direction to a detail in `scopedDetailIds`, plus versions that have
+     * no `MJ: Conversation Detail Artifacts` link at all.
+     */
+    public static FilterArtifactVersionsByScope<T extends { ID: string }>(
+        versions: readonly T[],
+        links: ReadonlyArray<{ ConversationDetailID?: string | null; ArtifactVersionID?: string | null }>,
+        scopedDetailIds: ReadonlySet<string>
+    ): T[] {
+        const allLinkedVersionIds = new Set<string>();
+        const scopedLinkedVersionIds = new Set<string>();
+        for (const link of links) {
+            const versionId = typeof link.ArtifactVersionID === 'string' ? link.ArtifactVersionID.trim().toLowerCase() : '';
+            if (!versionId) continue;
+            allLinkedVersionIds.add(versionId);
+            const detailId = typeof link.ConversationDetailID === 'string' ? link.ConversationDetailID.trim().toLowerCase() : '';
+            if (detailId && scopedDetailIds.has(detailId)) {
+                scopedLinkedVersionIds.add(versionId);
+            }
+        }
+        return versions.filter((v) => {
+            const id = typeof v.ID === 'string' ? v.ID.trim().toLowerCase() : '';
+            return id ? (!allLinkedVersionIds.has(id) || scopedLinkedVersionIds.has(id)) : false;
+        });
+    }
+
+    /**
      * Filter over MJ: Artifact Versions for the versions of one artifact visible in scope: versions
      * linked (in any direction) from a message on the path, and versions with no conversation link
      * at all.
+     *
+     * Note: server/internal callers only — GraphQL clients must use {@link BuildScopedDetailIdsQuery} +
+     * {@link FilterArtifactVersionsByScope} because `ClientClauseScreen` blocks `[__mj].[vwConversationDetails]`
+     * subqueries in client-supplied `ExtraFilter`s.
      */
     public static ArtifactVersionScopeFilter(scope: ConversationScope, artifactId: string): string {
         const path = ConversationEngine.ScopeFilter(scope);
