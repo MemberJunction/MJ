@@ -247,9 +247,19 @@ describe('contrast validation', () => {
     expect(light['--mj-surface-base-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
     expect(light['--mj-surface-elevated-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
     expect(light['--mj-surface-overlay-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
+    expect(light['--mj-surface-sunken-border']).toBe(light['--mj-border-subtle']);
+    expect(light['--mj-surface-base-border']).toBe(light['--mj-border-default']);
+    expect(light['--mj-surface-elevated-border']).toBe(light['--mj-border-default']);
+    expect(light['--mj-surface-overlay-border']).toBe(light['--mj-border-strong']);
+    expect(light['--mj-surface-base-border-selected']).toBe(light['--mj-brand-primary']);
     expect(dark['--mj-surface-base-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
     expect(dark['--mj-surface-elevated-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
     expect(dark['--mj-surface-overlay-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
+    expect(dark['--mj-surface-sunken-border']).toBe(dark['--mj-border-subtle']);
+    expect(dark['--mj-surface-base-border']).toBe(dark['--mj-border-default']);
+    expect(dark['--mj-surface-elevated-border']).toBe(dark['--mj-border-default']);
+    expect(dark['--mj-surface-overlay-border']).toBe(dark['--mj-border-strong']);
+    expect(dark['--mj-surface-base-border-selected']).toBe(dark['--mj-brand-primary']);
 
     // Muted text promoted to secondary on selected surface clears 4.5:1 AA
     expect(contrastRatio(light['--mj-surface-text-muted-selected'], light['--mj-surface-base-bg-selected'])).toBeGreaterThanOrEqual(4.5);

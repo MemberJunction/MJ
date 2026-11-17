@@ -56,27 +56,33 @@ describe('design tokens: WS6b surface ramp, control heights, radius roles, and a
     expect(rootVars.get('--mj-ambient-strength')).toBe('0');
   });
 
-  it('maps the 4 surface levels per NAMING.md (Ramp B) with no state tokens on sunken', () => {
-    // sunken: bg, border, shadow only — no hover or selected state tokens
+  it('maps the 4 surface levels per NAMING.md (Ramp B) with split border tokens and no state tokens on sunken', () => {
+    // Shared border width and style tokens
+    expect(rootVars.get('--mj-surface-border-width')).toBe('1px');
+    expect(rootVars.get('--mj-surface-border-style')).toBe('solid');
+
+    // sunken: bg, border (color only), shadow only — no hover or selected state tokens
     expect(rootVars.get('--mj-surface-sunken-bg')).toBe('var(--mj-bg-surface-sunken)');
-    expect(rootVars.get('--mj-surface-sunken-border')).toBe('1px solid var(--mj-border-subtle)');
+    expect(rootVars.get('--mj-surface-sunken-border')).toBe('var(--mj-border-subtle)');
     expect(rootVars.get('--mj-surface-sunken-shadow')).toBe('var(--mj-shadow-inner)');
     expect(rootVars.has('--mj-surface-sunken-bg-hover')).toBe(false);
     expect(rootVars.has('--mj-surface-sunken-bg-selected')).toBe(false);
     expect(rootVars.has('--mj-surface-sunken-border-selected')).toBe(false);
 
-    // base, elevated, overlay have bg, border, shadow, bg-hover, bg-selected, border-selected
+    // base, elevated, overlay have bg, border (color only), shadow, bg-hover, bg-selected, border-selected
     for (const level of ['base', 'elevated', 'overlay'] as const) {
       expect(rootVars.has(`--mj-surface-${level}-bg`)).toBe(true);
       expect(rootVars.has(`--mj-surface-${level}-border`)).toBe(true);
+      expect(rootVars.get(`--mj-surface-${level}-border`)).not.toContain('1px solid');
       expect(rootVars.has(`--mj-surface-${level}-shadow`)).toBe(true);
       expect(rootVars.has(`--mj-surface-${level}-bg-hover`)).toBe(true);
       expect(rootVars.has(`--mj-surface-${level}-bg-selected`)).toBe(true);
-      expect(rootVars.has(`--mj-surface-${level}-border-selected`)).toBe(true);
+      expect(rootVars.get(`--mj-surface-${level}-border-selected`)).toBe('var(--mj-brand-primary)');
     }
 
     // overlay sits on elevated bg
     expect(rootVars.get('--mj-surface-overlay-bg')).toBe('var(--mj-bg-surface-elevated)');
+    expect(rootVars.get('--mj-surface-overlay-border')).toBe('var(--mj-border-strong)');
     expect(rootVars.get('--mj-surface-elevated-shadow')).toBe('var(--mj-shadow-md)');
     expect(rootVars.get('--mj-surface-overlay-shadow')).toBe('var(--mj-shadow-xl)');
   });
@@ -93,7 +99,7 @@ describe('design tokens: WS6b surface ramp, control heights, radius roles, and a
     expect(darkVars.get('--mj-surface-overlay-text-muted')).toBe('var(--mj-surface-elevated-text-muted)');
   });
 
-  it('ships .mj-surface-{sunken,base,elevated,overlay} classes that re-point text tokens', () => {
+  it('ships .mj-surface-{sunken,base,elevated,overlay} classes that re-point text tokens and use .is-hover / .is-selected state classes', () => {
     for (const level of ['sunken', 'base', 'elevated', 'overlay'] as const) {
       expect(tailBlock).toContain(`.mj-surface-${level}`);
       expect(tailBlock).toContain(`--mj-text-secondary: var(--mj-surface-${level}-text-secondary);`);
@@ -101,8 +107,10 @@ describe('design tokens: WS6b surface ramp, control heights, radius roles, and a
       expect(tailBlock).toContain(`--mj-text-link: var(--mj-surface-${level}-text-link);`);
       expect(tailBlock).toContain(`--mj-text-link-hover: var(--mj-surface-${level}-text-link-hover);`);
     }
+    expect(tailBlock).not.toContain('[data-hover]');
     expect(tailBlock).not.toContain('.mj-surface-sunken.is-hover');
     expect(tailBlock).not.toContain('.mj-surface-sunken.is-selected');
+    expect(tailBlock).toContain('border-color: var(--mj-surface-base-border-selected);');
   });
 
   it('preserves canvas and card background tokens in :root and dark blocks', () => {

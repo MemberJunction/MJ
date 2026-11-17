@@ -166,31 +166,38 @@
      Four levels: sunken (wells, code blocks; no state tokens), base (default cards,
      panels, form sections, table bodies), elevated (raised above base, still part of
      the page), overlay (floats over the page: dialogs, sheets, popovers, menus, toasts).
-     Hover and selected are states at the end of the token name, not elevation changes. */
+     Hover and selected are states at the end of the token name, not elevation changes.
+     Border tokens split color (--mj-surface-<level>-border) from width and style
+     (--mj-surface-border-width, --mj-surface-border-style) so brands can re-color a
+     surface without restating stroke width/style, or set borderless/2px surfaces
+     without resetting border-style to initial (none). */
+  --mj-surface-border-width: 1px;
+  --mj-surface-border-style: solid;
+
   --mj-surface-sunken-bg: var(--mj-bg-surface-sunken);
-  --mj-surface-sunken-border: 1px solid var(--mj-border-subtle);
+  --mj-surface-sunken-border: var(--mj-border-subtle);
   --mj-surface-sunken-shadow: var(--mj-shadow-inner);
 
   --mj-surface-base-bg: var(--mj-bg-surface);
-  --mj-surface-base-border: 1px solid var(--mj-border-default);
+  --mj-surface-base-border: var(--mj-border-default);
   --mj-surface-base-shadow: var(--mj-shadow-none);
   --mj-surface-base-bg-hover: var(--mj-bg-surface-hover);
   --mj-surface-base-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
-  --mj-surface-base-border-selected: 1px solid var(--mj-brand-primary);
+  --mj-surface-base-border-selected: var(--mj-brand-primary);
 
   --mj-surface-elevated-bg: var(--mj-bg-surface-elevated);
-  --mj-surface-elevated-border: 1px solid var(--mj-border-default);
+  --mj-surface-elevated-border: var(--mj-border-default);
   --mj-surface-elevated-shadow: var(--mj-shadow-md);
   --mj-surface-elevated-bg-hover: var(--mj-bg-surface-hover);
   --mj-surface-elevated-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
-  --mj-surface-elevated-border-selected: 1px solid var(--mj-brand-primary);
+  --mj-surface-elevated-border-selected: var(--mj-brand-primary);
 
   --mj-surface-overlay-bg: var(--mj-bg-surface-elevated);
-  --mj-surface-overlay-border: 1px solid var(--mj-border-strong);
+  --mj-surface-overlay-border: var(--mj-border-strong);
   --mj-surface-overlay-shadow: var(--mj-shadow-xl);
   --mj-surface-overlay-bg-hover: var(--mj-bg-surface-hover);
   --mj-surface-overlay-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
-  --mj-surface-overlay-border-selected: 1px solid var(--mj-brand-primary);
+  --mj-surface-overlay-border-selected: var(--mj-brand-primary);
 
   /* Surface-scoped text re-point tokens (Tier 2 — NAMING.md).
      Each .mj-surface-* class re-points --mj-text-{secondary,muted,link,link-hover}
@@ -638,29 +645,29 @@
      containers (e.g. Theme Studio preview canvas) resolve the dark surface fills,
      borders, shadows, and per-level text tiers. */
   --mj-surface-sunken-bg: var(--mj-bg-surface-sunken);
-  --mj-surface-sunken-border: 1px solid var(--mj-border-subtle);
+  --mj-surface-sunken-border: var(--mj-border-subtle);
   --mj-surface-sunken-shadow: none;
 
   --mj-surface-base-bg: var(--mj-bg-surface);
-  --mj-surface-base-border: 1px solid var(--mj-border-default);
+  --mj-surface-base-border: var(--mj-border-default);
   --mj-surface-base-shadow: var(--mj-shadow-none);
   --mj-surface-base-bg-hover: var(--mj-bg-surface-hover);
   --mj-surface-base-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
-  --mj-surface-base-border-selected: 1px solid var(--mj-brand-primary);
+  --mj-surface-base-border-selected: var(--mj-brand-primary);
 
   --mj-surface-elevated-bg: var(--mj-bg-surface-elevated);
-  --mj-surface-elevated-border: 1px solid var(--mj-border-default);
+  --mj-surface-elevated-border: var(--mj-border-default);
   --mj-surface-elevated-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.55);
   --mj-surface-elevated-bg-hover: var(--mj-bg-surface-hover);
   --mj-surface-elevated-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
-  --mj-surface-elevated-border-selected: 1px solid var(--mj-brand-primary);
+  --mj-surface-elevated-border-selected: var(--mj-brand-primary);
 
   --mj-surface-overlay-bg: var(--mj-bg-surface-elevated);
-  --mj-surface-overlay-border: 1px solid var(--mj-border-strong);
+  --mj-surface-overlay-border: var(--mj-border-strong);
   --mj-surface-overlay-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.7);
   --mj-surface-overlay-bg-hover: var(--mj-bg-surface-hover);
   --mj-surface-overlay-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
-  --mj-surface-overlay-border-selected: 1px solid var(--mj-brand-primary);
+  --mj-surface-overlay-border-selected: var(--mj-brand-primary);
 
   /* Dark text tiers on elevated and overlay surfaces step one primitive brighter
      so they clear WCAG AA against --mj-bg-surface-elevated (neutral-700):
@@ -814,15 +821,18 @@
 /* ========================================
    SURFACE LEVEL CLASSES (Ramp B — NAMING.md)
    ========================================
-   Each surface class sets background, border, and box-shadow from its level's
-   role tokens and re-points --mj-text-{secondary,muted,link,link-hover} so
-   nested surfaces always reset to their own contrast tiers. Hover and selected
-   states exist on base, elevated, and overlay (sunken is a well and has no
-   interactive state tokens). */
+   Each surface class sets background, border (composing width, style, and color
+   tokens), and box-shadow from its level's role tokens and re-points
+   --mj-text-{secondary,muted,link,link-hover} so nested surfaces always reset to
+   their own contrast tiers. Hover (.is-hover) and selected (.is-selected) states
+   exist on base, elevated, and overlay (sunken is a well and has no interactive
+   state tokens). */
 
 .mj-surface-sunken {
   background: var(--mj-surface-sunken-bg);
-  border: var(--mj-surface-sunken-border);
+  border: var(--mj-surface-sunken-border-width, var(--mj-surface-border-width))
+    var(--mj-surface-sunken-border-style, var(--mj-surface-border-style))
+    var(--mj-surface-sunken-border);
   box-shadow: var(--mj-surface-sunken-shadow);
   --mj-text-secondary: var(--mj-surface-sunken-text-secondary);
   --mj-text-muted: var(--mj-surface-sunken-text-muted);
@@ -832,7 +842,9 @@
 
 .mj-surface-base {
   background: var(--mj-surface-base-bg);
-  border: var(--mj-surface-base-border);
+  border: var(--mj-surface-base-border-width, var(--mj-surface-border-width))
+    var(--mj-surface-base-border-style, var(--mj-surface-border-style))
+    var(--mj-surface-base-border);
   box-shadow: var(--mj-surface-base-shadow);
   --mj-text-secondary: var(--mj-surface-base-text-secondary);
   --mj-text-muted: var(--mj-surface-base-text-muted);
@@ -842,7 +854,9 @@
 
 .mj-surface-elevated {
   background: var(--mj-surface-elevated-bg);
-  border: var(--mj-surface-elevated-border);
+  border: var(--mj-surface-elevated-border-width, var(--mj-surface-border-width))
+    var(--mj-surface-elevated-border-style, var(--mj-surface-border-style))
+    var(--mj-surface-elevated-border);
   box-shadow: var(--mj-surface-elevated-shadow);
   --mj-text-secondary: var(--mj-surface-elevated-text-secondary);
   --mj-text-muted: var(--mj-surface-elevated-text-muted);
@@ -852,7 +866,9 @@
 
 .mj-surface-overlay {
   background: var(--mj-surface-overlay-bg);
-  border: var(--mj-surface-overlay-border);
+  border: var(--mj-surface-overlay-border-width, var(--mj-surface-border-width))
+    var(--mj-surface-overlay-border-style, var(--mj-surface-border-style))
+    var(--mj-surface-overlay-border);
   box-shadow: var(--mj-surface-overlay-shadow);
   --mj-text-secondary: var(--mj-surface-overlay-text-secondary);
   --mj-text-muted: var(--mj-surface-overlay-text-muted);
@@ -860,36 +876,33 @@
   --mj-text-link-hover: var(--mj-surface-overlay-text-link-hover);
 }
 
-.mj-surface-base[data-hover]:hover,
 .mj-surface-base.is-hover {
   background: var(--mj-surface-base-bg-hover);
 }
 
-.mj-surface-elevated[data-hover]:hover,
 .mj-surface-elevated.is-hover {
   background: var(--mj-surface-elevated-bg-hover);
 }
 
-.mj-surface-overlay[data-hover]:hover,
 .mj-surface-overlay.is-hover {
   background: var(--mj-surface-overlay-bg-hover);
 }
 
 .mj-surface-base.is-selected {
   background: var(--mj-surface-base-bg-selected);
-  border: var(--mj-surface-base-border-selected);
+  border-color: var(--mj-surface-base-border-selected);
   --mj-text-muted: var(--mj-surface-text-muted-selected);
 }
 
 .mj-surface-elevated.is-selected {
   background: var(--mj-surface-elevated-bg-selected);
-  border: var(--mj-surface-elevated-border-selected);
+  border-color: var(--mj-surface-elevated-border-selected);
   --mj-text-muted: var(--mj-surface-text-muted-selected);
 }
 
 .mj-surface-overlay.is-selected {
   background: var(--mj-surface-overlay-bg-selected);
-  border: var(--mj-surface-overlay-border-selected);
+  border-color: var(--mj-surface-overlay-border-selected);
   --mj-text-muted: var(--mj-surface-text-muted-selected);
 }
 
