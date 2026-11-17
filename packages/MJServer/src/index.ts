@@ -17,7 +17,7 @@ import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgr
 import type { RSUPostRestartProgress } from './integration/RSUPostRestartProgress.js';
 import { ResolvePostRestartFields, type IntrospectedSchema } from './integration/PostRestartIntrospect.js';
 import { default as BodyParser } from 'body-parser';
-import compression from 'compression'; // Add compression middleware
+import { CreateCompressionMiddleware } from './compressionMiddleware.js';
 import cors from 'cors';
 import express, { Application } from 'express';
 import { default as fg } from 'fast-glob';
@@ -213,6 +213,25 @@ let _currentExtensionLoader: ServerExtensionLoader | null = null;
  */
 export function GetServerExtensionLoader(): ServerExtensionLoader | null {
     return _currentExtensionLoader;
+}
+
+/** One enabled `BaseServerMiddleware` and what it contributed to the request pipeline. */
+export interface ActiveServerMiddlewareInfo {
+    /** The middleware's `Label` (e.g. `'mj:tenantFilter'`). */
+    Label: string;
+    /** How many handlers it added after authentication (they never run for pre-auth extensions). */
+    PostAuthHandlerCount: number;
+}
+
+let _activeServerMiddleware: ActiveServerMiddlewareInfo[] = [];
+
+/**
+ * The server middleware `serve()` activated, in order. Populated before server extensions load, so
+ * a pre-auth extension can see which post-auth steps (tenant stamping, org loading) will not run
+ * for its own routes. Empty before the server starts.
+ */
+export function GetActiveServerMiddleware(): ReadonlyArray<ActiveServerMiddlewareInfo> {
+    return _activeServerMiddleware;
 }
 
 export * from './generic/PushStatusResolver.js';
@@ -1154,9 +1173,12 @@ const setupComplete$ = new ReplaySubject(1);
   const mwSchemaTransformers: ((schema: GraphQLSchema) => GraphQLSchema)[] = [];
   const mwResolverPaths: string[] = [];
 
+  _activeServerMiddleware = [];
   for (const mw of middlewares) {
       mwPreAuth.push(...mw.GetPreAuthMiddleware());
-      mwPostAuth.push(...mw.GetPostAuthMiddleware());
+      const postAuth = mw.GetPostAuthMiddleware();
+      mwPostAuth.push(...postAuth);
+      _activeServerMiddleware.push({ Label: mw.Label, PostAuthHandlerCount: postAuth.length });
       mwPostRoute.push(...mw.GetPostRouteMiddleware());
       mwApolloPlugins.push(...mw.GetApolloPlugins());
       mwSchemaTransformers.push(...mw.GetSchemaTransformers());
@@ -1521,25 +1543,7 @@ const setupComplete$ = new ReplaySubject(1);
   // Never advertise the framework (`X-Powered-By: Express`) — the host may have passed its own app.
   app.disable('x-powered-by');
 
-  app.use(compression({
-    // Don't compress responses smaller than 1KB
-    threshold: 1024,
-    // Skip compression for images, videos, and other binary files
-    filter: (req, res) => {
-      if (req.headers['content-type']) {
-        const contentType = req.headers['content-type'];
-        if (contentType.includes('image/') || 
-            contentType.includes('video/') ||
-            contentType.includes('audio/') ||
-            contentType.includes('application/octet-stream')) {
-          return false;
-        }
-      }
-      return compression.filter(req, res);
-    },
-    // High compression level (good balance between CPU and compression ratio)
-    level: 6
-  }) as object as express.RequestHandler);
+  app.use(CreateCompressionMiddleware());
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
   // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).

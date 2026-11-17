@@ -4,10 +4,13 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
+const oauth = vi.hoisted(() => ({ enabled: true }));
+
 // Mock the OAuthConfig module
 vi.mock('../auth/OAuthConfig.js', () => ({
     GetResourceIdentifier: () => 'http://localhost:3100',
     get getResourceIdentifier() { return this.GetResourceIdentifier; },
+    IsOAuthEnabled: () => oauth.enabled,
 }));
 
 import { BuildWWWAuthenticateHeader } from '../auth/WWWAuthenticate';
@@ -76,5 +79,28 @@ describe('buildWWWAuthenticateHeader()', () => {
         expect(header).toContain('resource_metadata=');
         expect(header).toContain('scope="entity:write"');
         expect(header).toContain('error_description="Write access required"');
+    });
+});
+
+describe('BuildWWWAuthenticateHeader with OAuth off', () => {
+    it('REGRESSION: omits resource_metadata, which would point clients at a metadata URL that is not served', () => {
+        oauth.enabled = false;
+        try {
+            const header = BuildWWWAuthenticateHeader();
+            expect(header).toBe('Bearer');
+            expect(header).not.toContain('resource_metadata');
+        } finally {
+            oauth.enabled = true;
+        }
+    });
+
+    it('keeps error details when OAuth is off', () => {
+        oauth.enabled = false;
+        try {
+            const header = BuildWWWAuthenticateHeader({ error: 'insufficient_scope', errorDescription: 'nope' });
+            expect(header).toBe('Bearer error="insufficient_scope", error_description="nope"');
+        } finally {
+            oauth.enabled = true;
+        }
     });
 });

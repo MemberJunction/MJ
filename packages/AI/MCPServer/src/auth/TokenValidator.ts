@@ -353,6 +353,15 @@ export async function ValidateBearerToken(token: string): Promise<OAuthValidatio
   }
 
   const payload = decoded.payload as JwtPayload;
+
+  // MJAPI registers its magic-link issuer with the shared AuthProviderFactory, so its guest tokens
+  // (magic-link invitees and realtime-widget guests, which are built on the same claims) would
+  // otherwise verify here. MJAPI narrows those guests to their invite scope; MCP cannot, so it
+  // refuses them rather than give a guest the full rights of the user its email maps to.
+  if (payload['mj_magic_link'] === true) {
+    return createError('invalid_token', 'Magic-link and widget guest tokens cannot be used with MCP');
+  }
+
   const issuer = payload.iss;
 
   if (!issuer) {

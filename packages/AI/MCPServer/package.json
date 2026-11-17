@@ -43,6 +43,7 @@
     "@memberjunction/global": "6.3.0-edge.0",
     "@memberjunction/server": "6.3.0-edge.0",
     "@memberjunction/server-bootstrap-lite": "6.3.0-edge.0",
+    "@memberjunction/server-extensions-core": "6.3.0-edge.0",
     "@memberjunction/sqlserver-dataprovider": "6.3.0-edge.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "cosmiconfig": "9.0.0",

@@ -85,6 +85,67 @@ npx @memberjunction/ai-mcp-server --list-tools
 npx @memberjunction/ai-mcp-server --tools-file ./my-tools.json
 ```
 
+## Running inside MJAPI
+
+The MCP server can run as part of MJAPI instead of as its own process. It then uses MJAPI's database connection and caches, and is served under MJAPI's base path: at `/mcp` by default, or `/api/mcp` when `MJAPI_BASE_PATH=/api` (MJExplorer at `/`, MJAPI at `/api`).
+
+Stock MJAPI already depends on this package; it stays off, and is not even imported, until you list it in `mj.config.cjs`. (A custom host adds `@memberjunction/ai-mcp-server` to its own dependencies first.)
+
+```javascript
+dynamicPackages: {
+  server: [
+    // Processes keeps the standalone MCP server (process 'mcp') from loading it as well
+    { PackageName: '@memberjunction/ai-mcp-server', Processes: ['mjapi'] },
+  ],
+},
+```
+
+MJAPI then mounts the `MCPServerExtension` server extension before its own authentication. MCP authenticates every request itself, with the same `mcpServerSettings.auth` settings as the standalone server. Every route moves under the mount: `/mcp` (Streamable HTTP), `/mcp/sse` and `/mcp/messages` (legacy SSE), `/mcp/.well-known/*`, `/mcp/oauth/*` (the OAuth proxy) and `/mcp/health`.
+
+To change the defaults, add a `serverExtensions[]` entry with the same `DriverClass`; it overrides the published one field by field:
+
+```javascript
+serverExtensions: [
+  {
+    Enabled: true,
+    DriverClass: 'MCPServerExtension',
+    RootPath: '/mcp',          // relative to MJAPI_BASE_PATH
+    OwnsCORS: true,            // keep: the MCP routes answer their own CORS preflights
+    Settings: {
+      IncludeTools: ['Get_*', 'Run_Agent'],    // same patterns as --include / --exclude
+      ExcludeTools: ['Get_AuditLogs_*'],
+    },
+  },
+],
+```
+
+**Settings that work differently inside MJAPI:**
+
+- `enableMCPServer` and `port` apply only to the standalone server. Inside MJAPI, the extension entry turns MCP on or off.
+- `auth.mode: 'none'` is refused: the extension does not mount. That mode runs every request as the system user with no credentials, and inside MJAPI the MCP routes sit on its public port, before its own authentication.
+- MJAPI multi-tenancy (`multiTenancy.enabled`) is refused too. MJAPI stamps the tenant in middleware that runs after its own authentication, so MCP requests would carry no tenant.
+- Any other server middleware that adds after-login handlers (a custom tenant plugin, an org-membership loader) is refused for the same reason: those handlers never run for MCP's requests. MJ's Diagnostics middleware, which only reads, is allowed. The refusal names the middleware.
+- Magic-link and realtime-widget guest tokens are refused. MJAPI narrows those guests to their invite; MCP cannot, so it does not accept them at all.
+- An API key is accepted only in a header (`x-api-key`, `x-mj-api-key` or `Authorization: Bearer`), never in the URL query string, which ends up in access logs.
+- `systemApiKey` makes whoever sends it the system user. Over MCP that user can list every tool and its schema, and run tools that have no scope check; scope-checked tools refuse it, because the system key has no key record and so no scopes. Use an MJ API key with the right scopes to run tools. While `systemApiKey` is the stock placeholder `MY_API_KEY_FOR_MCP_SERVER`, which is published in this repo, the extension refuses to mount: set a secret value or remove it. With it removed, `MJ_API_KEY` becomes the system key, as it already is for MJAPI's GraphQL. The standalone server still accepts the placeholder for local development.
+- `trustProxy` has no effect, because Express reads `trust proxy` from MJAPI's app. MJAPI logs a warning when it is set.
+- `auth.resourceIdentifier` should normally be left unset. The extension builds it from MJAPI's public URL (`MJAPI_PUBLIC_URL`, e.g. `https://app.example.com/api` gives `https://app.example.com/api/mcp`). A leftover value such as `http://localhost:3100` sends OAuth clients to the wrong place, and MJAPI logs a warning.
+- CORS follows MJAPI's `cors.allowedOrigins`. With the default `['*']`, any origin may call MCP; it authenticates with a header, never a cookie.
+- With the OAuth proxy, register the upstream redirect URI under the mount: `https://app.example.com/api/mcp/oauth/callback`.
+
+**OAuth discovery.** MCP clients find the discovery documents from the endpoint URL by inserting the document name after the host: for an endpoint at `https://host/mcp`, they ask for `https://host/.well-known/oauth-protected-resource/mcp` and, with the OAuth proxy, `https://host/.well-known/oauth-authorization-server/mcp`. The extension serves both, through `ApiRoute`, at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server/mcp` under MJAPI's base path.
+
+- **MJAPI at the host root:** nothing more to do.
+- **MJExplorer at the host root and MJAPI at `/api`:** clients ask for `https://host/.well-known/oauth-authorization-server/api/mcp`, which MJExplorer's web server owns, and a single-page-app host answers it with `index.html`: the MCP SDK client then stops. Forward both paths to MJAPI's copies. In nginx, alongside the rule that sends `/api/` to MJAPI:
+
+```nginx
+rewrite ^/\.well-known/(oauth-authorization-server|oauth-protected-resource)/api/(.*)$ /api/.well-known/$1/$2 last;
+```
+
+Without the OAuth proxy, the login server is your identity provider on its own host, and only the protected-resource document matters; clients usually take its URL from the 401's `WWW-Authenticate` header, which needs no forwarding. The proxy does not serve `/.well-known/openid-configuration`: it is not an OpenID provider (it signs tokens with a shared secret and issues no ID tokens), and MCP clients validate that document as one.
+
+**Sessions.** Every request is authenticated, as the MCP spec requires: each Streamable HTTP request and each legacy SSE message post. It must also come from the exact credential that opened the session (the same API key, or the same OAuth identity), not just the same user; anything else is treated as an unknown session, and the client starts a new one. A revoked key or an expired token therefore stops working at once. A session with no request for 30 minutes is closed. Sessions live in memory, so behind a load balancer with several MJAPI instances, enable sticky sessions keyed on the `mcp-session-id` header, as you would for the standalone server.
+
 ## Tool Types
 
 ### Entity Tools
@@ -196,7 +257,7 @@ The OAuth proxy handles the authorization flow for MCP clients that don't native
 
 #### Rate limit and reverse proxies
 
-The OAuth proxy router limits requests per client IP: 60 per minute by default. It is mounted at the app root, so `/mcp` traffic counts against the limit too, not only the `/oauth/*` routes. Size the limit with `auth.proxy.rateLimit`.
+The OAuth proxy router limits requests per client IP: 60 per minute by default. On the standalone server it is mounted at the app root, so `/mcp` traffic counts against the limit too, not only the `/oauth/*` routes. Inside MJAPI the MCP transport routes are mounted ahead of it and are not counted, because MJAPI does not set `trust proxy` by default and behind a proxy every client would share one limit. Size the limit with `auth.proxy.rateLimit`.
 
 Behind CloudFront, a load balancer or another reverse proxy, also set `trustProxy`. It is passed to Express's [`trust proxy`](https://expressjs.com/en/guide/behind-proxies.html) setting. Without it, Express sees the proxy as every request's client, so all users share one limit.
 

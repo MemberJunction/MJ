@@ -24,9 +24,11 @@ const MJ_LOGO_SVG = `<svg class="logo-svg" viewBox="0 0 230 128" xmlns="http://w
  * Renders the consent page HTML.
  *
  * @param consentRequest - The consent request containing user and scope info
+ * @param formAction - Where the form posts: the proxy's public `/oauth/consent` URL. Built from the
+ *   proxy base URL so it still works when the routes are mounted under a prefix (e.g. `/api/mcp`).
  * @returns HTML string for the consent page
  */
-export function RenderConsentPage(consentRequest: ConsentRequest): string {
+export function RenderConsentPage(consentRequest: ConsentRequest, formAction = '/oauth/consent'): string {
   const { user, availableScopes, clientId, requestId } = consentRequest;
   const hierarchicalGroups = GroupScopesHierarchically(availableScopes);
 
@@ -56,7 +58,7 @@ export function RenderConsentPage(consentRequest: ConsentRequest): string {
         <p>The application <strong>${escapeHtml(clientId)}</strong> is requesting access to your MemberJunction account.</p>
       </div>
 
-      <form method="POST" action="/oauth/consent" class="consent-form">
+      <form method="POST" action="${escapeHtml(formAction)}" class="consent-form">
         <input type="hidden" name="requestId" value="${escapeHtml(requestId)}">
 
         <div class="button-group">
@@ -88,8 +90,8 @@ export function RenderConsentPage(consentRequest: ConsentRequest): string {
 }
 
 /** @deprecated Use {@link RenderConsentPage}. */
-export function renderConsentPage(consentRequest: ConsentRequest): string {
-  return RenderConsentPage(consentRequest);
+export function renderConsentPage(consentRequest: ConsentRequest, formAction?: string): string {
+  return RenderConsentPage(consentRequest, formAction);
 }
 
 /**

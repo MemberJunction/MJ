@@ -361,7 +361,8 @@ export async function InitConfig(): Promise<ConfigInfo> {
   // DEFAULT_SERVER_CONFIG.apiKey may have been evaluated before dotenv ran if @memberjunction/server
   // was imported elsewhere first
   const envApiKey = process.env.MJ_API_KEY;
-  console.log(`[Config] apiKey sources: configInfo.apiKey=${configInfo.apiKey ? `"${configInfo.apiKey.substring(0, 10)}..." (${configInfo.apiKey.length} chars)` : 'undefined'}, process.env.MJ_API_KEY=${envApiKey ? `"${envApiKey.substring(0, 10)}..." (${envApiKey.length} chars)` : 'undefined'}`);
+  // Presence only: any part of a key in a log (and, hosted, MJAPI's logs) narrows a guess.
+  console.log(`[Config] apiKey sources: configInfo.apiKey=${configInfo.apiKey ? 'set' : 'unset'}, process.env.MJ_API_KEY=${envApiKey ? 'set' : 'unset'}`);
 
   if (!configInfo.apiKey && envApiKey) {
     console.log('[Config] Using MJ_API_KEY from process.env (DEFAULT_SERVER_CONFIG was stale)');

@@ -11,7 +11,7 @@
  * @module @memberjunction/ai-mcp-server/auth/OAuthProxyRouter
  */
 
-import { Router, Request, Response, urlencoded, json } from 'express';
+import { Router, Request, RequestHandler, Response, urlencoded, json } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import * as crypto from 'crypto';
 import jwt from 'jsonwebtoken';
@@ -112,14 +112,13 @@ export function CreateOAuthProxyRouter(config: OAuthProxyConfig): Router {
     console.log('[OAuth Proxy] JWT signing not configured - passing through upstream tokens');
   }
 
-  // Parse URL-encoded bodies for token endpoint
-  router.use(urlencoded({ extended: true }));
-  router.use(json());
+  // Parse bodies for the /oauth/* endpoints only (token, registration, consent). This router is
+  // mounted at the MCP server's root, so an unscoped parser would also consume the body of the
+  // legacy SSE /mcp/messages route, which reads it as a raw stream.
+  router.use('/oauth', urlencoded({ extended: true }), json());
 
   // Authorization Server Metadata (RFC 8414)
-  router.get('/.well-known/oauth-authorization-server', (req: Request, res: Response) => {
-    handleMetadataEndpoint(req, res, config);
-  });
+  router.get('/.well-known/oauth-authorization-server', CreateAuthorizationServerMetadataHandler(config));
 
   // Dynamic Client Registration (RFC 7591)
   if (config.enableDynamicRegistration) {
@@ -156,7 +155,7 @@ export function CreateOAuthProxyRouter(config: OAuthProxyConfig): Router {
   // Consent Endpoints (only enabled if consent screen is configured)
   if (config.enableConsentScreen) {
     router.get('/oauth/consent', (req: Request, res: Response) => {
-      handleGetConsentEndpoint(req, res, stateManager);
+      handleGetConsentEndpoint(req, res, config, stateManager);
     });
 
     router.post('/oauth/consent', (req: Request, res: Response) => {
@@ -177,6 +176,15 @@ export function createOAuthProxyRouter(config: OAuthProxyConfig): Router {
 /**
  * Handles the Authorization Server Metadata endpoint.
  */
+/**
+ * The authorization server metadata (RFC 8414) endpoint as a bare handler, so a host can also serve
+ * it at the path-insertion URL clients build from the issuer
+ * (`/.well-known/oauth-authorization-server/<issuer path>`), which sits outside this router.
+ */
+export function CreateAuthorizationServerMetadataHandler(config: OAuthProxyConfig): RequestHandler {
+  return (req: Request, res: Response) => handleMetadataEndpoint(req, res, config);
+}
+
 function handleMetadataEndpoint(
   req: Request,
   res: Response,
@@ -1099,6 +1107,7 @@ async function handleScopesEndpoint(
 async function handleGetConsentEndpoint(
   req: Request,
   res: Response,
+  config: OAuthProxyConfig,
   stateManager: AuthorizationStateManager
 ): Promise<void> {
   const { request_id } = readStringQueryParams(req, ['request_id'] as const);
@@ -1115,7 +1124,7 @@ async function handleGetConsentEndpoint(
   }
 
   // Render the consent page
-  const html = RenderConsentPage(consentRequest);
+  const html = RenderConsentPage(consentRequest, `${config.baseUrl}/oauth/consent`);
   res.type('html').send(html);
 }
 

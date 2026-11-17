@@ -30,6 +30,7 @@
   "dependencies": {
     "@memberjunction/ai": "6.3.0-edge.0",
     "@memberjunction/ai-bridge-livekit-native": "6.3.0-edge.0",
+    "@memberjunction/ai-mcp-server": "6.3.0-edge.0",
     "@memberjunction/communication-sendgrid": "6.3.0-edge.0",
     "@memberjunction/core": "6.3.0-edge.0",
     "@memberjunction/excel-addin-server": "6.3.0-edge.0",
