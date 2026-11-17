@@ -280,18 +280,3 @@ describe('MJAuth0Provider', () => {
     });
   });
 });
-
-describe('MJAuth0Provider.GetSignUpOptions', () => {
-  beforeEach(() => {
-    (global as Record<string, unknown>).window = {
-      location: { pathname: '/', search: '', origin: 'http://localhost:4202' },
-    };
-  });
-
-  it('asks Universal Login for the sign-up screen', async () => {
-    const MJAuth0Provider = await importProvider();
-    const provider = new MJAuth0Provider(createMockAuthService() as unknown as ConstructorParameters<typeof MJAuth0Provider>[0]);
-
-    expect(provider.GetSignUpOptions()).toEqual({ authorizationParams: { screen_hint: 'signup' } });
-  });
-});

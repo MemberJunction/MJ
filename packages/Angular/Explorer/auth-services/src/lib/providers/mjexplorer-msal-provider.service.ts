@@ -241,11 +241,6 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       });
   }
 
-  /** Opens the account-creation page (OIDC `prompt=create`, supported by Entra External ID). */
-  public override GetSignUpOptions(): Record<string, unknown> | null {
-    return { prompt: 'create' };
-  }
-
   protected async loginInternal(options?: Record<string, unknown>): Promise<void> {
     await this.ensureInitialized();
 

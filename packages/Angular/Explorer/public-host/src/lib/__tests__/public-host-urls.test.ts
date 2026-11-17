@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BuildLoginScreenURL, BuildSignInURL, BuildSignUpURL, ResolvePublicMJAPIURL } from '../public-host-urls';
+import { BuildLoginScreenURL, BuildSignInURL, ResolvePublicMJAPIURL } from '../public-host-urls';
 
 describe('ResolvePublicMJAPIURL', () => {
   it('uses MJAPI_URI without a trailing slash', () => {
@@ -18,12 +18,8 @@ describe('BuildLoginScreenURL', () => {
   });
 });
 
-describe('sign-in links', () => {
-  it('sends sign-up to Explorer with the sign-up hint', () => {
-    expect(BuildSignUpURL()).toBe('/?signup=1');
-  });
-
-  it('sends sign-in to Explorer with no hint', () => {
+describe('BuildSignInURL', () => {
+  it('is Explorer\'s root', () => {
     expect(BuildSignInURL()).toBe('/');
   });
 });

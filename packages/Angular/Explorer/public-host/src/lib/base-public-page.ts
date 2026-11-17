@@ -7,6 +7,6 @@ import { PublicPageContext } from './public-page-context';
  */
 @Directive()
 export abstract class BasePublicPage {
-  /** The public host's services: slug, query, MJAPI URL, brand, and sign-up and sign-in links. */
+  /** The public host's services: slug, query, MJAPI URL, brand and the sign-in link. */
   protected readonly Context = inject(PublicPageContext);
 }

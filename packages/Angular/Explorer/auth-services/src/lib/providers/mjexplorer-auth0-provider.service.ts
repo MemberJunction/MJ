@@ -170,11 +170,6 @@ export class MJAuth0Provider extends MJAuthBase {
     this._initialized = true;
   }
 
-  /** Opens the Universal Login sign-up screen. */
-  public override GetSignUpOptions(): Record<string, unknown> | null {
-    return { authorizationParams: { screen_hint: 'signup' } };
-  }
-
   protected async loginInternal(options?: Record<string, unknown>): Promise<void> {
     this._staleSessionEvicted = false;
     await this.ensureInitialized();

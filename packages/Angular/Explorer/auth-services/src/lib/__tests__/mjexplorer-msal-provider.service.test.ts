@@ -231,14 +231,3 @@ describe('MJMSALProvider fast token extraction & refresh without iframe hangs', 
     expect(acquireTokenSilent).toHaveBeenCalledTimes(2);
   });
 });
-
-describe('MJMSALProvider.GetSignUpOptions', () => {
-  it('asks Entra for the account-creation prompt', () => {
-    const provider = new MJMSALProvider(
-      {} as unknown as ConstructorParameters<typeof MJMSALProvider>[0],
-      { inProgress$: { pipe: () => ({ subscribe: () => {} }) } } as unknown as ConstructorParameters<typeof MJMSALProvider>[1]
-    );
-
-    expect(provider.GetSignUpOptions()).toEqual({ prompt: 'create' });
-  });
-});

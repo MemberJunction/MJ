@@ -24,9 +24,6 @@ import {
  */
 type WorkOSClient = Awaited<ReturnType<typeof createClient>>;
 
-/** Login option that selects the AuthKit screen; `'sign-up'` routes the redirect to `signUp`. */
-const WORKOS_SCREEN_HINT_KEY = 'screenHint';
-
 /**
  * Resolved configuration for the WorkOS AuthKit client.
  * Provided via the `'workosConfig'` injection token (see `angularProviderFactory`).
@@ -160,21 +157,11 @@ export class MJWorkOSProvider extends MJAuthBase implements OnDestroy {
     }
   }
 
-  /** Opens the AuthKit sign-up screen; `loginInternal` routes this hint to `signUp`. */
-  public override GetSignUpOptions(): Record<string, unknown> | null {
-    return { [WORKOS_SCREEN_HINT_KEY]: 'sign-up' };
-  }
-
   protected async loginInternal(options?: Record<string, unknown>): Promise<void> {
     await this.ensureInitialized();
-    // signIn / signUp redirect the browser to the WorkOS hosted page. Any other caller-supplied
+    // signIn redirects the browser to the WorkOS hosted login page. Any caller-supplied
     // options (loginHint, organizationId, state, …) are passed straight through.
-    const { [WORKOS_SCREEN_HINT_KEY]: screenHint, ...redirectOptions } = options ?? {};
-    if (screenHint === 'sign-up') {
-      await this.client!.signUp(redirectOptions);
-    } else {
-      await this.client!.signIn(options);
-    }
+    await this.client!.signIn(options);
   }
 
   protected async logoutInternal(): Promise<void> {

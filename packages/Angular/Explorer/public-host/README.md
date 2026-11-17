@@ -1,6 +1,6 @@
 # @memberjunction/ng-public-host
 
-Public pages for MJ Explorer: pages that a visitor can open before signing in, such as a product landing page or a sign-up page. Open Apps ship them; the public host renders them at `/p/<slug>`.
+Public pages for MJ Explorer: pages that a visitor can open before signing in, such as a product landing page or a pricing page. Open Apps ship them; the public host renders them at `/p/<slug>`.
 
 A public page does not load Explorer, the auth SDK, GraphQL or metadata. It loads Angular, this package, its own chunk, and Explorer's `index.html` files.
 
@@ -37,7 +37,7 @@ import { BasePublicPage } from '@memberjunction/ng-public-host';
   selector: 'acme-pricing-page',
   template: `
     <h1>Pricing</h1>
-    <button type="button" (click)="Context.StartSignUp()">Create account</button>
+    <button type="button" (click)="Context.StartSignIn()">Sign in</button>
   `,
 })
 export class PricingPageComponent extends BasePublicPage {}
@@ -50,8 +50,7 @@ export class PricingPageComponent extends BasePublicPage {}
 | `Slug`, `SubPath`, `QueryParams` | The parts of the URL after `/p/` |
 | `Brand()` | The sign-in page design from Login Studio (logos, theme), or `null` |
 | `BuildMJAPIURL(path)` | An absolute URL for the Open App's `pre-auth` server endpoints |
-| `StartSignUp()` | Opens Explorer at `/?signup=1`, which opens the identity provider's sign-up form |
-| `StartSignIn()` | Opens Explorer's sign-in screen |
+| `StartSignIn()` | Opens Explorer's sign-in screen. A new visitor signs up there when the identity provider allows it |
 
 Rules for a public page:
 

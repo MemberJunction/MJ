@@ -105,26 +105,6 @@ describe('MJAuthBase', () => {
     expect(provider.initialSearch).toBe('?q=1');
   });
 
-  it('GetSignUpOptions returns null by default', () => {
-    class TestProvider extends MJAuthBase {
-      readonly type = 'test';
-      async initialize(): Promise<void> {}
-      protected async loginInternal(): Promise<void> {}
-      protected async logoutInternal(): Promise<void> {}
-      async handleCallback(): Promise<void> {}
-      protected async extractIdTokenInternal() { return 'token'; }
-      protected async extractTokenInfoInternal() { return { idToken: 'token', expiresAt: 0 }; }
-      protected async extractUserInfoInternal() { return { id: '1', email: 'a@b.c', name: 'Test' }; }
-      protected async refreshTokenInternal() { return { success: true, token: { idToken: 'token', expiresAt: 0 } }; }
-      protected classifyErrorInternal() { return { type: 'UNKNOWN_ERROR' as AuthErrorType, message: 'err' }; }
-      protected async getProfilePictureUrlInternal() { return null; }
-      protected async handleSessionExpiryInternal() {}
-    }
-
-    const provider = new TestProvider({ name: 'test', type: 'test', clientId: 'test-client' });
-    expect(provider.GetSignUpOptions()).toBeNull();
-  });
-
   it('should validate config with clientId', () => {
     class TestProvider extends MJAuthBase {
       readonly type = 'test';

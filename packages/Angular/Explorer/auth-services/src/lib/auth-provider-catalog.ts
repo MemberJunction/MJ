@@ -27,10 +27,6 @@ const SELECTED_PROVIDER_KEY = 'mj_auth_selected_provider';
  */
 const PENDING_LOGIN_KEY = 'mj_auth_pending_login';
 
-/** Values stored under {@link PENDING_LOGIN_KEY}: a plain sign-in, or a sign-up. */
-const PENDING_SIGN_IN = '1';
-const PENDING_SIGN_UP = 'signup';
-
 /** How long to wait for the catalog before falling back to the compiled configuration. */
 const DEFAULT_FETCH_TIMEOUT_MS = 5000;
 
@@ -59,12 +55,6 @@ export interface AuthProviderResolution {
    * start immediately. The surface should consume this once and call `login()`.
    */
   autoLogin: boolean;
-
-  /**
-   * True when {@link autoLogin} should open the provider's sign-up form instead of sign-in,
-   * because the picker choice was made while a sign-up was requested.
-   */
-  autoSignUp?: boolean;
 }
 
 /**
@@ -164,15 +154,12 @@ export class AuthProviderCatalog {
     }
 
     const active = selected ?? choices.find((p) => p.isDefault) ?? choices[0];
-    const pending = this.consumePendingLogin();
-    const autoLogin = Boolean(selected) && pending !== null;
 
     return {
       active,
       choices,
       showPicker: choices.length > 1,
-      autoLogin,
-      autoSignUp: autoLogin && pending === PENDING_SIGN_UP
+      autoLogin: Boolean(selected) && this.consumePendingLogin()
     };
   }
 
@@ -184,17 +171,15 @@ export class AuthProviderCatalog {
    * tokens) at module-definition time, so switching providers cannot be done in a live
    * injector. Choosing the provider that is already active needs no reload — the caller
    * simply calls `login()`.
-   *
-   * @param signUp When true, the reloaded app opens the provider's sign-up form instead of sign-in.
    */
-  public static Select(provider: PublicAuthProviderInfo, activeProviderName: string | null, signUp = false): { requiresReload: boolean } {
+  public static Select(provider: PublicAuthProviderInfo, activeProviderName: string | null): { requiresReload: boolean } {
     this.writeStorage(SELECTED_PROVIDER_KEY, provider.name);
 
     if (activeProviderName && provider.name === activeProviderName) {
       return { requiresReload: false };
     }
 
-    this.writeStorage(PENDING_LOGIN_KEY, signUp ? PENDING_SIGN_UP : PENDING_SIGN_IN);
+    this.writeStorage(PENDING_LOGIN_KEY, '1');
     return { requiresReload: true };
   }
 
@@ -212,15 +197,12 @@ export class AuthProviderCatalog {
   /**
    * Reads and clears the "start login immediately" flag. Clearing on read is what keeps a
    * failed or cancelled login from re-triggering the redirect on every subsequent load.
-   *
-   * @returns The stored sign-in or sign-up value, or null when no login is pending
    */
-  private static consumePendingLogin(): string | null {
-    const pending = this.readStorage(PENDING_LOGIN_KEY);
-    if (pending !== PENDING_SIGN_IN && pending !== PENDING_SIGN_UP) {
-      return null;
+  private static consumePendingLogin(): boolean {
+    const pending = this.readStorage(PENDING_LOGIN_KEY) === '1';
+    if (pending) {
+      this.removeStorage(PENDING_LOGIN_KEY);
     }
-    this.removeStorage(PENDING_LOGIN_KEY);
     return pending;
   }
 

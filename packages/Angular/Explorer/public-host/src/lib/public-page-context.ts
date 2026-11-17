@@ -1,7 +1,7 @@
 import { signal, type Signal } from '@angular/core';
 import type { PublicLoginScreen } from '@memberjunction/theme-engine';
 import { ReadPublicPageSubPath } from './public-path';
-import { BuildSignInURL, BuildSignUpURL } from './public-host-urls';
+import { BuildSignInURL } from './public-host-urls';
 
 /** What the public host knows when it creates a page's context. */
 export interface PublicPageContextConfig {
@@ -52,12 +52,7 @@ export class PublicPageContext {
     return `${this.MJAPIURL}/${path.replace(/^\/+/, '')}`;
   }
 
-  /** Opens Explorer and starts the identity provider's sign-up form. */
-  public StartSignUp(): void {
-    this.navigate(BuildSignUpURL());
-  }
-
-  /** Opens Explorer's sign-in screen. */
+  /** Opens Explorer's sign-in screen. A new visitor signs up there when the identity provider allows it. */
   public StartSignIn(): void {
     this.navigate(BuildSignInURL());
   }

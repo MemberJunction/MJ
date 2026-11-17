@@ -24,13 +24,10 @@ describe('PublicPageContext', () => {
     expect(makeContext().BuildMJAPIURL('lumen/plans')).toBe('https://host/api/lumen/plans');
   });
 
-  it('starts sign-up and sign-in in Explorer', () => {
+  it('starts sign-in in Explorer', () => {
     const navigate = vi.fn<(url: string) => void>();
-    const context = makeContext(navigate);
-    context.StartSignUp();
-    context.StartSignIn();
-    expect(navigate).toHaveBeenNthCalledWith(1, '/?signup=1');
-    expect(navigate).toHaveBeenNthCalledWith(2, '/');
+    makeContext(navigate).StartSignIn();
+    expect(navigate).toHaveBeenCalledWith('/');
   });
 
   it('has no brand until one is set', () => {

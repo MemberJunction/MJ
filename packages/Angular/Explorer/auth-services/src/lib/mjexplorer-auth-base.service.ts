@@ -207,15 +207,6 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
   }
 
   /**
-   * Options for `login()` that open the identity provider's sign-up form instead of sign-in.
-   *
-   * @returns The provider's sign-up options, or null when its SDK has no sign-up hint
-   */
-  public GetSignUpOptions(): Record<string, unknown> | null {
-    return null;
-  }
-
-  /**
    * Logout — clears all MJ client-side caches then delegates to the provider.
    *
    * Cache clearing happens universally regardless of auth provider so that a
