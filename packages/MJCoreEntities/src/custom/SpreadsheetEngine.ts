@@ -3,9 +3,9 @@ import {
     IMetadataProvider,
     IRunQueryProvider,
     LogError,
+    LogWarning,
     Metadata,
     ProjectEntityValueRowsForUser,
-    QueryInfo,
     RunQuery,
     RunView,
     RunViewParams,
@@ -13,6 +13,7 @@ import {
     UserInfo
 } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { QueryEngine } from '../engines/QueryEngine';
 import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
 import {
     ArtifactAiFormulaCellRequest,
@@ -12288,14 +12289,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (parsed.Kind === 'QUERY') {
             // Map positional args to non-server-set query parameters if the query metadata is available
             const params: Record<string, SpreadsheetCellValue> = { ...parsed.NamedParameters };
-            const queries: QueryInfo[] = provider?.Queries ?? [];
-            const matchedQuery = queries.find(
-                (q) =>
-                    UUIDsEqual(q.ID, parsed.PrimaryTarget) ||
-                    q.Name.toLowerCase() === parsed.PrimaryTarget.toLowerCase()
-            );
+            const queryEngine = QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
+            await queryEngine.Config(false, contextUser, provider);
+            if (!queryEngine.Loaded) {
+                LogWarning(`SpreadsheetEngine: saved queries could not be loaded; =MJ.QUERY("${parsed.PrimaryTarget}") falls back to positional parameter names`);
+            }
+            const matchedQuery = queryEngine.FindQueryByID(parsed.PrimaryTarget) ?? queryEngine.FindQueryByName(parsed.PrimaryTarget);
             if (matchedQuery && parsed.Arguments.length > 0) {
-                const clientParams = (matchedQuery.Parameters ?? []).filter((p) => !p.IsServerSet);
+                const clientParams = matchedQuery.QueryParameters.filter((p) => !p.IsServerSet);
                 for (let idx = 0; idx < parsed.Arguments.length && idx < clientParams.length; idx++) {
                     const paramName = clientParams[idx].Name;
                     if (params[paramName] === undefined) {

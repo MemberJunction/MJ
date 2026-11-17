@@ -14,6 +14,8 @@ export {
     FakeRenderBackend,
     PINNED_HYPERFRAMES_VERSION,
     RenderWorkerError,
+    type BackendAudioJob,
+    type BackendAudioResult,
     type BackendCheckJob,
     type BackendProbeResult,
     type BackendRenderJob,
@@ -34,6 +36,7 @@ export {
     MIN_FPS,
     MIN_FRAME_DIMENSION,
     ResolveCompositionDuration,
+    ResolveInsideBundleRoot,
     ResolveCompositionFps,
     StageRenderBundle,
     ValidateBundleRelativePath,
@@ -113,6 +116,7 @@ export {
     RunCheckJob,
     RunContactSheetJob,
     RunKeyframesJob,
+    ResolveRenderCaptureWorkers,
     RunRenderJob,
     RunStillsJob,
     type RunJobCommonOptions,
@@ -143,3 +147,92 @@ export {
     type RunOneShotOptions,
 } from './one-shot.js';
 
+
+export {
+    CountExpectedPauses,
+    EvaluateAudioChecks,
+    FindUnexpectedLinePauses,
+    MJ_AUDIO_CLIPPING_CODE,
+    MJ_AUDIO_LINE_PAUSE_CODE,
+    MJ_AUDIO_LOUDNESS_CODE,
+    MJ_AUDIO_MISSING_CODE,
+    MJ_AUDIO_NARRATION_MASKED_CODE,
+    MJ_AUDIO_SOURCE_MISSING_CODE,
+    MJ_AUDIO_TRUE_PEAK_CODE,
+    ParseAstatsOverall,
+    ParseEbur128Summary,
+    ParseLoudnormJson,
+    ParseSilenceDetect,
+    SILENT_MIX_LUFS,
+    type AstatsSummary,
+    type AudioCheckInput,
+    type Ebur128Summary,
+    type LineMaskingMeasurement,
+    type LoudnormMeasurement,
+    type UnexpectedLinePause,
+} from './checks/audio-checks.js';
+
+export {
+    Biquad,
+    BuildChordProgression,
+    CreatePrng,
+    CreateStereoBuffer,
+    DeriveSeed,
+    MidiToHz,
+    MIX_SAMPLE_RATE,
+    MUSIC_BED_TARGET_RMS,
+    NormalizePeak,
+    ParseMusicKey,
+    SFX_PEAK,
+    SynthesizeMusicBed,
+    SynthesizeSfx,
+    type BiquadType,
+    type StereoBuffer,
+} from './audio/synth.js';
+
+export {
+    ApplyMusicGainEnvelope,
+    BuildMusicGainSegments,
+    BuildSpeechIntervals,
+    ENVELOPE_CONTROL_SAMPLES,
+    MusicGainDbAt,
+    SegmentAmountAt,
+    SWELL_ATTACK_SECONDS,
+    SWELL_RELEASE_SECONDS,
+    type GainSegment,
+    type MusicGainSegments,
+    type TimeInterval,
+} from './audio/ducking.js';
+
+export {
+    BuildMixStems,
+    MeasureLineMasking,
+    MixStemsToStereo,
+    MUSIC_END_FADE_SECONDS,
+    type DecodedMixSources,
+    type MixStems,
+} from './audio/mixer.js';
+
+export {
+    BuildLoudnormFilter,
+    CreateFfmpegRunner,
+    DecodeAudioToPcm,
+    DeinterleaveFloat32,
+    DetectSilences,
+    EncodeWavFloat32,
+    MeasureDeliveredAudio,
+    MeasureLoudnorm,
+    MuxFinalAudio,
+    type DeliveredAudioMeasurement,
+    type FfmpegRunner,
+    type FfmpegRunResult,
+    type MuxFinalAudioParams,
+} from './audio/ffmpeg-audio.js';
+
+export {
+    BuildAudioMeasurements,
+    FinalizeRenderAudio,
+    MIX_TAIL_PAD_SECONDS,
+    type FinalizeRenderAudioParams,
+    type FinalizeRenderAudioResult,
+} from './audio/audio-pipeline.js';

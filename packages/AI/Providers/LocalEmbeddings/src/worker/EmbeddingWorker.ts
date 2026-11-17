@@ -9,5 +9,6 @@
 import { ServeWorkerRequests } from './ServeWorkerRequests.js';
 import { HandleEmbeddingRequest } from './EmbeddingWorkerHandler.js';
 import type { EmbeddingWorkerCall } from './EmbeddingWorkerProtocol.js';
+import type { EmbeddedTexts } from '../models/embeddingRuntime.js';
 
-ServeWorkerRequests<EmbeddingWorkerCall, Float32Array[]>((call) => HandleEmbeddingRequest(call));
+ServeWorkerRequests<EmbeddingWorkerCall, EmbeddedTexts>((call) => HandleEmbeddingRequest(call));
