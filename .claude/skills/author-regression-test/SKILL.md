@@ -13,6 +13,9 @@ MJ Explorer regression tests are `MJ: Tests` records (Computer Use type) in
 the criteria. **Files come from `mj test regression new`, never from a hand copy**: a copy keeps the
 other test's `primaryKey`, so a push overwrites that test.
 
+A PR needs no regression run. Step 6 is the only step that runs the stack, and only when the
+developer typed `/author-regression-test`.
+
 Helper (run from the repo root): `node .claude/skills/author-regression-test/scripts/related-tests.mjs [--base origin/next] [--keywords a,b]`.
 
 ## Steps
@@ -47,9 +50,12 @@ Helper (run from the repo root): `node .claude/skills/author-regression-test/scr
    `--dry-run`. Read the new file. Then run `pnpm run check:regression-suite`. Do not run the
    "next steps" the command prints (`mj sync push`, `mj test run`): they write to the database in
    your `mj.config.cjs`, which may be shared. Step 6 runs the test in its own stack.
-6. **Optional: prove it passes and record its first replay script.** Ask first: it costs one LLM
-   run and 30–60 minutes (1–2 hours the first time, which also generates forms and builds the
-   images). Without it, the next suite harvest records the script.
+6. **Optional: prove it passes and record its first replay script.** Do this step only when the
+   developer typed `/author-regression-test` in this conversation. When the skill loaded on its
+   own, skip to step 7 and tell the developer: "To run the test and record its first replay script,
+   type `/author-regression-test`. Otherwise the next suite harvest records it." When the developer
+   types it for a test the branch already has, start at this step. Ask first: it costs one LLM run
+   and 30–60 minutes (1–2 hours the first time, which also generates forms and builds the images).
    1. Commit the new test first (step 7). The harvest check fails on any other uncommitted change,
       so if the checkout has other uncommitted work, stop and ask the developer to commit it.
    2. Check: no `mj-regression` containers (`docker ps -aq --filter label=com.docker.compose.project=mj-regression`),

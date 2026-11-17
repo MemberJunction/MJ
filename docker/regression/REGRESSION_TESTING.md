@@ -606,7 +606,7 @@ See [`metadata-optional/regression-test/README.md`](../../metadata-optional/regr
 1. Scaffold the test with `pnpm mj test regression new` (it picks the next number, writes the test file and its suite member, and runs the parity check). Do not hand-copy a test file: the copy keeps the other test's `primaryKey`. The `author-regression-test` Claude skill walks through the whole flow from a branch's UI changes.
 2. Check the files with `pnpm run check:regression-suite` (CI runs the same check).
 3. The test runner syncs metadata on each run, so no rebuild is needed. Metadata files are bind-mounted from the host, so edits are picked up immediately.
-4. Run only the new test with `mj test regression up --test "T156 - My new test"`.
+4. Do not run the suite for a PR. To run the new test and record its first replay script, invoke `/author-regression-test`.
 
 ### Validating a Test Before Running
 

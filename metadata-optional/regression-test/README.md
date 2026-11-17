@@ -164,7 +164,12 @@ Always add `regression` as a tag too. Other useful tags: `smoke`, `crud`, `auth`
 ## Adding a New Test
 
 The `author-regression-test` Claude skill runs these steps from your branch's UI changes: it lists
-the related tests, proposes new ones, scaffolds them, and can record the first replay script.
+the related tests, proposes new ones, and scaffolds them.
+
+A PR does not run the regression suite. A test runs only when you invoke a skill:
+`/author-regression-test` can run the new test and record its first replay script, and
+`/regression-replay-pr` runs the suite for a branch. Without either, the next harvest records the
+new test's script.
 
 1. **Scaffold it.** The command picks the next free number, writes the test file, adds the suite member, and runs the parity check. It does not touch a database.
    ```bash
@@ -175,9 +180,7 @@ the related tests, proposes new ones, scaffolds them, and can record the first r
    Add `--from T041` to copy the `Configuration` of a similar test (its replay scripts are not copied), and `--dry-run` to preview.
 2. **Read the new file** and sharpen `goal`, `judgeValidationCriteria`, `finalUrlPattern`, and `maxSteps` (5 for a simple click, 15+ for multi-step workflows). Keep the generated `primaryKey`: every record needs one.
 3. **Check the suite**: `pnpm run check:regression-suite`. CI runs the same check on every PR.
-4. **Push to your database**: `pnpm mj sync push --dir=metadata-optional/regression-test`
-5. **Smoke test a single run**: `pnpm mj test run --name "T156 - My new test"`
-6. **If another PR takes the same number first**, the parity check fails after you rebase. Renumber the file, its `Name`, and its suite member.
+4. **If another PR takes the same number first**, the parity check fails after you rebase. Renumber the file, its `Name`, and its suite member.
 
 ## Replay Scripts
 
@@ -229,8 +232,8 @@ Three things worth knowing:
   driven by the config, not by what the file already contains — so a pull with the entries removed
   writes the scripts into the test JSONs and orphans the files.
 
-**Getting scripts into git.** The `regression-replay-pr` Claude skill runs the suite on your machine
-for any branch (usually `next`), pulls the scripts back into these files, checks that only script
+**Getting scripts into git.** The `regression-replay-pr` Claude skill (type `/regression-replay-pr`;
+an agent does not start it on its own) runs the suite on your machine for any branch (usually `next`), pulls the scripts back into these files, checks that only script
 files and their `ReplayScript`/`PendingReplayScript` references changed, and opens a PR. It does not
 promote a pending script by itself: the PR body lists each pending script with its drift report,
 for a person to promote or discard.

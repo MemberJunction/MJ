@@ -1,6 +1,7 @@
 ---
 name: regression-replay-pr
 description: Use when replay scripts for the MJ Explorer regression suite must be recorded, refreshed or committed for a branch, or when asked to run the Docker regression suite on a branch (usually next) and open a PR with the replay scripts the run recorded.
+disable-model-invocation: true
 ---
 
 # Regression replay-script PR
