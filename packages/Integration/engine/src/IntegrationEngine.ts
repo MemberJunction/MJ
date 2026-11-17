@@ -4173,9 +4173,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!latestChangeAt || at > latestChangeAt) latestChangeAt = at;
         }
 
-        // Update push watermark
+        // Update push watermark. ChangedAt reaches us at JavaScript Date precision (milliseconds) while the column holds
+        // up to seven fractional digits, so a record changed at .2666667 sits ABOVE a watermark of .266 and would be
+        // re-selected (and re-pushed) by the very next pass. Round the watermark UP to the next whole millisecond: every
+        // change already pushed is then strictly below it. (A change committed inside that same millisecond window after
+        // the push's read is the ordinary timestamp-watermark race, not a new one.)
         if (latestChangeAt) {
-            await this.watermarkService.Update(entityMapID, latestChangeAt, contextUser, 'Push');
+            const parsed = new Date(latestChangeAt);
+            const watermark = Number.isNaN(parsed.getTime()) ? latestChangeAt : new Date(parsed.getTime() + 1).toISOString();
+            await this.watermarkService.Update(entityMapID, watermark, contextUser, 'Push');
         }
 
         console.log(
@@ -4208,7 +4214,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const result = await rv.RunView<{
             RecordID: string; Type: string; ChangedAt: string;
         }>({
-            EntityName: 'Record Changes',
+            EntityName: 'MJ: Record Changes',
             ExtraFilter: filter,
             OrderBy: 'ChangedAt ASC',
             Fields: ['RecordID', 'Type', 'ChangedAt'],
@@ -4223,7 +4229,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const latestByRecord = new Map<string, { RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> }>();
         for (const r of result.Results) {
             const normalizedID = this.normalizeRecordChangeID(r.RecordID);
-            latestByRecord.set(normalizedID, { ...r, RecordID: normalizedID, Fields: {} });
+            // ChangedAt arrives as a Date from a 'simple' RunView; the push watermark is stored as text, and a Date
+            // assigned to it serialises JSON-quoted ("…Z") — a value the next pass's `ChangedAt > '…'` filter can never
+            // match, so every incremental push after the first selected nothing. Normalise to ISO text here.
+            const changedAt: unknown = r.ChangedAt;
+            latestByRecord.set(normalizedID, { ...r, RecordID: normalizedID, ChangedAt: changedAt instanceof Date ? changedAt.toISOString() : String(changedAt), Fields: {} });
         }
 
         // Load current field values for each changed record
@@ -4375,6 +4385,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ObjectName: entityMap.ExternalObjectName,
             ContextUser: contextUser,
         };
+
+        if (change.Type === 'Delete' && (!externalID || !config.connector.SupportsDelete)) {
+            // Nothing can be deleted at the vendor: the record was never pushed (no record map) or the connector has no
+            // delete. Routing the Delete into the create/update branches with no attributes made the connector refuse it on
+            // EVERY incremental pass (errored, watermark held), permanently stalling the push for the whole entity map.
+            // A delete that cannot be performed is a documented skip (like a 403), and the watermark may advance past it.
+            const why = !externalID
+                ? 'the record was never pushed (no record map), so there is nothing to delete at the vendor'
+                : 'the connector does not support delete';
+            this.warnPushSkip(logger, entityMap, 'delete', why, { recordID: change.RecordID });
+            result.RecordsSkipped++;
+            return;
+        }
 
         if (change.Type === 'Delete' && externalID && config.connector.SupportsDelete) {
             await this.rateLimit(config);
