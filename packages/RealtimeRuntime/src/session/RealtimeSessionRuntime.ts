@@ -5064,9 +5064,9 @@ export class RealtimeSessionRuntime {
           await this.mountAdvertisedChannel(plugin);
         }
         await plugin.OnDelegationArtifacts(artifacts);
-        if (!isOpen) {
-          this.noteChannelActivity(plugin); // the channel was mounted for this: reveal its tab
-        }
+        // Always reveal/mark the channel active when it took delegated artifacts, even for `open-on-start` channels
+        // (e.g. ArtifactWorkspace) whose surface tab stays hidden until first activity.
+        this.noteChannelActivity(plugin);
       } catch (error) {
         console.error(`[RealtimeSession] Channel '${plugin.ChannelName}' failed to take a delegated run's artifacts:`, error);
       }
