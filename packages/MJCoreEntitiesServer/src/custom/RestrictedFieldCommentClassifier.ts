@@ -10,7 +10,7 @@ import {
 } from '@memberjunction/core';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIDecisionParams, AIPromptRunner, RunDecisionUse, type ShadowDecisionRunner } from '@memberjunction/ai-prompts';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import {
     BuildLinkedRecordPrimaryKeyFilter,
@@ -20,6 +20,16 @@ import {
     type AnchoredRecordValues,
     type MJConversationEntity
 } from '@memberjunction/core-entities';
+import {
+    AnsweredByOf,
+    BuildRestrictedFieldQuestions,
+    BuildRestrictedFieldState,
+    CompareRestrictedFieldDecision,
+    FlaggedFieldsFromVerdicts,
+    GetRestrictedFieldClassifierDecisionMode,
+    ReadRestrictedFieldVerdicts,
+    RESTRICTED_FIELD_CLASSIFIER_USE
+} from './RestrictedFieldDecision';
 
 /**
  * Input passed to a semantic LLM classifier to determine whether an unanchored or
@@ -381,6 +391,25 @@ interface RestrictedFieldClassifierPromptResult {
     restrictedFields?: string[];
 }
 
+/** The decision prompt the semantic stage asks when its mode is `Shadow` or `Decision`. */
+const RESTRICTED_FIELD_DECISION_PROMPT_NAME = 'Default Decision';
+
+let restrictedFieldDecisionRunner: ShadowDecisionRunner | null = null;
+
+/**
+ * Sets (or clears with `null`) the decision runner the semantic stage uses. For tests; the default is
+ * a new `AIDecisionRunner` per call.
+ */
+export function SetRestrictedFieldDecisionRunner(runner: ShadowDecisionRunner | null): void {
+    restrictedFieldDecisionRunner = runner;
+}
+
+/**
+ * The default semantic stage: the governed prompt, the decision, or both, as
+ * `GetRestrictedFieldClassifierDecisionMode()` says (see `RestrictedFieldDecision.ts`). Every failure
+ * of the prompt reads as "nothing flagged", as it always has; a failed or unsure decision falls back
+ * to the prompt.
+ */
 async function runDefaultAIEngineRestrictedFieldClassifier(
     provider: IMetadataProvider,
     prompt: RestrictedFieldClassifierPrompt,
@@ -399,6 +428,56 @@ async function runDefaultAIEngineRestrictedFieldClassifier(
         return [];
     }
 
+    const outcome = await RunDecisionUse<string[]>({
+        Use: RESTRICTED_FIELD_CLASSIFIER_USE,
+        Mode: GetRestrictedFieldClassifierDecisionMode(),
+        BuildDecision: () => buildRestrictedFieldDecision(aiEngine, prompt, contextUser),
+        FromDecision: (run) => {
+            const flagged = FlaggedFieldsFromVerdicts(
+                ReadRestrictedFieldVerdicts(prompt, run.Answers, AnsweredByOf(run))
+            );
+            return flagged === null ? null : normalizeMatchedFieldNames(flagged, validByLower);
+        },
+        RunExisting: () => runRestrictedFieldPrompt(aiEngine, prompt, contextUser, validByLower),
+        Compare: (answers, existing, run) => CompareRestrictedFieldDecision(
+            ReadRestrictedFieldVerdicts(prompt, answers, AnsweredByOf(run)),
+            existing
+        ),
+        Runner: restrictedFieldDecisionRunner ?? undefined
+    });
+    return outcome.Value;
+}
+
+/**
+ * The decision for the semantic stage, asked as the commenting user, or null when there is no
+ * active decision prompt or nothing to ask about.
+ */
+function buildRestrictedFieldDecision(
+    aiEngine: AIEngineBase,
+    prompt: RestrictedFieldClassifierPrompt,
+    contextUser: UserInfo
+): AIDecisionParams | null {
+    const decisionPrompt = aiEngine.Prompts?.find(
+        (p) => p.Name === RESTRICTED_FIELD_DECISION_PROMPT_NAME && p.Status === 'Active'
+    );
+    if (!decisionPrompt || prompt.CandidateFields.length === 0) {
+        return null;
+    }
+    const params = new AIDecisionParams();
+    params.prompt = decisionPrompt;
+    params.contextUser = contextUser;
+    params.State = BuildRestrictedFieldState(prompt);
+    params.Questions = BuildRestrictedFieldQuestions(prompt);
+    return params;
+}
+
+/** The governed prompt: the semantic stage as it ran before decisions. Any failure flags nothing. */
+async function runRestrictedFieldPrompt(
+    aiEngine: AIEngineBase,
+    prompt: RestrictedFieldClassifierPrompt,
+    contextUser: UserInfo,
+    validByLower: ReadonlyMap<string, string>
+): Promise<string[]> {
     const aiPrompt = aiEngine.Prompts?.find(
         (p) => p.Name === RESTRICTED_FIELD_CLASSIFIER_PROMPT_NAME && p.Status === 'Active'
     );

@@ -24,9 +24,8 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIDecisionRunner, AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
     DescribeAnsweringModel,
-    FindDecisionCalibration,
     type DecisionAnsweringModel,
-    type DecisionModelCalibration,
+    type DecisionCalibrationKey,
     type MJAIPromptEntityExtended
 } from '@memberjunction/ai-core-plus';
 import { ApplyPlattCalibration, type DecisionAnswer, type DecisionQuestion, type PlattCalibration } from '@memberjunction/ai';
@@ -49,7 +48,7 @@ export interface DuplicateCandidateProbability {
     RecordID: string;
     /**
      * The Likelihood's probability in [0, 1], **calibrated** for the model that answered (see
-     * {@link DUPLICATE_DECISION_CALIBRATION}). Null when the decision returned no answer for this
+     * {@link DUPLICATE_DECISION_CALIBRATION_KEY}). Null when the decision returned no answer for this
      * candidate, or when the answering model has no calibration.
      */
     Probability: number | null;
@@ -58,9 +57,11 @@ export interface DuplicateCandidateProbability {
 }
 
 /**
- * Platt calibration of the duplicate Likelihood ("the candidate is the same real-world entity as
- * the new record"), per decision model, each tied to the exact model it was fitted on (see
- * `FindDecisionCalibration` in `@memberjunction/ai-core-plus`): the MJ decision model that answered
+ * Which calibration the duplicate Likelihood ("the candidate is the same real-world entity as the
+ * new record") reads: use `duplicate-detection`, question `duplicate` (every candidate's Likelihood
+ * shares it), in the answering model's `ModelConfiguration.Decision.Calibrations` (see
+ * `FindDecisionCalibration` in `@memberjunction/ai-core-plus`). Each fit is tied to the exact model it
+ * was fitted on: the MJ decision model that answered
  * (`ModelName`) and the model the driver reports behind it (`ResolvedModel`). A model's raw
  * probabilities are not calibrated: Jev ranks candidates almost perfectly (AUC 0.99) but its raw
  * probabilities run high for similar records that are not duplicates.
@@ -80,16 +81,21 @@ export interface DuplicateCandidateProbability {
  * - **LLM Decision** when its chat model is GPT-OSS-120B, its `LLM Decision` prompt's first choice.
  *   The stored runs don't record the resolved model; this is the prompt's binding on that day.
  *
- * Refit whenever a model's pinned version, its delegated chat model or the question changes.
+ * Refit whenever a model's pinned version, its delegated chat model or the question changes. The
+ * fits live on the `Jev` row (`A` 2.5855, `B` -4.4485) and the `LLM Decision` row (`A` 0.9918,
+ * `B` -1.4843) in `metadata/ai-models`.
  */
-export const DUPLICATE_DECISION_CALIBRATION: readonly DecisionModelCalibration<PlattCalibration>[] = Object.freeze([
-    Object.freeze({ ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917', Calibration: Object.freeze({ A: 2.5855, B: -4.4485 }) }),
-    Object.freeze({ ModelName: 'LLM Decision', ResolvedModel: 'GPT-OSS-120B', Calibration: Object.freeze({ A: 0.9918, B: -1.4843 }) })
-]);
+export const DUPLICATE_DECISION_CALIBRATION_KEY: DecisionCalibrationKey = Object.freeze({
+    Use: 'duplicate-detection',
+    Question: 'duplicate',
+});
 
-/** The shipped calibration for the exact model that answered, or null when it has none. */
+/**
+ * The calibration declared for the exact model that answered, or null when it has none.
+ * @param answeredBy The model that answered.
+ */
 export function DuplicateDecisionCalibrationFor(answeredBy: DecisionAnsweringModel): PlattCalibration | null {
-    return FindDecisionCalibration(DUPLICATE_DECISION_CALIBRATION, answeredBy);
+    return AIEngine.Instance.FindDecisionCalibration(DUPLICATE_DECISION_CALIBRATION_KEY, answeredBy);
 }
 
 /**
@@ -97,8 +103,7 @@ export function DuplicateDecisionCalibrationFor(answeredBy: DecisionAnsweringMod
  * has no calibration.
  */
 export function CalibratedDuplicateProbability(probability: number, answeredBy: DecisionAnsweringModel): number | null {
-    const calibration = DuplicateDecisionCalibrationFor(answeredBy);
-    return calibration ? ApplyPlattCalibration(probability, calibration) : null;
+    return AIEngine.Instance.CalibrateDecisionProbability(DUPLICATE_DECISION_CALIBRATION_KEY, probability, answeredBy);
 }
 
 /** Models already logged as having no calibration, so each is logged once per process. */
@@ -297,8 +302,8 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
 
     /**
      * The calibration for the exact model that answered (the MJ decision model and the model the
-     * driver reports behind it), or null when it has none. Defaults to
-     * {@link DUPLICATE_DECISION_CALIBRATION}; override to calibrate another model.
+     * driver reports behind it), or null when it has none. Defaults to the answering model's declared
+     * calibration ({@link DUPLICATE_DECISION_CALIBRATION_KEY}); override to supply another.
      */
     protected CalibrationFor(answeredBy: DecisionAnsweringModel): PlattCalibration | null {
         return DuplicateDecisionCalibrationFor(answeredBy);
@@ -340,7 +345,7 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
         LogError(
             `Duplicate decision: the model "${model}" has no calibration, so its probabilities can't be banded. ` +
             'The entry check flags nothing for it, and Decision mode flags its candidates for review. ' +
-            'Add its calibration (DUPLICATE_DECISION_CALIBRATION, or override CalibrationFor).'
+            "Add its calibration (use 'duplicate-detection' in its ModelConfiguration.Decision.Calibrations), or override CalibrationFor."
         );
     }
 

@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase, type RunViewResultWithResolvedView } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewParameters, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewParameters, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues, CanonicalFieldsKey } from '@memberjunction/core';
 import { GraphQLJSONObject } from 'graphql-type-json';
 
 import { ReplaceByteArraysWithBase64, UUIDsEqual } from '@memberjunction/global';
@@ -1475,7 +1475,8 @@ export class RunViewResolver extends ResolverBase {
             const processedUpdatedRows = this.processRawData(
               filteredUpdatedRows,
               entity.ID,
-              entity
+              entity,
+              inputItem.params.Fields
             );
             return {
               viewIndex: result.viewIndex,
@@ -1494,7 +1495,7 @@ export class RunViewResolver extends ResolverBase {
           if (result.status === 'stale' && result.results && entity) {
             // Apply API encryption filtering before serializing full refresh rows
             const filteredRows = await protectRawRows(entity, result.results as object[]);
-            const processedRows = this.processRawData(filteredRows, entity.ID, entity);
+            const processedRows = this.processRawData(filteredRows, entity.ID, entity, inputItem.params.Fields);
             return {
               viewIndex: result.viewIndex,
               status: result.status,
@@ -1536,16 +1537,29 @@ export class RunViewResolver extends ResolverBase {
     }
   }
 
-  protected processRawData(rawData: Record<string, unknown>[], entityId: string, entityInfo: EntityInfo): RunViewResultRow[] {
+  /**
+   * Serializes raw view rows into GraphQL `RunViewResultRow` entries, memoizing frozen
+   * cached rows in {@link FrozenRowSerializationCache} keyed by `entityId` (or
+   * `${entityId}|${CanonicalFieldsKey(fields)}` when `fields` is specified on pre-projected
+   * frozen rows).
+   */
+  protected processRawData(
+    rawData: Record<string, unknown>[],
+    entityId: string,
+    entityInfo: EntityInfo,
+    fields?: string[] | null
+  ): RunViewResultRow[] {
     const returnResult: RunViewResultRow[] = [];
     const pkFields = entityInfo?.PrimaryKeys ?? [];
     const hasBinaryFields = entityInfo?.Fields ? entityInfo.Fields.some((f) => f.IsBinaryFieldType) : false;
+    const fieldsKey = CanonicalFieldsKey(fields);
+    const cacheKey = fieldsKey.length > 0 ? `${entityId}|${fieldsKey}` : entityId;
 
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
 
       if (row !== null && typeof row === 'object' && Object.isFrozen(row)) {
-        const cached = FrozenRowSerializationCache.get(row)?.get(entityId);
+        const cached = FrozenRowSerializationCache.get(row)?.get(cacheKey);
         if (cached) {
           returnResult.push(cached);
           continue;
@@ -1574,7 +1588,7 @@ export class RunViewResolver extends ResolverBase {
           entityMap = new Map<string, RunViewResultRow>();
           FrozenRowSerializationCache.set(row, entityMap);
         }
-        entityMap.set(entityId, resultRow);
+        entityMap.set(cacheKey, resultRow);
       }
 
       returnResult.push(resultRow);

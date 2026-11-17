@@ -106,5 +106,13 @@ describe('IntegrationCheckRegistry skip allowlist', () => {
         reg.AllowSkip({ CheckId: 'allowunit.B', Gate: 'credentials', Reason: 'needs a key' });
         expect(() => reg.AllowSkip({ CheckId: 'allowunit.B', Gate: 'credentials', Reason: 'needs a key' })).not.toThrow();
         expect(() => reg.AllowSkip({ CheckId: 'allowunit.B', Gate: 'mutation', Reason: 'other' })).toThrow(/allowunit\.B/);
+        expect(() => reg.AllowSkip({ CheckId: 'allowunit.B', Gate: 'credentials', Reason: 'needs a key', Transport: 'client' })).toThrow(/allowunit\.B/);
+    });
+
+    it('honors Transport scope when resolving an allowlist entry', () => {
+        reg.AllowSkip({ CheckId: 'allowunit.C', Gate: 'not-applicable', Reason: 'server-only transaction leg', Transport: 'client' });
+        expect(reg.GetAllowedSkip('allowunit.C', 'client')?.Gate).toBe('not-applicable');
+        expect(reg.GetAllowedSkip('allowunit.C', 'server')).toBeUndefined();
+        expect(reg.GetAllowedSkip('allowunit.C')?.Transport).toBe('client');
     });
 });

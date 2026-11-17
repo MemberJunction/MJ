@@ -113,7 +113,7 @@ import {
     WellKnownUserSource,
 } from '@memberjunction/core';
 
-import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { BytesToBase64, EscapeSQLString, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -1523,7 +1523,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const rv = new RunView();
         const result = await rv.RunView({
             EntityName: 'MJ: Record Geo Codes',
-            ExtraFilter: `EntityID='${entity.EntityInfo.ID}' AND RecordID='${recordId}'`,
+            ExtraFilter: `EntityID='${entity.EntityInfo.ID}' AND RecordID='${EscapeSQLString(recordId)}'`,
             ResultType: 'entity_object'
         }, contextUser);
 
@@ -6333,7 +6333,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             true,
         );
         const results = callerFields
-            ? ProjectRowsToFields(materialized, callerFields)
+            ? ProjectRowsToFields(materialized, callerFields, { PreserveFrozen: true })
             : materialized;
         return {
             viewIndex,
@@ -8597,10 +8597,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return compositeKey.KeyValuePairs.map(val => {
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
             if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
-            const quotes = pk.NeedsQuotes ? "'" : '';
-            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
-            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
+            return `${this.QuoteIdentifier(pk.CodeName)}=${this.RenderPrimaryKeyLiteral(pk, val.Value, entityInfo.Name)}`;
         }).join(' AND ');
+    }
+
+    /**
+     * A primary key value as a SQL literal: quoted with embedded quotes escaped, or a plain number
+     * for a key that takes no quotes. These statements are built as text, and a key value can come
+     * from the client, so an unquoted value that isn't a number throws.
+     */
+    protected RenderPrimaryKeyLiteral(field: EntityFieldInfo | undefined, value: unknown, entityName: string): string {
+        return this.RenderKeyLiteral(value, field?.NeedsQuotes ?? false, field?.Name, entityName);
+    }
+
+    /**
+     * {@link RenderPrimaryKeyLiteral} for a caller that has the key's quoting rule but not its field.
+     */
+    protected RenderKeyLiteral(value: unknown, needsQuotes: boolean, fieldName: string | undefined, entityName: string): string {
+        if (needsQuotes) {
+            return `'${String(value).replace(/'/g, "''")}'`;
+        }
+        const raw = String(value);
+        if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+            throw new Error(`Invalid non-numeric value provided for numeric key field ${fieldName} on entity ${entityName}`);
+        }
+        return raw;
     }
 
     /**
@@ -8760,9 +8781,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (user && !relEntityInfo.GetUserPermisions(user)?.CanRead) {
             return null;
         }
-        const quotes = pkNeedsQuotes ? "'" : '';
-        const safeValue = pkNeedsQuotes ? String(pkValue).replace(/'/g, "''") : String(pkValue);
-        const keyLiteral = `${quotes}${safeValue}${quotes}`;
+        const keyLiteral = this.RenderKeyLiteral(pkValue, pkNeedsQuotes, relInfo.RelatedEntityJoinField, relEntityInfo.Name);
         const rowFilter = user ? relEntityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '') : '';
         const relatedView = this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView);
 
@@ -8800,14 +8819,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         const pkWhere = entity.PrimaryKeys.map(pk => {
             const fieldInfo = entityInfo.FieldByName(pk.Name);
-            const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
-            // Escape embedded single quotes, mirroring the Load()-by-PK path above. The PK
-            // value can be CLIENT-SUPPLIED here (the update resolver loads OldValues from the
-            // client for entities without record tracking), and this method's only job is an
-            // authorization decision — an unescaped quote lets a crafted PK make the COUNT(*)
-            // pass RLS on rows the caller cannot see.
-            const safeVal = quotes ? String(pk.Value).replace(/'/g, "''") : pk.Value;
-            return `${this.QuoteIdentifier(pk.Name)}=${quotes}${safeVal}${quotes}`;
+            // Rendered as on the Load()-by-PK path above. The PK value can be CLIENT-SUPPLIED here
+            // (the update resolver loads OldValues from the client for entities without record
+            // tracking), and this method's only job is an authorization decision — a crafted PK
+            // must not make the COUNT(*) pass RLS on rows the caller cannot see.
+            return `${this.QuoteIdentifier(pk.Name)}=${this.RenderPrimaryKeyLiteral(fieldInfo, pk.Value, entityInfo.Name)}`;
         }).join(' AND ');
 
         const sql = `SELECT COUNT(*) AS cnt FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${pkWhere} AND (${rlsWhereClause})`;
