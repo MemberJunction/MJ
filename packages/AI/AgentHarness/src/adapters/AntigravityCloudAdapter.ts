@@ -21,19 +21,20 @@ import { CloudExecutionState, HarnessSessionConfig } from '../types.js';
 export const DEFAULT_ANTIGRAVITY_CLOUD_API_URL =
     'https://generativelanguage.googleapis.com/v1beta/interactions';
 
-export const DEFAULT_ANTIGRAVITY_CLOUD_MODEL = 'gemini-3.1-pro-preview';
+export const DEFAULT_ANTIGRAVITY_CLOUD_MODEL = 'gemini-4-hydrogen-high';
 
 /**
  * Cloud harness adapter for Google Antigravity Cloud / Gemini Agent Interactions API.
  *
  * Supports `x-goog-api-key` (`GEMINI_API_KEY` / `GOOGLE_API_KEY` / `ANTIGRAVITY_API_KEY`) and Bearer
  * OAuth authentication, `background: true` async interaction leasing, `agent` / `model` selection,
- * repository/branch context, remote MCP tool declarations, thinking/token telemetry, and
- * `adaptive-wake` async continuation across `AgentWake` cycles.
+ * `SetEffort` thinking level forwarding, repository/branch context, remote MCP tool declarations,
+ * thinking/token telemetry, and `adaptive-wake` async continuation across `AgentWake` cycles.
  */
 @RegisterClass(BaseHarnessAdapter, 'AntigravityCloudAdapter')
 export class AntigravityCloudAdapter extends BaseCloudHarnessAdapter {
     private configuredAgent: string | undefined;
+    private configuredEffort: 'low' | 'medium' | 'high' | undefined;
 
     public constructor(httpTransport?: ICloudHttpTransport) {
         super(httpTransport);
@@ -54,6 +55,11 @@ export class AntigravityCloudAdapter extends BaseCloudHarnessAdapter {
     /** Configures an explicit Gemini/Antigravity `agent` identifier instead of a raw model ID. */
     public SetAgent(agentIdentifier: string): void {
         this.configuredAgent = agentIdentifier.trim() || undefined;
+    }
+
+    /** Sets the reasoning effort level forwarded to Antigravity Cloud / Gemini Agent Interactions API. */
+    public SetEffort(effort: 'low' | 'medium' | 'high'): void {
+        this.configuredEffort = effort;
     }
 
     protected resolveAuthHeaders(config: HarnessSessionConfig): Record<string, string> {
@@ -162,6 +168,13 @@ export class AntigravityCloudAdapter extends BaseCloudHarnessAdapter {
         const policyPayload = this.buildPermissionPolicyPayload();
         if (policyPayload) {
             body.permission_policy = policyPayload;
+        }
+        if (this.configuredEffort) {
+            body.generation_config = {
+                thinking_config: {
+                    thinking_level: this.configuredEffort,
+                },
+            };
         }
 
         const response = await this.sendCheckedRequest({

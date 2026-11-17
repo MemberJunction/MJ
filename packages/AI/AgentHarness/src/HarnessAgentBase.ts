@@ -92,7 +92,7 @@ function normalizeHarnessEffort(value: string | number | null | undefined): Harn
         return undefined;
     }
     if (typeof value === 'number') {
-        if (!Number.isFinite(value)) {
+        if (!Number.isFinite(value) || value <= 0) {
             return undefined;
         }
         if (value <= 33) return 'low';
@@ -113,6 +113,21 @@ function normalizeHarnessEffort(value: string | number | null | undefined): Harn
     if (Number.isFinite(numeric)) {
         return normalizeHarnessEffort(numeric);
     }
+    return undefined;
+}
+
+function toPersistedEffortNumber(value: string | number | null | undefined): number | undefined {
+    if (value == null) {
+        return undefined;
+    }
+    const rawNum = typeof value === 'number' ? value : Number(String(value).trim());
+    if (typeof value !== 'boolean' && String(value).trim() !== '' && Number.isFinite(rawNum)) {
+        return rawNum >= 1 && rawNum <= 100 ? Math.round(rawNum) : undefined;
+    }
+    const tier = normalizeHarnessEffort(value);
+    if (tier === 'low') return 25;
+    if (tier === 'medium') return 50;
+    if (tier === 'high') return 100;
     return undefined;
 }
 
@@ -186,6 +201,7 @@ export class HarnessAgentBase extends BaseAgent {
     protected sessionEnvironment: Record<string, string> = {};
     protected configuredModel: string | undefined = undefined;
     protected configuredEffort: HarnessReasoningEffort | undefined = undefined;
+    protected persistedEffortLevel: number | undefined = undefined;
     protected turnIndex = 0;
 
     /**
@@ -273,13 +289,20 @@ export class HarnessAgentBase extends BaseAgent {
 
         const resumeSessionId = await this.findResumableSession(harness, key.Scope, contextUser);
         const mcpBinding = this.resolveMcpSessionEndpoint(config);
-        const resolvedModel = config.model?.trim() || harness.DefaultModel?.trim() || undefined;
+        const resolvedModel =
+            config.model?.trim() ||
+            harness.DefaultModel?.trim() ||
+            undefined;
         const resolvedEffort =
             normalizeHarnessEffort(config.effort) ??
             normalizeHarnessEffort(promptParams.effortLevel) ??
             normalizeHarnessEffort(promptParams.prompt?.EffortLevel);
         this.configuredModel = resolvedModel;
         this.configuredEffort = resolvedEffort;
+        this.persistedEffortLevel =
+            toPersistedEffortNumber(config.effort) ??
+            toPersistedEffortNumber(promptParams.effortLevel) ??
+            toPersistedEffortNumber(promptParams.prompt?.EffortLevel);
 
         if (resolvedEffort && isEffortConfigurableAdapter(this.adapter)) {
             this.adapter.SetEffort(resolvedEffort);
@@ -542,10 +565,16 @@ export class HarnessAgentBase extends BaseAgent {
             const run = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', promptParams.contextUser);
             run.NewRecord();
             run.PromptID = ids.PromptID;
-            run.ModelID =
-                (await this.resolveReportedModelId(turn.ReportedModel ?? this.configuredModel, promptParams)) ??
-                ids.ModelID;
-            run.VendorID = ids.VendorID;
+            const reportedId = await this.resolveReportedModelId(turn.ReportedModel, promptParams);
+            const configuredId =
+                !reportedId && this.configuredModel && this.configuredModel !== turn.ReportedModel
+                    ? await this.resolveReportedModelId(this.configuredModel, promptParams)
+                    : null;
+            run.ModelID = promptParams.override?.modelId ?? reportedId ?? configuredId ?? ids.ModelID;
+            run.VendorID = promptParams.override?.vendorId ?? ids.VendorID;
+            if (this.persistedEffortLevel !== undefined) {
+                run.EffortLevel = this.persistedEffortLevel;
+            }
             run.AgentID = this._agentRunAgentId();
             run.UserID = ResolvePromptRunUserID({
                 UserID: promptParams.UserID,
@@ -1368,6 +1397,11 @@ export class HarnessAgentBase extends BaseAgent {
         this.adapter = null;
         this.sandboxHandle = null;
         this.sandboxProvider = null;
+        this.harnessRow = null;
+        this.sessionEnvironment = {};
+        this.configuredModel = undefined;
+        this.configuredEffort = undefined;
+        this.persistedEffortLevel = undefined;
         this.turnIndex = 0;
     }
 

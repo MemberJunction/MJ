@@ -161,8 +161,8 @@
       "Description": "Google Antigravity Cloud / Gemini Agent Interactions API (`AntigravityCloudAdapter`), supporting asynchronous background agent leasing (`background: true`), `x-goog-api-key` or Bearer authentication, repository/branch workspace context, remote MCP tool declarations, thinking/token telemetry, and `adaptive-wake` session continuation across AgentWake cycles.",
       "DriverClass": "AntigravityCloudAdapter",
       "AIVendorID": "@lookup:MJ: AI Vendors.Name=Google",
-      "AIModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
-      "DefaultModel": "gemini-3.1-pro-preview",
+      "AIModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen (High)",
+      "DefaultModel": "gemini-4-hydrogen-high",
       "CapabilitySettings": {
         "SessionResume": true,
         "MidTurnCancellation": true,
