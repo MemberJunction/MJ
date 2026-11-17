@@ -50,6 +50,11 @@ describe('SuggestSegmenterKey', () => {
         expect(key).toBe('Transcript');
     });
 
+    it('prefers the transcript segmenter when Text looks like WebVTT or SRT captions', () => {
+        expect(SuggestSegmenterKey({ Text: 'WEBVTT\n\n00:00.000 --> 00:02.000\nHello.' })).toBe('Transcript');
+        expect(SuggestSegmenterKey({ Text: '1\n00:00:01,000 --> 00:00:02,500\nHello.' })).toBe('Transcript');
+    });
+
     it('prefers paged segmentation when pages are supplied', () => {
         expect(SuggestSegmenterKey({ Pages: [{ PageNumber: 1, Text: 'p1' }], Text: 'also text' })).toBe('PagedContent');
     });

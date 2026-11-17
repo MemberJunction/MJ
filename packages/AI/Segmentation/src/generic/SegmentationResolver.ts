@@ -6,6 +6,7 @@
 
 import { LogStatus } from '@memberjunction/core';
 import { BaseSegmenter } from './BaseSegmenter';
+import { LooksLikeCaptionText } from './CaptionCueParser';
 import { FIXED_WINDOW_SEGMENTER_KEY, FixedWindowSegmenter } from './FixedWindowSegmenter';
 import { STRUCTURAL_TEXT_SEGMENTER_KEY } from './StructuralTextSegmenter';
 import { TRANSCRIPT_SEGMENTER_KEY } from './TranscriptSegmenter';
@@ -41,12 +42,12 @@ export function ResolveSegmenter(key?: string, fallbackKey?: string): BaseSegmen
 /**
  * Suggest the best-fit segmenter key for a piece of content.
  *
- * The ordering encodes the quality hierarchy: a real transcript beats document
- * structure, which beats uniform windows. Callers should treat this as a default
- * that explicit configuration may override.
+ * The ordering encodes the quality hierarchy: a real transcript (or WebVTT/SRT
+ * caption text) beats document structure, which beats uniform windows. Callers
+ * should treat this as a default that explicit configuration may override.
  */
 export function SuggestSegmenterKey(params: SegmentationParams): string {
-    if (params.Cues && params.Cues.length > 0) {
+    if ((params.Cues && params.Cues.length > 0) || LooksLikeCaptionText(params.Text)) {
         return TRANSCRIPT_SEGMENTER_KEY;
     }
     if (params.Pages && params.Pages.length > 0) {

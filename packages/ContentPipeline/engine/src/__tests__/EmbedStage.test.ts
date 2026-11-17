@@ -125,6 +125,19 @@ describe('what Embed writes to the store', () => {
         expect(internals(new EmbedStage()).textFor(record)).toBe('From: Quarterly Report\n\nthe body');
     });
 
+    it('prepends SegmentTitle and falls back to Transcript when a media chunk has empty Text', async () => {
+        const record = chunk('c1', '');
+        record.Propose('Modality', 'video', 5, 'Segment');
+        record.Propose('Decorator', 'Source: Demo Video', 5, 'Segment');
+        record.SetExtension('Pipeline', 'segmentTitle', 'Chapter 2');
+        record.SetExtension('Pipeline', 'transcript', 'Host: Here is the configuration panel.');
+
+        expect((await new EmbedStage().Run(record, contextWith())).Status).toBe('Complete');
+        expect(internals(new EmbedStage()).textFor(record)).toBe(
+            'Source: Demo Video\n\nChapter 2\nHost: Here is the configuration panel.',
+        );
+    });
+
     const item = (fields: Record<string, unknown>) =>
         ({ ...fields, GetAll: () => fields }) as never;
     const metadataContext = { ...contextWith(), Provider: { EntityByName: () => undefined } as never };

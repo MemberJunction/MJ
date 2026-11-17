@@ -563,5 +563,26 @@
       "lastModified": "2026-10-28T00:36:09.991Z",
       "checksum": "fa71555805f06bd4673f699cc6c564434330d4616b71cc15ccbe968d909d360a"
     }
+  },
+  {
+    "fields": {
+      "Name": "VTT",
+      "FileExtension": ".vtt",
+      "ByteSignature": "{\"TextPrefix\":[\"webvtt\"]}",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "4A11298C-1891-4157-9FF9-EEE728B4E589"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SRT",
+      "FileExtension": ".srt",
+      "IsText": true
+    },
+    "primaryKey": {
+      "ID": "E88C949A-E9E9-42F1-B3F0-220134483D38"
+    }
   }
 ]

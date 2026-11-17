@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import { ContentItemTagBridge } from '@memberjunction/tag-engine';
-import { ResolveSegmenter } from '@memberjunction/ai-segmentation';
+import { BaseSegmenter, LoadContentSegmenters } from '@memberjunction/ai-segmentation';
 import {
     BaseContentClassifier,
     ClassifiedTag,
@@ -15,6 +15,12 @@ import {
 import { ManagedPromptClassifier } from '../ManagedPromptClassifier.js';
 import { TagStage } from '../stages/TagStage.js';
 import { SegmentStage } from '../stages/SegmentStage.js';
+import { PipelineProcessor } from '../PipelineProcessor.js';
+import { WorkingRecordCommitter } from '../WorkingRecordCommitter.js';
+import { WorkingRecordHydrator } from '../WorkingRecordHydrator.js';
+import '../stages/index.js';
+
+LoadContentSegmenters();
 
 const keyword = (Name: string, Score = 0.5, extra: Partial<ClassifiedTag> = {}): ClassifiedTag => ({
     Name,
@@ -273,7 +279,7 @@ describe('SegmentStage', () => {
     });
 
     it('passes ContextUser into segmenter.Segment so server-side segmenters can invoke MJ services', async () => {
-        const segmentSpy = vi.spyOn(Object.getPrototypeOf(ResolveSegmenter()), 'Segment');
+        const segmentSpy = vi.spyOn(BaseSegmenter.prototype, 'Segment');
         const sentinelUser = { ID: 'user-sentinel-42' };
         const ctx = { ...contextWith(), ContextUser: sentinelUser as never };
         const outcome = await new SegmentStage().Run(item('Segmented with user.'), ctx);
@@ -284,5 +290,178 @@ describe('SegmentStage', () => {
                 ContextUser: sentinelUser,
             }),
         );
+    });
+
+    it('auto-selects TranscriptSegmenter for WebVTT text and populates StartMs, EndMs, SegmentTitle, Transcript and video Modality', async () => {
+        const vtt = [
+            'WEBVTT',
+            '',
+            '00:00:02.000 --> 00:00:05.500',
+            '<v Presenter>Welcome to the product demo.',
+            '',
+            '00:00:12.000 --> 00:00:16.000',
+            '<v Presenter>Here is how inline video works.',
+        ].join('\n');
+        const record = item(vtt);
+        record.Propose('Modality', 'video', 6, 'Extract');
+
+        const outcome = await new SegmentStage().Run(record, contextWith());
+        expect(outcome.Status).toBe('Complete');
+        expect(record.GetExtension<string>('Segment', 'segmenterKey')).toBe('Transcript');
+        expect(record.Children).toHaveLength(2);
+
+        const first = record.Children[0];
+        expect(first.Get('Modality')).toBe('video');
+        expect(first.Get('Text')).toBe('Presenter: Welcome to the product demo.');
+        expect(first.GetExtension<Record<string, unknown>>('Pipeline', 'columns')).toEqual({
+            Sequence: 0,
+            SegmenterKey: 'Transcript',
+            StartMs: 2000,
+            EndMs: 5500,
+            SegmentTitle: 'Chapter 1',
+            Transcript: 'Presenter: Welcome to the product demo.',
+        });
+    });
+
+    it('persists chunk provenance columns and ParentChunkID through PipelineProcessor + WorkingRecordCommitter + WorkingRecordHydrator', async () => {
+        const savedChunks: Record<string, unknown>[] = [];
+        let nextChunkSeq = 1;
+        const chunkFields = [
+            'ID',
+            'ContentItemID',
+            'Sequence',
+            'Text',
+            'Modality',
+            'Decorator',
+            'StartMs',
+            'EndMs',
+            'StartOffset',
+            'EndOffset',
+            'PageNumber',
+            'SegmentTitle',
+            'Transcript',
+            'Description',
+            'SegmenterKey',
+            'ParentChunkID',
+            'TaggingStatus',
+            'EmbeddingStatus',
+            'DeleteStatus',
+            'FieldConfidence',
+        ];
+        const itemFields = ['ID', 'URL', 'Text', 'Modality', 'SegmentationStatus', 'FieldConfidence'];
+
+        const makeEntity = (names: readonly string[], onSave?: (row: Record<string, unknown>) => void) => {
+            const row: Record<string, unknown> = {};
+            const entity: Record<string, unknown> = {
+                Fields: names.map((Name) => ({ Name })),
+                NewRecord: () => {
+                    row.ID = `CHUNK-${nextChunkSeq++}`;
+                    return true;
+                },
+                InnerLoad: async () => true,
+                Save: async () => {
+                    onSave?.({ ...row });
+                    return true;
+                },
+                LatestResult: null,
+            };
+            for (const name of names) {
+                Object.defineProperty(entity, name, {
+                    get: () => row[name],
+                    set: (v: unknown) => {
+                        row[name] = v;
+                    },
+                    enumerable: true,
+                });
+            }
+            return { entity, row };
+        };
+
+        const provider = {
+            EntityByName: (name: string) => ({ ID: name }),
+            RunView: async () => ({ Success: true, Results: [] }),
+            GetEntityObject: async (entityName: string) => {
+                if (entityName === 'MJ: Content Items') {
+                    const { entity, row } = makeEntity(itemFields);
+                    row.ID = 'ITEM-99';
+                    row.URL = 'https://video.example/demo.mp4';
+                    row.Modality = 'video';
+                    row.Text = [
+                        'WEBVTT',
+                        '',
+                        '00:00:01.000 --> 00:00:02.000',
+                        '<v Host>Welcome.',
+                        '00:00:02.500 --> 00:00:04.000',
+                        '<v Guest>Glad to be here.',
+                    ].join('\n');
+                    return entity;
+                }
+                return makeEntity(chunkFields, (saved) => savedChunks.push(saved)).entity;
+            },
+        };
+
+        const processor = new PipelineProcessor(
+            {
+                Stages: ['Segment'],
+                IsTest: false,
+                Configuration: {
+                    SegmenterKey: 'Transcript',
+                    SegmentationOptions: { EmitSubChapters: true },
+                },
+            },
+            {
+                Hydrator: (p, u) => new WorkingRecordHydrator(p, u),
+                Committer: (p, u) => new WorkingRecordCommitter(p, u),
+            },
+        );
+
+        const result = await processor.ProcessRecord(
+            { EntityID: 'MJ: Content Items', RecordID: 'ITEM-99' } as never,
+            { Provider: provider as never, ContextUser: {} as never } as never,
+        );
+
+        expect(result.Status).toBe('Succeeded');
+        expect(savedChunks).toHaveLength(3); // 1 parent chapter + 2 speaker sub-chapters
+        expect(savedChunks[0]).toMatchObject({
+            ID: 'CHUNK-1',
+            ContentItemID: 'ITEM-99',
+            Sequence: 0,
+            Modality: 'video',
+            StartMs: 1000,
+            EndMs: 4000,
+            SegmentTitle: 'Chapter 1',
+            SegmenterKey: 'Transcript',
+        });
+        expect(savedChunks[1]).toMatchObject({
+            ID: 'CHUNK-2',
+            Sequence: 1,
+            ParentChunkID: 'CHUNK-1',
+            StartMs: 1000,
+            EndMs: 2000,
+            SegmentTitle: 'Host',
+            Transcript: 'Host: Welcome.',
+        });
+        expect(savedChunks[2]).toMatchObject({
+            ID: 'CHUNK-3',
+            Sequence: 2,
+            ParentChunkID: 'CHUNK-1',
+            StartMs: 2500,
+            EndMs: 4000,
+            SegmentTitle: 'Guest',
+            Transcript: 'Guest: Glad to be here.',
+        });
+
+        // Verify WorkingRecordHydrator restores the saved provenance extensions for downstream stages.
+        const hydratedEntity = makeEntity(chunkFields);
+        Object.assign(hydratedEntity.row, savedChunks[1]);
+        const hydrated = new WorkingRecordHydrator(provider as never, {} as never).FromEntity(
+            'Content Item Chunk',
+            hydratedEntity.entity as never,
+        );
+        expect(hydrated.GetExtension<number>('Pipeline', 'startMs')).toBe(1000);
+        expect(hydrated.GetExtension<number>('Pipeline', 'endMs')).toBe(2000);
+        expect(hydrated.GetExtension<string>('Pipeline', 'segmentTitle')).toBe('Host');
+        expect(hydrated.GetExtension<string>('Pipeline', 'transcript')).toBe('Host: Welcome.');
+        expect(hydrated.GetExtension<string>('Pipeline', 'parentChunkID')).toBe('CHUNK-1');
     });
 });
