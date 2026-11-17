@@ -1,5 +1,6 @@
 ---
 "@memberjunction/ai-realtime-client": patch
+"@memberjunction/ng-conversations": patch
 "@memberjunction/scheduling-engine": patch
 "@memberjunction/server": patch
 "@memberjunction/ng-artifacts": patch
