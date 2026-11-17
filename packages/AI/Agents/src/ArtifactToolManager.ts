@@ -962,7 +962,7 @@ export class ArtifactToolManager {
       // 1. Permission check before any tool execution (Blocker 2, Lower #4 fail-closed on missing context)
       if (targetEntry.artifactId) {
         if (!this.contextUser || !this.provider) {
-          const missingCtxStored: StoredToolResult = {
+          const missingCtxStored = this.withEntryTrust(targetEntry, {
             artifactId: call.artifactId,
             tool: call.tool,
             input: sanitizedInput,
@@ -973,7 +973,7 @@ export class ArtifactToolManager {
             },
             timestamp: new Date(),
             durationMs: Date.now() - startedAt,
-          };
+          });
           this.toolResults.push(missingCtxStored);
           return missingCtxStored;
         }
@@ -1267,7 +1267,7 @@ export class ArtifactToolManager {
             );
             if (willPersist) {
               targetEntry.originalXlsxBytes = previousOriginalXlsxBytes;
-              const failedHookStored: StoredToolResult = {
+              const failedHookStored = this.withEntryTrust(targetEntry, {
                 artifactId: call.artifactId,
                 tool: call.tool,
                 input: call.input,
@@ -1278,7 +1278,7 @@ export class ArtifactToolManager {
                 },
                 timestamp: new Date(),
                 durationMs: Date.now() - startedAt,
-              };
+              });
               this.toolResults.push(failedHookStored);
               return failedHookStored;
             }
