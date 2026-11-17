@@ -1002,6 +1002,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input() EnableDecisionRouting: boolean = true;
 
   /**
+   * Opt-in Stage 6C.1 client-side Edge AI Pre-Discovery (`bge-small-en-v1.5` Top-5 ->
+   * `ms-marco-MiniLM-L-6-v2` in a lazy WASM Web Worker). Forwarded to
+   * `MessageInputComponent.EnableEdgePreDiscovery`.
+   */
+  @Input() EnableEdgePreDiscovery: boolean = false;
+
+  /**
    * Scope to apply when this surface CREATES a new conversation. Forwarded
    * to `ConversationEngine.CreateConversation` so the new row's
    * `ApplicationScope` column is stamped correctly. Embedded surfaces

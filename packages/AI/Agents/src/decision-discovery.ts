@@ -23,9 +23,13 @@
 import { ApplyPlattCalibration, type ChatMessage, type DecisionAnswer, type DecisionQuestion, type PlattCalibration } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
+    CalibrateEdgeLogitToConfidence,
     ConversationUtility,
     DescribeAnsweringModel,
+    IsEdgePreDiscoveryHintConfident,
+    SanitizeEdgePreDiscoveryHint,
     type DecisionAnsweringModel,
+    type EdgePreDiscoveryHint,
     type MentionContent,
     type SpecialContent
 } from '@memberjunction/ai-core-plus';
@@ -252,6 +256,12 @@ export interface DecisionDiscoveryOutcome {
      * so its answer was treated as unsure: discovery never suggests anything for it.
      */
     UncalibratedModel?: string;
+    /** Where a confident suggestion came from: server decision model or client edge pre-discovery. */
+    Source?: 'decision-model' | 'edge-pre-discovery';
+    /** True when a server-verified EdgePreDiscoveryHint informed narrowing or direct suggestion. */
+    EdgeHintUsed?: boolean;
+    /** Count of hinted IDs discarded by server permission/allow-list sanitization. */
+    EdgeHintDiscardedCount?: number;
 }
 
 /**
@@ -597,6 +607,13 @@ export interface DecisionDiscoveryOptionSetParams {
     DeclaredCap?: number;
     /** Narrows a catalog over the limit. Undefined when the provider cannot run the search. */
     Search?: DecisionDiscoverySearch;
+    /**
+     * Optional pre-ranked candidate IDs (e.g. from client edge bi-encoder narrowing), already
+     * verified against the permitted catalog. When this resolves at least
+     * {@link DECISION_DISCOVERY_MIN_OPTIONS} valid options, it narrows catalogs over `limit`
+     * without requiring a server `SearchEntity` round-trip.
+     */
+    PreferredCandidateIDs?: ReadonlyArray<string>;
 }
 
 /**
@@ -696,6 +713,12 @@ export async function BuildDecisionDiscoveryOptionSet(params: DecisionDiscoveryO
     if (options.length <= limit) {
         return set;
     }
+    if (params.PreferredCandidateIDs && params.PreferredCandidateIDs.length > 0) {
+        const preferred = RankOptionsBySearch(options, params.PreferredCandidateIDs, limit);
+        if (preferred.length >= DECISION_DISCOVERY_MIN_OPTIONS) {
+            return { ...set, Options: preferred, NarrowedFrom: options.length };
+        }
+    }
     if (!params.Search) {
         return { ...set, Options: [], NarrowedFrom: options.length,
             Error: `${options.length} agents exceed the limit of ${limit} options, and the provider cannot run the semantic search that narrows them` };
@@ -703,4 +726,74 @@ export async function BuildDecisionDiscoveryOptionSet(params: DecisionDiscoveryO
     // Over-fetching threefold for the permission filter, as Find Candidate Agents does.
     const results = await params.Search(limit * 3);
     return { ...set, Options: RankOptionsBySearch(options, results.map(r => r.recordId), limit), NarrowedFrom: options.length };
+}
+
+/** Result of server-side verification and optional fast-path evaluation of an untrusted edge hint. */
+export interface EdgePreDiscoveryEvaluation {
+    /** Server-sanitized hint (only permitted, runnable, directly-discoverable, host-allowed IDs). */
+    SanitizedHint: EdgePreDiscoveryHint | null;
+    /** Non-null when the sanitized hint is confident enough to inject `<suggested_agent>` directly. */
+    DirectOutcome: DecisionDiscoveryOutcome | null;
+    /** Number of raw IDs (candidate + suggested) stripped by server verification. */
+    DiscardedCount: number;
+}
+
+/**
+ * Counts how many raw IDs in an untrusted hint fail verification against `options`,
+ * sanitizes the hint against `options`, and produces a direct discovery outcome only when
+ * `SuggestedAgentId` is verified and clears the calibrated confidence gate.
+ */
+export function EvaluateEdgePreDiscoveryHint(
+    rawHint: unknown,
+    options: ReadonlyArray<DecisionDiscoveryOption>
+): EdgePreDiscoveryEvaluation {
+    if (!rawHint || typeof rawHint !== 'object' || Array.isArray(rawHint)) {
+        return { SanitizedHint: null, DirectOutcome: null, DiscardedCount: 0 };
+    }
+
+    const rawRecord = rawHint as Record<string, unknown>;
+    const rawCandidates = Array.isArray(rawRecord['CandidateAgentIds']) ? rawRecord['CandidateAgentIds'] : [];
+    const allowedNormalized = new Set(options.map(o => NormalizeUUID(o.ID)));
+
+    let discardedCount = 0;
+    for (const entry of rawCandidates) {
+        if (typeof entry !== 'string' || !allowedNormalized.has(NormalizeUUID(entry))) {
+            discardedCount++;
+        }
+    }
+    if (typeof rawRecord['SuggestedAgentId'] === 'string' && !allowedNormalized.has(NormalizeUUID(rawRecord['SuggestedAgentId']))) {
+        discardedCount++;
+    }
+
+    const sanitized = SanitizeEdgePreDiscoveryHint(rawHint, options);
+    if (!sanitized) {
+        return { SanitizedHint: null, DirectOutcome: null, DiscardedCount: discardedCount };
+    }
+
+    if (options.length >= DECISION_DISCOVERY_MIN_OPTIONS && IsEdgePreDiscoveryHintConfident(sanitized) && sanitized.SuggestedAgentId) {
+        const suggested = options.find(o => UUIDsEqual(o.ID, sanitized.SuggestedAgentId));
+        if (suggested) {
+            const confidence = sanitized.Confidence ?? CalibrateEdgeLogitToConfidence(sanitized.TopLogit!);
+            return {
+                SanitizedHint: sanitized,
+                DiscardedCount: discardedCount,
+                DirectOutcome: {
+                    Injected: true,
+                    Succeeded: true,
+                    Source: 'edge-pre-discovery',
+                    EdgeHintUsed: true,
+                    EdgeHintDiscardedCount: discardedCount,
+                    Message: SuggestedAgentMessage(suggested, confidence),
+                    Answer: {
+                        Agent: suggested,
+                        Confidence: confidence,
+                        AnyApplies: confidence,
+                        Probabilities: { [suggested.Name]: confidence },
+                    },
+                },
+            };
+        }
+    }
+
+    return { SanitizedHint: sanitized, DirectOutcome: null, DiscardedCount: discardedCount };
 }

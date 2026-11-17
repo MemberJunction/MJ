@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { LogStatusEx, Metadata, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient, type RunDecisionParams, type RunDecisionResult, type AgentReplyAcknowledgement } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult, type EdgePreDiscoveryHint } from '@memberjunction/ai-core-plus';
 import { AIEngineBase, FindMentionPinnedPresetID } from '@memberjunction/ai-engine-base';
 import {
   ConversationEngine,
@@ -263,7 +263,9 @@ export class ConversationAgentService {
     /** The first moment of the conversation the run may read. Null or omitted reads all of it. */
     agentHistoryFrom?: Date | null,
     /** The branch the turn runs on when it forks off an earlier message on another branch. */
-    replyBranchId?: string | null
+    replyBranchId?: string | null,
+    /** Optional untrusted client edge pre-discovery hint. Server remains guard of truth. */
+    edgePreDiscoveryHint?: EdgePreDiscoveryHint | null
   ): Promise<ExecuteAgentResult | null> {
     // Warm the cached default-agent name for any synchronous consumers
     // before the runtime resolves on its own.
@@ -281,6 +283,7 @@ export class ConversationAgentService {
       ...(allowedAgentIDs != null ? { AllowedAgentIDs: allowedAgentIDs } : {}),
       ...(agentHistoryFrom ? { AgentHistoryFrom: agentHistoryFrom } : {}),
       ...(replyBranchId ? { ReplyBranchID: replyBranchId } : {}),
+      ...(edgePreDiscoveryHint ? { EdgePreDiscoveryHint: edgePreDiscoveryHint } : {}),
     });
   }
 
@@ -296,9 +299,10 @@ export class ConversationAgentService {
     requestedSkillIDs?: string[],
     allowedAgentIDs?: readonly string[] | null,
     agentHistoryFrom?: Date | null,
-    replyBranchId?: string | null
+    replyBranchId?: string | null,
+    edgePreDiscoveryHint?: EdgePreDiscoveryHint | null
   ): Promise<ExecuteAgentResult | null> {
-    return this.ProcessMessage(conversationId, message, conversationHistory, onReplyAccepted, onProgress, appContext, planMode, requestedSkillIDs, allowedAgentIDs, agentHistoryFrom, replyBranchId);
+    return this.ProcessMessage(conversationId, message, conversationHistory, onReplyAccepted, onProgress, appContext, planMode, requestedSkillIDs, allowedAgentIDs, agentHistoryFrom, replyBranchId, edgePreDiscoveryHint);
   }
 
   /**

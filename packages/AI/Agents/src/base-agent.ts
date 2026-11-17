@@ -157,6 +157,7 @@ import {
     TAINTED_EGRESS_BLOCKED,
     TenantContextCarryProblem,
     type TaskSecurityEnvelope,
+    ReadEdgePreDiscoveryHint,
 } from '@memberjunction/ai-core-plus';
 import {
     ActionEngineBase, MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
@@ -210,6 +211,7 @@ import {
     SelectCatalogNarrowing,
 } from './catalog-narrowing';
 import {
+    AgentsWithoutDescription,
     BuildDecisionDiscoveryOptionSet,
     BuildDecisionDiscoveryQuestions,
     CanSearchEntities,
@@ -218,11 +220,15 @@ import {
     DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     DecisionDiscoveryAgentSearch,
+    DecisionDiscoveryCatalog,
     DecisionDiscoveryFromResult,
+    DecisionDiscoveryOptions,
     DecisionDiscoveryOptionSet,
     DecisionDiscoveryOutcome,
     DecisionDiscoveryRunnableAgents,
+    DecisionOptionLimit,
     DecisionPromptOptionCap,
+    EvaluateEdgePreDiscoveryHint,
     FailedDecisionDiscovery,
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
@@ -5358,7 +5364,13 @@ export class BaseAgent {
                 return;
             }
             const promptParams = this.decisionDiscoveryPromptParams(agent, overrides);
-            const outcome = await this.runDecisionDiscovery(agent, contextUser, promptParams, HostAllowedAgentIDs(data));
+            const outcome = await this.runDecisionDiscovery(
+                agent,
+                contextUser,
+                promptParams,
+                HostAllowedAgentIDs(data),
+                ReadEdgePreDiscoveryHint(data)
+            );
             if (outcome.Injected && outcome.Message) {
                 conversationMessages.unshift({ role: 'system', content: outcome.Message });
                 this.logStatus(`Decision discovery suggested '${outcome.Answer?.Agent.Name}' to '${agent.Name}'`, true);
@@ -5417,13 +5429,17 @@ export class BaseAgent {
         agent: MJAIAgentEntityExtended,
         contextUser: UserInfo,
         promptParams: Record<string, unknown>,
-        hostAllowedIDs: string[] | undefined
+        hostAllowedIDs: string[] | undefined,
+        rawEdgeHint?: unknown
     ): Promise<DecisionDiscoveryOutcome> {
         const promptName = typeof promptParams.decisionPromptName === 'string'
             ? promptParams.decisionPromptName
             : AgentDecisionService.DEFAULT_PROMPT_NAME;
         const step = await this.startDecisionDiscoveryStep(contextUser, promptName);
-        const outcome = await this.boundDecisionDiscovery(signal => this.discoverAgent(agent, contextUser, promptName, hostAllowedIDs, signal), step);
+        const outcome = await this.boundDecisionDiscovery(
+            signal => this.discoverAgent(agent, contextUser, promptName, hostAllowedIDs, rawEdgeHint, signal),
+            step
+        );
         await this.finishDecisionDiscoveryStep(step, outcome);
         if (!outcome.Succeeded) {
             this.warnDecisionDiscovery(agent, outcome.Reason ?? 'unknown error');
@@ -5510,11 +5526,60 @@ export class BaseAgent {
         contextUser: UserInfo,
         promptName: string,
         hostAllowedIDs: string[] | undefined,
+        rawEdgeHint: unknown,
         signal: AbortSignal
     ): Promise<DecisionDiscoveryOutcome> {
         try {
-            const { Options: options, Error: optionsError, ...rest } = await this.decisionDiscoveryOptionSet(agent, contextUser, promptName, hostAllowedIDs);
-            const sizes = { ...rest, OptionCount: options.length };
+            const runnableAgents = await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser);
+            const catalog = KeepHostAllowedAgents(DecisionDiscoveryCatalog(runnableAgents, agent.ID), hostAllowedIDs);
+            const fullOptions = DecisionDiscoveryOptions(catalog);
+            const declaredCap = DecisionPromptOptionCap(AIEngine.Instance, promptName);
+            const optionLimit = DecisionOptionLimit(declaredCap);
+
+            if (fullOptions.length < DECISION_DISCOVERY_MIN_OPTIONS) {
+                return {
+                    Injected: false,
+                    Succeeded: true,
+                    Reason: `there are ${fullOptions.length} agents to choose from, fewer than the ${DECISION_DISCOVERY_MIN_OPTIONS} a suggestion needs, so nothing was asked`,
+                    CatalogSize: catalog.length,
+                    HostAllowListSize: hostAllowedIDs?.length,
+                    WithoutDescription: AgentsWithoutDescription(catalog),
+                    OptionCount: fullOptions.length,
+                    OptionLimit: optionLimit,
+                    DeclaredOptionCap: declaredCap,
+                };
+            }
+
+            // Server remains guard of truth: verify every hinted ID against the server-authoritative
+            // permitted, runnable, directly-discoverable, host-allowed catalog before any fast-path or narrowing.
+            const edgeEval = EvaluateEdgePreDiscoveryHint(rawEdgeHint, fullOptions);
+            if (edgeEval.DirectOutcome) {
+                return {
+                    ...edgeEval.DirectOutcome,
+                    CatalogSize: catalog.length,
+                    HostAllowListSize: hostAllowedIDs?.length,
+                    WithoutDescription: AgentsWithoutDescription(catalog),
+                    OptionCount: fullOptions.length,
+                    OptionLimit: optionLimit,
+                    DeclaredOptionCap: declaredCap,
+                };
+            }
+
+            const { Options: options, Error: optionsError, ...rest } = await this.decisionDiscoveryOptionSet(
+                agent,
+                contextUser,
+                promptName,
+                hostAllowedIDs,
+                runnableAgents,
+                declaredCap,
+                edgeEval.SanitizedHint?.CandidateAgentIds
+            );
+            const sizes = {
+                ...rest,
+                OptionCount: options.length,
+                EdgeHintUsed: (edgeEval.SanitizedHint?.CandidateAgentIds.length ?? 0) > 0 && fullOptions.length > optionLimit,
+                EdgeHintDiscardedCount: edgeEval.DiscardedCount,
+            };
             if (optionsError) {
                 return { ...FailedDecisionDiscovery(optionsError), ...sizes };
             }
@@ -5533,7 +5598,7 @@ export class BaseAgent {
                 CancellationToken: signal,
                 ExecutionScope: this._runExecutionScope,
             });
-            return { ...DecisionDiscoveryFromResult(result, options, DECISION_DISCOVERY_MIN_CONFIDENCE), ...sizes };
+            return { ...DecisionDiscoveryFromResult(result, options, DECISION_DISCOVERY_MIN_CONFIDENCE), Source: 'decision-model', ...sizes };
         } catch (error) {
             return FailedDecisionDiscovery(error instanceof Error ? error.message : String(error));
         }
@@ -5542,20 +5607,24 @@ export class BaseAgent {
     /**
      * The Choice's options, rebuilt on every call and never cached ({@link BuildDecisionDiscoveryOptionSet}):
      * from AIEngine's current catalog, the agents the user may run, the decision prompt's option cap,
-     * and the semantic search over the opening request when the provider can run it.
+     * and the client's sanitized pre-filter or semantic search over the opening request when the provider can run it.
      */
     private async decisionDiscoveryOptionSet(
         agent: MJAIAgentEntityExtended,
         contextUser: UserInfo,
         promptName: string,
-        hostAllowedIDs: string[] | undefined
+        hostAllowedIDs: string[] | undefined,
+        runnableAgents?: MJAIAgentEntityExtended[],
+        declaredCap?: number,
+        preferredCandidateIDs?: ReadonlyArray<string>
     ): Promise<DecisionDiscoveryOptionSet> {
         const provider = this.ProviderToUse;
         return BuildDecisionDiscoveryOptionSet({
-            Agents: await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser),
+            Agents: runnableAgents ?? await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser),
             RunningAgentID: agent.ID,
             HostAllowedIDs: hostAllowedIDs,
-            DeclaredCap: DecisionPromptOptionCap(AIEngine.Instance, promptName),
+            DeclaredCap: declaredCap ?? DecisionPromptOptionCap(AIEngine.Instance, promptName),
+            PreferredCandidateIDs: preferredCandidateIDs,
             Search: CanSearchEntities(provider) ? DecisionDiscoveryAgentSearch(provider, this._openingRequest, contextUser) : undefined,
         });
     }
@@ -5620,6 +5689,15 @@ export class BaseAgent {
             tokensUsed: result?.tokensUsed,
             model: result?.DecisionResult?.ResolvedModel ?? result?.modelInfo?.modelName,
             promptRunId: result?.promptRun?.ID,
+            ...(outcome.Source === 'edge-pre-discovery' ? { source: outcome.Source } : {}),
+            ...(outcome.EdgeHintUsed || (outcome.EdgeHintDiscardedCount ?? 0) > 0
+                ? {
+                    edgePreDiscovery: {
+                        used: outcome.EdgeHintUsed ?? false,
+                        discardedCount: outcome.EdgeHintDiscardedCount ?? 0,
+                    },
+                }
+                : {}),
         });
     }
 
