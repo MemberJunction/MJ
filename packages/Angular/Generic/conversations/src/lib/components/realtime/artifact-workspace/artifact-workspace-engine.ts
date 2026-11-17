@@ -2,8 +2,11 @@ import { Observable, Subject } from 'rxjs';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   DEFAULT_ARTIFACT_WORKSPACE_CONFIG,
+  type ArtifactNavigateToAnchorPayload,
+  type ArtifactSelectionAnchor,
   type ArtifactWorkspaceOpenPayload,
   type ArtifactWorkspaceRecord,
+  type ArtifactWorkspaceViewMode,
 } from './artifact-workspace-types';
 
 export type ArtifactWorkspaceChange =
@@ -11,7 +14,8 @@ export type ArtifactWorkspaceChange =
   | { Kind: 'updated'; InstanceID: string }
   | { Kind: 'removed'; InstanceID: string }
   | { Kind: 'active'; InstanceID: string | null }
-  | { Kind: 'refresh'; ArtifactID: string; VersionNumber: number };
+  | { Kind: 'refresh'; ArtifactID: string; VersionNumber: number }
+  | { Kind: 'rehydrating'; IsRehydrating: boolean };
 
 /**
  * In-memory workspace tab engine with LRU eviction for the `ArtifactWorkspace`
@@ -21,14 +25,29 @@ export class ArtifactWorkspaceEngine {
   private readonly records = new Map<string, ArtifactWorkspaceRecord>();
   private readonly changedSubject = new Subject<ArtifactWorkspaceChange>();
   private readonly refreshTriggerSubject = new Subject<{ artifactId: string; versionNumber: number }>();
+  private readonly navigateAnchorSubject = new Subject<ArtifactNavigateToAnchorPayload>();
   private activeId: string | null = null;
   private instanceSeq = 0;
+  private isRehydrating = false;
 
   public constructor(private maxInstances: number = DEFAULT_ARTIFACT_WORKSPACE_CONFIG.MaxInstances) {}
 
   public readonly Changed$: Observable<ArtifactWorkspaceChange> = this.changedSubject.asObservable();
   public readonly RefreshTrigger$: Subject<{ artifactId: string; versionNumber: number }> =
     this.refreshTriggerSubject;
+  public readonly NavigateAnchor$: Observable<ArtifactNavigateToAnchorPayload> =
+    this.navigateAnchorSubject.asObservable();
+
+  public get IsRehydrating(): boolean {
+    return this.isRehydrating;
+  }
+
+  public SetRehydrating(value: boolean): void {
+    if (this.isRehydrating !== value) {
+      this.isRehydrating = value;
+      this.changedSubject.next({ Kind: 'rehydrating', IsRehydrating: value });
+    }
+  }
 
   public get Instances(): readonly ArtifactWorkspaceRecord[] {
     return [...this.records.values()];
@@ -233,11 +252,45 @@ export class ArtifactWorkspaceEngine {
     return true;
   }
 
+  public UpdateSelection(
+    instanceId: string,
+    anchor: ArtifactSelectionAnchor | null,
+  ): ArtifactWorkspaceRecord | undefined {
+    const record = this.records.get(instanceId);
+    if (!record) {
+      return undefined;
+    }
+    record.Selection = anchor;
+    record.LastUpdatedAt = Date.now();
+    this.changedSubject.next({ Kind: 'updated', InstanceID: instanceId });
+    return record;
+  }
+
+  public SetViewMode(
+    instanceId: string,
+    mode: ArtifactWorkspaceViewMode,
+  ): ArtifactWorkspaceRecord | undefined {
+    const record = this.records.get(instanceId);
+    if (!record) {
+      return undefined;
+    }
+    record.ViewMode = mode;
+    record.LastUpdatedAt = Date.now();
+    this.changedSubject.next({ Kind: 'updated', InstanceID: instanceId });
+    return record;
+  }
+
+  public RequestNavigateToAnchor(payload: ArtifactNavigateToAnchorPayload): void {
+    this.navigateAnchorSubject.next(payload);
+  }
+
   public Dispose(): void {
     this.records.clear();
     this.activeId = null;
+    this.isRehydrating = false;
     this.changedSubject.complete();
     this.refreshTriggerSubject.complete();
+    this.navigateAnchorSubject.complete();
   }
 
   private evictLeastRecentlyUsed(): void {

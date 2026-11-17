@@ -6,7 +6,7 @@ import {
     PermissionProviderBase,
     UserInfo,
 } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, EscapeSQLString, IsValidUUID } from '@memberjunction/global';
 
 /**
  * Raw shape of an `MJ: Artifact Permissions` row (narrowed for this provider's needs).
@@ -60,6 +60,13 @@ export class ArtifactPermissionProvider extends PermissionProviderBase {
                 Reason: 'Artifact permissions require a specific artifact ID',
             };
         }
+        if (!IsValidUUID(resourceId) || !IsValidUUID(user.ID)) {
+            return {
+                Allowed: false,
+                DomainName: this.DomainName,
+                Reason: 'Artifact permissions require valid UUID identifiers',
+            };
+        }
         const row = await this.fetchPermissionForUser(resourceId, user.ID);
         const actions = this.toActions(row);
         const allowed = actions.includes(action);
@@ -73,6 +80,7 @@ export class ArtifactPermissionProvider extends PermissionProviderBase {
     }
 
     async GetEffectivePermissions(user: UserInfo, _resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
+        if (!IsValidUUID(resourceId) || !IsValidUUID(user.ID)) return [];
         const row = await this.fetchPermissionForUser(resourceId, user.ID);
         if (!row) return [];
         const actions = this.toActions(row);
@@ -88,9 +96,11 @@ export class ArtifactPermissionProvider extends PermissionProviderBase {
 
     async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
         if (resourceType && resourceType !== 'Artifacts') return [];
+        if (!IsValidUUID(user.ID)) return [];
+        const safeUserId = EscapeSQLString(user.ID);
         const rows = await this.fetchRows<ArtifactPermissionRow>(
             'MJ: Artifact Permissions',
-            `UserID='${user.ID}'`,
+            `UserID='${safeUserId}'`,
             ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
             'GetUserResources'
         );
@@ -102,9 +112,11 @@ export class ArtifactPermissionProvider extends PermissionProviderBase {
      * is the grantor. Excludes rows the user created for themselves.
      */
     override async GetPermissionsSharedWithUser(grantee: UserInfo): Promise<NormalizedPermission[]> {
+        if (!IsValidUUID(grantee.ID)) return [];
+        const safeGranteeId = EscapeSQLString(grantee.ID);
         const rows = await this.fetchRows<ArtifactPermissionRow>(
             'MJ: Artifact Permissions',
-            `UserID='${grantee.ID}' AND (SharedByUserID IS NULL OR SharedByUserID <> '${grantee.ID}')`,
+            `UserID='${safeGranteeId}' AND (SharedByUserID IS NULL OR SharedByUserID <> '${safeGranteeId}')`,
             ['ID', 'ArtifactID', 'UserID', 'User', 'SharedByUserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
             'GetPermissionsSharedWithUser'
         );
@@ -117,9 +129,11 @@ export class ArtifactPermissionProvider extends PermissionProviderBase {
      * "owner without SharedByUserID" case in this table.
      */
     override async GetPermissionsGrantedByUser(grantor: UserInfo): Promise<NormalizedPermission[]> {
+        if (!IsValidUUID(grantor.ID)) return [];
+        const safeGrantorId = EscapeSQLString(grantor.ID);
         const rows = await this.fetchRows<ArtifactPermissionRow>(
             'MJ: Artifact Permissions',
-            `SharedByUserID='${grantor.ID}'`,
+            `SharedByUserID='${safeGrantorId}'`,
             ['ID', 'ArtifactID', 'UserID', 'User', 'SharedByUserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
             'GetPermissionsGrantedByUser'
         );
@@ -143,11 +157,11 @@ export class ArtifactPermissionProvider extends PermissionProviderBase {
     }
 
     async GetResourcePermissions(resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
-        if (resourceType !== 'Artifacts') return [];
-
+        if (resourceType !== 'Artifacts' || !IsValidUUID(resourceId)) return [];
+        const safeResourceId = EscapeSQLString(resourceId);
         const rows = await this.fetchRows<ArtifactPermissionRow>(
             'MJ: Artifact Permissions',
-            `ArtifactID='${resourceId}'`,
+            `ArtifactID='${safeResourceId}'`,
             ['ID', 'ArtifactID', 'UserID', 'User', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
             'GetResourcePermissions'
         );
@@ -196,9 +210,14 @@ export class ArtifactPermissionProvider extends PermissionProviderBase {
     }
 
     private async fetchPermissionForUser(artifactId: string, userId: string): Promise<ArtifactPermissionRow | null> {
+        if (!IsValidUUID(artifactId) || !IsValidUUID(userId)) {
+            return null;
+        }
+        const safeArtifactId = EscapeSQLString(artifactId);
+        const safeUserId = EscapeSQLString(userId);
         const rows = await this.fetchRows<ArtifactPermissionRow>(
             'MJ: Artifact Permissions',
-            `ArtifactID='${artifactId}' AND UserID='${userId}'`,
+            `ArtifactID='${safeArtifactId}' AND UserID='${safeUserId}'`,
             ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
             'fetchPermissionForUser'
         );

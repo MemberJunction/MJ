@@ -449,5 +449,134 @@ describe('MarkdownArtifactViewerComponent R3 Fixes', () => {
         collabService.ngOnDestroy();
       }
     });
+
+    it('surfaces FrozenBlocksInDocument, enforces PreVerifiedFrozenSnapshots fail-closed verification, and respects locks in bulk Refreeze/SwitchToLive', async () => {
+      const collabService = new DocumentCollaborationService();
+      const ownerId = '11111111-1111-4111-8111-111111111111';
+      const editorId = '22222222-2222-4222-8222-222222222222';
+      const artifactId = '33333333-3333-4333-8333-333333333333';
+
+      const { provider } = buildDocViewerProvider({
+        currentUserId: editorId,
+        artifactId,
+        artifactOwnerId: ownerId,
+        permissionSource: 'ArtifactPermission',
+        canRead: true,
+        canEdit: true,
+        canShare: false,
+      });
+
+      const component = createMarkdownViewer(collabService);
+      try {
+        component.Provider = provider;
+        const lockedFrozenBlock = [
+          ':::mj-block',
+          JSON.stringify({
+            BlockID: 'blk-locked',
+            Kind: 'EntityView',
+            Mode: 'Frozen',
+            Title: 'Locked Revenue Block',
+            Query: { EntityName: 'Invoices' },
+            FrozenSnapshot: {
+              FrozenAt: '2026-11-15T10:00:00.000Z',
+              FrozenByUserID: ownerId,
+              FrozenByUserName: 'Owner',
+              SecurityWarningAcknowledged: true,
+              Columns: [{ Name: 'ID', DisplayName: 'ID' }],
+              Rows: [{ ID: 'inv-1' }],
+            },
+          }),
+          ':::',
+        ].join('\n');
+        const unlockedFrozenBlock = [
+          ':::mj-block',
+          JSON.stringify({
+            BlockID: 'blk-open',
+            Kind: 'EntityView',
+            Mode: 'Frozen',
+            Title: 'Open Revenue Block',
+            Query: { EntityName: 'Orders' },
+            FrozenSnapshot: {
+              FrozenAt: '2026-11-15T10:00:00.000Z',
+              FrozenByUserID: ownerId,
+              FrozenByUserName: 'Owner',
+              SecurityWarningAcknowledged: true,
+              Columns: [{ Name: 'ID', DisplayName: 'ID' }],
+              Rows: [{ ID: 'ord-1' }],
+            },
+          }),
+          ':::',
+        ].join('\n');
+
+        component.artifactVersion = Object.assign(Object.create(null) as MJArtifactVersionEntity, {
+          ID: '44444444-4444-4444-8444-444444444444',
+          ArtifactID: artifactId,
+          VersionNumber: 1,
+          Name: 'Governance Frozen Doc',
+          Content: [
+            '<!-- mj-lock: owner-only -->',
+            '## Locked Section',
+            lockedFrozenBlock,
+            '<!-- /mj-lock -->',
+            '',
+            '## Open Section',
+            unlockedFrozenBlock,
+          ].join('\n'),
+        });
+        component.readonly = false;
+        component.ngOnInit();
+        await flushMicrotasks();
+
+        expect(component.FrozenBlocksInDocument.map((b) => b.BlockID)).toEqual(['blk-locked', 'blk-open']);
+
+        const lockedBlockSpec = component.FrozenBlocksInDocument[0];
+        const openBlockSpec = component.FrozenBlocksInDocument[1];
+
+        // Server pre-verified map: Verified=true shows provenance; Verified=false fails closed even with snapshot data
+        component.PreVerifiedFrozenSnapshots = {
+          'blk-locked': {
+            Verified: true,
+            FrozenByUserName: 'Guest Share Server Verified User',
+            FrozenAt: '2026-11-15T10:00:00.000Z',
+          },
+          'blk-open': {
+            Verified: false,
+            FrozenByUserName: 'Tampered Author',
+          },
+        };
+        expect(component.IsSnapshotVerified(lockedBlockSpec)).toBe(true);
+        expect(component.GetBlockPreVerifiedSnapshot(lockedBlockSpec)?.FrozenByUserName).toBe(
+          'Guest Share Server Verified User',
+        );
+        expect(component.IsSnapshotVerified(openBlockSpec)).toBe(false);
+
+        const freezeSpy = vi
+          .spyOn(collabService, 'FreezeLiveBlockOnServer')
+          .mockResolvedValue({
+            Success: true,
+            UpdatedSpec: {
+              ...openBlockSpec,
+              FrozenSnapshot: {
+                ...openBlockSpec.FrozenSnapshot!,
+                FrozenAt: '2026-11-15T11:00:00.000Z',
+              },
+            },
+          });
+
+        await component.RefreezeAllFrozenBlocks();
+        expect(freezeSpy).toHaveBeenCalledTimes(1);
+        expect(freezeSpy.mock.calls[0]?.[0].BlockID).toBe('blk-open');
+        expect(component.StatusBannerMessage).toBe('Re-froze 1 block(s); 1 locked block(s) skipped.');
+
+        // Bulk Switch All to Live skips locked block and converts only unlocked block
+        component.SwitchAllFrozenBlocksToLive();
+        expect(component.FrozenBlocksInDocument.map((b) => b.BlockID)).toEqual(['blk-locked']);
+        expect(component.StatusBannerMessage).toBe('Switched 1 block(s) to Live mode; 1 locked block(s) skipped.');
+
+        component.ngOnDestroy();
+      } finally {
+        collabService.ngOnDestroy();
+      }
+    });
   });
 });

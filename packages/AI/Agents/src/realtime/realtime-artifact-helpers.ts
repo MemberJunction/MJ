@@ -49,12 +49,27 @@ export function ExtractDirectActionArtifacts(
         const match = params.find((p) => p.Name.toLowerCase() === name.toLowerCase());
         return typeof match?.Value === 'string' && match.Value.trim() ? match.Value.trim() : undefined;
     };
+    const readBool = (name: string): boolean | undefined => {
+        const match = params.find((p) => p.Name.toLowerCase() === name.toLowerCase());
+        if (typeof match?.Value === 'boolean') return match.Value;
+        if (typeof match?.Value === 'string') {
+            const lower = match.Value.trim().toLowerCase();
+            if (lower === 'true' || lower === '1' || lower === 'yes') return true;
+            if (lower === 'false' || lower === '0' || lower === 'no') return false;
+        }
+        return undefined;
+    };
+
+    const normalizedName = normalizeActionName(actionName);
+    if (normalizedName === 'refresh and snapshot artifact' && readBool('Changed') === false) {
+        return undefined;
+    }
 
     const artifactId = readStr('ArtifactID');
     if (!artifactId) {
         return undefined;
     }
-    const versionId = readStr('VersionID') ?? '';
+    const versionId = readStr('VersionID') ?? readStr('NewVersionID') ?? '';
     const name = readStr('ArtifactName') ?? readStr('Title') ?? 'Untitled Artifact';
     const typeName = readStr('ArtifactTypeName') ?? readStr('ArtifactType');
     const driverClass = resolveDriverClass(typeName, readStr('DriverClass'));
@@ -114,12 +129,13 @@ export async function CollectDelegatedRunArtifacts(
     }
 
     const payload = result.payload;
+    const paused = result.agentRun?.Status === 'AwaitingFeedback';
     const hasPayload =
         payload != null &&
         typeof payload === 'object' &&
         Object.keys(payload).length > 0;
 
-    if (hasPayload && processPayloadArtifacts) {
+    if (result.success && !paused && hasPayload && processPayloadArtifacts) {
         const info = await processPayloadArtifacts(result);
         const infoNorm = info?.artifactId ? NormalizeUUID(info.artifactId) : '';
         if (info && infoNorm && !seen.has(infoNorm)) {
@@ -143,7 +159,8 @@ export async function CollectDelegatedRunArtifacts(
 
 /**
  * Best-effort wrapper around {@link CollectDelegatedRunArtifacts} for realtime delegation paths:
- * skips paused/failed runs and logs errors without failing the delegation response.
+ * preserves `touchedArtifacts` on paused (`AwaitingFeedback`) and failed runs while skipping
+ * payload-artifact creation on incomplete runs, and logs errors without failing the delegation response.
  */
 export async function CollectDelegatedRunArtifactsSafely(
     params: CollectDelegatedRunArtifactsParams & { logLabel: string },
@@ -157,7 +174,7 @@ export async function CollectDelegatedRunArtifactsSafely(
         Object.keys(payload).length > 0;
     const hasTouched = (result.touchedArtifacts?.length ?? 0) > 0;
 
-    if (!result.success || paused || (!hasPayload && !hasTouched)) {
+    if (!hasTouched && (!result.success || paused || !hasPayload)) {
         return undefined;
     }
 

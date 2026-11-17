@@ -14,6 +14,8 @@ import { CommandPaletteService } from '../command-palette/command-palette.servic
 import {
     DiscoverOmnibarProviders, GetOmnibarNavPayload, OmnibarProvider,
 } from './omnibar-provider';
+import { OmnibarSearchProvider } from './providers/omnibar-search.provider';
+import { OmnibarSemanticIndexService } from './omnibar-semantic-index.service';
 import { LoadOmnibarProviders } from './index';
 
 /** One rendered result row: the suggestion + presentation extras. */
@@ -205,6 +207,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
         this.renderedTriggerChar = '';
         void this.loadScopes();
         void this.loadRecents();
+        void this.warmSemanticIndex();
         if (initialQuery.length > 0) {
             this.runQuery();
         }
@@ -459,6 +462,9 @@ export class OmnibarPaletteComponent implements OnDestroy {
             case 'dashboard':
                 this.navigation.OpenDashboard(nav.dashboardId, nav.dashboardName);
                 break;
+            case 'view':
+                this.navigation.OpenView(nav.viewId, nav.viewName);
+                break;
         }
         this.Close();
     }
@@ -554,11 +560,59 @@ export class OmnibarPaletteComponent implements OnDestroy {
         this.IsLoading = this.Rows.length === 0;
         this.cdr.markForCheck();
 
+        const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        if (!isTriggerMode && OmnibarSemanticIndexService.Instance.IsReady && provider instanceof OmnibarSearchProvider) {
+            void this.fetchLocalSemanticSuggestions(provider, query, generation, isOffline);
+            if (isOffline) {
+                return;
+            }
+        }
+
         // Shorter debounce in trigger mode: entity matching is in-memory, but record
         // suggestions issue a RunView per keystroke — debouncing collapses a typing burst
         // into one backend query.
         const fire = () => void this.fetchSuggestions(provider, query, generation);
         this.debounceHandle = setTimeout(fire, isTriggerMode ? TRIGGER_DEBOUNCE_MS : SEARCH_DEBOUNCE_MS);
+    }
+
+    private async fetchLocalSemanticSuggestions(
+        provider: OmnibarSearchProvider,
+        query: string,
+        generation: number,
+        isOffline: boolean
+    ): Promise<void> {
+        try {
+            const suggestions = await provider.GetLocalSuggestions({
+                Query: query,
+                MaxResults: MAX_RESULTS,
+                ContextUser: this.currentUser,
+                Provider: this.search?.Provider ?? null,
+            });
+            if (generation !== this.queryGeneration) {
+                return;
+            }
+            if (suggestions.length > 0 || isOffline) {
+                this.Rows = this.toRows(suggestions);
+                this.SelectedIndex = 0;
+                this.IsLoading = false;
+                this.renderedTriggerChar = this.ActiveTriggerChar;
+                this.cdr.markForCheck();
+            }
+        } catch {
+            // fail soft — backend PreviewSearch or empty state settles cleanly
+        }
+    }
+
+    private async warmSemanticIndex(): Promise<void> {
+        try {
+            await OmnibarSemanticIndexService.Instance.BuildOrRefreshIndex({
+                Provider: this.search?.Provider ?? null,
+                UserId: this.currentUser?.ID ?? null,
+                Apps: this.appManager,
+            });
+        } catch {
+            // never block palette on cold/offline/unsupported worker
+        }
     }
 
     private async fetchSuggestions(provider: OmnibarProvider, query: string, generation: number): Promise<void> {

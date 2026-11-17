@@ -79,6 +79,7 @@ export type PreDeleteHook = (
 export type HookName = 'PreRunView' | 'PostRunView' | 'PreSave' | 'PostSave' | 'PreDelete';
 
 const DATA_HOOKS_KEY = '__mj_dataHooks';
+const POST_RUNVIEW_PROTECTED_ENTITIES_KEY = '__mj_postRunViewProtectedEntities';
 
 /**
  * Memoized result of {@link GetGlobalObjectStore}. `undefined` means "not resolved yet";
@@ -145,5 +146,91 @@ export function ClearAllDataHooks(): void {
     const gos = globalStore();
     if (gos) {
         gos[DATA_HOOKS_KEY] = {};
+    }
+}
+
+function getOrCreateProtectedEntitySet(): Set<string> | null {
+    const gos = globalStore();
+    if (!gos) {
+        return null;
+    }
+    let set = gos[POST_RUNVIEW_PROTECTED_ENTITIES_KEY] as Set<string> | undefined;
+    if (!set) {
+        set = new Set<string>();
+        gos[POST_RUNVIEW_PROTECTED_ENTITIES_KEY] = set;
+    }
+    return set;
+}
+
+/**
+ * Registers an entity whose read access control is enforced by server-side
+ * `PostRunView` hooks rather than SQL `RowLevelSecurityFilter` or field-level security.
+ *
+ * `ClientClauseScreen.AssertUnscopedRead` rejects direct SQL reads against any
+ * registered entity's base view (in ExtraFilter subqueries or ExecuteAdhocQuery)
+ * because raw SQL bypasses `PostRunView` hooks.
+ */
+export function RegisterPostRunViewProtectedEntity(entityName: string): void {
+    const trimmed = entityName.trim();
+    if (!trimmed) {
+        return;
+    }
+    const set = getOrCreateProtectedEntitySet();
+    if (!set) {
+        return;
+    }
+    const lower = trimmed.toLowerCase();
+    for (const existing of set) {
+        if (existing.toLowerCase() === lower) {
+            return;
+        }
+    }
+    set.add(trimmed);
+}
+
+/**
+ * Returns true if the given entity has been registered as enforcing row-level
+ * access via server-side `PostRunView` hooks (case-insensitive, trimmed).
+ */
+export function IsPostRunViewProtectedEntity(entityName: string): boolean {
+    const trimmed = entityName?.trim();
+    if (!trimmed) {
+        return false;
+    }
+    const gos = globalStore();
+    const set = gos?.[POST_RUNVIEW_PROTECTED_ENTITIES_KEY] as Set<string> | undefined;
+    if (!set || set.size === 0) {
+        return false;
+    }
+    if (set.has(trimmed)) {
+        return true;
+    }
+    const lower = trimmed.toLowerCase();
+    for (const existing of set) {
+        if (existing.toLowerCase() === lower) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Returns a read-only view of all currently registered `PostRunView`-protected entity names.
+ */
+export function GetPostRunViewProtectedEntities(): ReadonlySet<string> {
+    const gos = globalStore();
+    const set = gos?.[POST_RUNVIEW_PROTECTED_ENTITIES_KEY] as Set<string> | undefined;
+    return set ? new Set(set) : new Set();
+}
+
+/**
+ * Clears all registered `PostRunView`-protected entities from the global store.
+ * Kept separate from `ClearAllDataHooks()` so data-hook test resets do not wipe
+ * module-level protected entity declarations unless explicitly requested.
+ */
+export function ClearPostRunViewProtectedEntities(): void {
+    const gos = globalStore();
+    if (gos) {
+        gos[POST_RUNVIEW_PROTECTED_ENTITIES_KEY] = new Set<string>();
     }
 }

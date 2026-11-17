@@ -46,6 +46,15 @@ export class CreateGovernedArtifactAction extends BaseGovernedArtifactAction {
         } else {
             rawContent = this.getObjectParam(params, 'Content') ?? this.getStringParam(params, 'Content');
         }
+        const parsedInitOps = this.parseOperationsParam(params, 'InitialOperations');
+        if (parsedInitOps.errorMessage) {
+            return {
+                Success: false,
+                ResultCode: 'MISSING_PARAMETER',
+                Message: parsedInitOps.errorMessage,
+                Params: params.Params,
+            };
+        }
         const attribution = this.extractAgentAttribution(params);
 
         const outcome = await GovernedArtifactService.Instance.CreateGovernedArtifact({
@@ -56,6 +65,7 @@ export class CreateGovernedArtifactAction extends BaseGovernedArtifactAction {
             description,
             content: rawContent,
             sheetNames,
+            initialOperations: parsedInitOps.operations?.length ? parsedInitOps.operations : undefined,
             collectionId,
             environmentId,
             agentRunId: attribution.agentRunId,
@@ -77,6 +87,9 @@ export class CreateGovernedArtifactAction extends BaseGovernedArtifactAction {
         this.setOutputParam(params, 'ArtifactName', outcome.name);
         this.setOutputParam(params, 'ArtifactTypeName', outcome.typeName);
         this.setOutputParam(params, 'DriverClass', outcome.driverClass ?? null);
+        if (outcome.results?.length) {
+            this.setOutputParam(params, 'Results', outcome.results);
+        }
 
         return {
             Success: true,

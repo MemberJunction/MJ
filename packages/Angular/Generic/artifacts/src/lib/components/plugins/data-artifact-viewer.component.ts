@@ -1,9 +1,9 @@
 import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter, Type } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { RegisterClass } from '@memberjunction/global';
-import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, CompositeKey } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
+import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, RunView, CompositeKey } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
-import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
+import type { MJArtifactVersionEntity, MJQueryEntity, QueryDiagnosticLine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, IArtifactVersionDiffViewer, NavigationRequest } from '../base-artifact-viewer.component';
@@ -29,7 +29,7 @@ interface DataArtifactSpec {
   entityName?: string;
   extraFilter?: string;
   columns?: Array<MJColumnDescriptor & { headerName?: string }>;
-  rows?: Record<string, unknown>[];
+  rows?: DataTable['rows'];
   tables?: DataTable[];
   plan?: string;
   interpretation?: string;
@@ -84,7 +84,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public override tabsChanged = new EventEmitter<void>();
 
   public spec: DataArtifactSpec | null = null;
-  public GridData: Record<string, unknown>[] = [];
+  public GridData: DataTable['rows'] = [];
   public GridColumnConfigs: QueryGridColumnConfig[] | null = null;
   public IsLoading = false;
   public IsLive = false;
@@ -112,7 +112,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   private tablePageState: Map<number, { pageNumber: number; pageSize: number; totalRowCount: number }> = new Map();
 
   /** Per-table live data cache (loaded lazily on tab switch) */
-  private tableDataCache: Map<number, Record<string, unknown>[]> = new Map();
+  private tableDataCache: Map<number, DataTable['rows']> = new Map();
 
   /** Per-table column configs cache */
   private tableColumnConfigsCache: Map<number, QueryGridColumnConfig[]> = new Map();
@@ -229,7 +229,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
       // Resolve to tables array (handles both single and multi-table)
       this.ResolvedTables = NormalizeToTables(
-        this.spec as unknown as Record<string, unknown>,
+        { ...this.spec } as Record<string, string | number | boolean | object | null | undefined>,
         this.spec.title || 'Results'
       );
 
@@ -419,9 +419,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         align = 'center';
       }
 
-      // Support both displayName (new) and headerName (legacy) for backward compat
-      const colAny = col as unknown as Record<string, unknown>;
-      const title = col.displayName || (colAny['headerName'] as string) || col.field;
+      const title = col.displayName || col.field;
 
       return {
         field: col.field,
@@ -459,6 +457,21 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     }
   }
 
+  private get artifactMetadataEngine(): ArtifactMetadataEngine {
+    return this.Provider
+      ? (ArtifactMetadataEngine.GetProviderInstance(
+          this.Provider,
+          ArtifactMetadataEngine,
+        ) as ArtifactMetadataEngine)
+      : ArtifactMetadataEngine.Instance;
+  }
+
+  private get queryEngine(): QueryEngine {
+    return this.Provider
+      ? (QueryEngine.GetProviderInstance(this.Provider, QueryEngine) as QueryEngine)
+      : QueryEngine.Instance;
+  }
+
   // ─── Query Sync State ────────────────────────────────────────────
 
   /**
@@ -466,14 +479,19 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Resolves the latest version number and compares saved query SQL.
    */
   private async initQuerySyncState(): Promise<void> {
+    const currentUser = this.ProviderToUse?.CurrentUser;
     // Ensure the artifact-type registry is loaded (not registered for startup).
-    await ArtifactMetadataEngine.Instance.Config(false);
+    await this.artifactMetadataEngine.Config(false, currentUser);
 
     // Load THIS artifact's versions on demand (including Content, which
     // resolveEffectiveSavedAtVersion parses). Versions are no longer bulk-loaded
     // at boot — the payload here is bounded to a single artifact's versions.
     if (this.artifactVersion?.ArtifactID) {
-      await ArtifactMetadataEngine.Instance.LoadVersionsForArtifact(this.artifactVersion.ArtifactID);
+      await this.artifactMetadataEngine.LoadVersionsForArtifact(
+        this.artifactVersion.ArtifactID,
+        currentUser,
+        this.Provider ?? undefined,
+      );
     }
 
     this.LatestVersionNumber = this.resolveLatestVersionNumber();
@@ -481,7 +499,12 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     // If the loaded versions don't yet include the one we're viewing (a newer
     // version was created after we first loaded), force a re-fetch and re-resolve.
     if (this.LatestVersionNumber < this.CurrentVersionNumber && this.artifactVersion?.ArtifactID) {
-      await ArtifactMetadataEngine.Instance.LoadVersionsForArtifact(this.artifactVersion.ArtifactID, undefined, undefined, true);
+      await this.artifactMetadataEngine.LoadVersionsForArtifact(
+        this.artifactVersion.ArtifactID,
+        currentUser,
+        this.Provider ?? undefined,
+        true,
+      );
       this.LatestVersionNumber = this.resolveLatestVersionNumber();
     }
 
@@ -505,7 +528,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       return this.CurrentVersionNumber;
     }
 
-    const versions = ArtifactMetadataEngine.Instance.GetCachedVersionsForArtifact(this.artifactVersion.ArtifactID);
+    const versions = this.artifactMetadataEngine.GetCachedVersionsForArtifact(this.artifactVersion.ArtifactID);
     if (versions.length > 0) {
       // GetCachedVersionsForArtifact returns DESC sorted
       return versions[0].VersionNumber || 1;
@@ -531,7 +554,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     if (!this.artifactVersion?.ArtifactID) return effective;
 
     // GetCachedVersionsForArtifact returns DESC sorted — scan all versions
-    const versions = ArtifactMetadataEngine.Instance.GetCachedVersionsForArtifact(this.artifactVersion.ArtifactID);
+    const versions = this.artifactMetadataEngine.GetCachedVersionsForArtifact(this.artifactVersion.ArtifactID);
     for (const v of versions) {
       try {
         if (!v.Content) continue;
@@ -661,7 +684,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     try {
       const md = this.ProviderToUse;
-      const query = await md.GetEntityObject<import('@memberjunction/core-entities').MJQueryEntity>('MJ: Queries');
+      const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries');
       const loaded = await query.Load(this.spec.savedQueryId);
 
       if (!loaded) {
@@ -677,13 +700,13 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       const saved = await query.Save();
 
       if (saved) {
-        // Update spec with new version tracking
-        this.spec.savedAtVersionNumber = this.CurrentVersionNumber;
+        // Persist query metadata on a new immutable artifact version (`N4`)
+        this.spec.savedAtVersionNumber = this.CurrentVersionNumber + 1;
         await this.persistArtifactContent();
 
         // Refresh caches so future lookups see the updated data
-        await QueryEngine.Instance.Config(true);
-        await ArtifactMetadataEngine.Instance.Config(true);
+        await this.queryEngine.Config(true, this.ProviderToUse?.CurrentUser);
+        await this.artifactMetadataEngine.Config(true, this.ProviderToUse?.CurrentUser);
 
         this.savedQuerySql = this.spec.metadata.sql;
         this.EffectiveSavedAtVersion = this.CurrentVersionNumber;
@@ -727,20 +750,21 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   /** Handle successful save from the dialog (both initial save and "save as new") */
   public async OnQuerySaved(event: SaveQueryResult): Promise<void> {
     this.ShowSaveDialog = false;
+    this.UpdateQueryError = null;
+    this.UpdateQueryDiagnostics = [];
     this.IsSaving = true;
     this.SavingMessage = 'Saving query...';
     this.cdr.detectChanges();
 
     try {
-      // Update spec with saved query info and version tracking
+      // Persist query metadata on a new immutable artifact version (`N4`, `S-h`)
       this.spec!.savedQueryId = event.queryId;
       this.spec!.savedQueryName = event.queryName;
-      this.spec!.savedAtVersionNumber = this.CurrentVersionNumber;
 
-      // Persist and refresh caches
+      // Persist and refresh caches (persistArtifactContent resolves latest VersionNumber & updates savedAtVersionNumber)
       await this.persistArtifactContent();
-      await QueryEngine.Instance.Config(true);
-      await ArtifactMetadataEngine.Instance.Config(true);
+      await this.queryEngine.Config(true, this.ProviderToUse?.CurrentUser);
+      await this.artifactMetadataEngine.Config(true, this.ProviderToUse?.CurrentUser);
       await this.ProviderToUse.Refresh();
 
       this.savedQuerySql = this.spec!.metadata?.sql ?? null;
@@ -748,17 +772,87 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       this.QuerySyncState = 'synced';
     } catch (error) {
       console.error('Failed to save query:', error);
+      this.UpdateQueryError = error instanceof Error ? error.message : String(error);
+      this.UpdateQueryDiagnostics = [];
     } finally {
       this.IsSaving = false;
       this.cdr.detectChanges();
     }
   }
 
-  /** Persist updated spec back to the artifact version entity */
+  /** Persist updated spec as a new immutable artifact version (`N4`, `S-h`). */
   private async persistArtifactContent(): Promise<void> {
     if (!this.artifactVersion || !this.spec) return;
-    this.artifactVersion.Content = JSON.stringify(this.spec);
-    await this.artifactVersion.Save();
+    const md = this.ProviderToUse;
+    if (!md) {
+      throw new Error('Metadata provider is unavailable to persist artifact version.');
+    }
+    const currentUser = md.CurrentUser;
+    let latestVersionNumber = this.CurrentVersionNumber;
+    let baseName = this.artifactVersion.Name;
+    let baseConfiguration = this.artifactVersion.Configuration;
+
+    if (this.artifactVersion.ArtifactID) {
+      const rv = RunView.FromMetadataProvider(md);
+      const latestRes = await rv.RunView<{
+        VersionNumber?: number;
+        Name?: string | null;
+        Configuration?: string | null;
+      }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(this.artifactVersion.ArtifactID)}'`,
+          Fields: ['VersionNumber', 'Name', 'Configuration'],
+          OrderBy: 'VersionNumber DESC',
+          MaxRows: 1,
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        },
+        currentUser,
+      );
+      const latestRow = latestRes.Success ? latestRes.Results?.[0] : undefined;
+      if (latestRow) {
+        if (typeof latestRow.VersionNumber === 'number' && latestRow.VersionNumber > latestVersionNumber) {
+          latestVersionNumber = latestRow.VersionNumber;
+        }
+        if (latestRow.Name) baseName = latestRow.Name;
+        if (latestRow.Configuration !== undefined) baseConfiguration = latestRow.Configuration;
+      }
+    }
+
+    const nextVersionNumber = latestVersionNumber + 1;
+    this.spec.savedAtVersionNumber = nextVersionNumber;
+
+    const nextVersion = await md.GetEntityObject<MJArtifactVersionEntity>(
+      'MJ: Artifact Versions',
+      currentUser,
+    );
+    nextVersion.NewRecord();
+    nextVersion.ArtifactID = this.artifactVersion.ArtifactID;
+    nextVersion.VersionNumber = nextVersionNumber;
+    if (baseName) {
+      nextVersion.Name = baseName;
+    }
+    if (currentUser?.ID) {
+      nextVersion.UserID = currentUser.ID;
+    }
+    // Persisted Content is always JSON text here, so never copy File ContentMode without a FileID (`N9`).
+    nextVersion.ContentMode = 'Text';
+    nextVersion.MimeType = 'application/json';
+    if (baseConfiguration !== undefined && baseConfiguration !== null) {
+      nextVersion.Configuration = baseConfiguration;
+    }
+    nextVersion.Content = JSON.stringify(this.spec);
+    nextVersion.Comments = 'Updated saved query metadata';
+    const saved = await nextVersion.Save();
+    if (!saved) {
+      const msg =
+        nextVersion.LatestResult?.CompleteMessage ||
+        nextVersion.LatestResult?.Message ||
+        'Failed to save new artifact version.';
+      throw new Error(msg);
+    }
+    this.artifactVersion = nextVersion;
   }
 
   /**
@@ -769,7 +863,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     if (!this.spec) return null;
 
     const tables = NormalizeToTables(
-      this.spec as unknown as Record<string, unknown>,
+      { ...this.spec } as Record<string, string | number | boolean | object | null | undefined>,
       this.spec.title || 'Results'
     );
     const activeTable = tables[this.ActiveTableIndex];

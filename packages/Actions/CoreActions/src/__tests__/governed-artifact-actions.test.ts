@@ -348,4 +348,149 @@ describe('Governed Artifact CoreActions', () => {
             }),
         );
     });
+
+    it('CreateGovernedArtifactAction forwards InitialOperations (including JSON-stringified input) and falls back to Untitled Artifact when Title is omitted', async () => {
+        const createSpy = vi.spyOn(GovernedArtifactService.Instance, 'CreateGovernedArtifact').mockResolvedValue({
+            success: true,
+            artifactId: 'art-init-1',
+            versionId: 'ver-init-1',
+            versionNumber: 1,
+            name: 'Untitled Artifact',
+            typeName: 'Excel Spreadsheet',
+            driverClass: 'SpreadsheetArtifactViewerPlugin',
+            results: [{ tool: 'write_cells', success: true, result: { updated: 1 } }],
+        });
+
+        const action = new CreateGovernedArtifactAction();
+        const params: RunActionParams = {
+            ContextUser: user,
+            Action: { ID: 'a-1', Name: 'Create Governed Artifact' } as RunActionParams['Action'],
+            Filters: [],
+            Params: [
+                { Name: 'ArtifactType', Type: 'Input', Value: 'Excel Spreadsheet' },
+                {
+                    Name: 'InitialOperations',
+                    Type: 'Input',
+                    Value: JSON.stringify([{ tool: 'write_cells', input: '{"cells":[{"r":0,"c":0,"v":"Region"}]}' }]),
+                },
+            ],
+        };
+        (params as { Provider?: IMetadataProvider }).Provider = provider;
+
+        const res = await action.Run(params);
+        expect(res.Success).toBe(true);
+        expect(createSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                title: 'Untitled Artifact',
+                artifactType: 'Excel Spreadsheet',
+                initialOperations: [{ tool: 'write_cells', input: { cells: [{ r: 0, c: 0, v: 'Region' }] } }],
+            }),
+        );
+        expect(params.Params.find((p) => p.Name === 'Results')?.Value).toEqual([
+            { tool: 'write_cells', success: true, result: { updated: 1 } },
+        ]);
+    });
+
+    it('MutateGovernedArtifactAction parses JSON-stringified rec.input in Operations[] and gives specific errors on malformed inputs', async () => {
+        const mutateSpy = vi.spyOn(GovernedArtifactService.Instance, 'MutateGovernedArtifact').mockResolvedValue({
+            success: true,
+            artifactId: 'art-mut-1',
+            versionId: 'ver-mut-2',
+            versionNumber: 2,
+            results: [{ tool: 'write_cells', success: true, result: { count: 1 } }],
+        });
+
+        const action = new MutateGovernedArtifactAction();
+
+        // 1. JSON-stringified rec.input inside Operations[]
+        const okParams: RunActionParams = {
+            ContextUser: user,
+            Action: { ID: 'a-2', Name: 'Mutate Governed Artifact' } as RunActionParams['Action'],
+            Filters: [],
+            Params: [
+                { Name: 'ArtifactID', Type: 'Input', Value: 'art-mut-1' },
+                {
+                    Name: 'Operations',
+                    Type: 'Input',
+                    Value: [{ tool: 'write_cells', input: '{"cells":[{"address":"A1","value":42}]}' }],
+                },
+            ],
+        };
+        (okParams as { Provider?: IMetadataProvider }).Provider = provider;
+        const okRes = await action.Run(okParams);
+        expect(okRes.Success).toBe(true);
+        expect(mutateSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                operations: [{ tool: 'write_cells', input: { cells: [{ address: 'A1', value: 42 }] } }],
+            }),
+        );
+
+        // 2. Operations[0] missing tool field
+        const missingToolInOpParams: RunActionParams = {
+            ContextUser: user,
+            Action: { ID: 'a-2', Name: 'Mutate Governed Artifact' } as RunActionParams['Action'],
+            Filters: [],
+            Params: [
+                { Name: 'ArtifactID', Type: 'Input', Value: 'art-mut-1' },
+                { Name: 'Operations', Type: 'Input', Value: [{ input: { cells: [] } }] },
+            ],
+        };
+        (missingToolInOpParams as { Provider?: IMetadataProvider }).Provider = provider;
+        const badOpRes = await action.Run(missingToolInOpParams);
+        expect(badOpRes.Success).toBe(false);
+        expect(badOpRes.Message).toContain("Operations[0] is missing required string field 'tool'");
+
+        // 3. Input passed without Tool
+        const inputWithoutToolParams: RunActionParams = {
+            ContextUser: user,
+            Action: { ID: 'a-2', Name: 'Mutate Governed Artifact' } as RunActionParams['Action'],
+            Filters: [],
+            Params: [
+                { Name: 'ArtifactID', Type: 'Input', Value: 'art-mut-1' },
+                { Name: 'Input', Type: 'Input', Value: { cells: [{ address: 'A1', value: 1 }] } },
+            ],
+        };
+        (inputWithoutToolParams as { Provider?: IMetadataProvider }).Provider = provider;
+        const badInputRes = await action.Run(inputWithoutToolParams);
+        expect(badInputRes.Success).toBe(false);
+        expect(badInputRes.Message).toContain("Tool parameter is required when invoking a single tool with Input");
+    });
+
+    it('B7a: RefreshAndSnapshotArtifactAction unconditionally rejects FreezeRefreshedBlocks when invoked by an agent (even with UserConfirmedFreezeSecurityWarning=true)', async () => {
+        const refreshSpy = vi.spyOn(GovernedArtifactService.Instance, 'RefreshAndSnapshotArtifact');
+        const action = new RefreshAndSnapshotArtifactAction();
+        const params: RunActionParams = {
+            ContextUser: user,
+            Context: { AgentRunID: 'run-agent-1' },
+            Action: { ID: 'a-3', Name: '__RefreshAndSnapshotArtifact' } as RunActionParams['Action'],
+            Filters: [],
+            Params: [
+                { Name: 'ArtifactID', Type: 'Input', Value: 'art-100' },
+                { Name: 'FreezeRefreshedBlocks', Type: 'Input', Value: true },
+                { Name: 'UserConfirmedFreezeSecurityWarning', Type: 'Input', Value: true },
+            ],
+        };
+        (params as { Provider?: IMetadataProvider }).Provider = provider;
+        const res = await action.Run(params);
+        expect(res.Success).toBe(false);
+        expect(res.ResultCode).toBe('PERMISSION_DENIED');
+        expect(refreshSpy).not.toHaveBeenCalled();
+
+        // S-a: Also reject FreezeRefreshedBlocks when agent attribution is absent (MCP / RuntimeActionBridge)
+        const unattributedParams: RunActionParams = {
+            ContextUser: user,
+            Action: { ID: 'a-3', Name: '__RefreshAndSnapshotArtifact' } as RunActionParams['Action'],
+            Filters: [],
+            Params: [
+                { Name: 'ArtifactID', Type: 'Input', Value: 'art-100' },
+                { Name: 'FreezeRefreshedBlocks', Type: 'Input', Value: true },
+                { Name: 'UserConfirmedFreezeSecurityWarning', Type: 'Input', Value: true },
+            ],
+        };
+        (unattributedParams as { Provider?: IMetadataProvider }).Provider = provider;
+        const unattributedRes = await action.Run(unattributedParams);
+        expect(unattributedRes.Success).toBe(false);
+        expect(unattributedRes.ResultCode).toBe('PERMISSION_DENIED');
+        expect(refreshSpy).not.toHaveBeenCalled();
+    });
 });

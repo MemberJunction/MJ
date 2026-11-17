@@ -3,9 +3,7 @@ import {
   Component,
   EventEmitter,
   Input,
-  OnChanges,
   Output,
-  SimpleChanges,
   inject,
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -869,8 +867,22 @@ const STARTER_TILES: ReadonlyArray<StarterTileOption> = [
     `,
   ],
 })
-export class LibraryCreateDialogComponent extends BaseAngularComponent implements OnChanges {
-  @Input() IsOpen = false;
+export class LibraryCreateDialogComponent extends BaseAngularComponent {
+  private _isOpen = false;
+
+  @Input()
+  public set IsOpen(value: boolean) {
+    const next = Boolean(value);
+    const wasOpen = this._isOpen;
+    this._isOpen = next;
+    if (next && !wasOpen) {
+      this.initializeDialogOnOpen();
+    }
+  }
+  public get IsOpen(): boolean {
+    return this._isOpen;
+  }
+
   @Input() InitialTab: LibraryCreateDialogTab = 'blank';
   @Input() InitialStarterKind: LibraryStarterKind = 'document';
   @Input() DefaultCollectionId: string | null = null;
@@ -914,8 +926,7 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
   private readonly notifications = inject(MJNotificationService);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['IsOpen'] && this.IsOpen) {
+  private initializeDialogOnOpen(): void {
       this.ActiveTab = this.InitialTab;
       this.SelectedKind = this.InitialStarterKind;
       const starter = STARTER_TILES.find((t) => t.Kind === this.InitialStarterKind) ?? STARTER_TILES[0];
@@ -936,7 +947,6 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
       this.SelectedSourceIds = new Set(this.DefaultSelectedArtifactIds ?? []);
       this.restoreSynthesisTargetPreference();
       void this.ensureArtifactTypesLoaded();
-    }
   }
 
   public get DialogTitle(): string {
@@ -1383,8 +1393,22 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
     `,
   ],
 })
-export class LibraryExportDriveDialogComponent extends BaseAngularComponent implements OnChanges {
-  @Input() IsOpen = false;
+export class LibraryExportDriveDialogComponent extends BaseAngularComponent {
+  private _isOpen = false;
+
+  @Input()
+  public set IsOpen(value: boolean) {
+    const next = Boolean(value);
+    const wasOpen = this._isOpen;
+    this._isOpen = next;
+    if (next && !wasOpen) {
+      this.initializeExportDialogOnOpen();
+    }
+  }
+  public get IsOpen(): boolean {
+    return this._isOpen;
+  }
+
   @Input() Item: LibraryItemSummary | null = null;
   @Input() VersionNumber: number | null = null;
   @Input() Drives: LibraryDriveSummary[] = [];
@@ -1411,8 +1435,8 @@ export class LibraryExportDriveDialogComponent extends BaseAngularComponent impl
     return this.VersionNumber ?? this.Item?.LatestVersionNumber ?? 1;
   }
 
-  public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['IsOpen'] && this.IsOpen && this.Item) {
+  private initializeExportDialogOnOpen(): void {
+    if (this.IsOpen && this.Item) {
       this.FormatOptions = this.creationService.GetSupportedDriveExportFormats(
         this.Item.DriverClass,
         this.Item.TypeName,

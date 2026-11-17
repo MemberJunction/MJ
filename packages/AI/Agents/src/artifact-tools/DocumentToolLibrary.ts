@@ -21,6 +21,16 @@ import {
 } from '@memberjunction/core-entities';
 import { EnsureNodeVmSafeRegexExecutorRegistered, ExecuteSafeRegexBatchWithRecovery } from './node-vm-safe-regex';
 import { ExecuteStructuredLineGrep, UnsearchableLine as UnsearchableDocumentLine } from './grepHelper';
+import {
+    type ArtifactSuggestionAnchor,
+    ExecuteArtifactCommentTool,
+    ExecuteListSuggestionsTool,
+    ExecuteProposeSuggestionTool,
+    ExecuteReviewSuggestionTool,
+    GetSharedCommentAndSuggestionToolDefinitions,
+    ParseSuggestionAnchor,
+    ValidateEmbeddedArtifactAccess
+} from './artifact-comment-suggestion-helper';
 
 const TOOL_REGEX_BUDGET_MS = 150;
 const BATCH_REGEX_MAX_MS = 40;
@@ -129,6 +139,13 @@ export interface DocumentOutlineNode {
  */
 @RegisterClass(BaseArtifactToolLibrary, 'DocumentToolLibrary')
 export class DocumentToolLibrary extends BaseArtifactToolLibrary {
+    /**
+     * Wall-clock budget, in milliseconds, for one regex `search_blocks` or `grep` call.
+     * Defaults to {@link TOOL_REGEX_BUDGET_MS}; tests that assert a complete search raise it so
+     * a loaded CI runner does not turn a timing margin into a failure.
+     */
+    public RegexBudgetMs: number = TOOL_REGEX_BUDGET_MS;
+
     protected override getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
@@ -482,7 +499,77 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                     },
                     required: ['blockId']
                 }
-            }
+            },
+            {
+                name: 'mutate_markdown_table',
+                description: 'Performs structured row or column mutations on an existing Markdown table block.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        blockId: { type: 'string', description: 'Target table blockId.' },
+                        operation: {
+                            type: 'string',
+                            enum: ['add_row', 'update_row', 'delete_row', 'add_column', 'rename_column'],
+                            description: 'Table mutation operation.'
+                        },
+                        rowIndex: { type: 'number', description: '0-based data row index for update_row / delete_row.' },
+                        row: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: 'Cell values array (in column order) for add_row / update_row.'
+                        },
+                        columnName: { type: 'string', description: 'Column header name for add_column / rename_column.' },
+                        newColumnName: { type: 'string', description: 'Replacement column header name for rename_column.' },
+                        defaultValue: { type: 'string', description: 'Default cell value when adding a column.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash of the document prior to edit.' }
+                    },
+                    required: ['blockId', 'operation']
+                }
+            },
+            {
+                name: 'upsert_frontmatter',
+                description: 'Creates or updates YAML frontmatter fields at the top of the Markdown document.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        fields: { type: 'object', description: 'Key/value pairs to set in YAML frontmatter.' },
+                        removeKeys: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: 'Optional frontmatter keys to remove.'
+                        },
+                        expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash of the document prior to edit.' }
+                    },
+                    required: ['fields']
+                }
+            },
+            {
+                name: 'set_lock',
+                description: 'Locks a Markdown heading section via `<!-- mj-lock: owner-only -->`.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        headingLineNumber: { type: 'number', description: '1-based line number of the Markdown heading to lock.' },
+                        heading: { type: 'string', description: 'Optional heading text if headingLineNumber is omitted.' },
+                        blockId: { type: 'string', description: 'Optional heading blockId if headingLineNumber is omitted.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash of the document prior to edit.' }
+                    }
+                }
+            },
+            {
+                name: 'release_lock',
+                description: 'Removes a `<!-- mj-lock -->` guard from a Markdown heading section if the actor is authorized.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        headingLineNumber: { type: 'number', description: '1-based line number of the locked Markdown heading.' },
+                        heading: { type: 'string', description: 'Optional heading text if headingLineNumber is omitted.' },
+                        blockId: { type: 'string', description: 'Optional heading blockId if headingLineNumber is omitted.' },
+                        expectedRevisionHash: { type: 'string', description: 'Optional SHA-256 revision hash of the document prior to edit.' }
+                    }
+                }
+            },
+            ...GetSharedCommentAndSuggestionToolDefinitions('document')
         ];
     }
 
@@ -557,6 +644,35 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 return this.handleMoveBlock(contentStr, input);
             case 'duplicate_block':
                 return this.handleDuplicateBlock(contentStr, input);
+            case 'mutate_markdown_table':
+                return this.handleMutateMarkdownTable(contentStr, input, context);
+            case 'upsert_frontmatter':
+                return this.handleUpsertFrontmatter(contentStr, input);
+            case 'set_lock':
+                return this.handleToggleLock(contentStr, input, true, context);
+            case 'release_lock':
+                return this.handleToggleLock(contentStr, input, false, context);
+            case 'list_comments':
+            case 'add_comment':
+            case 'reply_comment':
+            case 'resolve_comment':
+                return ExecuteArtifactCommentTool({
+                    toolName,
+                    input,
+                    context,
+                    domain: 'document'
+                });
+            case 'list_suggestions':
+                return ExecuteListSuggestionsTool({
+                    domain: 'document',
+                    artifactContent: contentStr,
+                    input,
+                    context
+                });
+            case 'propose_suggestion':
+                return this.handleProposeSuggestion(contentStr, input, context);
+            case 'review_suggestion':
+                return this.handleReviewSuggestion(contentStr, input, context);
             default:
                 return { success: false, data: null, errorMessage: `Unknown tool: "${toolName}"` };
         }
@@ -919,7 +1035,8 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         let tooLongCount = 0;
         let timeoutCount = 0;
         let budgetExpired = false;
-        const regexDeadline = performance.now() + TOOL_REGEX_BUDGET_MS;
+        const budgetMs = this.RegexBudgetMs;
+        const regexDeadline = performance.now() + budgetMs;
 
         const recordUnsearchableBlock = (
             block: ParsedMarkdownLogicalBlock,
@@ -1008,7 +1125,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
         if (timeoutCount > 0) {
             warnings.push(
-                `${timeoutCount} block(s) were skipped because regex evaluation reached the ${TOOL_REGEX_BUDGET_MS}ms tool time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
+                `${timeoutCount} block(s) were skipped because regex evaluation reached the ${budgetMs}ms tool time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
             );
         }
         if (unsearchableCount > unsearchableBlocks.length) {
@@ -1033,7 +1150,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
     }
 
     private handleGrep(content: string, input: Parameters<BaseArtifactToolLibrary['InvokeTool']>[1]): Promise<ArtifactToolResult> {
-        return ExecuteStructuredLineGrep(content, input);
+        return ExecuteStructuredLineGrep(content, input, this.RegexBudgetMs);
     }
 
     private handleGetLines(content: string, input: ArtifactToolArgs): ArtifactToolResult {
@@ -1074,10 +1191,10 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             .join('\n\n');
     }
 
-    private normalizeArtifactBlocksInMarkdown(
+    private async normalizeArtifactBlocksInMarkdown(
         markdown: string,
         context?: ArtifactToolExecutionContext
-    ): { ok: true; markdown: string; errorMessage?: never } | { ok: false; markdown?: never; errorMessage: string } {
+    ): Promise<{ ok: true; markdown: string; errorMessage?: never } | { ok: false; markdown?: never; errorMessage: string }> {
         const parsedSegs = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(markdown);
         let updated = markdown;
         for (const seg of parsedSegs) {
@@ -1101,6 +1218,14 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 }
                 resolvedVersionId = verResult.versionId;
             }
+            const accessCheck = await ValidateEmbeddedArtifactAccess({
+                targetArtifactId: resolved.artifactId,
+                targetVersionId: resolvedVersionId,
+                context
+            });
+            if (!accessCheck.Ok) {
+                return { ok: false, errorMessage: accessCheck.ErrorMessage };
+            }
             if (resolved.artifactId !== seg.BlockSpec.ArtifactID || resolvedVersionId !== seg.BlockSpec.VersionID) {
                 const normalizedDirective = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective({
                     ...seg.BlockSpec,
@@ -1113,11 +1238,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         return { ok: true, markdown: updated };
     }
 
-    private handleInsertBlockAfter(
+    private async handleInsertBlockAfter(
         content: string,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const conflict = this.checkRevision(content, input.expectedRevisionHash);
         if (conflict) {
             return { success: false, data: null, errorMessage: conflict };
@@ -1127,7 +1252,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         if (!rawNewMarkdown) {
             return { success: false, data: null, errorMessage: 'insert_block_after requires non-empty markdown.' };
         }
-        const normalized = this.normalizeArtifactBlocksInMarkdown(rawNewMarkdown, context);
+        const normalized = await this.normalizeArtifactBlocksInMarkdown(rawNewMarkdown, context);
         if (!normalized.ok) {
             return { success: false, data: null, errorMessage: normalized.errorMessage };
         }
@@ -1200,11 +1325,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleReplaceBlock(
+    private async handleReplaceBlock(
         content: string,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const conflict = this.checkRevision(content, input.expectedRevisionHash);
         if (conflict) {
             return { success: false, data: null, errorMessage: conflict };
@@ -1215,7 +1340,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         if (!blockId) {
             return { success: false, data: null, errorMessage: 'replace_block requires blockId.' };
         }
-        const normalized = this.normalizeArtifactBlocksInMarkdown(rawInputMarkdown, context);
+        const normalized = await this.normalizeArtifactBlocksInMarkdown(rawInputMarkdown, context);
         if (!normalized.ok) {
             return { success: false, data: null, errorMessage: normalized.errorMessage };
         }
@@ -1274,11 +1399,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         };
     }
 
-    private handleUpsertTable(
+    private async handleUpsertTable(
         content: string,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const headers = Array.isArray(input.headers) ? input.headers.map((h) => String(h ?? '')) : [];
         const rows = Array.isArray(input.rows)
             ? input.rows.map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? '')) : []))
@@ -1392,7 +1517,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         };
 
         const directive = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(spec);
-        const insertResult = this.handleInsertBlockAfter(
+        const insertResult = await this.handleInsertBlockAfter(
             content,
             {
                 afterBlockId: input.afterBlockId,
@@ -1410,6 +1535,15 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 context.contextUser,
                 context.provider
             );
+            if (execRes.AccessDenied || !execRes.Success) {
+                return {
+                    success: false,
+                    data: null,
+                    errorMessage:
+                        execRes.ErrorMessage ||
+                        `Access denied or execution failed for live block '${spec.BlockID}'.`
+                };
+            }
             const dataObj: ArtifactToolArgs =
                 insertResult.data && typeof insertResult.data === 'object' && !Array.isArray(insertResult.data)
                     ? (insertResult.data as ArtifactToolArgs)
@@ -1420,7 +1554,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                     ...dataObj,
                     liveValidation: {
                         blockId: spec.BlockID,
-                        valid: Boolean(execRes.Success && !execRes.AccessDenied),
+                        valid: true,
                         rowCount: execRes.Rows.length,
                         columns: execRes.Columns.map((c) => c.DisplayName || c.Name),
                         validationError: execRes.ErrorMessage ?? null
@@ -1428,31 +1562,19 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 }
             };
         } catch (err) {
-            const dataObj: ArtifactToolArgs =
-                insertResult.data && typeof insertResult.data === 'object' && !Array.isArray(insertResult.data)
-                    ? (insertResult.data as ArtifactToolArgs)
-                    : {};
             return {
-                ...insertResult,
-                data: {
-                    ...dataObj,
-                    liveValidation: {
-                        blockId: spec.BlockID,
-                        valid: false,
-                        rowCount: 0,
-                        columns: [],
-                        validationError: err instanceof Error ? err.message : String(err)
-                    }
-                }
+                success: false,
+                data: null,
+                errorMessage: err instanceof Error ? err.message : String(err)
             };
         }
     }
 
-    private handleEmbedArtifactBlock(
+    private async handleEmbedArtifactBlock(
         content: string,
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
-    ): ArtifactToolResult {
+    ): Promise<ArtifactToolResult> {
         const rawArtifactId = String(input.artifactId ?? '').trim();
         if (!rawArtifactId) {
             return { success: false, data: null, errorMessage: 'embed_artifact_block requires artifactId.' };
@@ -1469,6 +1591,14 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 return { success: false, data: null, errorMessage: verResult.errorMessage };
             }
             resolvedVersionId = verResult.versionId;
+        }
+        const access = await ValidateEmbeddedArtifactAccess({
+            targetArtifactId: artifactId,
+            targetVersionId: resolvedVersionId,
+            context
+        });
+        if (!access.Ok) {
+            return { success: false, data: null, errorMessage: access.ErrorMessage || `Cannot embed artifact '${artifactId}'.` };
         }
         const replaceBlockId =
             typeof input.replaceBlockId === 'string' && input.replaceBlockId.trim()
@@ -1488,7 +1618,10 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             Mode: 'Live',
             Title: typeof input.title === 'string' ? input.title : undefined,
             ArtifactID: artifactId,
-            ArtifactType: typeof input.artifactType === 'string' ? input.artifactType : 'Whiteboard',
+            ArtifactType:
+                typeof input.artifactType === 'string'
+                    ? input.artifactType
+                    : access.ArtifactTypeName ?? 'Whiteboard',
             EmbedMode: embedMode,
             VersionID: resolvedVersionId,
             SheetID: rawSheetId ?? rawSheetName,
@@ -1646,5 +1779,401 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 revisionHash: this.ComputeRevisionHash(updatedContent)
             }
         };
+    }
+
+    private async handleMutateMarkdownTable(
+        content: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const conflict = this.checkRevision(content, input.expectedRevisionHash);
+        if (conflict) {
+            return { success: false, data: null, errorMessage: conflict };
+        }
+        const blockId = typeof input.blockId === 'string' ? input.blockId.trim() : '';
+        const operation = typeof input.operation === 'string' ? input.operation.trim() : '';
+        if (!blockId || !operation) {
+            return { success: false, data: null, errorMessage: 'mutate_markdown_table requires blockId and operation.' };
+        }
+
+        const blocks = this.ParseLogicalBlocks(content);
+        const target = blocks.find((b) => b.blockId === blockId);
+        if (!target || target.kind !== 'table') {
+            return { success: false, data: null, errorMessage: `Markdown table block '${blockId}' was not found.` };
+        }
+
+        const tableLines = target.rawMarkdown
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l.startsWith('|'));
+        if (tableLines.length < 2) {
+            return { success: false, data: null, errorMessage: `Block '${blockId}' is not a valid pipe-delimited Markdown table.` };
+        }
+
+        const parseCells = (line: string): string[] => {
+            const stripped = line.replace(/^\|/, '').replace(/\|$/, '');
+            return stripped.split('|').map((c) => c.trim());
+        };
+        const headers = parseCells(tableLines[0]);
+        const dividers = parseCells(tableLines[1]);
+        const rows = tableLines.slice(2).map((line) => parseCells(line));
+        const escapeCell = (val: string): string => val.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
+
+        switch (operation) {
+            case 'add_row': {
+                const rowVals = Array.isArray(input.row) ? input.row.map((v) => String(v ?? '')) : [];
+                rows.push(headers.map((_, idx) => rowVals[idx] ?? ''));
+                break;
+            }
+            case 'update_row': {
+                const rowIdx = typeof input.rowIndex === 'number' ? Math.trunc(input.rowIndex) : -1;
+                if (rowIdx < 0 || rowIdx >= rows.length) {
+                    return { success: false, data: null, errorMessage: `Row index ${rowIdx} is out of bounds.` };
+                }
+                const rowVals = Array.isArray(input.row) ? input.row.map((v) => String(v ?? '')) : [];
+                rows[rowIdx] = headers.map((_, idx) => (idx < rowVals.length ? rowVals[idx] : rows[rowIdx][idx] ?? ''));
+                break;
+            }
+            case 'delete_row': {
+                const rowIdx = typeof input.rowIndex === 'number' ? Math.trunc(input.rowIndex) : -1;
+                if (rowIdx < 0 || rowIdx >= rows.length) {
+                    return { success: false, data: null, errorMessage: `Row index ${rowIdx} is out of bounds.` };
+                }
+                rows.splice(rowIdx, 1);
+                break;
+            }
+            case 'add_column': {
+                const colName = typeof input.columnName === 'string' ? input.columnName.trim() : '';
+                if (!colName) {
+                    return { success: false, data: null, errorMessage: 'add_column requires columnName.' };
+                }
+                const defVal = typeof input.defaultValue === 'string' ? input.defaultValue : '';
+                headers.push(colName);
+                dividers.push('---');
+                for (const r of rows) {
+                    r.push(defVal);
+                }
+                break;
+            }
+            case 'rename_column': {
+                const colName = typeof input.columnName === 'string' ? input.columnName.trim() : '';
+                const nextName = typeof input.newColumnName === 'string' ? input.newColumnName.trim() : '';
+                const colIdx = headers.findIndex((h) => h.toLowerCase() === colName.toLowerCase());
+                if (colIdx < 0 || !nextName) {
+                    return { success: false, data: null, errorMessage: `Column '${colName}' not found or newColumnName missing.` };
+                }
+                headers[colIdx] = nextName;
+                break;
+            }
+            default:
+                return { success: false, data: null, errorMessage: `Unsupported table operation '${operation}'.` };
+        }
+
+        const nextTableMd = [
+            `| ${headers.map(escapeCell).join(' | ')} |`,
+            `| ${headers.map((_, idx) => dividers[idx] || '---').join(' | ')} |`,
+            ...rows.map((r) => `| ${headers.map((_, idx) => escapeCell(r[idx] ?? '')).join(' | ')} |`)
+        ].join('\n');
+
+        return this.handleReplaceBlock(
+            content,
+            {
+                blockId,
+                markdown: nextTableMd,
+                expectedRevisionHash: input.expectedRevisionHash
+            },
+            context
+        );
+    }
+
+    private handleUpsertFrontmatter(content: string, input: ArtifactToolArgs): ArtifactToolResult {
+        const conflict = this.checkRevision(content, input.expectedRevisionHash);
+        if (conflict) {
+            return { success: false, data: null, errorMessage: conflict };
+        }
+        const rawFields =
+            input.fields && typeof input.fields === 'object' && !Array.isArray(input.fields)
+                ? (input.fields as ArtifactToolArgs)
+                : null;
+        if (!rawFields) {
+            return { success: false, data: null, errorMessage: 'upsert_frontmatter requires a fields object.' };
+        }
+
+        const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+        const existingMap = new Map<string, string>();
+        let body = content;
+        if (fmMatch) {
+            body = content.slice(fmMatch[0].length);
+            for (const line of fmMatch[1].split(/\r?\n/)) {
+                const colonIdx = line.indexOf(':');
+                if (colonIdx > 0) {
+                    existingMap.set(line.slice(0, colonIdx).trim(), line.slice(colonIdx + 1).trim());
+                }
+            }
+        }
+
+        const removeKeys = Array.isArray(input.removeKeys)
+            ? input.removeKeys.filter((k): k is string => typeof k === 'string')
+            : [];
+        for (const k of removeKeys) {
+            existingMap.delete(k.trim());
+        }
+
+        for (const [k, v] of Object.entries(rawFields)) {
+            if (!k.trim() || v === undefined) continue;
+            const serialized =
+                typeof v === 'string'
+                    ? JSON.stringify(v)
+                    : typeof v === 'number' || typeof v === 'boolean' || v === null
+                      ? String(v)
+                      : JSON.stringify(v);
+            existingMap.set(k.trim(), serialized);
+        }
+
+        const fmLines = Array.from(existingMap.entries()).map(([k, v]) => `${k}: ${v}`);
+        const updatedContent = fmLines.length > 0 ? `---\n${fmLines.join('\n')}\n---\n${body}` : body;
+        return {
+            success: true,
+            data: {
+                updatedContent,
+                frontmatterKeys: Array.from(existingMap.keys()),
+                revisionHash: this.ComputeRevisionHash(updatedContent)
+            }
+        };
+    }
+
+    private handleToggleLock(
+        content: string,
+        input: ArtifactToolArgs,
+        locked: boolean,
+        context?: ArtifactToolExecutionContext
+    ): ArtifactToolResult {
+        const conflict = this.checkRevision(content, input.expectedRevisionHash);
+        if (conflict) {
+            return { success: false, data: null, errorMessage: conflict };
+        }
+        let lineNum =
+            typeof input.headingLineNumber === 'number' && Number.isFinite(input.headingLineNumber)
+                ? Math.trunc(input.headingLineNumber)
+                : 0;
+        const blocks = this.ParseLogicalBlocks(content);
+        if (lineNum <= 0 && typeof input.blockId === 'string' && input.blockId.trim()) {
+            const match = blocks.find((b) => b.blockId === input.blockId!.toString().trim() && b.kind === 'heading');
+            if (match) {
+                lineNum = match.startLine;
+            }
+        }
+        if (lineNum <= 0 && typeof input.heading === 'string' && input.heading.trim()) {
+            const target = input.heading.trim().toLowerCase();
+            const match = blocks.find(
+                (b) => b.kind === 'heading' && (b.headingText ?? '').trim().toLowerCase() === target
+            );
+            if (match) {
+                lineNum = match.startLine;
+            }
+        }
+        if (lineNum <= 0) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: 'set_lock / release_lock requires headingLineNumber, heading, or a heading blockId.'
+            };
+        }
+
+        const actorUserId = context?.actorUserId ?? context?.contextUser?.ID ?? 'system';
+        const ownerUserId = context?.ownerUserId;
+        const isEditor = Boolean(context?.isEditor);
+        try {
+            const updatedContent = DocumentLiveBlockEngine.Instance.ToggleHeadingLockInMarkdown(
+                content,
+                lineNum,
+                locked,
+                actorUserId,
+                ownerUserId,
+                isEditor
+            );
+            return {
+                success: true,
+                data: {
+                    locked,
+                    headingLineNumber: lineNum,
+                    updatedContent,
+                    revisionHash: this.ComputeRevisionHash(updatedContent)
+                }
+            };
+        } catch (err) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: err instanceof Error ? err.message : String(err)
+            };
+        }
+    }
+
+    private resolveDocumentSuggestionAnchor(
+        content: string,
+        anchor: ArtifactSuggestionAnchor,
+        originalSlice: string
+    ): { ok: true; resolvedAnchor?: ArtifactSuggestionAnchor } | { ok: false; errorMessage: string } {
+        const blocks = this.ParseLogicalBlocks(content);
+        if (anchor.BlockId) {
+            const block = blocks.find((b) => b.blockId === anchor.BlockId);
+            if (!block) {
+                return { ok: false, errorMessage: `Target block '${anchor.BlockId}' was not found.` };
+            }
+            if (originalSlice && !block.rawMarkdown.includes(originalSlice)) {
+                return {
+                    ok: false,
+                    errorMessage: `originalSlice was not found inside block '${anchor.BlockId}'.`
+                };
+            }
+            return {
+                ok: true,
+                resolvedAnchor: {
+                    ...anchor,
+                    BlockId: block.blockId,
+                    ...(block.headingText && !anchor.Heading ? { Heading: block.headingText } : {})
+                }
+            };
+        }
+
+        if (originalSlice && !content.includes(originalSlice)) {
+            return { ok: false, errorMessage: 'originalSlice was not found in the document.' };
+        }
+
+        const needle = originalSlice || (typeof anchor.Quote === 'string' ? anchor.Quote : '');
+        let searchBlocks = blocks;
+        let matchedHeadingBlock: ParsedMarkdownLogicalBlock | undefined;
+
+        if (anchor.Heading) {
+            const targetHeading = anchor.Heading.trim().toLowerCase();
+            const headingIdx = blocks.findIndex(
+                (b) =>
+                    b.kind === 'heading' &&
+                    ((b.headingText ?? '').trim().toLowerCase() === targetHeading ||
+                        (b.headingText ?? '').trim().toLowerCase().includes(targetHeading))
+            );
+            if (headingIdx >= 0) {
+                matchedHeadingBlock = blocks[headingIdx];
+                const baseLevel = matchedHeadingBlock.headingLevel ?? 1;
+                let endIdx = blocks.length;
+                for (let i = headingIdx + 1; i < blocks.length; i++) {
+                    const candidate = blocks[i];
+                    if (candidate.kind === 'heading' && (candidate.headingLevel ?? 6) <= baseLevel) {
+                        endIdx = i;
+                        break;
+                    }
+                }
+                searchBlocks = blocks.slice(headingIdx, endIdx);
+            }
+        }
+
+        const matchedBlock = needle
+            ? searchBlocks.find((b) => b.rawMarkdown.includes(needle)) ??
+              (searchBlocks !== blocks ? blocks.find((b) => b.rawMarkdown.includes(needle)) : undefined)
+            : matchedHeadingBlock;
+
+        if (matchedBlock) {
+            return {
+                ok: true,
+                resolvedAnchor: {
+                    ...anchor,
+                    BlockId: matchedBlock.blockId,
+                    ...(matchedBlock.headingText && !anchor.Heading
+                        ? { Heading: matchedBlock.headingText }
+                        : matchedHeadingBlock?.headingText && !anchor.Heading
+                          ? { Heading: matchedHeadingBlock.headingText }
+                          : {})
+                }
+            };
+        }
+
+        return { ok: true };
+    }
+
+    private async handleProposeSuggestion(
+        content: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        return ExecuteProposeSuggestionTool({
+            domain: 'document',
+            artifactContent: content,
+            input,
+            context,
+            validateTarget: (anchor, originalSlice) => this.resolveDocumentSuggestionAnchor(content, anchor, originalSlice)
+        });
+    }
+
+    private async handleReviewSuggestion(
+        content: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        return ExecuteReviewSuggestionTool({
+            domain: 'document',
+            artifactContent: content,
+            input,
+            context,
+            applyAcceptedSuggestion: async (suggestion) => {
+                let updatedContent = content;
+                const targetAnchor = ParseSuggestionAnchor(suggestion.Anchor, 'document');
+                if (targetAnchor.BlockId) {
+                    const blocks = this.ParseLogicalBlocks(content);
+                    const idx = blocks.findIndex((b) => b.blockId === targetAnchor.BlockId);
+                    if (idx < 0) {
+                        return { ok: false, errorMessage: `Target block '${targetAnchor.BlockId}' was not found.` };
+                    }
+                    const block = blocks[idx];
+                    if (suggestion.OriginalSlice && !block.rawMarkdown.includes(suggestion.OriginalSlice)) {
+                        return {
+                            ok: false,
+                            errorMessage: `originalSlice is stale and no longer matches block '${targetAnchor.BlockId}'.`
+                        };
+                    }
+                    const nextRaw = suggestion.OriginalSlice
+                        ? block.rawMarkdown.replace(suggestion.OriginalSlice, () => suggestion.ProposedReplacement)
+                        : suggestion.ProposedReplacement;
+                    blocks[idx] = { ...block, rawMarkdown: nextRaw };
+                    updatedContent = this.serializeLogicalBlocks(blocks);
+                } else {
+                    if (!suggestion.OriginalSlice || !content.includes(suggestion.OriginalSlice)) {
+                        return {
+                            ok: false,
+                            errorMessage: 'originalSlice is stale or empty and cannot be unambiguously applied.'
+                        };
+                    }
+                    updatedContent = content.replace(suggestion.OriginalSlice, () => suggestion.ProposedReplacement);
+                }
+
+                const normalized = await this.normalizeArtifactBlocksInMarkdown(updatedContent, context);
+                if (!normalized.ok) {
+                    return { ok: false, errorMessage: normalized.errorMessage };
+                }
+                updatedContent = normalized.markdown;
+
+                const lockCheck = DocumentLiveBlockEngine.Instance.ValidateDocumentEditAgainstLocks(
+                    content,
+                    updatedContent,
+                    context?.actorUserId ?? context?.contextUser?.ID,
+                    context?.ownerUserId,
+                    Boolean(context?.isEditor)
+                );
+                if (!lockCheck.Allowed) {
+                    return {
+                        ok: false,
+                        errorMessage:
+                            lockCheck.ViolationReason ||
+                            'Cannot apply suggestion to a locked Markdown section.'
+                    };
+                }
+
+                return {
+                    ok: true,
+                    updatedContent,
+                    revisionHash: this.ComputeRevisionHash(updatedContent)
+                };
+            }
+        });
     }
 }

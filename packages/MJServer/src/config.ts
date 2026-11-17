@@ -5,6 +5,7 @@ import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
+import { ArtifactGuestSharingEnabledDefault } from './magicLinkConfigUnits.js';
 import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
 import { DEFAULT_ROUTE_RATE_LIMITS, type RouteRateLimitName } from './routeRateLimitConfigUnits.js';
 import {
@@ -516,6 +517,35 @@ const feedbackSettingsSchema = z.object({
   enabled: z.boolean().optional().default(true),
   /** Optional GitHub-specific settings used by the feedback resolver. */
   github: feedbackGithubSettingsSchema.optional(),
+  /**
+   * How `ClassifyFeedback` picks a category and severity: `Prompt` (the chat-completion classifier
+   * only), `Shadow` (the classifier answers; a decision runs beside it and records whether they
+   * agreed) or `Decision` (two Choice questions answer; the classifier runs only when the decision
+   * cannot). Case-insensitive; anything else reads as the default, `Decision`. Choices pick the
+   * most likely option, so they need no calibration. Env: `MJ_FEEDBACK_DECISION_MODE`.
+   */
+  decisionMode: z.string().optional().default(process.env.MJ_FEEDBACK_DECISION_MODE || 'Decision'),
+});
+
+/**
+ * Modes for closed-set calls MJServer owns that a decision model can answer (see `RunDecisionUse` in
+ * `@memberjunction/ai-prompts`). Each is `Prompt`, `Shadow` or `Decision`, case-insensitive; anything
+ * else reads as that use's default. Feedback classification's mode lives in `feedbackSettings`.
+ */
+const decisionsSchema = z.object({
+  /**
+   * The semantic stage of the anchored-comment restricted-field check. Default `Shadow`: switch to
+   * `Decision` only once a calibration for `restricted-field-classifier` / `discusses` is fitted on the
+   * answering model. Env: `MJ_RESTRICTED_FIELD_CLASSIFIER_DECISION_MODE`.
+   */
+  restrictedFieldClassifier: z.string().optional().default(process.env.MJ_RESTRICTED_FIELD_CLASSIFIER_DECISION_MODE || 'Shadow'),
+  /**
+   * A tag keyword whose best match scores just under the match threshold (`TagEngine`'s suggestion
+   * band). Default `Shadow`: the keyword is queued for review as before and the decision's answer is
+   * recorded. `Decision` applies the tag at a calibrated 0.8 or above, once a `tag-match` / `same`
+   * calibration is fitted. Env: `MJ_TAG_MATCH_DECISION_MODE`.
+   */
+  tagMatch: z.string().optional().default(process.env.MJ_TAG_MATCH_DECISION_MODE || 'Shadow'),
 });
 
 const magicLinkSchema = z.object({
@@ -587,6 +617,27 @@ const magicLinkSchema = z.object({
    * never expose an open redirect carrying session tokens.
    */
   allowedRedirectOrigins: z.array(z.string()).optional(),
+  /**
+   * Configuration for external anonymous `resource-share` Magic Links scoped to Frozen artifacts.
+   * Default-disabled (`enabled: false`) so public redemption & guest share minting stay off unless
+   * explicitly opted in.
+   */
+  artifactGuestSharing: z.object({
+    /** Explicit opt-in switch enabling external Frozen artifact guest share links. Default false unless MJ_ARTIFACT_GUEST_SHARING_ENABLED is set truthy. */
+    enabled: zodBooleanWithTransforms().default(() => ArtifactGuestSharingEnabledDefault(process.env.MJ_ARTIFACT_GUEST_SHARING_ENABLED)),
+    /** Maximum allowed expiration window in hours for newly issued guest share links. Default 720 (30 days). */
+    maxExpiresInHours: z.coerce.number().positive().optional().default(720),
+    /** Maximum redemption uses permitted per guest share link. Default 100. */
+    maxUses: z.coerce.number().int().positive().optional().default(100),
+    /** Optional MJ Authorization name checked before issuing an external guest share link. */
+    requiredAuthorizationName: z.string().optional(),
+    /** Explicit MJ Application name bound onto resource-share invites. Fails closed if not found. */
+    applicationName: z.string().optional().default('Chat'),
+    /** Explicit MJ Role name bound onto resource-share invites (defaults to magicLink.restrictedRoleName; fails closed if not found). */
+    roleName: z.string().optional(),
+    /** Explicit MJ Resource Type name bound onto resource-share invites. Fails closed if not found. */
+    resourceTypeName: z.string().optional().default('Artifacts'),
+  }).optional().default({}),
 }).passthrough();
 
 /**
@@ -1040,6 +1091,7 @@ const configInfoSchema = z.object({
   loggingSettings: loggingSettingsSchema.optional().default({}),
   aiPromptRuns: aiPromptRunsSchema.optional(),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
+  decisions: decisionsSchema.optional().default({}),
   cors: corsSchema.optional().default({}),
   rateLimiting: rateLimitSchema.optional().default({}),
   startup: startupSchema.optional().default({}),
@@ -1121,6 +1173,7 @@ export type ServerExtensionConfig = z.infer<typeof ServerExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type LoggingSettingsConfig = z.infer<typeof loggingSettingsSchema>;
 export type AIPromptRunsConfig = z.infer<typeof aiPromptRunsSchema>;
+export type DecisionsConfig = z.infer<typeof decisionsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type CorsConfig = z.infer<typeof corsSchema>;

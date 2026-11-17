@@ -17,6 +17,7 @@ import { MemoryManagerAgent } from '../memory-manager-agent';
 import { AgentDecisionService, type AgentDecisionAskParams } from '../AgentDecisionService';
 import * as MemoryNoteGate from '../memory-note-gate';
 import { FormatMemoryNoteExcerpt, MEMORY_NOTE_MAX_EXCERPT_CHARS } from '../memory-note-gate';
+import { ServeDecisionCalibrations, ShippedAgentCalibrations } from './helpers/shipped-decision-calibrations';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -197,14 +198,16 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
 
     beforeEach(() => {
         agent = new TestMemoryManagerAgent();
+        // The engine serves the calibrations shipped in metadata/ai-models.
+        ServeDecisionCalibrations(ShippedAgentCalibrations);
     });
 
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('has EnableDecisionGate false by default', () => {
-        expect(agent.EnableDecisionGate).toBe(false);
+    it('has EnableDecisionGate true by default: the master switch alone decides whether it runs', () => {
+        expect(agent.EnableDecisionGate).toBe(true);
     });
 
     it('allows toggling EnableDecisionGate via property setter', () => {
@@ -214,7 +217,9 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
         expect(agent.EnableDecisionGate).toBe(false);
     });
 
-    it('filters by self-confidence and length when EnableDecisionGate is false (default)', async () => {
+    it('filters by self-confidence and length when EnableDecisionGate is false, even with the master switch on', async () => {
+        agent.TurnGateOn();
+        agent.EnableDecisionGate = false;
         const decisions = new ScriptedDecisionService(() => answered(JEV, {}));
         agent.SetDecisionService(decisions);
 
@@ -283,7 +288,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
 
         expect(decisions.Calls).toHaveLength(9);
         expect(loggedLines('typesafe/jev-1.13-logged-once')).toEqual([
-            'Memory Manager: Jev (typesafe/jev-1.13-logged-once) has no memory-note calibration (MEMORY_NOTE_DECISION_CALIBRATION), so the decision gate falls back to the confidence filter for its batches'
+            "Memory Manager: Jev (typesafe/jev-1.13-logged-once) has no memory-note calibration (use 'memory-note-gate' in its ModelConfiguration.Decision.Calibrations), so the decision gate falls back to the confidence filter for its batches"
         ]);
     });
 
@@ -488,18 +493,58 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
 
         it.each<[string, Record<string, unknown> | undefined]>([
             ['no data', undefined],
-            ['data without the flag', { verbose: false }],
-            ['a flag that is not a boolean', { enableDecisionGate: 'true', __agentTypePromptParams: { decisionsEnabled: true } }]
-        ])('leaves the gate off with %s', async (_label, data) => {
+            ['data without the flag', { verbose: false }]
+        ])('leaves the gate on, but idle without the master switch, with %s', async (_label, data) => {
             const decisions = new ScriptedDecisionService(() => answered(JEV, { n1: 0.01, n2: 0.01, n3: 0.99 }));
             agent.SetDecisionService(decisions);
 
             await agent.RunExecute(runParams(data));
             const filtered = await agent.RunGate(sampleNotes, oneThread, user);
 
+            expect(agent.EnableDecisionGate).toBe(true);
+            expect(decisions.Calls).toEqual([]);
+            expect(filtered.map(n => n.content)).toEqual(['Prefers dark mode theme', 'Do not touch production DB']);
+        });
+
+        it('runs the gate by default once the master switch is on, ignoring a flag that is not a boolean', async () => {
+            const decisions = new ScriptedDecisionService(() => answered(JEV, { n1: 0.95, n2: 0.6, n3: 0.9 }));
+            agent.SetDecisionService(decisions);
+
+            await agent.RunExecute(runParams({ enableDecisionGate: 'false', __agentTypePromptParams: { decisionsEnabled: true } }));
+            const filtered = await agent.RunGate(sampleNotes, oneThread, user);
+
+            expect(agent.EnableDecisionGate).toBe(true);
+            expect(decisions.Calls).toHaveLength(1);
+            expect(filtered.map(n => n.content)).toEqual(['Prefers dark mode theme', 'Build failed on missing module']);
+        });
+
+        it('turns the gate off with data.enableDecisionGate: false, even with the master switch on', async () => {
+            const decisions = new ScriptedDecisionService(() => answered(JEV, { n1: 0.01, n2: 0.01, n3: 0.99 }));
+            agent.SetDecisionService(decisions);
+
+            await agent.RunExecute(runParams({ enableDecisionGate: false, __agentTypePromptParams: { decisionsEnabled: true } }));
+            const filtered = await agent.RunGate(sampleNotes, oneThread, user);
+
             expect(agent.EnableDecisionGate).toBe(false);
             expect(decisions.Calls).toEqual([]);
             expect(filtered.map(n => n.content)).toEqual(['Prefers dark mode theme', 'Do not touch production DB']);
+        });
+
+        it("asks the agent's decisionPromptName with the run's execution scope", async () => {
+            const decisions = new ScriptedDecisionService(() => answered(JEV, { n1: 0.95, n2: 0.6, n3: 0.9 }));
+            agent.SetDecisionService(decisions);
+            const params = runParams(undefined, undefined, { decisionsEnabled: true, decisionPromptName: 'Memory Decision' });
+            params.configurationId = 'aaaaaaaa-7777-4000-8000-000000000001';
+            params.apiKeys = [{ driverClass: 'JevDecision', apiKey: 'run-key' }];
+
+            await agent.RunExecute(params);
+            await agent.RunGate(sampleNotes, oneThread, user);
+
+            expect(decisions.Calls).toHaveLength(1);
+            expect(decisions.Calls[0].PromptName).toBe('Memory Decision');
+            expect(decisions.Calls[0].ExecutionScope?.configurationId).toBe('aaaaaaaa-7777-4000-8000-000000000001');
+            expect(decisions.Calls[0].ExecutionScope?.apiKeys).toEqual([{ driverClass: 'JevDecision', apiKey: 'run-key' }]);
+            expect(decisions.Calls[0].ExecutionScope?.contextUser).toBe(user);
         });
     });
 

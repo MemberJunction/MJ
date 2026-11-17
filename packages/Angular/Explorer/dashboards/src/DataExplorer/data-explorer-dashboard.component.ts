@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, HostListener, ElementRef, ViewChild, NgZone, inject } from '@angular/core';
 
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
@@ -69,10 +69,12 @@ const DATA_EXPLORER_DEFAULT_PAGE_SIZE = 100;
   ]
 })
 @RegisterClass(BaseDashboard, 'DataExplorer')
-export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges, AfterViewInit {
+export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, AfterViewInit {
   protected override destroy$ = new Subject<void>();
   private metadata = this.ProviderToUse;
   private appManager = inject(ApplicationManager);
+  private inputsInitialized = false;
+  private _entityFilter: DataExplorerFilter | null = null;
 
   /** Reference to the filter input for keyboard shortcuts */
   @ViewChild('filterInput') FilterInputRef: ElementRef<HTMLInputElement> | undefined;
@@ -102,7 +104,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Optional filter to constrain which entities are shown in the explorer.
    * Can filter by applicationId, schemaNames, or explicit entityNames.
    */
-  @Input() EntityFilter: DataExplorerFilter | null = null;
+  @Input() set EntityFilter(value: DataExplorerFilter | null) {
+    const prev = this._entityFilter;
+    this._entityFilter = value;
+    if (this.inputsInitialized && value !== prev) {
+      void this.applyUpdatedEntityFilter();
+    }
+  }
+  get EntityFilter(): DataExplorerFilter | null {
+    return this._entityFilter;
+  }
 
   /** @deprecated Use {@link EntityFilter}. */
   @Input() set entityFilter(value: DataExplorerFilter | null) {
@@ -829,6 +840,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   async ngOnInit(): Promise<void> {
+    this.inputsInitialized = true;
     super.ngOnInit();
     // Wired before the async setup below, so a delete during a slow load isn't missed.
     this.listenForRecordDeletes();
@@ -1438,6 +1450,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
             tableTitle: { type: 'string', description: 'Optional live table title' },
             maxRows: { type: 'number', description: 'Optional row limit' },
             anchorCell: { type: 'string', description: 'Optional top-left cell (defaults to A1)' },
+            existingArtifactId: {
+              type: 'string',
+              description: 'Optional existing Excel Spreadsheet artifact ID to append onto instead of creating a new artifact',
+            },
           },
         },
         async (params) => this.toolCreateLiveSheetFromView(params),
@@ -2042,14 +2058,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     super.ngOnDestroy();
   }
 
-  async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    // Re-apply filter when entityFilter changes
-    if (changes['entityFilter'] && !changes['entityFilter'].firstChange) {
-      // Update context for new filter (loads context-specific state)
-      await this.StateService.setContext(this.EntityFilter);
-      this.State = this.StateService.CurrentState;
-      await this.loadEntities();
-    }
+  private async applyUpdatedEntityFilter(): Promise<void> {
+    await this.StateService.setContext(this.EntityFilter);
+    this.State = this.StateService.CurrentState;
+    await this.loadEntities();
   }
 
   protected initDashboard(): void {

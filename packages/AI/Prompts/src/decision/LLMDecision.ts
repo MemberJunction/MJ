@@ -549,9 +549,23 @@ export class LLMDecision extends BaseDecision {
             cost.cost,
             cost.currency
         );
-        if (promptResult.modelInfo?.modelName) {
-            decisionResult.ResolvedModel = promptResult.modelInfo.modelName;
+        const answeringModel = this.answeringModelName(promptResult);
+        if (answeringModel) {
+            decisionResult.ResolvedModel = answeringModel;
         }
+    }
+
+    /**
+     * The chat model that actually answered. After a failover inside the chat prompt,
+     * `modelInfo` still names the model `AIPromptRunner` first selected, while the run's `ModelID`
+     * moves to the model that answered; reporting the selected one would apply that model's
+     * calibration to another model's answer. So the run's model wins, and `modelInfo` is the
+     * fallback when the run has no model or it is not in the AI engine's cache.
+     */
+    private answeringModelName(promptResult: AIPromptRunResult): string | undefined {
+        const modelID = promptResult.promptRun?.ModelID;
+        const fromRun = modelID ? AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, modelID))?.Name : undefined;
+        return fromRun ?? promptResult.modelInfo?.modelName ?? undefined;
     }
 
     /**

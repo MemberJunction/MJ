@@ -91,6 +91,34 @@ The provider is registered in `metadata/search-providers/.search-providers.json`
 
 ---
 
+## 🎯 Re-ranking
+
+A scope opts into a re-ranker with `ScopeConfig.reRanker.driverClass`; a scope without one keeps the fused order. The shipped drivers are `CohereReRanker`, `VoyageReRanker`, `OpenAIReRanker`, `BGEReRanker` (local) and `DecisionReRanker`.
+
+**`DecisionReRanker`** scores each candidate with a typed decision: one Likelihood per candidate, asked as the searching user through the `Default Decision` prompt and its failover chain. A decision call bills input tokens only and needs no reranker key of its own. The scoring is `@memberjunction/ai-reranker`'s `DecisionReranker`, resolved through the ClassFactory, so it must be loaded (both server bootstraps load it).
+
+```json
+{
+  "reRanker": {
+    "driverClass": "DecisionReRanker",
+    "inputTopN": 50,
+    "outputTopN": 10,
+    "config": { "minRelevanceThreshold": 0.1 }
+  }
+}
+```
+
+| `config` key | Meaning | Default |
+|---|---|---|
+| `promptID` | The decision prompt to ask | `Default Decision` |
+| `timeoutMS` | Time budget for the rerank's decision calls, all together | 15 000 |
+| `maxDocumentsPerCall` | Candidates per call when no model declares `Decision.MaxQuestionsPerCall` | 20 |
+| `minRelevanceThreshold` | Drop results below it, unless none reaches it. The scores are uncalibrated, so start at 0.1 | none |
+
+Cost is reported to the scope's `RerankerBudgetCents` guard from the decision runs' recorded usage, or from the per-candidate estimate when no cost was recorded. A failed rerank falls back to the fused order, as for every driver.
+
+---
+
 ## 🧪 Testing
 
 Run package unit tests:

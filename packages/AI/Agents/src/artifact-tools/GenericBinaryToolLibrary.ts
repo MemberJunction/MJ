@@ -10,7 +10,13 @@
  */
 import { createHash } from 'crypto';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, type ArtifactToolDefinition, type ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import {
+    BaseArtifactToolLibrary,
+    type ArtifactToolArgs,
+    type ArtifactToolDefinition,
+    type ArtifactToolResult,
+} from '@memberjunction/ai-core-plus';
+import { DecodeBinaryArtifactContent } from './artifact-tool-helpers';
 
 @RegisterClass(BaseArtifactToolLibrary, 'GenericBinaryToolLibrary')
 export class GenericBinaryToolLibrary extends BaseArtifactToolLibrary {
@@ -26,13 +32,13 @@ export class GenericBinaryToolLibrary extends BaseArtifactToolLibrary {
 
     protected async invokeSubclassTool(
         toolName: string,
-        _input: Record<string, unknown>,
+        _input: ArtifactToolArgs,
         artifactContent: string | Buffer,
     ): Promise<ArtifactToolResult> {
         if (toolName !== 'get_metadata') {
             return { success: false, data: null, errorMessage: `Unknown tool: "${toolName}".` };
         }
-        const buffer = typeof artifactContent === 'string' ? Buffer.from(artifactContent, 'utf-8') : artifactContent;
+        const buffer = DecodeBinaryArtifactContent(artifactContent);
         const sha256 = createHash('sha256').update(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)).digest('hex');
         return {
             success: true,
