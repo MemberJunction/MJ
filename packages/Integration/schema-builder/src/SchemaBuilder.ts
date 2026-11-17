@@ -29,7 +29,11 @@ import { SoftFKConfigEmitter } from './SoftFKConfigEmitter.js';
 import { MetadataEmitter } from './MetadataEmitter.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { SchemaEvolution } from './SchemaEvolution.js';
-import { STANDARD_COLUMN_DESCRIPTIONS } from './DDLGenerator.js';
+import {
+    DDLGenerator as IntegrationDDLGenerator,
+    STANDARD_COLUMN_DESCRIPTIONS,
+    type StandardIntegrationColumnName,
+} from './DDLGenerator.js';
 import { IsIntegrationWriteAllowed } from './AccessControl.js';
 import { GetDialect } from '@memberjunction/sql-dialect';
 
@@ -303,8 +307,8 @@ export class SchemaBuilder {
             SchemaName: config.SchemaName,
             TableName: config.TableName,
             EntityName: config.EntityName,
-            Description: config.Description,
-            Columns: config.Columns.map(c => this.convertColumn(c)),
+            Description: IntegrationDDLGenerator.NormalizeDescription(config.Description, platform) ?? undefined,
+            Columns: config.Columns.map(c => this.convertColumn(c, platform)),
             SoftPrimaryKeys: config.PrimaryKeyFields,
             ForeignKeys: (config.SoftForeignKeys ?? []).map(fk => ({
                 ColumnName: fk.FieldName,
@@ -366,7 +370,7 @@ export class SchemaBuilder {
     }
 
     /** Convert a TargetColumnConfig to a generic ColumnDefinition. */
-    private convertColumn(col: TargetColumnConfig): ColumnDefinition {
+    private convertColumn(col: TargetColumnConfig, platform: DatabasePlatform): ColumnDefinition {
         return {
             Name: col.TargetColumnName,
             Type: 'string' as SchemaFieldType, // Overridden by RawSqlType
@@ -376,7 +380,7 @@ export class SchemaBuilder {
             Precision: col.Precision ?? undefined,
             Scale: col.Scale ?? undefined,
             DefaultValue: col.DefaultValue ?? undefined,
-            Description: col.Description,
+            Description: IntegrationDDLGenerator.NormalizeDescription(col.Description, platform) ?? undefined,
         };
     }
 
@@ -453,7 +457,7 @@ export class SchemaBuilder {
 
     /** Integration-specific sync columns added to every integration table. */
     private integrationSyncColumns(platform: DatabasePlatform): ColumnDefinition[] {
-        const columns: ColumnDefinition[] = [
+        const columns: Array<ColumnDefinition & { Name: StandardIntegrationColumnName }> = [
             {
                 Name: '__mj_integration_SyncStatus',
                 Type: 'string' as SchemaFieldType,

@@ -24,7 +24,12 @@ export type {
 
 // Classes & constants
 export { TypeMapper } from './TypeMapper.js';
-export { DDLGenerator, STANDARD_COLUMN_DESCRIPTIONS, ValidateIdentifier } from './DDLGenerator.js';
+export {
+    DDLGenerator,
+    STANDARD_COLUMN_DESCRIPTIONS,
+    ValidateIdentifier,
+    type StandardIntegrationColumnName,
+} from './DDLGenerator.js';
 export { MigrationFileWriter } from './MigrationFileWriter.js';
 export { SoftFKConfigEmitter } from './SoftFKConfigEmitter.js';
 export { MetadataEmitter } from './MetadataEmitter.js';

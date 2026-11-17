@@ -206,6 +206,17 @@ describe('SchemaEvolution', () => {
             const pgDiff = evo.DiffSchema(MakeSourceObject(), target, existing, 'postgresql');
             const pgSql = evo.GenerateEvolutionMigration(pgDiff, 'hubspot', 'Contact', 'postgresql');
             expect(pgSql).toContain(`COMMENT ON COLUMN "hubspot"."Contact"."__mj_integration_LastSyncedSnapshot" IS`);
+
+            // A legacy table with zero standard columns backfills all 12 with non-empty descriptions.
+            const bareExisting = MakeLegacyExistingTable([
+                { Name: 'Email', SqlType: 'NVARCHAR(255)', IsNullable: true },
+            ]);
+            const fullBackfill = evo.DiffSchema(MakeSourceObject(), target, bareExisting, 'sqlserver');
+            const backfilledStd = fullBackfill.AddedColumns.filter(c => c.TargetColumnName.startsWith('__mj_integration_'));
+            expect(new Set(backfilledStd.map(c => c.TargetColumnName))).toEqual(new Set(Object.keys(STANDARD_COLUMN_DESCRIPTIONS)));
+            for (const col of backfilledStd) {
+                expect(col.Description?.trim().length).toBeGreaterThan(0);
+            }
         });
 
         it('should add a key column that the existing table does not have, as nullable', () => {

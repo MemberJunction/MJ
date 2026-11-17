@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { GetDialect } from '@memberjunction/sql-dialect';
 import { DDLGenerator, STANDARD_COLUMN_DESCRIPTIONS, ValidateIdentifier } from '../DDLGenerator.js';
 import type { TargetTableConfig, TargetColumnConfig, ColumnModification } from '../interfaces.js';
 
@@ -258,6 +259,77 @@ describe('DDLGenerator', () => {
             });
             expect(gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'sqlserver')).not.toContain('sp_addextendedproperty');
             expect(gen.GenerateAlterTableAddColumn('hubspot', 'Contact', { ...col, TargetSqlType: 'VARCHAR(50)' }, 'postgresql')).not.toContain('COMMENT ON');
+        });
+
+        it('should cap SQL Server MS_Description values to stay under sql_variant 7,500-byte limit while preserving full length on PostgreSQL', () => {
+            const longDescription = 'X'.repeat(5000);
+            const ssCol = MakeColumn({
+                TargetColumnName: 'Notes',
+                TargetSqlType: 'NVARCHAR(MAX)',
+                Description: longDescription,
+            });
+            const ssSql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', ssCol, 'sqlserver');
+            const valueMatch = ssSql.match(/@value = N'([^']*)'/);
+            expect(valueMatch).not.toBeNull();
+            expect(valueMatch![1].length).toBe(DDLGenerator.MAX_SQLSERVER_DESCRIPTION_CHARS);
+            expect(valueMatch![1].endsWith('...')).toBe(true);
+
+            const pgCol = { ...ssCol, TargetSqlType: 'TEXT' };
+            const pgSql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', pgCol, 'postgresql');
+            expect(pgSql).toContain(`IS '${longDescription}';`);
+        });
+
+        it('should not split a UTF-16 surrogate pair when truncating SQL Server descriptions', () => {
+            // Place a 2-code-unit emoji ('😀') straddling cut - 1 (index MAX - 4) and cut (index MAX - 3).
+            const prefixLen = DDLGenerator.MAX_SQLSERVER_DESCRIPTION_CHARS - 4;
+            const descWithSurrogateAtBoundary = 'A'.repeat(prefixLen) + '😀' + 'B'.repeat(50);
+            const normalized = DDLGenerator.NormalizeDescription(descWithSurrogateAtBoundary, 'sqlserver');
+            expect(normalized).not.toBeNull();
+            expect(normalized!.length).toBe(prefixLen + 3);
+            expect(normalized!.endsWith('...')).toBe(true);
+            // Must contain no lone high/low surrogate code units.
+            for (let i = 0; i < normalized!.length; i++) {
+                const code = normalized!.charCodeAt(i);
+                expect(code >= 0xD800 && code <= 0xDFFF).toBe(false);
+            }
+        });
+
+        it('should sanitize semicolon-newline sequences in descriptions so RSU SplitStatements never splits mid-literal', () => {
+            const trickyDescription = 'Status codes:\n- A: Active;\n- I: Inactive;   \r\n\n- D: Deleted;\n';
+            const ssCol = MakeColumn({
+                TargetColumnName: 'Status',
+                TargetSqlType: 'NVARCHAR(50)',
+                Description: trickyDescription,
+            });
+            const ssSql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', ssCol, 'sqlserver');
+            const ssStatements = GetDialect('sqlserver').SplitStatements(ssSql);
+            // Exactly 2 statements: ALTER TABLE ADD + guarded sp_addextendedproperty.
+            expect(ssStatements).toHaveLength(2);
+            expect(ssStatements[1]).toContain('Active; - I: Inactive; - D: Deleted;');
+
+            const pgCol = { ...ssCol, TargetSqlType: 'VARCHAR(50)' };
+            const pgSql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', pgCol, 'postgresql');
+            const pgStatements = GetDialect('postgresql').SplitStatements(pgSql);
+            expect(pgStatements).toHaveLength(2);
+            expect(pgStatements[1]).toContain('Active; - I: Inactive; - D: Deleted;');
+        });
+    });
+
+    describe('STANDARD_COLUMN_DESCRIPTIONS', () => {
+        it('should be frozen and cover every __mj_integration_* column emitted in CREATE TABLE', () => {
+            expect(Object.isFrozen(STANDARD_COLUMN_DESCRIPTIONS)).toBe(true);
+
+            const sql = gen.GenerateCreateTable(MakeTableConfig(), 'sqlserver');
+            const emittedStdCols = Array.from(
+                sql.matchAll(/^\s*\[(__mj_integration_[A-Za-z0-9_]+)\]/gm),
+                m => m[1]
+            );
+            expect(emittedStdCols.length).toBeGreaterThanOrEqual(12);
+            expect(new Set(emittedStdCols)).toEqual(new Set(Object.keys(STANDARD_COLUMN_DESCRIPTIONS)));
+
+            for (const desc of Object.values(STANDARD_COLUMN_DESCRIPTIONS)) {
+                expect(desc.trim().length).toBeGreaterThan(0);
+            }
         });
     });
 

@@ -9,8 +9,23 @@ import type { DatabasePlatform, TargetColumnConfig, TargetTableConfig, ColumnMod
 /** Characters allowed in identifiers (schema, table, column names). */
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+/** Names of the standard `__mj_integration_*` tracking columns on every integration table. */
+export type StandardIntegrationColumnName =
+    | '__mj_integration_SyncStatus'
+    | '__mj_integration_LastSyncedAt'
+    | '__mj_integration_LastSyncedSnapshot'
+    | '__mj_integration_SyncMessage'
+    | '__mj_integration_ContentHash'
+    | '__mj_integration_CustomOverflow'
+    | '__mj_integration_ExternalVersion'
+    | '__mj_integration_LastSeenModifiedValue'
+    | '__mj_integration_LastReconciledAt'
+    | '__mj_integration_LastWriterDirection'
+    | '__mj_integration_IsTombstoned'
+    | '__mj_integration_DeletedDetectedAt';
+
 /** Standard descriptions for the `__mj_integration_*` tracking columns on every integration table. */
-export const STANDARD_COLUMN_DESCRIPTIONS: Record<string, string> = {
+export const STANDARD_COLUMN_DESCRIPTIONS: Readonly<Record<StandardIntegrationColumnName, string>> = Object.freeze({
     '__mj_integration_SyncStatus': 'Current per-record sync status: Active, Archived, Error, or Conflict (both sides changed the same field; the record awaits resolution per the entity map ConflictResolution policy).',
     '__mj_integration_LastSyncedAt': 'Timestamp of the last successful sync for this record',
     '__mj_integration_LastSyncedSnapshot': 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
@@ -23,12 +38,88 @@ export const STANDARD_COLUMN_DESCRIPTIONS: Record<string, string> = {
     '__mj_integration_LastWriterDirection': 'Which side last wrote this row: "Pull" (external→MJ) or "Push" (MJ→external). Informs conflict handling and audit.',
     '__mj_integration_IsTombstoned': 'Explicit soft-delete flag, set when the record is detected as deleted/archived upstream. A queryable tombstone, distinct from the SyncStatus="Archived" text status.',
     '__mj_integration_DeletedDetectedAt': 'Timestamp the upstream deletion was detected (set alongside IsTombstoned). Null while the record is live.',
-};
+});
 
 /**
  * Generates DDL SQL for creating and altering integration tables.
  */
 export class DDLGenerator {
+    /**
+     * SQL Server `sp_addextendedproperty` types `@value` as `sql_variant`, which caps payloads at
+     * 7,500 bytes (3,750 UTF-16 code units for `N'...'` literals; >4,000 code units also promotes
+     * the literal to `nvarchar(max)`, which SQL Server refuses to implicitly convert to `sql_variant`).
+     * Cap at 3,700 UTF-16 code units (7,400 bytes) to stay safely under both limits.
+     */
+    public static readonly MAX_SQLSERVER_DESCRIPTION_CHARS = 3700;
+
+    /**
+     * Normalize a table or column description for DDL emission:
+     * - Returns `null` when absent or whitespace-only.
+     * - Collapses `;` + whitespace containing `\n` into `; ` so RSU's 32 KB batch chunker
+     *   (`SQLDialect.SplitStatements`) never splits mid-literal across `ExecuteSQL` chunks.
+     * - Truncates SQL Server descriptions to {@link MAX_SQLSERVER_DESCRIPTION_CHARS} UTF-16 code
+     *   units (surrogate-pair safe) so `sp_addextendedproperty` never exceeds `sql_variant`'s
+     *   7,500-byte ceiling. PostgreSQL `COMMENT ON` (`text`) is not length-capped.
+     */
+    public static NormalizeDescription(
+        description: string | undefined | null,
+        platform: DatabasePlatform
+    ): string | null {
+        if (!description || description.trim().length === 0) {
+            return null;
+        }
+        const chunkSafe = DDLGenerator.collapseSemicolonNewlines(description);
+        if (platform === 'sqlserver') {
+            return DDLGenerator.truncateSqlServerDescription(chunkSafe);
+        }
+        return chunkSafe;
+    }
+
+    private static collapseSemicolonNewlines(value: string): string {
+        if (!value.includes(';') || !value.includes('\n')) {
+            return value;
+        }
+        let result = '';
+        let i = 0;
+        while (i < value.length) {
+            const ch = value[i];
+            if (ch !== ';') {
+                result += ch;
+                i++;
+                continue;
+            }
+            let j = i + 1;
+            let sawNewline = false;
+            while (j < value.length && /\s/.test(value[j])) {
+                if (value[j] === '\n') {
+                    sawNewline = true;
+                }
+                j++;
+            }
+            if (sawNewline) {
+                result += j < value.length ? '; ' : ';';
+                i = j;
+            } else {
+                result += ';';
+                i++;
+            }
+        }
+        return result;
+    }
+
+    private static truncateSqlServerDescription(value: string): string {
+        const maxChars = DDLGenerator.MAX_SQLSERVER_DESCRIPTION_CHARS;
+        if (value.length <= maxChars) {
+            return value;
+        }
+        const ellipsis = '...';
+        let cut = maxChars - ellipsis.length;
+        const lastCode = value.charCodeAt(cut - 1);
+        if (lastCode >= 0xD800 && lastCode <= 0xDBFF) {
+            cut--;
+        }
+        return value.slice(0, cut) + ellipsis;
+    }
     /**
      * Generate CREATE SCHEMA IF NOT EXISTS statement.
      */
@@ -159,7 +250,7 @@ export class DDLGenerator {
                 return this.GeneratePostgresComments(config);
             default: {
                 const unsupported: never = platform;
-                throw new Error(`GenerateDescriptionsForPlatform: unsupported database platform '${String(unsupported)}'`);
+                throw new Error(`generateDescriptionsForPlatform: unsupported database platform '${String(unsupported)}'`);
             }
         }
     }
@@ -189,7 +280,7 @@ export class DDLGenerator {
      * Generate sp_addextendedproperty calls for table and column descriptions.
      */
     GenerateExtendedProperties(config: TargetTableConfig): string[] {
-        const { tableDescription, columnDescriptions } = this.collectDescriptions(config);
+        const { tableDescription, columnDescriptions } = this.collectDescriptions(config, 'sqlserver');
         const props: string[] = [];
 
         if (tableDescription !== null) {
@@ -213,7 +304,7 @@ export class DDLGenerator {
      * Generate PostgreSQL COMMENT ON TABLE and COMMENT ON COLUMN statements for descriptions.
      */
     GeneratePostgresComments(config: TargetTableConfig): string[] {
-        const { tableDescription, columnDescriptions } = this.collectDescriptions(config);
+        const { tableDescription, columnDescriptions } = this.collectDescriptions(config, 'postgresql');
         const comments: string[] = [];
 
         if (tableDescription !== null) {
@@ -228,25 +319,27 @@ export class DDLGenerator {
         return comments;
     }
 
-    private collectDescriptions(config: TargetTableConfig): {
+    private collectDescriptions(config: TargetTableConfig, platform: DatabasePlatform): {
         tableDescription: string | null;
         columnDescriptions: Array<{ columnName: string; description: string }>;
     } {
         ValidateIdentifier(config.SchemaName, 'schema');
         ValidateIdentifier(config.TableName, 'table');
 
-        const tableDescription = config.Description && config.Description.trim().length > 0
-            ? config.Description
-            : null;
+        const tableDescription = DDLGenerator.NormalizeDescription(config.Description, platform);
 
         const columnDescriptions: Array<{ columnName: string; description: string }> = [];
         for (const [colName, desc] of Object.entries(STANDARD_COLUMN_DESCRIPTIONS)) {
-            columnDescriptions.push({ columnName: colName, description: desc });
+            const normalizedStd = DDLGenerator.NormalizeDescription(desc, platform);
+            if (normalizedStd !== null) {
+                columnDescriptions.push({ columnName: colName, description: normalizedStd });
+            }
         }
         for (const col of config.Columns) {
             ValidateIdentifier(col.TargetColumnName, 'column');
-            if (col.Description && col.Description.trim().length > 0) {
-                columnDescriptions.push({ columnName: col.TargetColumnName, description: col.Description });
+            const normalizedCol = DDLGenerator.NormalizeDescription(col.Description, platform);
+            if (normalizedCol !== null) {
+                columnDescriptions.push({ columnName: col.TargetColumnName, description: normalizedCol });
             }
         }
 
@@ -263,7 +356,7 @@ export class DDLGenerator {
                 return this.makePostgresColumnComment(schemaName, tableName, columnName, description);
             default: {
                 const unsupported: never = platform;
-                throw new Error(`MakeColumnDescriptionStatement: unsupported database platform '${String(unsupported)}'`);
+                throw new Error(`makeColumnDescriptionStatement: unsupported database platform '${String(unsupported)}'`);
             }
         }
     }
@@ -348,9 +441,10 @@ export class DDLGenerator {
             }
         }
 
-        if (column.Description && column.Description.trim().length > 0) {
+        const normalizedDescription = DDLGenerator.NormalizeDescription(column.Description, platform);
+        if (normalizedDescription !== null) {
             const descStmt = this.makeColumnDescriptionStatement(
-                schemaName, tableName, column.TargetColumnName, column.Description, platform
+                schemaName, tableName, column.TargetColumnName, normalizedDescription, platform
             );
             return `${alterStmt}\n\n${descStmt}`;
         }
