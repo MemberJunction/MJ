@@ -11,14 +11,27 @@ import {
 import {
   DocumentLiveBlockEngine,
   BaseDocumentBlock,
+  SavedQueryDocumentBlock,
+  InteractiveComponentDocumentBlock,
+  ArtifactDocumentBlock,
+  BuildBlockIdentityBinding,
+  ValidateFrozenBlockSnapshot,
   DecodeDocumentUtf8Fallback,
   EncodeDocumentUtf8Fallback,
   LoadDocumentLiveBlocks,
   type DocumentBlockSpec,
 } from '../custom/DocumentLiveBlockEngine';
+import { ValidateArtifactContentMutationAgainstLocks } from '../custom/ArtifactLockValidation';
+import {
+  LoadSpreadsheetEngine,
+  RegisterSpreadsheetWorkerRunner,
+  SetSpreadsheetWorkerIsolationRequired,
+  SpreadsheetEngine,
+} from '../custom/SpreadsheetEngine';
 
 LoadArtifactPermissionDelegates();
 LoadDocumentLiveBlocks();
+LoadSpreadsheetEngine();
 DocumentLiveBlockEngine.Instance.SetSigningSecret('test-frozen-block-hmac-secret-at-least-32-bytes!!');
 
 function createMockUser(id: string, name = 'Test User'): UserInfo {
@@ -343,6 +356,9 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
 
     const provider = {
       Entities: [mockEntityInfo],
+      EntityByID: (id: string) => (id === mockEntityInfo.ID ? mockEntityInfo : undefined),
+      EntityByName: (name: string) =>
+        name.trim().toLowerCase() === mockEntityInfo.Name.toLowerCase() ? mockEntityInfo : undefined,
       RunView: vi.fn().mockResolvedValue({
         Success: true,
         Results: [
@@ -380,6 +396,9 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
 
     const provider = {
       Entities: [restrictedEntity],
+      EntityByID: (id: string) => (id === restrictedEntity.ID ? restrictedEntity : undefined),
+      EntityByName: (name: string) =>
+        name.trim().toLowerCase() === restrictedEntity.Name.toLowerCase() ? restrictedEntity : undefined,
     } as unknown as IMetadataProvider;
 
     const block: DocumentBlockSpec = {
@@ -470,6 +489,9 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
 
     const provider = {
       Entities: [mockEntityInfo],
+      EntityByID: (id: string) => (id === mockEntityInfo.ID ? mockEntityInfo : undefined),
+      EntityByName: (name: string) =>
+        name.trim().toLowerCase() === mockEntityInfo.Name.toLowerCase() ? mockEntityInfo : undefined,
       RunView: vi.fn().mockResolvedValue({
         Success: true,
         Results: [{ ID: 'p1', Name: 'Project Apollo' }],
@@ -554,7 +576,10 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
 
   it('B2 & C2: fails closed when delegating entity has no registered delegate and resolves multi-hop parent chains in O(depth)', async () => {
     const u = createMockUser('99999999-9999-9999-9999-999999999999', 'Delegate Tester');
-    const unregEntities = [{ ID: 'ent-custom-unregistered', Name: 'Custom: Unregistered Host' }];
+    const missingDelegateArtId = 'e1000000-0000-4000-8000-000000000001';
+    const unregisteredEntityId = 'e2000000-0000-4000-8000-000000000001';
+    const unregisteredRecordId = 'e3000000-0000-4000-8000-000000000001';
+    const unregEntities = [{ ID: unregisteredEntityId, Name: 'Custom: Unregistered Host' }];
     const unregisteredProvider = {
       Entities: unregEntities,
       EntityByID: (id: string) => unregEntities.find((e) => UUIDsEqual(e.ID, id)),
@@ -562,10 +587,10 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
         Success: true,
         Results: [
           {
-            ID: 'art-delegated-missing',
+            ID: missingDelegateArtId,
             UserID: u.ID, // Even as owner, missing delegate must fail closed!
-            DelegateEntityID: 'ent-custom-unregistered',
-            DelegateRecordID: 'rec-123',
+            DelegateEntityID: unregisteredEntityId,
+            DelegateRecordID: unregisteredRecordId,
           },
         ],
       }),
@@ -573,7 +598,7 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
 
     const denied = await ArtifactPermissionEngine.Instance.ResolvePermissions(
       unregisteredProvider,
-      'art-delegated-missing',
+      missingDelegateArtId,
       u,
     );
     expect(denied.CanRead).toBe(false);
@@ -585,14 +610,21 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
 
     // C2: 4-hop parent artifact chain should query each artifact once (5 total artifact lookups, NOT 4^4 = 256)
     let artifactQueryCount = 0;
+    const otherOwnerId = 'e4000000-0000-4000-8000-000000000099';
+    const entArtifactsId = 'e5000000-0000-4000-8000-000000000001';
+    const hop4 = 'e6000000-0000-4000-8000-000000000004';
+    const hop3 = 'e6000000-0000-4000-8000-000000000003';
+    const hop2 = 'e6000000-0000-4000-8000-000000000002';
+    const hop1 = 'e6000000-0000-4000-8000-000000000001';
+    const hopRoot = 'e6000000-0000-4000-8000-000000000000';
     const chainRecords: Record<string, { ID: string; UserID: string; DelegateEntityID: string | null; DelegateRecordID: string | null }> = {
-      'art-hop-4': { ID: 'art-hop-4', UserID: 'other', DelegateEntityID: 'ent-artifacts', DelegateRecordID: 'art-hop-3' },
-      'art-hop-3': { ID: 'art-hop-3', UserID: 'other', DelegateEntityID: 'ent-artifacts', DelegateRecordID: 'art-hop-2' },
-      'art-hop-2': { ID: 'art-hop-2', UserID: 'other', DelegateEntityID: 'ent-artifacts', DelegateRecordID: 'art-hop-1' },
-      'art-hop-1': { ID: 'art-hop-1', UserID: 'other', DelegateEntityID: 'ent-artifacts', DelegateRecordID: 'art-root' },
-      'art-root': { ID: 'art-root', UserID: u.ID, DelegateEntityID: null, DelegateRecordID: null },
+      [hop4]: { ID: hop4, UserID: otherOwnerId, DelegateEntityID: entArtifactsId, DelegateRecordID: hop3 },
+      [hop3]: { ID: hop3, UserID: otherOwnerId, DelegateEntityID: entArtifactsId, DelegateRecordID: hop2 },
+      [hop2]: { ID: hop2, UserID: otherOwnerId, DelegateEntityID: entArtifactsId, DelegateRecordID: hop1 },
+      [hop1]: { ID: hop1, UserID: otherOwnerId, DelegateEntityID: entArtifactsId, DelegateRecordID: hopRoot },
+      [hopRoot]: { ID: hopRoot, UserID: u.ID, DelegateEntityID: null, DelegateRecordID: null },
     };
-    const chainEntities = [{ ID: 'ent-artifacts', Name: 'MJ: Artifacts' }];
+    const chainEntities = [{ ID: entArtifactsId, Name: 'MJ: Artifacts' }];
     const chainProvider = {
       Entities: chainEntities,
       EntityByID: (id: string) => chainEntities.find((e) => UUIDsEqual(e.ID, id)),
@@ -607,7 +639,7 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
       }),
     } as unknown as IMetadataProvider;
 
-    const chainPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(chainProvider, 'art-hop-4', u);
+    const chainPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(chainProvider, hop4, u);
     expect(chainPerms.CanRead).toBe(true);
     expect(chainPerms.CanEdit).toBe(true);
     expect(artifactQueryCount).toBe(5);
@@ -660,6 +692,9 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     const capturedRunViewCalls: Array<{ EntityName?: string; MaxRows?: number; ExtraFilter?: string; OrderBy?: string }> = [];
     const provider = {
       Entities: [mockEntity],
+      EntityByID: (id: string) => (id === mockEntity.ID ? mockEntity : undefined),
+      EntityByName: (name: string) =>
+        name.trim().toLowerCase() === mockEntity.Name.toLowerCase() ? mockEntity : undefined,
       RunView: vi.fn().mockImplementation(async (params: { EntityName?: string; MaxRows?: number; ExtraFilter?: string; OrderBy?: string }) => {
         capturedRunViewCalls.push(params);
         if (params.EntityName === 'MJ: User Views') {
@@ -787,10 +822,10 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
       },
     };
     const tamperedHashExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(mutatedRowsSpec, viewer, provider);
-    expect(tamperedHashExec.Success).toBe(true);
-    expect(tamperedHashExec.FrozenSnapshot?.SnapshotVerified).toBe(false);
+    expect(tamperedHashExec.Success).toBe(false);
+    expect(tamperedHashExec.ErrorMessage).toContain('HMAC');
 
-    // Mutating FrozenByUserName (e.g. spoofing 'Jane CEO') invalidates HMAC signature
+    // Mutating FrozenByUserName (e.g. spoofing 'Jane CEO') fails closed on HMAC verification
     const spoofedAuthorSpec: DocumentBlockSpec = {
       ...frozenWrap.UpdatedSpec!,
       FrozenSnapshot: {
@@ -799,9 +834,10 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
       },
     };
     const spoofedAuthorExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(spoofedAuthorSpec, viewer, provider);
-    expect(spoofedAuthorExec.FrozenSnapshot?.SnapshotVerified).toBe(false);
+    expect(spoofedAuthorExec.Success).toBe(false);
+    expect(spoofedAuthorExec.ErrorMessage).toContain('HMAC');
 
-    // Plain SHA-256 hash without 'hmac-sha256:' prefix or missing hash is rejected
+    // Plain SHA-256 hash without 'hmac-sha256:' prefix or missing hash fails closed when secret is configured
     const plainShaSpec: DocumentBlockSpec = {
       ...frozenWrap.UpdatedSpec!,
       FrozenSnapshot: {
@@ -810,7 +846,8 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
       },
     };
     const plainShaExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(plainShaSpec, viewer, provider);
-    expect(plainShaExec.FrozenSnapshot?.SnapshotVerified).toBe(false);
+    expect(plainShaExec.Success).toBe(false);
+    expect(plainShaExec.ErrorMessage).toContain('HMAC');
 
     // R6 Item 5.3: ValidateExtraFilter & ExecuteBlock reject disallowed SQL globals/functions & FLS fields on BOTH LHS and RHS
     const rhsDisallowedFilters = [
@@ -981,6 +1018,755 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
       }
     } finally {
       sysUserSpy.mockRestore();
+    }
+  });
+});
+
+describe('Security & Hardening Regression Coverage (SavedQuery, Component, Artifact, Locks, Anchors, Frozen HMAC)', () => {
+  const actorUser = createMockUser('11111111-1111-4111-8111-111111111111', 'Actor');
+  const otherUser = createMockUser('22222222-2222-4222-8222-222222222222', 'Other');
+
+  function makeSavedQueryProvider(options: {
+    queryRows: Array<{ ID: string; Name: string; CategoryPath?: string; UserCanRun?: boolean }>;
+    runQueryResult?: { Success: boolean; Results?: Array<Record<string, string | number | boolean | null>>; ErrorMessage?: string };
+    canReadQuery?: boolean;
+    canReadComponent?: boolean;
+    componentRows?: Array<{ ID: string; Name: string }>;
+    deniedFieldNames?: string[];
+  }): IMetadataProvider {
+    const queryEntity = {
+      ID: 'ent-queries',
+      Name: 'MJ: Queries',
+      Fields: [
+        { Name: 'ID', Type: 'uniqueidentifier', UserPermissions: { CanRead: options.canReadQuery ?? true } },
+        { Name: 'Name', Type: 'nvarchar', UserPermissions: { CanRead: options.canReadQuery ?? true } },
+      ],
+      GetUserPermisions: () => ({ CanRead: options.canReadQuery ?? true }),
+    } as unknown as EntityInfo;
+
+    const componentEntity = {
+      ID: 'ent-components',
+      Name: 'MJ: Components',
+      Fields: [{ Name: 'ID', Type: 'uniqueidentifier', UserPermissions: { CanRead: options.canReadComponent ?? true } }],
+      GetUserPermisions: () => ({ CanRead: options.canReadComponent ?? true }),
+    } as unknown as EntityInfo;
+
+    const targetEntity = {
+      ID: 'ent-target',
+      Name: 'Employees',
+      FieldLevelSecurityApplies: (options.deniedFieldNames ?? []).length > 0,
+      GetDeniedReadFields: () => options.deniedFieldNames ?? [],
+      Fields: [
+        { Name: 'Name', Type: 'nvarchar', UserPermissions: { CanRead: true } },
+        ...(options.deniedFieldNames ?? []).map((fname) => ({
+          Name: fname,
+          Type: 'nvarchar',
+          UserPermissions: { CanRead: false },
+        })),
+      ],
+      GetUserPermisions: () => ({ CanRead: true }),
+    } as unknown as EntityInfo;
+
+    const entities = [queryEntity, componentEntity, targetEntity];
+    const provider = {
+      ProviderType: 'Network',
+      Entities: entities,
+      Queries: options.queryRows.map((q) => ({
+        ID: q.ID,
+        Name: q.Name,
+        CategoryPath: q.CategoryPath ?? '',
+        Parameters: [],
+        Entities: [{ EntityID: 'ent-target', Entity: 'Employees' }],
+        UserCanRun: () => q.UserCanRun ?? true,
+      })),
+      EntityByID: (id: string) => entities.find((e) => e.ID === id),
+      EntityByName: (name: string) => entities.find((e) => e.Name === name),
+      RunQuery: vi.fn(async () => options.runQueryResult ?? { Success: true, Results: [] }),
+    };
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: vi.fn(async (params: { EntityName?: string; ExtraFilter?: string }) => {
+        if (params.EntityName === 'MJ: Queries') {
+          const filter = params.ExtraFilter ?? '';
+          const matched = options.queryRows.filter((q) => {
+            if (filter.includes("ID='")) {
+              return filter.includes(`ID='${q.ID}'`);
+            }
+            if (filter.includes('CategoryPath=')) {
+              return filter.includes(`Name='${q.Name}'`) && filter.includes(`CategoryPath='${q.CategoryPath ?? ''}'`);
+            }
+            return filter.includes(`Name='${q.Name}'`);
+          });
+          return {
+            Success: true,
+            Results: matched,
+            RowCount: matched.length,
+            TotalRowCount: matched.length,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        }
+        if (params.EntityName === 'MJ: Components') {
+          const matched = options.componentRows ?? [];
+          return {
+            Success: true,
+            Results: matched,
+            RowCount: matched.length,
+            TotalRowCount: matched.length,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        }
+        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+      }),
+    } as Pick<RunView, 'RunView'> as RunView);
+
+    return provider as unknown as IMetadataProvider;
+  }
+
+  it('SavedQueryDocumentBlock fails closed when !queryInfo and does not fall back across missing QueryID or CategoryPath', async () => {
+    const block = new SavedQueryDocumentBlock();
+    const provider = makeSavedQueryProvider({
+      queryRows: [{ ID: 'q-real-id', Name: 'RevenueQuery', CategoryPath: '/Finance', UserCanRun: true }],
+    });
+    try {
+      // 1. Missing QueryID must NOT resolve to another query by QueryName
+      const resByMissingId = await block.Execute(
+        { BlockID: 'blk-1', Kind: 'SavedQuery', Mode: 'Live', QueryID: 'q-missing-id', QueryName: 'RevenueQuery' },
+        provider,
+        actorUser,
+      );
+      expect(resByMissingId.Success).toBe(false);
+      expect(resByMissingId.AccessDenied).toBe(true);
+
+      // 2. CategoryPath mismatch must NOT fall back to bare QueryName lookup
+      const resWrongCat = await block.Execute(
+        { BlockID: 'blk-2', Kind: 'SavedQuery', Mode: 'Live', QueryName: 'RevenueQuery', CategoryPath: '/HR' },
+        provider,
+        actorUser,
+      );
+      expect(resWrongCat.Success).toBe(false);
+      expect(resWrongCat.AccessDenied).toBe(true);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('SavedQueryDocumentBlock enforces case-insensitive FLS denied columns on PascalCase/uppercase columns', async () => {
+    const block = new SavedQueryDocumentBlock();
+    const provider = makeSavedQueryProvider({
+      queryRows: [{ ID: 'q-emp', Name: 'EmpList', CategoryPath: '/HR', UserCanRun: true }],
+      deniedFieldNames: ['Salary'],
+      runQueryResult: {
+        Success: true,
+        Results: [{ Name: 'Alice', Salary: 150000, SALARY: 150000, salary: 150000 }],
+      },
+    });
+    try {
+      const res = await block.Execute(
+        { BlockID: 'blk-fls', Kind: 'SavedQuery', Mode: 'Live', QueryID: 'q-emp', EntityName: 'Employees' },
+        provider,
+        actorUser,
+      );
+      expect(res.Success).toBe(true);
+      expect(res.Columns.map((c) => c.Name)).toEqual(['Name']);
+      expect(res.Rows[0]).toEqual({ Name: 'Alice' });
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('InteractiveComponentDocumentBlock denies access when MJ: Components CanRead=false or lookup fails', async () => {
+    const block = new InteractiveComponentDocumentBlock();
+    const deniedProvider = makeSavedQueryProvider({
+      queryRows: [],
+      canReadComponent: false,
+      componentRows: [{ ID: 'comp-1', Name: 'ChartWidget' }],
+    });
+    try {
+      const resDenied = await block.Execute(
+        { BlockID: 'blk-comp-1', Kind: 'InteractiveComponent', Mode: 'Live', ComponentID: 'comp-1', ComponentName: 'ChartWidget' },
+        deniedProvider,
+        actorUser,
+      );
+      expect(resDenied.Success).toBe(false);
+      expect(resDenied.AccessDenied).toBe(true);
+
+      vi.restoreAllMocks();
+      const missingProvider = makeSavedQueryProvider({
+        queryRows: [],
+        canReadComponent: true,
+        componentRows: [],
+      });
+      const resMissing = await block.Execute(
+        { BlockID: 'blk-comp-2', Kind: 'InteractiveComponent', Mode: 'Live', ComponentID: 'comp-missing', ComponentName: 'SecretWidget' },
+        missingProvider,
+        actorUser,
+      );
+      expect(resMissing.Success).toBe(false);
+      expect(resMissing.AccessDenied).toBe(true);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('ArtifactDocumentBlock slices target SheetChartID without leaking raw workbook JSON, fails closed on missing slice, and rejects ContentMode=File', async () => {
+    const block = new ArtifactDocumentBlock();
+    const artifactId = 'aaaa5555-5555-4555-8555-555555555555';
+    const rawWorkbookContent = JSON.stringify({
+      Sheets: [{ ID: 's1', Name: 'Public', Cells: { A1: { RawValue: 'Q1' }, B1: { RawValue: 100 } } }],
+      SecretOtherSheet: 'CONFIDENTIAL_UNREFERENCED_TAB',
+    });
+
+    vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+      ArtifactID: artifactId,
+      CanRead: true,
+      CanEdit: true,
+      CanDelete: false,
+      CanShare: false,
+      Source: 'ArtifactPermission',
+      Reason: 'Allowed for test',
+    });
+
+    const extractSpy = vi
+      .spyOn(DocumentLiveBlockEngine.Instance, 'ExtractSpreadsheetChartDatasetAsync')
+      .mockResolvedValueOnce({
+        Columns: [{ Name: 'Label', DisplayName: 'Label' }, { Name: 'Value', DisplayName: 'Value' }],
+        Rows: [{ Label: 'Q1', Value: 100 }],
+      })
+      .mockResolvedValueOnce(null);
+
+    let mockContentMode = 'Inline';
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunViews: vi.fn(async () => [
+        {
+          Success: true,
+          Results: [{ ID: artifactId, Name: 'Financials.xlsx', Type: 'Spreadsheet' }],
+          RowCount: 1,
+          TotalRowCount: 1,
+          UserView: null,
+          ErrorMessage: '',
+          ExecutionTime: 1,
+        },
+        {
+          Success: true,
+          Results: [
+            {
+              ID: 'ver-1',
+              ArtifactID: artifactId,
+              VersionNumber: 2,
+              ContentMode: mockContentMode,
+              FileID: mockContentMode === 'File' ? 'file-1' : null,
+              Content: mockContentMode === 'File' ? null : rawWorkbookContent,
+              Configuration: null,
+            },
+          ],
+          RowCount: 1,
+          TotalRowCount: 1,
+          UserView: null,
+          ErrorMessage: '',
+          ExecutionTime: 1,
+        },
+      ]),
+    } as Pick<RunView, 'RunViews'> as RunView);
+
+    const provider = { ProviderType: 'Network', Entities: [] } as Partial<IMetadataProvider> as IMetadataProvider;
+
+    try {
+      // 1. Sliced chart payload must NOT contain raw workbook secret sheet
+      const slicedRes = await block.Execute(
+        { BlockID: 'blk-slice', Kind: 'Artifact', Mode: 'Live', ArtifactID: artifactId, SheetChartID: 'chart-1' },
+        provider,
+        actorUser,
+      );
+      expect(slicedRes.Success).toBe(true);
+      expect(slicedRes.ArtifactContent).toBeDefined();
+      expect(slicedRes.ArtifactContent).not.toContain('CONFIDENTIAL_UNREFERENCED_TAB');
+      const parsedSlice = JSON.parse(slicedRes.ArtifactContent!) as { Kind: string; ChartID: string; Rows: Array<{ Label: string }> };
+      expect(parsedSlice.Kind).toBe('SpreadsheetSlice');
+      expect(parsedSlice.ChartID).toBe('chart-1');
+      expect(parsedSlice.Rows).toHaveLength(1);
+
+      // 2. Failing chart extraction fails closed rather than dumping full workbook
+      const missingSliceRes = await block.Execute(
+        { BlockID: 'blk-slice-fail', Kind: 'Artifact', Mode: 'Live', ArtifactID: artifactId, SheetRange: 'A1:B5' },
+        provider,
+        actorUser,
+      );
+      expect(missingSliceRes.Success).toBe(false);
+      expect(missingSliceRes.ArtifactContent).toBeUndefined();
+
+      // 3. ContentMode === 'File' fails gracefully with descriptive message
+      mockContentMode = 'File';
+      const fileModeRes = await block.Execute(
+        { BlockID: 'blk-file-mode', Kind: 'Artifact', Mode: 'Live', ArtifactID: artifactId },
+        provider,
+        actorUser,
+      );
+      expect(fileModeRes.Success).toBe(false);
+      expect(fileModeRes.ErrorMessage).toContain('ContentMode=File');
+    } finally {
+      extractSpy.mockRestore();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('ValidateFrozenBlockSnapshot rejects unsigned SnapshotContentHash when signing secret is configured', () => {
+    const unsignedResult = ValidateFrozenBlockSnapshot({
+      FrozenAt: '2026-11-01T00:00:00Z',
+      FrozenByUserID: actorUser.ID,
+      FrozenByUserName: actorUser.Name,
+      SecurityWarningAcknowledged: true,
+      Columns: [{ Name: 'Name', DisplayName: 'Name' }],
+      Rows: [{ Name: 'Acme' }],
+      TotalRowCount: 1,
+    });
+    expect(unsignedResult.Valid).toBe(false);
+    expect(unsignedResult.SnapshotVerified).toBe(false);
+  });
+
+  it('ParseDocumentLocks, ValidateDocumentEditAgainstLocks, and ToggleHeadingLockInMarkdown handle fenced code, duplicate sections, and authorization', () => {
+    const engine = DocumentLiveBlockEngine.Instance;
+
+    // 1. `#` heading and `<!-- /mj-lock -->` inside fenced code block do NOT terminate a lock
+    const docWithCodeFence = [
+      `<!-- mj-lock: owner-only user=${actorUser.ID} -->`,
+      '## Protected Section',
+      '```bash',
+      '# shell comment that must not end the heading lock',
+      '<!-- /mj-lock -->',
+      'echo "still inside protected section"',
+      '```',
+      'Important trailing paragraph inside lock',
+      '## Next Unlocked Section',
+      'Free text',
+    ].join('\n');
+
+    const locks = engine.ParseDocumentLocks(docWithCodeFence);
+    expect(locks).toHaveLength(1);
+    expect(locks[0]?.Label).toBe('Protected Section');
+    expect(locks[0]?.EndLine).toBe(8);
+
+    // Modifying the trailing paragraph inside the fenced-code-containing lock must be blocked for another user
+    const tamperedDoc = docWithCodeFence.replace('Important trailing paragraph inside lock', 'HACKED');
+    const editCheck = engine.ValidateDocumentEditAgainstLocks(docWithCodeFence, tamperedDoc, otherUser.ID, actorUser.ID, true);
+    expect(editCheck.Allowed).toBe(false);
+
+    // 2. Duplicate locked sections: deleting 1 of 2 identical locked sections must fail multiplicity check
+    const dupOriginal = [
+      `<!-- mj-lock: owner-only user=${actorUser.ID} -->`,
+      '## Clause',
+      'Standard text.',
+      '',
+      `<!-- mj-lock: owner-only user=${actorUser.ID} -->`,
+      '## Clause',
+      'Standard text.',
+    ].join('\n');
+    const dupRemovedOne = [
+      `<!-- mj-lock: owner-only user=${actorUser.ID} -->`,
+      '## Clause',
+      'Standard text.',
+    ].join('\n');
+    const dupCheck = engine.ValidateDocumentEditAgainstLocks(dupOriginal, dupRemovedOne, otherUser.ID, actorUser.ID, true);
+    expect(dupCheck.Allowed).toBe(false);
+
+    // 3. Unauthorized editor cannot remove an owner-only heading lock
+    const lockedHeadingDoc = [
+      `<!-- mj-lock: owner-only user=${actorUser.ID} -->`,
+      '## Executive Summary',
+      'Locked content.',
+    ].join('\n');
+    expect(() =>
+      engine.ToggleHeadingLockInMarkdown(lockedHeadingDoc, 2, false, otherUser.ID, actorUser.ID, true),
+    ).toThrow(/Unauthorized/i);
+
+    // Owner CAN remove the lock
+    const unlockedByOwner = engine.ToggleHeadingLockInMarkdown(lockedHeadingDoc, 2, false, actorUser.ID, actorUser.ID, true);
+    expect(unlockedByOwner).not.toContain('mj-lock');
+  });
+
+  it('ParseArtifactCommentAnchor parses doc/sheet/slide/whiteboard anchors and rejects invalid domains', () => {
+    const engine = DocumentLiveBlockEngine.Instance;
+
+    const docAnchor = engine.ParseArtifactCommentAnchor({ domain: 'doc', segmentId: 'seg-1', blockId: 'blk-2' });
+    expect(docAnchor).toEqual({
+      Domain: 'doc',
+      SegmentID: 'seg-1',
+      BlockID: 'blk-2',
+      SheetID: undefined,
+      Range: undefined,
+      SlideID: undefined,
+      RegionID: undefined,
+    });
+
+    const sheetAnchor = engine.ParseArtifactCommentAnchor(
+      JSON.stringify({ Domain: 'sheet', SheetID: 'sheet-1', Range: 'B2:D10' }),
+    );
+    expect(sheetAnchor?.Domain).toBe('sheet');
+    expect(sheetAnchor?.SheetID).toBe('sheet-1');
+    expect(sheetAnchor?.Range).toBe('B2:D10');
+
+    const slideAnchor = engine.ParseArtifactCommentAnchor({ domain: 'slide', slideId: 'slide-3', regionId: 'reg-4' });
+    expect(slideAnchor?.Domain).toBe('slide');
+    expect(slideAnchor?.SlideID).toBe('slide-3');
+    expect(slideAnchor?.RegionID).toBe('reg-4');
+
+    expect(engine.ParseArtifactCommentAnchor({ domain: 'invalid-domain' })).toBeNull();
+    expect(engine.ParseArtifactCommentAnchor('not-json')).toBeNull();
+  });
+
+  it('S3: FrozenBlockSnapshot HMAC includes identity Binding and rejects block/target/artifact transplants', async () => {
+    const engine = DocumentLiveBlockEngine.Instance;
+    const mockUsersEntity = {
+      ID: 'ent-users',
+      Name: 'Users',
+      DisplayNameOrName: 'Users',
+      PrimaryKeys: [{ Name: 'ID', IsPrimaryKey: true, TSType: EntityFieldTSType.String }],
+      Fields: [
+        { Name: 'ID', DisplayNameOrName: 'ID', IsPrimaryKey: true, DefaultInView: true, TSType: EntityFieldTSType.String, IsBinaryFieldType: false },
+        { Name: 'Name', DisplayNameOrName: 'Name', IsPrimaryKey: false, DefaultInView: true, TSType: EntityFieldTSType.String, IsBinaryFieldType: false },
+      ] as unknown as EntityFieldInfo[],
+      FieldLevelSecurityApplies: false,
+      GetUserPermisions: vi.fn().mockReturnValue({ CanRead: true }),
+      GetDeniedReadFields: vi.fn().mockReturnValue(new Set<string>()),
+    } as unknown as EntityInfo;
+    const provider = {
+      Entities: [mockUsersEntity],
+      EntityByID: (id: string) => (id === mockUsersEntity.ID ? mockUsersEntity : undefined),
+      EntityByName: (name: string) => (name.trim().toLowerCase() === 'users' ? mockUsersEntity : undefined),
+      RunView: vi.fn().mockResolvedValue({
+        Success: true,
+        Results: [{ ID: 'row-1', Name: 'Alice' }],
+        TotalRowCount: 1,
+      }),
+    } as unknown as IMetadataProvider;
+    const origRunView = RunView.prototype.RunView;
+    RunView.prototype.RunView = vi.fn().mockResolvedValue({
+      Success: true,
+      Results: [{ ID: 'row-1', Name: 'Alice' }],
+      TotalRowCount: 1,
+    });
+    try {
+      const sourceSpec: DocumentBlockSpec = {
+        BlockID: 'blk-source',
+        Kind: 'EntityView',
+        EntityName: 'Users',
+        Mode: 'Live',
+      };
+      const hostArtifactId = 'aaaaaaaa-1111-1111-1111-111111111111';
+      const frozenRes = await engine.FreezeBlock(sourceSpec, actorUser, true, provider, undefined, hostArtifactId);
+      expect(frozenRes.Success).toBe(true);
+      const snap = frozenRes.UpdatedSpec!.FrozenSnapshot!;
+      expect(snap.Binding).toEqual({
+        ArtifactID: hostArtifactId,
+        BlockID: 'blk-source',
+        Kind: 'EntityView',
+        SourceTargetID: 'users',
+      });
+
+      // Exact matching binding succeeds
+      expect(ValidateFrozenBlockSnapshot(snap, undefined, BuildBlockIdentityBinding(sourceSpec, hostArtifactId)).Valid).toBe(true);
+
+      // Transplanting into a different BlockID fails
+      expect(
+        ValidateFrozenBlockSnapshot(
+          snap,
+          undefined,
+          BuildBlockIdentityBinding({ ...sourceSpec, BlockID: 'blk-other' }, hostArtifactId)
+        ).Valid
+      ).toBe(false);
+
+      // Changing QueryID/EntityName target fails
+      expect(
+        ValidateFrozenBlockSnapshot(
+          snap,
+          undefined,
+          BuildBlockIdentityBinding({ ...sourceSpec, EntityName: 'Orders' }, hostArtifactId)
+        ).Valid
+      ).toBe(false);
+
+      // Transplanting across artifacts fails
+      expect(
+        ValidateFrozenBlockSnapshot(
+          snap,
+          undefined,
+          BuildBlockIdentityBinding(sourceSpec, 'bbbbbbbb-2222-2222-2222-222222222222')
+        ).Valid
+      ).toBe(false);
+
+      // Snapshot without Binding.ArtifactID fails when expectedBinding specifies ArtifactID (`S3`)
+      const snapNoArt = await engine.FreezeBlock(sourceSpec, actorUser, true, provider);
+      expect(snapNoArt.Success).toBe(true);
+      expect(
+        ValidateFrozenBlockSnapshot(
+          snapNoArt.UpdatedSpec!.FrozenSnapshot!,
+          undefined,
+          BuildBlockIdentityBinding(sourceSpec, hostArtifactId)
+        ).Valid
+      ).toBe(false);
+    } finally {
+      RunView.prototype.RunView = origRunView;
+    }
+  });
+
+  it('B3: ValidateArtifactContentMutationAgainstLocks validates Configuration workbook protected ranges too', () => {
+    const lockedWb = JSON.stringify({
+      WorkbookID: 'wb-1',
+      Title: 'Locked',
+      Worksheets: [
+        {
+          SheetID: 's-1',
+          Name: 'Sheet1',
+          Rows: [{ RowID: 'r1' }],
+          Columns: [{ ColumnID: 'c1' }],
+          Cells: {
+            A1: { Address: 'A1', RowID: 'r1', ColumnID: 'c1', RawValue: 100 },
+          },
+          LiveTables: [],
+          ProtectedRanges: [
+            {
+              RangeID: 'pr-1',
+              Range: 'A1:A1',
+              LockedByUserID: actorUser.ID,
+              AllowEditors: false,
+            },
+          ],
+        },
+      ],
+      NamedRanges: [],
+    });
+    const tamperedConfig = lockedWb.replace('"RawValue":100', '"RawValue":999').replace('"RawValue": 100', '"RawValue": 999');
+    const res = ValidateArtifactContentMutationAgainstLocks(lockedWb, lockedWb, otherUser.ID, false, {
+      currentConfiguration: lockedWb,
+      nextConfiguration: tamperedConfig,
+    });
+    expect(res.Allowed).toBe(false);
+  });
+
+  it('B3: ValidateArtifactContentMutationAgainstLocks enforces markdown locks for non-owners while allowing owners', () => {
+    const locked = [
+      `<!-- mj-lock: owner-only user=${actorUser.ID} -->`,
+      '## Terms',
+      'Fixed legal clause.',
+    ].join('\n');
+    const tampered = locked.replace('Fixed legal clause.', 'Altered clause.');
+
+    expect(ValidateArtifactContentMutationAgainstLocks(locked, tampered, otherUser.ID, false).Allowed).toBe(false);
+    expect(ValidateArtifactContentMutationAgainstLocks(locked, tampered, actorUser.ID, true).Allowed).toBe(true);
+  });
+
+  it('B2 / S10: ArtifactPermissionEngine fails closed on anonymous/magic-link users for collection & artifact sets', async () => {
+    const magicUser = new UserInfo(undefined, {
+      ID: actorUser.ID,
+      Name: 'Magic Guest',
+      IsMagicLinkAnonymous: true,
+    });
+    const provider = {
+      Entities: [],
+      RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+    } as unknown as IMetadataProvider;
+    const colSet = await ArtifactPermissionEngine.Instance.BuildReadableCollectionIdSet(provider, magicUser);
+    const artSet = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(provider, magicUser);
+    expect(colSet.size).toBe(0);
+    expect(artSet.size).toBe(0);
+  });
+
+  it('R4: ValidateArtifactContentMutationAgainstLocks rejects Markdown Content override when Configuration holds locked slides', () => {
+    const lockedDeckJson = JSON.stringify({
+      DeckID: 'deck-r4',
+      Title: 'Locked Board Deck',
+      Slides: [
+        {
+          SlideID: 'slide-1',
+          Title: 'Protected KPIs',
+          Locked: true,
+          LockedByUserID: actorUser.ID,
+          Regions: [{ RegionID: 'main', Label: 'Main', Markdown: 'Revenue: $10M' }],
+        },
+      ],
+    });
+    const markdownHijack = '# Totally Different Unprotected Deck\n\nHijacked body';
+    const res1 = ValidateArtifactContentMutationAgainstLocks('', markdownHijack, otherUser.ID, false, {
+      currentConfiguration: lockedDeckJson,
+      nextConfiguration: lockedDeckJson,
+    });
+    expect(res1.Allowed).toBe(false);
+
+    const res2 = ValidateArtifactContentMutationAgainstLocks(lockedDeckJson, markdownHijack, otherUser.ID, false, {
+      currentConfiguration: lockedDeckJson,
+      nextConfiguration: lockedDeckJson,
+    });
+    expect(res2.Allowed).toBe(false);
+
+    expect(
+      ValidateArtifactContentMutationAgainstLocks(lockedDeckJson, markdownHijack, actorUser.ID, true, {
+        currentConfiguration: lockedDeckJson,
+        nextConfiguration: lockedDeckJson,
+      }).Allowed,
+    ).toBe(true);
+  });
+
+  it('B1: ValidateArtifactContentMutationAgainstLocks rejects non-owner locked Markdown tampering even when paired with fake Slides or Workbook Configuration', () => {
+    const lockedDoc = [
+      `<!-- mj-lock: owner-only user=${actorUser.ID} -->`,
+      '## Legal Notice',
+      'Original confidential terms.',
+    ].join('\n');
+    const tamperedDoc = lockedDoc.replace('Original confidential terms.', 'Bypassed terms.');
+
+    const resFakeSlidesConfig = ValidateArtifactContentMutationAgainstLocks(lockedDoc, tamperedDoc, otherUser.ID, false, {
+      currentConfiguration: null,
+      nextConfiguration: JSON.stringify({ Slides: [] }),
+    });
+    expect(resFakeSlidesConfig.Allowed).toBe(false);
+
+    const resFakeWorkbookConfig = ValidateArtifactContentMutationAgainstLocks(lockedDoc, tamperedDoc, otherUser.ID, false, {
+      currentConfiguration: null,
+      nextConfiguration: JSON.stringify({ Worksheets: [] }),
+    });
+    expect(resFakeWorkbookConfig.Allowed).toBe(false);
+
+    const resFakeSlidesContent = ValidateArtifactContentMutationAgainstLocks(
+      lockedDoc,
+      JSON.stringify({ Slides: [] }),
+      otherUser.ID,
+      false,
+    );
+    expect(resFakeSlidesContent.Allowed).toBe(false);
+
+    const resFakeWorkbookContent = ValidateArtifactContentMutationAgainstLocks(
+      lockedDoc,
+      JSON.stringify({ Worksheets: [] }),
+      otherUser.ID,
+      false,
+    );
+    expect(resFakeWorkbookContent.Allowed).toBe(false);
+  });
+
+  it('allows owner updates when prior Configuration holds slides and Content holds Markdown (Lower)', () => {
+    const ownerUser = { ID: 'owner-slides-md-1', Email: 'owner@test.com', Name: 'Owner' } as UserInfo;
+    const lockedSlidesConfig = JSON.stringify({
+      Slides: [
+        {
+          SlideID: 's1',
+          Title: 'Intro',
+          LockInfo: { LockedByUserID: ownerUser.ID, LockedByUserName: 'Owner', LockedAt: new Date().toISOString() },
+        },
+      ],
+    });
+    const res = ValidateArtifactContentMutationAgainstLocks(
+      '# Companion Markdown Notes\n\nNormal text.',
+      '# Updated Companion Markdown Notes',
+      ownerUser.ID,
+      true,
+      { currentConfiguration: lockedSlidesConfig, nextConfiguration: lockedSlidesConfig },
+    );
+    expect(res.Allowed).toBe(true);
+  });
+
+  it('R10-2: executes ArtifactDocumentBlock spreadsheet chart slicing under SetSpreadsheetWorkerIsolationRequired(true) without calling main-thread EvaluateWorkbook', async () => {
+    const eng = SpreadsheetEngine.Instance;
+    const wb = eng.CreateEmptyWorkbook('IsolatedChartSlice', ['Revenue'], 5, 3);
+    const sheet = wb.Worksheets[0];
+    eng.SetCell(wb, sheet.SheetID, 'A1', { Value: 'Quarter' }, false);
+    eng.SetCell(wb, sheet.SheetID, 'B1', { Value: 'Amount' }, false);
+    eng.SetCell(wb, sheet.SheetID, 'A2', { Value: 'Q1' }, false);
+    eng.SetCell(wb, sheet.SheetID, 'B2', { Value: 250 }, false);
+    sheet.Charts.push({
+      ChartID: 'chart-iso-1',
+      SheetID: sheet.SheetID,
+      ChartType: 'bar',
+      Title: 'Quarterly Revenue',
+      SourceRange: 'A1:B2',
+      PositionCell: 'D2',
+    });
+    const wbJson = eng.SerializeWorkbook(wb);
+
+    const artifactId = 'bbbb6666-6666-4666-8666-666666666666';
+    const block = new ArtifactDocumentBlock();
+    vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+      ArtifactID: artifactId,
+      CanRead: true,
+      CanEdit: false,
+      CanDelete: false,
+      CanShare: false,
+      Source: 'ArtifactPermission',
+      Reason: 'Allowed for test',
+    });
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunViews: vi.fn(async () => [
+        {
+          Success: true,
+          Results: [{ ID: artifactId, Name: 'Model.xlsx', Type: 'Excel Spreadsheet' }],
+          RowCount: 1,
+          TotalRowCount: 1,
+          UserView: null,
+          ErrorMessage: '',
+          ExecutionTime: 1,
+        },
+        {
+          Success: true,
+          Results: [
+            {
+              ID: 'ver-iso-1',
+              ArtifactID: artifactId,
+              VersionNumber: 1,
+              ContentMode: 'Text',
+              FileID: null,
+              Content: wbJson,
+              Configuration: null,
+            },
+          ],
+          RowCount: 1,
+          TotalRowCount: 1,
+          UserView: null,
+          ErrorMessage: '',
+          ExecutionTime: 1,
+        },
+      ]),
+    } as Pick<RunView, 'RunViews'> as RunView);
+
+    let insideWorker = false;
+    let mainThreadSyncEvalCount = 0;
+    const origEval = eng.EvaluateWorkbook.bind(eng);
+    const syncEvalSpy = vi.spyOn(eng, 'EvaluateWorkbook').mockImplementation((wbArg, ctxArg) => {
+      if (!insideWorker) {
+        mainThreadSyncEvalCount++;
+      }
+      origEval(wbArg, ctxArg);
+    });
+    RegisterSpreadsheetWorkerRunner({
+      ImportFromXlsxBytes: async (b, c, o) => eng.ImportFromXlsxBytes(b, c, o),
+      PatchXlsxBytes: async (orig, wbArg) => eng.PatchXlsxBytes(orig, wbArg),
+      EvaluateWorkbook: async (wbArg, ctx) => {
+        const cloned = structuredClone(wbArg);
+        SetSpreadsheetWorkerIsolationRequired(false);
+        insideWorker = true;
+        try {
+          origEval(cloned, ctx);
+        } finally {
+          insideWorker = false;
+          SetSpreadsheetWorkerIsolationRequired(true);
+        }
+        return { Workbook: cloned, EvaluatedFormulaCount: eng.LastEvaluatedFormulaCount };
+      },
+    });
+    SetSpreadsheetWorkerIsolationRequired(true);
+    try {
+      const provider = { ProviderType: 'Network', Entities: [] } as Partial<IMetadataProvider> as IMetadataProvider;
+      const res = await block.Execute(
+        { BlockID: 'blk-iso', Kind: 'Artifact', Mode: 'Live', ArtifactID: artifactId, SheetChartID: 'chart-iso-1' },
+        provider,
+        actorUser,
+      );
+      expect(res.Success).toBe(true);
+      expect(mainThreadSyncEvalCount).toBe(0);
+      expect(syncEvalSpy.mock.calls.length).toBeGreaterThanOrEqual(0);
+      expect(res.ArtifactContent).toContain('Q1');
+    } finally {
+      SetSpreadsheetWorkerIsolationRequired(false);
+      RegisterSpreadsheetWorkerRunner(null);
+      vi.restoreAllMocks();
     }
   });
 });

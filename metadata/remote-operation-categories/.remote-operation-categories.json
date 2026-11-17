@@ -155,6 +155,16 @@
   },
   {
     "fields": {
+      "Name": "Artifacts",
+      "Description": "Governed collaborative artifact operations (synthesis, spreadsheet AI formulas, compliance auditing, and Frozen-only external guest share links).",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "6EF20000-A2CF-4516-8003-7CEF32803326"
+    }
+  },
+  {
+    "fields": {
       "Name": "Semantic Graph",
       "Description": "Semantic graph operations (paths and neighborhoods over named graphs such as MJ Canon), checked as the caller.",
       "ParentID": null

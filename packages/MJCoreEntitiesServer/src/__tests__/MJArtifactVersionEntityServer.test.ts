@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+    BaseEntity,
     ClearAllDataHooks,
     CompositeKey,
     DatabaseProviderBase,
@@ -18,7 +19,7 @@ import {
     UserInfo,
     WellKnownUserSource
 } from '@memberjunction/core';
-import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
+import { ArtifactPermissionEngine, SpreadsheetEngine } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { GetGlobalObjectStore, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -28,9 +29,11 @@ import {
     ArtifactVersionSavedEventPayload,
     CalculateContentSizeBytes,
     EnsureArtifactVersionReadHookRegistered,
+    MarkTrustedCompactionVersionSave,
     MarkTrustedServerRestoreSave,
     MJArtifactVersionEntityServer
 } from '../custom/MJArtifactVersionEntityServer.server';
+import { RegisterWorkingStateContentDeserializer } from '../custom/ArtifactSecurityHookHelpers';
 
 function makeUser(id: string, email: string): UserInfo {
     return new UserInfo(null, {
@@ -215,7 +218,8 @@ describe('ArtifactVersionPreRunViewHook & ArtifactVersionPostRunViewHook narrow 
             ResultType: 'simple'
         };
         const hookedParams = await ArtifactVersionPreRunViewHook(callerParams, readerUser);
-        expect(hookedParams).toBe(callerParams);
+        expect(hookedParams).not.toBe(callerParams);
+        expect(callerParams.Fields).toEqual(['ID', 'VersionNumber']);
         expect(hookedParams.Fields).toEqual(['ID', 'VersionNumber', 'ArtifactID']);
         expect(origFields).toEqual(['ID', 'VersionNumber']);
 
@@ -621,6 +625,34 @@ class TestServerVersionProvider extends DatabaseProviderBase {
                 'CollectionPermission',
                 'vwCollectionPermissions',
                 ['CollectionID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare']
+            ),
+            buildSupportEntityInfo(
+                '77777777-7777-4777-8777-777777777777',
+                'MJ: Collections',
+                'Collection',
+                'vwCollections',
+                ['OwnerID', 'ParentID']
+            ),
+            buildSupportEntityInfo(
+                '88888888-8888-4888-8888-888888888888',
+                'MJ: Artifact Guest Share Links',
+                'ArtifactGuestShareLink',
+                'vwArtifactGuestShareLinks',
+                ['ArtifactID', 'ArtifactVersionID', 'MagicLinkInviteID']
+            ),
+            buildSupportEntityInfo(
+                '99999999-9999-4999-8999-999999999999',
+                'MJ: Artifact Working States',
+                'ArtifactWorkingState',
+                'vwArtifactWorkingStates',
+                ['ArtifactID', 'Content', 'UserID']
+            ),
+            buildSupportEntityInfo(
+                'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+                'MJ: Artifact Version Attributes',
+                'ArtifactVersionAttribute',
+                'vwArtifactVersionAttributes',
+                ['ArtifactVersionID', 'Name', 'Value']
             )
         ];
     }
@@ -970,7 +1002,7 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
         expect(fullRes.Results).toHaveLength(1);
         expect(fullRes.Results[0]?.Content).toBe(fullDbRow.Content);
 
-        // 3. Unauthorized user with the SAME role hitting the warm cache is still denied (0 rows)!
+        // 3. Unauthorized user with the SAME role hitting the warm cache is denied at SQL PreRunView (1 = 0) AND PostRunView (0 rows)!
         const deniedCacheHit = await provider.RunView<MockVersionRow>(
             {
                 EntityName: 'MJ: Artifact Versions',
@@ -979,7 +1011,8 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             },
             intruderUser
         );
-        expect(provider.internalRunViewCalls).toHaveLength(1);
+        expect(provider.internalRunViewCalls).toHaveLength(2);
+        expect(String(provider.internalRunViewCalls[1]?.ExtraFilter)).toContain('1 = 0');
         expect(deniedCacheHit.Results).toEqual([]);
         expect(deniedCacheHit.RowCount).toBe(0);
 
@@ -1313,11 +1346,15 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             Fields: ['ID'],
             ResultType: 'simple'
         };
-        ArtifactVersionPreRunViewHook(dbParams, undefined, databaseProviderPartial as IMetadataProvider);
-        expect(dbParams.Fields).toEqual(['ID', 'ArtifactID']);
+        const hookedDbParams = await ArtifactVersionPreRunViewHook(
+            dbParams,
+            undefined,
+            databaseProviderPartial as IMetadataProvider
+        );
+        expect(hookedDbParams.Fields).toEqual(['ID', 'ArtifactID']);
 
         const dbHookResult = await ArtifactVersionPostRunViewHook(
-            dbParams,
+            hookedDbParams,
             sampleResults,
             undefined,
             databaseProviderPartial as IMetadataProvider
@@ -1334,11 +1371,15 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             Fields: ['ID'],
             ResultType: 'simple'
         };
-        ArtifactVersionPreRunViewHook(netParams, undefined, networkProviderPartial as IMetadataProvider);
-        expect(netParams.Fields).toEqual(['ID']);
+        const hookedNetParams = await ArtifactVersionPreRunViewHook(
+            netParams,
+            undefined,
+            networkProviderPartial as IMetadataProvider
+        );
+        expect(hookedNetParams.Fields).toEqual(['ID']);
 
         const netHookResult = await ArtifactVersionPostRunViewHook(
-            netParams,
+            hookedNetParams,
             sampleResults,
             undefined,
             networkProviderPartial as IMetadataProvider
@@ -1526,6 +1567,755 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             expect(capturedEvents[2]?.IsRestore).toBe(false);
         } finally {
             sub.unsubscribe();
+            superSaveSpy.mockRestore();
+        }
+    });
+
+    it('closes count_only and paged TotalRowCount leaks, blocks saved ArtifactID reassignment, and preserves hash/bytes when ExtractAndSaveAttributes throws (P0-3 / P1-12)', async () => {
+        const outsider = makeRoleUser('99999999-9999-4999-8999-999999999999', 'outsider@example.com');
+        const provider = new TestServerVersionProvider(async () => ({
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        }));
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: targetArtifactId,
+            CanRead: false,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Denied',
+            Reason: 'Denied'
+        });
+
+        const countOnlyLeak = await ArtifactVersionPostRunViewHook(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+                ResultType: 'count_only'
+            },
+            {
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 17,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            outsider,
+            provider
+        );
+        expect(countOnlyLeak.TotalRowCount).toBe(0);
+        expect(countOnlyLeak.RowCount).toBe(0);
+
+        const pagedLeak = await ArtifactVersionPostRunViewHook(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: 'VersionNumber >= 1',
+                MaxRows: 1,
+                ResultType: 'simple'
+            },
+            {
+                Success: true,
+                Results: [{ ID: targetVersionId, ArtifactID: targetArtifactId }],
+                RowCount: 1,
+                TotalRowCount: 55,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            outsider,
+            provider
+        );
+        expect(pagedLeak.Results).toEqual([]);
+        expect(pagedLeak.RowCount).toBe(0);
+        expect(pagedLeak.TotalRowCount).toBe(0);
+
+        // Saved ArtifactID reassignment blocked on both Save() and Delete()
+        const superSaveSpy = vi
+            .spyOn(Object.getPrototypeOf(MJArtifactVersionEntityServer.prototype), 'Save')
+            .mockResolvedValue(true);
+        const superDeleteSpy = vi
+            .spyOn(Object.getPrototypeOf(MJArtifactVersionEntityServer.prototype), 'Delete')
+            .mockResolvedValue(true);
+        try {
+            const attacker = makeRoleUser('11111111-1111-4111-8111-111111111111', 'attacker@example.com');
+            const entity = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            const history: MJArtifactVersionEntityServer['ResultHistory'] = [];
+            Object.defineProperty(entity, 'ResultHistory', { value: history, writable: true });
+            Object.defineProperty(entity, 'IsSaved', { value: true, writable: true });
+            Object.defineProperty(entity, 'ArtifactID', { value: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', writable: true });
+            Object.defineProperty(entity, 'ContextCurrentUser', { value: attacker, writable: true });
+            Object.defineProperty(entity, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(entity, 'GetFieldByName', {
+                value: (name: string) =>
+                    name === 'ArtifactID'
+                        ? { OldValue: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', Dirty: true }
+                        : { Dirty: false, OldValue: null },
+                configurable: true
+            });
+
+            expect(await entity.Save()).toBe(false);
+            expect(history[0]?.Message).toContain('cannot be reassigned');
+            expect(await entity.Delete()).toBe(false);
+            expect(superSaveSpy).not.toHaveBeenCalled();
+            expect(superDeleteSpy).not.toHaveBeenCalled();
+
+            // ExtractAndSaveAttributes failure still keeps ContentHash & ContentSizeBytes and saves cleanly
+            const sysUser = makeRoleUser('00000000-0000-4000-8000-000000000001', 'sys@example.com');
+            vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+            const okEntity = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            Object.defineProperty(okEntity, 'ResultHistory', { value: [], writable: true });
+            Object.defineProperty(okEntity, 'IsSaved', { value: false, writable: true });
+            Object.defineProperty(okEntity, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(okEntity, 'Content', { value: '# Valid Content', writable: true });
+            Object.defineProperty(okEntity, 'ContentHash', { value: '', writable: true });
+            Object.defineProperty(okEntity, 'ContentSizeBytes', { value: 0, writable: true });
+            Object.defineProperty(okEntity, 'ContextCurrentUser', { value: sysUser, writable: true });
+            Object.defineProperty(okEntity, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(okEntity, 'GetFieldByName', {
+                value: () => ({ Dirty: true, OldValue: null }),
+                configurable: true
+            });
+            vi.spyOn(okEntity as never, 'ExtractAndSaveAttributes').mockRejectedValue(new Error('attribute parse failed'));
+            expect(await okEntity.Save()).toBe(true);
+            expect(okEntity.ContentHash.length).toBe(64);
+            expect(okEntity.ContentSizeBytes).toBe(CalculateContentSizeBytes('# Valid Content'));
+        } finally {
+            superSaveSpy.mockRestore();
+            superDeleteSpy.mockRestore();
+        }
+    });
+
+    it('B1 / B2: matches mixed-case EntityName, rejects EntityName vs ViewEntity mismatch, and preserves paged TotalRowCount & count_only when SQL-scoped', async () => {
+        const provider = new TestServerVersionProvider(async (params) => {
+            if (params.EntityName === 'MJ: Artifacts') {
+                return {
+                    Success: true,
+                    Results: [{ ID: targetArtifactId, UserID: ownerUserId }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            return {
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            };
+        });
+        const sysUser = makeRoleUser(systemUserId, 'sys@example.com', provider);
+        const reader = makeRoleUser(ownerUserId, 'owner@example.com', provider);
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(sysUser);
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet').mockResolvedValue(
+            new Set([targetArtifactId])
+        );
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: targetArtifactId,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: true,
+            CanShare: true,
+            Source: 'Owner',
+            Reason: 'Owner'
+        });
+
+        // 1. Mixed-case EntityName still gets SQL-scoped in PreRunView
+        const mixedParams: RunViewParams = {
+            EntityName: '  mj: artifact versions  ',
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple'
+        };
+        const hooked = await ArtifactVersionPreRunViewHook(mixedParams, reader, provider);
+        expect(String(hooked.ExtraFilter)).toContain('EXISTS (');
+        expect(String(hooked.ExtraFilter)).toContain('vwArtifacts');
+        expect(String(hooked.ExtraFilter)).toContain('ArtifactID');
+        expect(String(hooked.ExtraFilter)).toContain(reader.ID);
+
+        // When SQL-scoped and removedCount === 0 under MaxRows: 1, TotalRowCount (42) is preserved!
+        const pagedRes = await ArtifactVersionPostRunViewHook(
+            hooked,
+            {
+                Success: true,
+                Results: [{ ID: targetVersionId, ArtifactID: targetArtifactId }],
+                RowCount: 1,
+                TotalRowCount: 42,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            reader,
+            provider
+        );
+        expect(pagedRes.Results).toHaveLength(1);
+        expect(pagedRes.TotalRowCount).toBe(42);
+
+        // SQL-scoped count_only also preserves DB COUNT(*)
+        const countPre = await ArtifactVersionPreRunViewHook(
+            { EntityName: 'mj: artifact versions', ResultType: 'count_only' },
+            reader,
+            provider
+        );
+        const countRes = await ArtifactVersionPostRunViewHook(
+            countPre,
+            { Success: true, Results: [], RowCount: 0, TotalRowCount: 19, ExecutionTime: 1, ErrorMessage: '' },
+            reader,
+            provider
+        );
+        expect(countRes.TotalRowCount).toBe(19);
+
+        // EntityName vs ViewEntity mismatch rejects fail-closed
+        await expect(
+            ArtifactVersionPreRunViewHook(
+                {
+                    EntityName: 'Users',
+                    ViewEntity: { Entity: 'MJ: Artifact Versions' } as RunViewParams['ViewEntity'],
+                    ResultType: 'simple'
+                },
+                reader,
+                provider
+            )
+        ).rejects.toThrow(/does not match/);
+    });
+
+    it('B3 / S8: enforces locks & UserID/hash/version immutability on Save() and cascades guest share links on Delete()', async () => {
+        const provider = new TestServerVersionProvider(async (params) => {
+            if (params.EntityName === 'MJ: Artifacts') {
+                return { Success: true, Results: [{ ID: targetArtifactId, UserID: ownerUserId }], RowCount: 1, TotalRowCount: 1, ExecutionTime: 1, ErrorMessage: '' };
+            }
+            if (params.EntityName === 'MJ: Artifact Versions') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: targetVersionId,
+                            ArtifactID: targetArtifactId,
+                            VersionNumber: 3,
+                            Content: `<!-- mj-lock: owner-only user=${ownerUserId} -->\n## Locked Header\nImmutable owner copy.\n`
+                        }
+                    ],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Artifact Guest Share Links') {
+                return {
+                    Success: true,
+                    Results: [{ ID: '11111111-1111-4111-8111-111111111199', MagicLinkInviteID: '22222222-2222-4222-8222-222222222299' }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Artifact Version Attributes') {
+                return {
+                    Success: true,
+                    Results: [{ ID: '33333333-3333-4333-8333-333333333399' }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+        });
+
+        const sysUser = makeRoleUser(systemUserId, 'sys@example.com', provider);
+        const editor = makeRoleUser('33333333-3333-4333-8333-333333333388', 'editor@example.com', provider);
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(sysUser);
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: targetArtifactId,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: true,
+            CanShare: false,
+            Source: 'ArtifactPermission',
+            Reason: 'Editor'
+        });
+
+        const superSaveSpy = vi.spyOn(Object.getPrototypeOf(MJArtifactVersionEntityServer.prototype), 'Save').mockResolvedValue(true);
+        const superDeleteSpy = vi.spyOn(Object.getPrototypeOf(MJArtifactVersionEntityServer.prototype), 'Delete').mockResolvedValue(true);
+        try {
+            // 1. Non-owner creating new version that edits locked section is denied
+            const lockViolator = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            const hist1: MJArtifactVersionEntityServer['ResultHistory'] = [];
+            Object.defineProperty(lockViolator, 'ResultHistory', { value: hist1, writable: true });
+            Object.defineProperty(lockViolator, 'IsSaved', { value: false, writable: true });
+            Object.defineProperty(lockViolator, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(lockViolator, 'Content', {
+                value: `<!-- mj-lock: owner-only user=${ownerUserId} -->\n## Locked Header\nTampered by editor.\n`,
+                writable: true
+            });
+            Object.defineProperty(lockViolator, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(lockViolator, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(lockViolator, 'GetFieldByName', {
+                value: () => ({ Dirty: true, OldValue: null }),
+                configurable: true
+            });
+            expect(await lockViolator.Save()).toBe(false);
+            expect(hist1[0]?.Message).toMatch(/lock/i);
+            expect(superSaveSpy).not.toHaveBeenCalled();
+
+            // 2. Non-system caller attempting to mutate Content on an already-saved version is denied (B3 immutability)
+            const savedMutator = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            const hist2: MJArtifactVersionEntityServer['ResultHistory'] = [];
+            Object.defineProperty(savedMutator, 'ResultHistory', { value: hist2, writable: true });
+            Object.defineProperty(savedMutator, 'IsSaved', { value: true, writable: true });
+            Object.defineProperty(savedMutator, 'ID', { value: targetVersionId, writable: true });
+            Object.defineProperty(savedMutator, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(savedMutator, 'Content', { value: 'Overwritten snapshot!', writable: true });
+            Object.defineProperty(savedMutator, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(savedMutator, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(savedMutator, 'GetFieldByName', {
+                value: (n: string) =>
+                    n === 'Content'
+                        ? { Dirty: true, OldValue: 'Original snapshot!' }
+                        : { Dirty: false, OldValue: targetArtifactId },
+                configurable: true
+            });
+            expect(await savedMutator.Save()).toBe(false);
+            expect(hist2[0]?.Message).toContain('immutable');
+            expect(superSaveSpy).not.toHaveBeenCalled();
+
+            // 3. Deleting a version as owner cascades guest share link and version attribute deletion prior to super.Delete() (S8 + FK_ArtifactVersionAttribute_ArtifactVersion)
+            const ownerActor = makeRoleUser(ownerUserId, 'owner@example.com', provider);
+            const linkDeleted = vi.fn().mockResolvedValue(true);
+            const attrDeleted = vi.fn().mockResolvedValue(true);
+            const getEntitySpy = vi.spyOn(provider, 'GetEntityObject').mockImplementation(async (name: string) => {
+                if (name === 'MJ: Artifact Guest Share Links') {
+                    return {
+                        Load: vi.fn().mockResolvedValue(true),
+                        Delete: linkDeleted,
+                        LatestResult: { Message: '' }
+                    } as never;
+                }
+                if (name === 'MJ: Artifact Version Attributes') {
+                    return {
+                        Load: vi.fn().mockResolvedValue(true),
+                        Delete: attrDeleted,
+                        LatestResult: { Message: '', CompleteMessage: '' }
+                    } as never;
+                }
+                return null as never;
+            });
+            const verToDelete = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            Object.defineProperty(verToDelete, 'ResultHistory', { value: [], writable: true });
+            Object.defineProperty(verToDelete, 'IsSaved', { value: true, writable: true });
+            Object.defineProperty(verToDelete, 'ID', { value: targetVersionId, writable: true });
+            Object.defineProperty(verToDelete, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(verToDelete, 'ContextCurrentUser', { value: ownerActor, writable: true });
+            Object.defineProperty(verToDelete, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(verToDelete, 'GetFieldByName', {
+                value: () => ({ Dirty: false, OldValue: targetArtifactId }),
+                configurable: true
+            });
+            expect(await verToDelete.Delete()).toBe(true);
+            expect(linkDeleted).toHaveBeenCalledTimes(1);
+            expect(attrDeleted).toHaveBeenCalledTimes(1);
+            expect(superDeleteSpy).toHaveBeenCalledTimes(1);
+            getEntitySpy.mockRestore();
+
+            // 4. B3: non-owner creating new version that clears protected Configuration (Slides/Worksheets) is denied
+            const configViolator = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            const histConfig: MJArtifactVersionEntityServer['ResultHistory'] = [];
+            Object.defineProperty(configViolator, 'ResultHistory', { value: histConfig, writable: true });
+            Object.defineProperty(configViolator, 'IsSaved', { value: false, writable: true });
+            Object.defineProperty(configViolator, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(configViolator, 'Content', {
+                value: `<!-- mj-lock: owner-only user=${ownerUserId} -->\n## Locked Header\nImmutable owner copy.\n`,
+                writable: true
+            });
+            Object.defineProperty(configViolator, 'Configuration', {
+                value: JSON.stringify({ ProtectedRanges: [{ Range: 'A1', OwnerUserID: ownerUserId }] }),
+                writable: true
+            });
+            Object.defineProperty(configViolator, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(configViolator, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(configViolator, 'GetFieldByName', {
+                value: () => ({ Dirty: true, OldValue: null }),
+                configurable: true
+            });
+            // Mock prior version with locked Slide inside Configuration while Content is identical
+            const origRunView = provider.RunView.bind(provider);
+            const runViewConfigSpy = vi.spyOn(provider, 'RunView').mockImplementation(async (params, cu) => {
+                if (params.EntityName === 'MJ: Artifact Versions') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: targetVersionId,
+                                ArtifactID: targetArtifactId,
+                                VersionNumber: 3,
+                                Content: `<!-- mj-lock: owner-only user=${ownerUserId} -->\n## Locked Header\nImmutable owner copy.\n`,
+                                Configuration: JSON.stringify({
+                                    SchemaVersion: 1,
+                                    Slides: [
+                                        {
+                                            SlideID: 's1',
+                                            Title: 'Owner Slide',
+                                            Locked: true,
+                                            LockedByUserID: ownerUserId,
+                                            Regions: [
+                                                {
+                                                    RegionID: 'r1',
+                                                    Role: 'body',
+                                                    MarkdownContent: 'Owner locked slide'
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                })
+                            }
+                        ],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: ''
+                    };
+                }
+                return origRunView(params, cu);
+            });
+            Object.defineProperty(configViolator, 'Configuration', {
+                value: JSON.stringify({
+                    SchemaVersion: 1,
+                    Slides: [
+                        {
+                            SlideID: 's1',
+                            Title: 'Owner Slide',
+                            Locked: true,
+                            LockedByUserID: ownerUserId,
+                            Regions: [
+                                {
+                                    RegionID: 'r1',
+                                    Role: 'body',
+                                    MarkdownContent: 'Tampered slide body by non-owner'
+                                }
+                            ]
+                        }
+                    ]
+                }),
+                writable: true
+            });
+            expect(await configViolator.Save()).toBe(false);
+            expect(histConfig[0]?.Message).toMatch(/lock|slide/i);
+
+            // 5. N3: trusted compaction bypasses non-owner lock error even when prior version is owner-locked
+            const compactionSave = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            Object.defineProperty(compactionSave, 'ResultHistory', { value: [], writable: true });
+            Object.defineProperty(compactionSave, 'IsSaved', { value: false, writable: true });
+            Object.defineProperty(compactionSave, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(compactionSave, 'Content', { value: 'Compacted doc', writable: true });
+            Object.defineProperty(compactionSave, 'Configuration', { value: '{}', writable: true });
+            Object.defineProperty(compactionSave, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(compactionSave, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(compactionSave, 'GetFieldByName', {
+                value: () => ({ Dirty: true, OldValue: null }),
+                configurable: true
+            });
+            MarkTrustedCompactionVersionSave(compactionSave);
+            expect(await compactionSave.Save()).toBe(true);
+
+            // 6. B3 Delete(): non-owner deleting latest locked version is denied
+            const lockedDeleteAttempt = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            const histDelete: MJArtifactVersionEntityServer['ResultHistory'] = [];
+            Object.defineProperty(lockedDeleteAttempt, 'ResultHistory', { value: histDelete, writable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'IsSaved', { value: true, writable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'ID', { value: targetVersionId, writable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'GetFieldByName', {
+                value: () => ({ Dirty: false, OldValue: targetArtifactId }),
+                configurable: true
+            });
+            expect(await lockedDeleteAttempt.Delete()).toBe(false);
+            expect(histDelete[0]?.Message).toMatch(/lock|slide/i);
+            runViewConfigSpy.mockRestore();
+        } finally {
+            superSaveSpy.mockRestore();
+            superDeleteSpy.mockRestore();
+        }
+    });
+
+    it('R5-1: Save() decodes MJ: Artifact Working States.YjsState via registered deserializer and fails closed when undecodable', async () => {
+        const ownerId = '77777777-0000-4000-8000-000000000001';
+        const editorId = '77777777-0000-4000-8000-000000000002';
+        const artId = '77777777-0000-4000-8000-000000000003';
+        const sysUserId = '00000000-0000-4000-8000-000000000001';
+        const editor = new UserInfo(undefined, { ID: editorId, Email: 'editor@test.com', Name: 'Editor' });
+        const sysUser = new UserInfo(undefined, { ID: sysUserId, Email: 'sys@test.com', Name: 'System' });
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(sysUser);
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: artId,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'ArtifactPermission',
+            Reason: 'Editor'
+        });
+
+        const superSaveSpy = vi
+            .spyOn(BaseEntity.prototype, 'Save')
+            .mockResolvedValue(true);
+
+        try {
+            const lockedWsText = [
+                `<!-- mj-lock: owner-only user=${ownerId} -->`,
+                '## Locked Working State Section',
+                'Uncompacted confidential terms.'
+            ].join('\n');
+            const wsBytesB64 = Buffer.from('mock-yjs-update', 'utf8').toString('base64');
+
+            const provider = {
+                ProviderType: 'Database',
+                Entities: [],
+                RunView: vi.fn(async (params: RunViewParams, runUser?: UserInfo) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: artId, TypeID: 't-md', UserID: ownerId }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: ''
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'v-prev', VersionNumber: 1, Content: 'Old unlocked baseline', Configuration: null }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: ''
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Working States') {
+                        expect(runUser?.ID).toBe(sysUserId);
+                        expect(params.Fields).toEqual(['ID', 'ArtifactID', 'YjsState']);
+                        expect(params.IncludeBinaryFields).toBe(true);
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'ws-r51', ArtifactID: artId, YjsState: wsBytesB64 }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: ''
+                        };
+                    }
+                    return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+                })
+            } as unknown as IMetadataProvider;
+
+            const makeSave = () => {
+                const ent = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+                const hist: MJArtifactVersionEntityServer['ResultHistory'] = [];
+                Object.defineProperty(ent, 'ResultHistory', { value: hist, writable: true });
+                Object.defineProperty(ent, 'IsSaved', { value: false, writable: true });
+                Object.defineProperty(ent, 'ArtifactID', { value: artId, writable: true });
+                Object.defineProperty(ent, 'Content', { value: 'Old unlocked baseline overwritten', writable: true });
+                Object.defineProperty(ent, 'Configuration', { value: null, writable: true });
+                Object.defineProperty(ent, 'ContextCurrentUser', { value: editor, writable: true });
+                Object.defineProperty(ent, 'ProviderToUse', { value: provider, configurable: true });
+                Object.defineProperty(ent, 'GetFieldByName', {
+                    value: () => ({ Dirty: true, OldValue: null }),
+                    configurable: true
+                });
+                return { ent, hist };
+            };
+
+            // 1. Fails closed if YjsState exists and no deserializer is registered
+            RegisterWorkingStateContentDeserializer(null);
+            const noDeser = makeSave();
+            expect(await noDeser.ent.Save()).toBe(false);
+            expect(noDeser.hist[0]?.Message).toMatch(/unable to decode/i);
+
+            // 2. With registered deserializer returning locked text, blocks non-owner overwrite
+            RegisterWorkingStateContentDeserializer(() => lockedWsText);
+            const lockedAttempt = makeSave();
+            expect(await lockedAttempt.ent.Save()).toBe(false);
+            expect(lockedAttempt.hist[0]?.Message).toMatch(/lock/i);
+
+            // 3. S6-2: Corrupt YjsState throwing inside deserializer denies non-owner fail-closed,
+            //    while owner skips working-state query & deserializer completely and succeeds.
+            const corruptDeser = vi.fn(() => {
+                throw new Error('corrupt Yjs binary frame');
+            });
+            RegisterWorkingStateContentDeserializer(corruptDeser);
+            const nonOwnerCorrupt = makeSave();
+            expect(await nonOwnerCorrupt.ent.Save()).toBe(false);
+            expect(corruptDeser).toHaveBeenCalledTimes(1);
+            expect(nonOwnerCorrupt.hist[0]?.Message).toMatch(/unable to decode/i);
+
+            corruptDeser.mockClear();
+            const ownerUser = { ID: ownerId, Email: 'owner@mj.local' } as UserInfo;
+            const ownerSave = makeSave();
+            Object.defineProperty(ownerSave.ent, 'ContextCurrentUser', { value: ownerUser, writable: true });
+            superSaveSpy.mockResolvedValueOnce(true);
+            expect(await ownerSave.ent.Save()).toBe(true);
+            expect(corruptDeser).not.toHaveBeenCalled();
+
+            // 4. R7-1: Oversized JSON workbook (> 128 sheets) is rejected cleanly on Save even for the artifact owner
+            const oversizedWorkbookSave = makeSave();
+            Object.defineProperty(oversizedWorkbookSave.ent, 'ContextCurrentUser', { value: ownerUser, writable: true });
+            const oversizedJson = JSON.stringify({
+                WorkbookID: 'save-bomb',
+                Title: 'Too Many Sheets',
+                Worksheets: Array.from({ length: 129 }, (_, idx) => ({
+                    SheetID: `s-${idx + 1}`,
+                    Name: `Sheet ${idx + 1}`,
+                    Rows: [],
+                    Columns: [],
+                    Cells: {}
+                }))
+            });
+            Object.defineProperty(oversizedWorkbookSave.ent, 'Content', { value: oversizedJson, writable: true });
+            expect(await oversizedWorkbookSave.ent.Save()).toBe(false);
+            expect(oversizedWorkbookSave.hist[0]?.Message).toMatch(/maximum sheet limit/i);
+
+            // 5. R8-2: Saving a base64 .xlsx payload does NOT run EvaluateWorkbook synchronously on the main thread
+            const xlsxSourceWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('SaveXlsxNoMainEval', ['Sheet1'], 3, 3);
+            SpreadsheetEngine.Instance.SetCell(xlsxSourceWb, xlsxSourceWb.Worksheets[0].SheetID, 'A1', { Value: 5 }, false);
+            SpreadsheetEngine.Instance.SetCell(xlsxSourceWb, xlsxSourceWb.Worksheets[0].SheetID, 'A2', { Formula: '=A1*4' }, false);
+            const xlsxBytes = SpreadsheetEngine.Instance.ExportToXlsxBytes(xlsxSourceWb, false, {
+                SkipEvaluate: true
+            });
+            const xlsxDataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${Buffer.from(xlsxBytes).toString('base64')}`;
+
+            const mainEvalSpy = vi.spyOn(SpreadsheetEngine.Instance, 'EvaluateWorkbook');
+            const parseIsoSpy = vi.spyOn(SpreadsheetEngine.Instance, 'ParseWorkbookIsolated');
+            try {
+                const xlsxOwnerSave = makeSave();
+                Object.defineProperty(xlsxOwnerSave.ent, 'ContextCurrentUser', { value: ownerUser, writable: true });
+                Object.defineProperty(xlsxOwnerSave.ent, 'Content', { value: xlsxDataUrl, writable: true });
+                superSaveSpy.mockResolvedValueOnce(true);
+                expect(await xlsxOwnerSave.ent.Save()).toBe(true);
+                expect(mainEvalSpy).not.toHaveBeenCalled();
+
+                // R9-2: Non-owner Save() with .xlsx working state + prior version parses each distinct .xlsx payload
+                // via ParseWorkbookIsolated cleanly once (zero redundant re-imports inside ValidateArtifactContentMutationAgainstLocks).
+                parseIsoSpy.mockClear();
+                RegisterWorkingStateContentDeserializer(() => xlsxDataUrl);
+                const nonOwnerXlsxSave = makeSave();
+                Object.defineProperty(nonOwnerXlsxSave.ent, 'ContextCurrentUser', { value: editor, writable: true });
+                Object.defineProperty(nonOwnerXlsxSave.ent, 'Content', { value: xlsxDataUrl, writable: true });
+                superSaveSpy.mockResolvedValueOnce(true);
+                expect(await nonOwnerXlsxSave.ent.Save()).toBe(true);
+                expect(mainEvalSpy).not.toHaveBeenCalled();
+                expect(parseIsoSpy).toHaveBeenCalledTimes(1);
+
+                // R10-1: Non-owner saving edited `.xlsx` with stripped `Configuration: null` when prior version
+                // held owner `ProtectedRanges` inside `Configuration`, AND File-mode replacement (`FileID` swap)
+                // when `Configuration` holds protected ranges must BOTH be refused despite preParsedXlsxCache.
+                const cfgLockWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('CfgLockSave', ['Sheet1'], 3, 3);
+                cfgLockWb.Worksheets[0].SheetID = xlsxSourceWb.Worksheets[0].SheetID;
+                cfgLockWb.Worksheets[0].ProtectedRanges = [
+                    { RangeID: 'r10-cfg-lock', Range: 'A1:B2', LockedByUserID: ownerId }
+                ];
+                const cfgLockJson = JSON.stringify(cfgLockWb);
+
+                const editedXlsxWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('SaveXlsxEdited', ['Sheet1'], 3, 3);
+                editedXlsxWb.Worksheets[0].SheetID = xlsxSourceWb.Worksheets[0].SheetID;
+                SpreadsheetEngine.Instance.SetCell(editedXlsxWb, editedXlsxWb.Worksheets[0].SheetID, 'A1', { Value: 999 }, false);
+                const editedXlsxDataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${Buffer.from(
+                    SpreadsheetEngine.Instance.ExportToXlsxBytes(editedXlsxWb, false, { SkipEvaluate: true })
+                ).toString('base64')}`;
+
+                const cfgLockProvider: Pick<IMetadataProvider, 'Entities' | 'RunView'> = {
+                    Entities: [],
+                    RunView: vi.fn(async (params: RunViewParams) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return {
+                                Success: true,
+                                Results: [{ ID: artId, TypeID: 't-xlsx', UserID: ownerId }],
+                                RowCount: 1,
+                                TotalRowCount: 1,
+                                ExecutionTime: 1,
+                                ErrorMessage: ''
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Artifact Permissions') {
+                            return {
+                                Success: true,
+                                Results: [{ CanEdit: true }],
+                                RowCount: 1,
+                                TotalRowCount: 1,
+                                ExecutionTime: 1,
+                                ErrorMessage: ''
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Artifact Versions') {
+                            return {
+                                Success: true,
+                                Results: [
+                                    {
+                                        ID: 'ver-cfg-lock-1',
+                                        VersionNumber: 1,
+                                        Content: xlsxDataUrl,
+                                        Configuration: cfgLockJson,
+                                        ContentMode: 'File',
+                                        FileID: 'file-orig-1'
+                                    }
+                                ],
+                                RowCount: 1,
+                                TotalRowCount: 1,
+                                ExecutionTime: 1,
+                                ErrorMessage: ''
+                            };
+                        }
+                        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+                    }) as IMetadataProvider['RunView']
+                };
+
+                const buildCfgSave = () => {
+                    const ent = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+                    const hist: MJArtifactVersionEntityServer['ResultHistory'] = [];
+                    Object.defineProperty(ent, 'ResultHistory', { value: hist, writable: true });
+                    Object.defineProperty(ent, 'IsSaved', { value: false, writable: true });
+                    Object.defineProperty(ent, 'ArtifactID', { value: artId, writable: true });
+                    Object.defineProperty(ent, 'VersionNumber', { value: 2, writable: true });
+                    Object.defineProperty(ent, 'ContextCurrentUser', { value: editor, writable: true });
+                    Object.defineProperty(ent, 'ProviderToUse', { value: cfgLockProvider, configurable: true });
+                    Object.defineProperty(ent, 'GetFieldByName', {
+                        value: () => ({ Dirty: true, OldValue: null }),
+                        configurable: true
+                    });
+                    return { ent, hist };
+                };
+
+                RegisterWorkingStateContentDeserializer(null);
+                const stripConfigSave = buildCfgSave();
+                Object.defineProperty(stripConfigSave.ent, 'Content', { value: editedXlsxDataUrl, writable: true });
+                Object.defineProperty(stripConfigSave.ent, 'Configuration', { value: null, writable: true });
+                expect(await stripConfigSave.ent.Save()).toBe(false);
+                expect(stripConfigSave.hist[0]?.Message).toMatch(/protected range/i);
+
+                const wipeFileSave = buildCfgSave();
+                Object.defineProperty(wipeFileSave.ent, 'ContentMode', { value: 'File', writable: true });
+                Object.defineProperty(wipeFileSave.ent, 'FileID', { value: 'file-swapped-2', writable: true });
+                Object.defineProperty(wipeFileSave.ent, 'Content', { value: '', writable: true });
+                Object.defineProperty(wipeFileSave.ent, 'Configuration', { value: null, writable: true });
+                expect(await wipeFileSave.ent.Save()).toBe(false);
+                expect(wipeFileSave.hist[0]?.Message).toMatch(/File-mode|protected range/i);
+            } finally {
+                mainEvalSpy.mockRestore();
+                parseIsoSpy.mockRestore();
+            }
+        } finally {
+            RegisterWorkingStateContentDeserializer(null);
             superSaveSpy.mockRestore();
         }
     });

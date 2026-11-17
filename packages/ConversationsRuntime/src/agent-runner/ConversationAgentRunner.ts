@@ -31,8 +31,11 @@ import {
 } from '@memberjunction/ai-engine-base';
 import {
     AgentExecutionProgressCallback,
+    EDGE_PRE_DISCOVERY_DATA_KEY,
+    type EdgePreDiscoveryHint,
     ExecuteAgentResult,
     MJAIAgentEntityExtended,
+    SanitizeEdgePreDiscoveryHint,
     coerceFailedExecuteAgentResult,
 } from '@memberjunction/ai-core-plus';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
@@ -109,6 +112,11 @@ export interface ProcessMessageInput {
      * Null or omitted uses `message.BranchID`.
      */
     ReplyBranchID?: string | null;
+    /**
+     * Optional untrusted advisory pre-discovery hint from client-side local ONNX/WASM inference.
+     * Pre-filtered client-side against `availableAgents`, and always re-verified server-side.
+     */
+    EdgePreDiscoveryHint?: EdgePreDiscoveryHint | null;
 }
 
 /**
@@ -220,6 +228,9 @@ export class ConversationAgentRunner {
                 ? await this.filterAgentsByPermissions(candidateAgents, currentUser)
                 : candidateAgents;
             const availableAgents = NarrowToAllowedAgents(permittedAgents, input.AllowedAgentIDs);
+            const sanitizedEdgeHint = input.EdgePreDiscoveryHint
+                ? SanitizeEdgePreDiscoveryHint(input.EdgePreDiscoveryHint, availableAgents)
+                : null;
 
             LogStatusEx({
                 message: `[ConversationAgentRunner] Available agents for routing: ${availableAgents.length} (filtered from ${candidateAgents.length} candidates)`,
@@ -237,6 +248,7 @@ export class ConversationAgentRunner {
                         Name: a.Name,
                         Description: a.Description,
                     })),
+                    ...(sanitizedEdgeHint ? { [EDGE_PRE_DISCOVERY_DATA_KEY]: sanitizedEdgeHint } : {}),
                     conversationId: input.conversationId,
                     latestMessageId: input.message.ID,
                     ...(input.appContext ? { appContext: input.appContext } : {}),

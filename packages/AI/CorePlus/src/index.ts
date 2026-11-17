@@ -14,6 +14,7 @@ export * from './ui-commands';
 export * from './conversation-utility';
 export * from './decision-calibration';
 export * from './conversation-routing-decision';
+export * from './edge-pre-discovery';
 export * from './foreach-operation';
 export * from './while-operation';
 export * from './agent-scratchpad';

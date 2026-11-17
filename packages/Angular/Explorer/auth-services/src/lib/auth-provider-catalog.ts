@@ -72,12 +72,14 @@ export class AuthProviderCatalog {
    * reads the result synchronously.
    */
   private static _preloaded: PublicAuthProviderInfo[] = [];
+  private static _preloadedApiBaseUrl: string | null = null;
 
   /**
    * Fetches the catalog and stores it for {@link GetPreloaded}. Call this from the app's
    * bootstrap entry point BEFORE the root module is imported.
    */
   public static async Preload(graphqlUri: string, timeoutMs?: number, mjapiUri?: string): Promise<PublicAuthProviderInfo[]> {
+    this._preloadedApiBaseUrl = this.BuildApiBaseUrl(graphqlUri, mjapiUri) || null;
     this._preloaded = await this.Fetch(graphqlUri, timeoutMs, mjapiUri);
     return this._preloaded;
   }
@@ -88,14 +90,41 @@ export class AuthProviderCatalog {
   }
 
   /**
+   * Base MJAPI URL captured by {@link Preload} before Angular DI is constructed, enabling
+   * pre-auth routes (such as anonymous guest share resolution) to target MJAPI directly.
+   */
+  public static GetPreloadedApiBaseUrl(): string | null {
+    return this._preloadedApiBaseUrl;
+  }
+
+  /**
+   * Resolves the base MJAPI origin/prefix from `mjapiUri` or `graphqlUri`, matching the
+   * pre-auth URL precedence used by {@link BuildCatalogUrl}.
+   */
+  public static BuildApiBaseUrl(graphqlUri: string, mjapiUri?: string): string {
+    const mjapiUrl = ResolveMJAPIURL(mjapiUri);
+    if (mjapiUrl) {
+      return mjapiUrl;
+    }
+    if (!graphqlUri) {
+      return '';
+    }
+    try {
+      return new URL(graphqlUri).origin;
+    } catch {
+      return '';
+    }
+  }
+
+  /**
    * Builds the catalog URL. With a configured MJAPI URL (`MJAPI_URI`, MJ #5674) the catalog is
    * `<MJAPI URL>/auth/providers`. Without one it keeps the pre-#5674 behaviour: `/auth/providers` at the
    * GraphQL endpoint's origin. The catalog is served by the same MJServer instance, mounted ahead of the
    * auth middleware.
    */
   public static BuildCatalogUrl(graphqlUri: string, mjapiUri?: string): string {
-    const mjapiUrl = ResolveMJAPIURL(mjapiUri);
-    return mjapiUrl ? `${mjapiUrl}/auth/providers` : new URL('/auth/providers', graphqlUri).toString();
+    const baseUrl = this.BuildApiBaseUrl(graphqlUri, mjapiUri);
+    return baseUrl ? `${baseUrl}/auth/providers` : new URL('/auth/providers', graphqlUri).toString();
   }
 
   /**

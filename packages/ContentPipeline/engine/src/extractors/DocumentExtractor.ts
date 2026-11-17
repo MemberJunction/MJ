@@ -11,6 +11,7 @@ import {
     ContentBlock,
     ExtractRequest,
     ExtractResult,
+    TransientStageError,
 } from '@memberjunction/content-pipeline-base';
 
 /** The registered keys. */
@@ -57,7 +58,7 @@ export class SpreadsheetExtractor extends BaseContentExtractor {
         const blocks: ContentBlock[] = [];
         for (const sheet of await ParseSpreadsheet(request.Content)) {
             if (request.Signal.aborted) {
-                break;
+                throw new TransientStageError('spreadsheet extraction stopped before reading all worksheets');
             }
             const text = SheetsToText([sheet]);
             if (text.length === 0) {

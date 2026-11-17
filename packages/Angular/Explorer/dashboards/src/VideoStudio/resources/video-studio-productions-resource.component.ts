@@ -282,37 +282,67 @@ export class VideoStudioProductionsResourceComponent
         const quotedIds = artifacts
           .map((a) => `'${EscapeSQLString(a.ID)}'`)
           .join(', ');
-        const latestVersionsSubquery = `SELECT v.ID FROM [__mj].[vwArtifactVersions] v INNER JOIN (SELECT ArtifactID, MAX(VersionNumber) AS MaxVer FROM [__mj].[vwArtifactVersions] WHERE ArtifactID IN (${quotedIds}) GROUP BY ArtifactID) latest ON v.ArtifactID = latest.ArtifactID AND v.VersionNumber = latest.MaxVer`;
-        const [versionsResult, attributesResult, companiesResult] = await rv.RunViews([
-          {
-            EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ID IN (${latestVersionsSubquery})`,
-            Fields: ['ID', 'ArtifactID', 'VersionNumber'],
-            ResultType: 'simple',
-          },
-          {
-            EntityName: 'MJ: Artifact Version Attributes',
-            ExtraFilter: `ArtifactVersionID IN (${latestVersionsSubquery})`,
-            Fields: ['ArtifactVersionID', 'Name', 'Value'],
-            ResultType: 'simple',
-          },
+        const versionsResult = await rv.RunView<SimpleArtifactVersionRow>({
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID IN (${quotedIds})`,
+          OrderBy: 'ArtifactID ASC, VersionNumber DESC',
+          Fields: ['ID', 'ArtifactID', 'VersionNumber'],
+          ResultType: 'simple',
+        });
+        if (!versionsResult?.Success) {
+          throw new Error(versionsResult?.ErrorMessage || 'Failed to load artifact versions.');
+        }
+
+        const latestVersionIds: string[] = [];
+        for (const row of (versionsResult.Results ?? []) as SimpleArtifactVersionRow[]) {
+          if (row?.ID && row?.ArtifactID) {
+            const aKey = row.ArtifactID.toLowerCase();
+            const existing = versionByArtifactId.get(aKey);
+            if (!existing || row.VersionNumber > existing.VersionNumber) {
+              versionByArtifactId.set(aKey, row);
+            }
+          }
+        }
+        for (const latest of versionByArtifactId.values()) {
+          latestVersionIds.push(latest.ID);
+        }
+
+        const quotedLatestVersionIds = latestVersionIds
+          .map((id) => `'${EscapeSQLString(id)}'`)
+          .join(', ');
+        const [attributesResult, companiesResult] = await rv.RunViews([
+          ...(latestVersionIds.length > 0
+            ? [
+                {
+                  EntityName: 'MJ: Artifact Version Attributes',
+                  ExtraFilter: `ArtifactVersionID IN (${quotedLatestVersionIds})`,
+                  Fields: ['ArtifactVersionID', 'Name', 'Value'],
+                  ResultType: 'simple' as const,
+                },
+              ]
+            : []),
           {
             EntityName: 'MJ: Companies',
             Fields: ['ID', 'Name'],
-            ResultType: 'simple',
+            ResultType: 'simple' as const,
           },
         ]);
 
+        const effectiveAttrResult = latestVersionIds.length > 0
+          ? attributesResult
+          : { Success: true, Results: [], ErrorMessage: undefined as string | undefined };
+        const effectiveCompaniesResult = latestVersionIds.length > 0 ? companiesResult : attributesResult;
+
         if (
-          !versionsResult?.Success ||
-          !attributesResult?.Success ||
-          (companiesResult && !companiesResult.Success)
+          !effectiveAttrResult?.Success ||
+          (effectiveCompaniesResult && !effectiveCompaniesResult.Success)
         ) {
           const errMessage =
-            (!versionsResult?.Success ? versionsResult?.ErrorMessage : undefined) ||
-            (!attributesResult?.Success ? attributesResult?.ErrorMessage : undefined) ||
-            (companiesResult && !companiesResult.Success ? companiesResult.ErrorMessage : undefined) ||
-            'Failed to load version or attribute details.';
+            (!effectiveAttrResult?.Success ? effectiveAttrResult?.ErrorMessage : undefined) ||
+            (effectiveCompaniesResult && !effectiveCompaniesResult.Success
+              ? effectiveCompaniesResult.ErrorMessage
+              : undefined) ||
+            'Failed to load attribute or company details.';
           LogError(errMessage);
           this.LoadError = `Couldn't load production details: ${errMessage}`;
           this.AllProductions = [];
@@ -320,16 +350,8 @@ export class VideoStudioProductionsResourceComponent
           return;
         }
 
-        if (Array.isArray(versionsResult.Results)) {
-          for (const row of versionsResult.Results as SimpleArtifactVersionRow[]) {
-            if (row?.ID && row?.ArtifactID) {
-              versionByArtifactId.set(row.ArtifactID.toLowerCase(), row);
-            }
-          }
-        }
-
-        if (Array.isArray(attributesResult.Results)) {
-          for (const row of attributesResult.Results as SimpleArtifactVersionAttributeRow[]) {
+        if (Array.isArray(effectiveAttrResult.Results)) {
+          for (const row of effectiveAttrResult.Results as SimpleArtifactVersionAttributeRow[]) {
             if (!row?.ArtifactVersionID || !row.Name || row.Value == null) {
               continue;
             }
@@ -343,8 +365,8 @@ export class VideoStudioProductionsResourceComponent
           }
         }
 
-        if (companiesResult && Array.isArray(companiesResult.Results)) {
-          for (const row of companiesResult.Results as SimpleCompanyRow[]) {
+        if (effectiveCompaniesResult && Array.isArray(effectiveCompaniesResult.Results)) {
+          for (const row of effectiveCompaniesResult.Results as SimpleCompanyRow[]) {
             if (row?.ID && row?.Name) {
               this.companiesById.set(row.ID, row.Name);
             }
@@ -851,11 +873,29 @@ export class VideoStudioProductionsResourceComponent
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const escapedId = EscapeSQLString(trimmedId);
+      const versionsRes = await rv.RunView<{ ID?: string | null }>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID = '${escapedId}'`,
+        Fields: ['ID'],
+        ResultType: 'simple',
+      });
+      const versionIds = Array.from(
+        new Set(
+          (versionsRes.Success && versionsRes.Results ? versionsRes.Results : [])
+            .map((v) => (v.ID ?? '').trim())
+            .filter((id) => id.length > 0),
+        ),
+      );
+      if (versionIds.length === 0) {
+        return null;
+      }
+
+      const quotedVersionIds = versionIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
       const detailArtifactResult = await rv.RunView<{
         ConversationDetailID?: string | null;
       }>({
         EntityName: 'MJ: Conversation Detail Artifacts',
-        ExtraFilter: `ArtifactVersionID IN (SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID = '${escapedId}') AND Direction = 'Output'`,
+        ExtraFilter: `ArtifactVersionID IN (${quotedVersionIds}) AND Direction = 'Output'`,
         OrderBy: '__mj_CreatedAt DESC',
         Fields: ['ConversationDetailID'],
         MaxRows: 1,

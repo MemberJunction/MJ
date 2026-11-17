@@ -10,10 +10,16 @@ import {
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import type { UserInfo } from '@memberjunction/core';
-import { ArtifactsModule } from '@memberjunction/ng-artifacts';
+import { ArtifactsModule, type ArtifactVersionSavedEvent } from '@memberjunction/ng-artifacts';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { ArtifactWorkspaceEngine } from './artifact-workspace-engine';
-import type { ArtifactWorkspaceRecord } from './artifact-workspace-types';
+import type {
+  ArtifactNavigateToAnchorPayload,
+  ArtifactSelectionAnchor,
+  ArtifactSelectionDelta,
+  ArtifactViewerNavigationAnchor,
+  ArtifactWorkspaceRecord,
+} from './artifact-workspace-types';
 
 /**
  * Live tab-managed workspace surface for the `ArtifactWorkspace` realtime channel.
@@ -73,31 +79,38 @@ import type { ArtifactWorkspaceRecord } from './artifact-workspace-types';
           }
         </div>
         <div class="aw-panes">
-          @if (ActiveRecord; as active) {
-            <div
-              class="aw-pane"
-              role="tabpanel"
-              [id]="'aw-panel-' + active.InstanceID"
-              [attr.aria-labelledby]="'aw-tab-' + active.InstanceID"
-              [attr.data-instance]="active.InstanceID"
-            >
-              @if (CurrentUser; as user) {
-                <mj-artifact-viewer-panel
-                  [artifactId]="active.ArtifactID"
-                  [versionNumber]="active.VersionNumber"
-                  [currentUser]="user"
-                  [Provider]="Provider"
-                  [environmentId]="EnvironmentID"
-                  [refreshTrigger]="RefreshTrigger$"
-                  [canEdit]="active.CanEdit ?? false"
-                  [showHeader]="false"
-                  [showTabs]="false"
-                  [showSaveToCollection]="false"
-                  [showCloseButton]="false"
-                  [showMaximizeButton]="false"
-                ></mj-artifact-viewer-panel>
-              }
-            </div>
+          @if (!IsRehydrating) {
+            @for (record of Instances; track record.InstanceID) {
+              <div
+                class="aw-pane"
+                role="tabpanel"
+                [hidden]="record.InstanceID !== ActiveID"
+                [id]="'aw-panel-' + record.InstanceID"
+                [attr.aria-labelledby]="'aw-tab-' + record.InstanceID"
+                [attr.data-instance]="record.InstanceID"
+              >
+                @if (CurrentUser; as user) {
+                  <mj-artifact-viewer-panel
+                    [artifactId]="record.ArtifactID"
+                    [versionNumber]="record.VersionNumber"
+                    [currentUser]="user"
+                    [Provider]="Provider"
+                    [environmentId]="EnvironmentID"
+                    [refreshTrigger]="RefreshTrigger$"
+                    [canEdit]="record.CanEdit ?? false"
+                    [viewMode]="record.ViewMode ?? 'edit'"
+                    [navigationAnchor]="GetNavigationAnchorForRecord(record)"
+                    [showHeader]="false"
+                    [showTabs]="false"
+                    [showSaveToCollection]="false"
+                    [showCloseButton]="false"
+                    [showMaximizeButton]="false"
+                    (VersionSaved)="OnViewerVersionSaved(record.InstanceID, $event)"
+                    (selectionChanged)="ReportSelectionAnchor(record.InstanceID, $event)"
+                  ></mj-artifact-viewer-panel>
+                }
+              </div>
+            }
           }
         </div>
       }
@@ -227,6 +240,9 @@ import type { ArtifactWorkspaceRecord } from './artifact-workspace-types';
         display: flex;
         flex-direction: column;
       }
+      .aw-pane[hidden] {
+        display: none;
+      }
       .aw-pane > mj-artifact-viewer-panel {
         flex: 1;
         min-height: 0;
@@ -240,6 +256,8 @@ export class RealtimeArtifactWorkspaceSurfaceComponent
 {
   private _engine: ArtifactWorkspaceEngine | null = null;
   private subscription: Subscription | null = null;
+  private navSubscription: Subscription | null = null;
+  private anchorHighlightTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
 
@@ -254,6 +272,7 @@ export class RealtimeArtifactWorkspaceSurfaceComponent
     }
     this._engine = value;
     this.resubscribe();
+    this.cdr.markForCheck();
   }
   public get Engine(): ArtifactWorkspaceEngine | null {
     return this._engine;
@@ -261,8 +280,13 @@ export class RealtimeArtifactWorkspaceSurfaceComponent
 
   public Instances: readonly ArtifactWorkspaceRecord[] = [];
   public ActiveID: string | null = null;
+  public IsRehydrating = false;
+  public ActiveNavigationAnchor: ArtifactNavigateToAnchorPayload | null = null;
+  private activeViewerAnchor: ArtifactViewerNavigationAnchor | null = null;
   public OnUserSelected: ((instanceId: string) => void) | null = null;
   public OnUserClosed: ((instanceId: string) => void) | null = null;
+  public OnUserVersionSaved: ((instanceId: string, event: ArtifactVersionSavedEvent) => void) | null = null;
+  public OnUserSelectionChanged: ((delta: ArtifactSelectionDelta) => void) | null = null;
 
   public get RefreshTrigger$() {
     return this._engine?.RefreshTrigger$;
@@ -279,6 +303,12 @@ export class RealtimeArtifactWorkspaceSurfaceComponent
   public ngOnDestroy(): void {
     this.subscription?.unsubscribe();
     this.subscription = null;
+    this.navSubscription?.unsubscribe();
+    this.navSubscription = null;
+    if (this.anchorHighlightTimer) {
+      clearTimeout(this.anchorHighlightTimer);
+      this.anchorHighlightTimer = null;
+    }
   }
 
   public SelectTab(instanceId: string): void {
@@ -291,8 +321,44 @@ export class RealtimeArtifactWorkspaceSurfaceComponent
     this.OnUserClosed?.(instanceId);
   }
 
+  public OnViewerVersionSaved(instanceId: string, event: ArtifactVersionSavedEvent): void {
+    this._engine?.UpdateRecordMetadata(instanceId, {
+      ArtifactVersionID: event.VersionID,
+      VersionNumber: event.VersionNumber,
+    });
+    this.OnUserVersionSaved?.(instanceId, event);
+    this.cdr.markForCheck();
+  }
+
+  public ReportSelectionAnchor(instanceId: string, anchor: ArtifactSelectionAnchor): void {
+    const record = this._engine?.UpdateSelection(instanceId, anchor);
+    if (!record) {
+      return;
+    }
+    this.OnUserSelectionChanged?.({
+      instanceId,
+      artifactId: record.ArtifactID,
+      artifactTypeName: record.ArtifactTypeName,
+      anchor,
+    });
+    this.cdr.markForCheck();
+  }
+
+  public GetNavigationAnchorForRecord(record: ArtifactWorkspaceRecord): ArtifactViewerNavigationAnchor | null {
+    if (!this.ActiveNavigationAnchor || !this.activeViewerAnchor) {
+      return null;
+    }
+    if (
+      this.ActiveNavigationAnchor.InstanceID === record.InstanceID ||
+      this.ActiveNavigationAnchor.ArtifactID === record.ArtifactID
+    ) {
+      return this.activeViewerAnchor;
+    }
+    return null;
+  }
+
   public GetActiveElement(): HTMLElement | null {
-    return this.elementRef.nativeElement.querySelector<HTMLElement>('.aw-pane');
+    return this.elementRef.nativeElement.querySelector<HTMLElement>('.aw-pane:not([hidden])');
   }
 
   public IconForType(record: ArtifactWorkspaceRecord): string {
@@ -312,14 +378,47 @@ export class RealtimeArtifactWorkspaceSurfaceComponent
   private resubscribe(): void {
     this.subscription?.unsubscribe();
     this.subscription = null;
+    this.navSubscription?.unsubscribe();
+    this.navSubscription = null;
     if (!this._engine) {
       this.Instances = [];
       this.ActiveID = null;
+      this.IsRehydrating = false;
+      this.ActiveNavigationAnchor = null;
+      this.activeViewerAnchor = null;
       return;
     }
     this.syncFromEngine();
     this.subscription = this._engine.Changed$.subscribe(() => {
       this.syncFromEngine();
+      this.cdr.markForCheck();
+    });
+    this.navSubscription = this._engine.NavigateAnchor$.subscribe((payload) => {
+      this.ActiveNavigationAnchor = payload;
+      this.activeViewerAnchor = {
+        ...(payload.Sheet !== undefined ? { Sheet: payload.Sheet } : {}),
+        ...(payload.Range !== undefined ? { Range: payload.Range } : {}),
+        ...(payload.SlideNumber !== undefined ? { SlideNumber: payload.SlideNumber } : {}),
+        ...(payload.SlideID !== undefined ? { SlideID: payload.SlideID } : {}),
+        ...(payload.ElementID !== undefined ? { ElementID: payload.ElementID } : {}),
+        ...(payload.Heading !== undefined ? { Heading: payload.Heading } : {}),
+        ...(payload.BlockID !== undefined ? { BlockID: payload.BlockID } : {}),
+        ...(payload.HighlightMs !== undefined ? { HighlightMs: payload.HighlightMs } : {}),
+      };
+      if (this.anchorHighlightTimer) {
+        clearTimeout(this.anchorHighlightTimer);
+        this.anchorHighlightTimer = null;
+      }
+      const highlightMs = payload.HighlightMs;
+      if (typeof highlightMs === 'number' && highlightMs > 0) {
+        this.anchorHighlightTimer = setTimeout(() => {
+          if (this.ActiveNavigationAnchor === payload) {
+            this.ActiveNavigationAnchor = null;
+            this.activeViewerAnchor = null;
+            this.cdr.markForCheck();
+          }
+        }, highlightMs);
+      }
       this.cdr.markForCheck();
     });
   }
@@ -330,5 +429,6 @@ export class RealtimeArtifactWorkspaceSurfaceComponent
     }
     this.Instances = this._engine.Instances;
     this.ActiveID = this._engine.ActiveID;
+    this.IsRehydrating = this._engine.IsRehydrating;
   }
 }

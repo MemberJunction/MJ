@@ -1,11 +1,44 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BaseEntityResult, EntityDeleteOptions, EntitySaveOptions, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { BaseEntityResult, EntityDeleteOptions, EntityInfo, EntitySaveOptions, IMetadataProvider, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import {
     ArtifactDelegateContext,
     ArtifactPermissionEngine,
     BaseArtifactPermissionDelegate,
-    DelegatePermissionDecision
+    DelegatePermissionDecision,
+    RegisterSpreadsheetWorkerRunner,
+    SetSpreadsheetWorkerIsolationRequired,
+    SpreadsheetEngine
 } from '@memberjunction/core-entities';
+import {
+    AppendSqlAndFilter,
+    ARTIFACT_POST_RUN_VIEW_PROTECTED_ENTITIES,
+    BuildSqlArtifactReadablePredicate,
+    BuildSqlArtifactReadablePredicateAsync,
+    BuildSqlArtifactVersionIdReadablePredicate,
+    BuildSqlCollectionReadablePredicate,
+    BuildSqlCollectionReadablePredicateAsync,
+    ExtractSingleUuidFieldFromFilter,
+    QualifyOuterEntityColumn,
+    QualifyOuterEntityColumnAsync,
+    ResolveTargetEntityNameAsync
+} from '../custom/ArtifactSecurityHookHelpers';
+import {
+    RegisterSpreadsheetServerWorkerRunner,
+    RunSpreadsheetEvaluateInWorker,
+    RunSpreadsheetImportInWorker,
+    RunSpreadsheetPatchInWorker
+} from '../custom/SpreadsheetWorkerRunner';
+import { ArtifactPreRunViewHook } from '../custom/MJArtifactEntityServer.server';
+import { ArtifactPermissionPreRunViewHook } from '../custom/MJArtifactPermissionEntityServer.server';
+import { ArtifactVersionAttributePreRunViewHook } from '../custom/MJArtifactVersionAttributeEntityServer.server';
+import { ArtifactGuestShareLinkPreRunViewHook } from '../custom/MJArtifactGuestShareLinkEntityServer.server';
+import { CollectionArtifactPreRunViewHook } from '../custom/MJCollectionArtifactEntityServer.server';
+import { CollectionPreRunViewHook } from '../custom/MJCollectionEntityServer.server';
+import { CollectionPermissionPreRunViewHook } from '../custom/MJCollectionPermissionEntityServer.server';
+import { ArtifactVersionPostRunViewHook, ArtifactVersionPreRunViewHook } from '../custom/MJArtifactVersionEntityServer.server';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -116,6 +149,15 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             this.ResultHistory.push(result);
         }
 
+        public async InnerLoad(): Promise<boolean> {
+            return true;
+        }
+
+        public NewRecord(): void {
+            this.ID = '';
+            this.IsSaved = false;
+        }
+
         public async Save(_options?: EntitySaveOptions): Promise<boolean> {
             this.SuperSaveCalls++;
             return this.SuperSaveReturn;
@@ -133,7 +175,11 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     };
 });
 
-import { MJArtifactEntityServer } from '../custom/MJArtifactEntityServer.server';
+import {
+    ArtifactPostRunViewHook,
+    ArtifactPreRunViewHook,
+    MJArtifactEntityServer
+} from '../custom/MJArtifactEntityServer.server';
 
 interface StubArtifactHost {
     ID: string;
@@ -170,12 +216,16 @@ function makeUser(id: string, name: string): UserInfo {
 }
 
 function makeMockProvider(): IMetadataProvider {
+    const entities = [
+        { ID: ARTIFACTS_ENTITY_ID, Name: 'MJ: Artifacts' },
+        { ID: PROJECTS_ENTITY_ID, Name: 'MJ: Projects' },
+        { ID: UNREGISTERED_ENTITY_ID, Name: 'MJ: Unregistered Host' }
+    ];
     return {
-        Entities: [
-            { ID: ARTIFACTS_ENTITY_ID, Name: 'MJ: Artifacts' },
-            { ID: PROJECTS_ENTITY_ID, Name: 'MJ: Projects' },
-            { ID: UNREGISTERED_ENTITY_ID, Name: 'MJ: Unregistered Host' }
-        ]
+        ProviderType: 'Database',
+        Entities: entities,
+        EntityByID: (id: string) => entities.find((e) => e.ID === id),
+        EntityByName: (name: string) => entities.find((e) => e.Name === name)
     } as unknown as IMetadataProvider;
 }
 
@@ -225,7 +275,21 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
     let notifySpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
-        resolvePermsSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions');
+        resolvePermsSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
+            .mockImplementation(async (_p, targetArtifactId, user) => {
+                const isOwner = user.ID === OWNER_ID;
+                const isEditor = isOwner || user.ID === SHARED_EDITOR_ID;
+                return {
+                    ArtifactID: targetArtifactId,
+                    CanRead: isEditor,
+                    CanEdit: isEditor,
+                    CanDelete: isOwner,
+                    CanShare: isOwner,
+                    Source: isOwner ? 'Owner' : isEditor ? 'ArtifactPermission' : 'Denied',
+                    Reason: isOwner ? 'Owner' : isEditor ? 'Shared editor' : 'Denied'
+                };
+            });
         notifySpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'NotifyPermissionsChanged').mockResolvedValue();
     });
 
@@ -460,5 +524,1012 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             ArtifactID: ARTIFACT_ID,
             ChangedByUserID: OWNER_ID
         });
+    });
+
+    it('enforces UserID === actor.ID on create, CanEdit on non-delegation saved updates, and CanDelete on Delete() (P0-1)', async () => {
+        // 1. Spoofing UserID on !wasSaved create is rejected
+        const spoofedCreate = buildArtifact({
+            wasSaved: false,
+            actor: outsiderUser,
+            oldUserId: null,
+            newUserId: OWNER_ID
+        });
+        expect(await spoofedCreate.entity.Save()).toBe(false);
+        expect(spoofedCreate.host.SuperSaveCalls).toBe(0);
+
+        // 2. Outsider cannot update Name on an existing artifact
+        const outsiderUpdate = buildArtifact({
+            wasSaved: true,
+            actor: outsiderUser,
+            oldUserId: OWNER_ID,
+            newUserId: OWNER_ID
+        });
+        outsiderUpdate.entity.Name = 'Hijacked Name';
+        expect(await outsiderUpdate.entity.Save()).toBe(false);
+        expect(outsiderUpdate.host.SuperSaveCalls).toBe(0);
+
+        // 3. Shared editor without CanDelete cannot Delete()
+        const deniedDelete = buildArtifact({
+            wasSaved: true,
+            actor: sharedEditorUser,
+            oldUserId: OWNER_ID,
+            newUserId: OWNER_ID
+        });
+        expect(await deniedDelete.entity.Delete()).toBe(false);
+        expect(deniedDelete.host.SuperDeleteCalls).toBe(0);
+    });
+
+    it('enforces CanRead on InnerLoad, PreRunView/PostRunView, count_only, and paged TotalRowCount (P0-1)', async () => {
+        // InnerLoad rejects outsider via NewRecord()
+        const superInnerLoadSpy = vi
+            .spyOn(Object.getPrototypeOf(MJArtifactEntityServer.prototype), 'InnerLoad')
+            .mockResolvedValue(true);
+        try {
+            const loaded = buildArtifact({
+                wasSaved: true,
+                actor: outsiderUser
+            });
+            expect(await loaded.entity.InnerLoad({ FieldValues: [{ FieldName: 'ID', Value: ARTIFACT_ID }] } as never)).toBe(false);
+        } finally {
+            superInnerLoadSpy.mockRestore();
+        }
+
+        // PreRunView appends ID when missing; PostRunView strips synthetic ID and adjusts paged/count_only totals
+        const params = {
+            EntityName: 'MJ: Artifacts',
+            Fields: ['Name'],
+            MaxRows: 1,
+            ResultType: 'simple' as const
+        };
+        const provider = makeMockProvider();
+        const hookedParams = await ArtifactPreRunViewHook(params, sharedEditorUser, provider);
+        expect(hookedParams.Fields).toEqual(['Name', 'ID']);
+
+        const postRes = await ArtifactPostRunViewHook(
+            hookedParams,
+            {
+                Success: true,
+                Results: [
+                    { ID: ARTIFACT_ID, Name: 'Allowed' },
+                    { ID: HOST_ARTIFACT_ID, Name: 'Denied' }
+                ],
+                RowCount: 2,
+                TotalRowCount: 99,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            outsiderUser,
+            provider
+        );
+        expect(postRes.Results).toEqual([]);
+        expect(postRes.RowCount).toBe(0);
+        expect(postRes.TotalRowCount).toBe(0);
+
+        const countOnlyRes = await ArtifactPostRunViewHook(
+            {
+                EntityName: 'MJ: Artifacts',
+                ResultType: 'count_only'
+            },
+            {
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 42,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            outsiderUser,
+            provider
+        );
+        expect(countOnlyRes.TotalRowCount).toBe(0);
+        expect(countOnlyRes.RowCount).toBe(0);
+    });
+
+    it('B1 / B2: matches mixed-case EntityName and preserves paged TotalRowCount when SQL-scoped', async () => {
+        const scopedArtEntityId = '00000000-0000-4000-8000-0000000000a1';
+        const scopedProvider = {
+            ProviderType: 'Database',
+            Entities: [{ ID: scopedArtEntityId, Name: 'MJ: Artifacts' }],
+            EntityByName: (name: string) =>
+                name.trim().toLowerCase() === 'mj: artifacts'
+                    ? ({ ID: scopedArtEntityId, Name: 'MJ: Artifacts' } as never)
+                    : undefined,
+            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] })
+        } as unknown as IMetadataProvider;
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet').mockResolvedValueOnce(
+            new Set()
+        );
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet').mockResolvedValue(
+            new Set([ARTIFACT_ID])
+        );
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: ARTIFACT_ID,
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'ArtifactPermission',
+            Reason: 'Reader'
+        });
+
+        const hooked = await ArtifactPreRunViewHook(
+            { EntityName: 'mj: artifacts', Fields: ['Name'], MaxRows: 1, ResultType: 'simple' },
+            sharedEditorUser,
+            scopedProvider
+        );
+        expect(String(hooked.ExtraFilter)).toContain('EXISTS (');
+        expect(String(hooked.ExtraFilter)).toContain('vwArtifacts');
+        expect(String(hooked.ExtraFilter)).toContain('vwArtifactPermissions');
+        expect(String(hooked.ExtraFilter)).toContain(sharedEditorUser.ID);
+        expect(hooked.Fields).toEqual(['Name', 'ID']);
+
+        const post = await ArtifactPostRunViewHook(
+            hooked,
+            {
+                Success: true,
+                Results: [{ ID: ARTIFACT_ID, Name: 'Paged Item' }],
+                RowCount: 1,
+                TotalRowCount: 42,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            sharedEditorUser,
+            scopedProvider
+        );
+        expect(post.Results).toEqual([{ Name: 'Paged Item' }]);
+        expect(post.TotalRowCount).toBe(42);
+    });
+
+    it('B1 / B2: ViewID/ViewName fail-closed resolution and SQL EXISTS scoping for >5,000 artifacts across SQL dialects', async () => {
+        const provider = {
+            ProviderType: 'Database',
+            PlatformKey: 'sqlserver',
+            Entities: [{ ID: 'ent-art', Name: 'MJ: Artifacts', BaseView: 'vwArtifacts', SchemaName: '__mj' }],
+            EntityByName: (name: string) =>
+                name.trim().toLowerCase() === 'mj: artifacts'
+                    ? { ID: 'ent-art', Name: 'MJ: Artifacts', BaseView: 'vwArtifacts', SchemaName: '__mj' }
+                    : undefined,
+            RunView: vi.fn().mockImplementation(async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: User Views') {
+                    if (String(params.ExtraFilter).includes('00000000-0000-4000-8000-000000000404')) {
+                        return { Success: false, Results: [], ErrorMessage: 'DB timeout' };
+                    }
+                    return { Success: true, Results: [{ Entity: 'MJ: Artifacts' }] };
+                }
+                return { Success: true, Results: [] };
+            })
+        } as unknown as IMetadataProvider;
+
+        // ViewID resolving to MJ: Artifacts matches cleanly
+        const viewIdResolved = await ResolveTargetEntityNameAsync(
+            { ViewID: '11111111-1111-4111-8111-111111111222' },
+            provider,
+            sharedEditorUser
+        );
+        expect(viewIdResolved).toBe('MJ: Artifacts');
+
+        // Fail-closed when User Views lookup fails
+        await expect(
+            ResolveTargetEntityNameAsync(
+                { ViewID: '00000000-0000-4000-8000-000000000404' },
+                provider,
+                sharedEditorUser
+            )
+        ).rejects.toThrow(/unable to resolve target entity/i);
+
+        // Fail-closed when EntityName and ViewName disagree
+        await expect(
+            ResolveTargetEntityNameAsync(
+                { EntityName: 'Users', ViewName: 'Artifacts View' },
+                provider,
+                sharedEditorUser
+            )
+        ).rejects.toThrow(/does not match/i);
+
+        // SQL EXISTS predicate has no 5,000-ID truncation limit and covers both dialects
+        const bigSet = new Set<string>();
+        for (let i = 0; i < 5500; i++) {
+            bigSet.add(`00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+        }
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet').mockResolvedValueOnce(
+            new Set(['22222222-2222-4222-8222-222222222222'])
+        );
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet').mockResolvedValue(bigSet);
+        const sqlScoped = await ArtifactPreRunViewHook(
+            { EntityName: 'MJ: Artifacts', ResultType: 'simple' },
+            sharedEditorUser,
+            provider
+        );
+        expect(String(sqlScoped.ExtraFilter)).toContain('EXISTS (');
+        expect(String(sqlScoped.ExtraFilter)).toContain('[__mj].[vwArtifacts].[ID]');
+        expect(String(sqlScoped.ExtraFilter)).not.toContain('ID IN (');
+
+        // Also check PostgreSQL quoting for ArtifactVersion + Collection predicates
+        const pgEntities = [
+            { ID: 'ent-art', Name: 'MJ: Artifacts', BaseView: 'vwArtifacts', SchemaName: '__mj' },
+            { ID: 'ent-ver', Name: 'MJ: Artifact Versions', BaseView: 'vwArtifactVersions', SchemaName: '__mj' },
+            { ID: 'ent-attr', Name: 'MJ: Artifact Version Attributes', BaseView: 'vwArtifactVersionAttributes', SchemaName: '__mj' },
+            { ID: 'ent-ca', Name: 'MJ: Collection Artifacts', BaseView: 'vwCollectionArtifacts', SchemaName: '__mj' },
+            { ID: 'ent-col', Name: 'MJ: Collections', BaseView: 'vwCollections', SchemaName: '__mj' },
+            { ID: 'ent-cp', Name: 'MJ: Collection Permissions', BaseView: 'vwCollectionPermissions', SchemaName: '__mj' },
+            { ID: 'ent-ap', Name: 'MJ: Artifact Permissions', BaseView: 'vwArtifactPermissions', SchemaName: '__mj' }
+        ];
+        const pgProvider = {
+            ...provider,
+            PlatformKey: 'postgresql',
+            Entities: pgEntities,
+            EntityByName: (name: string) =>
+                pgEntities.find((e) => e.Name.trim().toLowerCase() === name.trim().toLowerCase())
+        } as unknown as IMetadataProvider;
+        const pgColSql = BuildSqlCollectionReadablePredicate('CollectionID', pgProvider, sharedEditorUser);
+        const pgVerSql = BuildSqlArtifactVersionIdReadablePredicate('ArtifactVersionID', pgProvider, sharedEditorUser);
+        expect(pgColSql).toContain('EXISTS (');
+        expect(pgColSql).toContain('vwCollections');
+        expect(pgVerSql).toContain('vwArtifactVersions');
+        expect(ARTIFACT_POST_RUN_VIEW_PROTECTED_ENTITIES).toHaveLength(9);
+    });
+
+    it('R1, S-f, S-j: hardens SQL delegate predicates, honors 17-level collections & alternate/materialized views, and rejects unbalanced ExtraFilter', async () => {
+        const artEntityId = '11111111-1111-4111-8111-111111111111';
+        const convEntityId = '22222222-2222-4222-8222-222222222222';
+        const projEntityId = '33333333-3333-4333-8333-333333333333';
+
+        const artEntityInfo = new EntityInfo({
+            ID: artEntityId,
+            Name: 'MJ: Artifacts',
+            BaseView: 'vwArtifacts',
+            SchemaName: 'custom_mj',
+            CodeName: 'Artifacts',
+            EntityFields: [],
+            EntityAlternateBaseViews: [
+                {
+                    ID: '55555555-5555-4555-8555-555555555555',
+                    EntityID: artEntityId,
+                    ParentID: null,
+                    Name: 'Compact',
+                    DisplayName: 'Compact',
+                    ViewName: 'vwArtifactsCompact',
+                    SchemaName: 'alt_schema',
+                    CachePolicy: 'Default',
+                    Status: 'Active',
+                    Sequence: 10
+                }
+            ]
+        });
+        const verEntityInfo = new EntityInfo({
+            ID: '44444444-4444-4444-8444-444444444444',
+            Name: 'MJ: Artifact Versions',
+            BaseView: 'vwArtifactVersions',
+            SchemaName: 'custom_mj',
+            CodeName: 'ArtifactVersions',
+            EntityFields: []
+        });
+        const convEntityInfo = new EntityInfo({
+            ID: convEntityId,
+            Name: 'MJ: Conversations',
+            BaseView: 'vwConversations',
+            SchemaName: 'custom_mj'
+        });
+        const projEntityInfo = new EntityInfo({
+            ID: projEntityId,
+            Name: 'MJ: Projects',
+            BaseView: 'vwProjects',
+            SchemaName: 'custom_mj'
+        });
+        const entities = [artEntityInfo, verEntityInfo, convEntityInfo, projEntityInfo];
+
+        const customProvider = {
+            ProviderType: 'Database',
+            PlatformKey: 'sqlserver',
+            ConfigData: { MJCoreSchemaName: 'custom_mj' },
+            Entities: entities,
+            EntityByName: (name: string) =>
+                entities.find((e) => e.Name.trim().toLowerCase() === name.trim().toLowerCase()),
+            EntityByID: (id: string) => entities.find((e) => e.ID === id),
+            RunView: vi.fn(async () => ({ Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: 'unmocked' }))
+        };
+
+        // R1 / L1: SQL collection predicate includes 16 levels (c0..c15) matching ArtifactPermissionEngine
+        const colSql = BuildSqlCollectionReadablePredicate(
+            '[custom_mj].[vwCollections].[ID]',
+            customProvider as unknown as IMetadataProvider,
+            sharedEditorUser
+        );
+        expect(colSql).toContain('[_sc15]');
+        expect(colSql).not.toContain('[_sc16]');
+        expect(colSql).toContain('[custom_mj].[vwCollections]');
+        expect(colSql).toContain('[custom_mj].[vwCollectionPermissions]');
+
+        // R1: Artifact SQL predicate does NOT emit vwConversations / AnchorType bypass and DOES chain MJ: Artifacts 8 hops
+        const artPredSync = BuildSqlArtifactReadablePredicate(
+            '[custom_mj].[vwArtifactVersions].[ArtifactID]',
+            customProvider as unknown as IMetadataProvider,
+            sharedEditorUser
+        );
+        expect(artPredSync).not.toContain('vwConversations');
+        expect(artPredSync).not.toContain('AnchorType');
+        expect(artPredSync).toContain(`[_sa_h0_art].[DelegateEntityID] = '${artEntityId}'`);
+        expect(artPredSync).toContain('[_sa_h8_art]');
+        expect(artPredSync).toContain('[_sa_h0_art].[DelegateEntityID] IS NULL OR [_sa_h0_art].[DelegateRecordID] IS NULL');
+
+        // R1: Async precompute shrinks query when collections succeed, and sets isExact=false when custom non-artifact delegate is registered
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet').mockResolvedValueOnce(new Set());
+        const exactAsync = await BuildSqlArtifactReadablePredicateAsync(
+            '[custom_mj].[vwArtifactVersions].[ArtifactID]',
+            customProvider as unknown as IMetadataProvider,
+            sharedEditorUser
+        );
+        expect(exactAsync.isExact).toBe(true);
+        expect(exactAsync.clause).not.toContain('vwCollections');
+
+        ArtifactPermissionEngine.Instance.RegisterDelegate('MJ: Projects', {
+            CanRead: async () => 'Allow',
+            CanEdit: async () => 'Defer'
+        });
+        try {
+            vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet').mockResolvedValueOnce(new Set());
+            const inexactAsync = await BuildSqlArtifactReadablePredicateAsync(
+                '[custom_mj].[vwArtifactVersions].[ArtifactID]',
+                customProvider as unknown as IMetadataProvider,
+                sharedEditorUser
+            );
+            expect(inexactAsync.isExact).toBe(false);
+            expect(inexactAsync.clause).toContain(projEntityId);
+
+            // When isExact=false (custom delegate active), count_only on empty results must NOT trust TotalRowCount
+            vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet').mockResolvedValueOnce(new Set());
+            const countOnlyParams: RunViewParams = {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: "Content LIKE '%secret%'",
+                ResultType: 'count_only'
+            };
+            const preParams = await ArtifactVersionPreRunViewHook(
+                countOnlyParams,
+                sharedEditorUser,
+                customProvider as unknown as IMetadataProvider
+            );
+            const postCount = await ArtifactVersionPostRunViewHook(
+                preParams,
+                {
+                    Success: true,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 3,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                },
+                sharedEditorUser,
+                customProvider as unknown as IMetadataProvider
+            );
+            expect(postCount.TotalRowCount).toBe(0);
+        } finally {
+            ArtifactPermissionEngine.Instance.UnregisterDelegate('MJ: Projects');
+        }
+
+        // B5: Guest Share Links (requireShareOrDelete) and Collection Artifacts precompute collections to avoid >260 tables
+        const colArtEntityId = '66666666-6666-4666-8666-666666666666';
+        const guestLinkEntityId = '77777777-7777-4777-8777-777777777777';
+        const colArtEntityInfo = new EntityInfo({
+            ID: colArtEntityId,
+            Name: 'MJ: Collection Artifacts',
+            BaseView: 'vwCollectionArtifacts',
+            SchemaName: 'custom_mj'
+        });
+        const guestLinkEntityInfo = new EntityInfo({
+            ID: guestLinkEntityId,
+            Name: 'MJ: Artifact Guest Share Links',
+            BaseView: 'vwArtifactGuestShareLinks',
+            SchemaName: 'custom_mj'
+        });
+        const b5Entities = [...entities, colArtEntityInfo, guestLinkEntityInfo];
+        const b5Provider = {
+            ProviderType: 'Database',
+            PlatformKey: 'sqlserver',
+            ConfigData: { MJCoreSchemaName: 'custom_mj' },
+            Entities: b5Entities,
+            EntityByName: (name: string) =>
+                b5Entities.find((e) => e.Name.trim().toLowerCase() === name.trim().toLowerCase()),
+            EntityByID: (id: string) => b5Entities.find((e) => e.ID === id),
+            RunView: vi.fn(async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }))
+        };
+        const tryColSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet')
+            .mockResolvedValue(new Set(['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']));
+
+        const guestHooked = await ArtifactGuestShareLinkPreRunViewHook(
+            { EntityName: 'MJ: Artifact Guest Share Links', ResultType: 'simple' },
+            sharedEditorUser,
+            b5Provider as unknown as IMetadataProvider
+        );
+        expect(tryColSpy).toHaveBeenCalledWith(expect.anything(), sharedEditorUser, { requireShareOrDelete: true });
+        expect(String(guestHooked.ExtraFilter)).not.toContain('vwCollections');
+
+        tryColSpy.mockClear();
+        const colArtHooked = await CollectionArtifactPreRunViewHook(
+            { EntityName: 'MJ: Collection Artifacts', ResultType: 'simple' },
+            sharedEditorUser,
+            b5Provider as unknown as IMetadataProvider
+        );
+        expect(tryColSpy).toHaveBeenCalledTimes(1);
+        expect(String(colArtHooked.ExtraFilter)).not.toContain('vwCollections');
+        tryColSpy.mockRestore();
+
+        // S-f & N4: QualifyOuterEntityColumn & QualifyOuterEntityColumnAsync honor EffectiveSchemaName, custom ViewName, and inactive fallback
+        expect(
+            QualifyOuterEntityColumn(
+                artEntityInfo,
+                'vwArtifacts',
+                'ID',
+                customProvider as unknown as IMetadataProvider,
+                { EntityName: 'MJ: Artifacts', DataSource: 'Materialized' }
+            )
+        ).toBe('[custom_mj].[materialized_vwArtifacts].[ID]');
+        expect(
+            QualifyOuterEntityColumn(
+                artEntityInfo,
+                'vwArtifacts',
+                'ID',
+                customProvider as unknown as IMetadataProvider,
+                { EntityName: 'MJ: Artifacts', AlternateBaseView: 'Compact' }
+            )
+        ).toBe('[alt_schema].[vwArtifactsCompact].[ID]');
+        expect(
+            await QualifyOuterEntityColumnAsync(
+                artEntityInfo,
+                'vwArtifacts',
+                'ID',
+                customProvider as unknown as IMetadataProvider,
+                { EntityName: 'MJ: Artifacts', DataSource: 'Materialized' },
+                sharedEditorUser
+            )
+        ).toBe('[custom_mj].[vwArtifacts].[ID]');
+        const activeMatProvider = {
+            ...b5Provider,
+            RunView: vi.fn(async () => ({
+                Success: true,
+                Results: [{ Status: 'Active', ViewName: 'mv_custom_artifacts' }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            }))
+        };
+        expect(
+            await QualifyOuterEntityColumnAsync(
+                artEntityInfo,
+                'vwArtifacts',
+                'ID',
+                activeMatProvider as unknown as IMetadataProvider,
+                { EntityName: 'MJ: Artifacts', DataSource: 'Materialized' },
+                sharedEditorUser
+            )
+        ).toBe('[custom_mj].[mv_custom_artifacts].[ID]');
+
+        // S-j: AppendSqlAndFilter rejects unbalanced parentheses and unclosed single quotes before wrapping
+        expect(() => AppendSqlAndFilter("Name = 'ok') OR (1=1", '[ID] IS NOT NULL')).toThrow(/unbalanced/i);
+        expect(() => AppendSqlAndFilter("Name = 'unclosed", '[ID] IS NOT NULL')).toThrow(/unbalanced/i);
+        expect(AppendSqlAndFilter("Name = 'O''Reilly (dev)'", '[ID] IS NOT NULL')).toBe(
+            "(Name = 'O''Reilly (dev)') AND ([ID] IS NOT NULL)"
+        );
+    });
+
+    it('bypasses server SQL scoping and PostRunView filtering on ProviderType=Network even with contextUser, while Database filtered RunView returns readable rows', async () => {
+        const networkProvider = {
+            ProviderType: 'Network',
+            Entities: [
+                {
+                    Name: 'MJ: Artifact Versions',
+                    SchemaName: '__mj',
+                    BaseView: 'vwArtifactVersions',
+                    Fields: [{ Name: 'ID', IsPrimaryKey: true }, { Name: 'ArtifactID' }, { Name: 'Content' }]
+                }
+            ],
+            EntityByName: (name: string) =>
+                name.trim().toLowerCase() === 'mj: artifact versions'
+                    ? networkProvider.Entities[0]
+                    : undefined
+        } as unknown as IMetadataProvider;
+
+        const clientParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: "Content LIKE '%probe%'",
+            Fields: ['ID', 'Content'],
+            ResultType: 'simple'
+        };
+        const afterNetworkPre = await ArtifactVersionPreRunViewHook(
+            clientParams,
+            sharedEditorUser,
+            networkProvider
+        );
+        // Must NOT inject SQL EXISTS(... FROM vwArtifacts) or add ArtifactID onto a Network/GraphQL client request
+        expect(afterNetworkPre).toBe(clientParams);
+        expect(afterNetworkPre.ExtraFilter).toBe("Content LIKE '%probe%'");
+        expect(afterNetworkPre.Fields).toEqual(['ID', 'Content']);
+
+        const networkPost = await ArtifactVersionPostRunViewHook(
+            afterNetworkPre,
+            {
+                Success: true,
+                Results: [{ ID: 'ver-1', Content: 'Server-vetted content' }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            sharedEditorUser,
+            networkProvider
+        );
+        expect(networkPost.Success).toBe(true);
+        expect(networkPost.Results).toEqual([{ ID: 'ver-1', Content: 'Server-vetted content' }]);
+
+        // Plain non-system user running a filtered Database RunView on MJ: Artifact Versions gets readable rows back
+        const readableArtId = '99999999-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: readableArtId,
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'ArtifactPermission',
+            Reason: 'Shared'
+        });
+        const dbProvider = {
+            ProviderType: 'Database',
+            Entities: networkProvider.Entities,
+            EntityByName: networkProvider.EntityByName,
+            RunView: vi.fn(async () => ({
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            }))
+        } as unknown as IMetadataProvider;
+
+        const filteredDbParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID = '${readableArtId}' AND Content LIKE '%readable%'`,
+            Fields: ['ID', 'Content'],
+            ResultType: 'simple'
+        };
+        const wellKnownSysSpy = vi
+            .spyOn(WellKnownUserSource.Instance, 'GetSystemUser')
+            .mockResolvedValue({ ID: SYSTEM_USER_ID } as UserInfo);
+        try {
+            const hookedDbParams = await ArtifactVersionPreRunViewHook(
+                filteredDbParams,
+                sharedEditorUser,
+                dbProvider
+            );
+            expect(String(hookedDbParams.ExtraFilter)).toContain(`ArtifactID = '${readableArtId}'`);
+            const postDbRes = await ArtifactVersionPostRunViewHook(
+                hookedDbParams,
+                {
+                    Success: true,
+                    Results: [{ ID: 'ver-readable', ArtifactID: readableArtId, Content: 'Shared readable doc' }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                },
+                sharedEditorUser,
+                dbProvider
+            );
+            expect(postDbRes.Success).toBe(true);
+            expect(postDbRes.Results).toEqual([{ ID: 'ver-readable', Content: 'Shared readable doc' }]);
+        } finally {
+            wellKnownSysSpy.mockRestore();
+        }
+    });
+
+    it('enforces S5-2 cache separation (readable vs shareOrDelete) and R5-4 bounded <260 table counts across collection/artifact matrix', async () => {
+        const b5Provider = {
+            ProviderType: 'Database',
+            PlatformKey: 'sqlserver',
+            ConfigData: { MJCoreSchemaName: '__mj' },
+            Entities: [
+                { ID: '00000000-0000-4000-8000-0000000000e1', Name: 'MJ: Artifacts', BaseView: 'vwArtifacts', SchemaName: '__mj' },
+                { ID: '00000000-0000-4000-8000-0000000000e2', Name: 'MJ: Artifact Guest Share Links', BaseView: 'vwArtifactGuestShareLinks', SchemaName: '__mj' },
+                { ID: '00000000-0000-4000-8000-0000000000e3', Name: 'MJ: Collection Artifacts', BaseView: 'vwCollectionArtifacts', SchemaName: '__mj' }
+            ],
+            EntityByName: (name: string) =>
+                b5Provider.Entities.find((e) => e.Name.trim().toLowerCase() === name.trim().toLowerCase()),
+            RunView: vi.fn(async () => ({ Success: true, Results: [] }))
+        };
+        const makeUuids = (n: number, prefix: string): Set<string> => {
+            const set = new Set<string>();
+            for (let i = 0; i < n; i++) {
+                set.add(`${prefix}-0000-4000-8000-${String(i).padStart(12, '0')}`);
+            }
+            return set;
+        };
+
+        // S5-2: Per-call CollectionIdSetCache MUST keep readable and shareOrDelete entries isolated
+        const readableCols = makeUuids(2, '11111111');
+        const shareOrDeleteCols = makeUuids(1, '22222222');
+        const tryColsSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet')
+            .mockImplementation(async (_p, _u, opts) => (opts?.requireShareOrDelete ? shareOrDeleteCols : readableCols));
+        const sharedCache = new Map<'readable' | 'shareOrDelete', Promise<Set<string> | null>>();
+        const readPred = await BuildSqlArtifactReadablePredicateAsync('[vwArtifacts].[ID]', b5Provider as unknown as IMetadataProvider, sharedEditorUser, {
+            requireShareOrDelete: false,
+            precomputedCollectionCache: sharedCache
+        });
+        const sharePred = await BuildSqlArtifactReadablePredicateAsync('[vwArtifacts].[ID]', b5Provider as unknown as IMetadataProvider, sharedEditorUser, {
+            requireShareOrDelete: true,
+            precomputedCollectionCache: sharedCache
+        });
+        expect(tryColsSpy).toHaveBeenCalledTimes(2);
+        expect(readPred.clause).toContain('11111111-0000-4000-8000-000000000001');
+        expect(sharePred.clause).toContain('22222222-0000-4000-8000-000000000000');
+        expect(sharePred.clause).not.toContain('11111111-0000-4000-8000-000000000001');
+
+        // R5-4, R6-3 & R7-4 matrix: <=500 / >500 collections x <=5000 / 5001 (set-based!) / >50000 / null artifacts x requireShareOrDelete false/true
+        const countTables = (sql: string): number => (sql.match(/\[vw[A-Za-z]+\]/g) ?? []).length;
+        const cases: Array<{
+            cols: Set<string> | null;
+            arts: Set<string> | null;
+            expectedExact: boolean;
+            expectedClauseFragment?: string;
+            expectedErrorPattern?: RegExp;
+        }> = [
+            { cols: makeUuids(10, 'aaaaaaaa'), arts: makeUuids(5, 'bbbbbbbb'), expectedExact: true },
+            { cols: makeUuids(501, 'cccccccc'), arts: makeUuids(20, 'dddddddd'), expectedExact: true },
+            {
+                cols: makeUuids(501, 'eeeeeeee'),
+                arts: makeUuids(5001, 'ffffffff'),
+                expectedExact: true,
+                expectedClauseFragment: 'STRING_SPLIT'
+            },
+            {
+                cols: makeUuids(501, 'eeeeeeee'),
+                arts: makeUuids(50001, 'ffffffff'),
+                expectedExact: false,
+                expectedErrorPattern: /exceeded SQL readability scope cap/i
+            },
+            {
+                cols: makeUuids(501, 'eeeeeeee'),
+                arts: null,
+                expectedExact: false,
+                expectedErrorPattern: /unable to resolve readable artifacts/i
+            },
+            {
+                cols: null,
+                arts: makeUuids(5, '99999999'),
+                expectedExact: false,
+                expectedErrorPattern: /unable to resolve readable/i
+            }
+        ];
+
+        for (const c of cases) {
+            for (const requireShareOrDelete of [false, true]) {
+                tryColsSpy.mockResolvedValue(c.cols);
+                const artSpy = vi
+                    .spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableArtifactIdSet')
+                    .mockResolvedValue(c.arts);
+
+                if (c.expectedErrorPattern) {
+                    await expect(
+                        BuildSqlArtifactReadablePredicateAsync(
+                            '[vwArtifacts].[ID]',
+                            b5Provider as unknown as IMetadataProvider,
+                            sharedEditorUser,
+                            { requireShareOrDelete }
+                        )
+                    ).rejects.toThrow(c.expectedErrorPattern);
+                    await expect(
+                        ArtifactGuestShareLinkPreRunViewHook(
+                            { EntityName: 'MJ: Artifact Guest Share Links', ResultType: 'simple' },
+                            sharedEditorUser,
+                            b5Provider as unknown as IMetadataProvider
+                        )
+                    ).rejects.toThrow(c.expectedErrorPattern);
+                } else {
+                    const res = await BuildSqlArtifactReadablePredicateAsync(
+                        '[vwArtifacts].[ID]',
+                        b5Provider as unknown as IMetadataProvider,
+                        sharedEditorUser,
+                        { requireShareOrDelete }
+                    );
+                    expect(countTables(res.clause)).toBeLessThan(260);
+                    expect(res.isExact).toBe(c.expectedExact);
+                    if (c.expectedClauseFragment) {
+                        expect(res.clause).toContain(c.expectedClauseFragment);
+                    }
+
+                    const guestParams = await ArtifactGuestShareLinkPreRunViewHook(
+                        { EntityName: 'MJ: Artifact Guest Share Links', ResultType: 'simple' },
+                        sharedEditorUser,
+                        b5Provider as unknown as IMetadataProvider
+                    );
+                    expect(countTables(String(guestParams.ExtraFilter ?? ''))).toBeLessThan(260);
+
+                    const colArtParams = await CollectionArtifactPreRunViewHook(
+                        { EntityName: 'MJ: Collection Artifacts', ResultType: 'simple' },
+                        sharedEditorUser,
+                        b5Provider as unknown as IMetadataProvider
+                    );
+                    expect(countTables(String(colArtParams.ExtraFilter ?? ''))).toBeLessThan(260);
+                }
+
+                artSpy.mockRestore();
+            }
+        }
+
+        // R7-4: Heavy user (> 500 collections & > 50,000 artifacts) filtering MJ: Collection Artifacts by CollectionID
+        // uses single-ID shortcut and succeeds without triggering workspace cap.
+        const heavyCols = makeUuids(505, '66666666');
+        const targetColId = Array.from(heavyCols)[0];
+        tryColsSpy.mockResolvedValue(heavyCols);
+        const capArtSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableArtifactIdSet')
+            .mockResolvedValue(makeUuids(50001, '12121212'));
+        const colAncSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'ResolveCollectionAncestryPermissions')
+            .mockResolvedValue({ CanRead: true, CanEdit: false, CanDelete: false, CanShare: false });
+        try {
+            const scopedColArtParams = await CollectionArtifactPreRunViewHook(
+                {
+                    EntityName: 'MJ: Collection Artifacts',
+                    ExtraFilter: `CollectionID='${targetColId}'`,
+                    ResultType: 'simple'
+                },
+                sharedEditorUser,
+                b5Provider as unknown as IMetadataProvider
+            );
+            expect(String(scopedColArtParams.ExtraFilter)).toContain(targetColId);
+            expect(String(scopedColArtParams.ExtraFilter)).not.toContain('vwCollections');
+            expect(countTables(String(scopedColArtParams.ExtraFilter))).toBeLessThan(260);
+        } finally {
+            colAncSpy.mockRestore();
+            capArtSpy.mockRestore();
+        }
+
+        // R6-3: > 5,000 collections on collection-scoped reads uses the bounded 17-table SQL predicate (never empty workspace!)
+        tryColsSpy.mockResolvedValue(makeUuids(5001, '77777777'));
+        const largeColPred = await BuildSqlCollectionReadablePredicateAsync(
+            '[vwCollectionArtifacts].[CollectionID]',
+            b5Provider as unknown as IMetadataProvider,
+            sharedEditorUser
+        );
+        expect(largeColPred.isExact).toBe(true);
+        expect(largeColPred.clause).toContain('vwCollections');
+        expect(countTables(largeColPred.clause)).toBeLessThan(25);
+        tryColsSpy.mockRestore();
+    });
+
+    it('R6-1 & R7-3: isolates server-side spreadsheet ops with timeout, missing-entry, heap-OOM, and bounded concurrency pool', async () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('Worker Isolated', ['Sheet1'], 5, 5);
+        const ws = wb.Worksheets[0];
+        ws.Cells['A1'] = { Address: 'A1', RowID: 'wr-1', ColumnID: 'wc-1', RawValue: 21 };
+        ws.Cells['A2'] = { Address: 'A2', RowID: 'wr-2', ColumnID: 'wc-1', RawValue: null, Formula: '=A1*2' };
+
+        const evalRes = await RunSpreadsheetEvaluateInWorker(wb);
+        expect(evalRes.EvaluatedFormulaCount).toBe(1);
+        expect(evalRes.Workbook.Worksheets[0].Cells['A2']?.ComputedValue).toBe(42);
+
+        const xlsxBytes = engine.ExportToXlsxBytes(evalRes.Workbook, true, { SkipEvaluate: true });
+        const imported = await RunSpreadsheetImportInWorker(xlsxBytes);
+        expect(imported.Worksheets[0].Cells['A2']?.ComputedValue).toBe(42);
+
+        imported.Worksheets[0].Cells['A1'] = { Address: 'A1', RowID: 'wr-1', ColumnID: 'wc-1', RawValue: 50 };
+        const evaluatedPatched = await RunSpreadsheetEvaluateInWorker(imported);
+        const patchedBytes = await RunSpreadsheetPatchInWorker(xlsxBytes, evaluatedPatched.Workbook);
+        const reimported = await RunSpreadsheetImportInWorker(patchedBytes);
+        expect(reimported.Worksheets[0].Cells['A2']?.ComputedValue).toBe(100);
+
+        // 1. Timeout + worker termination
+        await expect(RunSpreadsheetEvaluateInWorker(wb, undefined, { TimeoutMs: 1 })).rejects.toThrow(/timed out/i);
+
+        // 2. Missing worker entry path fails fast
+        await expect(
+            RunSpreadsheetEvaluateInWorker(wb, undefined, { WorkerEntryPath: '/nonexistent/spreadsheet-worker-missing.js' })
+        ).rejects.toThrow(/does not exist/i);
+
+        // 3 & 4. Heap OOM isolation & bounded concurrency cap + queue overflow rejection
+        const tmpDir = mkdtempSync(join(tmpdir(), 'mj-sheet-worker-test-'));
+        try {
+            const oomScript = join(tmpDir, 'oom.mjs');
+            writeFileSync(
+                oomScript,
+                "const a = []; while (true) { a.push(new Array(10_000).fill('x')); }\n",
+                'utf8'
+            );
+            await expect(
+                RunSpreadsheetEvaluateInWorker(wb, undefined, {
+                    WorkerEntryPath: oomScript,
+                    ResourceLimits: { maxOldGenerationSizeMb: 4, maxYoungGenerationSizeMb: 2 },
+                    TimeoutMs: 5000
+                })
+            ).rejects.toThrow(/memory limit|heap out of memory|ERR_WORKER_OUT_OF_MEMORY/i);
+
+            const slowOkScript = join(tmpDir, 'slow-ok.mjs');
+            writeFileSync(
+                slowOkScript,
+                "import { parentPort, workerData } from 'node:worker_threads';\n" +
+                    "setTimeout(() => parentPort?.postMessage({ Ok: true, Workbook: workerData.Workbook, EvaluatedFormulaCount: 1 }), 100);\n",
+                'utf8'
+            );
+            const poolOpts = {
+                WorkerEntryPath: slowOkScript,
+                MaxConcurrentWorkers: 1,
+                MaxQueuedWorkers: 1,
+                TimeoutMs: 5000
+            };
+            const p1 = RunSpreadsheetEvaluateInWorker(wb, undefined, poolOpts);
+            const p2 = RunSpreadsheetEvaluateInWorker(wb, undefined, poolOpts);
+            const p3 = RunSpreadsheetEvaluateInWorker(wb, undefined, poolOpts);
+            await expect(p3).rejects.toThrow(/queue is full/i);
+            const [r1, r2] = await Promise.all([p1, p2]);
+            expect(r1.EvaluatedFormulaCount).toBe(1);
+            expect(r2.EvaluatedFormulaCount).toBe(1);
+
+            // R8-2 & R8-3: RunSpreadsheetImportInWorker honors SkipEvaluate: true, QueueWaitTimeoutMs rejects slow wait,
+            // and RegisterSpreadsheetServerWorkerRunner turns on mandatory worker isolation
+            const unevaluatedSheetXml =
+                '<?xml version="1.0" encoding="UTF-8"?>' +
+                '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' +
+                '<row r="1"><c r="A1"><v>10</v></c></row>' +
+                '<row r="2"><c r="A2"><f>A1*5</f></c></row>' +
+                '</sheetData></worksheet>';
+            const encUtf8 = new TextEncoder();
+            const skipXlsx = engine.BuildZipArchive([
+                {
+                    Name: 'xl/workbook.xml',
+                    Data: encUtf8.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>')
+                },
+                {
+                    Name: 'xl/_rels/workbook.xml.rels',
+                    Data: encUtf8.encode('<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
+                },
+                { Name: 'xl/worksheets/sheet1.xml', Data: encUtf8.encode(unevaluatedSheetXml) }
+            ]);
+            const importedSkip = await RunSpreadsheetImportInWorker(skipXlsx, null, { SkipEvaluate: true });
+            expect(importedSkip.Worksheets[0].Cells['A2']?.Formula).toBe('=A1*5');
+            expect(importedSkip.Worksheets[0].Cells['A2']?.ComputedValue).toBeNull();
+            const importedEval = await RunSpreadsheetImportInWorker(skipXlsx, null, { SkipEvaluate: false });
+            expect(importedEval.Worksheets[0].Cells['A2']?.ComputedValue).toBe(50);
+
+            const waitHold = RunSpreadsheetEvaluateInWorker(wb, undefined, {
+                WorkerEntryPath: slowOkScript,
+                MaxConcurrentWorkers: 1,
+                MaxQueuedWorkers: 2,
+                TimeoutMs: 5000,
+                QueueWaitTimeoutMs: 5000
+            });
+            const timedOutQueued = RunSpreadsheetEvaluateInWorker(wb, undefined, {
+                WorkerEntryPath: slowOkScript,
+                MaxConcurrentWorkers: 1,
+                MaxQueuedWorkers: 2,
+                TimeoutMs: 5000,
+                QueueWaitTimeoutMs: 10
+            });
+            await expect(timedOutQueued).rejects.toThrow(/queue wait timed out/i);
+            await waitHold;
+
+            RegisterSpreadsheetServerWorkerRunner();
+            try {
+                RegisterSpreadsheetWorkerRunner(null);
+                await expect(engine.ImportFromXlsxBytesIsolated(skipXlsx)).rejects.toThrow(/isolation runner is required/i);
+            } finally {
+                SetSpreadsheetWorkerIsolationRequired(false);
+                RegisterSpreadsheetWorkerRunner(null);
+            }
+        } finally {
+            rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('Round 8 Part 1: ExtractSingleUuidFieldFromFilter rejects all delimiter/quoting oracle bypass payloads across all 5 count_only PreRunView hooks', async () => {
+        const targetId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        const bypassFilters = [
+            `CollectionID='${targetId}' OR 1=1`,
+            `ID='${targetId}'x'OR'1'='1`,
+            `ID='${targetId}']OR 1=1`,
+            `ID='${targetId}'"OR 1=1`,
+            `(ID='${targetId}')NOT 1=0`,
+            `ID='${targetId}'x'NOT'1'='1`,
+            `E'\\''; CollectionID='${targetId}'`,
+            `[a'] AND CollectionID='${targetId}'`
+        ];
+        for (const filter of bypassFilters) {
+            expect(ExtractSingleUuidFieldFromFilter(filter, 'ID')).toBeNull();
+            expect(ExtractSingleUuidFieldFromFilter(filter, 'CollectionID')).toBeNull();
+            expect(ExtractSingleUuidFieldFromFilter(filter, 'ArtifactID')).toBeNull();
+            expect(ExtractSingleUuidFieldFromFilter(filter, 'ArtifactVersionID')).toBeNull();
+        }
+        // Legitimate whole-filter equality (with balanced outer parens) still extracts cleanly
+        expect(ExtractSingleUuidFieldFromFilter(`(([CollectionID] = N'${targetId}'))`, 'CollectionID')).toBe(targetId);
+
+        const deniedUser = new UserInfo(null, {
+            ID: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            Name: 'Denied Actor',
+            Email: 'denied@mj.local',
+            IsActive: true,
+            Type: 'User',
+            UserRoles: []
+        });
+        const provider = {
+            ProviderType: 'Database',
+            DatabasePlatform: 'SQLServer',
+            Entities: [],
+            RunView: async () => ({ Success: true, Results: [] })
+        } as unknown as IMetadataProvider;
+
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableArtifactIdSet').mockResolvedValue(new Set());
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet').mockResolvedValue(new Set());
+        const resolvePermsSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: targetId,
+            CanRead: false,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Denied',
+            Reason: 'Denied'
+        });
+        const resolveColPermsSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'ResolveCollectionAncestryPermissions')
+            .mockResolvedValue({
+                CollectionID: targetId,
+                CanRead: false,
+                CanEdit: false,
+                CanDelete: false,
+                CanShare: false,
+                Source: 'Denied',
+                Reason: 'Denied'
+            });
+
+        const hooksToCheck: Array<{
+            entityName: string;
+            hook: typeof ArtifactPreRunViewHook;
+            colName: string;
+        }> = [
+            { entityName: 'MJ: Collection Artifacts', hook: CollectionArtifactPreRunViewHook, colName: 'CollectionID' },
+            { entityName: 'MJ: Collections', hook: CollectionPreRunViewHook, colName: 'ID' },
+            { entityName: 'MJ: Collection Permissions', hook: CollectionPermissionPreRunViewHook, colName: 'CollectionID' },
+            { entityName: 'MJ: Artifact Version Attributes', hook: ArtifactVersionAttributePreRunViewHook, colName: 'ArtifactVersionID' },
+            { entityName: 'MJ: Artifact Permissions', hook: ArtifactPermissionPreRunViewHook, colName: 'ArtifactID' }
+        ];
+
+        const balancedOracleFilters = [
+            `CollectionID='${targetId}' OR 1=1`,
+            `ID='${targetId}' AND 'a'='a'`,
+            `(ID='${targetId}') OR (1=1)`,
+            `ID='${targetId}' /* comment */ OR 1=1`
+        ];
+        try {
+            for (const { entityName, hook, colName } of hooksToCheck) {
+                for (const rawFilter of balancedOracleFilters) {
+                    const adversarialFilter = rawFilter.replace(/CollectionID|ID/g, colName);
+                    const params: RunViewParams = {
+                        EntityName: entityName,
+                        ExtraFilter: adversarialFilter,
+                        ResultType: 'count_only'
+                    };
+                    const out = await hook(params, deniedUser, provider);
+                    expect(String(out.ExtraFilter)).toMatch(/1 = 0|EXISTS \(/);
+                }
+                for (const rawFilter of bypassFilters) {
+                    const adversarialFilter = rawFilter.replace(/CollectionID|ID/g, colName);
+                    const params: RunViewParams = {
+                        EntityName: entityName,
+                        ExtraFilter: adversarialFilter,
+                        ResultType: 'count_only'
+                    };
+                    try {
+                        const out = await hook(params, deniedUser, provider);
+                        expect(String(out.ExtraFilter)).toMatch(/1 = 0|EXISTS \(/);
+                    } catch (err) {
+                        expect(err instanceof Error ? err.message : String(err)).toMatch(/Invalid ExtraFilter/i);
+                    }
+                }
+            }
+            expect(resolvePermsSpy).not.toHaveBeenCalled();
+            expect(resolveColPermsSpy).not.toHaveBeenCalled();
+        } finally {
+            vi.restoreAllMocks();
+        }
     });
 });

@@ -379,6 +379,7 @@ export class TagStage extends BasePipelineStage {
                 EntityName: 'MJ: Content Item Chunks',
                 ExtraFilter: WhereEqual({ ContentItemID: itemID, EmbeddingStatus: 'Complete', DeleteStatus: null }),
                 ResultType: 'entity_object',
+                IgnoreMaxRows: true,
             },
             context.ContextUser,
         );

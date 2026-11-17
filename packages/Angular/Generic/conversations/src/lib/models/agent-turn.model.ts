@@ -9,7 +9,7 @@
  * @module @memberjunction/ng-conversations
  */
 
-import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import type { EdgePreDiscoveryHint, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
 /**
  * When a message starts an agent turn.
@@ -108,6 +108,12 @@ export interface AgentTurnRequest {
      * own path continues from that version instead of the agent's latest output. Null otherwise.
      */
     TargetArtifactVersionId: string | null;
+    /**
+     * Optional untrusted advisory hint produced by client-side local ONNX/WASM pre-discovery
+     * on opening conversation-manager turns. Hosts that forward it to MJServer must still rely
+     * on server-side permission and allow-list verification.
+     */
+    EdgePreDiscoveryHint?: EdgePreDiscoveryHint | null;
 }
 
 /** What an {@link AgentTurnHandler} reports back to the chat area. */

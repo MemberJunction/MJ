@@ -24,7 +24,7 @@ import { Metadata } from "./metadata";
 import { RunView, RunViewParams, IsMaterializedDataSource, ExtractRunViewParameterNames } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { Observable, Subscription } from "rxjs";
-import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
+import { GetDataHooks, IsPostRunViewProtectedEntity, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
 import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
 import { ContextToken, GetLocalTimeZone } from "./contextTokens";
@@ -1799,34 +1799,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // BypassCache skips this entirely — used by maintenance actions that need
             // to see the true DB state after direct SQL inserts.
             const preResult = await this.PreRunView(params, contextUser);
+            const effectiveParams = preResult.effectiveParams ?? params;
 
             if (preResult.cachedResult) {
                 // Cache hit — transform and return directly
-                LogStatusEx({ message: `  ✅ [Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${preResult.cachedResult.Results?.length ?? 0} rows from cache, no DB query`, verboseOnly: true });
-                await this.TransformSimpleObjectToEntityObject(params, preResult.cachedResult, contextUser);
-                await this.ApplyPostRunViewHooksToCacheHit(params, preResult.cachedResult, contextUser);
+                LogStatusEx({ message: `  ✅ [Cache HIT] RunView "${effectiveParams.EntityName || effectiveParams.ViewName || 'unknown'}" — ${preResult.cachedResult.Results?.length ?? 0} rows from cache, no DB query`, verboseOnly: true });
+                await this.TransformSimpleObjectToEntityObject(effectiveParams, preResult.cachedResult, contextUser);
+                await this.ApplyPostRunViewHooksToCacheHit(effectiveParams, preResult.cachedResult, contextUser);
                 TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
                     cacheHit: true,
                     cacheStatus: preResult.cacheStatus,
                     resultCount: preResult.cachedResult.Results?.length ?? 0
                 });
-                if (params.OnDataChanged && preResult.fingerprint) {
+                if (effectiveParams.OnDataChanged && preResult.fingerprint) {
                     preResult.cachedResult.Unsubscribe = LocalCacheManager.Instance.RegisterChangeCallback(
                         preResult.fingerprint,
-                        params.OnDataChanged
+                        effectiveParams.OnDataChanged
                     );
                 }
-                ProviderBase.clearSkippedTotalRowCount(params, preResult.cachedResult);
+                ProviderBase.clearSkippedTotalRowCount(effectiveParams, preResult.cachedResult);
                 return preResult.cachedResult;
             }
 
             // Cache miss — execute query, then post-process (stores in cache)
-            LogStatusEx({ message: `  🔍 [Cache MISS] RunView "${params.EntityName || params.ViewName || 'unknown'}" — querying database`, verboseOnly: true });
-            const result = await this.InternalRunView<T>(params, contextUser);
+            LogStatusEx({ message: `  🔍 [Cache MISS] RunView "${effectiveParams.EntityName || effectiveParams.ViewName || 'unknown'}" — querying database`, verboseOnly: true });
+            const result = await this.InternalRunView<T>(effectiveParams, contextUser);
             // PostRunView copies any hook-supplied replacement onto `result` in place, so this
             // reference reflects the hook chain's output.
-            await this.PostRunView(result, params, preResult, contextUser);
-            ProviderBase.clearSkippedTotalRowCount(params, result);
+            await this.PostRunView(result, effectiveParams, preResult, contextUser);
+            ProviderBase.clearSkippedTotalRowCount(effectiveParams, result);
             return result;
         }
 
@@ -3537,6 +3538,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * projection eligible to populate the Fields-agnostic cache slot in PostRunView.
          */
         populateCache?: boolean;
+        /**
+         * The effective RunViewParams after PreRunView hooks (which may return a shallow-copied
+         * replacement object) so RunView passes hook mutations to InternalRunView and PostRunView.
+         */
+        effectiveParams?: RunViewParams;
     };
 
     /**
@@ -4351,6 +4357,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // PostRunView to project cache-miss DB results back to the caller's shape
             callerRequestedFields: callerRequestedFieldsForPost,
             populateCache: willPopulateCache,
+            effectiveParams: params,
         };
     }
 
@@ -5552,6 +5559,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // (`PostRunView` never passes `ttlMs`), so treating them as server-cacheable only forces
         // wasted `Fields` widening and futile cache lookups.
         if (entity.ExternalDataSourceID) return false;
+
+        // PostRunView-protected entities enforce per-caller ACL filtering inside PostRunView hooks
+        // from sibling permission tables whose mutations never change this entity's table timestamps.
+        if (IsPostRunViewProtectedEntity(entity.Name)) return false;
 
         return entity.TrustServerCacheCompletely !== false;
     }
