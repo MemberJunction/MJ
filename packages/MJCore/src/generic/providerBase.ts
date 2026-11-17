@@ -295,11 +295,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Minimum interval (ms) between metadata refresh checks to prevent
      * redundant network calls when Config()/RefreshIfNeeded() fire in
      * quick succession (e.g., multiple engines during startup).
+     * The throttle is armed only by a check whose status request succeeded — a check
+     * that threw or got no timestamps proved nothing, so the next caller checks again.
+     * A caller arriving while a check is in flight is told no refresh is needed, as the
+     * in-flight owner acts on the answer (see {@link CheckToSeeIfRefreshNeeded}).
      * Does NOT affect forced Refresh() calls. Default: 30 000 ms.
      */
     public static MinRefreshCheckIntervalMs: number = 30000;
 
+    /** When the last SUCCESSFUL refresh check's status request completed; 0 = never. */
     private _lastRefreshCheckAt: number = 0;
+    /**
+     * The check currently running in {@link CheckToSeeIfRefreshNeeded}; null when none is. While
+     * set, a non-bypassing caller is answered `false` without a request — the owner of this check
+     * acts on its answer. Held as the promise (not a flag) so only its owner clears it.
+     */
+    private _refreshCheckInFlight: Promise<boolean> | null = null;
+    /**
+     * Set when Config() adopts a snapshot it loaded from the server (which fetched the current user
+     * with it); consumed by the next {@link preValidateAndRefresh}, which then has nothing to check.
+     */
+    private _configLoadedFromServer = false;
 
     // ── Server-Side Auto-Cache ────────────────────────────────────────
     /**
@@ -4643,6 +4659,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
+        // Describes THIS Config only: a flag left by an earlier load must not make the
+        // pre-validation that follows a Config which loaded nothing skip its check.
+        this._configLoadedFromServer = false;
 
         // Initialize LocalCacheManager early so dataset loading can use the cache.
         // Initialize() is idempotent — subsequent calls (e.g. from StartupManager) are no-ops.
@@ -4695,7 +4714,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
-        if (hardRefresh || await this.CheckToSeeIfRefreshNeeded(providerToUse)) {
+        // An empty graph has nothing to throttle: the throttle exists to stop redundant checks of a
+        // snapshot we already hold. After a status check succeeded but the download that followed
+        // failed, the throttle is armed and a non-bypassing retry would read "current" and load
+        // nothing for the whole window.
+        const graphIsEmpty = !this._localMetadata?.AllEntities?.length;
+        if (hardRefresh || await this.CheckToSeeIfRefreshNeeded(providerToUse, graphIsEmpty)) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
             // first, make sure we reset the flag to false so that if another call to this function happens
@@ -4745,6 +4769,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         this.UpdateLocalMetadata(res);
                         this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps // update this since we just used server to get all the stuff
                         await this.SaveLocalMetadataToStorage();
+                        this._configLoadedFromServer = true;
                     }
                     else {
                         // GetAllMetadata failed - log error but keep existing metadata
@@ -4813,9 +4838,21 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * on RTT). On the warm-stale path we additionally pay the full metadata fetch but
      * avoid serving stale data to the UI in the first place.
      *
+     * On a cold boot, where Config() just loaded the graph (and the current user) from the
+     * server, the first call after that load returns immediately — no check, no current-user
+     * re-fetch. Later calls, and calls after a background refresh, check as usual.
+     *
      * Caller contract: invoke this before `StartupManager.Startup()`.
      */
     public async preValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
+        // The snapshot Config just loaded from the server is current by construction, and
+        // GetAllMetadata fetched CurrentUser with it. One-shot: only the first pre-validation
+        // after that load skips.
+        if (this._configLoadedFromServer) {
+            this._configLoadedFromServer = false;
+            LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata was just loaded from the server — skipping`, verboseOnly: true });
+            return;
+        }
         try {
             const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
             if (needsRefresh) {
@@ -5349,11 +5386,28 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * throttle. Event-driven callers pass true: they hold positive evidence that a metadata
      * member entity was just written, and the throttle otherwise answers "fresh" for any check
      * arriving within the window of the previous one — which would silently drop the second of
-     * two permission changes made less than the window apart.
+     * two permission changes made less than the window apart. For the same reason a bypassing
+     * caller always runs its own check, even while another is in flight: that check may have
+     * started before the write.
+     *
+     * The throttle is armed only when the status request succeeded (returned timestamps). A
+     * check that throws or returns no timestamps leaves it unarmed, so a retry inside the
+     * window really checks instead of reading "current" and loading nothing.
+     * A non-bypassing caller arriving while a check is in flight is told no refresh is needed,
+     * as the in-flight owner acts on the answer; that keeps N engines starting together down to
+     * one request. It must not share the owner's answer: a shared `true` would send every caller
+     * into its own full metadata reload (preValidateAndRefresh / backgroundValidateAndRefresh /
+     * RefreshIfNeeded load outside Config's reload single-flight). For the same reason it gets
+     * `false`, not the owner's rejection, when the owner's check throws.
      * @returns True if refresh is needed, false otherwise
      */
     public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
         if (!this.AllowRefresh) return false;
+
+        if (!bypassMinCheckInterval && this._refreshCheckInFlight) {
+            LogStatusEx({ message: `[RefreshCheck] Skipped — a check is already in flight; its caller acts on the answer`, verboseOnly: true });
+            return false;
+        }
 
         const now = Date.now();
         if (!bypassMinCheckInterval && (now - this._lastRefreshCheckAt) < ProviderBase.MinRefreshCheckIntervalMs) {
@@ -5363,9 +5417,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             });
             return false;
         }
-        this._lastRefreshCheckAt = now;
 
-        await this.RefreshRemoteMetadataTimestamps(providerToUse);
+        const check = this.runRefreshCheck(providerToUse);
+        this._refreshCheckInFlight = check;
+        try {
+            return await check;
+        }
+        finally {
+            // A bypassing caller may have replaced the slot with its own newer check while this
+            // one ran; only the check that still owns the slot clears it.
+            if (this._refreshCheckInFlight === check) {
+                this._refreshCheckInFlight = null;
+            }
+        }
+    }
+
+    /** One refresh check: fetch remote timestamps, arm the throttle only on success, compare. */
+    private async runRefreshCheck(providerToUse?: IMetadataProvider): Promise<boolean> {
+        const gotTimestamps = await this.RefreshRemoteMetadataTimestamps(providerToUse);
+        if (gotTimestamps) {
+            this._lastRefreshCheckAt = Date.now();
+        }
         await this.LoadLocalMetadataFromStorage();
         return this.LocalMetadataObsolete();
     }
@@ -5615,7 +5687,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // We have a candidate cache entry — confirm freshness with the server.
             const localDate = new Date(cachedDateStr);
             const status = await this.GetDatasetStatusByName(datasetName, itemFilters);
-            if (status && localDate.getTime() >= status.LatestUpdateDate.getTime()) {
+            const serverDate = this.validDatasetDate(status?.LatestUpdateDate);
+            if (status?.Success && serverDate && localDate.getTime() >= serverDate.getTime()) {
                 // Timestamps suggest cache is fresh; verify per-entity row counts to
                 // catch deleted rows (timestamp comparison alone misses pure deletes).
                 let allCountsMatch = true;
@@ -5632,9 +5705,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
-        // Cold path or stale: fetch from server and cache.
+        // Cold path or stale: fetch from server and cache only when the load succeeded.
         const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
-        await this.CacheDataset(datasetName, itemFilters, dataset);
+        if (dataset?.Success) {
+            await this.CacheDataset(datasetName, itemFilters, dataset);
+        }
         return dataset;
     }
 
@@ -5668,8 +5743,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (localDate) {
             // we have a local cached timestamp, so compare it to the server timestamp
             const status = await this.GetDatasetStatusByName(datasetName, itemFilters);
-            if (status) {
-                const serverTimestamp = status.LatestUpdateDate.getTime();
+            const serverDate = this.validDatasetDate(status?.LatestUpdateDate);
+            if (status?.Success && serverDate) {
+                const serverTimestamp = serverDate.getTime();
                 if (localDate.getTime() >= serverTimestamp) {
                     // this situation means our local cache timestamp is >= the server timestamp, so we're most likely up to date
                     // in this situation, the last thing we check is for each entity, if the rowcount is the same as the server, if it is, we're good
@@ -5704,6 +5780,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Normalizes a dataset `LatestUpdateDate` to a valid `Date`, or `null` when absent or invalid
+     * (for example, when a dataset or dataset-status call fails and returns `LatestUpdateDate: null`).
+     */
+    private validDatasetDate(value: Date | string | number | null | undefined): Date | null {
+        if (value == null) {
+            return null;
+        }
+        const date = value instanceof Date ? value : new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    /**
      * This routine gets the local cached version of a given datasetName/itemFilters combination, it does NOT check the server status first and does not fall back on the server if there isn't a local cache version of this dataset/itemFilters combination
      * @param datasetName 
      * @param itemFilters 
@@ -5728,6 +5816,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param dataset 
      */
     public async CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[], dataset: DatasetResultType): Promise<void> {
+        const latestUpdateDate = this.validDatasetDate(dataset?.LatestUpdateDate);
+        if (!dataset?.Success || !latestUpdateDate) {
+            LogError(
+                `CacheDataset("${datasetName}"): refusing to cache failed or undated dataset result ` +
+                `(Success=${dataset?.Success}, Status=${dataset?.Status ?? 'unknown'})`
+            );
+            return;
+        }
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
@@ -5735,7 +5831,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             await ls.SetItem<DatasetResultType>(key, dataset);
             // Date is stored as ISO string for forward-compatibility across providers
             // (Redis can't natively round-trip Date; localStorage requires string).
-            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString());
+            await ls.SetItem<string>(key + '_date', latestUpdateDate.toISOString());
         }
     }
 
