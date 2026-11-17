@@ -2190,10 +2190,13 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             const xlsxSourceWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('SaveXlsxNoMainEval', ['Sheet1'], 3, 3);
             SpreadsheetEngine.Instance.SetCell(xlsxSourceWb, xlsxSourceWb.Worksheets[0].SheetID, 'A1', { Value: 5 }, false);
             SpreadsheetEngine.Instance.SetCell(xlsxSourceWb, xlsxSourceWb.Worksheets[0].SheetID, 'A2', { Formula: '=A1*4' }, false);
-            const xlsxBytes = SpreadsheetEngine.Instance.ExportToXlsxBytes(xlsxSourceWb, false);
+            const xlsxBytes = SpreadsheetEngine.Instance.ExportToXlsxBytes(xlsxSourceWb, false, {
+                SkipEvaluate: true
+            });
             const xlsxDataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${Buffer.from(xlsxBytes).toString('base64')}`;
 
             const mainEvalSpy = vi.spyOn(SpreadsheetEngine.Instance, 'EvaluateWorkbook');
+            const parseIsoSpy = vi.spyOn(SpreadsheetEngine.Instance, 'ParseWorkbookIsolated');
             try {
                 const xlsxOwnerSave = makeSave();
                 Object.defineProperty(xlsxOwnerSave.ent, 'ContextCurrentUser', { value: ownerUser, writable: true });
@@ -2201,8 +2204,21 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
                 superSaveSpy.mockResolvedValueOnce(true);
                 expect(await xlsxOwnerSave.ent.Save()).toBe(true);
                 expect(mainEvalSpy).not.toHaveBeenCalled();
+
+                // R9-2: Non-owner Save() with .xlsx working state + prior version parses each distinct .xlsx payload
+                // via ParseWorkbookIsolated cleanly once (zero redundant re-imports inside ValidateArtifactContentMutationAgainstLocks).
+                parseIsoSpy.mockClear();
+                RegisterWorkingStateContentDeserializer(() => xlsxDataUrl);
+                const nonOwnerXlsxSave = makeSave();
+                Object.defineProperty(nonOwnerXlsxSave.ent, 'ContextCurrentUser', { value: editor, writable: true });
+                Object.defineProperty(nonOwnerXlsxSave.ent, 'Content', { value: xlsxDataUrl, writable: true });
+                superSaveSpy.mockResolvedValueOnce(true);
+                expect(await nonOwnerXlsxSave.ent.Save()).toBe(true);
+                expect(mainEvalSpy).not.toHaveBeenCalled();
+                expect(parseIsoSpy).toHaveBeenCalledTimes(1);
             } finally {
                 mainEvalSpy.mockRestore();
+                parseIsoSpy.mockRestore();
             }
         } finally {
             RegisterWorkingStateContentDeserializer(null);

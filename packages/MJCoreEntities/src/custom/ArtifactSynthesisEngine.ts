@@ -1,3 +1,4 @@
+import { LogError } from '@memberjunction/core';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { MJArtifactVersionEntity } from '../generated/entity_subclasses.js';
 import {
@@ -197,8 +198,12 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         if (!isBinaryPlaceholder && (normType.includes('spreadsheet') || normType === 'excel')) {
             try {
                 preparsedWorkbook = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(raw, source.Configuration);
-            } catch {
-                preparsedWorkbook = undefined;
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                LogError(
+                    `ArtifactSynthesisEngine.ExtractSourceDigestIsolated failed for artifact '${source.ArtifactID}': ${msg}`,
+                );
+                throw err;
             }
         }
         return this.extractSourceDigestInternal(source, maxChars, preparsedWorkbook);
@@ -352,7 +357,70 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                 fallbackTitle,
                 targetTypeName,
                 warnings,
+            ).artifact;
+        }
+
+        return this.normalizeDocumentResult(
+            parsedObj,
+            stripped,
+            fallbackTitle,
+            targetTypeName,
+            allowedSet,
+            warnings,
+        );
+    }
+
+    /**
+     * Worker-isolated async counterpart to {@link NormalizeSynthesizedOutput} (`R9-2`):
+     * builds synthesized spreadsheet workbooks with `recalculate = false` and evaluates
+     * via {@link SpreadsheetEngine.EvaluateWorkbookIsolated}.
+     */
+    public async NormalizeSynthesizedOutputIsolated(
+        options: NormalizeSynthesizedOutputOptions,
+    ): Promise<NormalizedSynthesizedArtifact> {
+        const warnings: string[] = [];
+        const fallbackTitle = (options.FallbackTitle ?? '').trim() || 'Synthesized Artifact';
+        const allowedSet = options.AllowedSourceArtifactIds;
+        const stripped = this.stripJsonFence(options.RawOutput);
+        const targetTypeName = SYNTHESIS_TARGET_TYPE_NAME_MAP[options.TargetKind];
+
+        let parsedObj: JsonRecord | null = null;
+        if (stripped.startsWith('{') || stripped.startsWith('[')) {
+            try {
+                const candidate = JSON.parse(stripped) as SynthesisJsonValue;
+                if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+                    parsedObj = candidate as JsonRecord;
+                } else if (Array.isArray(candidate) && options.TargetKind === 'presentation') {
+                    parsedObj = { slides: candidate as SynthesisJsonValue[] };
+                }
+            } catch {
+                parsedObj = null;
+            }
+        }
+
+        if (options.TargetKind === 'presentation') {
+            return this.normalizePresentationResult(
+                parsedObj,
+                stripped,
+                fallbackTitle,
+                allowedSet,
+                warnings,
             );
+        }
+
+        if (options.TargetKind === 'spreadsheet') {
+            const { artifact, workbook } = this.normalizeSpreadsheetResult(
+                parsedObj,
+                fallbackTitle,
+                targetTypeName,
+                warnings,
+                true,
+            );
+            if (workbook) {
+                await SpreadsheetEngine.Instance.EvaluateWorkbookIsolated(workbook);
+                artifact.Content = SpreadsheetEngine.Instance.SerializeWorkbook(workbook);
+            }
+            return artifact;
         }
 
         return this.normalizeDocumentResult(
@@ -485,22 +553,22 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         if (targetKind === 'spreadsheet') {
             const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook(cleanTitle);
             const firstSheet = wb.Worksheets[0];
-            SpreadsheetEngine.Instance.RenameWorksheet(wb, firstSheet.SheetID, 'Synthesis Index');
-            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'A1', { Value: 'Source Artifact', Formula: null });
-            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'B1', { Value: 'Type', Formula: null });
-            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'C1', { Value: 'Summary Highlights', Formula: null });
+            SpreadsheetEngine.Instance.RenameWorksheet(wb, firstSheet.SheetID, 'Synthesis Index', false);
+            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'A1', { Value: 'Source Artifact', Formula: null }, false);
+            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'B1', { Value: 'Type', Formula: null }, false);
+            SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, 'C1', { Value: 'Summary Highlights', Formula: null }, false);
             digests.forEach((d, rowOffset) => {
                 const row = rowOffset + 2;
-                SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, `A${row}`, { Value: d.Name, Formula: null });
-                SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, `B${row}`, { Value: d.ArtifactType, Formula: null });
+                SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, `A${row}`, { Value: d.Name, Formula: null }, false);
+                SpreadsheetEngine.Instance.SetCell(wb, firstSheet.SheetID, `B${row}`, { Value: d.ArtifactType, Formula: null }, false);
                 SpreadsheetEngine.Instance.SetCell(
                     wb,
                     firstSheet.SheetID,
                     `C${row}`,
                     { Value: d.SummaryText.replace(/\s+/g, ' ').slice(0, 220), Formula: null },
+                    false,
                 );
             });
-            SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
             return {
                 TargetKind: 'spreadsheet',
                 ArtifactTypeName: SYNTHESIS_TARGET_TYPE_NAME_MAP.spreadsheet,
@@ -994,7 +1062,8 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         fallbackTitle: string,
         targetTypeName: string,
         warnings: string[],
-    ): NormalizedSynthesizedArtifact {
+        skipEvaluate = false,
+    ): { artifact: NormalizedSynthesizedArtifact; workbook?: ReturnType<SpreadsheetEngine['CreateEmptyWorkbook']> } {
         const title = this.readStringField(parsedObj, 'title', 'Title') || fallbackTitle;
         const description =
             this.readStringField(parsedObj, 'description', 'Description') || 'AI-synthesized spreadsheet';
@@ -1005,13 +1074,15 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         if (rawSheets.length === 0) {
             warnings.push('Model output contained no worksheets array; initialized blank workbook.');
             return {
-                TargetKind: 'spreadsheet',
-                ArtifactTypeName: targetTypeName,
-                Title: title,
-                Description: description,
-                Content: SpreadsheetEngine.Instance.SerializeWorkbook(wb),
-                LinkedChartCount: 0,
-                Warnings: warnings,
+                artifact: {
+                    TargetKind: 'spreadsheet',
+                    ArtifactTypeName: targetTypeName,
+                    Title: title,
+                    Description: description,
+                    Content: SpreadsheetEngine.Instance.SerializeWorkbook(wb),
+                    LinkedChartCount: 0,
+                    Warnings: warnings,
+                },
             };
         }
 
@@ -1026,7 +1097,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                     ? wb.Worksheets[0]
                     : SpreadsheetEngine.Instance.AddWorksheet(wb, safeName);
             if (idx === 0) {
-                SpreadsheetEngine.Instance.RenameWorksheet(wb, targetSheet.SheetID, safeName);
+                SpreadsheetEngine.Instance.RenameWorksheet(wb, targetSheet.SheetID, safeName, !skipEvaluate);
             }
 
             const headers = Array.isArray(sh['Headers']) ? (sh['Headers'] as SynthesisJsonValue[]) : [];
@@ -1035,7 +1106,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                 SpreadsheetEngine.Instance.SetCell(wb, targetSheet.SheetID, addr, {
                     Value: h != null ? String(h) : '',
                     Formula: null,
-                });
+                }, false);
             });
 
             const rows = Array.isArray(sh['Rows']) ? (sh['Rows'] as SynthesisJsonValue[]) : [];
@@ -1053,32 +1124,37 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                             Value: `[Blocked formula] ${strippedBody}`,
                             Formula: null,
                             Literal: true,
-                        });
+                        }, false);
                     } else if (typeof cellVal === 'string' && cellVal.trim().startsWith('=')) {
                         SpreadsheetEngine.Instance.SetCell(wb, targetSheet.SheetID, addr, {
                             Formula: cellVal.trim(),
-                        });
+                        }, false);
                     } else {
                         const normalizedCell = this.toSpreadsheetCellValue(cellVal);
                         SpreadsheetEngine.Instance.SetCell(wb, targetSheet.SheetID, addr, {
                             Value: normalizedCell,
                             Formula: null,
-                        });
+                        }, false);
                     }
                 });
             });
         });
 
-        SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
+        if (!skipEvaluate) {
+            SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
+        }
 
         return {
-            TargetKind: 'spreadsheet',
-            ArtifactTypeName: targetTypeName,
-            Title: title,
-            Description: description,
-            Content: SpreadsheetEngine.Instance.SerializeWorkbook(wb),
-            LinkedChartCount: 0,
-            Warnings: warnings,
+            workbook: wb,
+            artifact: {
+                TargetKind: 'spreadsheet',
+                ArtifactTypeName: targetTypeName,
+                Title: title,
+                Description: description,
+                Content: skipEvaluate ? '' : SpreadsheetEngine.Instance.SerializeWorkbook(wb),
+                LinkedChartCount: 0,
+                Warnings: warnings,
+            },
         };
     }
 

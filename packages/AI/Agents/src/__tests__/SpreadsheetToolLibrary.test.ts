@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo } from '@memberjunction/core';
-import { ArtifactPermissionEngine, SpreadsheetEngine } from '@memberjunction/core-entities';
+import {
+    ArtifactPermissionEngine,
+    RegisterSpreadsheetWorkerRunner,
+    SpreadsheetEngine
+} from '@memberjunction/core-entities';
 import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
 import { SpreadsheetToolLibrary } from '../artifact-tools/SpreadsheetToolLibrary';
 
@@ -929,5 +933,41 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         expect(badNegative.success).toBe(false);
         expect(badNegative.errorMessage).toContain('Invalid cell coordinates');
         expect(badNegative.errorMessage).toContain('"r": 0');
+    });
+
+    it('R9-3: write_cells returns non-null computedValue when isolated worker runner returns structuredClone worksheets', async () => {
+        const engine = SpreadsheetEngine.Instance;
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c, o) => engine.ImportFromXlsxBytes(b, c, o),
+            PatchXlsxBytes: async (o, w) => engine.PatchXlsxBytes(o, w),
+            EvaluateWorkbook: async (w, ctx) => {
+                const cloned = structuredClone(w);
+                engine.EvaluateWorkbook(cloned, ctx);
+                return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+            }
+        });
+        try {
+            const initialJson = engine.SerializeWorkbook(engine.CreateEmptyWorkbook('R9WriteCells', ['Sheet1'], 5, 5));
+            const res = await sheetLib.InvokeTool(
+                'write_cells',
+                {
+                    sheet: 'Sheet1',
+                    cells: [
+                        { address: 'A1', value: 10 },
+                        { address: 'B1', formula: '=A1*3' }
+                    ]
+                },
+                initialJson
+            );
+            expect(res.success).toBe(true);
+            const payload = res.data as {
+                updatedCells?: Array<{ address: string; computedValue: number | string | boolean | null }>;
+            };
+            const b1 = payload.updatedCells?.find((c) => c.address === 'B1');
+            expect(b1).toBeDefined();
+            expect(b1?.computedValue).toBe(30);
+        } finally {
+            RegisterSpreadsheetWorkerRunner(null);
+        }
     });
 });

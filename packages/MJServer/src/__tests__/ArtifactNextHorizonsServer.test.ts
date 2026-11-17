@@ -872,7 +872,7 @@ describe('MJServer Next Horizons Operations & Lock Enforcement', () => {
         // 3. Spreadsheet ProtectedRange
         const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Protected Budget');
         const sheetId = wb.ActiveSheetID;
-        SpreadsheetEngine.Instance.SetCell(wb, sheetId, 'A1', { Value: 100 });
+        SpreadsheetEngine.Instance.SetCell(wb, sheetId, 'A1', { Value: 100 }, false);
         SpreadsheetEngine.Instance.AddProtectedRange(wb, sheetId, {
             RangeID: 'pr-1',
             Range: 'A1:B2',

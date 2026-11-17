@@ -1310,7 +1310,7 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
         expect(evalRes.EvaluatedFormulaCount).toBe(1);
         expect(evalRes.Workbook.Worksheets[0].Cells['A2']?.ComputedValue).toBe(42);
 
-        const xlsxBytes = engine.ExportToXlsxBytes(evalRes.Workbook);
+        const xlsxBytes = engine.ExportToXlsxBytes(evalRes.Workbook, true, { SkipEvaluate: true });
         const imported = await RunSpreadsheetImportInWorker(xlsxBytes);
         expect(imported.Worksheets[0].Cells['A2']?.ComputedValue).toBe(42);
 
@@ -1343,7 +1343,7 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
                     ResourceLimits: { maxOldGenerationSizeMb: 4, maxYoungGenerationSizeMb: 2 },
                     TimeoutMs: 5000
                 })
-            ).rejects.toThrow();
+            ).rejects.toThrow(/memory limit|heap out of memory|ERR_WORKER_OUT_OF_MEMORY/i);
 
             const slowOkScript = join(tmpDir, 'slow-ok.mjs');
             writeFileSync(

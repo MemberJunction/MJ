@@ -1188,7 +1188,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         const originalXlsxBytes = this.activeOriginalXlsxStorage.getStore() ?? null;
         const xlsxBytes = originalXlsxBytes
             ? await engine.PatchXlsxBytesIsolated(originalXlsxBytes, workbook)
-            : engine.ExportToXlsxBytes(workbook);
+            : engine.ExportToXlsxBytes(workbook, true, { SkipEvaluate: true });
         const xlsxBase64 = Buffer.from(xlsxBytes).toString('base64');
         const revisionHash = engine.ComputeRevisionHash(workbook);
         return this.successResult({
@@ -1485,15 +1485,16 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         }
 
         await engine.EvaluateWorkbookIsolated(workbook);
+        const refreshedSheet = engine.GetWorksheet(workbook, sheet.SheetID) ?? sheet;
         const updatedCells: SpreadsheetCellSpec[] = updatedAddresses
-            .map((a) => sheet.Cells[a])
+            .map((a) => refreshedSheet.Cells[a])
             .filter((c): c is SpreadsheetCellSpec => Boolean(c));
 
         return this.buildMutationSuccess(
             workbook,
             {
-                sheetId: sheet.SheetID,
-                sheetName: sheet.Name,
+                sheetId: refreshedSheet.SheetID,
+                sheetName: refreshedSheet.Name,
                 updatedCells: updatedCells.map((c) => ({
                     address: c.Address,
                     rowId: c.RowID,
@@ -2369,7 +2370,8 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 BypassCache: true
             });
             await engine.EvaluateWorkbookIsolated(workbook);
-            materializedSummary = this.summarizeMaterializedLiveTable(sheet, spec, refreshResults[spec.TableID]);
+            const refreshedSheet = engine.GetWorksheet(workbook, sheet.SheetID) ?? sheet;
+            materializedSummary = this.summarizeMaterializedLiveTable(refreshedSheet, spec, refreshResults[spec.TableID]);
         }
 
         return this.buildMutationSuccess(workbook, {

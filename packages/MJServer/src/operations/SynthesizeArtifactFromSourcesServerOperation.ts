@@ -155,9 +155,13 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
             );
         }
 
-        const digests = await Promise.all(
-            Sources.map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigestIsolated(s))
-        );
+        const digests: ReturnType<typeof ArtifactSynthesisEngine.Instance.ExtractSourceDigest>[] = [];
+        for (let i = 0; i < Sources.length; i += 4) {
+            const batch = await Promise.all(
+                Sources.slice(i, i + 4).map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigestIsolated(s))
+            );
+            digests.push(...batch);
+        }
         const allowedSourceIds = digests.map((d) => d.ArtifactID);
         const availableCharts = digests.flatMap((d) => d.EmbeddedCharts);
         const linkCharts = input.LinkChartsAndRanges !== false;
@@ -222,7 +226,7 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
         }
 
         let normalized = rawModelOutput
-            ? ArtifactSynthesisEngine.Instance.NormalizeSynthesizedOutput({
+            ? await ArtifactSynthesisEngine.Instance.NormalizeSynthesizedOutputIsolated({
                   TargetKind: normalizedKind,
                   RawOutput: rawModelOutput,
                   FallbackTitle: cleanTitle || undefined,

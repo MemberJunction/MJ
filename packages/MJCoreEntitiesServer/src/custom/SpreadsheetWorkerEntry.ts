@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import {
+    SetSpreadsheetWorkerIsolationRequired,
     SpreadsheetEngine,
     type SpreadsheetCellEditContext,
     type WorkbookSpec
@@ -37,6 +38,7 @@ export type SpreadsheetWorkerReply =
 
 function runWorkerRequest(req: SpreadsheetWorkerRequest): SpreadsheetWorkerReply {
     try {
+        SetSpreadsheetWorkerIsolationRequired(false);
         const engine = SpreadsheetEngine.Instance;
         switch (req.Op) {
             case 'import': {

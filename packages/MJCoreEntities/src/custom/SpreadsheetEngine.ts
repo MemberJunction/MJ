@@ -2974,6 +2974,15 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return ws;
     }
 
+    private assertSynchronousEvaluationAllowed(opName: string): void {
+        const store = GetGlobalObjectStore();
+        if (store[SPREADSHEET_WORKER_REQUIRED_KEY] === true) {
+            throw new Error(
+                `Spreadsheet operation '${opName}' rejected: synchronous main-thread evaluation is prohibited while server worker isolation is required.`
+            );
+        }
+    }
+
     /**
      * Parses a workbook from JSON string, `Configuration` metadata string, CSV text, or returns a default workbook.
      */
@@ -2982,6 +2991,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         configuration?: string | null,
         options?: { SkipEvaluate?: boolean }
     ): WorkbookSpec {
+        if (!options?.SkipEvaluate) {
+            this.assertSynchronousEvaluationAllowed('ParseWorkbook(SkipEvaluate=false)');
+        }
         for (const candidate of [configuration, content]) {
             if (!candidate || typeof candidate !== 'string') continue;
             const trimmed = candidate.trim();
@@ -4556,6 +4568,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     delete sheet.Cells[addr];
                 }
             }
+            this.workbookCellCountCache.delete(workbook);
         }
         this.sheetLookupCache.delete(sheet);
         this.sheetAxisIdSets.delete(sheet);
@@ -4672,6 +4685,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     delete sheet.Cells[addr];
                 }
             }
+            this.workbookCellCountCache.delete(workbook);
         }
         this.sheetLookupCache.delete(sheet);
         this.sheetAxisIdSets.delete(sheet);
@@ -5335,6 +5349,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         recalculate = true,
         editContext?: SpreadsheetCellEditContext
     ): SpreadsheetCellSpec {
+        if (recalculate) {
+            this.assertSynchronousEvaluationAllowed('SetCell(recalculate=true)');
+        }
         const sheet = this.GetWorksheet(workbook, sheetIdOrName);
         if (!sheet) {
             throw new Error(`Worksheet '${sheetIdOrName}' not found.`);
@@ -6000,6 +6017,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * `ComputedValue` (or `'#MJ_PENDING!'` until `EvaluateMjCustomFunctions` runs with a `UserInfo`).
      */
     public EvaluateWorkbook(workbook: WorkbookSpec, editContext?: SpreadsheetCellEditContext): void {
+        this.assertSynchronousEvaluationAllowed('EvaluateWorkbook');
         this._lastEvaluatedFormulaCount = 0;
         this.bindSheetsToWorkbook(workbook);
 
@@ -6064,13 +6082,39 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return;
         }
         const res = await runner.EvaluateWorkbook(workbook, editContext);
-        workbook.Worksheets = res.Workbook.Worksheets;
+        const returnedById = new Map(res.Workbook.Worksheets.map((s) => [s.SheetID, s]));
+        for (let i = 0; i < workbook.Worksheets.length; i++) {
+            const targetSheet = workbook.Worksheets[i];
+            const evalSheet = returnedById.get(targetSheet.SheetID) ?? res.Workbook.Worksheets[i];
+            if (!evalSheet) continue;
+            targetSheet.Rows = evalSheet.Rows;
+            targetSheet.Columns = evalSheet.Columns;
+            targetSheet.Cells = evalSheet.Cells;
+            targetSheet.ProtectedRanges = evalSheet.ProtectedRanges;
+            targetSheet.ValidationRules = evalSheet.ValidationRules;
+            targetSheet.Charts = evalSheet.Charts;
+            targetSheet.LiveTables = evalSheet.LiveTables;
+            targetSheet.MergeRanges = evalSheet.MergeRanges;
+            targetSheet.SortSpec = evalSheet.SortSpec;
+            targetSheet.ConditionalFormats = evalSheet.ConditionalFormats;
+            targetSheet.EmbeddedArtifacts = evalSheet.EmbeddedArtifacts;
+            this.validationIndexCache.delete(targetSheet);
+        }
+        if (res.Workbook.Worksheets.length > workbook.Worksheets.length) {
+            const existingIds = new Set(workbook.Worksheets.map((s) => s.SheetID));
+            for (const extra of res.Workbook.Worksheets) {
+                if (!existingIds.has(extra.SheetID)) {
+                    workbook.Worksheets.push(extra);
+                }
+            }
+        }
         workbook.NamedRanges = res.Workbook.NamedRanges;
         workbook.ActiveSheetID = res.Workbook.ActiveSheetID;
         workbook.UpdatedAt = res.Workbook.UpdatedAt;
         this._lastEvaluatedFormulaCount = res.EvaluatedFormulaCount;
         this.bindSheetsToWorkbook(workbook);
         this.workbookDagCache.delete(workbook);
+        this.workbookCellCountCache.delete(workbook);
     }
 
     /**
@@ -6566,7 +6610,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
         const addRangeDeps = (targetSheet: WorksheetSpec, rangeStr: string): void => {
             const trimmedRange = rangeStr.trim();
-            const dedupeKey = `${targetSheet.SheetID}::${trimmedRange}`;
+            const normalizedRange = trimmedRange.toUpperCase().replace(/\$/g, '');
+            const dedupeKey = `${targetSheet.SheetID}::${normalizedRange}`;
             if (seenRangeKeys.has(dedupeKey)) {
                 return;
             }
@@ -7178,6 +7223,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 };
                 this.upsertCellInEvalColIndex(sheet, targetR, targetC, targetAddr);
                 writtenAddrs.push(targetAddr);
+            }
+        }
+        if (writtenAddrs.length > 0) {
+            const ownerWb = this.sheetToWorkbook.get(sheet);
+            if (ownerWb) {
+                this.workbookCellCountCache.delete(ownerWb);
             }
         }
         return { anchorValue: matrix[0]?.[0] ?? null, writtenAddrs };
@@ -12056,7 +12107,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
             }
         }
-        this.EvaluateWorkbook(workbook);
+        this.workbookCellCountCache.delete(workbook);
+        await this.EvaluateWorkbookIsolated(workbook);
 
         interface PendingFunctionTask {
             sheet: WorksheetSpec;
@@ -12133,7 +12185,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             );
         }
 
-        this.EvaluateWorkbook(workbook, options?.EditContext);
+        await this.EvaluateWorkbookIsolated(workbook, options?.EditContext);
         return { EvaluatedCount: evaluatedCount, AccessDeniedCount: accessDeniedCount };
     }
 
@@ -12440,7 +12492,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             targetWorkbook = await this.ImportFromXlsxBytesIsolated(fileBytes, versionRow.Configuration);
         } else {
-            targetWorkbook = this.ParseWorkbook(versionRow.Content, versionRow.Configuration);
+            targetWorkbook = await this.ParseWorkbookIsolated(versionRow.Content, versionRow.Configuration);
         }
 
         const nextVisited = [...visitedKeys, targetArtifact.ID.toLowerCase(), canonicalArtifactKey];
@@ -12841,7 +12893,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
         if (batch.length === 0) {
             if (preAccessDeniedCount > 0) {
-                this.EvaluateWorkbook(workbook);
+                await this.EvaluateWorkbookIsolated(workbook);
             }
             return {
                 EvaluatedCount: 0,
@@ -12880,7 +12932,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     item.cell.ComputedValue = '#VALUE!';
                     item.cell.DisplayValue = String(item.cell.ComputedValue);
                 }
-                this.EvaluateWorkbook(workbook);
+                await this.EvaluateWorkbookIsolated(workbook);
                 return {
                     EvaluatedCount: 0,
                     CacheHitCount: cacheHitCount,
@@ -12907,7 +12959,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     item.cell.ComputedValue = item.cell.AccessDenied ? '#MJ_ACCESS_DENIED!' : '#VALUE!';
                     item.cell.DisplayValue = String(item.cell.ComputedValue);
                 }
-                this.EvaluateWorkbook(workbook);
+                await this.EvaluateWorkbookIsolated(workbook);
                 return {
                     EvaluatedCount: 0,
                     CacheHitCount: cacheHitCount,
@@ -12963,7 +13015,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             item.cell.DisplayValue = this.FormatCellValue(coerced, item.cell.Style);
         }
 
-        this.EvaluateWorkbook(workbook);
+        await this.EvaluateWorkbookIsolated(workbook);
         return {
             EvaluatedCount: evaluatedCount,
             CacheHitCount: cacheHitCount,
@@ -13071,6 +13123,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     SpilledFrom: anchorCell.Address
                 };
             }
+        }
+        const ownerWb = this.sheetToWorkbook.get(sheet);
+        if (ownerWb) {
+            this.workbookCellCountCache.delete(ownerWb);
         }
     }
 
@@ -13200,14 +13256,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        this.EvaluateWorkbook(workbook);
+        await this.EvaluateWorkbookIsolated(workbook);
         return resultsByTableId;
     }
 
     private clearPreviousLiveTableCells(sheet: WorksheetSpec, tableId: string): void {
+        let deletedAny = false;
         for (const [addr, cell] of Object.entries(sheet.Cells)) {
             if (cell?.LiveTableID === tableId) {
                 delete sheet.Cells[addr];
+                deletedAny = true;
+            }
+        }
+        if (deletedAny) {
+            const ownerWb = this.sheetToWorkbook.get(sheet);
+            if (ownerWb) {
+                this.workbookCellCountCache.delete(ownerWb);
             }
         }
     }
@@ -13384,6 +13448,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     Note: prev?.Note ?? null,
                     LiveTableID: liveTableStamp
                 };
+            }
+            const ownerWb = this.sheetToWorkbook.get(sheet);
+            if (ownerWb) {
+                this.workbookCellCountCache.delete(ownerWb);
             }
 
             // Fill down calculated formula columns (§ 6.3)
@@ -14250,8 +14318,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * - Frozen panes (`<pane ySplit="..." xSplit="..." state="frozen"/>`)
      * - Hidden `_mj_sheets_meta` worksheet holding the chunked `WorkbookSpec` JSON for lossless round-tripping
      */
-    public ExportToXlsxBytes(workbook: WorkbookSpec, includeMjMetadataSheet = true): Uint8Array {
-        this.EvaluateWorkbook(workbook);
+    public ExportToXlsxBytes(
+        workbook: WorkbookSpec,
+        includeMjMetadataSheet = true,
+        options?: { SkipEvaluate?: boolean }
+    ): Uint8Array {
+        if (!options?.SkipEvaluate) {
+            this.EvaluateWorkbook(workbook);
+        }
 
         // Build custom numFmt + font + fill + xf style table
         const numFmts: Array<{ Id: number; FormatCode: string }> = [];
@@ -15366,6 +15440,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         configurationJson?: string | null,
         options?: { SkipEvaluate?: boolean }
     ): WorkbookSpec {
+        if (!options?.SkipEvaluate) {
+            this.assertSynchronousEvaluationAllowed('ImportFromXlsxBytes(SkipEvaluate=false)');
+        }
         const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
         const files = this.extractZipArchive(u8);
 
@@ -19639,6 +19716,23 @@ export function LoadSpreadsheetEngine(): void {
     DocumentLiveBlockEngine.Instance.RegisterSpreadsheetChartExtractor(
         (content, configuration, sheetId, chartId, sheetRange) => {
             const wb = SpreadsheetEngine.Instance.ParseWorkbook(content, configuration);
+            const targetSheetId = sheetId || wb.ActiveSheetID;
+            let dataset = chartId
+                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId)
+                : null;
+            if (!dataset && sheetRange) {
+                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, sheetRange);
+            }
+            return dataset;
+        }
+    );
+    DocumentLiveBlockEngine.Instance.RegisterSpreadsheetChartExtractorAsync(
+        async (content, configuration, sheetId, chartId, sheetRange, options) => {
+            const wb = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(
+                content,
+                configuration,
+                options?.skipEvaluate ? { SkipEvaluate: true } : undefined
+            );
             const targetSheetId = sheetId || wb.ActiveSheetID;
             let dataset = chartId
                 ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId)

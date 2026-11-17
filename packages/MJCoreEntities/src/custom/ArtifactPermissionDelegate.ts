@@ -591,7 +591,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 user,
                 depth,
                 visited,
-                memo
+                memo,
+                strictThrowOnQueryError
             );
             if (delegateResult) {
                 return delegateResult;
@@ -662,7 +663,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         user: UserInfo,
         depth: number,
         visited: ReadonlySet<string>,
-        memo: Map<string, Promise<ResolvedArtifactPermissions>>
+        memo: Map<string, Promise<ResolvedArtifactPermissions>>,
+        strictThrowOnQueryError = false
     ): Promise<ResolvedArtifactPermissions | null> {
         const delegateEntityId = artifact.DelegateEntityID!;
         const delegateRecordId = artifact.DelegateRecordID!;
@@ -690,7 +692,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 user,
                 depth + 1,
                 visited,
-                memo
+                memo,
+                strictThrowOnQueryError
             );
             if (!parentPerms.CanRead) {
                 return this.buildDenied(

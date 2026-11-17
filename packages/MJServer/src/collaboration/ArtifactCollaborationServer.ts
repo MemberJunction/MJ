@@ -417,6 +417,10 @@ export interface CollaborationRoom {
     FlushQueue: Promise<boolean>;
     /** Serialized per-room compaction promise queue preventing concurrent version compactions (`NW-5`). */
     CompactionQueue: Promise<{ Saved: boolean; VersionID?: string; VersionNumber?: number }>;
+    /** Serialized per-room reconcile/mutation queue closing await-window lock races (`R9-1`). */
+    ReconcileQueue: Promise<void>;
+    /** Count of currently pending/queued async reconciles for this room (`R9-1`). */
+    PendingReconcileCount: number;
     /** Debounce timer for periodic working-state checkpointing. */
     WorkingStateTimer: ReturnType<typeof setTimeout> | null;
     /** Idle room disposal timer armed when `Connections.size === 0`. */
@@ -2338,10 +2342,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 let mutationMergeResult: ConcurrentDocumentMergeResult | null = null;
                 let isStructuredSlideOrSheet = false;
 
-                const preparedMutationWb =
-                    options?.isRestore === true
-                        ? await this.preparePreparsedWorkbookIfXlsxIsolated(newContent, null)
-                        : await this.preparePreparsedWorkbookIfXlsxIsolated(newContent, null);
+                const preparedMutationWb = await this.preparePreparsedWorkbookIfXlsxIsolated(newContent, null);
                 const preparedMutationBaseline =
                     options?.isRestore !== true && previousContent
                         ? await this.preparePreparsedWorkbookIfXlsxIsolated(previousContent, null)
@@ -2419,101 +2420,141 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
 
         const isRestore = options?.isRestore === true;
-        const yText = room.Doc.getText('content');
-        const existing = this.extractRoomSerializedContent(room.Doc);
-        if (!isRestore) {
-            const lockValidation = this.validateContentMutationAgainstLocks(existing, newContent, user.ID, isOwner);
-            if (!lockValidation.Allowed) {
-                return {
-                    Success: false,
-                    ErrorMessage: lockValidation.Reason
-                };
-            }
-        }
-        const alreadyReconciledFromSameBaseline =
-            !isRestore &&
-            !saveVersion &&
-            typeof previousContent === 'string' &&
-            previousContent !== newContent &&
-            room.BaseVersionText === newContent &&
-            room.LastReconciledBaselineText === previousContent;
+        const preparedLiveMutationWb = await this.preparePreparsedWorkbookIfXlsxIsolated(newContent, null);
+        const preparedLiveBaselineWb =
+            !isRestore && previousContent
+                ? await this.preparePreparsedWorkbookIfXlsxIsolated(previousContent, null)
+                : undefined;
 
         let mutationMergeResult: ConcurrentDocumentMergeResult | null = null;
         let isStructuredSlideOrSheet = false;
+        let lockFailureReason: string | undefined;
+        let mergedContent = '';
 
-        if (alreadyReconciledFromSameBaseline) {
-            if (options?.persistedVersionId && UUIDsEqual(room.LastReconciledOobVersionID, options.persistedVersionId)) {
-                mutationMergeResult = room.LastReconciledOobMergeResult;
+        await this.enqueueRoomReconcile(room, async () => {
+            // R9-1: Re-read room content AFTER all `.xlsx` awaits so check-then-transact is atomic per room.
+            const yText = room.Doc.getText('content');
+            const existing = this.extractRoomSerializedContent(room.Doc);
+            const preParsedMap = new Map<string, WorkbookSpec>();
+            if (preparedLiveMutationWb.workbook) {
+                preParsedMap.set(newContent, preparedLiveMutationWb.workbook);
             }
-        } else if (isRestore || existing !== newContent) {
-            const preparedLiveMutationWb = await this.preparePreparsedWorkbookIfXlsxIsolated(newContent, null);
-            const preparedLiveBaselineWb =
-                !isRestore && previousContent
-                    ? await this.preparePreparsedWorkbookIfXlsxIsolated(previousContent, null)
-                    : undefined;
-            room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
-            const nextEpoch = `epoch-${isRestore ? 'restore-' : ''}${Date.now()}-${randomBytes(4).toString('hex')}`;
-            room.RoomEpoch = nextEpoch;
-            if (isRestore) {
-                const isMatchingBase = typeof room.BaseVersionText === 'string' && room.BaseVersionText === newContent;
-                const restoreVerId = options?.persistedVersionId ?? (isMatchingBase ? room.BaseVersionID : undefined);
-                const restoreVerNum = options?.persistedVersionNumber ?? (isMatchingBase ? room.BaseVersionNumber : undefined);
-                room.Doc.transact(() => {
-                    const meta = room.Doc.getMap('meta');
-                    meta.set('roomEpoch', nextEpoch);
-                }, 'server-restore');
-                this.applyDeterministicRestoreTextToDoc(
-                    room.Doc,
-                    room.ArtifactID,
-                    restoreVerId,
-                    restoreVerNum,
-                    newContent,
-                    'server-restore'
-                );
-                room.Doc.transact(() => {
-                    this.syncSlideDeckStructuresIfPresent(room.Doc, newContent);
-                    this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent, null, {
-                        preparsedWorkbook: preparedLiveMutationWb.workbook,
-                        xlsxHandled: preparedLiveMutationWb.xlsxHandled
-                    });
-                }, 'server-restore');
-            } else {
-                room.Doc.transact(() => {
-                    const meta = room.Doc.getMap('meta');
-                    meta.set('roomEpoch', nextEpoch);
-                    mutationMergeResult = this.applyMinimalTextDiff(
-                        yText,
-                        yText.toString(),
-                        newContent,
-                        previousContent
-                    );
-                    this.syncSlideDeckStructuresIfPresent(room.Doc, newContent, {
-                        preserveConcurrentAdditions: true,
-                        baselineContent: previousContent
-                    });
-                    this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent, null, {
-                        preserveConcurrentAdditions: true,
-                        baselineContent: previousContent,
-                        preparsedWorkbook: preparedLiveMutationWb.workbook,
-                        xlsxHandled: preparedLiveMutationWb.xlsxHandled,
-                        preparsedBaselineWorkbook: preparedLiveBaselineWb?.workbook,
-                        baselineXlsxHandled: preparedLiveBaselineWb?.xlsxHandled
-                    });
-                    isStructuredSlideOrSheet =
-                        room.Doc.getMap('slidesById').size > 0 ||
-                        room.Doc.getMap('worksheetsById').size > 0;
-                    if (isStructuredSlideOrSheet) {
-                        const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
-                        this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
+            if (preparedLiveBaselineWb?.workbook && previousContent) {
+                preParsedMap.set(previousContent, preparedLiveBaselineWb.workbook);
+            }
+            if (this.isXlsxTextPayload(existing) && !preParsedMap.has(existing)) {
+                const livePre = await this.preparePreparsedWorkbookIfXlsxIsolated(existing, null);
+                if (livePre.workbook) {
+                    preParsedMap.set(existing, livePre.workbook);
+                }
+            }
+            const freshExisting = this.extractRoomSerializedContent(room.Doc);
+            if (freshExisting !== existing) {
+                if (this.isXlsxTextPayload(freshExisting) && !preParsedMap.has(freshExisting)) {
+                    const retryLivePre = await this.preparePreparsedWorkbookIfXlsxIsolated(freshExisting, null);
+                    if (retryLivePre.workbook) {
+                        preParsedMap.set(freshExisting, retryLivePre.workbook);
                     }
-                }, 'server-agent');
+                }
             }
-            room.LastModifiedByUser = user;
-            room.DirtyWorkingState = true;
-            room.DirtyVersion = true;
-        }
+            const authoritativeExisting = this.extractRoomSerializedContent(room.Doc);
+            if (!isRestore) {
+                const lockValidation = ValidateArtifactContentMutationAgainstLocks(
+                    authoritativeExisting,
+                    newContent,
+                    user.ID,
+                    isOwner,
+                    preParsedMap.size > 0 ? { preParsedWorkbooks: preParsedMap } : undefined
+                );
+                if (!lockValidation.Allowed) {
+                    lockFailureReason = lockValidation.Reason;
+                    return;
+                }
+            }
 
-        const mergedContent = this.extractRoomSerializedContent(room.Doc);
+            const alreadyReconciledFromSameBaseline =
+                !isRestore &&
+                !saveVersion &&
+                typeof previousContent === 'string' &&
+                previousContent !== newContent &&
+                room.BaseVersionText === newContent &&
+                room.LastReconciledBaselineText === previousContent;
+
+            if (alreadyReconciledFromSameBaseline) {
+                if (options?.persistedVersionId && UUIDsEqual(room.LastReconciledOobVersionID, options.persistedVersionId)) {
+                    mutationMergeResult = room.LastReconciledOobMergeResult;
+                }
+            } else if (isRestore || authoritativeExisting !== newContent) {
+                room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
+                const nextEpoch = `epoch-${isRestore ? 'restore-' : ''}${Date.now()}-${randomBytes(4).toString('hex')}`;
+                room.RoomEpoch = nextEpoch;
+                if (isRestore) {
+                    const isMatchingBase = typeof room.BaseVersionText === 'string' && room.BaseVersionText === newContent;
+                    const restoreVerId = options?.persistedVersionId ?? (isMatchingBase ? room.BaseVersionID : undefined);
+                    const restoreVerNum = options?.persistedVersionNumber ?? (isMatchingBase ? room.BaseVersionNumber : undefined);
+                    room.Doc.transact(() => {
+                        const meta = room.Doc.getMap('meta');
+                        meta.set('roomEpoch', nextEpoch);
+                    }, 'server-restore');
+                    this.applyDeterministicRestoreTextToDoc(
+                        room.Doc,
+                        room.ArtifactID,
+                        restoreVerId,
+                        restoreVerNum,
+                        newContent,
+                        'server-restore'
+                    );
+                    room.Doc.transact(() => {
+                        this.syncSlideDeckStructuresIfPresent(room.Doc, newContent);
+                        this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent, null, {
+                            preparsedWorkbook: preparedLiveMutationWb.workbook,
+                            xlsxHandled: preparedLiveMutationWb.xlsxHandled
+                        });
+                    }, 'server-restore');
+                } else {
+                    room.Doc.transact(() => {
+                        const meta = room.Doc.getMap('meta');
+                        meta.set('roomEpoch', nextEpoch);
+                        mutationMergeResult = this.applyMinimalTextDiff(
+                            yText,
+                            yText.toString(),
+                            newContent,
+                            previousContent
+                        );
+                        this.syncSlideDeckStructuresIfPresent(room.Doc, newContent, {
+                            preserveConcurrentAdditions: true,
+                            baselineContent: previousContent
+                        });
+                        this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent, null, {
+                            preserveConcurrentAdditions: true,
+                            baselineContent: previousContent,
+                            preparsedWorkbook: preparedLiveMutationWb.workbook,
+                            xlsxHandled: preparedLiveMutationWb.xlsxHandled,
+                            preparsedBaselineWorkbook: preparedLiveBaselineWb?.workbook,
+                            baselineXlsxHandled: preparedLiveBaselineWb?.xlsxHandled
+                        });
+                        isStructuredSlideOrSheet =
+                            room.Doc.getMap('slidesById').size > 0 ||
+                            room.Doc.getMap('worksheetsById').size > 0;
+                        if (isStructuredSlideOrSheet) {
+                            const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
+                            this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
+                        }
+                    }, 'server-agent');
+                }
+                room.LastModifiedByUser = user;
+                room.DirtyWorkingState = true;
+                room.DirtyVersion = true;
+            }
+            mergedContent = this.extractRoomSerializedContent(room.Doc);
+        });
+
+        if (lockFailureReason !== undefined) {
+            return {
+                Success: false,
+                ErrorMessage: lockFailureReason
+            };
+        }
         const resolvedMerge = mutationMergeResult as ConcurrentDocumentMergeResult | null;
         const hadConflict = Boolean(!isRestore && !isStructuredSlideOrSheet && resolvedMerge?.HadConflict);
         const rejectedLineHunks =
@@ -4572,26 +4613,34 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 expectedHash,
                                 room.ProviderKey
                             );
-                            void this.reconcileOutOfBandVersionIntoRoom(
-                                room,
-                                {
-                                    ID: eventVersionId,
-                                    VersionNumber: payload.VersionNumber,
-                                    Content: payload.Content,
-                                    Configuration: payload.Configuration,
-                                    Description: payload.Description,
-                                    Comments: payload.Comments,
-                                    UserID: actorUserId
-                                },
-                                {
-                                    originServerId: payload.OriginServerID ?? tracked?.OriginServerID,
-                                    savedStateVectorB64: payload.SavedStateVectorB64 ?? tracked?.SavedStateVectorB64,
-                                    savedSnapshotB64: tracked?.SavedSnapshotB64,
-                                    savedContentHash: expectedHash,
-                                    isRestore: payload.IsRestore,
-                                    actorUserId: actorUserId
-                                }
-                            );
+                            void Promise.resolve(
+                                this.reconcileOutOfBandVersionIntoRoom(
+                                    room,
+                                    {
+                                        ID: eventVersionId,
+                                        VersionNumber: payload.VersionNumber,
+                                        Content: payload.Content,
+                                        Configuration: payload.Configuration,
+                                        Description: payload.Description,
+                                        Comments: payload.Comments,
+                                        UserID: actorUserId
+                                    },
+                                    {
+                                        originServerId: payload.OriginServerID ?? tracked?.OriginServerID,
+                                        savedStateVectorB64: payload.SavedStateVectorB64 ?? tracked?.SavedStateVectorB64,
+                                        savedSnapshotB64: tracked?.SavedSnapshotB64,
+                                        savedContentHash: expectedHash,
+                                        isRestore: payload.IsRestore,
+                                        actorUserId: actorUserId
+                                    }
+                                )
+                            ).catch((reconcileErr) => {
+                                LogError(
+                                    `ArtifactCollaborationServer: async version-saved reconcile failed for '${room.ArtifactID}': ${
+                                        reconcileErr instanceof Error ? reconcileErr.message : String(reconcileErr)
+                                    }`
+                                );
+                            });
                         } else if (UUIDsEqual(room.BaseVersionID, eventVersionId)) {
                             const eventContent = payload.Content || payload.Configuration || '';
                             if (eventContent !== room.BaseVersionText) {
@@ -4619,6 +4668,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return trimmed.startsWith('data:') || trimmed.startsWith('UEsDB');
     }
 
+    private enqueueRoomReconcile(room: CollaborationRoom, fn: () => Promise<void>): Promise<void> {
+        room.PendingReconcileCount = (room.PendingReconcileCount ?? 0) + 1;
+        const baseQueue = room.ReconcileQueue ?? Promise.resolve();
+        const run = baseQueue.then(fn, fn).finally(() => {
+            room.PendingReconcileCount = Math.max(0, (room.PendingReconcileCount ?? 1) - 1);
+        });
+        room.ReconcileQueue = run.catch((err) => {
+            LogError(
+                `ArtifactCollaborationServer: room reconcile queue error for '${room.ArtifactID}': ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
+        });
+        return run;
+    }
+
     protected reconcileOutOfBandVersionIntoRoom(
         room: CollaborationRoom,
         version: {
@@ -4641,26 +4706,27 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             actorUserId?: string;
         }
     ): Promise<void> | void {
-        const isRestore = this.isAuthoritativeRestoreVersion(version, options?.isRestore);
-        if (isRestore) {
-            const alreadyApplied =
-                (room.LastAppliedRestoreVersionID !== null &&
-                    UUIDsEqual(room.LastAppliedRestoreVersionID, version.ID)) ||
-                room.LastAppliedRestoreVersionNumber >= version.VersionNumber ||
-                room.BaseVersionNumber > version.VersionNumber;
-            if (alreadyApplied) {
-                return;
+        const shouldSkipForCurrentRoom = (restoreFlag: boolean): boolean => {
+            if (restoreFlag) {
+                return (
+                    (room.LastAppliedRestoreVersionID !== null &&
+                        UUIDsEqual(room.LastAppliedRestoreVersionID, version.ID)) ||
+                    room.LastAppliedRestoreVersionNumber >= version.VersionNumber ||
+                    room.BaseVersionNumber > version.VersionNumber
+                );
             }
-        } else {
             if (UUIDsEqual(room.BaseVersionID, version.ID)) {
-                return;
+                return true;
             }
-            if (
+            return Boolean(
                 options?.originServerId === this._serverInstanceId &&
-                room.BaseVersionNumber >= version.VersionNumber
-            ) {
-                return;
-            }
+                    room.BaseVersionNumber >= version.VersionNumber
+            );
+        };
+
+        const isRestore = this.isAuthoritativeRestoreVersion(version, options?.isRestore);
+        if (shouldSkipForCurrentRoom(isRestore)) {
+            return;
         }
         const targetText = version.Content || version.Configuration || '';
         const targetContentHash = this.computeSha256Hex(targetText);
@@ -4673,8 +4739,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             this.isXlsxTextPayload(baselineText) ||
             this.isXlsxTextPayload(room.BaseConfiguration);
 
-        if (hasXlsxPayload) {
-            return (async () => {
+        if (hasXlsxPayload || (room.PendingReconcileCount ?? 0) > 0) {
+            return this.enqueueRoomReconcile(room, async () => {
                 const targetPre = await this.preparePreparsedWorkbookIfXlsxIsolated(
                     targetText,
                     version.Configuration ?? null
@@ -4686,13 +4752,51 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                               version.Content ?? '',
                               version.Configuration ?? null
                           );
-                const baselinePre = baselineText
-                    ? await this.preparePreparsedWorkbookIfXlsxIsolated(baselineText, null)
+                const freshBaseline = options?.previousContent ?? room.BaseVersionText;
+                const baselinePre = freshBaseline
+                    ? await this.preparePreparsedWorkbookIfXlsxIsolated(freshBaseline, null)
                     : undefined;
-                const rollbackPre = await this.preparePreparsedWorkbookIfXlsxIsolated(
-                    liveText,
-                    room.BaseConfiguration ?? null
-                );
+
+                // R9-1: Re-read live room content AFTER all `.xlsx` awaits and pre-parse live if `.xlsx`.
+                // Repeat once if a concurrent live edit lands during rollbackPre's worker parse.
+                let freshLiveText = this.extractRoomSerializedContent(room.Doc);
+                let freshBaseConfig = room.BaseConfiguration ?? null;
+                let rollbackPre = await this.preparePreparsedWorkbookIfXlsxIsolated(freshLiveText, freshBaseConfig);
+                if (this.isXlsxTextPayload(freshLiveText) || this.isXlsxTextPayload(freshBaseConfig)) {
+                    const postRollbackLiveText = this.extractRoomSerializedContent(room.Doc);
+                    const postRollbackBaseConfig = room.BaseConfiguration ?? null;
+                    if (postRollbackLiveText !== freshLiveText || postRollbackBaseConfig !== freshBaseConfig) {
+                        freshLiveText = postRollbackLiveText;
+                        freshBaseConfig = postRollbackBaseConfig;
+                        rollbackPre = await this.preparePreparsedWorkbookIfXlsxIsolated(
+                            freshLiveText,
+                            freshBaseConfig
+                        );
+                    }
+                }
+
+                // Re-check ordering / deduplication after waiting in queue (`R9-1`).
+                if (shouldSkipForCurrentRoom(isRestore)) {
+                    return;
+                }
+                const preParsedMap = new Map<string, WorkbookSpec>();
+                if (targetPre.workbook) {
+                    preParsedMap.set(targetText, targetPre.workbook);
+                    if (version.Configuration) {
+                        preParsedMap.set(version.Configuration, targetPre.workbook);
+                    }
+                }
+                if (contentTargetPre.workbook && version.Content) {
+                    preParsedMap.set(version.Content, contentTargetPre.workbook);
+                }
+                if (rollbackPre.workbook) {
+                    preParsedMap.set(freshLiveText, rollbackPre.workbook);
+                    if (freshBaseConfig) {
+                        preParsedMap.set(freshBaseConfig, rollbackPre.workbook);
+                    }
+                }
+
+                const latestLiveText = this.extractRoomSerializedContent(room.Doc);
                 this.applyOutOfBandVersionReconcile(
                     room,
                     version,
@@ -4700,11 +4804,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     isRestore,
                     targetText,
                     targetContentHash,
-                    liveText,
-                    baselineText,
-                    { targetPre, contentTargetPre, baselinePre, rollbackPre }
+                    latestLiveText,
+                    options?.previousContent ?? room.BaseVersionText,
+                    { targetPre, contentTargetPre, baselinePre, rollbackPre, preParsedWorkbooks: preParsedMap }
                 );
-            })();
+            });
         }
 
         this.applyOutOfBandVersionReconcile(
@@ -4752,6 +4856,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             contentTargetPre: { workbook?: WorkbookSpec; xlsxHandled: boolean };
             baselinePre?: { workbook?: WorkbookSpec; xlsxHandled: boolean };
             rollbackPre: { workbook?: WorkbookSpec; xlsxHandled: boolean };
+            preParsedWorkbooks?: ReadonlyMap<string, WorkbookSpec>;
         }
     ): void {
         const yText = room.Doc.getText('content');
@@ -5133,7 +5238,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     isOobOwner,
                     {
                         currentConfiguration: room.BaseConfiguration ?? null,
-                        nextConfiguration: version.Configuration ?? null
+                        nextConfiguration: version.Configuration ?? null,
+                        ...(pre?.preParsedWorkbooks ? { preParsedWorkbooks: pre.preParsedWorkbooks } : {})
                     }
                 );
                 if (!oobLockCheck.Allowed) {
@@ -5818,6 +5924,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             RoomEpoch: `epoch-init-${artifactId}`,
             FlushQueue: Promise.resolve(true),
             CompactionQueue: Promise.resolve({ Saved: false }),
+            ReconcileQueue: Promise.resolve(),
+            PendingReconcileCount: 0,
             WorkingStateTimer: null,
             IdleDisposeTimer: null,
             UnsubscribeRelay: null,
@@ -6180,7 +6288,6 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     }
                 }
 
-                room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
                 const nextEpoch = `epoch-${isHydrateRestore ? 'restore-' : ''}${versionRow.ID}-${versionRow.VersionNumber}`;
                 room.RoomEpoch = nextEpoch;
                 let hydrateMergeResult: ConcurrentDocumentMergeResult | null = null;
@@ -6191,6 +6298,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         versionTargetText,
                         versionRow.Configuration ?? null
                     );
+                    room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
                     room.Doc.transact(() => {
                         const meta = room.Doc.getMap('meta');
                         meta.set('roomEpoch', nextEpoch);
@@ -6223,21 +6331,25 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         }
                     }, 'hydrate');
                 } else {
-                    const preparedHydrateMergeWb =
-                        !alreadyContainsVersionOps && currentSerialized !== versionTargetText
-                            ? await this.preparePreparsedWorkbookIfXlsxIsolated(
-                                  versionRow.Content ?? '',
-                                  versionRow.Configuration ?? null
-                              )
-                            : undefined;
+                    const initialHydrateSerialized = this.extractRoomSerializedContent(room.Doc);
+                    const needsHydrateSheetSync = !alreadyContainsVersionOps && initialHydrateSerialized !== versionTargetText;
+                    const preparedHydrateMergeWb = needsHydrateSheetSync
+                        ? await this.preparePreparsedWorkbookIfXlsxIsolated(
+                              versionRow.Content ?? '',
+                              versionRow.Configuration ?? null
+                          )
+                        : undefined;
                     const preparedHydrateBaselineWb =
-                        !alreadyContainsVersionOps && currentSerialized !== versionTargetText && baseVersionText
+                        needsHydrateSheetSync && baseVersionText
                             ? await this.preparePreparsedWorkbookIfXlsxIsolated(baseVersionText, null)
                             : undefined;
+                    // R9-1: Capture state snapshot and currentSerialized AFTER awaits immediately before transact.
+                    room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
+                    const freshHydrateSerialized = this.extractRoomSerializedContent(room.Doc);
                     room.Doc.transact(() => {
                         const meta = room.Doc.getMap('meta');
                         meta.set('roomEpoch', nextEpoch);
-                        if (!alreadyContainsVersionOps && currentSerialized !== versionTargetText) {
+                        if (!alreadyContainsVersionOps && freshHydrateSerialized !== versionTargetText) {
                             hydrateMergeResult = this.applyMinimalTextDiff(
                                 yText,
                                 yText.toString(),

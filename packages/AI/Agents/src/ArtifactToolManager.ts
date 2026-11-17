@@ -3286,7 +3286,13 @@ export class ArtifactToolManager {
       }
     }
 
-    const digests = sourceInputs.map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigest(s));
+    const digests: ReturnType<typeof ArtifactSynthesisEngine.Instance.ExtractSourceDigest>[] = [];
+    for (let i = 0; i < sourceInputs.length; i += 4) {
+      const batch = await Promise.all(
+        sourceInputs.slice(i, i + 4).map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigestIsolated(s)),
+      );
+      digests.push(...batch);
+    }
     const allowedIds = digests.map((d) => d.ArtifactID);
     const availableCharts = digests.flatMap((d) => d.EmbeddedCharts);
 
@@ -3307,7 +3313,7 @@ export class ArtifactToolManager {
     }
 
     const normalized = rawContentStr
-      ? ArtifactSynthesisEngine.Instance.NormalizeSynthesizedOutput({
+      ? await ArtifactSynthesisEngine.Instance.NormalizeSynthesizedOutputIsolated({
           TargetKind: targetKind,
           RawOutput: rawContentStr,
           FallbackTitle: title,

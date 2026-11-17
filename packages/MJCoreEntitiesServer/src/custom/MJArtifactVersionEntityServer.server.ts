@@ -27,7 +27,8 @@ import {
     MJArtifactVersionEntity,
     SpreadsheetEngine,
     ValidateArtifactContentMutationAgainstLocks,
-    type MJUserViewEntity
+    type MJUserViewEntity,
+    type WorkbookSpec
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
@@ -615,6 +616,8 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         const isTrustedCompaction = trustedCompactionSet.has(this);
         const provider = resolveMetadataProvider(this.ProviderToUse, actor);
 
+        const preParsedXlsxCache = new Map<string, WorkbookSpec>();
+
         try {
             if (!isServerSystemUser(actor)) {
                 if (provider?.ProviderType === 'Network') {
@@ -662,6 +665,29 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                     (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? actor;
                 const canQueryDb = typeof (provider as { RunView?: unknown }).RunView === 'function';
                 let isArtifactOwner = perms.Source === 'Owner';
+
+                // Pre-parse any `.xlsx` binary/data-URL payload at most once per Save in the isolated worker (`R9-2`)
+                const preParseIfXlsx = async (raw: string | null | undefined): Promise<string | null> => {
+                    if (!raw || typeof raw !== 'string') {
+                        return null;
+                    }
+                    const trimmed = raw.trim();
+                    if (!(trimmed.startsWith('data:') || trimmed.startsWith('UEsDB'))) {
+                        return null;
+                    }
+                    if (preParsedXlsxCache.has(raw)) {
+                        return null;
+                    }
+                    try {
+                        const parsed = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(raw, null, {
+                            SkipEvaluate: true
+                        });
+                        preParsedXlsxCache.set(raw, parsed);
+                        return null;
+                    } catch (err) {
+                        return err instanceof Error ? err.message : String(err);
+                    }
+                };
 
                 if (canQueryDb && IsValidUUID(authArtifactId)) {
                     const artParams: RunViewParams = {
@@ -741,12 +767,21 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                 if (!isTrustedCompaction) {
                                     const priorContent = typeof priorRow.Content === 'string' ? priorRow.Content : '';
                                     const priorConfig = typeof priorRow.Configuration === 'string' ? priorRow.Configuration : null;
+                                    const priorXlsxErr =
+                                        (await preParseIfXlsx(priorContent)) ?? (await preParseIfXlsx(nextContent));
+                                    if (priorXlsxErr) {
+                                        return this.recordPermissionFailure(saveType, priorXlsxErr);
+                                    }
                                     const lockCheck = ValidateArtifactContentMutationAgainstLocks(
                                         priorContent,
                                         nextContent,
                                         actor.ID,
                                         isArtifactOwner,
-                                        { currentConfiguration: priorConfig, nextConfiguration: nextConfig }
+                                        {
+                                            currentConfiguration: priorConfig,
+                                            nextConfiguration: nextConfig,
+                                            preParsedWorkbooks: preParsedXlsxCache
+                                        }
                                     );
                                     if (!lockCheck.Allowed) {
                                         return this.recordPermissionFailure(
@@ -764,7 +799,11 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                             '',
                                             actor.ID,
                                             false,
-                                            { currentConfiguration: priorConfig, nextConfiguration: '{}' }
+                                            {
+                                                currentConfiguration: priorConfig,
+                                                nextConfiguration: '{}',
+                                                preParsedWorkbooks: preParsedXlsxCache
+                                            }
                                         );
                                         if (!wipeCheck.Allowed) {
                                             return this.recordPermissionFailure(
@@ -832,12 +871,21 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                         );
                                     }
                                     if (wsContent && wsContent !== (priorRow?.Content ?? '')) {
+                                        const wsXlsxErr =
+                                            (await preParseIfXlsx(wsContent)) ?? (await preParseIfXlsx(nextContent));
+                                        if (wsXlsxErr) {
+                                            return this.recordPermissionFailure(saveType, wsXlsxErr);
+                                        }
                                         const wsLockCheck = ValidateArtifactContentMutationAgainstLocks(
                                             wsContent,
                                             nextContent,
                                             actor.ID,
                                             false,
-                                            { currentConfiguration: priorRow?.Configuration ?? null, nextConfiguration: nextConfig }
+                                            {
+                                                currentConfiguration: priorRow?.Configuration ?? null,
+                                                nextConfiguration: nextConfig,
+                                                preParsedWorkbooks: preParsedXlsxCache
+                                            }
                                         );
                                         if (!wsLockCheck.Allowed) {
                                             return this.recordPermissionFailure(
@@ -929,12 +977,21 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                         const oldConfig = typeof configurationField?.OldValue === 'string' ? configurationField.OldValue : null;
                         const nextConfig = this.safeReadStringProp('Configuration');
                         if (!isTrustedCompaction && ((oldContent.length > 0 && oldContent !== nextContent) || (oldConfig && oldConfig !== nextConfig))) {
+                            const draftXlsxErr =
+                                (await preParseIfXlsx(oldContent)) ?? (await preParseIfXlsx(nextContent));
+                            if (draftXlsxErr) {
+                                return this.recordPermissionFailure('update', draftXlsxErr);
+                            }
                             const lockCheck = ValidateArtifactContentMutationAgainstLocks(
                                 oldContent,
                                 nextContent,
                                 actor.ID,
                                 isArtifactOwner,
-                                { currentConfiguration: oldConfig, nextConfiguration: nextConfig }
+                                {
+                                    currentConfiguration: oldConfig,
+                                    nextConfiguration: nextConfig,
+                                    preParsedWorkbooks: preParsedXlsxCache
+                                }
                             );
                             if (!lockCheck.Allowed) {
                                 return this.recordPermissionFailure(
@@ -968,15 +1025,19 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                     );
                 };
                 if (looksLikeSpreadsheet(effectiveContent) || looksLikeSpreadsheet(effectiveConfig)) {
-                    try {
-                        await SpreadsheetEngine.Instance.ParseWorkbookIsolated(
-                            looksLikeSpreadsheet(effectiveContent) ? effectiveContent : null,
-                            looksLikeSpreadsheet(effectiveConfig) ? effectiveConfig : null,
-                            { SkipEvaluate: true }
-                        );
-                    } catch (err) {
-                        const msg = err instanceof Error ? err.message : String(err);
-                        return this.recordPermissionFailure(saveType, msg);
+                    const alreadyParsedContent =
+                        looksLikeSpreadsheet(effectiveContent) && preParsedXlsxCache.has(effectiveContent);
+                    if (!alreadyParsedContent || looksLikeSpreadsheet(effectiveConfig)) {
+                        try {
+                            await SpreadsheetEngine.Instance.ParseWorkbookIsolated(
+                                looksLikeSpreadsheet(effectiveContent) ? effectiveContent : null,
+                                looksLikeSpreadsheet(effectiveConfig) ? effectiveConfig : null,
+                                { SkipEvaluate: true }
+                            );
+                        } catch (err) {
+                            const msg = err instanceof Error ? err.message : String(err);
+                            return this.recordPermissionFailure(saveType, msg);
+                        }
                     }
                 }
             }

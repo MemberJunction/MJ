@@ -602,4 +602,66 @@ describe('ArtifactPermissionEngine Defer Fallback, >500 Items, Collection Ancest
         );
         expect(result).toBeNull();
     });
+
+    it('TryBuildReadableArtifactIdSet forwards strictThrowOnQueryError through parent-artifact delegate recursion (R9 Should-fix)', async () => {
+        const actorId = '11111111-1111-4111-8111-111111111111';
+        const childArtId = '22222222-2222-4222-8222-222222222222';
+        const parentArtId = '33333333-3333-4333-8333-333333333333';
+        const artEntityId = '44444444-4444-4444-8444-444444444444';
+        const user: UserInfo = {
+            ID: actorId,
+            Name: 'Actor',
+            Email: 'actor@example.com'
+        } as UserInfo;
+
+        const entities = [{ ID: artEntityId, Name: 'MJ: Artifacts' }];
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: Artifacts') {
+                    const f = String(params.ExtraFilter ?? '');
+                    if (f.includes(`UserID='${actorId}'`)) {
+                        return { Success: true, Results: [{ ID: childArtId }], RowCount: 1, TotalRowCount: 1, ExecutionTime: 1, ErrorMessage: '' };
+                    }
+                    if (f.includes(`ID='${childArtId}'`)) {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: childArtId,
+                                    UserID: actorId,
+                                    DelegateEntityID: artEntityId,
+                                    DelegateRecordID: parentArtId
+                                }
+                            ],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: ''
+                        };
+                    }
+                    if (f.includes(`ID='${parentArtId}'`)) {
+                        return {
+                            Success: false,
+                            Results: [],
+                            RowCount: 0,
+                            TotalRowCount: 0,
+                            ExecutionTime: 1,
+                            ErrorMessage: 'Parent DB failure'
+                        };
+                    }
+                }
+                return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+            })
+        } as Pick<RunView, 'RunView'> as RunView);
+
+        const provider = {
+            ProviderType: 'Network',
+            Entities: entities,
+            EntityByID: (id: string) => entities.find((e) => e.ID === id),
+            EntityByName: (name: string) => entities.find((e) => e.Name === name)
+        } as unknown as IMetadataProvider;
+
+        const result = await ArtifactPermissionEngine.Instance.TryBuildReadableArtifactIdSet(provider, user);
+        expect(result).toBeNull();
+    });
 });

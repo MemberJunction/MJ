@@ -948,23 +948,22 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
   ): { content: string; mimeType: string } {
     if (normalizedTypeName === 'Excel Spreadsheet') {
       if (typeof providedContent === 'string' && providedContent.trim()) {
-        const parsed = SpreadsheetEngine.Instance.ParseWorkbook(providedContent);
-        SpreadsheetEngine.Instance.EvaluateWorkbook(parsed);
+        const parsed = SpreadsheetEngine.Instance.ParseWorkbook(providedContent, undefined, { SkipEvaluate: true });
         return {
           content: SpreadsheetEngine.Instance.SerializeWorkbook(parsed),
           mimeType: SPREADSHEET_JSON_MIME_TYPE,
         };
       }
       if (providedContent && typeof providedContent === 'object') {
-        const parsed = SpreadsheetEngine.Instance.ParseWorkbook(JSON.stringify(providedContent));
-        SpreadsheetEngine.Instance.EvaluateWorkbook(parsed);
+        const parsed = SpreadsheetEngine.Instance.ParseWorkbook(JSON.stringify(providedContent), undefined, {
+          SkipEvaluate: true,
+        });
         return {
           content: SpreadsheetEngine.Instance.SerializeWorkbook(parsed),
           mimeType: SPREADSHEET_JSON_MIME_TYPE,
         };
       }
       const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook(title, sheetNames);
-      SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
       return {
         content: SpreadsheetEngine.Instance.SerializeWorkbook(wb),
         mimeType: SPREADSHEET_JSON_MIME_TYPE,
@@ -1451,12 +1450,10 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     workingXlsxBytes: Uint8Array | undefined,
   ): Promise<{ xlsxBytes?: Uint8Array; xlsxBase64?: string }> {
     try {
-      const parsedWorkbook = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(contentStr, undefined, {
-        SkipEvaluate: true,
-      });
+      const parsedWorkbook = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(contentStr);
       const patched = workingXlsxBytes
         ? await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(workingXlsxBytes, parsedWorkbook)
-        : SpreadsheetEngine.Instance.ExportToXlsxBytes(parsedWorkbook);
+        : SpreadsheetEngine.Instance.ExportToXlsxBytes(parsedWorkbook, true, { SkipEvaluate: true });
       return {
         xlsxBytes: patched,
         xlsxBase64: Buffer.from(patched).toString('base64'),

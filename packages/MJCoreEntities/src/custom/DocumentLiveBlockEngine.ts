@@ -63,6 +63,15 @@ export type SpreadsheetChartExtractorFn = (
     sheetRange: string | undefined
 ) => SpreadsheetChartExtractResult | null;
 
+export type SpreadsheetChartExtractorAsyncFn = (
+    content: string,
+    configuration: string | null,
+    sheetId: string | undefined,
+    chartId: string | undefined,
+    sheetRange: string | undefined,
+    options?: { skipEvaluate?: boolean }
+) => Promise<SpreadsheetChartExtractResult | null>;
+
 /**
  * Callback registered by host/storage layers so `DocumentLiveBlockEngine` and `SpreadsheetEngine`
  * can load binary bytes for `ContentMode = 'File'` artifacts (e.g., `.xlsx` workbooks) without a
@@ -1158,6 +1167,7 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
 
         const resolvedType = artifactRow.Type || spec.ArtifactType || '';
         let resolvedContent = versionRow?.Content ?? '';
+        let skipChartReEvaluate = false;
         if (versionRow?.ContentMode === 'File' && !resolvedContent) {
             const fileBytes = versionRow.FileID
                 ? await DocumentLiveBlockEngine.Instance.LoadArtifactFileBytes(versionRow.FileID, user, provider)
@@ -1206,6 +1216,7 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
                 );
                 if (materializedJson) {
                     resolvedContent = materializedJson;
+                    skipChartReEvaluate = true;
                 }
             }
             if (!resolvedContent) {
@@ -1228,12 +1239,13 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
         }
 
         if (spec.SheetChartID || spec.SheetRange) {
-            const dataset = DocumentLiveBlockEngine.Instance.ExtractSpreadsheetChartDataset(
+            const dataset = await DocumentLiveBlockEngine.Instance.ExtractSpreadsheetChartDatasetAsync(
                 resolvedContent,
                 versionRow?.Configuration ?? null,
                 spec.SheetID,
                 spec.SheetChartID,
-                spec.SheetRange
+                spec.SheetRange,
+                skipChartReEvaluate ? { skipEvaluate: true } : undefined
             );
             if (!dataset) {
                 return buildErrorResult(
@@ -1317,6 +1329,7 @@ export interface ParsedDocumentSegment {
  */
 export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngine> {
     private _spreadsheetChartExtractor: SpreadsheetChartExtractorFn | null = null;
+    private _spreadsheetChartExtractorAsync: SpreadsheetChartExtractorAsyncFn | null = null;
     private _spreadsheetXlsxChartExtractor: SpreadsheetXlsxChartExtractorFn | null = null;
     private _spreadsheetXlsxChartExtractorAsync: SpreadsheetXlsxChartExtractorAsyncFn | null = null;
     private _spreadsheetXlsxWorkbookExtractor: SpreadsheetXlsxWorkbookExtractorFn | null = null;
@@ -1394,6 +1407,13 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
     }
 
     /**
+     * Registers an async worker-isolated spreadsheet chart/range dataset extractor (`R9-2`).
+     */
+    public RegisterSpreadsheetChartExtractorAsync(fn: SpreadsheetChartExtractorAsyncFn | null): void {
+        this._spreadsheetChartExtractorAsync = fn;
+    }
+
+    /**
      * Invokes the registered spreadsheet chart/range dataset extractor if available (`D5`).
      */
     public ExtractSpreadsheetChartDataset(
@@ -1407,6 +1427,23 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             return null;
         }
         return this._spreadsheetChartExtractor(content, configuration, sheetId, chartId, sheetRange);
+    }
+
+    /**
+     * Async worker-isolated chart/range dataset extraction (`R9-2`).
+     */
+    public async ExtractSpreadsheetChartDatasetAsync(
+        content: string,
+        configuration: string | null,
+        sheetId?: string,
+        chartId?: string,
+        sheetRange?: string,
+        options?: { skipEvaluate?: boolean }
+    ): Promise<SpreadsheetChartExtractResult | null> {
+        if (this._spreadsheetChartExtractorAsync) {
+            return this._spreadsheetChartExtractorAsync(content, configuration, sheetId, chartId, sheetRange, options);
+        }
+        return this.ExtractSpreadsheetChartDataset(content, configuration, sheetId, chartId, sheetRange);
     }
 
     /**

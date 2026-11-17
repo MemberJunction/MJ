@@ -1741,6 +1741,8 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                 LastReconciledOobMergeResult: null,
                 RoomEpoch: 'e1',
                 FlushQueue: Promise.resolve(true),
+                ReconcileQueue: Promise.resolve(),
+                PendingReconcileCount: 0,
                 CompactionQueue: Promise.resolve({ Saved: false }),
                 WorkingStateTimer: null,
                 IdleDisposeTimer: null,
@@ -2670,6 +2672,8 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                 LastReconciledOobMergeResult: null,
                 RoomEpoch: 'epoch-b2-peer',
                 FlushQueue: Promise.resolve(true),
+                ReconcileQueue: Promise.resolve(),
+                PendingReconcileCount: 0,
                 CompactionQueue: Promise.resolve({ Saved: false }),
                 WorkingStateTimer: null,
                 IdleDisposeTimer: null,
@@ -2829,7 +2833,9 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             const xlsxSrcWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('HydrateXlsxRoom', ['Sheet1'], 3, 3);
             SpreadsheetEngine.Instance.SetCell(xlsxSrcWb, xlsxSrcWb.Worksheets[0].SheetID, 'A1', { Value: 7 }, false);
             SpreadsheetEngine.Instance.SetCell(xlsxSrcWb, xlsxSrcWb.Worksheets[0].SheetID, 'A2', { Formula: '=A1*10' }, false);
-            const hydrateXlsxB64 = Buffer.from(SpreadsheetEngine.Instance.ExportToXlsxBytes(xlsxSrcWb, false)).toString('base64');
+            const hydrateXlsxB64 = Buffer.from(
+                SpreadsheetEngine.Instance.ExportToXlsxBytes(xlsxSrcWb, false, { SkipEvaluate: true })
+            ).toString('base64');
             const xlsxProvider = {
                 ProviderType: 'Database',
                 RunView: vi.fn(async (params: RunViewParams) => {
@@ -2888,6 +2894,125 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                 expect(lockReject.Reason).toMatch(/maximum sheet limit/i);
             } finally {
                 mainThreadEvalSpy.mockRestore();
+            }
+
+            // R9-1: While a non-owner's `.xlsx` agent mutation is awaiting worker parse, if the owner adds a
+            // protected range to the live room doc, ApplyServerContentMutation re-reads fresh room state after await
+            // and refuses the mutation instead of overwriting the new lock.
+            const raceArtId = '9a9a9a9a-9a9a-49a9-89a9-9a9a9a9a9a9a';
+            const baseRaceWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('LockRace', ['Sheet1'], 5, 5);
+            SpreadsheetEngine.Instance.SetCell(baseRaceWb, baseRaceWb.Worksheets[0].SheetID, 'A1', { Value: 'initial' }, false);
+            const baseRaceJson = SpreadsheetEngine.Instance.SerializeWorkbook(baseRaceWb);
+            const raceProvider = {
+                ProviderType: 'Database',
+                RunView: vi.fn(async (params: RunViewParams) => {
+                    if (params.EntityName === 'MJ: Artifact Working States') {
+                        return { Success: true, Results: [] };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: '9b9b9b9b-9b9b-49b9-89b9-9b9b9b9b9b9b',
+                                    VersionNumber: 1,
+                                    Content: baseRaceJson,
+                                    Configuration: null,
+                                    UserID: ownerUser.ID,
+                                },
+                            ],
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return { Success: true, Results: [{ ID: raceArtId, UserID: ownerUser.ID }] };
+                    }
+                    return { Success: true, Results: [] };
+                }),
+                RunViews: vi.fn(async (paramsList: RunViewParams[]) =>
+                    Promise.all(
+                        paramsList.map((p) =>
+                            (raceProvider.RunView as (arg: RunViewParams) => Promise<{ Success: boolean; Results: unknown[] }>)(p),
+                        ),
+                    ),
+                ),
+            };
+            const raceRoom = await nodeB.GetOrCreateRoom(raceArtId, ownerUser, raceProvider as unknown as IMetadataProvider);
+            expect(raceRoom).toBeTruthy();
+
+            const incomingMutatedWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('LockRace', ['Sheet1'], 5, 5);
+            SpreadsheetEngine.Instance.SetCell(
+                incomingMutatedWb,
+                incomingMutatedWb.Worksheets[0].SheetID,
+                'A1',
+                { Value: 'non-owner-overwrite' },
+                false
+            );
+            const incomingXlsxB64 = Buffer.from(
+                SpreadsheetEngine.Instance.ExportToXlsxBytes(incomingMutatedWb, false, { SkipEvaluate: true })
+            ).toString('base64');
+
+            let releaseWorkerImport!: () => void;
+            let markImportStarted!: () => void;
+            const importStartedPromise = new Promise<void>((res) => {
+                markImportStarted = res;
+            });
+            const deferredWorkerGate = new Promise<void>((res) => {
+                releaseWorkerImport = res;
+            });
+
+            const origImportIsolated = SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated.bind(
+                SpreadsheetEngine.Instance
+            );
+            const importIsoSpy = vi
+                .spyOn(SpreadsheetEngine.Instance, 'ImportFromXlsxBytesIsolated')
+                .mockImplementation(async (bytes, config, opts) => {
+                    markImportStarted();
+                    await deferredWorkerGate;
+                    return origImportIsolated(bytes, config, opts);
+                });
+            try {
+                const pendingNonOwnerMut = nodeB.ApplyServerContentMutation(
+                    raceArtId,
+                    incomingXlsxB64,
+                    editorUser,
+                    false,
+                    undefined,
+                    { provider: raceProvider as unknown as IMetadataProvider }
+                );
+                await importStartedPromise;
+
+                // While the non-owner mutation is paused inside `.xlsx` worker import, the owner adds a lock on A1:A5!
+                const lockedWb = JSON.parse(baseRaceJson) as WorkbookSpec;
+                lockedWb.Worksheets[0].ProtectedRanges = [
+                    {
+                        RangeID: 'r9-race-lock',
+                        Range: 'A1:A5',
+                        LockedByUserID: ownerUser.ID
+                    }
+                ];
+                const lockedJson = SpreadsheetEngine.Instance.SerializeWorkbook(lockedWb);
+                raceRoom!.Doc.transact(() => {
+                    const yTxt = raceRoom!.Doc.getText('content');
+                    yTxt.delete(0, yTxt.length);
+                    yTxt.insert(0, lockedJson);
+                    const wsMap = raceRoom!.Doc.getMap<string>('worksheetsById');
+                    const structSheet = { ...lockedWb.Worksheets[0], Cells: {} };
+                    wsMap.set(lockedWb.Worksheets[0].SheetID, JSON.stringify(structSheet));
+                }, 'owner-mid-await-lock');
+
+                releaseWorkerImport();
+                const raceRes = await pendingNonOwnerMut;
+                expect(raceRes.Success).toBe(false);
+                expect(raceRes.ErrorMessage).toMatch(/protected range/i);
+                const liveAfter = await nodeB.GetRoomContent(
+                    raceArtId,
+                    ownerUser,
+                    raceProvider as unknown as IMetadataProvider
+                );
+                expect(liveAfter).toContain('r9-race-lock');
+                expect(liveAfter).not.toContain('non-owner-overwrite');
+            } finally {
+                importIsoSpy.mockRestore();
             }
         } finally {
             await nodeA.Shutdown();

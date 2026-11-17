@@ -28,6 +28,24 @@ export interface ArtifactLockValidationResult {
 export interface ArtifactLockValidationOptions {
     currentConfiguration?: string | null;
     nextConfiguration?: string | null;
+    /** Optional pre-parsed workbooks (e.g. `.xlsx` decoded off-thread once per save) keyed by exact raw text (`R9-2`). */
+    preParsedWorkbooks?: ReadonlyMap<string, WorkbookSpec>;
+}
+
+function parseWorkbookWithCache(
+    content: string | null | undefined,
+    config: string | null | undefined,
+    preParsedWorkbooks?: ReadonlyMap<string, WorkbookSpec>
+): WorkbookSpec {
+    if (preParsedWorkbooks) {
+        if (config && preParsedWorkbooks.has(config)) {
+            return preParsedWorkbooks.get(config)!;
+        }
+        if (content && preParsedWorkbooks.has(content)) {
+            return preParsedWorkbooks.get(content)!;
+        }
+    }
+    return SpreadsheetEngine.Instance.ParseWorkbook(content, config, { SkipEvaluate: true });
 }
 
 function isSlideLockConfigEqual(
@@ -340,7 +358,8 @@ function isXlsxBinaryTextPayload(raw: string | null | undefined): boolean {
 function validateNewLocksOnEmptyContent(
     nextContent: string,
     actorUserId: string | null | undefined,
-    isOwner: boolean
+    isOwner: boolean,
+    preParsedWorkbooks?: ReadonlyMap<string, WorkbookSpec>
 ): ArtifactLockValidationResult | null {
     const trimmedNext = nextContent.trim();
     const isWorkbookPayload = inspectStructuredJsonKind(trimmedNext) === 'workbook' || isXlsxBinaryTextPayload(trimmedNext);
@@ -381,7 +400,7 @@ function validateNewLocksOnEmptyContent(
             return { Allowed: true };
         }
         if (isWorkbookPayload) {
-            const nextWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent, undefined, { SkipEvaluate: true });
+            const nextWb = parseWorkbookWithCache(nextContent, undefined, preParsedWorkbooks);
             const dupSheetId = findDuplicateNonEmptyId(nextWb.Worksheets.map((w) => w.SheetID));
             if (dupSheetId) {
                 return { Allowed: false, Reason: `Duplicate SheetID '${dupSheetId}' is not allowed.` };
@@ -934,12 +953,16 @@ export function ValidateArtifactContentMutationAgainstLocks(
     if (isWorkbookInvolved) {
         try {
             if (hasCurrentWorkbook) {
-                const prevEffectiveWb = SpreadsheetEngine.Instance.ParseWorkbook(currentContent, currentConfig, {
-                    SkipEvaluate: true
-                });
-                const nextEffectiveWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent, nextConfig, {
-                    SkipEvaluate: true
-                });
+                const prevEffectiveWb = parseWorkbookWithCache(
+                    currentContent,
+                    currentConfig,
+                    options?.preParsedWorkbooks
+                );
+                const nextEffectiveWb = parseWorkbookWithCache(
+                    nextContent,
+                    nextConfig,
+                    options?.preParsedWorkbooks
+                );
                 const effectiveRes = validateWorkbookLockTransition(
                     prevEffectiveWb,
                     nextEffectiveWb,
@@ -953,13 +976,23 @@ export function ValidateArtifactContentMutationAgainstLocks(
                 // Prior state was not a workbook (e.g. locked Markdown); validate any newly introduced
                 // protected ranges without returning Allowed early so `docCheck` still runs (`B1`).
                 if (nextContentKind === 'workbook' || isXlsxBinaryTextPayload(nextContent)) {
-                    const newWbContentCheck = validateNewLocksOnEmptyContent(nextContent, actorUserId, isOwner);
+                    const newWbContentCheck = validateNewLocksOnEmptyContent(
+                        nextContent,
+                        actorUserId,
+                        isOwner,
+                        options?.preParsedWorkbooks
+                    );
                     if (newWbContentCheck && !newWbContentCheck.Allowed) {
                         return newWbContentCheck;
                     }
                 }
                 if (nextConfigKind === 'workbook' && nextConfig) {
-                    const newWbConfigCheck = validateNewLocksOnEmptyContent(nextConfig, actorUserId, isOwner);
+                    const newWbConfigCheck = validateNewLocksOnEmptyContent(
+                        nextConfig,
+                        actorUserId,
+                        isOwner,
+                        options?.preParsedWorkbooks
+                    );
                     if (newWbConfigCheck && !newWbConfigCheck.Allowed) {
                         return newWbConfigCheck;
                     }
@@ -974,8 +1007,8 @@ export function ValidateArtifactContentMutationAgainstLocks(
                 currentContent !== nextContent
             ) {
                 const contentRes = validateWorkbookLockTransition(
-                    SpreadsheetEngine.Instance.ParseWorkbook(currentContent, null, { SkipEvaluate: true }),
-                    SpreadsheetEngine.Instance.ParseWorkbook(nextContent, null, { SkipEvaluate: true }),
+                    parseWorkbookWithCache(currentContent, null, options?.preParsedWorkbooks),
+                    parseWorkbookWithCache(nextContent, null, options?.preParsedWorkbooks),
                     actorUserId,
                     isOwner
                 );
@@ -985,8 +1018,8 @@ export function ValidateArtifactContentMutationAgainstLocks(
             }
             if (currentConfigKind === 'workbook' && nextConfigKind === 'workbook' && currentConfig !== nextConfig) {
                 const configRes = validateWorkbookLockTransition(
-                    SpreadsheetEngine.Instance.ParseWorkbook(null, currentConfig, { SkipEvaluate: true }),
-                    SpreadsheetEngine.Instance.ParseWorkbook(null, nextConfig, { SkipEvaluate: true }),
+                    parseWorkbookWithCache(null, currentConfig, options?.preParsedWorkbooks),
+                    parseWorkbookWithCache(null, nextConfig, options?.preParsedWorkbooks),
                     actorUserId,
                     isOwner
                 );

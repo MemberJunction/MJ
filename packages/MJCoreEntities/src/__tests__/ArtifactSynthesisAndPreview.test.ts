@@ -405,4 +405,52 @@ describe('ArtifactSynthesisEngine Security, Prompt Hygiene & Spreadsheet Fidelit
         expect(isolatedDigest.SummaryText).toContain('Grand Total');
         expect(isolatedDigest.SummaryText).toContain('2990');
     });
+
+    it('R9-2: ExtractSourceDigestIsolated propagates worker isolation failures without silent sync fallback, and NormalizeSynthesizedOutputIsolated avoids sync EvaluateWorkbook', async () => {
+        const isoSpy = vi
+            .spyOn(SpreadsheetEngine.Instance, 'ParseWorkbookIsolated')
+            .mockRejectedValueOnce(new Error('Spreadsheet worker timed out after 10000ms'));
+        const syncParseSpy = vi.spyOn(SpreadsheetEngine.Instance, 'ParseWorkbook');
+        try {
+            await expect(
+                engine.ExtractSourceDigestIsolated({
+                    ArtifactID: allowedArtifactId,
+                    Name: 'Toxic Sheet',
+                    ArtifactType: 'Spreadsheet',
+                    Content: '{"Worksheets":[{"SheetID":"s1","Name":"S1","Cells":{}}]}'
+                })
+            ).rejects.toThrow(/timed out/i);
+            expect(syncParseSpy).not.toHaveBeenCalled();
+        } finally {
+            isoSpy.mockRestore();
+            syncParseSpy.mockRestore();
+        }
+
+        const evalSyncSpy = vi.spyOn(SpreadsheetEngine.Instance, 'EvaluateWorkbook');
+        const evalIsoSpy = vi.spyOn(SpreadsheetEngine.Instance, 'EvaluateWorkbookIsolated').mockResolvedValue();
+        try {
+            const normalized = await engine.NormalizeSynthesizedOutputIsolated({
+                TargetKind: 'spreadsheet',
+                RawOutput: JSON.stringify({
+                    Title: 'Isolated Synth',
+                    Worksheets: [
+                        {
+                            Name: 'Summary',
+                            Headers: ['A', 'B'],
+                            Rows: [
+                                [10, '=A2*2']
+                            ]
+                        }
+                    ]
+                }),
+                AllowedSourceArtifactIds: [allowedArtifactId]
+            });
+            expect(normalized.TargetKind).toBe('spreadsheet');
+            expect(evalSyncSpy).not.toHaveBeenCalled();
+            expect(evalIsoSpy).toHaveBeenCalledTimes(1);
+        } finally {
+            evalSyncSpy.mockRestore();
+            evalIsoSpy.mockRestore();
+        }
+    });
 });

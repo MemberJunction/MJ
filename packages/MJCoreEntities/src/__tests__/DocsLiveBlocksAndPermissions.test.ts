@@ -1222,12 +1222,12 @@ describe('Security & Hardening Regression Coverage (SavedQuery, Component, Artif
     });
 
     const extractSpy = vi
-      .spyOn(DocumentLiveBlockEngine.Instance, 'ExtractSpreadsheetChartDataset')
-      .mockReturnValueOnce({
+      .spyOn(DocumentLiveBlockEngine.Instance, 'ExtractSpreadsheetChartDatasetAsync')
+      .mockResolvedValueOnce({
         Columns: [{ Name: 'Label', DisplayName: 'Label' }, { Name: 'Value', DisplayName: 'Value' }],
         Rows: [{ Label: 'Q1', Value: 100 }],
       })
-      .mockReturnValueOnce(null);
+      .mockResolvedValueOnce(null);
 
     let mockContentMode = 'Inline';
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({

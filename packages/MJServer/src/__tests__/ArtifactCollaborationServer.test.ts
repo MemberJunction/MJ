@@ -1123,7 +1123,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         sheetEngine.SetCell(wb, ws.SheetID, 'B2', { Value: 100 }, false);
         sheetEngine.SetCell(wb, ws.SheetID, 'B3', { Value: 200 }, false);
         sheetEngine.SetCell(wb, ws.SheetID, 'B4', { Value: 300 }, false);
-        sheetEngine.SetCell(wb, ws.SheetID, 'B5', { Value: 400 }, true);
+        sheetEngine.SetCell(wb, ws.SheetID, 'B5', { Value: 400 }, false);
+        await sheetEngine.EvaluateWorkbookIsolated(wb);
         versions[0].Content = sheetEngine.SerializeWorkbook(wb);
 
         const clientA = await connectYjsClient(editorUser.ID);

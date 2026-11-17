@@ -480,9 +480,11 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
             expect(liveJson).toContain('Total');
             expect(liveJson).toContain('=SUM(B2:B3)');
 
-            const hydratedWb = SpreadsheetEngine.Instance.ParseWorkbook(liveJson);
+            const hydratedWb = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(liveJson, undefined, {
+                SkipEvaluate: true
+            });
             await SpreadsheetEngine.Instance.RefreshLiveTables(hydratedWb, alice, createMockProvider());
-            SpreadsheetEngine.Instance.EvaluateWorkbook(hydratedWb);
+            await SpreadsheetEngine.Instance.EvaluateWorkbookIsolated(hydratedWb);
             expect(hydratedWb.Worksheets[0].Cells['A1']?.ComputedValue).toBe('Month');
             expect(hydratedWb.Worksheets[0].Cells['B2']?.ComputedValue).toBe(12000);
             expect(hydratedWb.Worksheets[0].Cells['B3']?.ComputedValue).toBe(15500);

@@ -4455,10 +4455,10 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
     it('Round 8 (R8-2, R8-3, R8-4): enforces required worker isolation, honors SkipEvaluate on .xlsx import, bounds protected ranges & AllowedValues, indexes lock diffs, deduplicates AST range watches, and caps CSV/SetCell growth', async () => {
         // 1. R8-3: SetSpreadsheetWorkerIsolationRequired(true) fails closed on all *Isolated methods when unregistered
         RegisterSpreadsheetWorkerRunner(null);
+        const sampleWb = engine.CreateEmptyWorkbook('RequiredIso', ['Sheet1'], 3, 3);
+        const sampleXlsx = engine.ExportToXlsxBytes(sampleWb, true, { SkipEvaluate: true });
         SetSpreadsheetWorkerIsolationRequired(true);
         try {
-            const sampleWb = engine.CreateEmptyWorkbook('RequiredIso', ['Sheet1'], 3, 3);
-            const sampleXlsx = engine.ExportToXlsxBytes(sampleWb);
             await expect(engine.ImportFromXlsxBytesIsolated(sampleXlsx)).rejects.toThrow(/isolation runner is required/i);
             await expect(engine.PatchXlsxBytesIsolated(sampleXlsx, sampleWb)).rejects.toThrow(/isolation runner is required/i);
             await expect(engine.EvaluateWorkbookIsolated(sampleWb)).rejects.toThrow(/isolation runner is required/i);
@@ -4568,5 +4568,124 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             };
         }
         expect(() => engine.SetCell(capWb, capWb.Worksheets[0].SheetID, 'A1', { Value: 1 }, false)).not.toThrow();
+    });
+
+    it('Round 9 (R9-2, R9-3, Should-fix): blocks synchronous evaluation when isolation required, merges EvaluateWorkbookIsolated in-place, normalizes AST range de-dupe, and covers column/wide/row/multi-sheet lock indexes', async () => {
+        // 1. R9-2: When SetSpreadsheetWorkerIsolationRequired(true), synchronous eval paths throw loudly
+        const isoWb = engine.CreateEmptyWorkbook('SyncBlockTest', ['Sheet1'], 4, 4);
+        engine.SetCell(isoWb, isoWb.Worksheets[0].SheetID, 'A1', { Value: 5 }, false);
+        engine.SetCell(isoWb, isoWb.Worksheets[0].SheetID, 'A2', { Formula: '=A1*2' }, false);
+        const isoXlsx = engine.ExportToXlsxBytes(isoWb, false);
+        const isoJson = engine.SerializeWorkbook(isoWb);
+
+        SetSpreadsheetWorkerIsolationRequired(true);
+        try {
+            expect(() => engine.EvaluateWorkbook(isoWb)).toThrow(/synchronous main-thread evaluation is prohibited/i);
+            expect(() => engine.SetCell(isoWb, isoWb.Worksheets[0].SheetID, 'A3', { Value: 7 }, true)).toThrow(
+                /synchronous main-thread evaluation is prohibited/i
+            );
+            expect(() => engine.ParseWorkbook(isoJson)).toThrow(/synchronous main-thread evaluation is prohibited/i);
+            expect(() => engine.ImportFromXlsxBytes(isoXlsx)).toThrow(
+                /synchronous main-thread evaluation is prohibited/i
+            );
+            expect(() => engine.ExportToXlsxBytes(isoWb, false)).toThrow(
+                /synchronous main-thread evaluation is prohibited/i
+            );
+            // SkipEvaluate: true and recalculate = false remain allowed
+            expect(() => engine.ParseWorkbook(isoJson, undefined, { SkipEvaluate: true })).not.toThrow();
+            expect(() => engine.ImportFromXlsxBytes(isoXlsx, undefined, { SkipEvaluate: true })).not.toThrow();
+            expect(() => engine.ExportToXlsxBytes(isoWb, false, { SkipEvaluate: true })).not.toThrow();
+            expect(() => engine.SetCell(isoWb, isoWb.Worksheets[0].SheetID, 'A3', { Value: 7 }, false)).not.toThrow();
+        } finally {
+            SetSpreadsheetWorkerIsolationRequired(false);
+        }
+
+        // 2. R9-3: EvaluateWorkbookIsolated merges results into existing WorksheetSpec references in-place
+        const mergeWb = engine.CreateEmptyWorkbook('InPlaceMerge', ['Sheet1'], 4, 4);
+        const origSheetRef = mergeWb.Worksheets[0];
+        engine.SetCell(mergeWb, origSheetRef.SheetID, 'A1', { Value: 12 }, false);
+        engine.SetCell(mergeWb, origSheetRef.SheetID, 'A2', { Formula: '=A1*4' }, false);
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c, o) => engine.ImportFromXlsxBytes(b, c, o),
+            PatchXlsxBytes: async (o, w) => engine.PatchXlsxBytes(o, w),
+            EvaluateWorkbook: async (w, ctx) => {
+                const cloned = structuredClone(w);
+                engine.EvaluateWorkbook(cloned, ctx);
+                return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+            }
+        });
+        try {
+            await engine.EvaluateWorkbookIsolated(mergeWb);
+            expect(mergeWb.Worksheets[0]).toBe(origSheetRef);
+            expect(origSheetRef.Cells['A2']?.ComputedValue).toBe(48);
+        } finally {
+            RegisterSpreadsheetWorkerRunner(null);
+        }
+
+        // 3. Should-fix: AST range de-dupe merges $A$1:B9, a1:b9, and A1:B9 identically
+        const dedupeWb = engine.CreateEmptyWorkbook('NormalizedRangeDedupe', ['Sheet1'], 5, 5);
+        engine.SetCell(dedupeWb, dedupeWb.Worksheets[0].SheetID, 'D1', {
+            Formula: '=SUM($A$1:B200) + SUM(a1:b200) + SUM(A1:B200)'
+        });
+        expect(dedupeWb.Worksheets[0].Cells['D1']?.ComputedValue).toBe(0);
+
+        // 4. Should-fix: Lock validator index handles column-bucketed (C:C), wide (A1:Z5000), whole-row (5:5),
+        //    and multi-sheet protected ranges, plus overlapping-range detection through col & wide buckets
+        const ownerId = '11111111-1111-1111-1111-111111111111';
+        const editorId = '22222222-2222-2222-2222-222222222222';
+        const multiWb = engine.CreateEmptyWorkbook('IndexedLockVariants', ['Main', 'Second'], 25, 10);
+        multiWb.Worksheets[0].ProtectedRanges = [
+            { RangeID: 'col-c', Range: 'C:C', LockedByUserID: ownerId },
+            { RangeID: 'wide-box', Range: 'E1:Z5000', LockedByUserID: ownerId },
+            { RangeID: 'row-5', Range: '5:5', LockedByUserID: ownerId }
+        ];
+        multiWb.Worksheets[1].ProtectedRanges = [
+            { RangeID: 's2-row-2', Range: '2:2', LockedByUserID: ownerId }
+        ];
+        const multiPrevJson = JSON.stringify(multiWb);
+
+        // Editor can edit unlocked A1 on sheet 0 and A1 on sheet 1
+        const allowedEdit = JSON.parse(multiPrevJson) as typeof multiWb;
+        allowedEdit.Worksheets[0].Cells['A1'] = { Address: 'A1', RowID: 'r1', ColumnID: 'c1', RawValue: 'ok' };
+        allowedEdit.Worksheets[1].Cells['A1'] = { Address: 'A1', RowID: 'r1', ColumnID: 'c1', RawValue: 'ok' };
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(allowedEdit), editorId, false).Allowed).toBe(true);
+
+        // Blocked inside col bucket C:C (C99)
+        const blockCol = JSON.parse(multiPrevJson) as typeof multiWb;
+        blockCol.Worksheets[0].Cells['C99'] = { Address: 'C99', RowID: 'r99', ColumnID: 'c3', RawValue: 'x' };
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(blockCol), editorId, false).Allowed).toBe(false);
+
+        // Blocked inside wide bucket E1:Z5000 (F100)
+        const blockWide = JSON.parse(multiPrevJson) as typeof multiWb;
+        blockWide.Worksheets[0].Cells['F100'] = { Address: 'F100', RowID: 'r100', ColumnID: 'c6', RawValue: 'x' };
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(blockWide), editorId, false).Allowed).toBe(false);
+
+        // Blocked inside multi-sheet row 2:2 on Second sheet (D2)
+        const blockSheet2 = JSON.parse(multiPrevJson) as typeof multiWb;
+        blockSheet2.Worksheets[1].Cells['D2'] = { Address: 'D2', RowID: 'r2', ColumnID: 'c4', RawValue: 'x' };
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(blockSheet2), editorId, false).Allowed).toBe(false);
+
+        // Editor cannot add overlapping range hitting col bucket (C:C) or wide bucket (E1:Z5000)
+        const overlapColRule = JSON.parse(multiPrevJson) as typeof multiWb;
+        overlapColRule.Worksheets[0].ProtectedRanges.push({
+            RangeID: 'editor-overlap-col',
+            Range: 'B1:D2',
+            LockedByUserID: editorId
+        });
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(overlapColRule), editorId, false).Allowed).toBe(false);
+
+        const overlapWideRule = JSON.parse(multiPrevJson) as typeof multiWb;
+        overlapWideRule.Worksheets[0].ProtectedRanges.push({
+            RangeID: 'editor-overlap-wide',
+            Range: 'F10:G20',
+            LockedByUserID: editorId
+        });
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(overlapWideRule), editorId, false).Allowed).toBe(false);
+
+        // 5. Should-fix: DeleteRows invalidates workbookCellCountCache so subsequent SetCell counts accurately
+        const delWb = engine.CreateEmptyWorkbook('DelCacheTest', ['Sheet1'], 5, 3);
+        engine.SetCell(delWb, delWb.Worksheets[0].SheetID, 'A2', { Value: 99 }, false);
+        engine.DeleteRows(delWb, delWb.Worksheets[0].SheetID, 2, 1);
+        expect(delWb.Worksheets[0].Cells['A2']).toBeUndefined();
     });
 });
