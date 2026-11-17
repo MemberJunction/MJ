@@ -45,17 +45,9 @@ export interface EmbeddedTexts {
   Tokens: number;
 }
 
-/**
- * Whether verbose logging is enabled, mirroring the MJ_VERBOSE semantics used by
- * @memberjunction/core's IsVerboseLoggingEnabled(). Duplicated here as a tiny inline
- * check so this leaf AI provider doesn't take a dependency on @memberjunction/core
- * just to gate a couple of routine status messages. Routine load/progress messages
- * are suppressed by default so they don't garble CodeGen's spinner; errors/warnings
- * still print unconditionally.
- */
+/** Routine load/progress messages are off by default so they don't garble CodeGen's spinner; errors still print. */
 function isVerbose(): boolean {
-  const v = process.env.MJ_VERBOSE;
-  return v !== undefined && ['true', '1', 'yes'].includes(v.toLowerCase());
+  return IsTruthyEnvValue(process.env.MJ_VERBOSE);
 }
 
 /**
@@ -122,6 +114,9 @@ export function CurrentEmbeddingSettings(): EmbeddingSettings {
  * declare none (EmbeddingGemma 2's reads as 1e30, past its 8,192-token window).
  */
 export async function EmbedTextsWithModel(modelName: string, texts: string[], maxInputTokens?: number): Promise<EmbeddedTexts> {
+  if (maxInputTokens !== undefined && (!Number.isInteger(maxInputTokens) || maxInputTokens <= 0)) {
+    throw new Error(`maxInputTokens must be a positive integer, got ${maxInputTokens} for model ${modelName}`);
+  }
   if (texts.length === 0) {
     return { Vectors: [], Tokens: 0 };
   }
@@ -186,8 +181,7 @@ export async function PreloadEmbeddingModel(modelName: string): Promise<void> {
  * forgetting the JS object alone leaves the session (weights and arena) alive until a GC that may
  * never run it. A load still in flight is released when it finishes; its cache entry is already
  * gone, so no call can reuse it. A model with calls running is released when the last one finishes.
- * Rejects, naming the model IDs, when a release fails; the cache is
- * emptied either way.
+ * Rejects, naming the model IDs, when a release fails; the cache is emptied either way.
  */
 export async function ClearEmbeddingPipelines(): Promise<void> {
   const dropped = Array.from(models.entries());
@@ -204,8 +198,11 @@ async function releaseModel(modelId: string, loading: Promise<LoadedModel>): Pro
   let loaded: LoadedModel;
   try {
     loaded = await loading;
-  } catch {
-    // The load failed, so there is nothing to release; the callers that awaited it saw the error.
+  } catch (loadError) {
+    // The load failure was already reported to its callers by loadModel; there is nothing to release.
+    if (isVerbose()) {
+      console.log(`Skipped releasing embedding model ${modelId}: its load failed (${loadError instanceof Error ? loadError.message : String(loadError)})`);
+    }
     return null;
   }
   if (loaded.activeCalls > 0) {

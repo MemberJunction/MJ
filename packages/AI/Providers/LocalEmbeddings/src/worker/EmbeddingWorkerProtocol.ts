@@ -21,7 +21,7 @@ export interface EmbedCall {
   Settings: EmbeddingSettings;
 }
 
-/** Drop the worker's loaded pipelines. Resolves with no vectors. */
+/** Drop the worker's loaded models and release their ONNX sessions once their in-flight calls finish. Resolves with no vectors. */
 export interface ClearCall {
   Kind: 'clear';
 }

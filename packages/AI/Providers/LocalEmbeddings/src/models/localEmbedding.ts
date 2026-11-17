@@ -182,7 +182,8 @@ export class LocalEmbedding extends BaseEmbeddings {
     }
 
     /**
-     * Clear loaded pipelines to free memory
+     * Drops the loaded models and releases their ONNX sessions once their in-flight calls finish,
+     * to free memory.
      */
     public ClearCache(): void {
         LocalEmbedding.clearLoadedModels();

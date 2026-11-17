@@ -42,6 +42,7 @@ const MODEL = 'Xenova/all-MiniLM-L6-v2';
 beforeEach(async () => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
+  vi.stubEnv(LOCAL_EMBEDDINGS_CPU_ARENA_ENV, ''); // a developer's exported value must not leak into the default-off tests
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'log').mockImplementation(() => {});
   await ClearEmbeddingPipelines();
@@ -156,6 +157,17 @@ describe('EmbedTextsWithModel', () => {
   });
 });
 
+describe('maxInputTokens guard', () => {
+  it.each([0, -5, 1.5])('rejects %j before loading the model', async (value) => {
+    await expect(EmbedTextsWithModel(MODEL, ['a'], value)).rejects.toThrow(`got ${value} for model ${MODEL}`);
+    expect(fake.modelFromPretrained).not.toHaveBeenCalled();
+  });
+
+  it('accepts a positive integer', async () => {
+    await expect(EmbedTextsWithModel(MODEL, ['a'], 1)).resolves.toBeDefined();
+  });
+});
+
 describe('CPU memory arena', () => {
   const sessionOptionsOf = () => fake.modelFromPretrained.mock.calls[0][1].session_options;
 
@@ -168,7 +180,7 @@ describe('CPU memory arena', () => {
     }));
   });
 
-  it.each(['true', '1', 'YES'])('is kept when %s is set in %s', async (value) => {
+  it.each(['true', '1', 'YES'])('is kept when the variable is %j', async (value) => {
     vi.stubEnv(LOCAL_EMBEDDINGS_CPU_ARENA_ENV, value);
     await EmbedTextsWithModel(MODEL, ['a']);
     expect(sessionOptionsOf()).not.toHaveProperty('enableCpuMemArena');
@@ -221,14 +233,13 @@ describe('ClearEmbeddingPipelines', () => {
     const events: string[] = [];
     let batches = 0;
     let clearDuringEmbed: Promise<void> | undefined;
-    const real = model;
     const guarded = Object.assign(async (inputs: FakeBatch) => {
       events.push('batch');
       if (++batches === 2) {
         clearDuringEmbed = ClearEmbeddingPipelines().then(() => { events.push('cleared'); });
       }
-      return real(inputs);
-    }, { dispose: vi.fn(async () => { events.push('disposed'); await real.dispose(); }) });
+      return model(inputs);
+    }, { dispose: vi.fn(async () => { events.push('disposed'); await model.dispose(); }) });
     fake.modelFromPretrained.mockImplementationOnce(async () => guarded);
 
     const { Vectors } = await EmbedTextsWithModel(MODEL, ['a', 'b', 'c']);
