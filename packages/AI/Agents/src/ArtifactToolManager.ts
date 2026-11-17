@@ -67,8 +67,8 @@ const MAX_INITIAL_OPERATIONS = 100;
  * synthesized workspace artifacts inherit the run's trust boundary.
  */
 export interface ActiveRunTaint {
-  trustLevel: Exclude<ActionOutputTrustLevel, 'Trusted'>;
-  sourceName: string;
+  TrustLevel: Exclude<ActionOutputTrustLevel, 'Trusted'>;
+  SourceName: string;
 }
 
 /**
@@ -3892,12 +3892,12 @@ export class ArtifactToolManager {
     if (!runTaint || fromEntries.trustLevel === 'Untrusted') {
       return fromEntries;
     }
-    if (runTaint.trustLevel === 'Untrusted') {
-      return { trustLevel: 'Untrusted', sourceName: runTaint.sourceName };
+    if (runTaint.TrustLevel === 'Untrusted') {
+      return { trustLevel: 'Untrusted', sourceName: runTaint.SourceName };
     }
     return fromEntries.trustLevel === 'SemiTrusted'
       ? fromEntries
-      : { trustLevel: 'SemiTrusted', sourceName: runTaint.sourceName };
+      : { trustLevel: 'SemiTrusted', sourceName: runTaint.SourceName };
   }
 
   private withEntryTrust(

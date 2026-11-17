@@ -2181,10 +2181,10 @@ export class BaseAgent {
         }
         const untrusted = this._taintedSources.find(s => s.trustLevel === 'Untrusted');
         if (untrusted) {
-            return { trustLevel: 'Untrusted', sourceName: untrusted.sourceName };
+            return { TrustLevel: 'Untrusted', SourceName: untrusted.sourceName };
         }
         const first = this._taintedSources[0];
-        return { trustLevel: first.trustLevel, sourceName: first.sourceName };
+        return { TrustLevel: first.trustLevel, SourceName: first.sourceName };
     }
 
     /**
@@ -22481,10 +22481,13 @@ The context is now within limits. Please retry your request with the recovered c
             messageType: 'loop-result'
         };
 
-        // Check for global override first
+        // Check for global override first (including explicit expirationMode: 'None' opt-out)
         if (params.messageExpirationOverride) {
             const override = params.messageExpirationOverride;
-            if (override.expirationTurns != null && override.expirationMode !== 'None') {
+            if (override.expirationMode === 'None') {
+                return baseMetadata;
+            }
+            if (override.expirationTurns != null) {
                 return {
                     ...baseMetadata,
                     expirationTurns: override.expirationTurns,

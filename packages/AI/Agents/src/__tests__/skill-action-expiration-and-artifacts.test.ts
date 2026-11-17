@@ -635,6 +635,41 @@ describe('Unified skill & direct action expiration, compaction, and artifact his
             });
         });
 
+        it('honors messageExpirationOverride with expirationMode None in resolveLoopExpirationMetadata (with or without expirationTurns)', () => {
+            const agent = new UnifiedActionPathwayProbeAgent();
+            const adhocQueryAction = makeActionEntity(RUN_ADHOC_QUERY_ID, 'Run Ad-hoc Query', {
+                resultExpirationTurns: 1,
+                resultExpirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 2000,
+            });
+
+            vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);
+            vi.spyOn(ActionEngineBase.Instance, 'Actions', 'get').mockReturnValue([adhocQueryAction]);
+
+            const withoutTurns = agent.ResolveLoopMetadata(
+                {
+                    agent: { ID: SAGE_AGENT_ID, Name: 'Sage' },
+                    messageExpirationOverride: { expirationMode: 'None' },
+                } as Partial<ExecuteAgentParams> as ExecuteAgentParams,
+                'Run Ad-hoc Query'
+            );
+            expect(withoutTurns.messageType).toBe('loop-result');
+            expect(withoutTurns.expirationTurns).toBeUndefined();
+            expect(withoutTurns.expirationMode).toBeUndefined();
+
+            const withTurns = agent.ResolveLoopMetadata(
+                {
+                    agent: { ID: SAGE_AGENT_ID, Name: 'Sage' },
+                    messageExpirationOverride: { expirationTurns: 5, expirationMode: 'None' },
+                } as Partial<ExecuteAgentParams> as ExecuteAgentParams,
+                'Run Ad-hoc Query'
+            );
+            expect(withTurns.messageType).toBe('loop-result');
+            expect(withTurns.expirationTurns).toBeUndefined();
+            expect(withTurns.expirationMode).toBeUndefined();
+        });
+
         it('resolves maxExecutionsPerRun from Action.Config when no AIAgentAction row limit is set', () => {
             const agent = new UnifiedActionPathwayProbeAgent();
             vi.spyOn(AIEngine.Instance, 'AgentActions', 'get').mockReturnValue([]);

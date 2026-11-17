@@ -3357,9 +3357,6 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     if (lower.includes('csv')) {
       return new CSVToolLibrary();
     }
-    if (lower.includes('csv')) {
-      return new CSVToolLibrary();
-    }
     if (lower.includes('pdf')) {
       const lib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, 'PDFToolLibrary');
       return lib ?? new PDFToolLibrary();
