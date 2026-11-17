@@ -37,7 +37,8 @@ describe('AgentStateService poll filter', () => {
     function lastRunsFilter(): string {
         const calls = runViewCalls().filter((c) => c.EntityName === 'MJ: AI Agent Runs');
         expect(calls.length).toBeGreaterThan(0);
-        return calls[calls.length - 1].ExtraFilter ?? '';
+        const filter = calls[calls.length - 1].ExtraFilter;
+        return typeof filter === 'string' ? filter : '';
     }
 
     beforeEach(() => {
