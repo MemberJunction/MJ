@@ -52,6 +52,11 @@ class QueryAuthTestProvider extends ProviderBase {
         return this.ResolveQueryCacheAuthorization(params, user);
     }
 
+    /** The seam resolves from the provider's query metadata only when the provider loads it. */
+    public override get LoadsQueryMetadata(): boolean {
+        return true;
+    }
+
     public override get Queries(): QueryInfo[] {
         return [
             queryStub(FINANCE_ID, 'Revenue Summary', '/Finance/', true),
@@ -209,5 +214,19 @@ describe('ProviderBase.ResolveQueryCacheAuthorization uses its own query permiss
         const provider = new OwnPermissionsProvider();
 
         expect(provider.auth({ QueryID: FINANCE_ID } as RunQueryParams, otherUser).authorized).toBe(false);
+    });
+});
+
+describe('ProviderBase.ResolveQueryCacheAuthorization without loaded query metadata', () => {
+    class NoQueryMetadataProvider extends QueryAuthTestProvider {
+        public override get LoadsQueryMetadata(): boolean {
+            return false;
+        }
+    }
+
+    it('reports every request unresolvable, so the gate falls back to its warmer rule', () => {
+        const provider = new NoQueryMetadataProvider();
+        const user = new UserInfo(null as unknown as IMetadataProvider, { ID: 'user-1', Email: 'u@test' });
+        expect(provider.auth({ QueryID: FINANCE_ID } as RunQueryParams, user)).toEqual({ resolvable: false, authorized: false });
     });
 });

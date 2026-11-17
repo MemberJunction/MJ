@@ -1,11 +1,12 @@
 /**
  * Data Explorer read service — entities, records, queries, dashboards.
- * Uses the MJ object model: Metadata (entity + query metadata), RunView
- * (records), RunQuery (saved queries), all via the active provider.
+ * Uses the MJ object model: Metadata (entity metadata), QueryEngine (saved
+ * query metadata), RunView (records), RunQuery (saved queries), all via the
+ * active provider.
  */
 
 import { Metadata, RunView, RunQuery, CompositeKey, FormatDateOnly, IsDateOnlySQLType, type UserInfo, type EntityInfo, type EntityFieldInfo } from '@memberjunction/core';
-import type { MJDashboardEntity } from '@memberjunction/core-entities';
+import { QueryEngine, type MJDashboardEntity } from '@memberjunction/core-entities';
 import { BuildDashboardConfig, type DashboardPanelSpec } from '@/dashboards/dashboard-config';
 
 // ---------------------------------------------------------------------------
@@ -204,7 +205,7 @@ export async function LoadRecordDetail(
 // Queries
 // ---------------------------------------------------------------------------
 
-/** A saved query (from MJ's `Metadata.Queries`) shown in the explorer's query list. */
+/** A saved query (from MJ's `QueryEngine`) shown in the explorer's query list. */
 export type QueryListItem = {
     id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -221,29 +222,28 @@ export type QueryListItem = {
 };
 
 /**
- * List the approved saved queries from metadata, sorted by name. Reads
- * `Metadata.Queries` (already cached) — no round trip.
+ * List the approved saved queries, sorted by name. Reads `QueryEngine` (already
+ * cached) — no round trip. The engine loads during client startup, which
+ * finishes before the MJ provider reports `ready`; callers gate on that.
  *
  * @returns The approved queries as {@link QueryListItem}s.
  */
 export function LoadQueries(): QueryListItem[] {
-    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
-    return md.Queries
-        .filter((q) => q.Status === 'Approved')
+    return QueryEngine.Instance.ApprovedQueries
         .map((q) => ({
             id: q.ID,
             name: q.Name ?? '(unnamed query)',
             description: q.Description ?? null,
-            category: q.CategoryInfo?.Name ?? null,
+            category: q.CategoryEntity?.Name ?? null,
             // A parameter with a default is fine — the query runs without being asked.
-            requiresParameters: (q.Parameters ?? []).some((p) => p.IsRequired && !p.DefaultValue),
+            requiresParameters: q.QueryParameters.some((p) => p.IsRequired && !p.DefaultValue),
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Count of approved saved queries in metadata. */
+/** Count of approved saved queries in the `QueryEngine` cache. */
 export function QueryCount(): number {
-    return new Metadata().Queries.filter((q) => q.Status === 'Approved').length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+    return QueryEngine.Instance.ApprovedQueries.length;
 }
 
 /** Result of running a saved query: column names, row objects, count, and success/error. */
