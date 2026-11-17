@@ -147,7 +147,7 @@ MJ 6586 certifies schema descriptions and wants query history as evidence.
 | 4 | Schema knowledge | MJ 6586 | `ct-bc` | Decision 7 written into 6586; merged |
 | 5 | Graph access control | New, see [below](#workstream-5-graph-access-control) | `cmbrock-BC` | 5a merged; 5b to 5d filed as `canon` issues with a design sketch, ready for the December 3 review |
 
-Owner confirmations: `MS-BC` accepted workstreams 3 and 4 and the 6404 split ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6930640383)), then handed workstream 4 to `ct-bc`, who was already driving the 6586 roadmap ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6952518939)); `MS-BC` reviews its Canon interface section. The non-Canon part of 6404 is now [MJ 6688](https://github.com/MemberJunction/MJ/pull/6688).
+Owner confirmations: `MS-BC` accepted workstreams 3 and 4 and the 6404 split ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6930640383)), then handed workstream 4 to `ct-bc`, who was already driving the 6586 roadmap ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6952518939)); `MS-BC` reviews its Canon interface section. `ct-bc` agreed decisions 1 to 7 and confirmed workstream 4 and folding MJ 4155 R4, with its Off / Propose / Auto mode, into MJ 6213's ledger ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6962182228)). `cmbrock-BC` agreed decisions 1 to 7 and confirmed workstream 5 ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6952739756)). The non-Canon part of 6404 is now [MJ 6688](https://github.com/MemberJunction/MJ/pull/6688).
 
 ### Workstream 5: graph access control
 
@@ -221,3 +221,4 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 | 2026-11-16 | Plan created. |
 | 2026-11-17 | `MS-BC` accepted decisions 1 to 7 and workstreams 3 and 4; the non-Canon part of MJ 6404 moved to MJ 6688. Watched MJ 6642 merged. Added workstream 5, graph access control, owned by `cmbrock-BC`, with 5a as a named exception to the freeze. |
 | 2026-11-17 | Workstream 4 handed from `MS-BC` to `ct-bc`. |
+| 2026-11-17 | `ct-bc` and `cmbrock-BC` agreed decisions 1 to 7 and confirmed workstreams 4 and 5. |
