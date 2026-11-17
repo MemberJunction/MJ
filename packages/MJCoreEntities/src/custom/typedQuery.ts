@@ -1,14 +1,19 @@
-import { GetGlobalObjectStore, UUIDsEqual } from '@memberjunction/global';
-import type { IMetadataProvider, IRunQueryProvider, RunQueryResult } from './interfaces';
-import { LogWarning } from './logging';
-import { Metadata } from './metadata';
-import type { QueryInfo } from './queryInfo';
-import { RunQuery, type RunQueryParams } from './runQuery';
-import type { UserInfo } from './securityInfo';
+import { GetGlobalObjectStore } from '@memberjunction/global';
+import {
+    LogWarning,
+    RunQuery,
+    type IMetadataProvider,
+    type IRunQueryProvider,
+    type RunQueryParams,
+    type RunQueryResult,
+    type UserInfo,
+} from '@memberjunction/core';
+import { QueryEngine } from '../engines/QueryEngine';
+import type { MJQueryEntityExtended } from './MJQueryEntityExtended';
 
 /**
  * Behavior when a {@link TypedQuery}'s codegen-time signature differs from the live
- * {@link QueryInfo} metadata at runtime.
+ * query metadata in `QueryEngine` at runtime.
  *
  * - `'warn'` (default): log a warning once per query per process, then execute the query.
  * - `'throw'`: throw a {@link TypedQueryDriftError} before executing the query (useful in CI and tests).
@@ -42,7 +47,7 @@ export interface TypedQueryDefinition<TRow = Record<string, unknown>> {
 
 /**
  * Input shape for computing a parameter's contribution to {@link ComputeTypedQuerySignature}.
- * Compatible with {@link QueryParameterInfo} and `MJQueryParameterEntity`.
+ * Compatible with `MJQueryParameterEntity`.
  */
 export interface TypedQuerySignatureParamInput {
     Name: string;
@@ -54,7 +59,7 @@ export interface TypedQuerySignatureParamInput {
 
 /**
  * Input shape for computing an output field's contribution to {@link ComputeTypedQuerySignature}.
- * Compatible with {@link QueryFieldInfo} and `MJQueryFieldEntity`.
+ * Compatible with `MJQueryFieldEntity`.
  */
 export interface TypedQuerySignatureFieldInput {
     Name: string;
@@ -63,7 +68,8 @@ export interface TypedQuerySignatureFieldInput {
 }
 
 /**
- * Input shape for {@link ComputeTypedQuerySignature}. Compatible with {@link QueryInfo}.
+ * Input shape for {@link ComputeTypedQuerySignature}. Build it from a query with
+ * {@link TypedQuerySignatureSourceFor}.
  */
 export interface TypedQuerySignatureSource {
     Parameters?: ReadonlyArray<TypedQuerySignatureParamInput> | null;
@@ -81,7 +87,7 @@ export interface TypedQueryRunOptions
     contextUser?: UserInfo;
     /** Optional explicit query provider (`IRunQueryProvider`) to execute against instead of the global provider. */
     provider?: IRunQueryProvider;
-    /** Optional metadata provider used to look up live `QueryInfo` for signature drift detection. */
+    /** Optional metadata provider whose connection's `QueryEngine` supplies the live query for signature drift detection. */
     metadataProvider?: IMetadataProvider;
     /** Optional per-call override for signature drift handling (`'warn' | 'throw'`). */
     driftMode?: TypedQueryDriftMode;
@@ -98,7 +104,7 @@ export type TypedQueryResult<TRow> = Omit<RunQueryResult, 'Results'> & {
 
 /**
  * Error thrown when a {@link TypedQuery}'s codegen-time signature differs from the live
- * {@link QueryInfo} metadata and the active drift mode is `'throw'`.
+ * query metadata in `QueryEngine` and the active drift mode is `'throw'`.
  */
 export class TypedQueryDriftError extends Error {
     public readonly QueryID: string;
@@ -147,7 +153,7 @@ function getGlobalTypedQueryState(): TypedQueryGlobalState {
 
 /**
  * Sets the process-wide drift mode for {@link TypedQuery.Run} when a generated query wrapper's
- * signature differs from the live `QueryInfo` metadata (`'warn'` by default; `'throw'` in strict CI/test environments).
+ * signature differs from the live query metadata in `QueryEngine` (`'warn'` by default; `'throw'` in strict CI/test environments).
  */
 export function SetTypedQueryDriftMode(mode: TypedQueryDriftMode): void {
     getGlobalTypedQueryState().driftMode = mode;
@@ -183,6 +189,15 @@ function isRowValidationEnabled(): boolean {
     }
     const g = globalThis as { process?: { env?: Record<string, string | undefined> } };
     return g.process?.env?.['MJ_TYPED_QUERY_VALIDATE'] === '1';
+}
+
+/**
+ * The signature input for a saved query: its parameter and output-field definitions, as
+ * {@link ComputeTypedQuerySignature} reads them. CodeGen and the runtime drift check both build it
+ * this way, so they hash the same thing.
+ */
+export function TypedQuerySignatureSourceFor(query: MJQueryEntityExtended): TypedQuerySignatureSource {
+    return { Parameters: query.QueryParameters, Fields: query.QueryFields };
 }
 
 /**
@@ -311,10 +326,10 @@ export class TypedQuery<
 
     private checkSignatureDrift(options?: TypedQueryRunOptions): void {
         if (!this.Signature) return;
-        const liveQuery = this.resolveLiveQueryInfo(options?.metadataProvider);
+        const liveQuery = this.resolveLiveQuery(options?.metadataProvider);
         if (!liveQuery) return;
 
-        const actualSignature = ComputeTypedQuerySignature(liveQuery);
+        const actualSignature = ComputeTypedQuerySignature(TypedQuerySignatureSourceFor(liveQuery));
         if (actualSignature === this.Signature) {
             return;
         }
@@ -335,13 +350,16 @@ export class TypedQuery<
         }
     }
 
-    private resolveLiveQueryInfo(explicitProvider?: IMetadataProvider): QueryInfo | undefined {
-        const provider = explicitProvider ?? Metadata.Provider;
-        const queries = provider?.Queries;
-        if (!Array.isArray(queries) || queries.length === 0) {
-            return undefined;
-        }
-        return queries.find((q) => UUIDsEqual(q.ID, this.QueryID));
+    /**
+     * The live query from `QueryEngine` — the engine bound to `explicitProvider`'s connection when
+     * one is given, otherwise the global one. Undefined when the engine does not hold the query (not
+     * loaded yet, or the query is unknown), which skips the drift check.
+     */
+    private resolveLiveQuery(explicitProvider?: IMetadataProvider): MJQueryEntityExtended | undefined {
+        const engine = explicitProvider
+            ? (QueryEngine.GetProviderInstance(explicitProvider, QueryEngine) as QueryEngine)
+            : QueryEngine.Instance;
+        return engine.FindQueryByID(this.QueryID);
     }
 }
 

@@ -197,6 +197,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT178 - Open App Install From a Local Folder",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AE89BD61-438C-4D5B-AE9A-62E6BF8DA7BC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT22 - User Routines Dispatcher",
             "Sequence": 16,
             "Status": "Active"
@@ -1688,6 +1699,28 @@
           },
           "primaryKey": {
             "ID": "78E3D9A1-2C4B-4F6A-9E15-3B8D4C5E6F70"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT177 - Saved-Query Metadata Not Loaded Into Metadata",
+            "Sequence": 85,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6C75CCCD-9D4A-46BD-8E44-C995007B32A0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT176 - Metadata Dataset Rows Reach Clients Once",
+            "Sequence": 86,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9C325FFD-F122-4114-88C6-4FCD88758AF7"
           }
         },
         {

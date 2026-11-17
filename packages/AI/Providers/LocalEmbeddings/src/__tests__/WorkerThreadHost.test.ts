@@ -96,6 +96,19 @@ describe('WorkerThreadHost', () => {
     expect(host().DisabledReason).toMatch(/^3 worker crashes in 60s/);
   });
 
+  it('reports a worker as running from its first call until Shutdown', async () => {
+    expect(host().IsRunning).toBe(false);
+    await run('a');
+    expect(host().IsRunning).toBe(true);
+    await host().Shutdown();
+    expect(host().IsRunning).toBe(false);
+  });
+
+  it('reports no worker running after the worker dies', async () => {
+    await expect(run('CRASH')).rejects.toThrow(/Test worker stopped/);
+    expect(host().IsRunning).toBe(false);
+  });
+
   it('rejects pending calls on Shutdown', async () => {
     const rejected = expect(run('BLOCK:2000')).rejects.toThrow('Test worker shut down');
     await host().Shutdown();
