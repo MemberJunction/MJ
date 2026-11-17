@@ -425,10 +425,11 @@
   overflow: hidden;
 }
 
-/* The review recording, Docs, and Media pane bodies fill their template-based pane slots cleanly. */
+/* The review recording, Docs, Media, and Browser pane bodies fill their template-based pane slots cleanly. */
 .review-recording-host,
 .review-docs-host,
-.review-media-host {
+.review-media-host,
+.review-browser-host {
   display: flex;
   flex-direction: column;
   flex: 1;

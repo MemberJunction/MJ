@@ -383,6 +383,20 @@
   }
 </ng-template>
 
+<!-- SESSION REVIEW Browser pane body: the reviewed session's saved Remote Browser snapshot and visited pages. -->
+<ng-template #reviewBrowserTpl>
+  @if (ReviewBrowser; as browser) {
+    <div class="review-browser-host">
+      <mj-realtime-remote-browser-surface
+        [ReadOnly]="true"
+        [CurrentUrl]="browser.CurrentUrl"
+        [ScreenshotDataUrl]="browser.ScreenshotDataUrl ?? null"
+        [ReviewHistory]="browser.History">
+      </mj-realtime-remote-browser-surface>
+    </div>
+  }
+</ng-template>
+
 <!-- SESSION REVIEW whiteboard pane body: the reviewed session's saved board, rehydrated
      locally (WhiteboardState.FromJSON) and rendered READ-ONLY (pan/zoom only). Registered
      as a template-based channel tab ONLY when a parseable Whiteboard state exists. -->

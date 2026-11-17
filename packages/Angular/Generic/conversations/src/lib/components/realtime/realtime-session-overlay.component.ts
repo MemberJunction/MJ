@@ -55,8 +55,14 @@ import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjuncti
 import { ArtifactWorkspaceEngine } from './artifact-workspace/artifact-workspace-engine';
 import { RealtimeArtifactWorkspaceSurfaceComponent } from './artifact-workspace/realtime-artifact-workspace-surface.component';
 import { IsComponentArtifactDescriptor, type ArtifactWorkspaceOpenPayload } from './artifact-workspace/artifact-workspace-types';
-import { MediaChannelState } from './media/media-channel-state';
+import { IsAllowedExternalMediaUrl, MediaChannelState } from './media/media-channel-state';
 import { RealtimeMediaSurfaceComponent } from './media/realtime-media-surface.component';
+import {
+  IsSafeRasterImageDataUrl,
+  RemoteBrowserSurfaceComponent,
+  type RemoteBrowserHistoryEntry,
+  type SerializedRemoteBrowserState,
+} from './remote-browser/remote-browser-surface.component';
 import {
   AvatarNoticeText, MediaMoveMenuComponent, MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
   SharePanelDirective, SharePanelRegistry,
@@ -188,6 +194,7 @@ export interface RealtimeAvatarCaption {
     RealtimeWhiteboardBoardComponent,
     RealtimeArtifactWorkspaceSurfaceComponent,
     RealtimeMediaSurfaceComponent,
+    RemoteBrowserSurfaceComponent,
     MJStorageMediaPlayerComponent,
     MJAlertComponent
   ],
@@ -564,6 +571,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public ReviewMedia: MediaChannelState | null = null;
 
   /**
+   * The reviewed session's rehydrated Remote Browser snapshot + visited-page history (from
+   * `ChannelStates` or `DirectActions` fallback). Null = no tab.
+   */
+  public ReviewBrowser: SerializedRemoteBrowserState | null = null;
+
+  /**
    * The reviewed session's rehydrated whiteboard, when it saved a parseable Whiteboard
    * channel state — rendered read-only by the review whiteboard tab. Null = no tab.
    */
@@ -725,6 +738,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** Template hosting the read-only review Media surface. */
   @ViewChild('reviewMediaTpl') private reviewMediaTpl?: TemplateRef<unknown>;
+
+  /** Template hosting the read-only review Remote Browser surface. */
+  @ViewChild('reviewBrowserTpl') private reviewBrowserTpl?: TemplateRef<unknown>;
 
   /** Template hosting the read-only review whiteboard (root-level, so always resolvable). */
   @ViewChild('reviewBoardTpl') private reviewBoardTpl?: TemplateRef<unknown>;
@@ -2290,6 +2306,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.ReviewWorkspaceEngine = this.parseReviewDocsWorkspace(review);
     this.ReviewWhiteboard = this.parseReviewWhiteboard(review);
     this.ReviewMedia = this.parseReviewMedia(review);
+    this.ReviewBrowser = this.parseReviewBrowser(review);
     this.reviewArtifacts = review.Artifacts ?? [];
     this.ReviewCues = this.buildReviewCues(review);
     if (this.viewReady) {
@@ -2388,23 +2405,26 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.ReviewWorkspaceEngine?.Dispose();
     this.ReviewWorkspaceEngine = null;
     this.ReviewMedia = null;
+    this.ReviewBrowser = null;
     this.ReviewWhiteboard = null;
     this.ReviewCues = [];
   }
 
   /**
-   * Registers all review-mode surface tabs in live-call order (`Docs`, `Whiteboard`, `Media`,
-   * `Recording`, plus `Activity` on the right) and focuses the primary workspace tab so past
-   * sessions open with the same tabbed workspace layout as live calls.
+   * Registers all review-mode surface tabs in live-call order (`Workspace`, `Whiteboard`,
+   * `Browser`, `Media`, `Recording`, plus `Activity` on the right) and focuses the primary
+   * workspace tab so past sessions open with the same tabbed workspace layout as live calls.
    */
   private registerReviewTabs(): void {
     const focusKey = this.ReviewWorkspaceEngine
       ? 'ArtifactWorkspace'
       : this.ReviewWhiteboard
         ? 'Whiteboard'
-        : this.ReviewMedia
-          ? 'Media'
-          : null;
+        : this.ReviewBrowser
+          ? 'Remote Browser'
+          : this.ReviewMedia
+            ? 'Media'
+            : null;
 
     if (this.ReviewWorkspaceEngine && this.reviewDocsTpl) {
       this.registerReviewTemplateTab({
@@ -2422,6 +2442,15 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
         Icon: 'fa-solid fa-chalkboard',
         Content: this.reviewBoardTpl,
         Focus: focusKey === 'Whiteboard'
+      });
+    }
+    if (this.ReviewBrowser && this.reviewBrowserTpl) {
+      this.registerReviewTemplateTab({
+        Key: 'Remote Browser',
+        Title: 'Browser',
+        Icon: 'fa-solid fa-globe',
+        Content: this.reviewBrowserTpl,
+        Focus: focusKey === 'Remote Browser'
       });
     }
     if (this.ReviewMedia && this.reviewMediaTpl) {
@@ -2528,6 +2557,82 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
     const state = new MediaChannelState();
     return state.LoadFromJSON(channel.StateJson) && state.Items.length > 0 ? state : null;
+  }
+
+  /**
+   * Rehydrates the reviewed session's Remote Browser snapshot & visited-page history from
+   * saved `ChannelStates` and/or recorded `browser_*` `DirectActions` (fallback for sessions
+   * before client-side browser persistence existed).
+   */
+  private parseReviewBrowser(review: RealtimeSessionReview): SerializedRemoteBrowserState | null {
+    const channel = review.ChannelStates.find(c => c.ChannelName.trim().toLowerCase() === 'remote browser');
+    const saved = channel?.StateJson
+      ? SafeJSONParse<Partial<SerializedRemoteBrowserState>>(channel.StateJson)
+      : null;
+
+    let currentUrl =
+      saved && typeof saved.CurrentUrl === 'string' && IsAllowedExternalMediaUrl(saved.CurrentUrl)
+        ? saved.CurrentUrl.trim()
+        : null;
+    const savedHistory: RemoteBrowserHistoryEntry[] =
+      saved && Array.isArray(saved.History)
+        ? saved.History.filter(
+            (h): h is RemoteBrowserHistoryEntry =>
+              h != null && typeof h === 'object' && typeof h.Url === 'string' && IsAllowedExternalMediaUrl(h.Url)
+          )
+        : [];
+    const screenshot =
+      saved && typeof saved.ScreenshotDataUrl === 'string' && IsSafeRasterImageDataUrl(saved.ScreenshotDataUrl)
+        ? saved.ScreenshotDataUrl
+        : null;
+
+    const actionHistory: RemoteBrowserHistoryEntry[] = [];
+    for (const action of review.DirectActions ?? []) {
+      if (!action.ToolName.startsWith('browser_')) {
+        continue;
+      }
+      const parsedResult = action.ResultJson
+        ? SafeJSONParse<{ currentUrl?: string; detail?: string }>(action.ResultJson)
+        : null;
+      const parsedArgs = action.ArgsJson
+        ? SafeJSONParse<{ url?: string }>(action.ArgsJson)
+        : null;
+      const candidateUrl =
+        typeof parsedResult?.currentUrl === 'string' && IsAllowedExternalMediaUrl(parsedResult.currentUrl)
+          ? parsedResult.currentUrl.trim()
+          : typeof parsedArgs?.url === 'string' && IsAllowedExternalMediaUrl(parsedArgs.url)
+            ? parsedArgs.url.trim()
+            : null;
+      if (!candidateUrl) {
+        continue;
+      }
+      currentUrl = candidateUrl;
+      const actionLabel = action.ToolName.replace(/^browser_/, '');
+      const detail = typeof parsedResult?.detail === 'string' ? parsedResult.detail : undefined;
+      const prev = actionHistory[actionHistory.length - 1];
+      if (!prev || prev.Url !== candidateUrl || detail) {
+        actionHistory.push({
+          Url: candidateUrl,
+          ActionLabel: actionLabel,
+          ...(detail ? { Detail: detail } : {}),
+          ...(action.At ? { VisitedAt: action.At.toISOString() } : {}),
+        });
+      }
+    }
+
+    const history = actionHistory.length > 0 ? actionHistory : savedHistory;
+    if (!currentUrl && history.length > 0) {
+      currentUrl = history[history.length - 1].Url;
+    }
+    if (!currentUrl && history.length === 0 && !screenshot) {
+      return null;
+    }
+    return {
+      V: 1,
+      CurrentUrl: currentUrl,
+      History: history,
+      ...(screenshot ? { ScreenshotDataUrl: screenshot } : {}),
+    };
   }
 
   /**

@@ -2413,5 +2413,70 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
         Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
       }
     });
+
+    it('restores saved Browser tab with snapshot + visited URLs from ChannelStates', async () => {
+      const savedBrowser = JSON.stringify({
+        V: 1,
+        CurrentUrl: 'https://example.com/maple',
+        History: [{ Url: 'https://example.com/maple', VisitedAt: '2026-11-17T16:00:00Z' }],
+        ScreenshotDataUrl: 'data:image/png;base64,AAAA',
+      });
+      const review: RealtimeSessionReview = {
+        ...emptyReview(),
+        ChannelStates: [{ ChannelName: 'Remote Browser', StateJson: savedBrowser }],
+      };
+
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+
+      expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Browser');
+      expect(query(f, '.rb-url')?.textContent?.trim()).toBe('https://example.com/maple');
+      expect(query(f, '.rb-screenshot')?.getAttribute('src')).toBe('data:image/png;base64,AAAA');
+      expect(queryAll(f, '.rb-history__item')).toHaveLength(1);
+    });
+
+    it('reconstructs Browser tab retroactively from browser_* DirectActions when no ChannelState exists', async () => {
+      const review: RealtimeSessionReview = {
+        ...emptyReview(),
+        DirectActions: [
+          {
+            ID: 'act-1',
+            CallID: 'call-1',
+            ToolName: 'browser_OpenUrl',
+            ArgsJson: JSON.stringify({ url: 'https://example.com/start' }),
+            ResultJson: JSON.stringify({ success: true, currentUrl: 'https://example.com/final', detail: 'Loaded final page' }),
+            Success: true,
+            DurationMs: 250,
+            At: new Date('2026-11-17T16:01:00Z'),
+          },
+        ],
+      };
+
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console', ReviewData: review },
+        autoDetect: true,
+      });
+      await settle();
+
+      expect(query(f, '.s-tab--active')?.textContent?.trim()).toContain('Browser');
+      expect(query(f, '.rb-url')?.textContent?.trim()).toBe('https://example.com/final');
+      expect(query(f, '.rb-iframe')).not.toBeNull();
+      expect(query(f, '.rb-open-btn')?.getAttribute('href')).toBe('https://example.com/final');
+      expect(queryAll(f, '.rb-history__item')).toHaveLength(1);
+      expect(query(f, '.rb-history__detail')?.textContent?.trim()).toBe('Loaded final page');
+    });
   });
 });
