@@ -14,6 +14,18 @@ import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 /** Default Microsoft Entra ID authority used for the client-credentials token. */
 export const BC_DEFAULT_AUTHORITY_HOST = 'https://login.microsoftonline.com';
 
+/**
+ * Entra ID authority hosts a connection may request a token from (#4928). The client secret is sent
+ * to this host, so it is never taken from a value outside this list: public cloud, US Government,
+ * and the two China (21Vianet) hosts.
+ */
+export const BC_ALLOWED_AUTHORITY_HOSTS: ReadonlyArray<string> = [
+    'login.microsoftonline.com',
+    'login.microsoftonline.us',
+    'login.chinacloudapi.cn',
+    'login.partner.microsoftonline.cn',
+];
+
 /** Default OAuth2 scope for the Business Central API. */
 export const BC_DEFAULT_SCOPE = 'https://api.businesscentral.dynamics.com/.default';
 
@@ -115,10 +127,19 @@ function nonEmpty(value: string | null | undefined): string | undefined {
 }
 
 /**
- * Resolves a connector-style Business Central connection the way the connector does:
- * `merged = { ...configuration, ...credentialValues }`, each setting read from its keys in
- * order, then the CompanyIntegration column fallbacks (`ClientID`, `ClientSecret`, `APIKey` for
- * the tenant, `ExternalSystemID` for the company). The environment has no fallback and no default.
+ * Resolves a connector-style Business Central connection: `merged = { ...configuration,
+ * ...credentialValues }`, each setting read from its keys in order, then the CompanyIntegration
+ * column fallbacks (`ClientID`, `ClientSecret`, `APIKey` for the tenant). The environment has no
+ * fallback and no default.
+ *
+ * Two settings are deliberately NOT read from the merged values:
+ * - The BC company comes only from the connection's `ExternalSystemID` (#5824). A Credential is often
+ *   shared by several connections, so a company stored on it would send every one of them to the
+ *   same company. A `CompanyId` found in Credential or Configuration is logged when it differs and
+ *   otherwise ignored.
+ * - `AuthorityHost` comes only from the Credential, and only from {@link BC_ALLOWED_AUTHORITY_HOSTS}
+ *   (#4928): the client secret is posted to it, so whoever can edit a connection's Configuration must
+ *   not be able to redirect it.
  *
  * @param integration - The CompanyIntegration, for the column fallbacks and error messages.
  * @param configuration - The parsed `CompanyIntegration.Configuration`.
@@ -151,9 +172,19 @@ export function ResolveBusinessCentralConnectorConfig(
     if (!tenantId) {
         throw missing('tenant ID', keys.TenantId, 'APIKey');
     }
-    const companyId = PickConfigString(merged, keys.CompanyId) ?? nonEmpty(integration.ExternalSystemID);
+    const companyId = nonEmpty(integration.ExternalSystemID);
     if (!companyId) {
-        throw missing('company ID', keys.CompanyId, 'ExternalSystemID');
+        throw new Error(
+            `CompanyIntegration ${integration.ID} has no Business Central company. ` +
+            `Set the connection's ExternalSystemID to the BC company ID.`
+        );
+    }
+    const storedCompanyId = PickConfigString(merged, keys.CompanyId);
+    if (storedCompanyId && storedCompanyId.toLowerCase() !== companyId.toLowerCase()) {
+        console.warn(
+            `Business Central: CompanyIntegration ${integration.ID} carries CompanyId '${storedCompanyId}' in its ` +
+            `Credential or Configuration; it is ignored. The connection posts to its ExternalSystemID '${companyId}'.`
+        );
     }
     const environment = PickConfigString(merged, keys.Environment);
     if (!environment) {
@@ -166,9 +197,37 @@ export function ResolveBusinessCentralConnectorConfig(
         TenantId: tenantId,
         CompanyId: companyId,
         Environment: environment,
-        AuthorityHost: (PickConfigString(merged, keys.AuthorityHost) ?? BC_DEFAULT_AUTHORITY_HOST).replace(/\/+$/, ''),
+        AuthorityHost: ResolveBusinessCentralAuthorityHost(integration.ID, credentialValues),
         Scope: PickConfigString(merged, keys.Scope) ?? BC_DEFAULT_SCOPE,
     };
+}
+
+/**
+ * The token authority for a connection: the Credential's `AuthorityHost` when set, else the public
+ * cloud default. The host must be one of {@link BC_ALLOWED_AUTHORITY_HOSTS} over https.
+ *
+ * @throws Error when the Credential names a host outside the allow list.
+ */
+export function ResolveBusinessCentralAuthorityHost(companyIntegrationId: string, credentialValues: JSONObject): string {
+    const raw = PickConfigString(credentialValues, BC_CONNECTOR_CONFIG_KEYS.AuthorityHost);
+    if (!raw) {
+        return BC_DEFAULT_AUTHORITY_HOST;
+    }
+    const trimmed = raw.replace(/\/+$/, '');
+    let host: string | null = null;
+    try {
+        const url = new URL(trimmed);
+        host = url.protocol === 'https:' && (url.pathname === '' || url.pathname === '/') ? url.hostname.toLowerCase() : null;
+    } catch {
+        host = null;
+    }
+    if (!host || !BC_ALLOWED_AUTHORITY_HOSTS.includes(host)) {
+        throw new Error(
+            `Business Central AuthorityHost '${raw}' on the Credential of CompanyIntegration ${companyIntegrationId} ` +
+            `is not an allowed Microsoft Entra ID host (${BC_ALLOWED_AUTHORITY_HOSTS.join(', ')}).`
+        );
+    }
+    return `https://${host}`;
 }
 
 /** The client-credentials token endpoint for a resolved connection. */

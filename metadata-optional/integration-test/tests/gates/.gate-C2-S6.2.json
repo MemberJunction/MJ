@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C2 -> S6.2",
+    "Description": "Gate G2.34 (phase 2, dataset C2, criterion S6.2): on C2 the holdout AUC's bootstrap interval half-width over 1.96 Hanley-McNeil standard errors lies in [0.67, 1.28], 1 of 1. It fails when the AUC bootstrap reports a 68% interval (ratio below 0.67).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.34\",\"owner:PR3\",\"phase:2\",\"dataset:C2\",\"criterion:S6.2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The C2 AUC interval's half-width over 1.96 Hanley-McNeil SE lies in [0.67, 1.28] (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c2-s6-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "7CE91CC8-96FF-4191-9AFD-3D430B2C304B"
+  }
+}

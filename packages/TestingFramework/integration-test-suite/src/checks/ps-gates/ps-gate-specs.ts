@@ -22,11 +22,15 @@ import {
   type TruthHarness,
 } from '@memberjunction/predictive-studio-truth-suite';
 
-/** The W1 s42 record-process scoring: its details, the model as the Predictions resource reads it, and the truth file. */
+/**
+ * The W1 s42 record-process scoring: its details, the model as the Predictions resource reads it, the truth file and the
+ * loaded dataset (its cached rows give each scored record's feature values).
+ */
 export interface W1RecordProcessScoring {
   Details: RunDetailLike[];
   Model: OutcomeModelLike;
   TruthCsv: string;
+  Dataset: LoadedDataset;
 }
 
 /** Pipeline specs, dataset references and the shared W1 record-process scoring for the PS gate bundles. */
@@ -115,6 +119,7 @@ export class PsGateSpecs {
     if (run.Status !== 'Completed') throw new Error(`record-process scoring ended ${run.Status}`);
     return {
       TruthCsv: path.join(w1.Dir, 'truth.csv'),
+      Dataset: w1,
       Details: run.Details.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
       Model: { Lineage: model.LineageJSON, TargetVariable: 'Renewed', ProblemType: 'classification' },
     };

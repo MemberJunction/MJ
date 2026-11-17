@@ -7,8 +7,10 @@
  * Supports both SQL Server and PostgreSQL database platforms via the dbPlatform configuration.
  */
 
+import path from 'path';
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase, EntitiesNotInExcludedSchemas } from './Database/sql_codegen';
+import { UnhealedSQLPassFailures } from './Database/sqlPassFailures';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { ApplyIncludeSchemaScope } from './Database/schema-scope';
@@ -26,6 +28,7 @@ import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { RemoteOperationGeneratorBase, ResolveRemoteOperationSchema } from './Misc/remote_operations_codegen';
+import { TypedQueryGeneratorBase } from './Misc/typed_query_codegen';
 import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
 import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, ResolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
@@ -52,7 +55,7 @@ type DataSourceResult = ProviderDataSourceResult;
 
 /**
  * Failure context for the SQL generation/execution pass. Named so the CRUD self-heal can clear
- * exactly this entry when it repairs what the pass left missing.
+ * exactly this entry when it repaired every failure the pass recorded.
  */
 const SQL_PASS_FAILURE_CONTEXT = 'SQL_PASS';
 
@@ -461,9 +464,12 @@ export class RunCodeGenBase {
                 const e = md.EntityByName(m.entity);
                 if (e) missingByEntity.set(e.Name, e);
               }
+              const healedEntityNames: string[] = [];
               for (const entity of missingByEntity.values()) {
                 try {
-                  await sqlCodeGenObject.executeEntityInPhases(conn, entity, undefined);
+                  const heal = await sqlCodeGenObject.executeEntityInPhases(conn, entity, undefined);
+                  if (heal.success) healedEntityNames.push(entity.Name);
+                  else logStatus(`Self-heal phased re-emit for ${entity.Name} failed in phase "${heal.phase ?? 'unknown'}": ${heal.error?.message ?? '(no message)'}`);
                 } catch (heal) {
                   logStatus(
                     `Self-heal phased re-emit for ${entity.Name} threw: ${heal instanceof Error ? heal.message : String(heal)}`
@@ -475,19 +481,24 @@ export class RunCodeGenBase {
               missing = await sqlCodeGenObject.DBProvider.validateExpectedCRUDFunctions(conn, baseline);
               if (missing.length === 0) {
                 logStatus('Self-heal succeeded — all expected CRUD routines now exist');
-                this.commandFailures = this.commandFailures.filter((f) => f.context !== SQL_PASS_FAILURE_CONTEXT);
-                // Self-heal closed the runtime gap that the upstream batch
-                // failure left behind. Clear the upstream failure flag so
-                // codegen reports success: every entity that runtime needs
-                // is now in the database, even if a batch-level error during
-                // manageSQLScriptsAndExecution flagged the pipeline as
-                // failed. Without this reset, codegen would report
-                // success=False despite the DB being in a fully-working
-                // state — and the user would dutifully re-run codegen, see
-                // it converge on pass 2, and conclude that PG's codegen
-                // requires two passes. Pass 1 IS the converged state now.
-                sqlGenerationSucceeded = true;
-                pipelineSuccess = true;
+                if (!sqlGenerationSucceeded) {
+                  // The restored routines may be all the SQL pass got wrong — on a PostgreSQL first
+                  // run a view CASCADE-drop leaves them missing and nothing else — and then the pass's
+                  // failure is cleared, so pass 1 is the converged state instead of the user re-running
+                  // CodeGen to see it pass. Anything the self-heal did not re-run (a script, a
+                  // permissions file, another entity) keeps the failure, and the run exits non-zero.
+                  // A failed pass with nothing recorded is a failure nobody can attribute — keep it.
+                  const recorded = sqlCodeGenObject.SQLPassFailures;
+                  const unhealed = UnhealedSQLPassFailures(recorded, healedEntityNames);
+                  if (recorded.length > 0 && unhealed.length === 0) {
+                    this.commandFailures = this.commandFailures.filter((f) => f.context !== SQL_PASS_FAILURE_CONTEXT);
+                    sqlGenerationSucceeded = true;
+                    pipelineSuccess = this.commandFailures.length === 0;
+                  } else {
+                    const list = unhealed.map((f) => `  - [${f.Step}] ${f.Message}`).join('\n');
+                    logError(`The SQL pass also failed outside the restored CRUD routines, so its failure stands${list ? `:\n${list}` : '.'}`);
+                  }
+                }
               }
             }
 
@@ -971,7 +982,7 @@ export class RunCodeGenBase {
         );
         const ok = await reporter.phase('generateAngular', async () => {
           for (const [dir, group] of angularGroups) {
-            const groupOk = angularGenerator.generateAngularCode(group, dir, '', currentUser, 'Angular');
+            const groupOk = await angularGenerator.generateAngularCode(group, dir, '', currentUser, 'Angular');
             if (!groupOk) {
               return false;
             }
@@ -1112,6 +1123,59 @@ export class RunCodeGenBase {
           } else if (isVerbose) SucceedSpinner(`${target.label} typed bases generated`);
         }
       } else if (isVerbose) WarnSpinner('Remote Operations output directory NOT found in config file, skipping...');
+
+      // Typed Query Wrappers — emit DefineTypedQuery descriptors + Queries.<Category>.<Name> namespace tree
+      // for approved, reusable queries (Query.Status === 'Approved' && Query.Reusable === true).
+      const coreTypedQueriesDir =
+        OutputDir('CoreTypedQueries', false) ||
+        (coreEntitySubClassOutputDir ? path.join(coreEntitySubClassOutputDir, 'queries') : undefined);
+      const nonCoreTypedQueriesDir =
+        OutputDir('TypedQueries', false) ||
+        (entitySubClassOutputDir ? path.join(entitySubClassOutputDir, 'queries') : undefined);
+      if (coreTypedQueriesDir || nonCoreTypedQueriesDir) {
+        const typedQueryGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<TypedQueryGeneratorBase>(TypedQueryGeneratorBase)!;
+        const allQueries = md.Queries ?? [];
+        const platform = DbPlatform();
+
+        if (coreTypedQueriesDir && !RunCodeGenBase.SkipEmptyCorePass('CORE Typed Queries', coreEntities)) {
+          if (isVerbose) StartSpinner('Generating CORE Typed Query wrappers...');
+          const ok = await reporter.phase('generateTypedQueriesCore', async () =>
+            typedQueryGenerator.GenerateTypedQueriesForDirectory(
+              allQueries,
+              md.Entities,
+              coreTypedQueriesDir,
+              [mjCoreSchema],
+              { platform },
+            ),
+          );
+          if (!ok) {
+            FailSpinner('Error generating CORE Typed Query wrappers');
+            this.RecordStepFailure('FILE_GENERATION', 'Error generating CORE Typed Query wrappers');
+            allSucceeded = false;
+          } else if (isVerbose) SucceedSpinner('CORE Typed Query wrappers generated');
+        }
+
+        const nonCoreSchemaNames = Array.from(
+          new Set(localNonCoreEntities.map((e) => e.SchemaName)),
+        ).filter(Boolean);
+        if (nonCoreTypedQueriesDir && nonCoreSchemaNames.length > 0) {
+          if (isVerbose) StartSpinner('Generating Typed Query wrappers...');
+          const ok = await reporter.phase('generateTypedQueries', async () =>
+            typedQueryGenerator.GenerateTypedQueriesForDirectory(
+              allQueries,
+              md.Entities,
+              nonCoreTypedQueriesDir,
+              nonCoreSchemaNames,
+              { platform },
+            ),
+          );
+          if (!ok) {
+            FailSpinner('Error generating Typed Query wrappers');
+            this.RecordStepFailure('FILE_GENERATION', 'Error generating Typed Query wrappers');
+            allSucceeded = false;
+          } else if (isVerbose) SucceedSpinner('Typed Query wrappers generated');
+        }
+      }
 
       const emit = EmitStats.Snapshot();
       reporter.counter('filesWritten', emit.filesWritten);

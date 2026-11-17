@@ -1584,11 +1584,6 @@
         padding: 12px;
     }
 
-    ::ng-deep .k-panelbar > .k-panelbar-item > .k-header {
-        padding: 16px 20px;
-        font-size: 15px;
-    }
-
     .panel-content {
         padding: 20px 16px;
     }

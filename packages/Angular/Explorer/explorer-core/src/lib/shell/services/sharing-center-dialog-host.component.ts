@@ -94,7 +94,9 @@ export class SharingCenterDialogHostComponent {
             // Match on DriverClass (stable identity — survives label renames/localization)
             // and only consider Active items (Status defaults to Active when unset).
             const collectionsNav = navItems.find(
-                (item) => item.DriverClass === 'ChatCollectionsResource' && (item.Status ?? 'Active') === 'Active'
+                (item) =>
+                    (item.DriverClass === 'LibraryResource' || item.DriverClass === 'ChatCollectionsResource') &&
+                    (item.Status ?? 'Active') === 'Active'
             );
             if (collectionsNav) {
                 await this.navigationService.SwitchToApp(app.ID, collectionsNav.Label, { collectionId });

@@ -937,3 +937,48 @@ With a resolver that reports `Sales/Targets/Regional Targets` as Reusable with r
 `Validate({ Mode: 'Save', ResolveComposition })` finds no errors. If that target also had an optional `Search`
 parameter, the save would be refused with `MJQ_COMPOSITION_IMPLICIT_ARGUMENT` until the composition passes
 `Search=Search` (or the parameter is renamed).
+
+---
+
+## 15. Typed Query Wrappers (`DefineTypedQuery` & `Queries`)
+
+For every saved query with `Status = 'Approved'` and `Reusable = 1`, MemberJunction CodeGen (`typed_query_codegen.ts`) emits strongly-typed parameter and row interfaces, a Zod row schema, a `DefineTypedQuery<TParams, TRow>(...)` descriptor, and a hierarchical `Queries.<Category>.<Name>` namespace object (`packages/MJCoreEntities/src/generated/queries/__mj.ts` for core queries, and `packages/GeneratedEntities/src/generated/queries/<schema>.ts` for OpenApp / tenant queries).
+
+```ts
+import { Queries } from '@memberjunction/core-entities';
+
+// Zero-parameter query — params argument is optional:
+const activeUsers = await Queries.MJ.Demos.ActiveUsers.Run();
+for (const u of activeUsers.Results) {
+    console.log(u.ID, u.Email); // fully typed ActiveUsersRow
+}
+
+// Parameterized query — required and optional parameters are compile-time checked:
+const tagged = await Queries.MJ.Tags.EntityRecordsByTag.Run(
+    { entityName: 'MJ: Users', tagName: 'VIP' },
+    { contextUser, CacheLocal: true },
+);
+```
+
+### How CodeGen derives `TParams` and `TRow`
+
+- **Parameters (`TParams`)**:
+  - Server-set parameters (`QueryParameter.IsServerSet = 1`) are excluded from `TParams` (they are injected by the server at execution time).
+  - Type precedence per parameter:
+    1. MJQ header `@param {<type>}` declaration (`template.DocComments().Value.Parameters[].DeclaredType`).
+    2. `Manual` parameter row (`DetectionMethod = 'Manual'`) `Type` on `QueryParameter`.
+    3. Filter-inferred type (`template.Parameters().Value[].InferredType`: `'string' | 'number' | 'date' | 'boolean' | 'array'`).
+    4. Fallback `'unknown'` → emits `string | number | boolean | Date | null` and logs a CodeGen warning.
+  - A parameter is optional (`?:`) when `IsRequired` is `false` or a `DefaultValue` is present.
+- **Output columns (`TRow`)**:
+  - Column types map from `QueryField.SQLBaseType` via `TypeScriptTypeFromSQLType`.
+  - When `QueryField.SourceEntityID` + `SourceFieldName` resolve to a non-computed `EntityField` with `AllowsNull = false`, the property is non-null (`T`); computed, summary, and unsourced columns include `| null`.
+  - **Branch-conditional columns (`QueryField.InAllBranchVariants`)**: During query extraction (`describeFacts.ts`), columns that appear in some `BranchVariants()` renders of a `{% if %}` block but not all are persisted with `QueryField.InAllBranchVariants = 0` and emitted as optional properties (`col?: T | null`) on `TRow`.
+
+### Signature drift detection & runtime row validation
+
+Each generated `DefineTypedQuery` descriptor embeds a deterministic `Signature: 'sha256:...'` computed via `ComputeTypedQuerySignature` over the query's normalized parameter and field metadata. Before `TypedQuery.Run()` dispatches to `RunQuery`:
+
+- **`'warn'` mode (default)**: logs a warning once per query per process if the live `QueryInfo` metadata in `Metadata.Provider.Queries` has drifted since CodeGen ran, then executes the query.
+- **`'throw'` mode**: throws `TypedQueryDriftError` before executing the query. Configure via `databaseSettings.typedQueryDrift: 'warn' | 'throw'` in `mj.config.cjs`, `SetTypedQueryDriftMode('throw')` in tests/CI, or per call via `Run(params, { driftMode: 'throw' })`.
+- **Optional Zod row validation**: enable via `MJ_TYPED_QUERY_VALIDATE=1` or `SetTypedQueryRowValidation(true)` to validate the first `validateMaxRows` (default 10) result rows against the generated `RowSchema`.

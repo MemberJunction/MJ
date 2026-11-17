@@ -4,6 +4,7 @@ import type { MJMLModelEntity } from '@memberjunction/core-entities';
 
 import { ModelScoringActionGenerator } from '../model-scoring-action-generator';
 import { SCORE_RECORD_SET_DRIVER_CLASS } from '../score-record-set.action';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the per-model scoring Action generator (PS2-2). NO live DB — a
@@ -201,6 +202,7 @@ const USER = { Email: 'test@example.com' } as UserInfo;
 
 describe('ModelScoringActionGenerator — generateForModel', () => {
   it('creates a child Action with the right shape + a ModelID param defaulted to the model id', async () => {
+    const status = ConsoleCapture.Status();
     const store = new Store();
     seedParentAction(store);
     const provider = new FakeProvider(store);
@@ -236,9 +238,11 @@ describe('ModelScoringActionGenerator — generateForModel', () => {
     expect(params.map((p) => p['Name']).sort()).toEqual(
       ['FailedCount', 'ModelID', 'Predictions', 'Scope', 'ScoredCount', 'SkippedCount', 'WriteBack', 'WroteBack'].sort(),
     );
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3' for model 'model-uuid-1'.")]);
   });
 
   it('falls back to the model ID + v1 in the name when Name/Version are absent', async () => {
+    const status = ConsoleCapture.Status();
     const store = new Store();
     seedParentAction(store);
     const provider = new FakeProvider(store);
@@ -247,9 +251,11 @@ describe('ModelScoringActionGenerator — generateForModel', () => {
     await new ModelScoringActionGenerator().generateForModel(model, USER, asProvider(provider));
 
     expect(actions(store)[0]['Name']).toBe('Score with bare-model v1');
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with bare-model v1' for model 'bare-model'.")]);
   });
 
   it('is idempotent — generating twice neither duplicates the Action nor appends params', async () => {
+    const status = ConsoleCapture.Status();
     const store = new Store();
     seedParentAction(store);
     const provider = new FakeProvider(store);
@@ -263,11 +269,13 @@ describe('ModelScoringActionGenerator — generateForModel', () => {
     expect(children).toHaveLength(1); // reused, not duplicated
     expect(paramsFor(store, children[0]['ID'] as string)).toHaveLength(8); // recreated, not doubled
     expect(store.rows['MJ: Action Categories']).toHaveLength(1); // category reused too
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'"), expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'")]);
   });
 });
 
 describe('ModelScoringActionGenerator — disableForModel', () => {
   it("sets the generated Action's Status to 'Disabled'", async () => {
+    const status = ConsoleCapture.Status();
     const store = new Store();
     seedParentAction(store);
     const provider = new FakeProvider(store);
@@ -279,6 +287,7 @@ describe('ModelScoringActionGenerator — disableForModel', () => {
 
     await gen.disableForModel(model, USER, asProvider(provider));
     expect(actions(store)[0]['Status']).toBe('Disabled');
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("ModelScoringActionGenerator: ensured scoring action 'Score with Renewal Risk v3'"), expect.stringContaining("ModelScoringActionGenerator: disabled scoring action 'Score with Renewal Risk v3' for archived model 'model-uuid-1'.")]);
   });
 
   it('is a no-op when no generated Action exists', async () => {
@@ -294,6 +303,7 @@ describe('ModelScoringActionGenerator — disableForModel', () => {
 
 describe('ModelScoringActionGenerator — missing parent', () => {
   it('handles a missing parent action gracefully (logs, no throw, nothing created)', async () => {
+    const errors = ConsoleCapture.Errors();
     const store = new Store(); // NO parent seeded
     const provider = new FakeProvider(store);
 
@@ -304,5 +314,6 @@ describe('ModelScoringActionGenerator — missing parent', () => {
     // Nothing was created — neither an Action nor a category.
     expect(store.rows['MJ: Actions']).toHaveLength(0);
     expect(store.rows['MJ: Action Categories']).toHaveLength(0);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("ModelScoringActionGenerator: parent action 'Score Record Set' (DriverClass 'PredictiveStudioScoreRecordSetAction') not found")]);
   });
 });

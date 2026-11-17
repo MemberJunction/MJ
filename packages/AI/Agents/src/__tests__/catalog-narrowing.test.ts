@@ -10,15 +10,17 @@ import {
     ApplyCatalogNarrowing,
     BuildCatalogNarrowingQuestions,
     CATALOG_NARROWING_REQUEST_MAX_CHARS,
-    CatalogNarrowingCandidate,
+    type CatalogNarrowingCandidate,
     CatalogNarrowingCandidatesToAsk,
-    CatalogNarrowingLimits,
+    type CatalogNarrowingLimits,
     CatalogNarrowingNote,
     CatalogNarrowingQuestion,
     IsAlwaysShownAction,
     IsCatalogListNarrowed,
     NoCatalogNarrowing,
     OpeningRequestText,
+    PreFilterSkillCandidatesForDecision,
+    RankSkillsByHybridRelevance,
     ReachableCatalogNarrowingLimits,
     ResolveCatalogNarrowingLimits,
     SelectCatalogNarrowing,
@@ -240,3 +242,125 @@ describe('ApplyCatalogNarrowing', () => {
         expect(ApplyCatalogNarrowing(items, new Set(['aaaa-2']))).toEqual([{ ID: 'AAAA-1' }, { ID: 'AAAA-3' }]);
     });
 });
+
+describe('Skill Scaling & Hybrid Prioritization Extensions', () => {
+    it('supports dedicated maxSkillsInPrompt while falling back to maxActionsInPrompt when omitted', () => {
+        expect(ResolveCatalogNarrowingLimits({ maxActionsInPrompt: 10, maxSkillsInPrompt: 4.8 })).toEqual({
+            Actions: 10,
+            SubAgents: 0,
+            Skills: 4,
+        });
+        expect(ResolveCatalogNarrowingLimits({ maxActionsInPrompt: 10, maxSkillsInPrompt: -1 })).toEqual({
+            Actions: 10,
+            SubAgents: 0,
+            Skills: 0,
+        });
+        expect(ResolveCatalogNarrowingLimits({ maxActionsInPrompt: -1, maxSkillsInPrompt: 6 })).toEqual({
+            Actions: 0,
+            SubAgents: 0,
+            Skills: 6,
+        });
+    });
+
+    it('marks Find Candidate Skills and Get Skill Details as always-shown discovery actions', () => {
+        expect(IsAlwaysShownAction('Find Candidate Skills')).toBe(true);
+        expect(IsAlwaysShownAction('  get skill details  ')).toBe(true);
+        expect(IsAlwaysShownAction('Find Best Skill')).toBe(false);
+    });
+
+    it('renders scale-aware CatalogNarrowingNote for skills when Find Candidate Skills is available or hidden > 20', () => {
+        expect(CatalogNarrowingNote('skill', ['Poet', 'SQL Analyst'], { hasFindCandidateSkills: true })).toBe(
+            '2 of your skills are not described below: Poet, SQL Analyst. Activate one by name if it fits the task, or call Find Candidate Skills to search skills by task description.'
+        );
+
+        const manySkills = Array.from({ length: 25 }, (_, i) => `Skill ${i + 1}`);
+        expect(CatalogNarrowingNote('skill', manySkills)).toBe(
+            '25 of your skills are not described below. Call Find Candidate Skills to search the skill catalog by task description (and Get Skill Details to inspect one), then activate it by name.'
+        );
+    });
+
+    it('RankSkillsByHybridRelevance prioritizes pinned skills, then combines query fit, usage frequency, and recency decay', () => {
+        const now = Date.parse('2026-11-05T12:00:00Z');
+        const oneDayAgo = new Date(now - 1 * 86_400_000).toISOString();
+        const thirtyDaysAgo = new Date(now - 30 * 86_400_000).toISOString();
+
+        const ranked = RankSkillsByHybridRelevance(
+            [
+                {
+                    ID: '11111111-0000-4000-8000-000000000001',
+                    Name: 'Legacy Accounting Export',
+                    Description: 'Exports general ledger batches to CSV',
+                    Category: 'Finance',
+                    Pinned: false,
+                    AgentInvocationCount: 2,
+                    LastInvokedAt: thirtyDaysAgo,
+                },
+                {
+                    ID: '11111111-0000-4000-8000-000000000002',
+                    Name: 'GitHub Engineering & Repository Steward',
+                    Description: 'Inspect repositories, commit files atomically, and raise pull requests on GitHub',
+                    Category: 'Engineering',
+                    Pinned: false,
+                    AgentInvocationCount: 15,
+                    GlobalInvocationCount: 40,
+                    LastInvokedAt: oneDayAgo,
+                },
+                {
+                    ID: '11111111-0000-4000-8000-000000000003',
+                    Name: 'Company Security Compliance Baseline',
+                    Description: 'Mandatory compliance guardrails',
+                    Category: 'Governance',
+                    Pinned: true,
+                    AgentInvocationCount: 0,
+                },
+            ],
+            'Read the repository and open a pull request on GitHub',
+            { NowMs: now }
+        );
+
+        // Pinned skill always comes first
+        expect(ranked[0].Skill.Name).toBe('Company Security Compliance Baseline');
+        expect(ranked[0].Pinned).toBe(true);
+
+        // Unpinned GitHub skill outranks unrelated Finance skill on query fit + frequency + recency
+        expect(ranked[1].Skill.Name).toBe('GitHub Engineering & Repository Steward');
+        expect(ranked[1].QueryFitScore).toBeGreaterThan(0.4);
+        expect(ranked[1].FrequencyScore).toBe(1);
+        expect(ranked[1].RecencyScore).toBeGreaterThan(0.9);
+        expect(ranked[1].HybridScore).toBeGreaterThan(ranked[2].HybridScore);
+    });
+
+    it('PreFilterSkillCandidatesForDecision caps unpinned skill candidates at maxSkillDecisionCandidates while keeping pinned skills and actions', () => {
+        const pinnedSkill: CatalogNarrowingCandidate = {
+            Kind: 'skill',
+            ID: 'BBBBBBBB-0000-4000-8000-000000000000',
+            Name: 'Pinned Core Skill',
+            Description: 'Always available',
+            Pinned: true,
+        };
+        const unpinnedSkills: CatalogNarrowingCandidate[] = Array.from({ length: 50 }, (_, i) => ({
+            Kind: 'skill' as const,
+            ID: `CCCCCCCC-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+            Name: i === 42 ? 'GitHub Pull Request Automation' : `Generic Skill ${i + 1}`,
+            Description: i === 42 ? 'Automates GitHub branch commits and pull requests' : `Handles domain workflow ${i + 1}`,
+            Pinned: false,
+        }));
+        const actionCandidate = candidate('action', 1);
+
+        const result = PreFilterSkillCandidatesForDecision(
+            [actionCandidate, pinnedSkill, ...unpinnedSkills],
+            'Create a GitHub pull request from branch commits',
+            10
+        );
+
+        const remainingSkills = result.FilteredCandidates.filter(c => c.Kind === 'skill');
+        // 1 pinned + 10 top-ranked unpinned = 11 skills retained for Stage 2 decision
+        expect(remainingSkills).toHaveLength(11);
+        expect(result.PreHiddenSkillIDs.size).toBe(40);
+        // The semantically matching skill #43 is retained in the top 10
+        expect(remainingSkills.some(s => s.Name === 'GitHub Pull Request Automation')).toBe(true);
+        // Pinned skill is retained
+        expect(remainingSkills.some(s => s.Name === 'Pinned Core Skill')).toBe(true);
+    });
+});
+

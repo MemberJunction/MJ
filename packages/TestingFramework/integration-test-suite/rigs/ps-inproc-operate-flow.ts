@@ -41,19 +41,22 @@
  * tree-shaking. Without `PS_INTEGRATION=1` (+ a reachable sidecar) the script does a graceful,
  * deterministic SKIP (exit 0) after entity resolution.
  *
- * THROWAWAY: it creates a driver-named ML Algorithm (if missing) + an ML Training Pipeline, trains a
- * model, creates the on-demand Record Processes (+ their bindings/run history), runs two of them, then
- * deletes every row it created (child→parent) in `finally` and NULLs the RenewalScore column for
- * repeatability.
+ * THROWAWAY: it creates the driver's ML Algorithm (if missing) + an ML Training Pipeline bound to its Prediction Unit
+ * and Evaluation Protocol (the pipeline migration, as the gates' harness binds its pipelines), trains a model, creates
+ * the on-demand Record Processes (+ their bindings/run history), runs two of them, then NULLs the RenewalScore column
+ * and deletes every row it created in `finally`, children first (`lib/ps-rig-lifecycle.ts`); a row it cannot delete
+ * fails the rig. A run whose stored gate decision ships no model fails the rig with the stored reason (nothing to
+ * operate).
  *
- * USAGE (from the repo root, against a live DB the harness resolves):
- *   PS_INTEGRATION=1 npx tsx packages/MJServer/integration-test-scripts/ps-inproc-operate-flow.ts
- *   npx tsx packages/MJServer/integration-test-scripts/ps-inproc-operate-flow.ts   # deterministic SKIP (no sidecar)
+ * USAGE (from the repo root, against a live DB the harness resolves; needs AssociationDemo's Memberships):
+ *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-inproc-operate-flow.ts
+ *   npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-inproc-operate-flow.ts   # deterministic SKIP (no sidecar)
  *
  * Exit code: 0 = passed (or cleanly skipped), 1 = failures, 2 = bootstrap error.
  */
 import { BootstrapAI } from './lib/ai-bootstrap';
 import { PromoteToPublished } from './lib/ps-promote';
+import { DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, TrainBoundPipeline, type RigAlgorithm } from './lib/ps-rig-lifecycle';
 import {
   RunView,
   UserInfo,
@@ -64,21 +67,17 @@ import {
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import '@memberjunction/core-entities';
 import {
-  MJMLAlgorithmEntity,
   MJMLTrainingPipelineEntity,
-  MJMLTrainingRunEntity,
   MJRecordProcessEntity,
   MJProcessRunDetailEntity,
 } from '@memberjunction/core-entities';
+import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
 // Side-effect import: runs the @RegisterClass decorator for the 'ML Model' scoring work type, and
-// exposes the in-process train delegation helper + the on-demand "Operate" scoring helper.
+// exposes the on-demand "Operate" scoring helper.
 import {
-  trainModelViaEngine,
-  createScoringProcess,
+  CreateScoringProcess,
   LoadMLModelInferenceProcessor,
-  type TrainModelInput,
-  type TrainModelResult,
   type CreateScoringProcessResult,
 } from '@memberjunction/predictive-studio';
 
@@ -139,32 +138,6 @@ function check(condition: boolean, label: string): void {
 /** True when a value is a finite number (the work type persists a numeric `score`). */
 function isNumeric(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
-}
-
-/**
- * Resolve (or create) an ML Algorithm row whose DISPLAY NAME equals the sidecar driver key (the
- * TrainingEngine sends `pipeline.Algorithm` — the denormalized algorithm NAME — to the sidecar).
- */
-async function ensureDriverNamedAlgorithm(md: IMetadataProvider, user: UserInfo): Promise<{ id: string; created: boolean }> {
-  const existing = await new RunView().RunView<{ ID: string }>(
-    { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${DRIVER_KEY}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
-    user,
-  );
-  if (existing.Success && existing.Results.length > 0) {
-    return { id: existing.Results[0].ID, created: false };
-  }
-  const algo = await md.GetEntityObject<MJMLAlgorithmEntity>('MJ: ML Algorithms', user);
-  algo.NewRecord();
-  algo.Name = DRIVER_KEY;
-  algo.Description = TAG;
-  algo.ProblemTypes = 'classification';
-  algo.DriverClass = DRIVER_KEY;
-  algo.SupportsFeatureImportance = true;
-  algo.Status = 'Active';
-  if (!(await algo.Save())) {
-    throw new Error(`Failed to create ML Algorithm: ${algo.LatestResult?.CompleteMessage}`);
-  }
-  return { id: algo.ID, created: true };
 }
 
 /** Resolve an entity's ID by name (throws if not found). */
@@ -308,281 +281,222 @@ async function clearWrittenColumns(md: IMetadataProvider, user: UserInfo, rows: 
   console.log(`  cleared ${OUTPUT_FIELD} on ${cleared}/${rows.length} rows`);
 }
 
-/**
- * Best-effort cleanup, child→parent. For each created Record Process: delete its ML Model Scoring
- * Binding (FKs both the model AND the RP, so delete it first), then its Process Runs' details →
- * Process Runs → the Record Process. Then the model's training run(s) → model → pipeline → algorithm.
- * Logs LatestResult on every delete failure.
- */
-async function cleanup(md: IMetadataProvider, user: UserInfo, ids: {
-  recordProcessIds: string[]; scoringBindingIds: string[]; pipelineId?: string; modelId?: string;
-  algorithmId?: string; algorithmCreated?: boolean;
-}): Promise<void> {
+/** Everything the run created that cleanup undoes: the recorded rows, the algorithm, and the rows whose column it wrote. */
+interface RigState {
+  readonly Records: RunRecords;
+  Algorithm?: RigAlgorithm;
+  ReadbackRows: MembershipReadback[];
+}
+
+/** Step 1: resolve the entities, exiting 0 with a SKIP when AssociationDemo or the ML metadata is absent, or the live legs are off. */
+function resolveEntitiesOrSkip(md: IMetadataProvider): void {
+  banner('1. RESOLVE ENTITIES');
+  const membership = md.EntityByName('Memberships');
+  if (!membership) {
+    console.log('  SKIP: Memberships entity not found — is AssociationDemo loaded? (exiting 0)');
+    process.exit(0);
+  }
+  if (!md.EntityByName('MJ: ML Algorithms')) {
+    console.log('  SKIP: MJ: ML Algorithms entity not found — Predictive Studio metadata absent. (exiting 0)');
+    process.exit(0);
+  }
+  console.log(`  Memberships entity: ${membership.Name} (${membership.ID})`);
+  if (!PS_LIVE) {
+    console.log('\n  SKIP: set PS_INTEGRATION=1 (with the Python sidecar reachable) to train + score.');
+    console.log('  This script trains a real model and runs the on-demand "Operate" Record Processes against');
+    console.log('  the sidecar, gated like predictive-studio-tests.ts. Exiting 0.');
+    process.exit(0);
+  }
+}
+
+/** Step 2: create the pipeline, bind its unit and protocol, train it, and promote the shipped model so it can score; null when none shipped. */
+async function trainAndPromote(md: IMetadataProvider, user: UserInfo, state: RigState): Promise<string | null> {
+  state.Algorithm = await EnsureDriverAlgorithm(md, user, DRIVER_KEY, TAG);
+  console.log(`  Algorithm row: ${state.Algorithm.ID} (driver '${DRIVER_KEY}', ${state.Algorithm.Created ? 'created' : 'reused'})`);
+  const pipeline = await createPipeline(md, user, state.Algorithm.ID);
+  state.Records.RecordPipeline(pipeline.ID);
+  console.log(`  Pipeline ${pipeline.ID} — target Memberships.Status (classification)`);
+  const trainStart = Date.now();
+  const training = await TrainBoundPipeline(md, user, pipeline, state.Records, 'ps-inproc-operate-flow');
+  console.log(`  Trained in ${Date.now() - trainStart}ms — run ${training.RunID}, model ${training.Model ? `${training.Model.ID} (status=${training.Model.Status}, version=${training.Model.Version})` : '(none)'}`);
+  check(training.Model !== null, `the run's stored gate decision shipped a model to operate${training.NoModelReason ? ` (it shipped none: ${training.NoModelReason})` : ''}`);
+  if (training.Model === null) return null;
+  // Scoring refuses a Draft model (MODEL_NOT_SCORABLE), so promote it to Published first.
+  console.log(`  promoted → ${await PromoteToPublished(md, user, training.Model.ID, TAG)}`);
+  return training.Model.ID;
+}
+
+/** Steps 3–3b: the GENERIC Record Process — no binding, predictions in run history only, nothing written back. */
+async function proveGenericOutput(md: IMetadataProvider, user: UserInfo, modelId: string, scope: { filter: string }): Promise<void> {
+  // The Operate dialog's "record predictions in run history only" mode: no binding, no write-back.
+  banner('3. CreateScoringProcess(...) — GENERIC output (no write-back, no binding)');
+  const generic: CreateScoringProcessResult = await CreateScoringProcess({
+    modelId,
+    targetEntityName: 'Memberships',
+    scope: { filter: scope.filter },
+    primaryKeyField: 'ID',
+    contextUser: user,
+    provider: md,
+  });
+  const genericRP = generic.recordProcess;
+  console.log(`  Record Process ${genericRP.ID} ('${genericRP.Name}')`);
+  check(generic.binding === null, 'GENERIC mode → result.binding === null (no lineage row)');
+  await verifyGenericRecordProcess(user, genericRP.ID, modelId);
+
+  // ── 3b. Run the GENERIC RP — predictions persist in run history, NOT the column ──
+  banner('3b. RUN GENERIC RP (RecordProcessExecutor.RunByID) — run-history-only predictions');
+  const genRunStart = Date.now();
+  const genRun = await new RecordProcessExecutor().RunByID(genericRP.ID, { ContextUser: user, TriggeredBy: 'OnDemand' });
+  console.log(`  Run: Status=${genRun.Status} Processed=${genRun.Processed} Success=${genRun.Success} Error=${genRun.Error} Skipped=${genRun.Skipped} ProcessRunID=${genRun.ProcessRunID} (${Date.now() - genRunStart}ms)`);
+  check(genRun.Status === 'Completed', `generic run Status = 'Completed' (got '${genRun.Status}')`);
+  check(genRun.Success > 0, `generic run scored > 0 records (Success=${genRun.Success})`);
+  check(genRun.Error === 0, `generic run had 0 errors (Error=${genRun.Error})`);
+  check(!!genRun.ProcessRunID, 'generic run produced a persisted ProcessRunID');
+  if (genRun.ProcessRunID) await verifyGenericRunHistory(user, genRun.ProcessRunID);
+
+  // The member column must NOT have been written in generic mode.
+  const genScored = countScored(await readBackPredictions(user, scope.filter));
+  check(genScored === 0, `GENERIC mode wrote NOTHING to '${OUTPUT_FIELD}' (got ${genScored} scored rows)`);
+}
+
+/** Step 3a: the generic Record Process row as saved. */
+async function verifyGenericRecordProcess(user: UserInfo, recordProcessId: string, modelId: string): Promise<void> {
+  const genCheck = await new RunView().RunView<MJRecordProcessEntity>(
+    { EntityName: 'MJ: Record Processes', ExtraFilter: `ID='${recordProcessId}'`, ResultType: 'entity_object', MaxRows: 1, BypassCache: true }, user,
+  );
+  const genRow = genCheck.Results?.[0];
+  check(!!genRow, 'GENERIC Record Process re-read found');
+  if (!genRow) return;
+  check(genRow.Status === 'Active', `RP Status = 'Active' (got '${genRow.Status}')`);
+  // 'ML Model' is the runtime work type, not in the codegen'd union — read it via Get().
+  check(genRow.Get('WorkType') === 'ML Model', `RP WorkType = 'ML Model' (got '${genRow.Get('WorkType')}')`);
+  check(genRow.OnDemandEnabled === true, `RP OnDemandEnabled = true (got ${genRow.OnDemandEnabled})`);
+  check(genRow.ScheduleEnabled === false, `RP ScheduleEnabled = false (got ${genRow.ScheduleEnabled})`);
+  check(genRow.ScopeType === 'Filter', `RP ScopeType = 'Filter' (got '${genRow.ScopeType}')`);
+  const om = genRow.OutputMapping;
+  check(om == null || om.trim().length === 0, `RP OutputMapping is null/empty (no write-back) (got '${om ?? 'null'}')`);
+  const cfg = SafeJSONParse<MLScoringConfiguration>(genRow.Configuration ?? '');
+  check(UUIDsEqual(cfg?.modelId ?? '', modelId), `RP Configuration.modelId === the model id`);
+}
+
+/** The core generic-mode assertion: predictions persist in `MJ: Process Run Details` with NO binding, and they vary. */
+async function verifyGenericRunHistory(user: UserInfo, processRunId: string): Promise<void> {
+  const payloads = await readRunDetailPayloads(user, processRunId);
+  console.log(`  ${payloads.length} Process Run Detail payloads parsed.`);
+  check(payloads.length > 0, 'GENERIC run wrote ≥1 Process Run Detail row');
+  const withScore = payloads.filter((p) => isNumeric(p.score) && p.scoredAt != null);
+  check(withScore.length > 0, "a detail's ResultPayload parses to { score: <number>, scoredAt } (predictions in run history)");
+  // ── ANTI-SKEW REGRESSION GUARD ──────────────────────────────────────────────
+  // The pipeline trains on `MembershipType` — a VIRTUAL (view-joined) column the on-demand
+  // scope can silently drop, which made every prediction identical (the bug this guards). The
+  // assembler now re-reads dropped feature columns from the entity view, so predictions must VARY.
+  // A single distinct score across a multi-type scope = the skew is back.
+  const distinctScores = new Set(withScore.map((p) => p.score)).size;
+  console.log(`  Distinct prediction scores across ${withScore.length} rows: ${distinctScores}`);
+  check(distinctScores > 1, `GENERIC predictions VARY across the scope (distinct scores=${distinctScores}>1) — virtual feature reached the model, no train/serve skew`);
+}
+
+/** Steps 4–4c: the WRITE-BACK Record Process — binding + OutputMapping, run history AND the column. */
+async function proveWriteBackOutput(md: IMetadataProvider, user: UserInfo, modelId: string, scope: { filter: string }, state: RigState): Promise<void> {
+  banner('4. CreateScoringProcess(...) — WRITE-BACK output (binding + OutputMapping)');
+  const writeBack: CreateScoringProcessResult = await CreateScoringProcess({
+    modelId,
+    targetEntityName: 'Memberships',
+    scope: { filter: scope.filter },
+    outputField: OUTPUT_FIELD,
+    primaryKeyField: 'ID',
+    contextUser: user,
+    provider: md,
+  });
+  const wbRP = writeBack.recordProcess;
+  console.log(`  Record Process ${wbRP.ID} ('${wbRP.Name}')`);
+  check(writeBack.binding !== null, 'WRITE-BACK mode → result.binding !== null');
+  if (writeBack.binding) {
+    check(writeBack.binding.Mode === 'OnDemand', `binding.Mode === 'OnDemand' (got '${writeBack.binding.Mode}')`);
+    check(writeBack.binding.TargetColumn === OUTPUT_FIELD, `binding.TargetColumn === '${OUTPUT_FIELD}' (got '${writeBack.binding.TargetColumn}')`);
+    check(UUIDsEqual(writeBack.binding.RecordProcessID, wbRP.ID), 'binding.RecordProcessID === the RP id');
+  }
+
+  // ── 4a. Verify the write-back RP carries an OutputMapping ─────────────────
+  const wbCheck = await new RunView().RunView<MJRecordProcessEntity>(
+    { EntityName: 'MJ: Record Processes', ExtraFilter: `ID='${wbRP.ID}'`, ResultType: 'entity_object', MaxRows: 1, BypassCache: true }, user,
+  );
+  const wbRow = wbCheck.Results?.[0];
+  check(!!wbRow, 'WRITE-BACK Record Process re-read found');
+  if (wbRow) {
+    const om = SafeJSONParse<OutputMappingShape>(wbRow.OutputMapping ?? '');
+    check(om?.fields?.[OUTPUT_FIELD] === '$.score', `RP OutputMapping maps ${OUTPUT_FIELD} ← '$.score'`);
+  }
+
+  // ── 4b. Run the WRITE-BACK RP — run history AND the column land ───────────
+  banner('4b. RUN WRITE-BACK RP (RecordProcessExecutor.RunByID) — predictions + column write-back');
+  const wbRunStart = Date.now();
+  const wbRun = await new RecordProcessExecutor().RunByID(wbRP.ID, { ContextUser: user, TriggeredBy: 'OnDemand' });
+  console.log(`  Run: Status=${wbRun.Status} Processed=${wbRun.Processed} Success=${wbRun.Success} Error=${wbRun.Error} Skipped=${wbRun.Skipped} ProcessRunID=${wbRun.ProcessRunID} (${Date.now() - wbRunStart}ms)`);
+  check(wbRun.Status === 'Completed', `write-back run Status = 'Completed' (got '${wbRun.Status}')`);
+  check(wbRun.Success > 0, `write-back run scored > 0 records (Success=${wbRun.Success})`);
+  check(wbRun.Error === 0, `write-back run had 0 errors (Error=${wbRun.Error})`);
+  if (wbRun.ProcessRunID) {
+    const payloads = await readRunDetailPayloads(user, wbRun.ProcessRunID);
+    check(payloads.filter((p) => isNumeric(p.score)).length > 0, 'WRITE-BACK run ALSO carries predictions in Process Run Details');
+  }
+
+  // ── 4c. Verify the column write-back landed ───────────────────────────────
+  banner('4c. VERIFY WRITE-BACK (RunView Memberships — RenewalScore)');
+  state.ReadbackRows = await readBackPredictions(user, scope.filter);
+  const scored = countScored(state.ReadbackRows);
+  console.log(`  ${scored}/${state.ReadbackRows.length} rows carry a numeric '${OUTPUT_FIELD}'.`);
+  check(scored > 0, `at least one Membership row carries a numeric '${OUTPUT_FIELD}' (countScored > 0)`);
+}
+
+/** Step 5: the whole-entity scope SHAPE — assert only, never run (it would score the whole table). */
+async function proveWholeEntityShape(md: IMetadataProvider, user: UserInfo, modelId: string): Promise<void> {
+  banner('5. CreateScoringProcess({ scope: { all: true } }) — SHAPE ONLY (not run)');
+  const wholeEntity: CreateScoringProcessResult = await CreateScoringProcess({
+    modelId,
+    targetEntityName: 'Memberships',
+    scope: { all: true },
+    primaryKeyField: 'ID',
+    contextUser: user,
+    provider: md,
+  });
+  const allRP = wholeEntity.recordProcess;
+  console.log(`  Record Process ${allRP.ID} ('${allRP.Name}') — NOT run.`);
+  check(allRP.ScopeType === 'Filter', `whole-entity RP ScopeType === 'Filter' (got '${allRP.ScopeType}')`);
+  check(allRP.ScopeFilter === '(1=1)', `whole-entity RP ScopeFilter === '(1=1)' (got '${allRP.ScopeFilter}')`);
+}
+
+/** NULLs the written column, then deletes every row the run created (the model's Record Processes and bindings included); each failure fails the rig. */
+async function cleanup(md: IMetadataProvider, user: UserInfo, state: RigState): Promise<void> {
+  banner('CLEAR WRITTEN-BACK COLUMN (repeatability)');
+  if (state.ReadbackRows.length > 0) {
+    await clearWrittenColumns(md, user, state.ReadbackRows);
+  } else {
+    console.log('  (no read-back rows captured — nothing to clear)');
+  }
   banner('CLEANUP');
-  const del = async (entity: string, id: string): Promise<void> => {
-    try {
-      const obj = await md.GetEntityObject<BaseEntity>(entity, user);
-      if (await obj.InnerLoad(CompositeKey.FromID(id))) {
-        const ok = await obj.Delete();
-        console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} ${entity} ${id}${ok ? '' : ` — ${obj.LatestResult?.CompleteMessage}`}`);
-      }
-    } catch (e) {
-      console.log(`  skip ${entity} ${id}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
-  // The ML Model Scoring Bindings FK both the model AND a Record Process — delete them before either.
-  for (const bindingId of ids.scoringBindingIds) {
-    await del('MJ: ML Model Scoring Bindings', bindingId);
-  }
-
-  // Each Record Process's Process Runs (+ their details) FK the Record Process; delete child→parent.
-  for (const rpId of ids.recordProcessIds) {
-    const runs = await new RunView().RunView<{ ID: string }>(
-      { EntityName: 'MJ: Process Runs', Fields: ['ID'], ExtraFilter: `RecordProcessID='${rpId}'`, ResultType: 'simple', BypassCache: true }, user,
-    );
-    for (const run of runs.Results ?? []) {
-      const details = await new RunView().RunView<MJProcessRunDetailEntity>(
-        { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${run.ID}'`, ResultType: 'entity_object', BypassCache: true }, user,
-      );
-      for (const d of details.Results ?? []) {
-        const ok = await d.Delete();
-        if (!ok) {
-          console.log(`  FAILED to delete MJ: Process Run Details ${d.ID} — ${d.LatestResult?.CompleteMessage}`);
-        }
-      }
-      await del('MJ: Process Runs', run.ID);
-    }
-    await del('MJ: Record Processes', rpId);
-  }
-
-  // Training runs reference the pipeline (and the model); delete them before the model/pipeline.
-  if (ids.pipelineId) {
-    const trainingRuns = await new RunView().RunView<MJMLTrainingRunEntity>(
-      { EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${ids.pipelineId}'`, ResultType: 'entity_object', BypassCache: true }, user,
-    );
-    for (const r of trainingRuns.Results ?? []) {
-      const ok = await r.Delete();
-      console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} MJ: ML Training Runs ${r.ID}`);
-    }
-  }
-  if (ids.modelId) await del('MJ: ML Models', ids.modelId);
-  if (ids.pipelineId) await del('MJ: ML Training Pipelines', ids.pipelineId);
-  if (ids.algorithmId && ids.algorithmCreated) await del('MJ: ML Algorithms', ids.algorithmId);
+  failures += ReportCleanup(await DeleteRecordedRows(md, user, state.Records, state.Algorithm));
 }
 
 async function main(): Promise<void> {
   const t0 = Date.now();
   const { user, provider } = await BootstrapAI();
-  const md = provider;
-
-  const recordProcessIds: string[] = [];
-  const scoringBindingIds: string[] = [];
-  let pipelineId: string | undefined;
-  let modelId: string | undefined;
-  let algorithm: { id: string; created: boolean } | undefined;
-  let readbackRows: MembershipReadback[] = [];
-
+  const state: RigState = { Records: new RunRecords(), ReadbackRows: [] };
   try {
-    // ── 1. Resolve entities (graceful SKIP if AssociationDemo / ML metadata absent) ──
-    banner('1. RESOLVE ENTITIES');
-    const membership = md.EntityByName('Memberships');
-    const mlAlgorithms = md.EntityByName('MJ: ML Algorithms');
-    if (!membership) {
-      console.log('  SKIP: Memberships entity not found — is AssociationDemo loaded? (exiting 0)');
-      process.exit(0);
-    }
-    if (!mlAlgorithms) {
-      console.log('  SKIP: MJ: ML Algorithms entity not found — Predictive Studio metadata absent. (exiting 0)');
-      process.exit(0);
-    }
-    console.log(`  Memberships entity: ${membership.Name} (${membership.ID})`);
-
-    if (!PS_LIVE) {
-      console.log('\n  SKIP: set PS_INTEGRATION=1 (with the Python sidecar reachable) to train + score.');
-      console.log('  This script trains a real model and runs the on-demand "Operate" Record Processes against');
-      console.log('  the sidecar, gated like predictive-studio-tests.ts. Exiting 0.');
-      process.exit(0);
-    }
-
-    // ── 2. Resolve a small scope + train a model IN-PROCESS ───────────────────
-    banner('2. RESOLVE SCOPE + TRAIN IN-PROCESS (trainModelViaEngine)');
+    resolveEntitiesOrSkip(provider);
+    banner('2. RESOLVE SCOPE + BIND UNIT AND PROTOCOL + TRAIN IN-PROCESS');
     const scope = await resolveScopeIDs(user);
     console.log(`  Scope: ${scope.ids.length} Membership IDs → filter = ID IN (… ${scope.ids.length} ids …)`);
-    algorithm = await ensureDriverNamedAlgorithm(md, user);
-    console.log(`  Algorithm row: ${algorithm.id} (Name='${DRIVER_KEY}', ${algorithm.created ? 'created' : 'reused'})`);
-    const pipeline = await createPipeline(md, user, algorithm.id);
-    pipelineId = pipeline.ID;
-    console.log(`  Pipeline ${pipeline.ID} — target Memberships.Status (classification)`);
-
-    const trainStart = Date.now();
-    const trainInput: TrainModelInput = { pipelineId: pipeline.ID, sidecarVersion: 'ps-inproc-operate-flow' };
-    const trainResult: TrainModelResult = await trainModelViaEngine(trainInput, provider, user);
-    modelId = trainResult.model.ID;
-    console.log(`  Trained in ${Date.now() - trainStart}ms — modelId=${trainResult.model.ID} (status=${trainResult.model.Status}, version=${trainResult.model.Version})`);
-    check(!!modelId, 'training produced a model id');
-    // Scoring refuses a Draft model (MODEL_NOT_SCORABLE), so promote it to Published first.
-    console.log(`  promoted → ${await PromoteToPublished(provider, user, modelId, TAG)}`);
-
-    // ── 3. GENERIC OUTPUT — createScoringProcess(...) with NO outputField ─────
-    // The Operate dialog's "record predictions in run history only" mode: no binding, no write-back.
-    banner('3. createScoringProcess(...) — GENERIC output (no write-back, no binding)');
-    const generic: CreateScoringProcessResult = await createScoringProcess({
-      provider,
-      modelId: modelId!,
-      targetEntityName: 'Memberships',
-      scope: { filter: scope.filter },
-      primaryKeyField: 'ID',
-      contextUser: user,
-      provider,
-    });
-    const genericRP = generic.recordProcess;
-    recordProcessIds.push(genericRP.ID);
-    console.log(`  Record Process ${genericRP.ID} ('${genericRP.Name}')`);
-    check(generic.binding === null, 'GENERIC mode → result.binding === null (no lineage row)');
-
-    // ── 3a. Verify the generic Record Process row ─────────────────────────────
-    const genCheck = await new RunView().RunView<MJRecordProcessEntity>(
-      { EntityName: 'MJ: Record Processes', ExtraFilter: `ID='${genericRP.ID}'`, ResultType: 'entity_object', MaxRows: 1, BypassCache: true }, user,
-    );
-    const genRow = genCheck.Results?.[0];
-    check(!!genRow, 'GENERIC Record Process re-read found');
-    if (genRow) {
-      check(genRow.Status === 'Active', `RP Status = 'Active' (got '${genRow.Status}')`);
-      // 'ML Model' is the runtime work type, not in the codegen'd union — read it via Get().
-      check(genRow.Get('WorkType') === 'ML Model', `RP WorkType = 'ML Model' (got '${genRow.Get('WorkType')}')`);
-      check(genRow.OnDemandEnabled === true, `RP OnDemandEnabled = true (got ${genRow.OnDemandEnabled})`);
-      check(genRow.ScheduleEnabled === false, `RP ScheduleEnabled = false (got ${genRow.ScheduleEnabled})`);
-      check(genRow.ScopeType === 'Filter', `RP ScopeType = 'Filter' (got '${genRow.ScopeType}')`);
-      const om = genRow.OutputMapping;
-      check(om == null || om.trim().length === 0, `RP OutputMapping is null/empty (no write-back) (got '${om ?? 'null'}')`);
-      const cfg = SafeJSONParse<MLScoringConfiguration>(genRow.Configuration ?? '');
-      check(cfg?.modelId === modelId, `RP Configuration.modelId === the model id`);
+    const modelId = await trainAndPromote(provider, user, state);
+    if (modelId !== null) {
+      await proveGenericOutput(provider, user, modelId, scope);
+      await proveWriteBackOutput(provider, user, modelId, scope, state);
+      await proveWholeEntityShape(provider, user, modelId);
     }
-
-    // ── 3b. Run the GENERIC RP — predictions persist in run history, NOT the column ──
-    banner('3b. RUN GENERIC RP (RecordProcessExecutor.RunByID) — run-history-only predictions');
-    const genRunStart = Date.now();
-    const genRun = await new RecordProcessExecutor().RunByID(genericRP.ID, { ContextUser: user, TriggeredBy: 'OnDemand' });
-    console.log(`  Run: Status=${genRun.Status} Processed=${genRun.Processed} Success=${genRun.Success} Error=${genRun.Error} Skipped=${genRun.Skipped} ProcessRunID=${genRun.ProcessRunID} (${Date.now() - genRunStart}ms)`);
-    check(genRun.Status === 'Completed', `generic run Status = 'Completed' (got '${genRun.Status}')`);
-    check(genRun.Success > 0, `generic run scored > 0 records (Success=${genRun.Success})`);
-    check(genRun.Error === 0, `generic run had 0 errors (Error=${genRun.Error})`);
-    check(!!genRun.ProcessRunID, 'generic run produced a persisted ProcessRunID');
-
-    // Core assertion: predictions persist in MJ: Process Run Details with NO binding.
-    if (genRun.ProcessRunID) {
-      const payloads = await readRunDetailPayloads(user, genRun.ProcessRunID);
-      console.log(`  ${payloads.length} Process Run Detail payloads parsed.`);
-      check(payloads.length > 0, 'GENERIC run wrote ≥1 Process Run Detail row');
-      const withScore = payloads.filter((p) => isNumeric(p.score) && p.scoredAt != null);
-      check(withScore.length > 0, "a detail's ResultPayload parses to { score: <number>, scoredAt } (predictions in run history)");
-
-      // ── ANTI-SKEW REGRESSION GUARD ──────────────────────────────────────────────
-      // The pipeline trains on `MembershipType` — a VIRTUAL (view-joined) column the on-demand
-      // scope can silently drop, which made every prediction identical (the bug this guards). The
-      // assembler now re-reads dropped feature columns from the entity view, so predictions must VARY.
-      // A single distinct score across a multi-type scope = the skew is back. (Pre-fix this assertion
-      // did not exist — the suite only checked that scores *existed*, which is how the bug stayed latent.)
-      const distinctScores = new Set(withScore.map((p) => p.score)).size;
-      console.log(`  Distinct prediction scores across ${withScore.length} rows: ${distinctScores}`);
-      check(distinctScores > 1, `GENERIC predictions VARY across the scope (distinct scores=${distinctScores}>1) — virtual feature reached the model, no train/serve skew`);
-    }
-
-    // The member column must NOT have been written in generic mode.
-    const genReadback = await readBackPredictions(user, scope.filter);
-    const genScored = countScored(genReadback);
-    check(genScored === 0, `GENERIC mode wrote NOTHING to '${OUTPUT_FIELD}' (got ${genScored} scored rows)`);
-
-    // ── 4. WRITE-BACK OUTPUT — createScoringProcess(...) with outputField ─────
-    banner('4. createScoringProcess(...) — WRITE-BACK output (binding + OutputMapping)');
-    const writeBack: CreateScoringProcessResult = await createScoringProcess({
-      provider,
-      modelId: modelId!,
-      targetEntityName: 'Memberships',
-      scope: { filter: scope.filter },
-      outputField: OUTPUT_FIELD,
-      primaryKeyField: 'ID',
-      contextUser: user,
-      provider,
-    });
-    const wbRP = writeBack.recordProcess;
-    recordProcessIds.push(wbRP.ID);
-    console.log(`  Record Process ${wbRP.ID} ('${wbRP.Name}')`);
-    check(writeBack.binding !== null, 'WRITE-BACK mode → result.binding !== null');
-    if (writeBack.binding) {
-      scoringBindingIds.push(writeBack.binding.ID);
-      check(writeBack.binding.Mode === 'OnDemand', `binding.Mode === 'OnDemand' (got '${writeBack.binding.Mode}')`);
-      check(writeBack.binding.TargetColumn === OUTPUT_FIELD, `binding.TargetColumn === '${OUTPUT_FIELD}' (got '${writeBack.binding.TargetColumn}')`);
-      check(UUIDsEqual(writeBack.binding.RecordProcessID, wbRP.ID), 'binding.RecordProcessID === the RP id');
-    }
-
-    // ── 4a. Verify the write-back RP carries an OutputMapping ─────────────────
-    const wbCheck = await new RunView().RunView<MJRecordProcessEntity>(
-      { EntityName: 'MJ: Record Processes', ExtraFilter: `ID='${wbRP.ID}'`, ResultType: 'entity_object', MaxRows: 1, BypassCache: true }, user,
-    );
-    const wbRow = wbCheck.Results?.[0];
-    check(!!wbRow, 'WRITE-BACK Record Process re-read found');
-    if (wbRow) {
-      const om = SafeJSONParse<OutputMappingShape>(wbRow.OutputMapping ?? '');
-      check(om?.fields?.[OUTPUT_FIELD] === '$.score', `RP OutputMapping maps ${OUTPUT_FIELD} ← '$.score'`);
-    }
-
-    // ── 4b. Run the WRITE-BACK RP — run history AND the column land ───────────
-    banner('4b. RUN WRITE-BACK RP (RecordProcessExecutor.RunByID) — predictions + column write-back');
-    const wbRunStart = Date.now();
-    const wbRun = await new RecordProcessExecutor().RunByID(wbRP.ID, { ContextUser: user, TriggeredBy: 'OnDemand' });
-    console.log(`  Run: Status=${wbRun.Status} Processed=${wbRun.Processed} Success=${wbRun.Success} Error=${wbRun.Error} Skipped=${wbRun.Skipped} ProcessRunID=${wbRun.ProcessRunID} (${Date.now() - wbRunStart}ms)`);
-    check(wbRun.Status === 'Completed', `write-back run Status = 'Completed' (got '${wbRun.Status}')`);
-    check(wbRun.Success > 0, `write-back run scored > 0 records (Success=${wbRun.Success})`);
-    check(wbRun.Error === 0, `write-back run had 0 errors (Error=${wbRun.Error})`);
-    if (wbRun.ProcessRunID) {
-      const payloads = await readRunDetailPayloads(user, wbRun.ProcessRunID);
-      const withScore = payloads.filter((p) => isNumeric(p.score));
-      check(withScore.length > 0, 'WRITE-BACK run ALSO carries predictions in Process Run Details');
-    }
-
-    // ── 4c. Verify the column write-back landed ───────────────────────────────
-    banner('4c. VERIFY WRITE-BACK (RunView Memberships — RenewalScore)');
-    readbackRows = await readBackPredictions(user, scope.filter);
-    const scored = countScored(readbackRows);
-    console.log(`  ${scored}/${readbackRows.length} rows carry a numeric '${OUTPUT_FIELD}'.`);
-    check(scored > 0, `at least one Membership row carries a numeric '${OUTPUT_FIELD}' (countScored > 0)`);
-
-    // ── 5. WHOLE-ENTITY scope SHAPE — assert only, DO NOT run ─────────────────
-    // Proves all:true maps to a Filter '(1=1)'. We never run it (would score the whole table).
-    banner('5. createScoringProcess({ scope: { all: true } }) — SHAPE ONLY (not run)');
-    const wholeEntity: CreateScoringProcessResult = await createScoringProcess({
-      provider,
-      modelId: modelId!,
-      targetEntityName: 'Memberships',
-      scope: { all: true },
-      primaryKeyField: 'ID',
-      contextUser: user,
-      provider,
-    });
-    const allRP = wholeEntity.recordProcess;
-    recordProcessIds.push(allRP.ID);
-    if (wholeEntity.binding) {
-      scoringBindingIds.push(wholeEntity.binding.ID);
-    }
-    console.log(`  Record Process ${allRP.ID} ('${allRP.Name}') — NOT run.`);
-    check(allRP.ScopeType === 'Filter', `whole-entity RP ScopeType === 'Filter' (got '${allRP.ScopeType}')`);
-    check(allRP.ScopeFilter === '(1=1)', `whole-entity RP ScopeFilter === '(1=1)' (got '${allRP.ScopeFilter}')`);
-
     banner(failures === 0 ? 'OPERATE-FLOW PROOF COMPLETE — ALL CHECKS PASSED' : `OPERATE-FLOW PROOF FAILED — ${failures} CHECK(S) FAILED`);
     console.log(`  Total wall-clock: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   } finally {
-    banner('CLEAR WRITTEN-BACK COLUMN (repeatability)');
-    if (readbackRows.length > 0) {
-      await clearWrittenColumns(md, user, readbackRows);
-    } else {
-      console.log('  (no read-back rows captured — nothing to clear)');
-    }
-    await cleanup(md, user, {
-      recordProcessIds, scoringBindingIds, pipelineId, modelId,
-      algorithmId: algorithm?.id, algorithmCreated: algorithm?.created,
-    });
+    await cleanup(provider, user, state);
   }
   process.exit(failures > 0 ? 1 : 0);
 }

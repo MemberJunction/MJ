@@ -8,10 +8,11 @@
  * - System validation
  */
 
-import { Injectable, Inject } from '@angular/core';
+import { Injectable, Inject, NgZone, Optional } from '@angular/core';
 import { Router } from '@angular/router';
 import { Metadata } from '@memberjunction/core';
-import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { SetupAngularGraphQLClient } from '@memberjunction/ng-shared-generic';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJStartupValidationService, MJ_STARTUP_VALIDATION } from '../bootstrap.types';
@@ -40,7 +41,8 @@ export class MJInitializationService {
   constructor(
     private router: Router,
     private authBase: MJAuthBase,
-    @Inject(MJ_STARTUP_VALIDATION) private startupValidationService: MJStartupValidationService | null
+    @Inject(MJ_STARTUP_VALIDATION) private startupValidationService: MJStartupValidationService | null,
+    @Optional() private ngZone?: NgZone
   ) {}
 
   /**
@@ -63,7 +65,7 @@ export class MJInitializationService {
       environment.MJ_CORE_SCHEMA_NAME
     );
 
-    await setupGraphQLClient(config);
+    await SetupAngularGraphQLClient(config, this.ngZone);
     const end = Date.now();
     console.log(`✓ GraphQL Client Setup Complete: ${end - start}ms`);
 
@@ -128,11 +130,10 @@ export class MJInitializationService {
    * Navigate to the initial route after a successful login. A deep link is replayed
    * through the router; a bare `/` is left to the router's default route (the Home app).
    *
-   * @param document Unused since the Kendo drawer was removed; kept so existing callers
-   * (`AuthShellComponent`) and the deprecated alias keep compiling.
+   * @param _document No longer used; kept so existing callers (`AuthShellComponent`) and
+   *                  the deprecated alias keep compiling.
    */
-  NavigateToInitialRoute(initialPath: string, document: Document): void {
-    void document;
+  NavigateToInitialRoute(initialPath: string, _document: Document): void {
     localStorage.removeItem('jwt-retry-ts');
 
     if (initialPath !== '/') {

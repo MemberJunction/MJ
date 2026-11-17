@@ -99,4 +99,16 @@ describe('MagicLinkKeyManager ephemeral key reporting', () => {
     expect(manager.IsEphemeral).toBe(false);
     expect(manager.IsInitialized).toBe(false);
   });
+
+  it('B4: refuses ephemeral RSA keys in production when requireExplicitKeyInProduction is true', () => {
+    expect(() =>
+      manager.Initialize(undefined, { NODE_ENV: 'production' }, { requireExplicitKeyInProduction: true }),
+    ).toThrow(/Refusing to generate an ephemeral RSA signing key in production/);
+
+    // Also refuses if previously initialized ephemerally and then required in production
+    manager.Initialize(undefined, { NODE_ENV: 'development' });
+    expect(() =>
+      manager.Initialize(undefined, { NODE_ENV: 'production' }, { requireExplicitKeyInProduction: true }),
+    ).toThrow(/Refusing to use an ephemeral RSA signing key in production/);
+  });
 });

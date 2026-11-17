@@ -2124,6 +2124,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.isProcessing = this.IsProcessing;
     instance.userAvatarMap = this.UserAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
+    instance.IsLatestMessage = (index === messages.length - 1);
     instance.messageExtraTemplate = this.MessageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 
@@ -2245,6 +2246,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.isProcessing = this.IsProcessing;
     instance.userAvatarMap = this.UserAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
+    instance.IsLatestMessage = (index === messages.length - 1);
     instance.messageExtraTemplate = this.MessageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 

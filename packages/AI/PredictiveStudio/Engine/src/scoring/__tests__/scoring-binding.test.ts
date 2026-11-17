@@ -4,6 +4,7 @@ import type { MJMLModelScoringBindingEntity } from '@memberjunction/core-entitie
 
 import { UpsertScoringBinding, RecordScoringRun } from '../scoring-binding';
 import type { IEntityFactory } from '../../training';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Tests for the ML Model Scoring Binding helper (plan §4.6). The binding ties a
@@ -117,12 +118,14 @@ describe('upsertScoringBinding — update', () => {
   });
 
   it('throws the CompleteMessage when Save fails', async () => {
+    const errors = ConsoleCapture.Errors();
     const factory = new FakeEntityFactory(() => {
       const b = new FakeBinding();
       b.failNextSaveWith('FK violation on MLModelID');
       return b;
     });
     await expect(UpsertScoringBinding({ mlModelId: 'm', recordProcessId: 'rp' }, factory)).rejects.toThrow(/FK violation on MLModelID/);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("upsertScoringBinding: failed to save scoring binding for model 'm': FK violation on MLModelID")]);
   });
 });
 

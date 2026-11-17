@@ -47,7 +47,7 @@ const loadNgDashboardsComponentStudioDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (40 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (42 entries) ---
 const loadNgDashboardsCoreDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
@@ -71,7 +71,7 @@ const loadNgDashboardsIntegrationModule = {
   load: () => import('@memberjunction/ng-dashboards/integration.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./lists-dashboards.module (5 entries) ---
+// --- @memberjunction/ng-dashboards → ./lists-dashboards.module (6 entries) ---
 const loadNgDashboardsListsDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/lists-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/lists-dashboards.module').then(() => {})
@@ -89,7 +89,7 @@ const loadNgDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (3 entries) ---
+// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (7 entries) ---
 const loadNgDashboardsPredictiveStudioDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/predictive-studio-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module').then(() => {})
@@ -207,6 +207,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   // @memberjunction/ng-dashboards → ./core-dashboards.module
   'BaseApplication::HomeApplication': loadNgDashboardsCoreDashboardsModule,
   'BaseDashboard::EntityAdmin': loadNgDashboardsCoreDashboardsModule,
+  'BaseDashboard::HealthObservatoryDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseDashboard::ThemeManagerDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseDashboard::ThemeStudioDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::APIKeysResource': loadNgDashboardsCoreDashboardsModule,
@@ -225,6 +226,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::EventMonitorInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::GraphQLConsoleInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::GridWidthLabInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::HealthObservatoryResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::HomeDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::InteractionOperationsDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::LayoutInspector': loadNgDashboardsCoreDashboardsModule,
@@ -271,6 +273,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::ListsCategoriesResource': loadNgDashboardsListsDashboardsModule,
   'BaseResourceComponent::ListsMyListsResource': loadNgDashboardsListsDashboardsModule,
   'BaseResourceComponent::ListsOperationsResource': loadNgDashboardsListsDashboardsModule,
+  'BaseResourceComponent::ListsRefreshesResource': loadNgDashboardsListsDashboardsModule,
   'BaseResourceComponent::ListsSharedWithMeResource': loadNgDashboardsListsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./mcp.module
@@ -281,6 +284,10 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::DatabaseDesignerDashboard': loadNgDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
+  'BaseFormPanel::form-panel:MJMLEvaluationProtocols:versions': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLModels:evaluation': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLPredictionUnits:versions': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLTrainingPipelines:bindings': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioModelsResource': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioPredictionsResource': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioStudioResource': loadNgDashboardsPredictiveStudioDashboardsModule,
@@ -335,4 +342,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 135;
+export const LAZY_FEATURE_CONFIG_COUNT = 142;

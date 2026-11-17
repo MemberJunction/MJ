@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C4 -> S2.4",
+    "Description": "Gate G2.9 (phase 2, dataset C4, criterion S2.4): the leakage audit flags ProxyOfTarget, NextPeriodFlag and TicketCode, 3 of 3 (the reference flags the same three), and each flagged column is absent from the shipped model, 3 of 3 (the recorded sign-off for an override is Phase 3). The node also requires the audit's per-shift single-feature scores on the same development rows to equal the reference pipeline's within 1e-10, and keeps the lagged outcome PrevEscalated. It fails when the audit flags a column only for a next-period best shift (the same-period proxy ProxyOfTarget goes unflagged) or when the high-cardinality identifier check never fires (TicketCode goes unflagged).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.9\",\"owner:PR3\",\"phase:2\",\"dataset:C4\",\"criterion:S2.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The leakage audit flags ProxyOfTarget (same period), NextPeriodFlag (next period, with a time-shifted-label flag) and TicketCode (identifier), 3 of 3, as the reference pipeline does with per-shift scores within 1e-10; none of them reaches the shipped model and the lag PrevEscalated is kept (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c4-s2-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "82C9E2D3-BB70-43EA-825C-F070A46BA12B"
+  }
+}

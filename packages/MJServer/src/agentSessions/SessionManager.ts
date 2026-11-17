@@ -1,5 +1,5 @@
 import { IMetadataProvider, UserInfo, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { MJLruCache } from '@memberjunction/global';
+import { MJLruCache, NormalizeUUID } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
@@ -7,7 +7,7 @@ import {
 } from '@memberjunction/core-entities';
 import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
+import { RealtimeClientSessionService, RealtimeChannelServerHost, RealtimeMintSnapshotRegistry } from '@memberjunction/ai-agents';
 import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
 import { ParseSessionDeadlineMs, VerifyTimeLimitClaim } from './sessionDeadline.js';
 import { GetHostInstanceID } from './HostInstance.js';
@@ -87,6 +87,20 @@ export class SessionAuthorizationError extends Error {
  * this window are coalesced in-memory and dropped. Mirrors the `SetSettingDebounced` philosophy.
  */
 const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
+
+/**
+ * Normalized session ID → the close running for it in this process. Two closes of one session can overlap: the
+ * page-close beacon lands while the End mutation's close is still in flight, a host closes the session on `pagehide`
+ * as well, or the janitor sweeps a session its user is closing. Both would load the row as `Active` before either
+ * saves, so both would finalize the observability runs, notify the channel plugins and write the returning-visitor
+ * recap, and the later save would overwrite `CloseReason`/`ClosedAt`. A later caller joins the running close instead.
+ *
+ * Module scope, not an instance field: every resolver and the janitor construct their own `SessionManager`, and the
+ * overlapping closes arrive through different ones. Entries are removed when their close settles, so the map holds
+ * only closes in flight. Closes on two host instances can still overlap; the `Status === 'Closed'` check covers a
+ * close that finished first, and only a conditional UPDATE (`WHERE Status <> 'Closed'`) would close the window fully.
+ */
+const inFlightSessionCloses = new Map<string, Promise<boolean>>();
 
 /**
  * Server-side lifecycle manager for `AIAgentSession` **records** (not the media/socket transport —
@@ -199,6 +213,9 @@ export class SessionManager {
      *   A `'TimeLimit'` is verified against the session's stored deadline ({@link VerifyTimeLimitClaim}); a claim the
      *   deadline does not back is recorded as `'Explicit'` and logged, never refused.
      *
+     * Overlapping calls for one session ID in this process share one close (see {@link inFlightSessionCloses}): a later
+     * caller gets the running close's result, keeps its reason, and does no close work of its own.
+     *
      * @remarks P5 adds in-flight-run abort + `ClientToolRequestManager.ClearSession` here.
      */
     public async CloseSession(
@@ -208,6 +225,28 @@ export class SessionManager {
         closeReason: SessionCloseReason = 'Explicit',
         preloadedChannels?: MJAIAgentSessionChannelEntity[],
     ): Promise<boolean> {
+        const key = NormalizeUUID(agentSessionID);
+        const inFlight = inFlightSessionCloses.get(key);
+        if (inFlight) {
+            return inFlight;
+        }
+        const close = this.closeSessionOnce(agentSessionID, contextUser, provider, closeReason, preloadedChannels);
+        inFlightSessionCloses.set(key, close);
+        try {
+            return await close;
+        } finally {
+            inFlightSessionCloses.delete(key);
+        }
+    }
+
+    /** The close work behind {@link CloseSession}; runs once per overlapping set of calls for a session ID. */
+    private async closeSessionOnce(
+        agentSessionID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        closeReason: SessionCloseReason,
+        preloadedChannels: MJAIAgentSessionChannelEntity[] | undefined,
+    ): Promise<boolean> {
         const session = await this.loadSession(agentSessionID, contextUser, provider);
         if (!session) {
             return false;
@@ -215,6 +254,7 @@ export class SessionManager {
         this.heartbeatLastWrite.Delete(agentSessionID.toLowerCase());
 
         if (session.Status === 'Closed') {
+            this.deleteMintSnapshotBestEffort(agentSessionID);
             // Idempotent — already terminal. Still notify the channel-plugin host so a session
             // whose plugin instances live in THIS process is cleaned up even when another host
             // instance won the close race (the host no-ops for sessions it doesn't hold).
@@ -228,6 +268,7 @@ export class SessionManager {
         if (!closed) {
             return false;
         }
+        this.deleteMintSnapshotBestEffort(agentSessionID);
         if (session.RecordingStartedAt) {
             // A client-direct recording is assembled only after the grace period while its call is open
             // (a hidden tab must not rewrite recording.wav on every switch; see RealtimeRecordingHandler).
@@ -243,6 +284,19 @@ export class SessionManager {
         // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
         await WriteReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
+    }
+
+    /** Evicts any cached client-session mint snapshot for `agentSessionID`; best-effort so cleanup never blocks close. */
+    private deleteMintSnapshotBestEffort(agentSessionID: string): void {
+        try {
+            RealtimeMintSnapshotRegistry.Instance.Delete(agentSessionID);
+        } catch (err) {
+            LogError(
+                `SessionManager.CloseSession: failed to delete mint snapshot for ${agentSessionID}: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            );
+        }
     }
 
     /**

@@ -1,10 +1,10 @@
 # @memberjunction/ng-actions
 
-Reusable Angular components for testing and running MemberJunction Actions. This package provides a lightweight action test harness and parameter/result-code editing dialogs with no Kendo UI dependencies.
+Reusable Angular components for testing and running MemberJunction Actions. This package provides a lightweight action test harness and parameter/result-code editing dialogs with no third-party UI dependencies.
 
 ## Overview
 
-The `@memberjunction/ng-actions` package provides a self-contained set of components for interacting with MemberJunction Actions: executing them with custom parameter values, viewing results, and editing action parameter definitions and result codes. Unlike other MJ Angular packages, this module has no Kendo UI dependency, making it suitable for any Angular application.
+The `@memberjunction/ng-actions` package provides a self-contained set of components for interacting with MemberJunction Actions: executing them with custom parameter values, viewing results, and editing action parameter definitions and result codes. The module depends only on Angular and the MJ UI component kit, making it suitable for any Angular application.
 
 ```mermaid
 graph TD
@@ -125,7 +125,7 @@ import {
 - `@angular/core` ^21.x
 - `@angular/forms` ^21.x
 
-**Note**: This package does not depend on Kendo UI, making it lightweight and suitable for use in any Angular project.
+**Note**: This package pulls in no third-party UI library, making it lightweight and suitable for use in any Angular project.
 
 ## Build
 

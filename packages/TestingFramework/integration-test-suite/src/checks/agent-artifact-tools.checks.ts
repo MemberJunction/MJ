@@ -35,12 +35,13 @@
 import { RunView } from '@memberjunction/core';
 import type {
     MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity,
-    MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
+    MJArtifactVersionEntity, MJConversationDetailArtifactEntity } from '@memberjunction/core-entities';
 import { ArtifactToolManager } from '@memberjunction/ai-agents';
+import { SlideDeckEngine, SpreadsheetEngine } from '@memberjunction/core-entities';
 import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext, SkipCheck } from '@memberjunction/testing-integration';
 import type { AgentInvoker } from './_it-live-agent-harness';
 import { UserTurn } from './agent-live-shared';
-import type { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import type { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     ResolveClient, NewMarker, LoadAgentByName, Settle,
     ReadRun, ReadSteps, ReadPromptRunsForAgent, DeepDeleteRunTrees, DeleteMatching, RunWithCompliance,
@@ -66,7 +67,8 @@ const MANIFEST_EXPECTED = {
     xml: { grepPattern: '<name>\\w+</name>', grepMatchCount: 3 },
     md: { sentinelPattern: 'IT-MD-SENTINEL-Q3', sentinelMatchCount: 1 },
     pdf: { pageCount: 2, sentinel: 'IT-PDF-SENTINEL-Z5', sentinelPage: 1, title: 'IT Sample PDF', author: 'MJ Integration Tests' },
-    png: { sizeBytes: 69, sha256: '2e9b06dc65a4dec84a3eb3124553ec93ca27c78221e64ab2177d0f1412cfcb20' }
+    png: { sizeBytes: 69, sha256: '2e9b06dc65a4dec84a3eb3124553ec93ca27c78221e64ab2177d0f1412cfcb20' },
+    docx: { sentinel: 'IT-DOCX-SENTINEL-W8' }
 } as const;
 
 /** The checked-in asset bytes, embedded so artifacts are self-contained (no fs/cwd dependency). */
@@ -127,18 +129,28 @@ The word deterministic appears here, and deterministic appears here too.`;
 const ASSET_PDF_B64 = 'JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUiA1IDAgUl0gL0NvdW50IDIgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNyAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA5OSA+PgpzdHJlYW0KQlQKL0YxIDEyIFRmCjcyIDcyMCBUZAooSVQgU2FtcGxlIFBERiAtIFBhZ2UgT25lLiBJVC1QREYtU0VOVElORUwtWjUgaXMgdGhlIHNlbnRpbmVsIHBocmFzZS4pIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvUGFnZSAvUGFyZW50IDIgMCBSIC9NZWRpYUJveCBbMCAwIDYxMiA3OTJdIC9Db250ZW50cyA2IDAgUiAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA3IDAgUiA+PiA+PiA+PgplbmRvYmoKNiAwIG9iago8PCAvTGVuZ3RoIDY5ID4+CnN0cmVhbQpCVAovRjEgMTIgVGYKNzIgNzIwIFRkCihQYWdlIFR3byBjb250ZW50OiB0aGUgcXVpY2sgYnJvd24gZm94LikgVGoKRVQKZW5kc3RyZWFtCmVuZG9iago3IDAgb2JqCjw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PgplbmRvYmoKOCAwIG9iago8PCAvVGl0bGUgKElUIFNhbXBsZSBQREYpIC9BdXRob3IgKE1KIEludGVncmF0aW9uIFRlc3RzKSA+PgplbmRvYmoKeHJlZgowIDkKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDEyMSAwMDAwMCBuIAowMDAwMDAwMjQ3IDAwMDAwIG4gCjAwMDAwMDAzOTYgMDAwMDAgbiAKMDAwMDAwMDUyMiAwMDAwMCBuIAowMDAwMDAwNjQxIDAwMDAwIG4gCjAwMDAwMDA3MTEgMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA5IC9Sb290IDEgMCBSIC9JbmZvIDggMCBSID4+CnN0YXJ0eHJlZgo3ODYKJSVFT0YK';
 const ASSET_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4z8AAAAMBAQD3A0FDAAAAAElFTkSuQmCC';
 
+/** Minimal valid DOCX (ZIP + word/document.xml) containing IT-DOCX-SENTINEL-W8. */
+const ASSET_DOCX_B64 =
+    'UEsDBAoAAAAIAD2db13MVIwQ4AAAAJwBAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH2Qy07DMBBFf8XyFsUTukAIJekCyhJYlA+w7Eli4Zc8bil/z6QtXaDC0r6PM7rd+hC82GMhl2Ivb1UrBUaTrItTL9+3z829XA/d9isjCbZG6uVca34AIDNj0KRSxsjKmErQlZ9lgqzNh54QVm17BybFirE2demQQ/eEo975KjYH/j5hC3qS4vFkXFi91Dl7Z3RlHfbR/qI0Z4Li5NFDs8t0wwYJVwmL8jfgnHvlHYqzKN50qS86sAs+U7Fgk9kFTqr/a67cmcbRGbzkl7ZckkEiHjh4dVGCdvHnfjjOPXwDUEsDBAoAAAAAAD2db10AAAAAAAAAAAAAAAAGAAAAX3JlbHMvUEsDBAoAAAAIAD2db102V97cogAAABgBAAALAAAAX3JlbHMvLnJlbHONzzsOwjAMBuCrRN6pCwNCqGkXhNQVlQNEiZtGNA8l4XV7MjBQxMBo+/dnuekedmY3isl4x2Fd1cDISa+M0xzOw3G1g65tTjSLXBJpMiGxsuIShynnsEdMciIrUuUDuTIZfbQilzJqDEJehCbc1PUW46cBS5P1ikPs1RrY8Az0j+3H0Ug6eHm15PKPE1+JIouoKXO4+6hQvdtVYQHbBhcvti9QSwMECgAAAAAAPZ1vXQAAAAAAAAAAAAAAAAUAAAB3b3JkL1BLAwQKAAAACAA9nW9dOyu37aoAAADaAAAAEQAAAHdvcmQvZG9jdW1lbnQueG1sRY7LCsIwFER/JWSfprqQUvpYaIWC1EUjuo1JbAvNgyRa/XuTunBzhssMh1vUbzmDl7Bu0qqEmySFQCim+aSGEl7IEWWwrool55o9pVAehL1y+VLC0XuTY+zYKCR1iTZChe6hraQ+nHbAi7bcWM2Ec0EnZ7xN0x2WdFIwKu+af2KaCBvhq5aAnkozC3A472+gJSgm6puOtF1zQteswHEXaVealT8X/v9ZfQFQSwECFAAKAAAACAA9nW9dzFSMEOAAAACcAQAAEwAAAAAAAAAAAAAAAAAAAAAAW0NvbnRlbnRfVHlwZXNdLnhtbFBLAQIUAAoAAAAAAD2db10AAAAAAAAAAAAAAAAGAAAAAAAAAAAAEAAAABEBAABfcmVscy9QSwECFAAKAAAACAA9nW9dNlfe3KIAAAAYAQAACwAAAAAAAAAAAAAAAAA1AQAAX3JlbHMvLnJlbHNQSwECFAAKAAAAAAA9nW9dAAAAAAAAAAAAAAAABQAAAAAAAAAAABAAAAAAAgAAd29yZC9QSwECFAAKAAAACAA9nW9dOyu37aoAAADaAAAAEQAAAAAAAAAAAAAAAAAjAgAAd29yZC9kb2N1bWVudC54bWxQSwUGAAAAAAUABQAgAQAA/AIAAAAA';
+
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonRecord | JsonValue[];
+interface JsonRecord {
+    [key: string]: JsonValue | undefined;
+}
+
 /** The `result` object inside a Tool step's CarryForwardToolStepOutput. */
 interface ToolStepResult {
     tool: string;
     artifactId: string;
-    result: { success: boolean; data: unknown; errorMessage?: string };
+    result: { success: boolean; data: JsonValue | undefined; errorMessage?: string };
 }
 
 /** Module-level fixture (no IntegrationCheckContext slot — the framework package is not modified). */
 interface ArtifactToolsFixture {
     Client?: AgentInvoker;
     ReaderID: string;
-    Reader?: MJAIAgentEntity;
+    Reader?: MJAIAgentEntityExtended;
     EnvironmentID?: string;
     TypeIds: Record<string, string>;
     CreatedRootRunIds: string[];
@@ -218,28 +230,20 @@ async function attachArtifact(
 /** Run IT: Artifact Reader from a conversation detail and return the persisted root run ID. */
 async function runReader(fx: ArtifactToolsFixture, conversationDetailId: string, userMessage: string): Promise<string | undefined> {
     if (!fx.Client || !fx.Reader) return undefined;
-    // 🚨 The instruction MUST be passed as the turn's message, not left implicit in the
-    // ConversationDetail. `conversationDetailId` links the run to the conversation and carries the
-    // ARTIFACTS; it does not deliver the user's text to the prompt — the production resolver builds
-    // `conversationMessages` from the conversation and passes them explicitly, and this harness must
-    // do the same. Passing `[]` here (as it originally did) meant the reader was told "call get_rows
-    // with this input" only in a database row the model never sees; it then guessed, and seven
-    // checks reported `model-noncompliance:` for an instruction that was never delivered. Its own
-    // reasoning gave it away: "User message does not explicitly restate a tool call in this turn".
-    // Server-in-process (Q8): the reader runs against the conversation detail — the artifacts
-    // reach the run via the MJ: Conversation Detail Artifacts junction + conversationDetailId,
-    // exactly as the wire RunAIAgentFromConversationDetail path did, but synchronously.
-    const result = await fx.Client.RunAIAgent(
-        { agent: fx.Reader, conversationDetailId, conversationMessages: UserTurn(userMessage) } as unknown as ExecuteAgentParams
-    );
+    const params: ExecuteAgentParams = {
+        agent: fx.Reader,
+        conversationDetailId,
+        conversationMessages: UserTurn(userMessage),
+    };
+    const result: ExecuteAgentResult = await fx.Client.RunAIAgent(params);
     await Settle(2500); // let the fire-and-forget Tool/prompt step saves flush
-    const runId = (result as unknown as { agentRun?: { ID?: string } }).agentRun?.ID;
+    const runId = result.agentRun?.ID;
     if (runId) fx.CreatedRootRunIds.push(runId);
     return runId;
 }
 
 /** Build the imperative tool-call instruction the reader copies verbatim. */
-function toolInstruction(tool: string, input: Record<string, unknown>): string {
+function toolInstruction(tool: string, input: JsonRecord): string {
     return `Call exactly one artifact tool now against artifact A. tool: "${tool}". input: ${JSON.stringify(input)}. ` +
         `Copy artifactId "A", the tool name, and the input object verbatim into a single artifactToolCalls entry.`;
 }
@@ -265,7 +269,7 @@ async function readToolResult(ctx: IntegrationCheckContext, runId: string): Prom
 async function interrogate(
     ctx: IntegrationCheckContext, fx: ArtifactToolsFixture,
     typeName: string, mimeType: string, content: string, isBinary: boolean,
-    tool: string, input: Record<string, unknown>, label: string
+    tool: string, input: JsonRecord, label: string
 ): Promise<ToolStepResult> {
     const runId = await RunWithCompliance(
         async () => {
@@ -291,8 +295,19 @@ async function interrogate(
     return tr!;
 }
 
-function asRecord(v: unknown): Record<string, unknown> {
-    return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+function asRecord(v: JsonValue | undefined): JsonRecord {
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+}
+
+function asRecordArray(v: JsonValue | undefined): JsonRecord[] {
+    if (!Array.isArray(v)) return [];
+    const out: JsonRecord[] = [];
+    for (const item of v) {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+            out.push(item);
+        }
+    }
+    return out;
 }
 
 export const ArtifactToolsChecks: NamedCheck[] = [
@@ -327,7 +342,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             const tr = await interrogate(ctx, fx, 'CSV', 'text/csv', ASSET_CSV, false, 'get_rows', { start: 0, count: 5 }, 'AT2 CSV get_rows');
             const data = asRecord(tr.result.data);
             AssertEqual(data.total, MANIFEST_EXPECTED.csv.rowCount, 'AT2: CSV total row count');
-            const rows = Array.isArray(data.rows) ? (data.rows as Array<Record<string, unknown>>) : [];
+            const rows = asRecordArray(data.rows);
             AssertEqual(rows.length, 5, 'AT2: get_rows returned all 5 rows');
             AssertEqual(rows[0]?.Customer, MANIFEST_EXPECTED.csv.cells.row0Customer, 'AT2: row0.Customer');
             AssertEqual(rows[2]?.Amount, MANIFEST_EXPECTED.csv.cells.row2Amount, 'AT2: row2.Amount');
@@ -359,7 +374,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             AssertEqual(asRecord(pc.result.data).pageCount, MANIFEST_EXPECTED.pdf.pageCount, 'AT4: PDF page count');
 
             const st = await interrogate(ctx, fx, 'PDF', 'application/pdf', ASSET_PDF_B64, true, 'search_text', { query: MANIFEST_EXPECTED.pdf.sentinel }, 'AT4 search_text');
-            const matches = Array.isArray(asRecord(st.result.data).matches) ? (asRecord(st.result.data).matches as Array<Record<string, unknown>>) : [];
+            const matches = asRecordArray(asRecord(st.result.data).matches);
             Assert(matches.length > 0, 'AT4: search_text did not find the seeded PDF sentinel');
             AssertEqual(matches[0]?.page, MANIFEST_EXPECTED.pdf.sentinelPage, 'AT4: sentinel located on the wrong page');
 
@@ -375,7 +390,10 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip();
             const tr = await interrogate(ctx, fx, 'Markdown Document', 'text/markdown', ASSET_MD, false, 'grep', { pattern: MANIFEST_EXPECTED.md.sentinelPattern }, 'AT5 MD grep');
-            const matches = Array.isArray(tr.result.data) ? (tr.result.data as unknown[]) : [];
+            const rawData = tr.result.data;
+            const matches = Array.isArray(rawData)
+                ? rawData
+                : asRecordArray(asRecord(rawData).matches);
             AssertEqual(matches.length, MANIFEST_EXPECTED.md.sentinelMatchCount, 'AT5: markdown grep match count');
         }
     },
@@ -386,8 +404,11 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip();
             // XML artifact type has no ToolLibraryClass → composite chain resolves to TextToolLibrary; grep works.
-            const tr = await interrogate(ctx, fx, 'XML', 'application/xml', ASSET_XML, false, 'grep', { pattern: MANIFEST_EXPECTED.xml.grepPattern }, 'AT6 XML grep');
-            const matches = Array.isArray(tr.result.data) ? (tr.result.data as unknown[]) : [];
+            const tr = await interrogate(ctx, fx, 'XML', 'application/xml', ASSET_XML, false, 'grep', { pattern: MANIFEST_EXPECTED.xml.grepPattern, use_regex: true }, 'AT6 XML grep');
+            const rawData = tr.result.data;
+            const matches = Array.isArray(rawData)
+                ? rawData
+                : asRecordArray(asRecord(rawData).matches);
             AssertEqual(matches.length, MANIFEST_EXPECTED.xml.grepMatchCount, 'AT6: XML grep <name> match count (via TextToolLibrary fallback)');
         }
     },
@@ -450,7 +471,12 @@ export const ArtifactToolsChecks: NamedCheck[] = [
                 'AT9 large-text'
             );
             const tr = await readToolResult(ctx, runId);
-            const matches = tr && Array.isArray(tr.result.data) ? (tr.result.data as unknown[]) : [];
+            const rawData = tr?.result.data;
+            const matches = Array.isArray(rawData)
+                ? rawData
+                : rawData && typeof rawData === 'object' && Array.isArray(asRecord(rawData).matches)
+                  ? (asRecord(rawData).matches as Array<{ lineNumber?: number; text?: string }>)
+                  : [];
             Assert(matches.length === 1, 'AT9: the tool did not reach into the large (tools-only) artifact content');
 
             // The 60k body must NOT have been inlined into the prompt (tools-only delivery for large artifacts).
@@ -467,6 +493,186 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             const bodyProbe = 'x'.repeat(10_000); // a slab only the inlined 60k body could contain
             Assert(!allMessages.includes(bodyProbe), 'AT9: large artifact CONTENT was inlined into the prompt (context blow-up)');
         }
+    },
+    {
+        Id: 'agent-artifact-tools.AT10',
+        Name: 'AT10: DocumentToolLibrary mutating tools (insert_block_after & NW-3 propose_suggestion) via live agent loop',
+        RequiresLiveModel: true,
+        Fn: async (ctx): Promise<void> => {
+            const fx = guardOrSkip();
+            const insertRes = await interrogate(
+                ctx,
+                fx,
+                'Markdown Document',
+                'text/markdown',
+                ASSET_MD,
+                false,
+                'insert_block_after',
+                { markdown: '## Appended Section\n\nIT-AT10-INSERTED-BLOCK' },
+                'AT10 Document insert_block_after',
+            );
+            Assert(insertRes.result.success, `AT10 insert_block_after failed: ${insertRes.result.errorMessage ?? ''}`);
+            const insertData = asRecord(insertRes.result.data);
+            const updatedDoc = typeof insertData.updatedContent === 'string' ? insertData.updatedContent : '';
+            Assert(updatedDoc.includes('IT-AT10-INSERTED-BLOCK'), 'AT10: updatedContent missing inserted markdown block');
+            Assert(typeof insertData.revisionHash === 'string' && insertData.revisionHash.length > 0, 'AT10: revisionHash missing');
+
+            const suggestRes = await interrogate(
+                ctx,
+                fx,
+                'Markdown Document',
+                'text/markdown',
+                ASSET_MD,
+                false,
+                'propose_suggestion',
+                {
+                    originalSlice: 'The quick brown fox jumps over the lazy dog.',
+                    proposedReplacement: 'The agile silver fox leaps gracefully.',
+                    rationale: 'Clearer phrasing for executive summary.',
+                },
+                'AT10 Document propose_suggestion',
+            );
+            Assert(suggestRes.result.success, `AT10 propose_suggestion failed: ${suggestRes.result.errorMessage ?? ''}`);
+        }
+    },
+    {
+        Id: 'agent-artifact-tools.AT11',
+        Name: 'AT11: SpreadsheetToolLibrary mutating tools (write_cells with =SUM formula & NW-4 merge_cells) via live agent loop',
+        RequiresLiveModel: true,
+        Fn: async (ctx): Promise<void> => {
+            const fx = guardOrSkip();
+            const wbJson = SpreadsheetEngine.Instance.SerializeWorkbook(
+                SpreadsheetEngine.Instance.CreateEmptyWorkbook('IT AT11 Workbook'),
+            );
+            const writeRes = await interrogate(
+                ctx,
+                fx,
+                'Excel Spreadsheet',
+                'application/vnd.mj.spreadsheet+json',
+                wbJson,
+                false,
+                'write_cells',
+                {
+                    cells: [
+                        { address: 'B2', value: 120, formatType: 'number' },
+                        { address: 'B3', value: 80, formatType: 'number' },
+                        { address: 'B4', formula: '=SUM(B2:B3)', formatType: 'number' },
+                    ],
+                },
+                'AT11 Spreadsheet write_cells',
+            );
+            Assert(writeRes.result.success, `AT11 write_cells failed: ${writeRes.result.errorMessage ?? ''}`);
+            const updatedCells = asRecordArray(asRecord(writeRes.result.data).updatedCells);
+            const b4 = updatedCells.find((c) => c.address === 'B4');
+            AssertEqual(b4?.computedValue, 200, 'AT11: =SUM(B2:B3) computedValue must equal 200');
+
+            const mergeRes = await interrogate(
+                ctx,
+                fx,
+                'Excel Spreadsheet',
+                'application/vnd.mj.spreadsheet+json',
+                wbJson,
+                false,
+                'merge_cells',
+                { range: 'A1:B1' },
+                'AT11 Spreadsheet merge_cells',
+            );
+            Assert(mergeRes.result.success, `AT11 merge_cells failed: ${mergeRes.result.errorMessage ?? ''}`);
+            const mergeUpdated = typeof asRecord(mergeRes.result.data).updatedContent === 'string'
+                ? (asRecord(mergeRes.result.data).updatedContent as string)
+                : '';
+            Assert(mergeUpdated.includes('A1:B1'), 'AT11: merged range A1:B1 must persist in updatedContent');
+        }
+    },
+    {
+        Id: 'agent-artifact-tools.AT12',
+        Name: 'AT12: SlideDeckToolLibrary mutating tool (add_slide) via live agent loop',
+        RequiresLiveModel: true,
+        Fn: async (ctx): Promise<void> => {
+            const fx = guardOrSkip();
+            const deck = SlideDeckEngine.Instance.ConvertMarkdownToSlideDeck('# Baseline Title\n\nOverview.', 'IT AT12 Deck');
+            const deckJson = JSON.stringify(deck);
+            const addRes = await interrogate(
+                ctx,
+                fx,
+                'Presentation',
+                'application/vnd.mj.presentation+json',
+                deckJson,
+                false,
+                'add_slide',
+                {
+                    layout: 'TitleAndBody',
+                    title: 'IT-AT12 Mutated Slide',
+                    markdownContent: 'Added dynamically through SlideDeckToolLibrary.',
+                    speakerNotes: 'Speaker note sentinel IT-AT12-NOTE',
+                },
+                'AT12 SlideDeck add_slide',
+            );
+            Assert(addRes.result.success, `AT12 add_slide failed: ${addRes.result.errorMessage ?? ''}`);
+            const updatedDeck = typeof asRecord(addRes.result.data).updatedContent === 'string'
+                ? (asRecord(addRes.result.data).updatedContent as string)
+                : '';
+            Assert(updatedDeck.includes('IT-AT12 Mutated Slide'), 'AT12: new slide title must persist in updatedContent');
+            Assert(updatedDeck.includes('IT-AT12-NOTE'), 'AT12: speaker notes must persist in updatedContent');
+        }
+    },
+    {
+        Id: 'agent-artifact-tools.AT13',
+        Name: 'AT13: WhiteboardToolLibrary mutating tool (upsert_nodes) via live agent loop',
+        RequiresLiveModel: true,
+        Fn: async (ctx): Promise<void> => {
+            const fx = guardOrSkip();
+            const wbInit = JSON.stringify({
+                version: 1,
+                activePageId: 'page-1',
+                pages: [{ id: 'page-1', name: 'Page 1', items: [], author: 'user' }],
+            });
+            const wbRes = await interrogate(
+                ctx,
+                fx,
+                'Whiteboard',
+                'application/json',
+                wbInit,
+                false,
+                'upsert_nodes',
+                {
+                    nodes: [
+                        { id: 'n-api', label: 'IT-AT13 Gateway', shape: 'rect', x: 80, y: 120 },
+                        { id: 'n-store', label: 'IT-AT13 SQL Store', shape: 'ellipse', x: 340, y: 120 },
+                    ],
+                },
+                'AT13 Whiteboard upsert_nodes',
+            );
+            Assert(wbRes.result.success, `AT13 upsert_nodes failed: ${wbRes.result.errorMessage ?? ''}`);
+            const updatedWb = typeof asRecord(wbRes.result.data).updatedContent === 'string'
+                ? (asRecord(wbRes.result.data).updatedContent as string)
+                : '';
+            Assert(updatedWb.includes('IT-AT13 Gateway') && updatedWb.includes('IT-AT13 SQL Store'), 'AT13: upserted whiteboard nodes must persist in updatedContent');
+        }
+    },
+    {
+        Id: 'agent-artifact-tools.AT14',
+        Name: 'AT14: DocxToolLibrary get_text extracts expected text sentinel from valid Word Document (.docx)',
+        RequiresLiveModel: true,
+        Fn: async (ctx): Promise<void> => {
+            const fx = guardOrSkip();
+            const tr = await interrogate(
+                ctx,
+                fx,
+                'Word Document',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                ASSET_DOCX_B64,
+                true,
+                'get_text',
+                {},
+                'AT14 DOCX get_text',
+            );
+            Assert(tr.result.success, `AT14 DocxToolLibrary.get_text failed: ${tr.result.errorMessage ?? ''}`);
+            const extracted = typeof asRecord(tr.result.data).text === 'string'
+                ? (asRecord(tr.result.data).text as string)
+                : '';
+            Assert(extracted.includes(MANIFEST_EXPECTED.docx.sentinel), `AT14: extracted DOCX text missing sentinel ${MANIFEST_EXPECTED.docx.sentinel}`);
+        }
     }
 ];
 
@@ -481,13 +687,20 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-artifact-tools', {
             ConversationIds: [], ArtifactIds: [], ArtifactVersionIds: [], JunctionIds: []
         };
         const client = ResolveClient(ctx.Provider, ctx.User);
-        const reader = await LoadAgentByName(ctx.Provider, ctx.User, 'IT: Artifact Reader');
-        if (!reader) {
+        const readerRow = await LoadAgentByName(ctx.Provider, ctx.User, 'IT: Artifact Reader');
+        if (!readerRow) {
             fixture.Skip = "'IT: Artifact Reader' agent not seeded — run: npx mj sync push --dir=metadata-optional/integration-test";
             return;
         }
+        const reader = await ctx.Provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', ctx.User);
+        if (!(await reader.Load(readerRow.ID))) {
+            throw new Error(`Failed loading MJAIAgentEntityExtended for '${readerRow.ID}'`);
+        }
         // Resolve the artifact type IDs the bundle attaches to.
-        const typeNames = ['JSON', 'CSV', 'PDF', 'Markdown Document', 'XML', 'Generic Binary', 'Generic Text'];
+        const typeNames = [
+            'JSON', 'CSV', 'PDF', 'Markdown Document', 'XML', 'Generic Binary', 'Generic Text',
+            'Excel Spreadsheet', 'Presentation', 'Whiteboard', 'Word Document',
+        ];
         const types = await new RunView().RunView<{ ID: string; Name: string }>({
             EntityName: 'MJ: Artifact Types',
             ExtraFilter: `Name IN (${typeNames.map((n) => `'${n}'`).join(',')})`,
@@ -513,8 +726,32 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-artifact-tools', {
         if (!fx) return;
         // 1. Run trees (steps → prompt runs → runs) the reader spawned.
         await DeepDeleteRunTrees(ctx.Provider, ctx.User, fx.CreatedRootRunIds);
-        // 2. Junctions → versions → artifacts (FK order).
+        // 2. Junctions → ALL versions (including live v2+ versions created during AT10–AT13) → artifacts (FK order).
+        const rv = new RunView();
         for (const id of fx.JunctionIds) await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Conversation Detail Artifacts', `ID='${id}'`);
+        for (const convId of fx.ConversationIds) {
+            const detailRes = await rv.RunView<{ ID: string }>(
+                { EntityName: 'MJ: Conversation Details', ExtraFilter: `ConversationID='${convId}'`, Fields: ['ID'], ResultType: 'simple' },
+                ctx.User,
+            );
+            if (detailRes.Success) {
+                for (const d of detailRes.Results) {
+                    await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Conversation Detail Artifacts', `ConversationDetailID='${d.ID}'`);
+                }
+            }
+        }
+        for (const artId of fx.ArtifactIds) {
+            const verRes = await rv.RunView<{ ID: string }>(
+                { EntityName: 'MJ: Artifact Versions', ExtraFilter: `ArtifactID='${artId}'`, Fields: ['ID'], OrderBy: 'VersionNumber DESC', ResultType: 'simple' },
+                ctx.User,
+            );
+            if (verRes.Success) {
+                for (const v of verRes.Results) {
+                    await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Conversation Detail Artifacts', `ArtifactVersionID='${v.ID}'`);
+                }
+            }
+            await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Artifact Versions', `ArtifactID='${artId}'`);
+        }
         for (const id of fx.ArtifactVersionIds) await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Artifact Versions', `ID='${id}'`);
         for (const id of fx.ArtifactIds) await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Artifacts', `ID='${id}'`);
         // 3. All conversation details (user + any agent responses) → conversations.

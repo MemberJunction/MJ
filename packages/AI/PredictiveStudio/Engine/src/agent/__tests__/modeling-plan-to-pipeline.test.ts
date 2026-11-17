@@ -32,7 +32,7 @@ function baseSpec(overrides: Partial<ModelingPlanSpec> = {}): ModelingPlanSpec {
   };
 }
 
-describe('modelingPlanToPipelineConfig', () => {
+describe('ModelingPlanToPipelineConfig', () => {
   it('maps the plan into a concrete, trainable pipeline configuration', () => {
     const cfg = ModelingPlanToPipelineConfig(baseSpec());
     expect(cfg.targetEntityName).toBe('Memberships');
@@ -40,7 +40,18 @@ describe('modelingPlanToPipelineConfig', () => {
     expect(cfg.problemType).toBe('classification');
     expect(cfg.sourceBindings).toEqual([{ Kind: 'Entity', Ref: 'Memberships' }]);
     expect(cfg.asOf).toEqual({ Mode: 'none' });
-    expect(cfg.validation).toEqual({ Strategy: 'holdout', TestSize: undefined, K: undefined, LockedHoldoutFraction: 0.2 });
+    expect(cfg.validation).toEqual({ Strategy: 'holdout', TestSize: undefined, K: undefined });
+  });
+
+  it("does not carry the plan's LockedHoldoutFraction: the bound Evaluation Protocol decides the holdout", () => {
+    const cfg = ModelingPlanToPipelineConfig(baseSpec({ ValidationStrategy: { Strategy: 'kfold', K: 5, LockedHoldoutFraction: 0.2 } }));
+    expect(cfg.validation).not.toHaveProperty('LockedHoldoutFraction');
+    expect(JSON.parse(JSON.stringify(cfg.validation))).toEqual({ Strategy: 'kfold', K: 5 });
+  });
+
+  it('builds a validation strategy from a plan that proposes no holdout share', () => {
+    const cfg = ModelingPlanToPipelineConfig(baseSpec({ ValidationStrategy: { Strategy: 'kfold', K: 5 } }));
+    expect(JSON.parse(JSON.stringify(cfg.validation))).toEqual({ Strategy: 'kfold', K: 5 });
   });
 
   it('chooses the highest-priority (lowest Priority number) experiment for the algorithm', () => {
@@ -164,7 +175,7 @@ describe('modelingPlanToPipelineConfig — evaluation settings and refusals (I2)
     const cfg = ModelingPlanToPipelineConfig(baseSpec({
       ValidationStrategy: { Strategy: 'holdout', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' },
     }));
-    expect(cfg.validation).toEqual({ Strategy: 'holdout', TestSize: undefined, K: undefined, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' });
+    expect(cfg.validation).toEqual({ Strategy: 'holdout', TestSize: undefined, K: undefined, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' });
   });
 
   it('leaves both settings off when the plan does not set them', () => {

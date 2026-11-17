@@ -9,18 +9,30 @@ import { Uuidv4 } from './util';
  * Global class used for coordinating events, creating class instances, and managing components across MemberJunction
  */
 export class MJGlobal extends BaseSingleton<MJGlobal> {
+    /**
+     * Event codes excluded from {@link _eventsReplaySubject} retention while still delivered
+     * synchronously to all live subscribers (both `GetEventListener(false)` and active
+     * `GetEventListener(true)` listeners).
+     *
+     * `BaseEntityEvent` fires on every entity load, save, delete, and `NewRecord()` call and
+     * carries the `BaseEntity` instance (plus its bound per-request `DatabaseProviderBase`) in
+     * `event.args`. Retaining it in the 100-slot replay buffer pins up to 100 entity graphs in
+     * memory for 30s and evicts one-shot initialization events such as `LoggedIn` during boot.
+     */
+    public static readonly NonReplayableEventCodes: Set<string> = new Set(['BaseEntityEvent']);
+
     // subjects for observables to handle eventing
     private _eventsSubject: Subject<MJ.MJEvent> = new Subject();
     // ReplaySubject configured to prevent memory leaks while supporting late subscribers:
     // - bufferSize: 100 events (sufficient for initialization scenarios like login events)
     // - windowTime: 30000ms (30 seconds - adequate for slow-loading components)
-    // Note: Backend services primarily use non-replay mode, but events are still stored in
-    // this buffer via RaiseEvent(). Time-based expiration prevents unbounded memory growth.
+    // Note: High-frequency non-replayable events (see NonReplayableEventCodes) bypass this
+    // buffer so initialization events are not evicted and entity instances are not retained.
     private _eventsReplaySubject: ReplaySubject<MJ.MJEvent> = new ReplaySubject(100, 30000);
 
     // Convert the Subjects to Observables for public use.
     private _events$: Observable<MJ.MJEvent> = this._eventsSubject.asObservable();
-    private _eventsReplay$: Observable<MJ.MJEvent> = this._eventsReplaySubject.asObservable();
+    private _eventsReplay$: Observable<MJ.MJEvent> = this.createReplayAndLiveObservable();
 
     private _components: MJ.IMJComponent[] = [];
 
@@ -71,7 +83,35 @@ export class MJGlobal extends BaseSingleton<MJGlobal> {
 
         // Convert the Subjects to Observables for public use.
         this._events$ = this._eventsSubject.asObservable();
-        this._eventsReplay$ = this._eventsReplaySubject.asObservable();
+        this._eventsReplay$ = this.createReplayAndLiveObservable();
+    }
+
+    /**
+     * Builds an observable that synchronously drains the current {@link _eventsReplaySubject}
+     * buffer on subscribe (matching `ReplaySubject` semantics) and then delegates live delivery
+     * to {@link _eventsSubject}. This ensures active `GetEventListener(true)` subscribers still
+     * receive live {@link NonReplayableEventCodes} events without retaining those events in the
+     * replay buffer.
+     */
+    private createReplayAndLiveObservable(): Observable<MJ.MJEvent> {
+        const replaySubject = this._eventsReplaySubject;
+        const liveSubject = this._eventsSubject;
+        return new Observable<MJ.MJEvent>((subscriber) => {
+            const buffered: MJ.MJEvent[] = [];
+            const replaySub = replaySubject.subscribe({
+                next: (event) => buffered.push(event),
+                error: (err) => subscriber.error(err),
+            });
+            replaySub.unsubscribe();
+            if (subscriber.closed) {
+                return undefined;
+            }
+            const liveSub = liveSubject.subscribe(subscriber);
+            for (let i = 0; i < buffered.length && !subscriber.closed; i++) {
+                subscriber.next(buffered[i]);
+            }
+            return liveSub;
+        });
     }
 
     /**
@@ -80,7 +120,9 @@ export class MJGlobal extends BaseSingleton<MJGlobal> {
      */
     public RaiseEvent(event: MJ.MJEvent) {
         this._eventsSubject.next(event);
-        this._eventsReplaySubject.next(event);
+        if (!event.eventCode || !MJGlobal.NonReplayableEventCodes.has(event.eventCode)) {
+            this._eventsReplaySubject.next(event);
+        }
     }
 
     /**

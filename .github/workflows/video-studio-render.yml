@@ -81,12 +81,8 @@ jobs:
       - name: Install system ffmpeg and Chromium libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            ffmpeg \
-            fonts-dejavu-core \
-            fonts-liberation \
-            fonts-noto-color-emoji \
-            fonts-noto-core \
+          PKGS="ffmpeg fonts-dejavu-core fonts-liberation fonts-noto-color-emoji fonts-noto-core"
+          for pkg in \
             libasound2 \
             libatk-bridge2.0-0 \
             libatk1.0-0 \
@@ -109,7 +105,15 @@ jobs:
             libxfixes3 \
             libxkbcommon0 \
             libxrandr2 \
-            libxshmfence1
+            libxshmfence1; do
+            if apt-cache policy "${pkg}t64" 2>/dev/null | grep -q 'Candidate: [0-9]'; then
+              PKGS="$PKGS ${pkg}t64"
+            else
+              PKGS="$PKGS $pkg"
+            fi
+          done
+          # shellcheck disable=SC2086
+          sudo apt-get install -y --no-install-recommends $PKGS
 
       - name: Set up workspace
         uses: ./.github/actions/mj-setup
@@ -157,16 +161,14 @@ jobs:
           VIDEO_STUDIO_RENDER_TESTS: '1'
           VIDEO_STUDIO_RENDER_TESTS_REQUIRED: '1'
         run: |
-          RAW="$(pnpm --filter @memberjunction/video-studio-render-worker exec vitest run \
+          pnpm --filter @memberjunction/video-studio-render-worker exec vitest run \
             src/__tests__/hyperframes.render.test.ts \
             src/__tests__/checks.render.test.ts \
             src/__tests__/chart-kit.render.test.ts \
-            --reporter=json)"
+            --reporter=default --reporter=json --outputFile=/tmp/render-worker-vitest.json
           node -e '
-            const out = process.argv[1];
-            const start = out.indexOf("{");
-            if (start < 0) { console.error("::error::No JSON report from RenderWorker vitest"); process.exit(1); }
-            const report = JSON.parse(out.slice(start, out.lastIndexOf("}") + 1));
+            const fs = require("node:fs");
+            const report = JSON.parse(fs.readFileSync("/tmp/render-worker-vitest.json", "utf8"));
             const passed = report.numPassedTests ?? 0;
             const failed = report.numFailedTests ?? 0;
             const skipped = (report.numPendingTests ?? 0) + (report.numTodoTests ?? 0);
@@ -175,7 +177,7 @@ jobs:
               console.error(`::error::Expected all RenderWorker real-render tests to execute and pass (passed=${passed}, failed=${failed}, skipped=${skipped})`);
               process.exit(1);
             }
-          ' "$RAW"
+          '
 
       - name: Run Engine LocalWorker and Docker real-render suites (WS1-3)
         env:
@@ -184,15 +186,13 @@ jobs:
           VIDEO_STUDIO_DOCKER_TESTS: '1'
           VIDEO_STUDIO_DOCKER_TESTS_REQUIRED: '1'
         run: |
-          RAW="$(pnpm --filter @memberjunction/video-studio exec vitest run \
+          pnpm --filter @memberjunction/video-studio exec vitest run \
             src/__tests__/local-worker-render-driver.test.ts \
             src/__tests__/docker-render-driver.test.ts \
-            --reporter=json)"
+            --reporter=default --reporter=json --outputFile=/tmp/engine-vitest.json
           node -e '
-            const out = process.argv[1];
-            const start = out.indexOf("{");
-            if (start < 0) { console.error("::error::No JSON report from Engine vitest"); process.exit(1); }
-            const report = JSON.parse(out.slice(start, out.lastIndexOf("}") + 1));
+            const fs = require("node:fs");
+            const report = JSON.parse(fs.readFileSync("/tmp/engine-vitest.json", "utf8"));
             const passed = report.numPassedTests ?? 0;
             const failed = report.numFailedTests ?? 0;
             const skipped = (report.numPendingTests ?? 0) + (report.numTodoTests ?? 0);
@@ -201,4 +201,4 @@ jobs:
               console.error(`::error::Expected all Engine real-render driver tests to execute and pass (passed=${passed}, failed=${failed}, skipped=${skipped})`);
               process.exit(1);
             }
-          ' "$RAW"
+          '

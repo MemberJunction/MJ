@@ -208,3 +208,35 @@ Bound the data sample used to build a column corpus + lightweight PK guess (NOT 
 | `MJ_INTEGRATION_FULL_PUSH_MAX_RECORDS` | unset = unbounded | Cap on records pushed in a single full push. |
 | `MJ_INTEGRATION_MAX_RUNS_PER_CI` | 100 | Run-history rows retained per CompanyIntegration (≤0 disables pruning). |
 | `MJ_INTEGRATION_VERBOSE_RECORD_LOGS` | off | When `true`, emits per-record console logs (structured artifacts are unaffected either way). |
+
+## Connection Configuration keys (sync limits)
+
+Set in `CompanyIntegration.Configuration` (JSON) for one connection. Only positive whole numbers are honoured; anything else falls back to the default.
+
+| Key | Default | Effect |
+|---|---|---|
+| `batchSize` | engine `MaxBatchSize` (200) | Records asked of the source per page. The memory governor may still shrink it under pressure. |
+| `maxBatchesPerMap` | 5000 | Most pages one object may fetch in a run. Reaching it records a Critical `BATCH_CAP_REACHED` error, marks the object incomplete and ends the run `Failed`. For an object larger than `batchSize × maxBatchesPerMap` rows, raise `batchSize` first. |
+| `watermarkLookbackSeconds` | connector's `WatermarkLookbackSeconds` (0; 300 for external-data-source connectors) | For connectors whose watermark is a monotonic timestamp, the next incremental's fetch filter starts this many seconds before the saved watermark, so rows that commit late are still fetched. The saved watermark is unchanged. `0` turns the overlap off. Ignored for non-timestamp watermarks. |
+
+A run also ends `Failed` when an object stops on a missing or stale CRUD routine (`SchemaNotGeneratedError`, reason `Missing` or `Stale`): the first write that fails with "could not find stored procedure", "too many arguments specified" or "expects parameter ... which was not supplied" stops that object with one Critical error, and the fix is to run CodeGen for the entity.
+
+## Deletes: DeleteBehavior, source delete flags and adopted rows
+
+An entity map's `DeleteBehavior` decides what a deletion does to the MJ row — whether the source sent a delete, a full sync's orphan sweep found the record gone, or the source flagged it:
+
+| DeleteBehavior | What happens |
+|---|---|
+| `DoNothing` | The MJ row is left as it is. |
+| `SoftDelete` | The row is archived: `__mj_integration_SyncStatus = 'Archived'`, `__mj_integration_IsTombstoned = 1`, `__mj_integration_DeletedDetectedAt` stamped once. An entity with neither tombstone column cannot be archived: nothing is written or counted, and the run logs one `SOFT_DELETE_UNSUPPORTED` warning per map. |
+| `HardDelete` | The row is deleted, except a row the integration **adopted** (below). |
+
+**Source delete flags.** Sources that mark deletions on a live row (NetForum's `*_delete_flag = '1'`) are configured on the entity map's `Configuration`:
+
+```json
+{ "sourceDeleteField": "cst_delete_flag", "sourceDeleteValue": "1" }
+```
+
+A record whose field equals the value (compared as trimmed strings) follows `DeleteBehavior`: `SoftDelete` writes it tombstoned (inserting it tombstoned when MJ has no row, so its history stays queryable), `HardDelete` deletes an existing row the integration created (and prunes its record map, so later syncs that still see the flagged record skip it) and skips inserting a new one, `DoNothing` writes it as usual. Under `SoftDelete`, an entity with no tombstone columns is written live with a `SOFT_DELETE_UNSUPPORTED` warning. When the flag clears, the row comes back: `IsTombstoned = 0` and `DeletedDetectedAt = NULL`. A map with a delete flag configured skips the content-hash fast path, because the hash covers mapped fields only.
+
+**Adopted rows.** Each record map records its `Origin`: `Created` when the sync inserted the MJ row, `Adopted` when the row already existed and the sync matched it by key fields or primary key (rows mapped before this column existed are `Created`). Neither the orphan sweep nor a source delete flag hard-deletes an adopted row (a row matched with no record map counts as adopted on the flag path): it archives it when the entity has tombstone columns, and otherwise keeps it with an `ADOPTED_ROW_KEPT` warning.

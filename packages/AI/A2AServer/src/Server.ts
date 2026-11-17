@@ -10,10 +10,12 @@ import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInsta
 import type { OperationResult } from './EntityOperations.js';
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { randomUUID } from "crypto";
 import { ShutdownRegistry } from "@memberjunction/global";
-import { TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
+import { CreateA2ATaskStore, DurableEntityA2ATaskStore, RESUBSCRIBE_STALE_AFTER_MS, TERMINAL_STATUSES, Task, TaskStatus, Message, Artifact } from "./TaskStore.js";
 import { AgentCard, AgentCardAgentCapability, AgentCardEntityCapability, BuildAgentCard, ResolveAgentCardIdentity } from "./AgentCard.js";
 import { CreateTaskOperations } from "./TaskOperations.js";
+import { HandleTaskSend, TASK_NOT_FOUND_MESSAGE, type TaskSendOutcome, type TaskSendRequest } from "./TaskSend.js";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -38,15 +40,9 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
     poolConfig.options!.instanceName = dbInstanceName;
 }
 
-// A2A Server Classes and Types — `TaskStatus`, `Task`, `Message`, `Part`, `Artifact`
-// are imported from `./TaskStore.js` (extracted for testability).
-
-// In-memory storage for tasks. Bounded by the periodic sweep started below;
-// in production you'd swap in a database-backed store. See `./TaskStore.ts`
-// for the implementation; the module-level `tasks` reference is kept for
-// drop-in compatibility with the rest of this file (which uses `tasks.set`
-// / `tasks.get` directly).
-const taskStore = new TaskStore();
+// In-process by default; `a2aServerSettings.taskStoreMode: 'entity'` opts into the durable `MJ: Tasks` store,
+// which needs every A2A caller to hold Create and Update on `MJ: Tasks` (see CreateA2ATaskStore).
+const taskStore = CreateA2ATaskStore(a2aServerSettings?.taskStoreMode);
 taskStore.Start();
 ShutdownRegistry.Instance.Register(taskStore);
 const tasks = taskStore;
@@ -277,17 +273,30 @@ function setupRoutes() {
     app.use('/a2a/tasks', authenticateRequest);
 
     // Send a message to a task
-    app.post('/a2a/tasks/send', (req: Request, res: Response) => {
-        const reqWithUser = req as RequestWithUser;
-        const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
-            ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
-            : undefined;
-        const result = handleTaskSend(req.body, reqWithUser.authenticatedUser, authContext);
-        res.json(result);
+    app.post('/a2a/tasks/send', async (req: Request, res: Response) => {
+        try {
+            const reqWithUser = req as RequestWithUser;
+            const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
+                ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
+                : undefined;
+            const result = await handleTaskSend(req.body, reqWithUser.authenticatedUser, authContext);
+            if ('ErrorCode' in result) {
+                res.status(result.ErrorCode).json({
+                    error: { code: result.ErrorCode, message: result.ErrorMessage }
+                });
+                return;
+            }
+            res.json(result);
+        } catch (err: unknown) {
+            LogError('A2A Server: Task send failed', undefined, err);
+            res.status(500).json({
+                error: { code: 500, message: 'Internal server error while processing task request' }
+            });
+        }
     });
 
     // Send a message to a task with streaming response
-    app.post('/a2a/tasks/sendSubscribe', (req: Request, res: Response) => {
+    app.post('/a2a/tasks/sendSubscribe', async (req: Request, res: Response) => {
         if (!a2aServerSettings?.streamingEnabled) {
             res.status(400).json({
                 error: {
@@ -303,23 +312,31 @@ function setupRoutes() {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        const reqWithUser = req as RequestWithUser;
-        const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
-            ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
-            : undefined;
-        handleTaskSendSubscribe(req.body, res, reqWithUser.authenticatedUser, authContext);
+        try {
+            const reqWithUser = req as RequestWithUser;
+            const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
+                ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
+                : undefined;
+            await handleTaskSendSubscribe(req.body, res, reqWithUser.authenticatedUser, authContext);
+        } catch (err: unknown) {
+            LogError('A2A Server: Task sendSubscribe failed', undefined, err);
+            res.write(`data: ${JSON.stringify({ error: { code: 500, message: 'Internal server error while processing streaming task request' } })}\n\n`);
+            res.end();
+        }
     });
 
     // Get a task's status
-    app.get('/a2a/tasks/:taskId', (req: Request, res: Response) => {
+    app.get('/a2a/tasks/:taskId', async (req: Request, res: Response) => {
         const taskId = req.params.taskId as string;
-        const task = tasks.GetForUser(taskId, callerId(req));
+        const reqWithUser = req as RequestWithUser;
+        const task = (await tasks.LoadTaskForUser(taskId, reqWithUser.authenticatedUser, resolveProviderForRequest()))
+            ?? tasks.GetForUser(taskId, callerId(req));
 
         if (!task) {
             res.status(404).json({
                 error: {
                     code: 404,
-                    message: `Task with ID ${taskId} not found`
+                    message: TASK_NOT_FOUND_MESSAGE
                 }
             });
             return;
@@ -329,22 +346,33 @@ function setupRoutes() {
     });
 
     // Cancel a task
-    app.post('/a2a/tasks/:taskId/cancel', (req: Request, res: Response) => {
+    app.post('/a2a/tasks/:taskId/cancel', async (req: Request, res: Response) => {
         const taskId = req.params.taskId as string;
-        const task = tasks.GetForUser(taskId, callerId(req));
+        const reqWithUser = req as RequestWithUser;
+        const task = (await tasks.LoadTaskForUser(taskId, reqWithUser.authenticatedUser, resolveProviderForRequest()))
+            ?? tasks.GetForUser(taskId, callerId(req));
 
         if (!task) {
             res.status(404).json({
                 error: {
                     code: 404,
-                    message: `Task with ID ${taskId} not found`
+                    message: TASK_NOT_FOUND_MESSAGE
                 }
             });
             return;
         }
 
-        // Cancel a task and propagate cancellation to any in-flight agent execution
-        tasks.CancelTask(taskId);
+        // Cancel a task and propagate cancellation to any in-flight agent execution and durable MJ: Tasks row
+        const cancelled = await tasks.CancelTaskForUser(
+            taskId,
+            reqWithUser.authenticatedUser,
+            'Task cancelled via A2A',
+            resolveProviderForRequest()
+        );
+        if (!cancelled) {
+            res.status(500).json({ error: { code: 500, message: 'The cancellation could not be saved' } });
+            return;
+        }
 
         res.json({ success: true });
     });
@@ -556,93 +584,50 @@ function getMatchingEntitiesForConfig(allEntities: EntityInfo[], config: any) {
     });
 }
 
-function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
-    const { taskId, message } = requestBody as { taskId?: string; message?: { parts?: Part[] } };
-
-    if (!taskId) {
-        // Create a new task
-        const newTaskId = generateId();
-        const task: Task = {
-            id: newTaskId,
-            status: 'pending',
-            messages: [],
-            artifacts: [],
-            created: new Date(),
-            updated: new Date()
-        };
-
-        if (message) {
-            const newMessage: Message = {
-                id: generateId(),
-                taskId: newTaskId,
-                role: 'user',
-                parts: message.parts || [],
-                created: new Date()
-            };
-            task.messages.push(newMessage);
-        }
-
-        tasks.Set(newTaskId, task, authenticatedUser?.ID);
-
-        // Process the task asynchronously with the authenticated user
-        processTask(task, authenticatedUser, authContext);
-
-        return {
-            taskId: newTaskId,
-            status: task.status
-        };
-    } else {
-        // Update an existing task: only the caller's own, so another user's task reads as missing
-        const task = authenticatedUser ? tasks.GetForUser(taskId, authenticatedUser.ID) : undefined;
-
-        if (!task) {
-            throw {
-                error: {
-                    code: 404,
-                    message: `Task with ID ${taskId} not found`
-                }
-            };
-        }
-
-        if (task.status === 'completed' || task.status === 'cancelled' || task.status === 'failed') {
-            throw {
-                error: {
-                    code: 400,
-                    message: `Cannot update a task with status: ${task.status}`
-                }
-            };
-        }
-
-        if (message) {
-            const newMessage: Message = {
-                id: generateId(),
-                taskId,
-                role: 'user',
-                parts: message.parts || [],
-                created: new Date()
-            };
-            task.messages.push(newMessage);
-            task.updated = new Date();
-        }
-
-        // Process the updated task with the authenticated user
-        processTask(task, authenticatedUser, authContext);
-
-        return {
-            taskId: task.id,
-            status: task.status
-        };
-    }
+async function handleTaskSend(
+    requestBody: Record<string, unknown>,
+    authenticatedUser?: UserInfo,
+    authContext?: AuthorizationContext
+): Promise<TaskSendOutcome> {
+    return HandleTaskSend(requestBody as TaskSendRequest, authenticatedUser, {
+        Store: tasks,
+        Provider: resolveProviderForRequest(),
+        StartProcessing: (task) => void processTask(task, authenticatedUser, authContext),
+        NewID: generateId,
+    });
 }
 
-function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
-    const result = handleTaskSend(requestBody, authenticatedUser, authContext);
-    const task = authenticatedUser ? tasks.GetForUser(result.taskId, authenticatedUser.ID) : undefined;
+async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
+    const isResubscribe = typeof requestBody.taskId === 'string' && !requestBody.message;
+    let task: Task | undefined;
 
-    if (!task) {
-        res.write(`data: ${JSON.stringify({ error: { code: 404, message: "Task not found" } })}\n\n`);
-        res.end();
-        return;
+    if (isResubscribe) {
+        const taskId = requestBody.taskId as string;
+        task = authenticatedUser
+            ? ((await tasks.LoadTaskForUser(taskId, authenticatedUser, resolveProviderForRequest())) ?? tasks.GetForUser(taskId, authenticatedUser.ID))
+            : undefined;
+        if (!task) {
+            res.write(`data: ${JSON.stringify({ error: { code: 404, message: TASK_NOT_FOUND_MESSAGE } })}\n\n`);
+            res.end();
+            return;
+        }
+    } else {
+        const result = await handleTaskSend(requestBody, authenticatedUser, authContext);
+        if ('ErrorCode' in result) {
+            res.write(`data: ${JSON.stringify({ error: { code: result.ErrorCode, message: result.ErrorMessage } })}\n\n`);
+            res.end();
+            return;
+        }
+        task = authenticatedUser
+            ? (tasks.GetForUser(result.taskId, authenticatedUser.ID)
+                ?? (await tasks.LoadTaskForUser(result.taskId, authenticatedUser, resolveProviderForRequest())))
+            : undefined;
+
+        if (!task) {
+            res.write(`data: ${JSON.stringify({ error: { code: 404, message: TASK_NOT_FOUND_MESSAGE } })}\n\n`);
+            res.end();
+            return;
+        }
     }
 
     // Send initial task state
@@ -662,14 +647,21 @@ function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Resp
         return;
     }
 
-    // Subscribe to event-driven task updates (zero polling timers)
-    const unsubscribe = tasks.Subscribe(task.id, (updatedTask) => {
-        res.write(`data: ${JSON.stringify({
-            taskId: updatedTask.id,
-            status: updatedTask.status
-        })}\n\n`);
+    // Subscribe to task updates (event-driven locally; cross-replica status polling in durable mode)
+    let lastStatus: TaskStatus = task.status;
+    const provider = resolveProviderForRequest();
+    const pollInterval = a2aServerSettings?.statusPollIntervalMs ?? 5000;
 
-        if (updatedTask.status === 'completed' || updatedTask.status === 'cancelled' || updatedTask.status === 'failed') {
+    const onUpdate = (updatedTask: Task) => {
+        if (updatedTask.status !== lastStatus || TERMINAL_STATUSES.has(updatedTask.status)) {
+            lastStatus = updatedTask.status;
+            res.write(`data: ${JSON.stringify({
+                taskId: updatedTask.id,
+                status: updatedTask.status
+            })}\n\n`);
+        }
+
+        if (TERMINAL_STATUSES.has(updatedTask.status)) {
             unsubscribe();
 
             if (updatedTask.artifacts.length > 0) {
@@ -681,7 +673,26 @@ function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Resp
 
             res.end();
         }
-    });
+    };
+
+    // A task that stops changing (its replica died) ends the stream with that status instead of polling forever.
+    const subscribedTaskId = task.id;
+    const onStale = () => {
+        res.write(`data: ${JSON.stringify({
+            taskId: subscribedTaskId,
+            status: lastStatus,
+            error: {
+                code: 408,
+                message: `The task has not changed for ${RESUBSCRIBE_STALE_AFTER_MS / 60_000} minutes, so this stream has ended. ` +
+                    'It may still finish: check it with tasks/get or resubscribe.'
+            }
+        })}\n\n`);
+        res.end();
+    };
+
+    const unsubscribe = tasks instanceof DurableEntityA2ATaskStore && authenticatedUser
+        ? tasks.SubscribeWithPolling(task.id, authenticatedUser, provider, onUpdate, pollInterval, onStale)
+        : tasks.Subscribe(task.id, onUpdate);
 
     // Handle client disconnect
     res.on('close', () => {
@@ -692,10 +703,19 @@ function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Resp
 // Process a task using MemberJunction APIs
 async function processTask(task: Task, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     const abortController = tasks.RegisterAbortController(task.id);
+    let stopCancellationWatcher: (() => void) | undefined;
+    if (tasks instanceof DurableEntityA2ATaskStore && authenticatedUser) {
+        stopCancellationWatcher = tasks.WatchCancellation(
+            task.id,
+            authenticatedUser,
+            resolveProviderForRequest(),
+            a2aServerSettings?.statusPollIntervalMs ?? 5000
+        );
+    }
     try {
         task.status = 'in_progress';
         task.updated = new Date();
-        tasks.Notify(task);
+        await tasks.NotifyTask(task, authenticatedUser, resolveProviderForRequest());
 
         // Get the last user message
         const lastMessage = task.messages.filter(m => m.role === 'user').pop();
@@ -869,7 +889,7 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             task.status = 'cancelled';
         }
         task.updated = new Date();
-        tasks.Notify(task);
+        await tasks.NotifyTask(task, authenticatedUser, provider);
 
     } catch (error) {
         console.error("Error processing task:", error);
@@ -916,11 +936,13 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             task.status = 'cancelled';
         }
         task.updated = new Date();
-        tasks.Notify(task);
+        await tasks.NotifyTask(task, authenticatedUser, resolveProviderForRequest());
+    } finally {
+        stopCancellationWatcher?.();
     }
 }
 
-// Utility function to generate a random ID
-function generateId() {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+// Utility function to generate a UUID v4 identifier compatible with MJ: Tasks PK
+function generateId(): string {
+    return randomUUID();
 }

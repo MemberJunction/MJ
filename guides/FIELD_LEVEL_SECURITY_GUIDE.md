@@ -756,6 +756,17 @@ What holds full-width data, and why that is safe:
   for each reader (§3.2). That includes a restricted user's own saves: the provider reads the
   stored row to complete the snapshot, so the payload never narrows to what the saver could see.
 
+- **Related rows loaded with an entity** (`Load` with `EntityRelationshipsToLoad`) are read with
+  the related entity's column list and Read row filter for the user, and a relationship to an
+  entity the user cannot read is skipped. A many-to-many load reads its join view without checking
+  the user's access to the join entity; no transport returns these rows today.
+- **A save or delete that fails on a database constraint**, directly or inside a transaction
+  group, returns the database's message without the column values it quotes (a unique-index
+  violation lists the key, which can include a denied column) and without the executed SQL to a
+  caller who is denied any field of the entity. A value list that does not close on its own line
+  (a value containing a line break, or a PostgreSQL key detail with an unrecognised ending) is
+  withheld together with the rest of the message. The server log keeps the full message.
+
 For server code acting for a user, the rule is simple: create entity objects and run views with
 that user as `contextUser`, and they will never hold a value the user is denied.
 
@@ -936,18 +947,18 @@ Until it runs, only the API tier reflects the change.
 
 ## 5. Operational notes
 
-- **There is currently no UI for the entity flag.** `Enable Field Level Security` is not exposed on
-  the Entity form in Explorer — the custom form that entity uses does not render it, and the flag is
-  the *only* thing standing between a configured rule and an enforced one. Until that is added
-  ([#4297](https://github.com/MemberJunction/MJ/issues/4297)), turn it on the way the integration
-  tests do: save `EnableFieldLevelSecurity` through the entity layer (`MJ: Entities`), which is also
-  what runs the snapshot. Editing the column with direct SQL is **not** equivalent — it commits the
-  flag without the rows, and on an enabled entity a field with no rows is denied, so it locks every
-  user out of every field on that entity.
+- **Turn the flag on from the Entity form** (Permissions section, "Field-level security"), or by
+  saving `EnableFieldLevelSecurity` through the entity layer (`MJ: Entities`) as the integration
+  tests do. Both run the snapshot. Editing the column with direct SQL is **not** equivalent — it
+  commits the flag without the rows, and on an enabled entity a field with no rows is denied, so it
+  locks every user out of every field on that entity.
 - **Enabling field security on an entity is safe and reversible** (§1.1). It snapshots current
   access, so nothing changes until you tighten a field; switching it off keeps your rules for
   later. You do not maintain the rows by hand — MJ reconciles them as the schema and
   entity-level permissions change, and never overwrites a rule you wrote.
+- **Enabling reads the existing rules from the database, not from cached metadata.** Rules
+  deleted with direct SQL, or by another server this one has not heard from, are recreated at
+  snapshot defaults when you turn the flag on. If that read fails, the flag is not saved.
 - **Run CodeGen after a schema change on an enabled entity.** That is the pass which creates
   rows for new columns. Until it runs, a new column is denied to everyone (§1.5).
 - **Restricted users still need their baseline roles.** A user holding *only* a custom
@@ -1029,24 +1040,11 @@ restriction should know them before relying on it.
   This is tracked as a security advisory. Until it is fixed, **pin only agents whose data sources
   and tools read public data** to a widget or anonymous session.
 
-- **Database constraint errors may echo denied values.** A unique-index violation reports the
-  duplicate key, and the provider returns the database's message to the caller. With a unique index
-  over `(Email, SSN)` and `SSN` denied, a collision on `Email` can show the SSN
-  ([#5981](https://github.com/MemberJunction/MJ/issues/5981)). Avoid unique indexes and constraints
-  that include a restricted column, or keep their messages away from restricted users.
-
 - **A read-only cache collection's children keep the engine's width.** A related-record
   collection filled from an engine cache (`Source: 'cache'`, read-only) holds the engine's own
   shared objects, so setting `ContextCurrentUser` on its owner does not narrow them (§2.3): doing so
   would narrow them for every reader. Like any engine-cached object they hold every column, and no
   transport serializes them to a client. Do not hand them to a restricted user without projecting.
-
-- **Related rows loaded with an entity are not narrowed.** `InnerLoad` with
-  `EntityRelationshipsToLoad` reads related records without the user's field, row-level or entity
-  checks and attaches them to the object unprojected
-  ([#5982](https://github.com/MemberJunction/MJ/issues/5982)). No transport returns them today
-  (REST `?include=` leaves related data out of its response), but do not serialize such an object
-  to a restricted user.
 
 - **Shared conversations and artifacts can hold rows loaded for another user.** An agent's answer,
   and any artifact it produced, holds what its user could read. Sharing that conversation or

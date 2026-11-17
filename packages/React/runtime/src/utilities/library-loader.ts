@@ -33,10 +33,11 @@ export function IsAllowedSubresourceUrl(url: string | null | undefined): boolean
     return false;
   }
   try {
-    const baseOrigin =
-      typeof window !== 'undefined' && window.location?.origin
-        ? window.location.origin
-        : 'https://localhost';
+    // An opaque origin (about:blank, srcdoc and sandboxed iframes, data: pages — where the test
+    // harness renders components) is the string "null". As a base it makes `new URL` throw even
+    // for an absolute https URL, which would refuse every library, so it falls back like no window.
+    const origin = typeof window !== 'undefined' ? window.location?.origin : undefined;
+    const baseOrigin = origin && origin !== 'null' ? origin : 'https://localhost';
     const parsed = new URL(trimmed, baseOrigin);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
   } catch {

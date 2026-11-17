@@ -7,7 +7,7 @@
  * These private methods don't touch AIEngine, so no engine mock is needed — only a real
  * AIPromptRunner instance reached via cast.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AIPromptRunner } from '../AIPromptRunner';
 import type { ValidationErrorInfo } from '@memberjunction/global';
 
@@ -112,6 +112,22 @@ describe('parseObjectOutput', () => {
     expect(res).toEqual({ ok: true });
   });
 
+  it('keeps a complete JSON object followed by a stray fragment and drops the fragment (#3065)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const reply = '{"taskComplete":true,"message":"done"}\n"message":"done"}';
+    const res = await priv(runner).parseObjectOutput(reply, prompt(), false, false, [], {});
+    expect(res).toEqual({ taskComplete: true, message: 'done' });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('stray text'));
+    warn.mockRestore();
+  });
+
+  it('leaves a non-object output type to the CleanJSON path (no trailing-fragment recovery)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await priv(runner).parseObjectOutput('{"a":1}\n"a":1}', prompt({ OutputType: 'string' }), true, false, [], {});
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('stray text'));
+    warn.mockRestore();
+  });
+
   it('throws + records an error on invalid JSON when validation is on and repair is off', async () => {
     const errs: ValidationErrorInfo[] = [];
     await expect(priv(runner).parseObjectOutput('{broken', prompt(), false, false, errs, {})).rejects.toThrow();
@@ -139,39 +155,48 @@ describe('parseObjectOutput', () => {
     expect(res.name).toBe('John');
     expect(res.age).toBe(42);
   });
+});
 
-  it('does not run implicit OutputExample key-cleaning when ValidationBehavior is None (#4827)', async () => {
-    const p = prompt({ OutputExample: '{"16:9":{}}', ValidationBehavior: 'None' });
-    const res = await priv(runner).parseObjectOutput(
-      '{"16:9":{"Width":1920,"Height":1080},"custom?":"kept-when-validation-none"}',
-      p,
-      false,
-      false,
-      [],
-      {},
-    ) as Record<string, unknown>;
-    expect(res).toEqual({
-      '16:9': { Width: 1920, Height: 1080 },
-      'custom?': 'kept-when-validation-none',
-    });
+describe('parseObjectOutput — key cleaning and ValidationBehavior (#4827)', () => {
+  const example = '{"time":"10:30","question":"Is it urgent?"}';
+  const reply = '{"10:30":"meeting","Is it urgent?":"yes","name?":"John"}';
+
+  it("leaves reply keys as written when ValidationBehavior is 'None', even with an OutputExample", async () => {
+    const res = await priv(runner).parseObjectOutput(reply, { OutputType: 'object', OutputExample: example, ValidationBehavior: 'None' }, false, false, [], {});
+    expect(res).toEqual({ '10:30': 'meeting', 'Is it urgent?': 'yes', 'name?': 'John' });
   });
 
-  it('preserves aspect-ratio keys like 16:9 and 9:16 even when cleanValidationSyntax runs (#4827)', async () => {
-    const p = prompt({ OutputExample: '{"Source":{}}', ValidationBehavior: 'Warn' });
+  it("honors a per-call validationBehavior of 'None' over the prompt's value", async () => {
+    const res = await priv(runner).parseObjectOutput(reply, { OutputType: 'object', OutputExample: example, ValidationBehavior: 'Warn' }, false, false, [], {}, { validationBehavior: 'None' });
+    expect(res).toEqual({ '10:30': 'meeting', 'Is it urgent?': 'yes', 'name?': 'John' });
+  });
+
+  it("still cleans under 'Warn'", async () => {
+    const res = await priv(runner).parseObjectOutput('{"name?":"John"}', { OutputType: 'object', OutputExample: example, ValidationBehavior: 'Warn' }, false, false, [], {});
+    expect(res).toEqual({ name: 'John' });
+  });
+
+  it("preserves colon-bearing format keys like '16:9' and '9:16' under 'Warn' while cleaning 'name:string?' (#4827)", async () => {
     const res = await priv(runner).parseObjectOutput(
-      '{"Source":{"16:9":{"Files":{"index.html":"<html></html>"}},"9:16":{"Files":{}}}}',
-      p,
+      '{"Source":{"16:9":{"Files":{"index.html":"<html></html>"}},"9:16":{"Files":{}}},"name:string?":"Hero"}',
+      { OutputType: 'object', OutputExample: '{"Source":{}}', ValidationBehavior: 'Warn' },
       false,
-      true,
+      false,
       [],
-      {},
-    ) as Record<string, unknown>;
+      {}
+    );
     expect(res).toEqual({
       Source: {
         '16:9': { Files: { 'index.html': '<html></html>' } },
         '9:16': { Files: {} },
       },
+      name: 'Hero',
     });
+  });
+
+  it("still cleans under 'None' when cleanValidationSyntax is set explicitly", async () => {
+    const res = await priv(runner).parseObjectOutput('{"name?":"John"}', { OutputType: 'object', OutputExample: example, ValidationBehavior: 'None' }, false, true, [], {});
+    expect(res).toEqual({ name: 'John' });
   });
 });
 

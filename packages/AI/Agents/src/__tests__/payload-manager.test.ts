@@ -96,6 +96,15 @@ describe('PayloadManager', () => {
             const result = pm.deepMerge(dest, src);
             expect(result.x).toEqual({ now: 'object' });
         });
+
+        it('should skip __proto__, constructor and prototype keys from parsed JSON', () => {
+            const src = JSON.parse('{"__proto__":{"polluted":1},"a":{"__proto__":{"polluted":1},"constructor":{"prototype":{"polluted":1}},"ok":true}}');
+            const result = pm.DeepMerge<Record<string, unknown>>({ a: { b: 1 } }, src);
+            expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+            expect(Object.getPrototypeOf(result.a)).toBe(Object.prototype);
+            expect(result).toEqual({ a: { b: 1, ok: true } });
+            expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+        });
     });
 
     // ════════════════════════════════════════════════════════════════════
@@ -954,9 +963,9 @@ describe('PayloadManager', () => {
                 ['*']
             );
 
-            expect(({} as any).polluted).toBeUndefined();
+            expect(({} as Record<string, unknown>).polluted).toBeUndefined();
             expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
-            expect(merged.result.data.safe).toBe(2);
+            expect((merged.result as { data: { safe: number } }).data.safe).toBe(2);
         });
 
         it('rejects __proto__, constructor, and prototype in ApplyAgentChangeRequest', () => {
@@ -969,7 +978,7 @@ describe('PayloadManager', () => {
                 allowedPaths: ['*'],
             });
 
-            expect(({} as any).polluted).toBeUndefined();
+            expect(({} as Record<string, unknown>).polluted).toBeUndefined();
             expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
             expect(result.result.data.safe).toBe(3);
             expect(result.warnings.length).toBeGreaterThan(0);
@@ -1023,7 +1032,7 @@ describe('PayloadManager', () => {
             expect(merged.result.Output.Source['9:16'].Files).toEqual({
                 'index.html': '<html>vertical</html>',
             });
-            expect((merged.result.Output as any).Forbidden).toBeUndefined();
+            expect((merged.result.Output as Record<string, unknown>).Forbidden).toBeUndefined();
             expect(merged.blockedOperations.some(b => b.path.includes('Forbidden'))).toBe(true);
         });
 

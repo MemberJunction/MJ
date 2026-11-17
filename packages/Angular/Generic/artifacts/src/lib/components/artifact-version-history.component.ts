@@ -1,8 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { BuildVersionDownload } from './artifact-version-download.js';
 
 @Component({
@@ -13,7 +15,7 @@ import { BuildVersionDownload } from './artifact-version-download.js';
       <div class="history-header">
         <h3>Version History</h3>
         <button class="btn-close" (click)="onClose()" title="Close">
-          <i class="fas fa-times"></i>
+          <i class="fa-solid fa-times"></i>
         </button>
       </div>
     
@@ -44,13 +46,13 @@ import { BuildVersionDownload } from './artifact-version-download.js';
             @if (version.VersionNumber === selectedVersion) {
               <div class="version-actions">
                 <button class="btn-action" (click)="onRestoreVersion(version); $event.stopPropagation()">
-                  <i class="fas fa-undo"></i> Restore
+                  <i class="fa-solid fa-undo"></i> Restore
                 </button>
                 <button class="btn-action" (click)="onCompareVersion(version); $event.stopPropagation()">
-                  <i class="fas fa-code-compare"></i> Compare
+                  <i class="fa-solid fa-code-compare"></i> Compare
                 </button>
                 <button class="btn-action" (click)="onDownloadVersion(version); $event.stopPropagation()">
-                  <i class="fas fa-download"></i> Download
+                  <i class="fa-solid fa-download"></i> Download
                 </button>
               </div>
             }
@@ -63,7 +65,7 @@ import { BuildVersionDownload } from './artifact-version-download.js';
           <div class="diff-header">
             <h4>Changes from v{{ (selectedVersion || 1) - 1 }} to v{{ selectedVersion }}</h4>
             <button class="btn-close-diff" (click)="showDiff = false">
-              <i class="fas fa-times"></i>
+              <i class="fa-solid fa-times"></i>
             </button>
           </div>
           <div class="diff-content">
@@ -110,6 +112,7 @@ import { BuildVersionDownload } from './artifact-version-download.js';
 })
 export class ArtifactVersionHistoryComponent extends BaseAngularComponent implements OnInit  {
   private confirmService = inject(MJConfirmService);
+  private notificationService = inject(MJNotificationService);
 
   @Input() Artifact!: MJArtifactEntity;
 
@@ -224,7 +227,7 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
       // conversation-scope: artifact-wide read, no conversation path applies
       const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID='${this.Artifact.ID}'`,
+        ExtraFilter: `ArtifactID='${EscapeSQLString(this.Artifact.ID)}'`,
         OrderBy: 'VersionNumber DESC',
         ResultType: 'entity_object'
       }, this.CurrentUser);
@@ -253,10 +256,14 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
     try {
       // Restoring creates a new version with the old content
       this.VersionRestored.emit(version.VersionNumber);
-      alert(`Version ${version.VersionNumber} has been restored as the latest version`);
+      this.notificationService.CreateSimpleNotification(
+        `Version ${version.VersionNumber} has been restored as the latest version`,
+        'success',
+        3500
+      );
     } catch (error) {
       console.error('Failed to restore version:', error);
-      alert('Failed to restore version');
+      this.notificationService.CreateSimpleNotification('Failed to restore version', 'error', 5000);
     }
   }
 
@@ -267,7 +274,7 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
 
   async OnCompareVersion(version: MJArtifactVersionEntity): Promise<void> {
     if (version.VersionNumber === 1) {
-      alert('Cannot compare: this is the first version');
+      this.notificationService.CreateSimpleNotification('Cannot compare: this is the first version', 'info', 3500);
       return;
     }
 
@@ -282,7 +289,7 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
       }
     } catch (error) {
       console.error('Failed to load version for comparison:', error);
-      alert('Failed to compare versions');
+      this.notificationService.CreateSimpleNotification('Failed to compare versions', 'error', 5000);
     }
   }
 
@@ -301,10 +308,10 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
       link.href = url;
       link.download = download.FileName;
       link.click();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
     } catch (error) {
       console.error('Failed to download version:', error);
-      alert('Failed to download version');
+      this.notificationService.CreateSimpleNotification('Failed to download version', 'error', 5000);
     }
   }
 

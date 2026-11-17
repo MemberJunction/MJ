@@ -35,6 +35,12 @@ import { RenderComponentFixture, CreateFakeProvider, Attr, Capture, Click, HasCl
 import { DashboardEditorComponent } from './dashboard-editor.component';
 import type { DashboardEditorLoadError } from './dashboard-editor.types';
 import { DashboardViewerFactory } from './dashboard-viewer-factory';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
+
+/** The lines these tests log on purpose: the refused save the broken-mapping test drives. Any other line fails its test. */
+ExpectConsoleLines({
+  error: [/^Dashboard editor: could not save the dashboard: Part "Members": Input "ChapterID" is mapped from "Gone"/],
+});
 
 /**
  * DOM coverage for <mj-dashboard-editor>, the dashboard header and edit flow made for the dashboard tab and

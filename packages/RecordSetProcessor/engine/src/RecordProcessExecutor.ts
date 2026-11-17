@@ -69,6 +69,8 @@ export interface RunRecordProcessOptions {
      * A version backfill passes false; it still refreshes the watermarks of the records it processes.
      */
     SkipUnchanged?: boolean;
+    /** Stops the run from the calling code; see {@link RecordSetProcessOptions.Signal}. */
+    Signal?: AbortSignal;
 }
 
 /** Builds and runs a RecordSetProcessor pass from a Record Process definition. */
@@ -130,6 +132,7 @@ export class RecordProcessExecutor {
             LastRunAt: lastRunAt,
             OnProgress: options.OnProgress,
             OverwriteHumanValues: options.OverwriteHumanValues,
+            Signal: options.Signal,
             Configuration: { recordProcessName: rp.Name, workType: rp.WorkType, scopeType: rp.ScopeType },
         });
     }

@@ -15,11 +15,12 @@ import {
   type UserInfo,
   type IMetadataProvider,
 } from '@memberjunction/core';
-import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import type { TrainRequest, TrainResponse, MatrixData } from '@memberjunction/predictive-studio-core';
-import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
+import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
+import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import type { TrainerRequest, TrainerResult } from '@memberjunction/predictive-studio-core';
+import { MLSidecar, SidecarError, TrainerResultMalformedError } from '@memberjunction/predictive-studio-sidecar';
 import { MLSidecarProvider } from '../sidecar-provider';
-import type { IEntityFactory, IRecordLoader, ISidecarTrainer } from './types';
+import type { IEntityFactory, IRecordLoader, ITrainerEvaluator, TrainerRequestReissue } from './types';
 
 /**
  * Provider-bound {@link IEntityFactory}: every entity is created through the
@@ -115,10 +116,37 @@ export class RunViewRecordLoader implements IRecordLoader {
     }
     return result.Results[0].DriverClass ?? null;
   }
+
+  /**
+   * One read of `MJ: ML Algorithms` by `DriverClass` (at most two rows). Two rows are refused rather than one picked,
+   * the same ambiguity rule the agent's algorithm-name resolver applies (`PredictiveStudioPipelineBuilder.MatchAlgorithm`).
+   *
+   * @inheritdoc
+   * @throws Error when the read fails, or naming both rows when two share the driver key
+   */
+  public async resolveAlgorithmIDForDriver(driverKey: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null> {
+    const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLAlgorithmEntity, 'ID' | 'Name'>>(
+      {
+        EntityName: 'MJ: ML Algorithms',
+        ExtraFilter: `DriverClass='${EscapeSQLString(driverKey)}'`,
+        Fields: ['ID', 'Name'],
+        MaxRows: 2,
+        SkipTotalRowCount: true,
+        ResultType: 'simple',
+      },
+      contextUser,
+    );
+    if (!result.Success) throw new Error(`Reading MJ: ML Algorithms for driver '${driverKey}' failed: ${result.ErrorMessage || 'unknown error'}`);
+    if (result.Results.length > 1) {
+      const named = result.Results.map((a) => `'${a.Name}' (${NormalizeUUID(a.ID)})`).join(' and ');
+      throw new Error(`Driver '${driverKey}' matches more than one MJ: ML Algorithms row: ${named}; the shipped model's algorithm is ambiguous.`);
+    }
+    return result.Results.length === 1 ? result.Results[0].ID : null;
+  }
 }
 
 /**
- * {@link ISidecarTrainer} backed by the self-managing {@link MLSidecar} client.
+ * {@link ITrainerEvaluator} backed by the self-managing {@link MLSidecar} client.
  * Lazily starts the sidecar on first use (managed or remote mode is decided by
  * `MLSidecar` from options/env). Defaults to the process-shared
  * {@link MLSidecarProvider} instance rather than constructing a private `MLSidecar`
@@ -126,31 +154,59 @@ export class RunViewRecordLoader implements IRecordLoader {
  * child process per action run. Tests (and callers that genuinely need an isolated
  * sidecar) can still inject their own via the constructor parameter.
  */
-export class MJSidecarTrainer implements ISidecarTrainer {
-  private started = false;
-
+export class MJSidecarTrainer implements ITrainerEvaluator {
   /**
    * @param sidecar an `MLSidecar` instance (managed or remote); defaults to the
    *   shared, process-lifetime instance from {@link MLSidecarProvider}
+   * @param clockMs the clock (milliseconds) a protocol training's wall seconds are measured with; tests pin it
    */
-  constructor(private readonly sidecar: MLSidecar = MLSidecarProvider.Instance.GetSidecar()) {}
+  constructor(
+    private readonly sidecar: MLSidecar = MLSidecarProvider.Instance.GetSidecar(),
+    private readonly clockMs: () => number = () => performance.now(),
+  ) {}
 
-  /** @inheritdoc */
-  public async train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse> {
-    if (!this.started) {
-      await this.sidecar.start();
-      this.started = true;
+  /**
+   * Run one protocol-driven training with bounded retries: a transport failure or a 5xx answer is retried up to
+   * `req.maxRetries` times. Each retry sends the request `reissue` builds, with fresh snapshot downloads, since the
+   * first attempt's may have expired by then (a failed re-issue counts as that attempt failing). Each attempt first
+   * calls `Start()`, which does nothing while the sidecar runs and respawns a managed child that died, so a crash
+   * mid-training is recovered by the next attempt (a failed respawn counts as that attempt failing). A 4xx refusal and
+   * a malformed answer are not retried (the same request gets the same answer) and are rethrown. A `failed` answer to
+   * a retry keeps the error that forced the retry in its message. When every attempt fails the result is `failed` at
+   * stage `timeout` naming the last error, never partial metrics, with the wall seconds the attempts took as its
+   * `computeSeconds` (the sidecar may have computed for all of them, so the run records that time rather than none).
+   *
+   * A retried transport failure can repeat a training that is still running: a socket reset on a remote sidecar
+   * that kept computing makes attempt 2 train and score the holdout again, concurrently. The sidecar is stateless
+   * and the run is seeded, so the repeat produces the same result; only compute repeats, up to
+   * `(maxRetries + 1) × (timeoutSeconds + 60)` seconds of wall time.
+   */
+  public async RunTrainer(req: TrainerRequest, reissue: TrainerRequestReissue): Promise<TrainerResult> {
+    let lastError = '';
+    const startedMs = this.clockMs();
+    for (let attempt = 0; attempt <= req.maxRetries; attempt++) {
+      try {
+        const sent = attempt === 0 ? req : await reissue();
+        await this.sidecar.Start();
+        const result = await this.sidecar.RunTrainer(sent);
+        if (result.status !== 'failed' || attempt === 0) return result;
+        return { ...result, message: `${result.message} (attempt ${attempt + 1} of ${req.maxRetries + 1}; attempt ${attempt} failed: ${lastError})` };
+      } catch (err) {
+        if (MJSidecarTrainer.isNotRetryable(err)) throw err;
+        lastError = err instanceof Error ? err.message : String(err);
+      }
     }
-    // Forward the orchestrator-carved **locked holdout** (plan §8.2) on the shared
-    // `TrainRequest.holdout` channel. The sidecar fits preprocessing on the
-    // training `data` only, then APPLIES that frozen fitted transform to these
-    // holdout rows and scores them exactly once → `holdout_metrics` (the anti-skew
-    // guarantee, plan §6.2 — holdout preprocessing is never re-fit). `req.data`
-    // already excludes the holdout, so the carve stays deterministic + auditable
-    // on the TypeScript side. When no holdout was carved (e.g. tiny datasets) we
-    // simply omit it and the sidecar returns no `holdout_metrics`.
-    const withHoldout: TrainRequest =
-      lockedHoldout && lockedHoldout.rows.length > 0 ? { ...req, holdout: lockedHoldout } : req;
-    return this.sidecar.train(withHoldout);
+    return {
+      status: 'failed',
+      trainingRunId: req.trainingRunId,
+      stage: 'timeout',
+      message: `sidecar gave no result after ${req.maxRetries + 1} attempt(s): ${lastError}`,
+      computeSeconds: (this.clockMs() - startedMs) / 1000,
+    };
+  }
+
+  /** A refusal (4xx) or a malformed answer: sending the same request again gets the same answer. */
+  private static isNotRetryable(err: Error | object | string | number | boolean | null | undefined): boolean {
+    return err instanceof TrainerResultMalformedError || (err instanceof SidecarError && err.Status >= 400 && err.Status < 500);
   }
 }

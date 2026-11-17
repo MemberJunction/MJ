@@ -139,6 +139,24 @@ describe('convertLinksToSlackFormat', () => {
     it('should not modify text without links', () => {
         expect(ConvertLinksToSlackFormat('no links')).toBe('no links');
     });
+
+    it('converts exactly the links the old regex converted', () => {
+        const oldConvert = (s: string) => s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<$2|$1>');
+        let level = [''];
+        for (let len = 1; len <= 6; len++) {
+            level = level.flatMap((prefix) => ['[', ']', '(', ')', 'a'].map((c) => prefix + c));
+            for (const s of level) {
+                expect(ConvertLinksToSlackFormat(s)).toBe(oldConvert(s));
+            }
+        }
+    });
+
+    it('stays linear on many unclosed brackets', () => {
+        const hostile = '['.repeat(100_000) + ']x';
+        const started = performance.now();
+        expect(ConvertLinksToSlackFormat(hostile)).toBe(hostile);
+        expect(performance.now() - started).toBeLessThan(2500);
+    });
 });
 
 describe('convertToSlackMrkdwn', () => {

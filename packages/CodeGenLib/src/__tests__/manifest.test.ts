@@ -1363,6 +1363,56 @@ describe('Lazy Config Generation - Integration', () => {
         expect(content).toMatch(/'BaseResourceComponent::AlphaPlugin':\s*loadAlphaPlugins/);
         expect(content).toMatch(/'BaseResourceComponent::BetaPlugin':\s*loadBetaPlugins/);
     });
+
+    it('should not collapse packages with non-class subpath exports (e.g. ./schemas) into whole-package lazy chunks', async () => {
+        const entitiesDir = `${appDir}/node_modules/@test/entities`;
+        virtualFiles[`${appDir}/package.json`] = JSON.stringify({
+            name: 'test-lazy-app',
+            dependencies: {
+                '@test/dashboards': '1.0.0',
+                '@test/entities': '1.0.0',
+            }
+        }, null, 2);
+
+        virtualFiles[`${entitiesDir}/package.json`] = JSON.stringify({
+            name: '@test/entities',
+            version: '1.0.0',
+            exports: {
+                '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                './schemas': { types: './dist/schemas.d.ts', default: './dist/schemas.js' }
+            },
+            dependencies: {}
+        });
+        virtualFiles[`${entitiesDir}/dist/index.d.ts`] = 'export declare class UserEntity {}\n';
+        virtualFiles[`${entitiesDir}/dist/schemas.d.ts`] = 'export declare const UserSchema: object;\n';
+        virtualFiles[`${entitiesDir}/src/index.ts`] = [
+            "import { RegisterClass } from '@memberjunction/global';",
+            "@RegisterClass(BaseEntity, 'Users')",
+            "export class UserEntity extends BaseEntity {}",
+            "@RegisterClass(BaseEntity, 'Users')",
+            "export class UserEntityExtended extends UserEntity {}"
+        ].join('\n');
+
+        const result = await GenerateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            excludePackages: ['@test/'],
+            lazyConfigPath,
+            lazyBaseClasses: ['BaseResourceComponent', 'BaseEntity'],
+        });
+
+        expect(result.success).toBe(true);
+        const lazyWrite = writtenFiles.find(w => w.path === lazyConfigPath);
+        expect(lazyWrite).toBeDefined();
+        const content = lazyWrite!.content;
+
+        // Genuine lazy subpaths remain, while non-class subpath packages do NOT fall into a `.` chunk
+        expect(content).toContain("'BaseResourceComponent::AIModels'");
+        expect(content).not.toContain('@test/entities');
+        expect(content).not.toContain('BaseEntity::Users');
+    });
 });
 
 // =============================================================================
@@ -1582,7 +1632,11 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
     const PKG_DIR = '/repo/packages/Angular/Explorer/dashboards';
 
     /** Route existsSync/readFileSync by path: package.json present, every .d.ts absent unless listed. */
-    function mockPackage(packageJson: Record<string, unknown>, presentDtsFiles: string[] = []): void {
+    function mockPackage(
+        packageJson: Record<string, unknown>,
+        presentDtsFiles: string[] = [],
+        dtsContents: Record<string, string> = {}
+    ): void {
         const present = new Set(presentDtsFiles);
         vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
             const s = String(p);
@@ -1592,7 +1646,7 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
         vi.mocked(fs.readFileSync).mockImplementation(((p: fs.PathOrFileDescriptor) => {
             const s = String(p);
             if (s.endsWith('package.json')) return JSON.stringify(packageJson);
-            return 'export declare class Whatever {}';
+            return dtsContents[s] ?? 'export declare class Whatever {}';
         }) as unknown as typeof fs.readFileSync);
     }
 
@@ -1682,6 +1736,39 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
         );
 
         expect(() => ResolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR)).not.toThrow();
+    });
+
+    it('does NOT throw when a built subpath .d.ts exists on disk with 0 exported classes, while still throwing if a subpath .d.ts is missing on disk', () => {
+        const builtSchemasDts = path.resolve(PKG_DIR, './dist/schemas.d.ts');
+        mockPackage(
+            {
+                name: '@memberjunction/core-entities',
+                exports: {
+                    '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                    './schemas': { types: './dist/schemas.d.ts', default: './dist/schemas.js' }
+                }
+            },
+            [builtSchemasDts],
+            { [builtSchemasDts]: 'export declare const UserSchema: Record<string, string>;' }
+        );
+
+        const resolved = ResolveLazySubpathExports('@memberjunction/core-entities', PKG_DIR);
+        expect(resolved.size).toBe(0);
+
+        mockPackage(
+            {
+                name: '@memberjunction/core-entities',
+                exports: {
+                    '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                    './schemas': { types: './dist/schemas.d.ts', default: './dist/schemas.js' },
+                    './unbuilt': { types: './dist/unbuilt.d.ts', default: './dist/unbuilt.js' }
+                }
+            },
+            [builtSchemasDts],
+            { [builtSchemasDts]: 'export declare const UserSchema: Record<string, string>;' }
+        );
+
+        expect(() => ResolveLazySubpathExports('@memberjunction/core-entities', PKG_DIR)).toThrow(/has not been built/);
     });
 });
 

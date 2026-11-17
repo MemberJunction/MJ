@@ -142,3 +142,54 @@ describe('parseCanvasFromCode (round-trip)', () => {
         expect(result.HasUnknownConstructs).toBe(true);
     });
 });
+
+describe('parseCanvasFromCode heading scan', () => {
+    const fieldRef = 'value("Name")';
+
+    it.each([
+        [`<h2>Form</h2><h3>Main</h3>${fieldRef}`, 'Form', ['Main']],
+        [`<h2 className="t">Form</h2><h3 style={s}>One</h3>${fieldRef}<h3>Two</h3>value("Count")`, 'Form', ['One', 'Two']],
+        [`<h2>{title}</h2><h3>A <b>bold</b></h3>${fieldRef}`, undefined, ['Details']],
+        [`<h3>Main</h3>${fieldRef}<h3>Empty</h3>`, undefined, ['Main']],
+    ])('reads the title and sections of %j', (code, title, sections) => {
+        const canvas = ParseCanvasFromCode(code, schema()).Canvas;
+        expect(canvas?.title).toBe(title);
+        expect(canvas?.sections.map(s => s.title)).toEqual(sections);
+    });
+
+    it('reads 100k characters of unclosed h2 and h3 openings in linear time', () => {
+        const started = Date.now();
+        expect(ParseCanvasFromCode('<h3'.repeat(50_000) + fieldRef, schema()).Canvas?.sections.map(s => s.title)).toEqual(['Details']);
+        expect(ParseCanvasFromCode(fieldRef + '<h2'.repeat(50_000), schema()).Canvas?.title).toBeUndefined();
+        expect(Date.now() - started).toBeLessThan(2500);
+    });
+});
+
+describe('escaping (CodeQL js/incomplete-sanitization, js/double-escaping)', () => {
+    it('escapes backslashes and quotes in a non-identifier display field', () => {
+        const s = schema();
+        s.fields[4].references = { entity: 'Accounts', displayField: 'Odd \\ "Name"' };
+        const canvas = BuildEmptyCanvas('Customers', 'Customer');
+        canvas.sections[0].elements.push({ id: GenerateCanvasId('field'), type: 'field', fieldName: 'AccountID', span: 1 });
+        const code = GenerateCodeFromCanvas(canvas, s, 'CustomerForm');
+        expect(code).toContain('o?.["Odd \\\\ \\"Name\\""]');
+        expect(code).toContain('value("AccountID")?.["Odd \\\\ \\"Name\\""]');
+    });
+
+    it('writes a field name with a quote or backslash as one string literal', () => {
+        const s = schema();
+        s.fields[3].name = 'Odd \\ "Notes"';
+        const canvas = BuildEmptyCanvas('Customers', 'Customer');
+        canvas.sections[0].elements.push({ id: GenerateCanvasId('field'), type: 'field', fieldName: 'Odd \\ "Notes"', span: 1 });
+        const code = GenerateCodeFromCanvas(canvas, s, 'CustomerForm');
+        expect(code).toContain('value("Odd \\\\ \\"Notes\\"")');
+        expect(code).toContain('setField("Odd \\\\ \\"Notes\\"", ');
+        expect(code).not.toContain('value("Odd \\ "Notes"")');
+    });
+
+    it('decodes each title entity once, so &amp;lt; stays &lt;', () => {
+        const code = 'function X() { return <div><h2>A &amp;lt; B &amp; C</h2><div>{value("Name")}</div></div>; }';
+        const result = ParseCanvasFromCode(code, schema());
+        expect(result.Canvas?.title).toBe('A &lt; B & C');
+    });
+});

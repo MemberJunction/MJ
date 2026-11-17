@@ -179,6 +179,42 @@ if (utilities.ai) {
 }
 ```
 
+`utilities.ai.Decide` answers typed questions with a fast decision model (about 150-500 ms) and
+returns probabilities instead of text. Use it to classify, route, filter or score interactively, where
+an `ExecutePrompt` call would be too slow. Question kinds: `Likelihood` (yes/no probability),
+`Choice` (one of 2-255 options) and `Score` (an ordered rubric, lowest level first). It is optional,
+so guard it, and it never throws: check `Success`.
+
+```javascript
+if (utilities.ai?.Decide) {
+  const decision = await utilities.ai.Decide({
+    State: { subject: ticket.Subject, body: ticket.Body },
+    Questions: {
+      urgent: { Kind: 'Likelihood', Instructions: 'Does the customer report an outage or data loss?' },
+      team: {
+        Kind: 'Choice',
+        Instructions: 'Which team should handle this ticket?',
+        Options: [
+          { Value: 'billing', Description: 'Invoices, payments, refunds or pricing.' },
+          { Value: 'support', Description: 'How to use the product, or a bug report.' },
+          { Value: 'sales', Description: 'Buying, upgrading or a new contract.' }
+        ]
+      }
+    }
+  });
+
+  if (decision.Success) {
+    const isUrgent = decision.Answers.urgent.Probability >= 0.8;
+    const team = decision.Answers.team.Value;            // 'billing' | 'support' | 'sales'
+    const sure = decision.Answers.team.Confidence >= 0.7; // route by hand below this
+  }
+}
+```
+
+Keep `State` to what the questions need, write `Instructions` and option `Description`s as full
+sentences (the model never reads the keys or `Value`s), and ask many questions in one call rather
+than one call per question.
+
 ## Data Access Patterns
 
 ### Data Requirements Structure

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
-import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompts';
+import { AIEmbeddingRunner, EmbeddingCarrierPrompts, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, IndexDescription, IndexList, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
@@ -618,6 +618,7 @@ export class EntityVectorSyncer extends VectorBase {
   ): Promise<EmbeddingRunResult> {
     return embeddingRunner.RunEmbedding({
       Texts: texts,
+      PromptName: EmbeddingCarrierPrompts.VectorSync,
       ModelID: aiModelID,
       Dimensions: embeddingDimensions,
       ContextUser: this.CurrentUser,

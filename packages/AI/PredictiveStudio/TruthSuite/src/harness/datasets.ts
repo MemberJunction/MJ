@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type sql from 'mssql';
 import { RunView, type UserInfo } from '@memberjunction/core';
+import { UUIDMap } from '@memberjunction/global';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { TruthConnection } from '../db/connection';
 import { TruthCsv } from '../db/csv';
@@ -67,6 +68,24 @@ export class HarnessDatasets {
       }
     }
     return { Positives: positives, Negatives: negatives };
+  }
+
+  /** Each row's `column` cell keyed by its `ID`, from the dataset's cached `rows.csv` (never the truth file). */
+  public static ColumnByRowID(dataset: LoadedDataset, column: string): UUIDMap<string> {
+    const rowsPath = path.join(dataset.Dir, 'rows.csv');
+    TruthCsv.AssertNotTruthFile(rowsPath);
+    const parsed = TruthCsv.Parse(readFileSync(rowsPath, 'utf8'));
+    const idIdx = parsed.Header.indexOf('ID');
+    const colIdx = parsed.Header.indexOf(column);
+    if (idIdx < 0 || colIdx < 0) {
+      throw new Error(`${rowsPath} has no ID/${column} columns`);
+    }
+    const out = new UUIDMap<string>();
+    for (const row of parsed.Rows) {
+      const id = (row[idIdx] || '').trim();
+      if (id.length > 0) out.Set(id, (row[colIdx] || '').trim());
+    }
+    return out;
   }
 
   /** Read the first `n` `ID` values from the dataset's cached `rows.csv` (never the truth file). */

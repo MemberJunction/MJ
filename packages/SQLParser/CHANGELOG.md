@@ -1,5 +1,15 @@
 # @memberjunction/sql-parser
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [66fcfde]
+- Updated dependencies [d87bb40]
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

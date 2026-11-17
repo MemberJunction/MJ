@@ -317,6 +317,7 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
 // on what RefreshNoteEmbeddings / RefreshExampleEmbeddings handed to LoadVectors.
 const { createdVectorServices } = vi.hoisted(() => ({
     createdVectorServices: [] as Array<{
+        options: unknown;
         LoadVectors: ReturnType<typeof vi.fn>;
         AddOrUpdateVector: ReturnType<typeof vi.fn>;
         RemoveVector: ReturnType<typeof vi.fn>;
@@ -330,6 +331,7 @@ vi.mock('@memberjunction/ai-vectors-memory', async (importOriginal) => {
     return {
         ReadStoredVector,
         SimpleVectorService: class SimpleVectorService<T = unknown> {
+            options: unknown;
             LoadVectors = vi.fn();
             AddOrUpdateVector = vi.fn();
             RemoveVector = vi.fn().mockReturnValue(true);
@@ -337,7 +339,10 @@ vi.mock('@memberjunction/ai-vectors-memory', async (importOriginal) => {
             FindSimilar = vi.fn().mockReturnValue([]);
             Similarity = vi.fn().mockReturnValue(0);
             Has = vi.fn().mockReturnValue(false);
-            constructor() { createdVectorServices.push(this); }
+            constructor(options?: unknown) {
+                this.options = options;
+                createdVectorServices.push(this);
+            }
         },
         VectorEntry: class VectorEntry {},
     };
@@ -2171,6 +2176,39 @@ describe('AIEngine', () => {
             expect(embedLocal).toHaveBeenCalledWith('what charts does the user like?', { inputType: 'query' });
         });
 
+        it('skips query embedding in FindSimilarAgentNotes and FindSimilarAgentExamples when no vector candidate matches filter', async () => {
+            const engine2 = TestableAIEngine.CreateForTest();
+            const findNearestNotes = vi.fn().mockResolvedValue([]);
+            const findNearestExamples = vi.fn().mockResolvedValue([]);
+            const hasMatchingNotes = vi.fn().mockReturnValue(false);
+            const hasMatchingExamples = vi.fn().mockReturnValue(false);
+            engine2.setNoteVectorServiceForTest({
+                RemoveVector: vi.fn(),
+                AddOrUpdateVector: vi.fn(),
+                FindNearestAsync: findNearestNotes,
+                HasMatching: hasMatchingNotes,
+            } as never);
+            engine2.setExampleVectorServiceForTest({
+                RemoveVector: vi.fn(),
+                AddOrUpdateVector: vi.fn(),
+                FindNearestAsync: findNearestExamples,
+                HasMatching: hasMatchingExamples,
+            } as never);
+            const embedLocal = vi.spyOn(engine2, 'EmbedTextLocal');
+            vi.spyOn(engine2 as unknown as { ensureEmbeddingsGenerated: () => Promise<void> }, 'ensureEmbeddingsGenerated').mockResolvedValue();
+
+            const notes = await engine2.FindSimilarAgentNotes('what charts?', 'agent-empty');
+            const examples = await engine2.FindSimilarAgentExamples('how to query?', 'agent-empty');
+
+            expect(notes).toEqual([]);
+            expect(examples).toEqual([]);
+            expect(hasMatchingNotes).toHaveBeenCalledTimes(1);
+            expect(hasMatchingExamples).toHaveBeenCalledTimes(1);
+            expect(embedLocal).not.toHaveBeenCalled();
+            expect(findNearestNotes).not.toHaveBeenCalled();
+            expect(findNearestExamples).not.toHaveBeenCalled();
+        });
+
         it('loads only notes embedded by the default model, and warns with the count left out', () => {
             const vec = JSON.stringify([1, 0]);
             const note = (id: string, modelID: string | null, json: string | null = vec) => ({
@@ -2185,6 +2223,17 @@ describe('AIEngine', () => {
                 expect(loaded.map(e => e.key)).toEqual(['current']);
                 expect(vi.mocked(LogWarning)).toHaveBeenCalledWith(expect.stringContaining('left out 2 agent note(s)'));
             });
+        });
+
+        it('constructs both _noteVectorService and _exampleVectorService with Precision: float32', async () => {
+            createdVectorServices.length = 0;
+            base.AgentNotes = [];
+            base.AgentExamples = [];
+            await engine.RefreshNoteEmbeddings();
+            await engine.RefreshExampleEmbeddings();
+            expect(createdVectorServices).toHaveLength(2);
+            expect(createdVectorServices[0].options).toEqual({ Precision: 'float32' });
+            expect(createdVectorServices[1].options).toEqual({ Precision: 'float32' });
         });
 
         it('drops a saved note embedded by another model instead of adding it to the index', () => {

@@ -1,7 +1,8 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAccountingAction } from '../../base/base-accounting-action';
-import { LogError, Metadata, UserInfo } from '@memberjunction/core';
-import { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import { LogError, UserInfo } from '@memberjunction/core';
+import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { CredentialEngine, ResolvedCredential } from '@memberjunction/credentials';
 import { BaseAction } from '@memberjunction/actions';
 import { ERP_INTEGRATION } from '../../constants';
 import {
@@ -12,6 +13,9 @@ import {
     ParseJSONObject,
     ResolveBusinessCentralConnectorConfig
 } from './business-central-connection';
+
+/** Subsystem recorded on the credential access-audit row for Business Central actions. */
+const BC_CREDENTIAL_SUBSYSTEM = 'Accounting: Business Central';
 
 /**
  * Everything a Business Central API call needs, however the connection stores it.
@@ -195,15 +199,30 @@ export abstract class BusinessCentralBaseAction extends BaseAccountingAction {
         companyIntegrationId: string,
         contextUser: UserInfo
     ): Promise<JSONObject> {
-        const md = this.requestProvider ?? new Metadata();
-        const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-        const loaded = await credential.Load(credentialId);
-        if (!loaded) {
+        // Through CredentialEngine (#4928), so the read writes its access-audit row and LastUsedAt like
+        // every other credential consumer, instead of a bare entity Load.
+        const engine = CredentialEngine.Instance;
+        await engine.Config(false, contextUser, this.requestProvider);
+        let resolved: ResolvedCredential;
+        try {
+            resolved = await engine.GetCredential('', {
+                credentialId,
+                contextUser,
+                subsystem: BC_CREDENTIAL_SUBSYSTEM,
+            });
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            throw new Error(`Credential ${credentialId} for CompanyIntegration ${companyIntegrationId} could not be loaded: ${msg}`);
+        }
+        const credential = resolved.credential;
+        if (!credential) {
             throw new Error(`Credential ${credentialId} for CompanyIntegration ${companyIntegrationId} could not be loaded.`);
         }
         if (!credential.IsActive) {
             throw new Error(`Credential ${credentialId} for CompanyIntegration ${companyIntegrationId} is not active.`);
         }
+        // Parsed here rather than taken from `resolved.values`: the engine maps unparseable Values to
+        // an empty object, and this connection must refuse them instead.
         return ParseJSONObject(credential.Values, `Values of Credential ${credentialId}`);
     }
 

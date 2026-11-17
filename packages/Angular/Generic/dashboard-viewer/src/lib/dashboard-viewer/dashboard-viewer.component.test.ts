@@ -97,17 +97,21 @@ vi.mock('@memberjunction/ng-base-types', () => ({
   },
 }));
 
-vi.mock('@memberjunction/core', () => ({
-  Metadata: {},
-  RunView: class {},
-  // What the dashboard property code reads from core: a fixed zone, fixed-value defaults, and no type
-  // errors (the resolver and validator are tested against the real core in models/*.test.ts).
-  GetLocalTimeZone: () => 'UTC',
-  ResolvePropertyDefault: (def: { Value?: unknown }) => def.Value ?? null,
-  IsPropertyValueOfType: () => true,
-  ValidatePropertyDefault: () => [],
-  PROPERTY_VALUE_TYPES: ['string', 'number', 'boolean', 'date', 'uuid'],
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/core')>();
+  return {
+    ...actual,
+    Metadata: {},
+    RunView: class {},
+    // What the dashboard property code reads from core: a fixed zone, fixed-value defaults, and no type
+    // errors (the resolver and validator are tested against the real core in models/*.test.ts).
+    GetLocalTimeZone: () => 'UTC',
+    ResolvePropertyDefault: (def: { Value?: unknown }) => def.Value ?? null,
+    IsPropertyValueOfType: () => true,
+    ValidatePropertyDefault: () => [],
+    PROPERTY_VALUE_TYPES: ['string', 'number', 'boolean', 'date', 'uuid'],
+  };
+});
 
 /** LoadPartInterface: what each part declares, for the save check. */
 const loadPartInterfaceMock = vi.fn();
@@ -115,18 +119,47 @@ vi.mock('../models/dashboard-part-interfaces', () => ({
   LoadPartInterface: (...args: unknown[]) => loadPartInterfaceMock(...args),
 }));
 
-vi.mock('@memberjunction/global', () => ({
-  MJGlobal: { Instance: { ClassFactory: { CreateInstanceAsync: createPartInstanceMock } } },
-  UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) => a === b,
-  EscapeHTML: (value: string) => value,
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/global')>();
+  return {
+    ...actual,
+    MJGlobal: {
+      Instance: {
+        ClassFactory: {
+          CreateInstanceAsync: createPartInstanceMock,
+          Register: vi.fn(),
+        },
+        GetGlobalObjectStore: () => ({}),
+      },
+    },
+    UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) => a === b,
+    EscapeHTML: (value: string) => value,
+  };
+});
 
-vi.mock('@memberjunction/core-entities', () => ({
+const coreEntitiesMock: Record<string | symbol, unknown> = {
   DashboardEngine: {
     Instance: {
       Config: vi.fn().mockResolvedValue(undefined),
       DashboardPartTypes: partTypesDouble,
     },
+  },
+};
+vi.mock('@memberjunction/core-entities', () => new Proxy(coreEntitiesMock, {
+  has(target, prop) {
+    if (typeof prop !== 'string' || interopKeys.has(prop)) {
+      return prop in target;
+    }
+    return true;
+  },
+  get(target, prop) {
+    if (prop in target) {
+      return target[prop];
+    }
+    if (typeof prop !== 'string' || interopKeys.has(prop)) {
+      return undefined;
+    }
+    return class {};
   },
 }));
 

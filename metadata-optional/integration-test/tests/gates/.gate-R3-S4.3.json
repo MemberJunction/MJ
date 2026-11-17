@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "R3 -> S4.3",
+    "Description": "Gate G2.15 (phase 2, dataset R3, criterion S4.3): on R3 a count target ranks and gates on Poisson deviance; the GLM baseline's holdout deviance and the XGBoost candidate's inner-CV deviance each equal the reference pipeline's Poisson fits within 1e-6, and what the gate ships scores at most 1.1713 on the 3,000 held-out rows, with 0 negative predictions, 1 of 1. It fails when the count objective falls back to squared error for the boosted candidates (the XGBoost candidate's inner deviance departs from the reference pipeline's) or for the Poisson GLM baseline (the GLM baseline's deviance departs from the reference pipeline's).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.15\",\"owner:PR3\",\"phase:2\",\"dataset:R3\",\"criterion:S4.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Poisson deviance is the primary score on R3; the GLM baseline and the XGBoost candidate match the reference pipeline's Poisson fits and the shipped model scores at most 1.1713 with no negative counts (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-r3-s4-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "BE6FBDBC-2FBF-4397-A84E-27D7ED893058"
+  }
+}

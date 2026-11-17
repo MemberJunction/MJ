@@ -3,7 +3,7 @@ import { AppContext } from '../types.js';
 import { RunViewByIDInput } from '../generic/RunViewResolver.js';
 import { Message } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngine } from '@memberjunction/entity-communications-server';
-import { DatabaseProviderBase, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -207,9 +207,24 @@ export class ReportResolver extends ResolverBase {
 
       await EntityCommunicationsEngine.Instance.Config(false, contextUser);
       const newMessage = await this.resolveMessageTemplates(message, contextUser);
+      const {
+        Filter: rawFilter,
+        ResultType: rawResultType,
+        AfterKey: rawAfterKey,
+        ...restRunViewInput
+      } = runViewByIDInput;
+      const runViewParams: RunViewParams = {
+        ...restRunViewInput,
+        AfterKey: rawAfterKey?.KeyValuePairs ? CompositeKey.FromKeyValuePairs(rawAfterKey.KeyValuePairs) : undefined,
+        ResultType:
+          rawResultType === 'entity_object' || rawResultType === 'count_only' || rawResultType === 'simple'
+            ? rawResultType
+            : undefined,
+        Filter: this.parseStructuredRunViewFilter(rawFilter),
+      };
       const params: EntityCommunicationParams = {
         EntityID: entityID,
-        RunViewParams: <RunViewParams>runViewByIDInput,
+        RunViewParams: runViewParams,
         ProviderName: providerName,
         ProviderMessageTypeName: providerMessageTypeName,
         Message: newMessage,
