@@ -1,10 +1,10 @@
-import type { MJBootstrapEnvironment } from './public-page-entry';
+import type { PublicHostEnvironment } from './public-page-entry';
 
 /**
  * The MJAPI base URL, without a trailing slash: `MJAPI_URI` when set, otherwise the GraphQL server's origin.
  * Matches how Explorer's login-screen loader finds MJAPI before sign-in.
  */
-export function ResolvePublicMJAPIURL(environment: MJBootstrapEnvironment): string {
+export function ResolvePublicMJAPIURL(environment: PublicHostEnvironment): string {
   const configured = environment.MJAPI_URI?.trim();
   if (configured) {
     return configured.replace(/\/+$/, '');
@@ -13,7 +13,7 @@ export function ResolvePublicMJAPIURL(environment: MJBootstrapEnvironment): stri
 }
 
 /** The public route that returns the default theme's published sign-in page design. */
-export function BuildLoginScreenURL(environment: MJBootstrapEnvironment): string {
+export function BuildLoginScreenURL(environment: PublicHostEnvironment): string {
   return `${ResolvePublicMJAPIURL(environment)}/auth/login-screen`;
 }
 

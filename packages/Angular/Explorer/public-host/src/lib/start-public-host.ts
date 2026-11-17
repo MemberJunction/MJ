@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection, type ApplicationRef } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
-import type { MJBootstrapEnvironment, PublicPageEntry } from './public-page-entry';
+import type { PublicHostEnvironment, PublicPageEntry } from './public-page-entry';
 import { PUBLIC_HOST_CONFIG } from './public-host-config';
 import { PublicHostComponent } from './public-host.component';
 import { PublicPageContext } from './public-page-context';
@@ -11,7 +11,7 @@ import { ResolvePublicMJAPIURL } from './public-host-urls';
 export const PUBLIC_HOST_ACTIVE_CLASS = 'mj-public-host-active';
 
 export interface StartPublicHostOptions {
-  Environment: MJBootstrapEnvironment;
+  Environment: PublicHostEnvironment;
   PublicPages: PublicPageEntry[];
 }
 

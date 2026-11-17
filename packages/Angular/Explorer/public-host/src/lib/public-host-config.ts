@@ -1,9 +1,9 @@
 import { InjectionToken } from '@angular/core';
-import type { MJBootstrapEnvironment, PublicPageEntry } from './public-page-entry';
+import type { PublicHostEnvironment, PublicPageEntry } from './public-page-entry';
 
 /** What the public host gets from the host app. */
 export interface PublicHostConfig {
-  Environment: MJBootstrapEnvironment;
+  Environment: PublicHostEnvironment;
   PublicPages: PublicPageEntry[];
 }
 

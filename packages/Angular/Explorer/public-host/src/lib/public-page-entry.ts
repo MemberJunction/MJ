@@ -10,8 +10,8 @@ export interface PublicPageEntry {
   Load: () => Promise<Type<unknown>>;
 }
 
-/** The part of the host app's environment that the public host and the Explorer start-up read. */
-export interface MJBootstrapEnvironment {
+/** The part of the host app's environment that the public host reads. */
+export interface PublicHostEnvironment {
   GRAPHQL_URI: string;
   MJAPI_URI?: string;
 }
