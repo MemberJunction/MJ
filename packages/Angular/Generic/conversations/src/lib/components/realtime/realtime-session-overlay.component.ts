@@ -637,6 +637,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   private surfaceTabs?: RealtimeSurfaceTabsComponent;
   @ViewChild(RealtimeSurfaceTabsComponent)
   private set surfaceTabsRef(ref: RealtimeSurfaceTabsComponent | undefined) {
+    if (ref === this.surfaceTabs) {
+      return;
+    }
     this.surfaceTabs = ref;
     if (!ref) {
       // The panel went away with its slots. StageSlot reads null while it is away, so the bindings don't change.
@@ -655,11 +658,15 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.flushPendingChannelTabs();
       const reveal = this.pendingRevealKey;
       this.pendingRevealKey = null;
+      const revealSeq = this.revealSequence;
       // Deferred: focus/expand feed the parent's width bindings (wide tier) — never
       // mutate those inside the change-detection pass that created the panel.
       setTimeout(() => {
+        if (revealSeq !== this.revealSequence) {
+          return;
+        }
         if (reveal) {
-          // The agent's first channel activity caused this creation — land ON the board.
+          // The agent's channel activity caused this creation — land ON that channel.
           ref.RevealChannel(reveal);
         } else {
           // Default for a fresh panel (live AND review): the marquee surface — channels
@@ -681,11 +688,14 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** The bottom dock — type-to-compose seeds + focuses its input. */
   @ViewChild(RealtimeComposerComponent) private composer?: RealtimeComposerComponent;
 
-  /** Channel keys already auto-revealed this session (first activity only). */
-  private revealedChannelKeys = new Set<string>();
+  /** Presenter channel keys already auto-revealed this session (avoid re-placing video on repeat frames). */
+  private revealedPresenterKeys = new Set<string>();
 
   /** Auto-reveal that arrived before the (disclosure-gated) panel rendered. */
   private pendingRevealKey: string | null = null;
+
+  /** Monotonic sequence guarding deferred initial-mount reveals against newer channel switches. */
+  private revealSequence = 0;
 
   /** Previous Active$ value — edges drive disclosure session begin/ratchet. */
   private prevActive = false;
@@ -1630,34 +1640,48 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * The agent ACTED on a channel (a tool call routed to its local executor — e.g. the
-   * first whiteboard write). THE ONE AUTO-REVEAL: the surface panel opens (as a peek —
-   * the left column stays exactly as it was, pure audio included) with the channel's tab
-   * focused and flashed, exactly once per channel — so the user discovers the board the
-   * moment it comes alive. Disclosure levels are NOT raised: no text, no composer, no
-   * extra chrome — just the board.
+   * The agent ACTED on a channel (a native channel tool call, ContextTool dispatch, or
+   * accepted delegation artifact). Auto-reveals and switches to that channel's surface tab
+   * whenever the agent switches resources or the panel is hidden/collapsed, while leaving
+   * the user alone if they are already viewing that exact expanded channel tab.
+   * Headless channels (no surface) never open the panel, and presenter video is placed once.
    */
   private onChannelActivity(plugin: BaseRealtimeChannelClient): void {
-    if (this.IsReviewing || this.revealedChannelKeys.has(plugin.ChannelName)) {
+    if (this.IsReviewing) {
       return;
     }
-    this.revealedChannelKeys.add(plugin.ChannelName);
     if (plugin.ShowsAgentVideo) {
+      if (this.revealedPresenterKeys.has(plugin.ChannelName)) {
+        return;
+      }
+      this.revealedPresenterKeys.add(plugin.ChannelName);
       this.revealPresenter(plugin);
       return;
     }
-    this.DetailsPeek = true; // the panel shows via the same on-demand mechanism Details uses
-    // FIRST USE: a non-whiteboard channel was tab-less until now — register its tab
-    // SYNCHRONOUSLY (before the reveal/focus below) so the channel exists to be revealed.
-    // The whiteboard already has its tab from session start; re-registering is idempotent.
-    if (plugin.HasSurface()) {
+    if (!plugin.HasSurface()) {
+      return;
+    }
+
+    const hadPanel = this.DetailsPeek && Boolean(this.surfaceTabs);
+    const alreadyViewing =
+      hadPanel &&
+      !this.surfaceTabs!.Collapsed &&
+      this.surfaceTabs!.ActiveTab.Key === plugin.ChannelName;
+
+    if (!this.hasChannelTab(plugin)) {
       this.registerPluginChannelTab(plugin);
     }
+
+    if (alreadyViewing) {
+      return;
+    }
+
+    this.DetailsPeek = true; // the panel shows via the same on-demand mechanism Details uses
+    this.revealSequence++;
     if (this.surfaceTabs) {
       // Stream handler (a tool call), not a change-detection pass — reveal synchronously
-      // so the board is the visible tab the instant the agent's first stroke lands. The
-      // microtask-deferred RegisterChannelTab above is ordered before this RevealChannel,
-      // so the tab is in place when the focus lands.
+      // so the channel is visible the instant the agent acts. Any microtask-deferred
+      // RegisterChannelTab above is ordered before this RevealChannel.
       this.surfaceTabs.RevealChannel(plugin.ChannelName);
     } else {
       // Panel not rendered yet (the peek just created it) — reveal once it exists.
@@ -1665,6 +1689,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
     // DetailsPeek flipped — surfacePanelEarned changed; re-resolve (marks for check).
     this.recomputeUi();
+  }
+
+  /** Whether the channel's tab and current plugin instance are already registered. */
+  private hasChannelTab(plugin: BaseRealtimeChannelClient): boolean {
+    if (this.SurfaceStage.PluginFor(plugin.ChannelName) !== plugin) {
+      return false;
+    }
+    if (this.surfaceTabs) {
+      return this.surfaceTabs.Model.Tabs.some(t => t.Key === plugin.ChannelName);
+    }
+    return this.pendingChannelTabs.some(t => t.Key === plugin.ChannelName);
   }
 
   /**
@@ -1684,8 +1719,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.Disclosure.BeginSession();
       this.DetailsPeek = false;
       this.ComposerOpen = false; // typing is opt-in per session (voice-first)
-      this.revealedChannelKeys.clear();
+      this.revealedPresenterKeys.clear();
       this.pendingRevealKey = null;
+      this.revealSequence++;
       this.startAudioVisualLoop();
     } else if (!active && this.prevActive) {
       this.persistDisclosure(this.Disclosure.RatchetOnSessionEnd());

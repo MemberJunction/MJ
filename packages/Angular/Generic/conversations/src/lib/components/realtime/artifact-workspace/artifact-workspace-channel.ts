@@ -712,6 +712,7 @@ export class ArtifactWorkspaceChannel extends BaseRealtimeChannelClient<Realtime
       resolved.VersionNumber,
       resolved.Name,
     );
+    this.Engine.SetActive(existing.InstanceID);
     this.EmitChannelEvent(
       'version_changed',
       {

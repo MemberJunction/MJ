@@ -2100,4 +2100,151 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       });
     });
   });
+
+  describe('channel activity auto-switching', () => {
+    class TestSurfaceChannel extends BaseRealtimeChannelClient<TestBoardComponent> {
+      public constructor(
+        private readonly channelName: string,
+        private readonly tabTitle: string,
+        private readonly prefix: string,
+      ) {
+        super();
+      }
+      public get ChannelName(): string { return this.channelName; }
+      public get ToolNamePrefix(): string { return this.prefix; }
+      public get TabTitle(): string { return this.tabTitle; }
+      public get TabIcon(): string { return 'fa-solid fa-window-maximize'; }
+      public GetToolDefinitions(): RealtimeToolDefinition[] { return []; }
+      public ApplyAgentTool(): string { return '{}'; }
+      public override GetSurfaceComponent(): Type<TestBoardComponent> { return TestBoardComponent; }
+    }
+
+    class TestHeadlessChannel extends BaseRealtimeChannelClient {
+      public get ChannelName(): string { return 'ClientContextChannel'; }
+      public get ToolNamePrefix(): string { return 'ContextTool'; }
+      public get TabTitle(): string { return 'Context'; }
+      public get TabIcon(): string { return 'fa-solid fa-code'; }
+      public GetToolDefinitions(): RealtimeToolDefinition[] { return []; }
+      public ApplyAgentTool(): string { return '{}'; }
+    }
+
+    const activeTabTitle = (f: ReturnType<typeof renderComponentFixture<RealtimeSessionOverlayComponent>>): string =>
+      query(f, '.s-tab--active')?.textContent?.trim() ?? '';
+
+    it('switches to whichever channel the agent is acting on, including returning to earlier channels', async () => {
+      const session = fakeSession();
+      const board = new TestWhiteboardChannel();
+      const docs = new TestSurfaceChannel('ArtifactWorkspace', 'Docs', 'ArtifactWorkspace_');
+      const browser = new TestSurfaceChannel('Remote Browser', 'Browser', 'browser_');
+      const media = new TestSurfaceChannel('Media', 'Media', 'Media_');
+
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console' },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      session.channels$.next([board, docs, browser, media]);
+      await settle();
+
+      expect(query(f, '.call-panel')).toBeNull();
+
+      // First doc opens panel directly onto Docs (not Whiteboard)
+      session.activity$.next(docs);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Docs');
+
+      // Agent switches to Remote Browser
+      session.activity$.next(browser);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Browser');
+
+      // Agent switches to Media
+      session.activity$.next(media);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Media');
+
+      // Agent switches BACK to Docs, then BACK to Browser, then to Whiteboard
+      session.activity$.next(docs);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Docs');
+
+      session.activity$.next(browser);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Browser');
+
+      session.activity$.next(board);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Whiteboard');
+    });
+
+    it('reopens a collapsed or hidden panel onto the channel the agent acts on', async () => {
+      const session = fakeSession();
+      const board = new TestWhiteboardChannel();
+      const media = new TestSurfaceChannel('Media', 'Media', 'Media_');
+
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console' },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      session.channels$.next([board, media]);
+      await settle();
+
+      session.activity$.next(media);
+      await settle();
+      expect(activeTabTitle(f)).toContain('Media');
+
+      // User collapses panel strip; new activity on Media must re-expand it onto Media.
+      click(f, '.surface__toggle');
+      await settle();
+      expect(f.componentInstance.PanelCollapsed).toBe(true);
+
+      session.activity$.next(media);
+      await settle();
+      expect(f.componentInstance.PanelCollapsed).toBe(false);
+      expect(activeTabTitle(f)).toContain('Media');
+
+      // User hides the panel via Details; new activity on Media must reopen it onto Media.
+      f.componentInstance.OnDetailsToggled();
+      await settle();
+      expect(f.componentInstance.DetailsPeek).toBe(false);
+
+      session.activity$.next(media);
+      await settle();
+      expect(f.componentInstance.DetailsPeek).toBe(true);
+      expect(activeTabTitle(f)).toContain('Media');
+    });
+
+    it('ignores activity from headless channels with no surface', async () => {
+      const session = fakeSession();
+      const board = new TestWhiteboardChannel();
+      const headless = new TestHeadlessChannel();
+
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console' },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      session.channels$.next([board, headless]);
+      await settle();
+
+      session.activity$.next(headless);
+      await settle();
+
+      expect(f.componentInstance.DetailsPeek).toBe(false);
+      expect(query(f, '.call-panel')).toBeNull();
+    });
+  });
 });
