@@ -6,7 +6,7 @@
  * down to just GraphQLServer + ActionSubclasses + EntitySubclasses because
  * the production API never generates Angular forms — those are baked into
  * MJExplorer at build time. In the regression docker stack, however, we
- * need to generate forms at runtime against the AssociationDemo schema,
+ * generate the non-core output against the stack's own fresh database,
  * so this config supplies the full output array from the repo-root
  * mj.config.cjs (the one a developer runs `mj codegen` with locally).
  *

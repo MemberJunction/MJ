@@ -1,9 +1,10 @@
 #!/bin/bash
 # Form Generator Entrypoint — One-Shot CodeGen Container
 #
-# Runs the same DB bring-up as db-setup (create DB, install AssociationDB,
-# run Flyway migrations) and then runs `mj codegen` to generate Angular
-# entity-form components into a host bind-mount.
+# Runs the same DB bring-up as db-setup (create DB, run Flyway migrations)
+# and then runs `mj codegen` to generate Angular entity-form components into a
+# host bind-mount. It does not install the Open Apps: their entity classes and
+# forms ship in the app packages, so the output covers MJ's own schema only.
 #
 # The compose file mounts:
 #   ./.docker-generated/MJExplorer-forms → /app/packages/MJExplorer/src/app/generated
@@ -24,12 +25,9 @@ echo "  MJ Form Generator (codegen for entity forms)"
 echo "  ─────────────────────────────────────────"
 echo ""
 
-# Step 1: CREATE DATABASE + install AssociationDB schema.
-# We only need the AssociationDB schema (so codegen sees the tables); skip the
-# row-count verify and accept >50% batch errors because the form-generator
-# container tears down before the data ever matters.
-echo "Step 1: Bootstrapping database (CREATE + AssociationDB schema)..."
-SKIP_VERIFY=true FORCE_FAIL_THRESHOLD=disabled node "$SCRIPTS/bootstrap-db.cjs"
+# Step 1: CREATE DATABASE
+echo "Step 1: Creating database..."
+node "$SCRIPTS/bootstrap-db.cjs"
 echo ""
 
 echo "Step 2: Running MJ migrations..."
@@ -42,26 +40,8 @@ echo ""
 # ./.docker-generated/MJExplorer-forms/ on the host. That's the whole point
 # of this container.
 echo "Step 3: Running CodeGen to generate Angular entity forms..."
-# Run codegen TWICE. The AssociationDemo tables are brand-new to this fresh temp
-# DB, so the FIRST pass onboards them: it creates their EntityField metadata
-# rows — including the __mj_CreatedAt/__mj_UpdatedAt system date fields — and
-# commits them to the DB. But the generated output files emitted during that
-# same first pass are produced from in-memory metadata captured before those
-# system fields existed, so the non-core GraphQL types (and entity subclasses)
-# come out WITHOUT _mj__CreatedAt/_mj__UpdatedAt. A SECOND codegen process loads
-# metadata that now includes those committed fields and regenerates the output
-# correctly. Without this, single-record reads + saves of demo entities fail
-# at runtime with "Cannot query field _mj__CreatedAt on type AssociationDemoMember_".
-# Both passes must succeed.
 node /app/packages/MJCLI/bin/run.js codegen
-# Pass 1 created the demo EntityField rows; type the email/URL ones so the next
-# pass generates their fields as mailto / external links (T044).
-node "$SCRIPTS/set-demo-field-types.cjs" 2>&1 || {
-    echo "  WARNING: Demo field type update failed — T044 will see plain-text emails"
-}
-echo "  ↻ CodeGen pass 1 complete; re-running against settled metadata..."
-node /app/packages/MJCLI/bin/run.js codegen
-echo "  ✓ CodeGen complete (2 passes)"
+echo "  ✓ CodeGen complete"
 echo ""
 
 # Sanity check: confirm forms were written to the bind-mount.

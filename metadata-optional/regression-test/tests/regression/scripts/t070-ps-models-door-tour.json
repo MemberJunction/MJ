@@ -1,0 +1,137 @@
+{
+  "TestId": "728C5900-3980-4E8B-9F05-91A9B8D2918D",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "85cd97d9",
+  "RecordedAt": "2026-11-13T08:52:48.345Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on the application switcher dropdown next to the logo to open the list of applications.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open and 'Predictive Studio' is visible under RECENT apps (element index 5). I will click on 'Predictive Studio'.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Predictive Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[2]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 502,
+            "YMin": 186,
+            "XMax": 778,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Predictions"
+      }
+    },
+    {
+      "Instruction": "Predictive Studio is open. Next step is to click the 'Models' door/tab at the top.",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Predictions",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Models",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 563,
+            "YMin": 13,
+            "XMax": 671,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Predictions"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Models"
+      }
+    },
+    {
+      "Instruction": "We have clicked on 'Models' and arrived at the 'Model Registry' section. The page displays the master list of trained ML models and the lifecycle stepper (Draft → Validated → Published → Archived), pe",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Models",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Models in Production",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-models-resource[1]/mj-page-body-interior[1]/div[1]/as-split[1]/as-split-area[1]/aside[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 246,
+            "XMax": 169,
+            "YMax": 294
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Models"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Models?section=production"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/predictive-studio/Models?section=production",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

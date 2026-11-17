@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t032-ai-agent-run-timeline-steps.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,ai",
@@ -51,7 +52,7 @@
     "ID": "967A045A-97AF-4EF1-A38D-16E05B62DB7E"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.745Z",
-    "checksum": "5e9ce463bef1e60e70cb2b87207f94765486b539d6e00835a511479a61d411e7"
+    "lastModified": "2026-11-13T09:22:10.900Z",
+    "checksum": "032243c816585b015631947388a1dc765a58d2f8b30da3b3ecc27f2f9f7199b3"
   }
 }

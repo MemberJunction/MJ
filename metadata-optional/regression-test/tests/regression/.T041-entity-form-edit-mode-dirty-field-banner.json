@@ -3,7 +3,7 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T041 - Entity Form Edit-Mode Dirty Field Banner",
     "Description": "Tests the live dirty-field-tracking banner (DirtyFieldDisplayNames count + names, ShowEditBanner) — distinct from the edit-and-save round-trips (T201-T209) and from discard (T204); the observable here is the real-time change-tracking display, not persistence.",
-    "InputDefinition": "{\n  \"goal\": \"Open the 'Events' entity via the LEFT sidebar 'Search record types...' box, click an event row, then 'Open Full Record'. Click Edit to enter edit mode — an edit banner appears at the top. Modify one editable text field (e.g. Location or Description) to a new value. Confirm the banner updates to show a count of modified fields (e.g. '1 field modified') and lists the changed field name(s). Success is the banner reflecting the dirty-field count/name after your edit — you do NOT need to save. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "InputDefinition": "{\n  \"goal\": \"Open the 'Meetings' entity (the Committees app's meetings) via the LEFT sidebar 'Search record types...' box (or navigate to http://localhost:4200/app/data-explorer/Data?entity=Committees:%20Meetings), click a meeting row, then 'Open Full Record'. Click Edit to enter edit mode — an edit banner appears at the top. Modify one editable text field (e.g. Location Text or Description) to a new value. Confirm the banner updates to show a count of modified fields (e.g. '1 field modified') and lists the changed field name(s). Success is the banner reflecting the dirty-field count/name after your edit — you do NOT need to save. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Entering edit mode shows an edit banner with Save/Discard actions\",\n    \"After editing a field, the banner reports the number of modified fields and/or names the changed field\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -51,7 +51,7 @@
     "ID": "B1147EA3-E176-4ABE-AD03-1B43115D31FA"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.747Z",
-    "checksum": "f8044619a514a37d71c74b25482e34643fe7c435b68e4884724fb0496559e0d9"
+    "lastModified": "2026-11-13T08:36:00.239Z",
+    "checksum": "aeea1a646adbf1013a8b38c80cc10c0051c670fb862589037dc3e5531f3bdf77"
   }
 }

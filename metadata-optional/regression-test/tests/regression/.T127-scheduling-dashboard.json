@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t127-scheduling-dashboard.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,scheduling",
@@ -51,7 +52,7 @@
     "ID": "5961D1B9-4CCC-45CF-8A35-730C6D9EBB2F"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.774Z",
-    "checksum": "212a3f54569709d921f96a182913c410c6d67d954ce822151e020dd72db06e30"
+    "lastModified": "2026-11-13T09:22:10.936Z",
+    "checksum": "666f5afe1644d4e147137d1d28722eaa3a0d5429738e205103fbafe000cc887f"
   }
 }

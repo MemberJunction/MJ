@@ -1,0 +1,77 @@
+{
+  "TestId": "1B5A6380-8407-477C-82C9-EEE5C275D93F",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "773baab4",
+  "RecordedAt": "2026-11-13T09:02:27.925Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the application switcher dropdown next to the logo (or click 'Knowledge Hub' from the applications list). In the interactive elements list, element [50] is 'Knowledge Hub' under 'My app",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Knowledge Hub",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[39]",
+          "BoundingBox": {
+            "XMin": 646,
+            "YMin": 1368,
+            "XMax": 916,
+            "YMax": 1454
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Classify"
+      }
+    },
+    {
+      "Instruction": "The user prompt asked: 'In the left nav within Classify, click the 'Pipeline' section, then click the primary 'Run Pipeline' button in the top-right header.' Wait, let's look at the left nav or top he",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Classify",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Run Pipeline",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-autotagging-pipeline-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1136,
+            "YMin": 84,
+            "XMax": 1256,
+            "YMax": 117
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Classify"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/knowledge-hub/Classify",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

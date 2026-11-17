@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "step-count": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t005-handle-invalid-navigation-gracefully.json"
     },
     "Status": "Active",
     "Tags": "P3,regression",
@@ -51,7 +52,7 @@
     "ID": "F41D1D9B-73B1-499A-841C-E4A6E2C08FB3"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.796Z",
-    "checksum": "9f5744d93fadb27cd25cc9066b5b4d908f0e24954857aa53c5b6acd6a5989a2e"
+    "lastModified": "2026-11-13T09:22:10.950Z",
+    "checksum": "541ffcf842e95da6fd948b20f20e2925a8c44d6fac301c00b1ffc4b9c695625f"
   }
 }

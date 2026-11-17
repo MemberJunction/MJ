@@ -1,0 +1,130 @@
+{
+  "TestId": "86CCCFB7-3081-4890-AE3D-C6118CB9F57C",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "89c92cf5",
+  "RecordedAt": "2026-11-13T09:13:34.115Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on 'Component Studio' in the application list to navigate to Component Studio.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Component Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[30]",
+          "BoundingBox": {
+            "XMin": 364,
+            "YMin": 1432,
+            "XMax": 634,
+            "YMax": 1518
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    },
+    {
+      "Instruction": "The user wants to navigate to Component Studio -> Form Studio, locate the view-mode toggle button in the Forms rail header (tree/folder icon 'Switch to tree view'), toggle it to grouped tree view (Sch",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Components",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Form Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 474,
+            "YMin": 13,
+            "XMax": 609,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/component-studio/Form%20Studio"
+      }
+    },
+    {
+      "Instruction": "I need to click the view-mode toggle button in the Forms rail header (tooltip 'Switch to tree view (Schema → Entity → Form)'). It is element [10].",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Form%20Studio",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch to tree view (Schema → Entity → Form)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-form-builder-resource[1]/div[1]/as-split[1]/as-split-area[1]/aside[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 527,
+            "YMin": 72,
+            "XMax": 555,
+            "YMax": 100
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Form%20Studio"
+      }
+    },
+    {
+      "Instruction": "The previous action clicked element [10] (the view-mode toggle). The current screenshot shows the forms list restructured into a grouped tree layout: '(NO SCHEMA)' header with a database icon, '(no en",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Form%20Studio",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch to flat list",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-form-builder-resource[1]/div[1]/as-split[1]/as-split-area[1]/aside[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 527,
+            "YMin": 72,
+            "XMax": 555,
+            "YMax": 100
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Form%20Studio"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/component-studio/Form%20Studio",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

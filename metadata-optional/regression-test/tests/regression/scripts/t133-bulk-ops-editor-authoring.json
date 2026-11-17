@@ -1,0 +1,334 @@
+{
+  "TestId": "1CD1A261-55D1-432B-8A29-CEBAD2E08E41",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "fa2cd150",
+  "RecordedAt": "2026-11-13T09:09:33.168Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on 'New operation' button to open the bulk operation editor.",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New operation",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1087,
+            "YMin": 161,
+            "XMax": 1260,
+            "YMax": 205
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    },
+    {
+      "Instruction": "First, signal checkpoint 'create-new-op-editor' as we are on the new operation editor screen. Then, to test 'save-preview-gating', type a Name into the Name input field (index 11) and select an Entity",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "type",
+        "Text": "Test Operation",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "e.g. Mark idle prompts for review",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/mj-record-process-editor[1]/div[1]/section[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 281,
+            "YMin": 302,
+            "XMax": 1003,
+            "YMax": 341
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    },
+    {
+      "Instruction": "I have already reached the authoring editor view for creating a new bulk operation, which completes checkpoint (1) 'create-new-op-editor'. Now I will signal 'create-new-op-editor' and select an Entity",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "— choose an entity —\nAccess Control Rules\nAccounting Company Profiles\nAccounting Engine Extensions\nAction Authorizations",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/mj-record-process-editor[1]/div[1]/section[2]/div[2]/div[1]/select[1]",
+          "BoundingBox": {
+            "XMin": 281,
+            "YMin": 537,
+            "XMax": 662,
+            "YMax": 575
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    },
+    {
+      "Instruction": "I need to set the checkpointReached to 'create-new-op-editor' while taking an action, or select an entity from the open dropdown to proceed to 'save-preview-gating'. Let's select 'Access Control Rules",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "ArrowDown"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    },
+    {
+      "Instruction": "I need to set the checkpointReached to 'create-new-op-editor' while taking an action, or select an entity from the open dropdown to proceed to 'save-preview-gating'. Let's select 'Access Control Rules",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "We have selected the Entity 'Access Control Rules' and typed a Name 'Test Operation'. Now we see 'Save' enabled in the toolbar at the top right, while 'Preview changes' stays disabled (or not visible ",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Filter\nA view\nA list",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/mj-record-process-editor[1]/div[1]/section[2]/div[2]/div[2]/select[1]",
+          "BoundingBox": {
+            "XMin": 678,
+            "YMin": 537,
+            "XMax": 951,
+            "YMax": 575
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    },
+    {
+      "Instruction": "We need to test behavior (3) scope-conditional-filter: confirm Filter input is visible when Default scope is 'Filter', then switch to 'A view' and confirm Filter input disappears, then switch back to ",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "ArrowDown"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    },
+    {
+      "Instruction": "We need to test behavior (3) scope-conditional-filter: confirm Filter input is visible when Default scope is 'Filter', then switch to 'A view' and confirm Filter input disappears, then switch back to ",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "We just selected 'A view' for Default scope, and the Filter input field disappeared, which partially tests scope-conditional-filter. Now let's switch Default scope back to 'Filter' to verify it reappe",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Filter\nA view\nA list",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/mj-record-process-editor[1]/div[1]/section[2]/div[2]/div[2]/select[1]",
+          "BoundingBox": {
+            "XMin": 678,
+            "YMin": 537,
+            "XMax": 951,
+            "YMax": 575
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    },
+    {
+      "Instruction": "We just selected 'A view' for Default scope, and the Filter input field disappeared, which partially tests scope-conditional-filter. Now let's switch Default scope back to 'Filter' to verify it reappe",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "ArrowUp"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "We just selected 'A view' for Default scope, and the Filter input field disappeared, which partially tests scope-conditional-filter. Now let's switch Default scope back to 'Filter' to verify it reappe",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "Confirm scope-conditional-filter checkpoint as the Filter input is currently visible after toggling scope back to 'Filter'. Next, proceed to rules-gated-on-entity or fieldrules-add-rule by clicking th",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add rule",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/mj-record-process-editor[1]/div[1]/section[3]/mj-field-rules-builder[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1141,
+            "YMin": 749,
+            "XMax": 1239,
+            "YMax": 780
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    },
+    {
+      "Instruction": "First, signal checkpoint 'rules-gated-on-entity' since section 3 'Rules' shows the field rules builder ('Field rules' heading with '+ Add rule' button) because an entity is selected. Then, switch the ",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "a fixed value\nanother field\na formula\na lookup\nan AI prompt",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/mj-record-process-editor[1]/div[1]/section[3]/mj-field-rules-builder[1]/div[1]/div[2]/div[1]/select[2]",
+          "BoundingBox": {
+            "XMin": 294,
+            "YMin": 613,
+            "XMax": 1226,
+            "YMax": 651
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    },
+    {
+      "Instruction": "First, signal checkpoint 'rules-gated-on-entity' since section 3 'Rules' shows the field rules builder ('Field rules' heading with '+ Add rule' button) because an entity is selected. Then, switch the ",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "ArrowDown"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "First, signal checkpoint 'rules-gated-on-entity' since section 3 'Rules' shows the field rules builder ('Field rules' heading with '+ Add rule' button) because an entity is selected. Then, switch the ",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "ArrowDown"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "First, signal checkpoint 'rules-gated-on-entity' since section 3 'Rules' shows the field rules builder ('Field rules' heading with '+ Add rule' button) because an entity is selected. Then, switch the ",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The source dropdown was successfully changed to 'a formula' and the source input below re-rendered showing a formula expression input box (placeholder 'e.g. fields.FirstName + ...'). This satisfies st",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/mj-record-process-editor[1]/div[1]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 571,
+            "YMin": 838,
+            "XMax": 644,
+            "YMax": 882
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/bulk-operations",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

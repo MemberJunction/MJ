@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t037-ai-prompt-record-loads.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,ai",
@@ -51,7 +52,7 @@
     "ID": "5715E8E0-C6EF-48A2-80A8-B073CC564F57"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.785Z",
-    "checksum": "d2c174217305f879fda94d77e0ce6f36f7017eb9ff97be24ef8d569ede710d9f"
+    "lastModified": "2026-11-13T09:22:10.948Z",
+    "checksum": "3b113f7602160b646e55201ff15c3104556fc6527e283967b3db445ac916e668"
   }
 }

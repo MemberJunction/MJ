@@ -16,7 +16,7 @@ node_modules
 # Local CodeGen artifacts (gitignored). These are regenerated per-environment:
 # Dockerfile.api overlays them from docker/regression/.docker-generated/, but
 # Dockerfile.db-setup does not, so a developer's stale copy leaks in and fails
-# the build against the checked-in GeneratedEntities (TS2305 on AssociationDemo*).
+# the build against the checked-in GeneratedEntities (TS2305 on missing generated classes).
 packages/MJAPI/src/generated/class-registrations-manifest.ts
 
 # VCS + editor noise

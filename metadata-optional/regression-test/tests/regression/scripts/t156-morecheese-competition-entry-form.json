@@ -1,0 +1,80 @@
+{
+  "TestId": "EE88DA19-190D-40CF-9136-C8B4C94BA439",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "5b8ed693",
+  "RecordedAt": "2026-11-13T15:30:39.688Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Type 'Old Alderwick' into the grid filter box [11] to show only Old Alderwick entries, then click 'Open Full Record' [106].",
+      "UrlBefore": "http://localhost:4200/app/morecheese",
+      "Action": {
+        "Method": "type",
+        "Text": "Old Alderwick",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Filter records... (press / to focus)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[2]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 409,
+            "YMin": 121,
+            "XMax": 832,
+            "YMax": 159
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/morecheese"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/morecheese?entity=MoreCheese: Competition Entries&record=ID|{uuid}"
+      }
+    },
+    {
+      "Instruction": "Clicking 'Open Full Record' button on the side panel to open the full record form for ICF-000107:2019:1 (Henri Dubois, 2019).",
+      "UrlBefore": "http://localhost:4200/app/morecheese?entity=MoreCheese: Competition Entries&record=ID|{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[3]/mj-entity-record-detail-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 901,
+            "YMin": 664,
+            "XMax": 1260,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/morecheese?entity=MoreCheese: Competition Entries&record=ID|{uuid}"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/morecheese/record/MoreCheese:%20Competition%20Entries/ID%7C{uuid}"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/morecheese/record/MoreCheese:%20Competition%20Entries/ID%7C{uuid}",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

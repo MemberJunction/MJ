@@ -1,0 +1,212 @@
+{
+  "TestId": "B96D18C5-C3E1-420E-921D-3F0AC89AB3F3",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "c851fce9",
+  "RecordedAt": "2026-11-13T09:07:19.465Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the Communication app via the application switcher dropdown next to the logo. Looking at the element list, [1] is 'Switch application — current: Home'. Clicking it will open the app lis",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is open. I need to select the Communication app. Looking at interactive elements, [40] link 'Communication' or [89] button 'Communication' is available. I will click el",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Communication",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[33]",
+          "Scope": "group:All applications",
+          "BoundingBox": {
+            "XMin": 788,
+            "YMin": 1178,
+            "XMax": 1063,
+            "YMax": 1256
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/communication/Monitor"
+      }
+    },
+    {
+      "Instruction": "I am in the Communication app now. I need to navigate to its 'Templates' section. Looking at the top bar, I see 'New Message', 'Monitor', 'Logs', and 'More 3'. I'll click 'More 3' or look for 'Templat",
+      "UrlBefore": "http://localhost:4200/app/communication/Monitor",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[4]",
+          "BoundingBox": {
+            "XMin": 671,
+            "YMin": 13,
+            "XMax": 786,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/communication/Monitor"
+      }
+    },
+    {
+      "Instruction": "Click on the 'Templates' link in the dropdown menu to navigate to the Templates section.",
+      "UrlBefore": "http://localhost:4200/app/communication/Monitor",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Templates",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 625,
+            "YMin": 96,
+            "XMax": 823,
+            "YMax": 133
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/communication/Monitor"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/communication/Templates"
+      }
+    },
+    {
+      "Instruction": "I have arrived at the Communication Templates page. Setting checkpoint to 'templates-search-filter' as required by instructions. First I will test searching for a term e.g. 'Action' to see template ca",
+      "UrlBefore": "http://localhost:4200/app/communication/Templates",
+      "Action": {
+        "Method": "type",
+        "Text": "Action",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search templates...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-communication-templates-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-page-search[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 909,
+            "YMin": 159,
+            "XMax": 1132,
+            "YMax": 182
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/communication/Templates"
+      }
+    },
+    {
+      "Instruction": "Checkpoint 'templates-search-filter' was reached when we entered Templates and started testing search. Now typing a nonsense term 'zzzqqq' to trigger the empty state, then clearing it, then proceeding",
+      "UrlBefore": "http://localhost:4200/app/communication/Templates",
+      "Action": {
+        "Method": "type",
+        "Text": "zzzqqq",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search templates...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-communication-templates-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-page-search[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 909,
+            "YMin": 159,
+            "XMax": 1132,
+            "YMax": 182
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/communication/Templates"
+      }
+    },
+    {
+      "Instruction": "We see 'No templates found matching your criteria' after searching 'zzzqqq'. Now we proceed to checkpoint 'new-template' by clicking '+ New Template'.",
+      "UrlBefore": "http://localhost:4200/app/communication/Templates",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Template",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-communication-templates-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1118,
+            "YMin": 84,
+            "XMax": 1256,
+            "YMax": 117
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/communication/Templates"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/communication/record/MJ:%20Templates/new"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/communication/record/MJ:%20Templates/new",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

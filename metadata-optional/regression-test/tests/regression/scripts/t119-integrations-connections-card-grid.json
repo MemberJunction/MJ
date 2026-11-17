@@ -1,0 +1,358 @@
+{
+  "TestId": "8B8C22CC-57E9-4D58-A779-DB1FDE797B8B",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "2aad8e29",
+  "RecordedAt": "2026-11-13T09:06:17.600Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click the application switcher dropdown next to the Home logo to open the list of applications.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher opened and 'Integrations' is directly visible in the RECENT section (and also available by searching or clicking). Clicking 'Integrations' [4] will open the Integrations appli",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Integrations",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/integrations/Overview"
+      }
+    },
+    {
+      "Instruction": "I am in the Integrations application on the Overview tab. I need to navigate to the 'Integrations' (Connections) tab in the top navigation bar.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Integrations",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 408,
+            "YMin": 13,
+            "XMax": 540,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Overview"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/integrations/Integrations"
+      }
+    },
+    {
+      "Instruction": "Now on the Integrations (Connections) page. Step 1 is add-connection-wizard: click 'Add Integration' button to open wizard.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Integrations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add Integration",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-connections[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1112,
+            "YMin": 84,
+            "XMax": 1256,
+            "YMax": 117
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Integrations"
+      }
+    },
+    {
+      "Instruction": "We are now inside the Add Integration multi-step wizard (Step 1: Choose Integration). I need to type a few letters in the search box to test narrowing, then close the wizard by clicking 'Back to Integ",
+      "UrlBefore": "http://localhost:4200/app/integrations/Integrations",
+      "Action": {
+        "Method": "type",
+        "Text": "File",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search integrations...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-connections[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[3]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 304,
+            "YMin": 345,
+            "XMax": 976,
+            "YMax": 383
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Integrations"
+      }
+    },
+    {
+      "Instruction": "We are now inside the Add Integration multi-step wizard (Step 1: Choose Integration). I need to type a few letters in the search box to test narrowing, then close the wizard by clicking 'Back to Integ",
+      "UrlBefore": "http://localhost:4200/app/integrations/Integrations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Back to Integrations",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-connections[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 280,
+            "YMin": 165,
+            "XMax": 432,
+            "YMax": 192
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The previous action returned to the main integrations page after completing step 1. Now moving to checkpoint (2) configure-slide-in: click the 'Configure' button on the connection card.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Integrations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Configure",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-connections[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 119,
+            "YMin": 361,
+            "XMax": 224,
+            "YMax": 405
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Integrations"
+      }
+    },
+    {
+      "Instruction": "We are now at checkpoint (2) configure-slide-in. The Configure slide-in panel titled 'Configure Integration' is open, displaying 'Connection Name', 'Status', 'Credential' section, and 'Save Changes'/'",
+      "UrlBefore": "http://localhost:4200/app/integrations/Integrations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-connections[1]/mj-page-layout[1]/mj-page-body[1]/div[3]/div[3]/button[2]",
+          "BoundingBox": {
+            "XMin": 1049,
+            "YMin": 660,
+            "XMax": 1138,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Integrations"
+      }
+    },
+    {
+      "Instruction": "The slide-in panel has closed. Now moving to checkpoint (3) delete-confirm-overlay: click the trash-can icon on the connection card.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Integrations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Delete integration",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-connections[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/button[3]",
+          "BoundingBox": {
+            "XMin": 375,
+            "YMin": 372,
+            "XMax": 404,
+            "YMax": 397
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Integrations"
+      }
+    },
+    {
+      "Instruction": "The delete confirmation overlay 'Delete this integration and all its entity maps?' is visible with 'Delete' and 'Cancel' buttons. I will set checkpointReached to 'delete-confirm-overlay' and click 'Ca",
+      "UrlBefore": "http://localhost:4200/app/integrations/Integrations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-connections[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 225,
+            "YMin": 310,
+            "XMax": 314,
+            "YMax": 354
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Integrations"
+      }
+    },
+    {
+      "Instruction": "Setting checkpointReached to 'delete-confirm-overlay' as instructed, and now opening the sync direction menu on the connection card to proceed with the final checkpoint (sync-direction-menu).",
+      "UrlBefore": "http://localhost:4200/app/integrations/Integrations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Sync",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-connections[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 232,
+            "YMin": 361,
+            "XMax": 352,
+            "YMax": 405
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Integrations"
+      }
+    },
+    {
+      "Instruction": "Clicking the 'Sync' button dropdown chevron [15] to open the sync options dropdown menu.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Integrations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Sync",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-connections[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 232,
+            "YMin": 359,
+            "XMax": 352,
+            "YMax": 403
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Integrations"
+      }
+    },
+    {
+      "Instruction": "Clicking element index 15 ('Sync' button) directly on the button text did not open the dropdown chevron overlay or the connection state is inactive (empty/inactive state acceptable as noted in goal pr",
+      "UrlBefore": "http://localhost:4200/app/integrations/Integrations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Sync",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-connections[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 232,
+            "YMin": 359,
+            "XMax": 352,
+            "YMax": 403
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Integrations"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/integrations/Integrations",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

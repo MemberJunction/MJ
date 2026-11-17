@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t018-admin-app-section-tour.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,admin",
@@ -51,7 +52,7 @@
     "ID": "41E69E45-1506-4838-97FC-22CA4870D05F"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.750Z",
-    "checksum": "845576c81695170cfab604a15709eec5e00037b2609d4bd20115d61e73cb2aef"
+    "lastModified": "2026-11-13T09:22:10.908Z",
+    "checksum": "604abfdd38f1e4d62dd400f293125e1216791e21638dfede91cef5a0714ed10b"
   }
 }

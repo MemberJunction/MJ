@@ -1,0 +1,90 @@
+{
+  "TestId": "CE7A6A97-EAE6-4595-8908-BDF6BAE63A50",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "5095b97b",
+  "RecordedAt": "2026-11-13T08:43:16.700Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Navigating directly to the Products entity grid in Data Explorer via URL.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products"
+      }
+    },
+    {
+      "Instruction": "The Products entity grid has loaded. Next, click 'Configure view settings' (element [22], sliders icon next to view dropdown) to open the Configure View panel.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Configure view settings (columns, filters, sorting)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[4]/mj-view-workspace[1]/div[1]/div[1]/mj-view-selector[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 440,
+            "YMin": 264,
+            "XMax": 472,
+            "YMax": 296
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products"
+      }
+    },
+    {
+      "Instruction": "The Configure View panel is open. Now I need to click the 'Filters' tab (element [85]) inside the panel.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Filters",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[4]/mj-view-workspace[1]/div[1]/mj-view-config-panel[1]/div[1]/div[2]/div[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 38,
+            "YMin": 254,
+            "XMax": 237,
+            "YMax": 291
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

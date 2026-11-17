@@ -1,0 +1,159 @@
+{
+  "TestId": "EB39DFDC-5C71-49EC-A170-30F446D26065",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "ddbc1014",
+  "RecordedAt": "2026-11-13T08:53:01.669Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Clicking on the application switcher dropdown next to the Home logo to open the list of applications, so we can find Predictive Studio.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open and 'Predictive Studio' is visible as the first entry under RECENT (interactive element [4]). I will click it to open the Predictive Studio app.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Predictive Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Predictions"
+      }
+    },
+    {
+      "Instruction": "We are now in Predictive Studio on the 'Predictions' door. Step 1 requirement: on the 'Predictions' door, click the '+ New prediction' button (or 'Build your first prediction' in the empty state) to o",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Predictions",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New prediction",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-predictions-resource[1]/mj-page-header-interior[1]/div[1]/div[1]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1104,
+            "YMin": 96,
+            "XMax": 1247,
+            "YMax": 129
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Predictions"
+      }
+    },
+    {
+      "Instruction": "We are currently on the 'Predictions' door with the 'New prediction' co-pilot chat panel open on the right, titled 'New prediction'. This verifies the first checkpoint 'new-prediction-copilot'. Now, w",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Predictions",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 456,
+            "YMin": 13,
+            "XMax": 559,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Predictions"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio"
+      }
+    },
+    {
+      "Instruction": "We are now on the 'Studio' door in the 'Overview' section. I will click the 'Ask the Model Dev Agent' button (index 19) to open the docked co-pilot chat panel titled 'Model Dev Agent'.",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Studio",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Ask the Model Dev Agent",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-studio-resource[1]/mj-page-body-interior[1]/div[1]/as-split[1]/as-split-area[2]/div[1]/as-split[1]/as-split-area[1]/section[1]/ps-home[1]/div[1]/div[1]/div[3]/button[2]",
+          "BoundingBox": {
+            "XMin": 421,
+            "YMin": 342,
+            "XMax": 630,
+            "YMax": 376
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

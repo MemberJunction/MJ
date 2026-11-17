@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t113-list-create-entity-picker-search.json"
     },
     "Status": "Active",
     "Tags": "P3,regression,lists",
@@ -51,7 +52,7 @@
     "ID": "75399DC4-5EC8-4051-9212-85A04C55C4A8"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.775Z",
-    "checksum": "fb6f0735669f68fe24e46d400a3dbd2734c61dfb64b94a2914a3b277647e3c53"
+    "lastModified": "2026-11-13T09:22:10.940Z",
+    "checksum": "809a3070322eb064351b43b3f4b1ff956dc9a85b988ec66132206b651db0fa1b"
   }
 }

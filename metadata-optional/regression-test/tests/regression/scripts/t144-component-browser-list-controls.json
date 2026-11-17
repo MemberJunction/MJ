@@ -1,0 +1,155 @@
+{
+  "TestId": "183EA69E-6D61-45AC-9460-5089DEFDE214",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "f8ff9df7",
+  "RecordedAt": "2026-11-13T09:17:10.991Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on the application switcher dropdown (index 1) to find and select Component Studio.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is open. I need to select 'Component Studio'. In the interactive elements, index 38 (or index 87) is 'Component Studio'. I will click index 38 to open Component Studio.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Component Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[31]",
+          "Scope": "group:All applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 1178,
+            "XMax": 492,
+            "YMax": 1256
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    },
+    {
+      "Instruction": "We are now in Component Studio -> Components section. We need to exercise checkpoint 1 (search-narrows): type a few characters into 'Search components...' box (index 16) and confirm the component list",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Components",
+      "Action": {
+        "Method": "type",
+        "Text": "Account",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search components...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-component-studio-resource[1]/div[1]/mj-component-studio-dashboard[1]/div[1]/div[2]/div[1]/mj-component-browser[1]/div[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 14,
+            "YMin": 208,
+            "XMax": 325,
+            "YMax": 247
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    },
+    {
+      "Instruction": "The search box has 'Account' typed in it, and the component list count updated to '5 of 45' (5 components shown). Checkpoint 1 (search-narrows) is satisfied. Next, I need to reach checkpoint 2 (filter",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Components",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Show filters",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-component-studio-resource[1]/div[1]/mj-component-studio-dashboard[1]/div[1]/div[2]/div[1]/mj-component-browser[1]/div[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 14,
+            "YMin": 166,
+            "XMax": 49,
+            "YMax": 191
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    },
+    {
+      "Instruction": "The filter panel is now expanded showing Quick Filters ('Favorites only', 'Show deprecated') and Categories pills ('CRM 34', 'AI 4', etc.). I will click the 'Favorites only' checkbox (index 17) to tog",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Components",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "checkbox",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-component-studio-resource[1]/div[1]/mj-component-studio-dashboard[1]/div[1]/div[2]/div[1]/mj-component-browser[1]/div[1]/div[3]/div[1]/div[1]/div[1]/label[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 24,
+            "YMin": 290,
+            "XMax": 38,
+            "YMax": 304
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/component-studio/Components",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

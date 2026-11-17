@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t098-chat-global-search-panel.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,chat",
@@ -51,7 +52,7 @@
     "ID": "EA0CC1B6-8BB9-4A37-A54B-17E39C86A43A"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.751Z",
-    "checksum": "86484eb4fb676db5e67311cb4da7de44252d8ccc64ccb48b2b6a185bc59edcb1"
+    "lastModified": "2026-11-13T15:37:29.173Z",
+    "checksum": "a181f9a9e8f10ae529bda99af7ed17266bb569ac0e7f077ad0a3ad07009c13a5"
   }
 }

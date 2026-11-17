@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t056-ai-agent-requests-approve-reject-dialog.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,ai",
@@ -51,7 +52,7 @@
     "ID": "FE899F58-3D9C-4AD8-AF53-D2F332CC4A27"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.794Z",
-    "checksum": "765a741ab93a0d57707b467e4564b9cb1f5a111f82d2d1e15f23488399c45620"
+    "lastModified": "2026-11-13T09:22:10.949Z",
+    "checksum": "3dc1d559e1b68c730e8fe0844913ff5b7cbea03de83271fcad42a2f3d55c4667"
   }
 }

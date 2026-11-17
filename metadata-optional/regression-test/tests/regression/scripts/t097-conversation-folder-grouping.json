@@ -1,0 +1,102 @@
+{
+  "TestId": "610BF5AD-B684-4E85-A210-8D584735002A",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "5678a184",
+  "RecordedAt": "2026-11-13T08:58:34.857Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on the Chat app card to open the Chat application.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Chat",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 82,
+            "YMin": 486,
+            "XMax": 352,
+            "YMax": 572
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "The Chat application has loaded. Looking at the sidebar, it is ALREADY structured into 'Folders' (with a New Folder '+' affordance icon) and 'Ungrouped' sections. Let's open the Options menu ('...') t",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Options",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-chat-conversations-resource[1]/div[1]/div[1]/mj-conversation-list[1]/div[1]/div[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 259,
+            "YMin": 70,
+            "XMax": 291,
+            "YMax": 102
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "Clicking 'Show as flat list' to switch the sidebar view to a flat list.",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Show as flat list",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-chat-conversations-resource[1]/div[1]/div[1]/mj-conversation-list[1]/div[1]/div[1]/div[1]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 92,
+            "YMin": 146,
+            "XMax": 290,
+            "YMax": 181
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/chat/Conversations",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

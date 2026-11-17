@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t143-realtime-playback-activation.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,realtime",
@@ -51,7 +52,7 @@
     "ID": "04425273-7252-4E75-8DEC-DBFEE6EDB78F"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.795Z",
-    "checksum": "05467cfd53a0684eb0fd995c286b9d14b96e4a0b0497588db9132380df1d6107"
+    "lastModified": "2026-11-13T09:22:10.949Z",
+    "checksum": "cef2225d9465ec12e05eca956b66ea095aa66ff1c3131d05af6115667258cefc"
   }
 }

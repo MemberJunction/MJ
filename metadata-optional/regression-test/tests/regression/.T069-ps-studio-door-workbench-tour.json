@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t069-ps-studio-door-workbench-tour.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,ps",
@@ -51,7 +52,7 @@
     "ID": "6FC23A4B-28D8-421C-BE16-B080A00B329A"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.785Z",
-    "checksum": "13dd136c7f87d9b0f0a30f426b1c55265b82673bdcbd157eff9ab8bf92962adf"
+    "lastModified": "2026-11-13T09:22:10.947Z",
+    "checksum": "35b9d92b082760f2de0e8e6735328c9b739f780fa6b05e22d1ad2a1b41a6971b"
   }
 }

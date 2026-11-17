@@ -1,5 +1,5 @@
 # MemberJunction API Server — Test Environment
-# Runs the GraphQL server only. Database setup (migrations, AssociationDB, CodeGen)
+# Runs the GraphQL server only. Database setup (migrations, CodeGen, Open Apps)
 # is handled by the db-setup container which must complete before this starts.
 #
 # Health endpoint: /healthcheck (exposed by MJServer)
@@ -27,14 +27,22 @@ COPY migrations/ ./migrations/
 # Overlay codegen output produced by the form-generator service (see
 # docker/regression/gen-forms.sh). `npm run regression:build` invokes
 # gen-forms before this build whenever .docker-generated/ is missing, so
-# these COPYs always have real content. Required so MJAPI's build can
-# compile the GraphQL resolvers that reference AssociationDemo entity
-# classes — without these the schema is missing types like
-# CreateAssociationDemoMemberInput and demo-entity queries fail at runtime.
+# these COPYs always have real content. They replace the developer's local
+# generated folders, so MJAPI compiles only the resolvers and entity classes
+# that match the stack's database. The Open Apps bring their own.
 COPY docker/regression/.docker-generated/GeneratedEntities/ ./packages/GeneratedEntities/src/generated/
 COPY docker/regression/.docker-generated/MJAPI-generated/ ./packages/MJAPI/src/generated/
 
 RUN pnpm install --frozen-lockfile
+
+# Package step for the Open Apps pinned in open-apps.json (see scripts/open-apps.cjs). It needs
+# mj.config.cjs, because it writes dynamicPackages, entityPackageName and excludeSchemas into it.
+# GITHUB_TOKEN is a BuildKit secret (compose build.secrets), so it is in no image layer; without
+# it, public repos still install.
+COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+COPY docker/regression/open-apps.json ./docker/regression/open-apps.json
+COPY docker/regression/scripts/open-apps.cjs ./docker/regression/scripts/open-apps.cjs
+RUN --mount=type=secret,id=github_token node docker/regression/scripts/open-apps.cjs packages
 
 RUN pnpm run build:api
 
@@ -46,8 +54,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 
 WORKDIR /app
 
+# Includes mj.config.cjs with the Open Apps' package-step changes.
 COPY --from=builder /app ./
-COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
 COPY docker/regression/scripts/ ./docker/regression/scripts/
 
 # Patch userHandling config for the test environment.
@@ -61,7 +69,7 @@ EXPOSE 4000
 HEALTHCHECK --interval=10s --timeout=5s --retries=15 --start-period=30s \
     CMD curl -f http://localhost:4000/healthcheck || exit 1
 
-# Database setup (migrations, CodeGen, AssociationDB) is handled by the db-setup container.
+# Database setup (migrations, CodeGen, Open Apps) is handled by the db-setup container.
 # MJAPI just starts the GraphQL server.
 # --max-old-space-size=8192: 8GB heap to handle the load of 150 parallel regression tests
 # (default ~4GB OOMs under sustained GraphQL/subscription load)

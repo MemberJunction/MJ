@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t155-deep-link-app-url-navigation.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,shell",
@@ -51,7 +52,7 @@
     "ID": "72D0058B-6E19-4FD4-BCC9-A8238B610AE4"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.783Z",
-    "checksum": "7c444f47397715611f3debec3e692a34b8cf02984f4219b0bdd9e34a892495ca"
+    "lastModified": "2026-11-13T09:22:10.947Z",
+    "checksum": "597f04864a055adddf890214ab4637a1c39634adb638bbf7381a1eefd44cf73d"
   }
 }

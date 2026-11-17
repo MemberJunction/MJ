@@ -10,15 +10,17 @@
  *   2. An integration connection (T120). The Integrations app shows "No integrations
  *      yet" until a CompanyIntegration exists, so there is no connection detail view, no
  *      entity map, and no visual field editor to open. Seeds one File Feed connection
- *      with a Members entity map and five field maps.
+ *      with a People entity map (BizApps Common, installed by the Open Apps' database
+ *      step) and five field maps.
  *
  * Idempotent: every block checks for its own marker row first, so re-runs are harmless.
  *
  * Usage: node seed-sample-data.cjs [integration|communication]  (default: both)
  *
- *   integration   — runs in db-setup, BEFORE MJAPI starts. The Integrations app reads
- *                   IntegrationEngineBase, which MJAPI caches; rows inserted in raw SQL
- *                   after MJAPI has loaded that engine stay invisible to it.
+ *   integration   — runs in db-setup, after the Open Apps' database step and BEFORE
+ *                   MJAPI starts. The Integrations app reads IntegrationEngineBase, which
+ *                   MJAPI caches; rows inserted in raw SQL after MJAPI has loaded that
+ *                   engine stay invisible to it.
  *   communication — runs in the test-runner after setup-test-user.cjs (the
  *                   communication run is owned by the test user). The Logs view queries
  *                   the table directly, so MJAPI already being up does not matter.
@@ -27,7 +29,8 @@
 const { sql, connect } = require('./lib/db.cjs');
 
 const COMPANY_NAME = 'Regression Test Company';
-const CONNECTION_NAME = 'Regression Member Feed';
+const CONNECTION_NAME = 'Regression People Feed';
+const PEOPLE_ENTITY = 'MJ_BizApps_Common: People';
 const LOG_MARKER = '[regression-seed]';
 
 async function seedCommunicationLogs(pool, userId) {
@@ -103,10 +106,11 @@ async function seedIntegrationConnection(pool) {
 
     const integration = (await pool.request()
         .query(`SELECT TOP 1 ID FROM __mj.Integration WHERE Name = 'File Feed'`)).recordset[0];
-    const membersEntity = (await pool.request()
-        .query(`SELECT ID FROM __mj.Entity WHERE SchemaName = 'AssociationDemo' AND Name = 'Members'`)).recordset[0];
-    if (!integration || !membersEntity) {
-        console.log('  WARNING: File Feed integration or Members entity missing — connection not seeded');
+    const peopleEntity = (await pool.request()
+        .input('name', sql.NVarChar, PEOPLE_ENTITY)
+        .query('SELECT ID FROM __mj.Entity WHERE Name = @name')).recordset[0];
+    if (!integration || !peopleEntity) {
+        console.log(`  WARNING: File Feed integration or ${PEOPLE_ENTITY} entity missing — connection not seeded`);
         return;
     }
 
@@ -134,17 +138,17 @@ async function seedIntegrationConnection(pool) {
 
         const entityMapId = (await new sql.Request(transaction)
             .input('connectionId', sql.UniqueIdentifier, connectionId)
-            .input('entityId', sql.UniqueIdentifier, membersEntity.ID)
+            .input('entityId', sql.UniqueIdentifier, peopleEntity.ID)
             .query(`INSERT INTO __mj.CompanyIntegrationEntityMap (CompanyIntegrationID, ExternalObjectName, EntityID, SyncDirection)
                     OUTPUT inserted.ID
-                    VALUES (@connectionId, 'members_export', @entityId, 'Pull')`)).recordset[0].ID;
+                    VALUES (@connectionId, 'people_export', @entityId, 'Pull')`)).recordset[0].ID;
 
         const fieldMaps = [
             { source: 'email', dest: 'Email', key: true, required: true },
             { source: 'first_name', dest: 'FirstName', required: true },
             { source: 'last_name', dest: 'LastName', required: true },
             { source: 'job_title', dest: 'Title' },
-            { source: 'city', dest: 'City' },
+            { source: 'phone', dest: 'Phone' },
         ];
         for (let i = 0; i < fieldMaps.length; i++) {
             const fm = fieldMaps[i];

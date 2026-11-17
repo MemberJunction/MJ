@@ -1,0 +1,374 @@
+{
+  "TestId": "2FAB7011-B75E-4FEB-B96C-EC6C951724DC",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "92a3bae7",
+  "RecordedAt": "2026-11-13T08:41:18.692Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Clicking the application switcher dropdown next to the logo to open the AI application.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open. I need to click on 'AI' app. Looking at interactive elements, index 36 is link 'AI' (or button 87 'AI'). Let's click index 36 or type 'AI' in the search box / ",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "AI",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[30]",
+          "Scope": "group:All applications",
+          "BoundingBox": {
+            "XMin": 788,
+            "YMin": 1090,
+            "XMax": 1063,
+            "YMax": 1168
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/Overview"
+      }
+    },
+    {
+      "Instruction": "We have arrived at AI Overview. This satisfies checkpoint (1) ai-overview. Next section in order is (2) ai-agents, so we will click on 'Agents'.",
+      "UrlBefore": "http://localhost:4200/app/ai/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Agents",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 322,
+            "YMin": 13,
+            "XMax": 430,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Overview"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/Agents"
+      }
+    },
+    {
+      "Instruction": "I am currently on the Agents list page. Setting checkpointReached to 'ai-agents'. Next, I need to click into an individual agent to reach 'ai-agent-detail'. I will click the 'Details' button on the fi",
+      "UrlBefore": "http://localhost:4200/app/ai/Agents",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "View Details",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-agent-configuration[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 394,
+            "YMin": 529,
+            "XMax": 504,
+            "YMax": 568
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Agents"
+      }
+    },
+    {
+      "Instruction": "Clicking 'Open Full Record' to enter the agent's full detail view, satisfying checkpoint (3) ai-agent-detail.",
+      "UrlBefore": "http://localhost:4200/app/ai/Agents",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-agent-configuration[1]/mj-page-layout[1]/mj-slide-panel[1]/div[2]/div[2]/div[1]/div[3]/button[2]",
+          "BoundingBox": {
+            "XMin": 1046,
+            "YMin": 652,
+            "XMax": 1256,
+            "YMax": 700
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Agents"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/record/MJ:%20AI%20Agents/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The agent detail view for 'ActionSmith' has finished loading (Details, Execution History, Actions, Sub-Agents, Prompts, etc. are visible). This satisfies checkpoint (3) ai-agent-detail. Next in order ",
+      "UrlBefore": "http://localhost:4200/app/ai/record/MJ:%20AI%20Agents/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 434,
+            "YMin": 13,
+            "XMax": 549,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/record/MJ:%20AI%20Agents/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "Clicking on 'Prompts' link from the opened 'More' navigation dropdown menu.",
+      "UrlBefore": "http://localhost:4200/app/ai/record/MJ:%20AI%20Agents/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Prompts",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 435,
+            "YMin": 96,
+            "XMax": 633,
+            "YMax": 133
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/record/MJ:%20AI%20Agents/ID%7C{uuid}"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/Prompts"
+      }
+    },
+    {
+      "Instruction": "We have arrived at the Prompts page, which satisfies checkpoint (4) ai-prompts. Next in order is (5) ai-models. I will open the 'More' dropdown menu to navigate to Models.",
+      "UrlBefore": "http://localhost:4200/app/ai/Prompts",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 434,
+            "YMin": 13,
+            "XMax": 549,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Prompts"
+      }
+    },
+    {
+      "Instruction": "I am currently on the Prompts section, satisfying checkpoint (4) ai-prompts. I set checkpointReached to 'ai-prompts'. Next in order is (5) ai-models, so I will click the 'Models' item in the open 'Mor",
+      "UrlBefore": "http://localhost:4200/app/ai/Prompts",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Models",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 435,
+            "YMin": 133,
+            "XMax": 633,
+            "YMax": 170
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Prompts"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/Models"
+      }
+    },
+    {
+      "Instruction": "We have arrived at the Models page, which satisfies checkpoint (5) ai-models. Setting checkpointReached to 'ai-models'. Next in order is (6) ai-analytics. I will open the 'More' dropdown menu to navig",
+      "UrlBefore": "http://localhost:4200/app/ai/Models",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 434,
+            "YMin": 13,
+            "XMax": 549,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Models"
+      }
+    },
+    {
+      "Instruction": "I am currently on the Models page and have set checkpointReached to 'ai-models'. The 'More' dropdown menu is currently open. Next in order is (6) ai-analytics (Analytics). I will click the 'Analytics'",
+      "UrlBefore": "http://localhost:4200/app/ai/Models",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Analytics",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[5]",
+          "BoundingBox": {
+            "XMin": 435,
+            "YMin": 207,
+            "XMax": 633,
+            "YMax": 244
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Models"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    },
+    {
+      "Instruction": "We have arrived at the AI Analytics section ('/app/ai/Analytics' showing Executive Summary, KPIs, etc.). This satisfies checkpoint (6) ai-analytics. Setting checkpointReached to 'ai-analytics'. Next a",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 434,
+            "YMin": 13,
+            "XMax": 549,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    },
+    {
+      "Instruction": "The 'More' dropdown menu is open. I will click on 'Configuration' (index 12) to navigate to the final required section (7) ai-configuration.",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Configuration",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[6]",
+          "BoundingBox": {
+            "XMin": 435,
+            "YMin": 244,
+            "XMax": 633,
+            "YMax": 281
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/Configuration"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/ai/Configuration",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "TestId": "1B61785E-4920-4940-973E-40D5644D915C",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "3f450218",
+  "RecordedAt": "2026-11-13T09:18:28.058Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I will open the command palette using Ctrl+/ (or Cmd+/), type 'Admin' to filter the applications, and then press Enter or click the matching application to open it.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "keypress",
+        "Key": "/"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The command palette modal is open with focus on 'Search applications...'. I will type 'Admin' to filter the list and press Enter to navigate to the Admin application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "type",
+        "Text": "Admin",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search applications",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/mj-command-palette[1]/div[2]/div[1]/input[1]",
+          "Scope": "dialog:Search applications",
+          "BoundingBox": {
+            "XMin": 366,
+            "YMin": 159,
+            "XMax": 944,
+            "YMax": 193
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access"
+      }
+    },
+    {
+      "Instruction": "The Admin app has successfully loaded after selecting it from the command palette. Checkpoint 'palette-jump-to-app' is reached. Now I will reopen the command palette using Ctrl+/ to test the no-match ",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access",
+      "Action": {
+        "Method": "keypress",
+        "Key": "/"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    },
+    {
+      "Instruction": "The command palette is open. I need to type a nonsense string like 'zzzqqqxyz' into the palette search box to test the no-match empty state.",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Action": {
+        "Method": "type",
+        "Text": "zzzqqqxyz",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search applications",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/mj-command-palette[1]/div[2]/div[1]/input[1]",
+          "Scope": "dialog:Search applications",
+          "BoundingBox": {
+            "XMin": 366,
+            "YMin": 160,
+            "XMax": 944,
+            "YMax": 194
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

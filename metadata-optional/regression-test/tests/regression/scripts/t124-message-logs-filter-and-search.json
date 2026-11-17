@@ -1,0 +1,126 @@
+{
+  "TestId": "B8412ADB-D63B-4D11-ADB7-30567AEB80AC",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "a51e7379",
+  "RecordedAt": "2026-11-13T09:06:02.940Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on the 'Logs' tab in the Communication top navigation bar to access the log view.",
+      "UrlBefore": "http://localhost:4200/app/communication",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Logs",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 578,
+            "YMin": 13,
+            "XMax": 667,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/communication"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/communication/Logs"
+      }
+    },
+    {
+      "Instruction": "I have reached the Logs section under Communication. Now I will test filtering/searching: type 'failed' into the search box [12], verify the table narrows to matches, then clear it.",
+      "UrlBefore": "http://localhost:4200/app/communication/Logs",
+      "Action": {
+        "Method": "type",
+        "Text": "failed",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search messages, providers, recipients...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-communication-logs-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-page-search[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 909,
+            "YMin": 150,
+            "XMax": 1132,
+            "YMax": 173
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/communication/Logs"
+      }
+    },
+    {
+      "Instruction": "The search term 'failed' was typed into the search box, and the table narrowed to a single 'Failed' row (Mailbox unavailable 550). Now I need to clear the search box to confirm the fuller list returns",
+      "UrlBefore": "http://localhost:4200/app/communication/Logs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search messages, providers, recipients...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-communication-logs-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-page-search[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 909,
+            "YMin": 150,
+            "XMax": 1132,
+            "YMax": 173
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/communication/Logs"
+      }
+    },
+    {
+      "Instruction": "The search term 'failed' was typed into the search box, and the table narrowed to a single 'Failed' row (Mailbox unavailable 550). Now I need to clear the search box to confirm the fuller list returns",
+      "UrlBefore": "http://localhost:4200/app/communication/Logs",
+      "Action": {
+        "Method": "keypress",
+        "Key": "a"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The search term 'failed' was typed into the search box, and the table narrowed to a single 'Failed' row (Mailbox unavailable 550). Now I need to clear the search box to confirm the fuller list returns",
+      "UrlBefore": "http://localhost:4200/app/communication/Logs",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Backspace"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/communication/Logs",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

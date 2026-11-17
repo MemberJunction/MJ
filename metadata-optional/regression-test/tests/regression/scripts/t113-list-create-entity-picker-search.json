@@ -1,0 +1,156 @@
+{
+  "TestId": "75399DC4-5EC8-4051-9212-85A04C55C4A8",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "412aada8",
+  "RecordedAt": "2026-11-13T09:04:58.114Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the application switcher dropdown next to the logo (element [1] 'Switch application — current: Home') and select the Lists application.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is now open. 'Lists' is visible in the recent apps / list (element [4] or [17] or [66]). Let's click on element [4] (Lists link) to open the Lists application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Lists",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "I am on the Lists application landing page. The next step in the plan is to click the '+ New List' button.",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New List",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1155,
+            "YMin": 89,
+            "XMax": 1256,
+            "YMax": 123
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "The 'Create New List' dialog is visible. I will click the Entity field (element index 33), type a few letters to filter entities, pick one from the list, and observe how the entity picker narrows and ",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "type",
+        "Text": "People",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search and select an entity",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/div[2]/div[2]/div[3]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 410,
+            "YMin": 405,
+            "XMax": 870,
+            "YMax": 443
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "I clicked/typed into the Entity field, which filtered and showed matching dropdown options ('People'). Selecting it filled the field. The Create button remains disabled because the Name field is still",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/div[2]/div[3]/button[2]",
+          "BoundingBox": {
+            "XMin": 504,
+            "YMin": 558,
+            "XMax": 590,
+            "YMax": 596
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/lists/Lists",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "TestId": "6C2C12D7-98C6-4FA4-BB73-9A796CD39CCC",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "afc0f360",
+  "RecordedAt": "2026-11-13T08:59:45.399Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "The Knowledge Hub app has loaded. Now I need to click 'Visualize' in the top/nav bar to go to the Visualize section.",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Visualize",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 520,
+            "YMin": 13,
+            "XMax": 638,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Visualize"
+      }
+    },
+    {
+      "Instruction": "We are on Visualize page. Default mode 'Clusters' is active. We need to complete section 1 'visualize-mode-toggle': confirm default mode renders its visualization (or empty/loading visualization), the",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Visualize",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Tag Cloud",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-visualize-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 986,
+            "YMin": 158,
+            "XMax": 1098,
+            "YMax": 185
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Visualize"
+      }
+    },
+    {
+      "Instruction": "We clicked 'Tag Cloud' mode and confirmed it rendered the tag cloud visualization (Food Safety, Cheese Industry, Milk Prices). This completes section 1 'visualize-mode-toggle'. Now we switch back to '",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Visualize",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Clusters",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-visualize-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 885,
+            "YMin": 158,
+            "XMax": 984,
+            "YMax": 185
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Visualize"
+      }
+    },
+    {
+      "Instruction": "We are now back in Clusters mode. I will report the `cluster-analysis` checkpoint, pick an entity or source if needed, and click 'Run Clustering' (Index 26).",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Visualize",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Run Clustering",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-visualize-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/app-cluster-visualization-resource[1]/div[1]/div[2]/div[2]/mj-cluster-config-panel[1]/div[1]/div[7]/button[1]",
+          "BoundingBox": {
+            "XMin": 293,
+            "YMin": 703,
+            "XMax": 551,
+            "YMax": 738
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Visualize"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/knowledge-hub/Visualize",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

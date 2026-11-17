@@ -162,7 +162,7 @@ direction:
   │   Adds:                                                  │
   │   • socat (localhost:4200 → mjexplorer:4200 shim)        │
   │   • MJ-specific entrypoint (test-runner-entrypoint.sh)   │
-  │   • MJ test-user provisioning + AssociationDB setup      │
+  │   • MJ test-user provisioning + Open Apps demo data      │
   │                                                          │
   │   Result: the test-runner container in the 5-service     │
   │   Mode A compose stack.                                  │
@@ -249,13 +249,14 @@ definition serve both Mode A (waits for MJExplorer) and Modes B/C/D
 - **Lifecycle:** one-shot. Exits 0 on success, then mjapi can start.
 - **Entrypoint:** [`db-setup-entrypoint.sh`](db-setup-entrypoint.sh)
 - **Steps:**
-  1. `bootstrap-db.cjs` — creates `MemberJunction_Test`, installs AssociationDB demo schema (58 tables, 10K+ rows)
+  1. `bootstrap-db.cjs` — creates `MemberJunction_Test`
   2. `mj migrate` — runs Flyway migrations to create `__mj` schema
   3. `mj codegen` — generates entity classes, views, stored procs, GraphQL resolvers, EntityField metadata
+  3b. `open-apps.cjs database` — `mj app install --database-only` for each app in [`open-apps.json`](open-apps.json) (MoreCheese and its BizApps dependencies). Their migrations carry the demo data the suite needs.
   4. `mj sync push` of `metadata/applications/`
   5. `mj sync push` of `metadata/prompts/` — picks up Computer Use controller/judge prompts
-- **Bacpac mode** (`BACPAC_FILE` set, via `--bacpac` + the `docker-compose.bacpac.yml` overlay): the entrypoint branches to [`import-bacpac.cjs`](scripts/import-bacpac.cjs) (SqlPackage `/Action:Import` into `MemberJunction_Test`) → optional `mj migrate` + `mj codegen` (gated by `BACPAC_UPGRADE`, default on; guarded against mis-baselining a DB with no `flyway_schema_history`) → push prompts. AssociationDB + the standard app/test seeding are skipped; the user supplies their suite via `EXTRA_METADATA_DIRS`. The overlay pins db-setup to `linux/amd64` so the x64 SqlPackage build runs.
-- **Why a separate container?** Migration + codegen + AssociationDB install takes ~2-3 minutes. Keeping them out of MJAPI's Dockerfile keeps the runtime image lean and lets `service_completed_successfully` block dependents until the DB is fully ready.
+- **Bacpac mode** (`BACPAC_FILE` set, via `--bacpac` + the `docker-compose.bacpac.yml` overlay): the entrypoint branches to [`import-bacpac.cjs`](scripts/import-bacpac.cjs) (SqlPackage `/Action:Import` into `MemberJunction_Test`) → optional `mj migrate` + `mj codegen` (gated by `BACPAC_UPGRADE`, default on; guarded against mis-baselining a DB with no `flyway_schema_history`) → push prompts. The Open Apps + the standard app/test seeding are skipped; the user supplies their suite via `EXTRA_METADATA_DIRS`. The overlay pins db-setup to `linux/amd64` so the x64 SqlPackage build runs.
+- **Why a separate container?** Migration + codegen + the Open Apps' database step take several minutes. Keeping them out of MJAPI's Dockerfile keeps the runtime image lean and lets `service_completed_successfully` block dependents until the DB is fully ready.
 
 ### mjapi
 
@@ -403,9 +404,10 @@ Here's a complete trace of what happens when a developer runs
 │                                                                        │
 │  T+0s    sqlserver starts. Healthcheck: TCP/1433 + SELECT 1.           │
 │  T+15s   sqlserver healthy → db-setup starts.                          │
-│  T+15s   db-setup: bootstrap-db.cjs → AssociationDB install (~30s)     │
+│  T+15s   db-setup: bootstrap-db.cjs → CREATE DATABASE                  │
 │  T+45s   db-setup: mj migrate (Flyway migrations, ~30s)                │
 │  T+75s   db-setup: mj codegen (entity classes, views, sprocs, ~60s)    │
+│  T+135s  db-setup: Open Apps DB step (not timed; later times shift)    │
 │  T+135s  db-setup: mj sync push applications/                          │
 │  T+140s  db-setup: mj sync push prompts/                               │
 │  T+150s  db-setup exits 0 → mjapi can start.                           │
@@ -1087,7 +1089,7 @@ mj test regression init generic-web           # scaffold ./generic-web/
 | Path | Purpose |
 |---|---|
 | `docker-compose.test.yml` | The 5-service compose project + form-generator overlay; profile-gated |
-| `Dockerfile.db-setup` | Init container — Flyway + codegen + AssociationDB |
+| `Dockerfile.db-setup` | Init container — Flyway + codegen + Open Apps |
 | `Dockerfile.api` | MJAPI runtime — `Dockerfile.db-setup` would re-do init work |
 | `Dockerfile.explorer` | MJExplorer — Angular AOT build + nginx serve |
 | `Dockerfile.test-runner` | Test runner — Playwright + monorepo build (will become a thin overlay on the published image post-Phase-8 publish) |
@@ -1106,7 +1108,7 @@ mj test regression init generic-web           # scaffold ./generic-web/
 
 | File | Purpose | Where it runs |
 |---|---|---|
-| `bootstrap-db.cjs` | CREATE DATABASE + install AssociationDB (one-shot) | db-setup container |
+| `bootstrap-db.cjs` | CREATE DATABASE (one-shot) | db-setup container |
 | `setup-test-user.cjs` | SQL safety-net: test user + roles + apps + favorites | test-runner container |
 | `preflight-checks.cjs` | Probes MJAPI/nginx/socat/Auth0 + memory snapshot | test-runner container |
 | `health-monitor.cjs` | Background diagnostic probes every 10s | test-runner container (bg) |
@@ -1256,7 +1258,7 @@ See the [Dynamic Import policy](../../.claude/rules/typescript-style.md) for the
 | **Driver** | A `BaseTestDriver` subclass that executes one test type. `ComputerUseTestDriver` is the one used by the regression suite. |
 | **Target profile** | JSON describing where to run (URL, auth, suite, archive). See §8. |
 | **Mode A/B/C/D** | The four run modes. See §2. |
-| **AssociationDB** | The demo dataset baked into the docker DB. 58 tables, 10K+ rows of members/events/courses/certifications/etc. Provides realistic UI to test against. |
+| **Open Apps demo data** | The demo dataset the docker DB gets from the Open Apps in `open-apps.json`: MoreCheese and its BizApps dependencies (people, committees and meetings, courses, products, etc.). Provides realistic UI to test against. |
 | **Suite run** | One execution of `mj test suite`. Produces a `MJTestSuiteRun` row + N `MJTestRun` rows + M `MJTestRunOutput` rows. |
 | **Test output** | A persisted artifact from one step — typically a screenshot stored as base64 in `TestRunOutput.InlineData`. |
 | **Variable substitution** | The `{{key}}` placeholder system. See §9. |

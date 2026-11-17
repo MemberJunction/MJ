@@ -11,14 +11,13 @@
 # Standard mode runs sequentially, then exits. Steps must run in order because
 # each one assumes the previous one has succeeded:
 #
-#   1. Bootstrap database — CREATE DATABASE + install AssociationDB demo data
-#         AssociationDB must be installed BEFORE migrations because the
-#         repeatable Flyway migration R__RefreshMetadata.sql regenerates
-#         views/procs for ALL entities in __mj metadata. On a reused database,
-#         that includes AssociationDB tables — if they don't exist yet, the
-#         migration fails with "Invalid object name".
+#   1. CREATE DATABASE (scripts/bootstrap-db.cjs)
 #   2. Run Flyway migrations (`mj migrate`)
 #   3. Run CodeGen (`mj codegen`)
+#   3b. Database step of the Open Apps in open-apps.json (`mj app install
+#       --database-only`, via scripts/open-apps.cjs). The images ran the package step.
+#       The demo data (MoreCheese and its BizApps dependencies) comes from here, so
+#       every seed that reads app data runs after this step.
 #   4. Push application metadata (the baseline migration only seeds 2 of ~20)
 #   5. Push prompt metadata (refreshes Computer Use controller/judge templates
 #      if their .template.md files have changed)
@@ -42,7 +41,7 @@ if [ -n "${BACPAC_FILE:-}" ]; then
     # ─── Bacpac mode ─────────────────────────────────────────────────────────
     # Import a real MJ database instead of building from scratch. The user
     # supplies their own test suite (EXTRA_METADATA_DIRS, pushed by the
-    # test-runner), so we skip AssociationDB + the standard app/test seeding.
+    # test-runner), so we skip the Open Apps + the standard app/test seeding.
     echo "Step 1: Importing bacpac (BACPAC_FILE=$BACPAC_FILE)..."
     node "$SCRIPTS/import-bacpac.cjs"
     echo ""
@@ -84,8 +83,8 @@ if [ -n "${BACPAC_FILE:-}" ]; then
 fi
 
 # ─── Standard mode (build from scratch) ──────────────────────────────────────
-# Step 1: CREATE DATABASE + install AssociationDB demo schema + data
-echo "Step 1: Bootstrapping database (CREATE + AssociationDB)..."
+# Step 1: CREATE DATABASE
+echo "Step 1: Creating database..."
 node "$SCRIPTS/bootstrap-db.cjs"
 echo ""
 
@@ -99,19 +98,19 @@ echo ""
 # the matching EntityField metadata rows.
 # CodeGen handles the __mj_CreatedAt/__mj_UpdatedAt/__mj_DeletedAt EntityField
 # rows itself via ensureSpecialDateEntityFieldsExist (see CodeGenLib's
-# manage-metadata.ts) — no post-codegen patching is required.
-# Two passes, each of which must succeed: pass 1 creates the demo EntityField
-# rows, set-demo-field-types.cjs types the email/URL ones, and pass 2 runs
-# against that metadata so this DB matches the forms form-gen-entrypoint.sh
-# generated.
+# manage-metadata.ts) — no post-codegen patching is required. The Open Apps'
+# schemas are in excludeSchemas, so CodeGen does not touch them; their entity
+# classes and forms ship in the app packages.
 echo "Step 3: Running CodeGen..."
 node /app/packages/MJCLI/bin/run.js codegen
-node "$SCRIPTS/set-demo-field-types.cjs" 2>&1 || {
-    echo "  WARNING: Demo field type update failed — email/URL fields stay untyped"
-}
-echo "  ↻ CodeGen pass 1 complete; re-running against the typed demo fields..."
-node /app/packages/MJCLI/bin/run.js codegen
-echo "  ✓ CodeGen complete (2 passes)"
+echo "  ✓ CodeGen complete"
+echo ""
+
+# Step 3b: Open Apps — schemas, migrations (with their data) and app records. The database
+# is new on every `up`, so no app is installed yet. An empty open-apps.json does nothing.
+echo "Step 3b: Installing the database step of the pinned Open Apps..."
+node "$SCRIPTS/open-apps.cjs" database
+echo "  ✓ Open Apps database step complete"
 echo ""
 
 # Step 4: Sync application metadata (baseline migration only seeds 2 of ~20 apps)
@@ -145,6 +144,6 @@ echo ""
 echo "  ═══════════════════════════════════════════"
 echo "  Database setup complete!"
 echo "  Database: $DB_NAME"
-echo "  Schema: __mj (MJ core) + AssociationDemo (demo data)"
+echo "  Schema: __mj (MJ core) + the Open Apps in open-apps.json (demo data)"
 echo "  ═══════════════════════════════════════════"
 echo ""

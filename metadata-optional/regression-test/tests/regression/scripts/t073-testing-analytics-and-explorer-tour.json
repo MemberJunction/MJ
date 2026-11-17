@@ -1,0 +1,384 @@
+{
+  "TestId": "88C270AF-9C9F-436A-8A37-A4F0A8463D80",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "66b89914",
+  "RecordedAt": "2026-11-13T08:54:07.851Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Clicking the Analytics tab to start the first checkpoint 'testing-analytics'.",
+      "UrlBefore": "http://localhost:4200/app/testing",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Analytics",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[4]",
+          "BoundingBox": {
+            "XMin": 583,
+            "YMin": 13,
+            "XMax": 702,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/testing/Analytics"
+      }
+    },
+    {
+      "Instruction": "We arrived at testing-analytics page. We see Trend Overview (Pass Rate, Run Volume, Score, Cost), Insights grid, Score Distribution chart. Now we click a different time-range chip ('7 Days' or '90 Day",
+      "UrlBefore": "http://localhost:4200/app/testing/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "7 Days",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-analytics-resource[1]/app-testing-analytics[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/mj-filter-chip[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 910,
+            "YMin": 86,
+            "XMax": 975,
+            "YMax": 115
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Analytics"
+      }
+    },
+    {
+      "Instruction": "The 7 Days chip is now active and charts re-rendered. Checkpoint testing-analytics complete. Now moving to explorer-rail-filter by clicking the 'Explorer' tab.",
+      "UrlBefore": "http://localhost:4200/app/testing/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Explorer",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 375,
+            "YMin": 13,
+            "XMax": 486,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Analytics"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/testing/Explorer"
+      }
+    },
+    {
+      "Instruction": "We are now on the Test Explorer view for surface (2) explorer-rail-filter. I need to click a Test Suite node (e.g. 'Core agent rubrics') to filter the card grid, verify it narrows, then click 'All Ite",
+      "UrlBefore": "http://localhost:4200/app/testing/Explorer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Core agent rubrics\n9",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-explorer-resource[1]/app-testing-explorer[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[6]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 536,
+            "XMax": 231,
+            "YMax": 574
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Explorer"
+      }
+    },
+    {
+      "Instruction": "The grid narrowed to show '10 of 169 results' and only the 'Core agent rubrics' suite. Now I need to click 'All Items' on the left rail to restore the full set and complete checkpoint explorer-rail-fi",
+      "UrlBefore": "http://localhost:4200/app/testing/Explorer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "All Items\n169",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-explorer-resource[1]/app-testing-explorer[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 317,
+            "XMax": 231,
+            "YMax": 355
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Explorer"
+      }
+    },
+    {
+      "Instruction": "'All Items' has been clicked and restored full results (169 of 169 results). Marking checkpoint 'explorer-rail-filter'. Now moving to surface (3) explorer-filter-search: typing a search term in 'Searc",
+      "UrlBefore": "http://localhost:4200/app/testing/Explorer",
+      "Action": {
+        "Method": "type",
+        "Text": "Login",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search tests and suites...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-explorer-resource[1]/app-testing-explorer[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-page-search[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 831,
+            "YMin": 195,
+            "XMax": 1054,
+            "YMax": 218
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Explorer"
+      }
+    },
+    {
+      "Instruction": "The search term 'Login' typed into 'Search tests and suites...' narrowed the grid to 2 matching results ('2 of 169 results') with highlights ('login' highlighted). Now I need to click 'Filters' popove",
+      "UrlBefore": "http://localhost:4200/app/testing/Explorer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Filters",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-explorer-resource[1]/app-testing-explorer[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-filter-popover[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1079,
+            "YMin": 190,
+            "XMax": 1178,
+            "YMax": 223
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Explorer"
+      }
+    },
+    {
+      "Instruction": "The Filters popover is now open. I will click on 'Suites' (or 'Tests') view button to change the view and confirm the grid responds. Then I will set checkpointReached to 'explorer-filter-search'.",
+      "UrlBefore": "http://localhost:4200/app/testing/Explorer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Suites",
+          "Selector": "xpath=/html/body[1]/div[1]/div[1]/div[2]/div[1]/div[2]/mj-filter-panel[1]/div[1]/div[1]/mj-filter-field[1]/label[1]/div[1]/mj-filter-chip[2]/button[1]",
+          "Scope": "dialog:Filters",
+          "BoundingBox": {
+            "XMin": 922,
+            "YMin": 290,
+            "XMax": 983,
+            "YMax": 319
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Explorer"
+      }
+    },
+    {
+      "Instruction": "Checkpoint 'explorer-filter-search' was completed. Now proceeding to (4) 'create-test-validation': click '+ New Test' button to open the create slideout.",
+      "UrlBefore": "http://localhost:4200/app/testing/Explorer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Test",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-explorer-resource[1]/app-testing-explorer[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1149,
+            "YMin": 101,
+            "XMax": 1256,
+            "YMax": 134
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Explorer"
+      }
+    },
+    {
+      "Instruction": "We are now on surface (4) create-test-validation. The Create Test slideout is open. The Create Test button is currently disabled. Notice that Test Type already has a selected value 'Decision Eval', bu",
+      "UrlBefore": "http://localhost:4200/app/testing/Explorer",
+      "Action": {
+        "Method": "type",
+        "Text": "Sample Validation Test",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "e.g., Agent Response Quality Test",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-explorer-resource[1]/app-testing-explorer[1]/mj-page-layout[1]/mj-page-body[1]/div[2]/div[2]/div[3]/div[1]/div[2]/input[1]",
+          "BoundingBox": {
+            "XMin": 744,
+            "YMin": 223,
+            "XMax": 1256,
+            "YMax": 261
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Explorer"
+      }
+    },
+    {
+      "Instruction": "The Name field now contains 'Sample Validation Test' and Test Type is 'Decision Eval', which has enabled the 'Create Test' button (visible as blue with checkmark icon). Now I close the slideout using ",
+      "UrlBefore": "http://localhost:4200/app/testing/Explorer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-explorer-resource[1]/app-testing-explorer[1]/mj-page-layout[1]/mj-page-body[1]/div[2]/div[2]/div[4]/button[1]",
+          "BoundingBox": {
+            "XMin": 1027,
+            "YMin": 669,
+            "XMax": 1127,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Explorer"
+      }
+    },
+    {
+      "Instruction": "I have set checkpointReached to 'create-test-validation' in the previous action frame. Now proceeding to surface (5) run-test-dialog by clicking the 'Runs' tab at top navigation [5].",
+      "UrlBefore": "http://localhost:4200/app/testing/Explorer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Runs",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 490,
+            "YMin": 13,
+            "XMax": 579,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Explorer"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/testing/Runs"
+      }
+    },
+    {
+      "Instruction": "Now on the Runs page. I need to click the 'Run Test' button [13] to open the run configuration slide panel and set checkpointReached to 'run-test-dialog'.",
+      "UrlBefore": "http://localhost:4200/app/testing/Runs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Run Test",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-runs-resource[1]/app-testing-runs[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1157,
+            "YMin": 84,
+            "XMax": 1256,
+            "YMax": 117
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Runs"
+      }
+    },
+    {
+      "Instruction": "The 'Run Test' configuration slide panel is open, showing options like Verbose logging, Run Tags, test selection, and tabs for Single Test / Test Suite. I will set checkpointReached to 'run-test-dialo",
+      "UrlBefore": "http://localhost:4200/app/testing/Runs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-runs-resource[1]/mj-slide-panel[1]/div[2]/div[3]/app-test-run-dialog[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 1037,
+            "YMin": 660,
+            "XMax": 1126,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Runs"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/testing/Runs",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

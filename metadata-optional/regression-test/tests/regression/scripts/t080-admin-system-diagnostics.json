@@ -1,0 +1,680 @@
+{
+  "TestId": "DFB9EB3A-A19F-4AED-8CD7-8F61ABDA4D8E",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "8a197d33",
+  "RecordedAt": "2026-11-13T08:57:25.529Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on the Admin application card to switch to Admin application.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Admin",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[27]",
+          "BoundingBox": {
+            "XMin": 646,
+            "YMin": 1074,
+            "XMax": 916,
+            "YMax": 1160
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access"
+      }
+    },
+    {
+      "Instruction": "I am in the Admin app. Now I need to open the 'Monitoring' section. Looking at the top bar, I see 'Identity & Access', 'Data & Schema', and '... More 2'. I will click on '... More 2' or check the navi",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 582,
+            "YMin": 13,
+            "XMax": 697,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    },
+    {
+      "Instruction": "Click on 'Monitoring' in the top navigation dropdown.",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Monitoring",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 583,
+            "YMin": 59,
+            "XMax": 781,
+            "YMax": 96
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring"
+      }
+    },
+    {
+      "Instruction": "We are now on Monitoring -> System Diagnostics page. The four section tabs (Engine Registry / Redundant Loading / Performance / Local Cache) are visible. I will test clicking through these section tab",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=diagnostics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Redundant Loading\n1",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-header-interior[1]/div[1]/div[2]/div[1]/mj-tab-nav[1]/div[1]/button[2]",
+          "Scope": "region:System diagnostics",
+          "BoundingBox": {
+            "XMin": 723,
+            "YMin": 283,
+            "XMax": 919,
+            "YMax": 315
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=diagnostics"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=redundant"
+      }
+    },
+    {
+      "Instruction": "I clicked on 'Redundant Loading' in the previous step and the panel updated to show Redundant Entity Loading content. Now I will click through Performance, Local Cache, and back to Engine Registry to ",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=redundant",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Performance\n0",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-header-interior[1]/div[1]/div[2]/div[1]/mj-tab-nav[1]/div[1]/button[3]",
+          "Scope": "region:System diagnostics",
+          "BoundingBox": {
+            "XMin": 923,
+            "YMin": 283,
+            "XMax": 1084,
+            "YMax": 315
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=redundant"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance"
+      }
+    },
+    {
+      "Instruction": "I have clicked on Engine Registry, Redundant Loading, and Performance tabs. Now clicking Local Cache tab (Index 17) to complete all 4 section tabs, and then clicking back to Engine Registry (Index 14)",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Local Cache\n0",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-header-interior[1]/div[1]/div[2]/div[1]/mj-tab-nav[1]/div[1]/button[4]",
+          "Scope": "region:System diagnostics",
+          "BoundingBox": {
+            "XMin": 1088,
+            "YMin": 283,
+            "XMax": 1242,
+            "YMax": 315
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=cache"
+      }
+    },
+    {
+      "Instruction": "We are on the Local Cache section tab, so we have clicked through all 4 tabs (Engine Registry, Redundant Loading, Performance, Local Cache). Now we need to go back to Engine Registry tab to complete c",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=cache",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Engine Registry\n22",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-header-interior[1]/div[1]/div[2]/div[1]/mj-tab-nav[1]/div[1]/button[1]",
+          "Scope": "region:System diagnostics",
+          "BoundingBox": {
+            "XMin": 529,
+            "YMin": 283,
+            "XMax": 711,
+            "YMax": 315
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=cache"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring"
+      }
+    },
+    {
+      "Instruction": "I have navigated through all four section tabs (Engine Registry, Redundant Loading, Performance, Local Cache) and returned to Engine Registry. Now I will click 'Refresh All Engines' (index 18) to test",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Refresh All Engines",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1068,
+            "YMin": 389,
+            "XMax": 1232,
+            "YMax": 420
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring"
+      }
+    },
+    {
+      "Instruction": "I clicked 'Refresh All Engines' in step 8. The button responded and the registered engine cards remain cleanly rendered. I will report checkpoint 'engine-registry-refresh'. Next, I need to test checkp",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "View engine details",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[3]/button[2]",
+          "BoundingBox": {
+            "XMin": 698,
+            "YMin": 602,
+            "XMax": 730,
+            "YMax": 634
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring"
+      }
+    },
+    {
+      "Instruction": "The engine detail panel is now slide-in visible, showing Status, Memory, Items, Last Loaded, and Data Configs (2). This confirms checkpoint (3) engine-detail-panel. Next, I need to close this panel (u",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[3]/div[1]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 1224,
+            "YMin": 16,
+            "XMax": 1260,
+            "YMax": 52
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring"
+      }
+    },
+    {
+      "Instruction": "The slide-in detail panel was verified in step 10, but the checkpoint string 'engine-detail-panel' was not set in that step's JSON response (it was set in memory/reasoning, but the actual key 'checkpo",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Performance\n0",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-header-interior[1]/div[1]/div[2]/div[1]/mj-tab-nav[1]/div[1]/button[3]",
+          "Scope": "region:System diagnostics",
+          "BoundingBox": {
+            "XMin": 915,
+            "YMin": 283,
+            "XMax": 1076,
+            "YMax": 315
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance"
+      }
+    },
+    {
+      "Instruction": "Now on Performance tab. I will click through the performance sub-tabs (Monitor, Overview, Events, Patterns, Insights) to fulfill checkpoint (4) performance-subtabs.",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Overview",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 389,
+            "YMin": 453,
+            "XMax": 498,
+            "YMax": 488
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=overview"
+      }
+    },
+    {
+      "Instruction": "In the previous step, batch execution stopped after clicking 'Overview' because the URL updated to `tab=overview`. Now I will click through the remaining Performance sub-tabs: Events (24), Patterns (2",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Events\n0",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[2]/button[3]",
+          "BoundingBox": {
+            "XMin": 502,
+            "YMin": 453,
+            "XMax": 625,
+            "YMax": 488
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=overview"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=events"
+      }
+    },
+    {
+      "Instruction": "I need to complete step (4) by clicking through the remaining sub-tabs: Patterns and Insights, then setting checkpoint 'performance-subtabs'.",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=events",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Patterns\n0",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[2]/button[4]",
+          "BoundingBox": {
+            "XMin": 629,
+            "YMin": 453,
+            "XMax": 758,
+            "YMax": 488
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=events"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=patterns"
+      }
+    },
+    {
+      "Instruction": "Clicking the last sub-tab 'Insights' (index 26) will finish exercising all sub-tabs of Performance section, completing checkpoint 'performance-subtabs'.",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=patterns",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Insights",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[2]/button[5]",
+          "BoundingBox": {
+            "XMin": 762,
+            "YMin": 453,
+            "XMax": 858,
+            "YMax": 488
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=patterns"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights"
+      }
+    },
+    {
+      "Instruction": "I have clicked through all sub-tabs of Performance (Monitor, Overview, Events, Patterns, Insights). Now set checkpoint 'performance-subtabs', then exercise (5) telemetry-enable-toggle by clicking the ",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Disabled",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1036,
+            "YMin": 389,
+            "XMax": 1140,
+            "YMax": 420
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights"
+      }
+    },
+    {
+      "Instruction": "The telemetry enable toggle was clicked and its label flipped to 'Enabled' and the warning banner disappeared. Setting checkpoint 'telemetry-enable-toggle' now. Next, I will test checkpoint (6) teleme",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Server",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 940,
+            "YMin": 391,
+            "XMax": 1014,
+            "YMax": 417
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&source=server&tab=insights"
+      }
+    },
+    {
+      "Instruction": "Clicking 'Server' switched the source toggle and updated the header controls to show Server mode (with Disabled config status and access error note). This satisfies checkpoint (6) telemetry-source-tog",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance&source=server&tab=insights",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Client",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 926,
+            "YMin": 392,
+            "XMax": 985,
+            "YMax": 418
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&source=server&tab=insights"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights"
+      }
+    },
+    {
+      "Instruction": "We clicked Client (restoring client controls) and setting checkpoint 'telemetry-source-toggle' in previous step. Now we need to set checkpoint 'telemetry-source-toggle' on this frame as we are back on",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Local Cache\n107",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-header-interior[1]/div[1]/div[2]/div[1]/mj-tab-nav[1]/div[1]/button[4]",
+          "Scope": "region:System diagnostics",
+          "BoundingBox": {
+            "XMin": 1080,
+            "YMin": 283,
+            "XMax": 1242,
+            "YMax": 315
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=cache&tab=insights"
+      }
+    },
+    {
+      "Instruction": "We are now on the Local Cache tab. The summary cards are rendered (Total Entries: 107, Total Size: 11.63 MB, Cache Hits: 107, Cache Misses: 109, Hit Rate: 49.5%). Now I'll click the 'RunViews' type fi",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=cache&tab=insights",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "RunViews",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[2]/div[3]/div[1]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 1046,
+            "YMin": 697,
+            "XMax": 1130,
+            "YMax": 725
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=cache&tab=insights"
+      }
+    },
+    {
+      "Instruction": "I clicked 'RunViews' filter button to test cache filter controls. Now setting checkpoint 'cache-stats-filter' and moving to step (8) perfmon-chart-zoom: returning to Performance tab -> Monitor sub-tab",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=cache&tab=insights",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Performance\n11",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-header-interior[1]/div[1]/div[2]/div[1]/mj-tab-nav[1]/div[1]/button[3]",
+          "Scope": "region:System diagnostics",
+          "BoundingBox": {
+            "XMin": 915,
+            "YMin": 283,
+            "XMax": 1076,
+            "YMax": 315
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=cache&tab=insights"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights"
+      }
+    },
+    {
+      "Instruction": "I need to switch to the Monitor sub-tab inside the Performance section tab. Looking at the Interactive Elements list, index 22 is the 'Monitor' button.",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Monitor",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 288,
+            "YMin": 448,
+            "XMax": 385,
+            "YMax": 483
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance&tab=insights"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance"
+      }
+    },
+    {
+      "Instruction": "Now on Monitor sub-tab of Performance section. To complete checkpoint 'perfmon-chart-zoom', click Zoom In button [30] then Reset Zoom button [32].",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Zoom In",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[3]/div[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 949,
+            "YMin": 541,
+            "XMax": 981,
+            "YMax": 573
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance"
+      }
+    },
+    {
+      "Instruction": "Now on Monitor sub-tab of Performance section. To complete checkpoint 'perfmon-chart-zoom', click Zoom In button [30] then Reset Zoom button [32].",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=performance",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Reset Zoom",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/app-system-diagnostics[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/div[3]/div[1]/div[1]/div[2]/button[3]",
+          "BoundingBox": {
+            "XMin": 1029,
+            "YMin": 541,
+            "XMax": 1061,
+            "YMax": 573
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=performance",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

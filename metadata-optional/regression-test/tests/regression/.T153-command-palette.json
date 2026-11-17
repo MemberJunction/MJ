@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t153-command-palette.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,shell",
@@ -51,7 +52,7 @@
     "ID": "1B61785E-4920-4940-973E-40D5644D915C"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.759Z",
-    "checksum": "f474e6081fc087a935ecbc16ceb8a588325b09dcbe0e817ac2aba14cdb352c46"
+    "lastModified": "2026-11-13T09:22:10.932Z",
+    "checksum": "0ebbf00e449bf7c138447ba61ebf3e2fc30999993600899bdcca7fc3a75a027a"
   }
 }

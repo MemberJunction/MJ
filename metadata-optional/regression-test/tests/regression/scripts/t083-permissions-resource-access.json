@@ -1,0 +1,176 @@
+{
+  "TestId": "1A3D1E53-364E-4ADD-943D-C8D95963B487",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "4425936a",
+  "RecordedAt": "2026-11-13T08:57:59.828Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on 'Resource Access' in the navigation bar to access the Resource Access section.",
+      "UrlBefore": "http://localhost:4200/app/permissions",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Resource Access",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 429,
+            "YMin": 13,
+            "XMax": 601,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/permissions/Resource%20Access"
+      }
+    },
+    {
+      "Instruction": "We are on the Resource Access page. The first checkpoint is 'domain-switch-populates-types'. We need to open the 'Domain:' dropdown and select a different permission domain, confirming that the 'Resou",
+      "UrlBefore": "http://localhost:4200/app/permissions/Resource%20Access",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Domain:",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-permissions-resource-access-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/select[1]",
+          "BoundingBox": {
+            "XMin": 24,
+            "YMin": 197,
+            "XMax": 1256,
+            "YMax": 235
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions/Resource%20Access"
+      }
+    },
+    {
+      "Instruction": "The Domain dropdown is currently open. I will select a different permission domain, e.g., 'Entity Permissions', to confirm that the 'Resource Type:' combobox updates/clears, satisfying checkpoint (1).",
+      "UrlBefore": "http://localhost:4200/app/permissions/Resource%20Access",
+      "Action": {
+        "Method": "keypress",
+        "Key": "ArrowDown"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions/Resource%20Access"
+      }
+    },
+    {
+      "Instruction": "The Domain dropdown is currently open. I will select a different permission domain, e.g., 'Entity Permissions', to confirm that the 'Resource Type:' combobox updates/clears, satisfying checkpoint (1).",
+      "UrlBefore": "http://localhost:4200/app/permissions/Resource%20Access",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "We changed the Domain to 'AI Agent Permissions' and the Resource Type updated automatically to 'AI Agents'. This satisfies checkpoint (1) 'domain-switch-populates-types'. Now we must proceed to checkp",
+      "UrlBefore": "http://localhost:4200/app/permissions/Resource%20Access",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Lookup",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-permissions-resource-access-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 24,
+            "YMin": 414,
+            "XMax": 142,
+            "YMax": 458
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions/Resource%20Access"
+      }
+    },
+    {
+      "Instruction": "The validation error 'Resource type and resource ID are both required.' is clearly displayed after clicking Lookup while Resource ID was blank. This fulfills checkpoint (2) 'lookup-requires-type-and-i",
+      "UrlBefore": "http://localhost:4200/app/permissions/Resource%20Access",
+      "Action": {
+        "Method": "type",
+        "Text": "123e4567-e89b-12d3-a456-426614174000",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Resource ID:",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-permissions-resource-access-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 24,
+            "YMin": 425,
+            "XMax": 1256,
+            "YMax": 464
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions/Resource%20Access"
+      }
+    },
+    {
+      "Instruction": "The validation error 'Resource type and resource ID are both required.' is clearly displayed after clicking Lookup while Resource ID was blank. This fulfills checkpoint (2) 'lookup-requires-type-and-i",
+      "UrlBefore": "http://localhost:4200/app/permissions/Resource%20Access",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Lookup",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-permissions-resource-access-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 24,
+            "YMin": 476,
+            "XMax": 142,
+            "YMax": 520
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/permissions/Resource%20Access",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t101-classify-pipeline-run-and-monitor.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,knowledge-hub",
@@ -51,7 +52,7 @@
     "ID": "1B5A6380-8407-477C-82C9-EEE5C275D93F"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.799Z",
-    "checksum": "0638a2aca4cc9726fcc18d33f0f16bdbe001ffbc43ea6e54421dda8462cecdb3"
+    "lastModified": "2026-11-13T09:22:10.951Z",
+    "checksum": "85fe0de20bb095b9870cdb1ba454c923939277ba70e0544291e7a0391c8f494f"
   }
 }

@@ -1,0 +1,447 @@
+{
+  "TestId": "F0D76B03-303C-4CC3-BAB0-AB5E7621DBB0",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "d59e2440",
+  "RecordedAt": "2026-11-13T09:08:13.003Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on 'New Routine' button (element index 9) to open the routine editor.",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Routine",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1129,
+            "YMin": 101,
+            "XMax": 1256,
+            "YMax": 134
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "The routine editor has loaded. We are currently at section (1): schedule-frequency-builder. Let's set checkpointReached to 'schedule-frequency-builder', and test switching frequency controls (Weekly/D",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Weekly",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[1]/div[4]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 184,
+            "YMin": 618,
+            "XMax": 255,
+            "YMax": 647
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "Currently Weekly is selected showing 'Monday' dropdown and '09:00 AM' time input. I will click 'Advanced (cron)' button to see the schedule inputs change to a raw cron-expression box, confirming secti",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Advanced (cron)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[1]/div[4]/div[1]/button[5]",
+          "BoundingBox": {
+            "XMin": 330,
+            "YMin": 465,
+            "XMax": 454,
+            "YMax": 494
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "Advanced (cron) is now selected and the cron expression box + preview line ('Every Monday at 9:00 AM') are visible. Section 1 (schedule-frequency-builder) complete. Moving to Section 2 (required-field",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Create Routine",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 40,
+            "YMin": 634,
+            "XMax": 206,
+            "YMax": 678
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "We need to verify checkpoint 2 'required-field-validation'. Without filling Name or Agent, click 'Create Routine' (index 23) and observe the validation error block.",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Create Routine",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 40,
+            "YMin": 632,
+            "XMax": 206,
+            "YMax": 676
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "We see element [22] 'Advanced options description · monitoring · timezone · window · payload · skills · notifications'. We need to click it to expand 'Advanced options' for section (3) routine-type-to",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Advanced options\ndescription · monitoring · timezone · window · payload · skills · notifications",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 40,
+            "YMin": 578,
+            "XMax": 1240,
+            "YMax": 615
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "We have reached section (3) routine-type-toggle. I will set checkpointReached to 'routine-type-toggle'. Now I need to click 'Monitoring' (element 25) to see the help text change, then click 'Scheduled",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Monitoring",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[2]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 171,
+            "YMin": 600,
+            "XMax": 281,
+            "YMax": 629
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "I clicked 'Monitoring' in step 12. Now I will set checkpointReached to 'routine-type-toggle' (to ensure it's registered on this frame) and click 'Scheduled' back to complete the verification for secti",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Scheduled",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[2]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 58,
+            "YMin": 600,
+            "XMax": 166,
+            "YMax": 629
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "Now scheduled is selected again (Routine type toggled back). We set checkpointReached to routine-type-toggle to register checkpoint 3. Next step will be section 4: advanced-options-disclosure (confirm",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Scheduled",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[2]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 58,
+            "YMin": 600,
+            "XMax": 171,
+            "YMax": 629
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "Now testing section (5) recipients-add-reorder. I am setting checkpointReached to 'recipients-add-reorder' and clicking 'Add recipient' (element 44) to add a row.",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add recipient",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[3]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1092,
+            "YMin": 543,
+            "XMax": 1223,
+            "YMax": 577
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "I will click 'Add recipient' (element 44) to add a second recipient row, as required by section 5.",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add recipient",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[3]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1092,
+            "YMin": 476,
+            "XMax": 1223,
+            "YMax": 510
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "Clicking 'Add recipient' in step 20 registered a second row (visible with controls below), but let's click 'Add recipient' [44] once more or click reorder arrow / trash icon on one of the recipient ro",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Move up",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[3]/div[3]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 66,
+            "YMin": 613,
+            "XMax": 110,
+            "YMax": 645
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "Clicking 'Add recipient' in step 20 registered a second row (visible with controls below), but let's click 'Add recipient' [44] once more or click reorder arrow / trash icon on one of the recipient ro",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Remove recipient",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[3]/div[3]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 1170,
+            "YMin": 629,
+            "XMax": 1214,
+            "YMax": 661
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "Clicking 'Add recipient' [38] will add a second recipient row. Then we will reorder and remove one to finish section 5.",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add recipient",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[3]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1092,
+            "YMin": 325,
+            "XMax": 1223,
+            "YMax": 359
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "We need to add a second recipient row by clicking '+ Add recipient'. In the Interactive Elements list, index 38 is 'Add recipient'. Let's click it.",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add recipient",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[3]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1092,
+            "YMin": 325,
+            "XMax": 1223,
+            "YMax": 359
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "Now there are 3 recipient rows visible on screen! Let's reorder by clicking a 'Move up' or 'Move down' button, and then click a trash button ('Remove recipient') to delete one row.",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Move up",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[3]/div[3]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 66,
+            "YMin": 286,
+            "XMax": 110,
+            "YMax": 318
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      }
+    },
+    {
+      "Instruction": "Now there are 3 recipient rows visible on screen! Let's reorder by clicking a 'Move up' or 'Move down' button, and then click a trash button ('Remove recipient') to delete one row.",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Remove recipient",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[3]/div[3]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 1170,
+            "YMin": 214,
+            "XMax": 1214,
+            "YMax": 246
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/routines",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

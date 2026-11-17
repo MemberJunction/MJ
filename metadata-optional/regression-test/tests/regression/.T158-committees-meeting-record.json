@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T158 - Committees Meeting Record",
+    "Description": "In the Committees app, open 'Meetings' from the app's navigation (if it is not there, navigate to http://localhost:4200/app/data-explorer/Data?entity=Committees:%20Meetings — do not use the sidebar search, because two entities are called 'Meetings'). Type 'Standards Committee — Q4 2015' in the grid's filter box ('Filter records...') and open the meeting 'Standards Committee — Q4 2015 meeting': click its row and then 'Open Full Record', or double-click the row. Pages can take 10-30s to load — wait, don't navigate away.",
+    "InputDefinition": "{\n  \"goal\": \"In the Committees app, open 'Meetings' from the app's navigation (if it is not there, navigate to http://localhost:4200/app/data-explorer/Data?entity=Committees:%20Meetings — do not use the sidebar search, because two entities are called 'Meetings'). Type 'Standards Committee — Q4 2015' in the grid's filter box ('Filter records...') and open the meeting 'Standards Committee — Q4 2015 meeting': click its row and then 'Open Full Record', or double-click the row. Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200/app/mjcommittees\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200/app/mjcommittees\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 30,\n  \"judgeValidationCriteria\": [\n    \"The Committees app's Meetings grid shows meeting rows\",\n    \"The meeting 'Standards Committee — Q4 2015 meeting' is open and shows Status Completed, Location Type InPerson and Location Text 'Madison, WI — Annex Room 2'\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 30,
+      "maxExecutionTime": 360000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 30
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,open-apps",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "SkipEmbeddings": false,
+    "RubricID": null
+  },
+  "primaryKey": {
+    "ID": "95BE8945-CBF4-4B26-948B-4C9A8DB60EFA"
+  },
+  "sync": {
+    "lastModified": "2026-11-13T09:23:58.734Z",
+    "checksum": "7036527f6b39a0ed2a1769c3d700a9e4fd5648986a93ea3a4307bd7defd5a013"
+  }
+}

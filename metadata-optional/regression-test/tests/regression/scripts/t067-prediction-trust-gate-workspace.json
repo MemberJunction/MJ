@@ -1,0 +1,107 @@
+{
+  "TestId": "33BD7DFC-7909-4853-9AB4-1995E59DF0E3",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "263741fe",
+  "RecordedAt": "2026-11-13T08:52:21.111Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click the application switcher dropdown next to the logo to locate and switch to Predictive Studio.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is open. I need to find 'Predictive Studio'. I can type 'Predictive Studio' into the 'Find an app...' input field.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "type",
+        "Text": "Predictive Studio",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Find an app",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[1]/div[1]/input[1]",
+          "Scope": "dialog:Application launcher",
+          "BoundingBox": {
+            "XMin": 256,
+            "YMin": 113,
+            "XMax": 1000,
+            "YMax": 135
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application search returned 'Predictive Studio'. I will click on the 'Predictive Studio' app card to open it.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Predictive Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[1]/div[1]",
+          "Scope": "dialog:Application launcher",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 155,
+            "XMax": 492,
+            "YMax": 233
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Predictions"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/predictive-studio/Predictions",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

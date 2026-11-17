@@ -139,13 +139,20 @@ class OpenAppPhaseError extends Error {
  * Runtime context provided by the CLI to the orchestrator.
  * Contains all the external dependencies needed for the install flow.
  */
-export interface OrchestratorContext {
+export interface OrchestratorContext extends PackageStepContext {
   /** MJ context user for entity operations (Metadata / RunView) */
   ContextUser: UserInfo;
   /** MJ database provider for schema DDL operations */
   DatabaseProvider: DatabaseProviderBase;
   /** Database config for Skyway */
   DatabaseConfig: SkywayDatabaseConfig;
+}
+
+/**
+ * The part of {@link OrchestratorContext} the package step needs. Has no database members, so
+ * {@link InstallAppPackages} can run where no database exists (for example a Docker build).
+ */
+export interface PackageStepContext {
   /** GitHub client options (auth token) */
   GitHubOptions: GitHubClientOptions;
   /** Absolute path to the monorepo root */
@@ -201,9 +208,20 @@ export interface OrchestratorContext {
  * 13. Update angular.json prebundle excludes (prevents Vite singleton duplication)
  * 14. Execute hooks (postInstall)
  * 15. Finalize status to 'Active'
+ *
+ * `PackagesOnly` runs steps 1-5 and 10-13 through {@link InstallAppPackages}, with no database.
+ * `DatabaseOnly` skips the package preflight and steps 10-13. The two cannot be combined.
  */
 export async function InstallApp(options: InstallOptions, context: OrchestratorContext): Promise<AppOperationResult> {
   const startTime = Date.now();
+  const modeError = ValidateInstallModes(options);
+  if (modeError) {
+    return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, modeError);
+  }
+  if (options.PackagesOnly) {
+    return InstallAppPackages(options, context);
+  }
+
   const { Callbacks } = context;
   let createdAppId: string | undefined;
   let manifest: MJAppManifest | undefined;
@@ -215,66 +233,31 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
   const subpath = options.Subpath ?? ParseGitHubUrl(options.Source)?.Subpath;
 
   try {
-    // Step 1a: If an explicit version was requested, validate the tag exists on GitHub
-    const explicitVersion = options.Version;
-    if (explicitVersion) {
-      Callbacks?.OnProgress?.('Fetch', `Validating version tag v${explicitVersion.replace(/^v/, '')} exists...`);
-      const tagResult = await ValidateGitHubTag(options.Source, explicitVersion, context.GitHubOptions, subpath);
-      if (!tagResult.Exists) {
-        return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, tagResult.ErrorMessage ?? `Version ${explicitVersion} not found`);
-      }
+    // Steps 1-3: Fetch and validate the manifest, then check MJ compatibility
+    const prepared = await PrepareInstall(options, context, subpath, startTime);
+    if ('Failure' in prepared) {
+      return prepared.Failure;
     }
-
-    // Step 1b: Fetch manifest (from the app's subpath when this is a multi-app repo)
-    Callbacks?.OnProgress?.('Fetch', `Fetching manifest from ${options.Source}...`);
-    const fetchResult = await FetchManifestFromGitHub(options.Source, explicitVersion, context.GitHubOptions, subpath);
-    if (!fetchResult.Success || !fetchResult.ManifestJSON) {
-      return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
-    }
-
-    // Step 2: Validate manifest
-    Callbacks?.OnProgress?.('Validate', 'Validating manifest...');
-    const parseResult = ParseAndValidateManifest(fetchResult.ManifestJSON);
-    if (!parseResult.Success || !parseResult.Manifest) {
-      return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, `Invalid manifest: ${parseResult.Errors?.join(', ')}`);
-    }
-    manifest = parseResult.Manifest;
-
-    // When an explicit version is requested, use that version for package pins
-    // (not the manifest's version field, which may be a base version like "1.0.0").
-    // Also switch to 'exact' version strategy so packages are pinned without ^ prefix.
-    const effectivePackageVersion = explicitVersion ? explicitVersion.replace(/^v/, '') : manifest.version;
-    const effectiveVersionStrategy: VersionStrategy | undefined = explicitVersion ? 'exact' : context.VersionStrategy;
-
-    // Step 3: Validate MJ compatibility
-    Callbacks?.OnProgress?.('Validate', 'Checking MJ version compatibility...');
-    const compatResult = CheckMJVersionCompatibility(context.MJVersion, manifest.mjVersionRange);
-    if (!compatResult.Compatible) {
-      return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, compatResult.Message ?? 'Incompatible MJ version');
-    }
+    manifest = prepared.Manifest;
+    const effectivePackageVersion = prepared.PackageVersion;
+    const effectiveVersionStrategy = prepared.VersionStrategy;
 
     // Before any database or file change: an npm auth failure or an unpublished package stops here (#3796).
-    const preflight = await PreflightManifestPackages(manifest, context, effectivePackageVersion, effectiveVersionStrategy);
-    if (!preflight.Success) {
-      return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, preflight.ErrorMessage ?? 'Package preflight failed');
+    // The database step installs no packages, so it skips this check.
+    if (!options.DatabaseOnly) {
+      const preflight = await PreflightManifestPackages(manifest, context, effectivePackageVersion, effectiveVersionStrategy);
+      if (!preflight.Success) {
+        return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, preflight.ErrorMessage ?? 'Package preflight failed');
+      }
     }
 
     // Steps 4-5: Resolve the full transitive dependency graph and install members
     // in leaf-first order. Skipped when this call is itself a pre-resolved member
     // of a parent's graph (the parent already resolved and installed our deps).
     if (!options._skipDependencyResolution) {
-      const depResult = await ResolveDependencyChain(manifest, context);
-      if (!depResult.Success) {
-        return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
-      }
-      if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        const depsResult = await InstallDependencies(depResult.DepsToInstall, context, {
-          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
-          Verbose: options.Verbose,
-        });
-        if (!depsResult.Success) {
-          return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depsResult.ErrorMessage ?? 'Dependency installation failed');
-        }
+      const depsError = await ResolveAndInstallDependencies(manifest, context, options, () => LoadInstalledAppMap(context), (o) => InstallApp(o, context));
+      if (depsError) {
+        return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depsError);
       }
     }
 
@@ -396,47 +379,21 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     }
 
     // ── PHASE 2: File operations (after all DB work succeeds) ────
-    Callbacks?.OnProgress?.('Config', 'Updating configuration files...');
-
-    // Steps 10-11: Packages
+    // Steps 10-13. The database step leaves every file alone.
     let npmInstallWarning: string | undefined;
-    if (!IsStepDone(INSTALL_STEP_ORDER, resumeCheckpoint, 'PackagesInstalled')) {
-      const pkgResult = await HandlePackageInstallation(manifest, context, effectivePackageVersion, effectiveVersionStrategy, options.Verbose);
-      if (!pkgResult.Success) {
-        if (pkgResult.PackageJsonUpdated) {
-          // package.json was updated successfully but `npm install` failed (e.g., missing npm auth).
-          // Continue with the rest of the install — the user can run `npm install` manually once
-          // they fix their npm credentials. Deliberately NOT checkpointed: this is a soft-success
-          // for THIS attempt, but a resumed retry should re-attempt npm install (the user may have
-          // fixed their npm auth by then) rather than skip straight past it — skipping here was the
-          // bug that let a resume finalize 'Active' with dependencies never actually resolved.
-          npmInstallWarning = pkgResult.ErrorMessage;
-          Callbacks?.OnWarn?.('Packages', DescribeUnresolvedPackages(manifest.name, 'added', pkgResult.ErrorMessage));
-        } else {
-          await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
-          await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Packages', pkgResult.ErrorMessage ?? 'Package installation failed', startTime);
-          return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package installation failed');
-        }
-      } else {
-        await SetAppStep(context.ContextUser, createdAppId!, 'PackagesInstalled');
+    if (!options.DatabaseOnly) {
+      const fileSteps = await RunInstallFileSteps(manifest, context, {
+        AppId: createdAppId!,
+        ResumeCheckpoint: resumeCheckpoint,
+        PackageVersion: effectivePackageVersion,
+        VersionStrategy: effectiveVersionStrategy,
+        Verbose: options.Verbose,
+        StartTime: startTime,
+      });
+      if (fileSteps.Failure) {
+        return fileSteps.Failure;
       }
-    }
-
-    // Step 12: Update server config
-    if (!IsStepDone(INSTALL_STEP_ORDER, resumeCheckpoint, 'ConfigUpdated')) {
-      const configResult = HandleServerConfig(manifest, context, { ExcludeSchema: true });
-      if (!configResult.Success) {
-        await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
-        await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Config', configResult.ErrorMessage ?? 'Config update failed', startTime);
-        return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
-      }
-      await SetAppStep(context.ContextUser, createdAppId!, 'ConfigUpdated');
-    }
-
-    // Step 13: Update angular.json prebundle excludes
-    if (!IsStepDone(INSTALL_STEP_ORDER, resumeCheckpoint, 'AngularExcludesUpdated')) {
-      HandleAngularPrebundleExcludes(manifest, context);
-      await SetAppStep(context.ContextUser, createdAppId!, 'AngularExcludesUpdated');
+      npmInstallWarning = fileSteps.NpmInstallWarning;
     }
 
     // Step 14: Finalize status. If `npm install` failed (deps unresolved), finalize as
@@ -552,6 +509,233 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
   } finally {
     ReleaseTeardownScripts(teardownScripts, context);
   }
+}
+
+/**
+ * Runs only the package step of an install, for the app and every dependency app: add the npm
+ * packages to the workspaces, run the package install, write `mj.config.cjs` (dynamic packages,
+ * entity package mapping, excluded schema) and update `angular.json`.
+ *
+ * Opens no database connection: there is no "already installed" check, no schema, no migrations,
+ * no Open App records, no hooks and no template-user step. Every app is treated as a fresh install
+ * of its packages. Finish the install later with {@link InstallApp} and `DatabaseOnly`.
+ */
+export async function InstallAppPackages(options: InstallOptions, context: PackageStepContext): Promise<AppOperationResult> {
+  const startTime = Date.now();
+  const modeError = options.DatabaseOnly ? 'The package step cannot run with DatabaseOnly. Use InstallApp with DatabaseOnly for the database step.' : undefined;
+  if (modeError) {
+    return BuildFailureResult('Install', options.Source, '', 'Packages', startTime, modeError);
+  }
+  const subpath = options.Subpath ?? ParseGitHubUrl(options.Source)?.Subpath;
+  try {
+    const prepared = await PrepareInstall(options, context, subpath, startTime);
+    if ('Failure' in prepared) {
+      return prepared.Failure;
+    }
+    const { Manifest: manifest } = prepared;
+    const preflight = await PreflightManifestPackages(manifest, context, prepared.PackageVersion, prepared.VersionStrategy);
+    if (!preflight.Success) {
+      return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, preflight.ErrorMessage ?? 'Package preflight failed');
+    }
+    if (!options._skipDependencyResolution) {
+      const noInstalledApps = async (): Promise<InstalledAppMap> => ({});
+      const depsError = await ResolveAndInstallDependencies(manifest, context, options, noInstalledApps, (o) => InstallAppPackages(o, context));
+      if (depsError) {
+        return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, depsError);
+      }
+    }
+    return await RunPackageStepOnly(manifest, context, prepared, options.Verbose, startTime);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    context.Callbacks?.OnError?.('Install', message);
+    return BuildFailureResult('Install', options.Source, '', 'Packages', startTime, message);
+  }
+}
+
+/** Returns an error message when the install options ask for both the package and the database step only. */
+function ValidateInstallModes(options: InstallOptions): string | undefined {
+  if (options.PackagesOnly && options.DatabaseOnly) {
+    return 'PackagesOnly and DatabaseOnly cannot be used together. Omit both to run the full install.';
+  }
+  return undefined;
+}
+
+/** A manifest that passed steps 1-3, with the package version and strategy the install writes. */
+type PreparedInstall =
+  | { Success: true; Manifest: MJAppManifest; PackageVersion: string; VersionStrategy: VersionStrategy | undefined }
+  | { Success: false; Failure: AppOperationResult };
+
+/**
+ * Install steps 1-3: validate an explicit version tag, fetch and validate the manifest, and check
+ * MJ version compatibility. An explicit version also sets the package pin and the 'exact' strategy.
+ */
+async function PrepareInstall(options: InstallOptions, context: PackageStepContext, subpath: string | undefined, startTime: number): Promise<PreparedInstall> {
+  const { Callbacks } = context;
+  const fail = (appName: string, version: string, message: string): PreparedInstall =>
+    ({ Success: false, Failure: BuildFailureResult('Install', appName, version, 'Schema', startTime, message) });
+  const explicitVersion = options.Version;
+  if (explicitVersion) {
+    Callbacks?.OnProgress?.('Fetch', `Validating version tag v${explicitVersion.replace(/^v/, '')} exists...`);
+    const tagResult = await ValidateGitHubTag(options.Source, explicitVersion, context.GitHubOptions, subpath);
+    if (!tagResult.Exists) {
+      return fail(options.Source, '', tagResult.ErrorMessage ?? `Version ${explicitVersion} not found`);
+    }
+  }
+  Callbacks?.OnProgress?.('Fetch', `Fetching manifest from ${options.Source}...`);
+  const fetchResult = await FetchManifestFromGitHub(options.Source, explicitVersion, context.GitHubOptions, subpath);
+  if (!fetchResult.Success || !fetchResult.ManifestJSON) {
+    return fail(options.Source, '', fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
+  }
+  Callbacks?.OnProgress?.('Validate', 'Validating manifest...');
+  const parseResult = ParseAndValidateManifest(fetchResult.ManifestJSON);
+  if (!parseResult.Success || !parseResult.Manifest) {
+    return fail(options.Source, '', `Invalid manifest: ${parseResult.Errors?.join(', ')}`);
+  }
+  const manifest = parseResult.Manifest;
+  Callbacks?.OnProgress?.('Validate', 'Checking MJ version compatibility...');
+  const compatResult = CheckMJVersionCompatibility(context.MJVersion, manifest.mjVersionRange);
+  if (!compatResult.Compatible) {
+    return fail(manifest.name, manifest.version, compatResult.Message ?? 'Incompatible MJ version');
+  }
+  return {
+    Success: true,
+    Manifest: manifest,
+    PackageVersion: explicitVersion ? explicitVersion.replace(/^v/, '') : manifest.version,
+    VersionStrategy: explicitVersion ? 'exact' : context.VersionStrategy,
+  };
+}
+
+/**
+ * Install steps 4-5: resolves the dependency graph and installs each missing dependency with
+ * `install`. Returns an error message on failure, otherwise undefined.
+ */
+async function ResolveAndInstallDependencies(
+  manifest: MJAppManifest,
+  context: PackageStepContext,
+  options: InstallOptions,
+  loadInstalledApps: () => Promise<InstalledAppMap>,
+  install: (options: InstallOptions) => Promise<AppOperationResult>,
+): Promise<string | undefined> {
+  const depResult = await ResolveDependencyChain(manifest, context, loadInstalledApps);
+  if (!depResult.Success) {
+    return depResult.ErrorMessage ?? 'Dependency resolution failed';
+  }
+  if (!depResult.DepsToInstall || depResult.DepsToInstall.length === 0) {
+    return undefined;
+  }
+  const depsResult = await InstallDependencies(depResult.DepsToInstall, context, BuildPassthroughOptions(options), install);
+  return depsResult.Success ? undefined : depsResult.ErrorMessage ?? 'Dependency installation failed';
+}
+
+/** The options a top-level install forwards to its dependency installs. */
+function BuildPassthroughOptions(options: InstallOptions): PassthroughInstallOptions {
+  return {
+    AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+    Verbose: options.Verbose,
+    PackagesOnly: options.PackagesOnly,
+    DatabaseOnly: options.DatabaseOnly,
+  };
+}
+
+/**
+ * The package step with no database: packages, config and angular.json. Any failure fails the
+ * install, including a package install that fails after package.json was updated.
+ */
+async function RunPackageStepOnly(
+  manifest: MJAppManifest,
+  context: PackageStepContext,
+  prepared: { PackageVersion: string; VersionStrategy: VersionStrategy | undefined },
+  verbose: boolean | undefined,
+  startTime: number,
+): Promise<AppOperationResult> {
+  const fail = (phase: ErrorPhase, message: string): AppOperationResult =>
+    BuildFailureResult('Install', manifest.name, manifest.version, phase, startTime, message);
+  const pkgResult = await HandlePackageInstallation(manifest, context, prepared.PackageVersion, prepared.VersionStrategy, verbose);
+  if (!pkgResult.Success) {
+    return fail('Packages', pkgResult.ErrorMessage ?? 'Package installation failed');
+  }
+  const configResult = HandleServerConfig(manifest, context, { ExcludeSchema: true });
+  if (!configResult.Success) {
+    return fail('Config', configResult.ErrorMessage ?? 'Config update failed');
+  }
+  HandleAngularPrebundleExcludes(manifest, context);
+  context.Callbacks?.OnSuccess?.('Install', `Installed the packages of ${manifest.name} v${manifest.version}`);
+  return {
+    Success: true,
+    Action: 'Install',
+    AppName: manifest.name,
+    Version: manifest.version,
+    DurationSeconds: GetDurationSeconds(startTime),
+    Summary: `Packages installed. The database step has not run: run 'mj app install <source> --database-only' when the database is available to finish the install.`,
+  };
+}
+
+/** Inputs to {@link RunInstallFileSteps}. */
+interface InstallFileStepsInput {
+  AppId: string;
+  ResumeCheckpoint: string | null;
+  PackageVersion: string;
+  VersionStrategy: VersionStrategy | undefined;
+  Verbose: boolean | undefined;
+  StartTime: number;
+}
+
+/** Result of {@link RunInstallFileSteps}: a failure to return, or a package-install warning. */
+interface InstallFileStepsResult {
+  Failure?: AppOperationResult;
+  NpmInstallWarning?: string;
+}
+
+/**
+ * Install steps 10-13 for an app that is recorded in the database: packages, server config and
+ * angular.json, each skipped when the resume checkpoint shows it done.
+ */
+async function RunInstallFileSteps(manifest: MJAppManifest, context: OrchestratorContext, input: InstallFileStepsInput): Promise<InstallFileStepsResult> {
+  context.Callbacks?.OnProgress?.('Config', 'Updating configuration files...');
+  let npmInstallWarning: string | undefined;
+  if (!IsStepDone(INSTALL_STEP_ORDER, input.ResumeCheckpoint, 'PackagesInstalled')) {
+    const pkgStep = await RunInstallPackageStep(manifest, context, input);
+    if (pkgStep.Failure) {
+      return pkgStep;
+    }
+    npmInstallWarning = pkgStep.NpmInstallWarning;
+  }
+  if (!IsStepDone(INSTALL_STEP_ORDER, input.ResumeCheckpoint, 'ConfigUpdated')) {
+    const configResult = HandleServerConfig(manifest, context, { ExcludeSchema: true });
+    if (!configResult.Success) {
+      const message = configResult.ErrorMessage ?? 'Config update failed';
+      await SetAppStatus(context.ContextUser, input.AppId, 'Error');
+      await RecordFailureHistory(context.ContextUser, input.AppId, 'Install', manifest, 'Config', message, input.StartTime);
+      return { Failure: BuildFailureResult('Install', manifest.name, manifest.version, 'Config', input.StartTime, message) };
+    }
+    await SetAppStep(context.ContextUser, input.AppId, 'ConfigUpdated');
+  }
+  if (!IsStepDone(INSTALL_STEP_ORDER, input.ResumeCheckpoint, 'AngularExcludesUpdated')) {
+    HandleAngularPrebundleExcludes(manifest, context);
+    await SetAppStep(context.ContextUser, input.AppId, 'AngularExcludesUpdated');
+  }
+  return { NpmInstallWarning: npmInstallWarning };
+}
+
+/**
+ * Install steps 10-11: adds the packages and runs the package install. A package install that
+ * fails after package.json was updated is a warning, not a failure, and is not checkpointed, so a
+ * resumed install tries the package install again.
+ */
+async function RunInstallPackageStep(manifest: MJAppManifest, context: OrchestratorContext, input: InstallFileStepsInput): Promise<InstallFileStepsResult> {
+  const pkgResult = await HandlePackageInstallation(manifest, context, input.PackageVersion, input.VersionStrategy, input.Verbose);
+  if (pkgResult.Success) {
+    await SetAppStep(context.ContextUser, input.AppId, 'PackagesInstalled');
+    return {};
+  }
+  if (pkgResult.PackageJsonUpdated) {
+    context.Callbacks?.OnWarn?.('Packages', DescribeUnresolvedPackages(manifest.name, 'added', pkgResult.ErrorMessage));
+    return { NpmInstallWarning: pkgResult.ErrorMessage };
+  }
+  const message = pkgResult.ErrorMessage ?? 'Package installation failed';
+  await SetAppStatus(context.ContextUser, input.AppId, 'Error');
+  await RecordFailureHistory(context.ContextUser, input.AppId, 'Install', manifest, 'Packages', message, input.StartTime);
+  return { Failure: BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', input.StartTime, message) };
 }
 
 /**
@@ -900,7 +1084,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 3: Check dependency compatibility
     if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
-      const depResult = await ResolveDependencyChain(manifest, context);
+      const depResult = await ResolveDependencyChain(manifest, context, () => LoadInstalledAppMap(context));
       if (!depResult.Success) {
         return BuildFailureResult(
           'Upgrade',
@@ -913,10 +1097,12 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       }
       // Install any new dependencies required by the upgraded version
       if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
-          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
-          Verbose: options.Verbose,
-        });
+        const installResult = await InstallDependencies(
+          depResult.DepsToInstall,
+          context,
+          { AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema, Verbose: options.Verbose },
+          (o) => InstallApp(o, context),
+        );
         if (!installResult.Success) {
           return BuildFailureResult(
             'Upgrade',
@@ -1660,27 +1846,18 @@ interface InternalResult {
  * is what makes genuine cross-repo cycle detection (A -> B -> A) possible before
  * any install work begins.
  */
-async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext): Promise<InternalResult> {
+async function ResolveDependencyChain(
+  manifest: MJAppManifest,
+  context: PackageStepContext,
+  loadInstalledApps: () => Promise<InstalledAppMap>,
+): Promise<InternalResult> {
   if (!manifest.dependencies || Object.keys(manifest.dependencies).length === 0) {
     return { Success: true };
   }
 
   context.Callbacks?.OnProgress?.('Dependencies', 'Resolving dependency graph...');
 
-  const installedApps = await ListInstalledApps(context.ContextUser);
-  const installedMap: InstalledAppMap = {};
-  for (const app of installedApps) {
-    // Only a genuinely completed install/upgrade satisfies a dependency. An app stuck at
-    // 'Installing'/'Upgrading'/'Error' (e.g. from a prior crashed run) is NOT satisfied —
-    // treating it as AlreadyInstalled would silently skip it forever, leaving a broken
-    // dependency invisible on every future retry. Excluding it here re-queues it into
-    // depsToInstall, so InstallDependencies calls InstallApp on it again and resumes it
-    // from its checkpoint instead of restarting or skipping it.
-    if (app.Status !== 'Active' && app.Status !== 'Disabled') {
-      continue;
-    }
-    installedMap[app.Name] = { Version: app.Version, Repository: app.RepositoryURL };
-  }
+  const installedMap = await loadInstalledApps();
 
   // Zod infers object variant fields as optional; DependencyValue requires them.
   // The runtime schema validates they're present, so this narrowing is safe.
@@ -1709,11 +1886,28 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
 }
 
 /**
+ * Reads the installed apps that satisfy a dependency. Only a completed install/upgrade
+ * ('Active' or 'Disabled') counts: an app stuck at 'Installing'/'Upgrading'/'Error' is left out,
+ * so it is queued again and {@link InstallApp} resumes it from its checkpoint.
+ */
+async function LoadInstalledAppMap(context: OrchestratorContext): Promise<InstalledAppMap> {
+  const installedApps = await ListInstalledApps(context.ContextUser);
+  const installedMap: InstalledAppMap = {};
+  for (const app of installedApps) {
+    if (app.Status !== 'Active' && app.Status !== 'Disabled') {
+      continue;
+    }
+    installedMap[app.Name] = { Version: app.Version, Repository: app.RepositoryURL };
+  }
+  return installedMap;
+}
+
+/**
  * Builds a {@link ManifestFetcher} that retrieves and validates a dependency's
  * manifest from GitHub (at the resolved version when given). Used by the graph
  * builder to walk transitive deps.
  */
-function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
+function BuildManifestFetcher(context: PackageStepContext): ManifestFetcher {
   return async (repoUrl: string, subpath?: string, version?: string) => {
     const fetched = await FetchManifestFromGitHub(repoUrl, version, context.GitHubOptions, subpath);
     if (!fetched.Success || !fetched.ManifestJSON) {
@@ -1738,13 +1932,14 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
 /**
  * Installs the resolved dependencies sequentially in the leaf-first order
  * produced by the graph resolution. Each dependency is installed via
- * {@link InstallApp} with `_skipDependencyResolution` set — its own transitive
+ * `install` ({@link InstallApp}, or {@link InstallAppPackages} for the package
+ * step) with `_skipDependencyResolution` set — its own transitive
  * dependencies appear earlier in the order and are therefore already installed,
  * so re-resolving here would be redundant (and, for any cycle that slipped the
  * up-front check, unbounded).
  *
  * Inherited options that affect install BEHAVIOR (verbosity, the schema-name
- * override) are forwarded from the parent so a flag set on the top-level call
+ * override, the package-only and database-only modes) are forwarded from the parent so a flag set on the top-level call
  * also governs the dependency installs. App-identity options (Source, Version)
  * are NOT forwarded — each dependency has its own source and installs at the
  * version the graph resolution chose for it, rather than inheriting the parent's
@@ -1753,8 +1948,9 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
  */
 async function InstallDependencies(
   deps: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string; Version?: string }>,
-  context: OrchestratorContext,
+  context: PackageStepContext,
   inherited: PassthroughInstallOptions,
+  install: (options: InstallOptions) => Promise<AppOperationResult>,
 ): Promise<InternalResult> {
   for (const dep of deps) {
     if (!dep.Repository) {
@@ -1767,18 +1963,17 @@ async function InstallDependencies(
     // The graph resolution already resolved the highest published version satisfying the
     // declared range, fetched that version's manifest and checked it against every other
     // parent's range — install exactly that version so the installed app matches the graph.
-    const result = await InstallApp(
-      {
-        Source: dep.Repository,
-        Subpath: dep.Subpath,
-        // Pinned to satisfy the declared range; undefined ⇒ no constraint ⇒ default-branch latest.
-        Version: dep.Version,
-        _skipDependencyResolution: true,
-        AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
-        Verbose: inherited.Verbose,
-      },
-      context,
-    );
+    const result = await install({
+      Source: dep.Repository,
+      Subpath: dep.Subpath,
+      // Pinned to satisfy the declared range; undefined ⇒ no constraint ⇒ default-branch latest.
+      Version: dep.Version,
+      _skipDependencyResolution: true,
+      AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
+      Verbose: inherited.Verbose,
+      PackagesOnly: inherited.PackagesOnly,
+      DatabaseOnly: inherited.DatabaseOnly,
+    });
     if (!result.Success) {
       return { Success: false, ErrorMessage: `Failed to install dependency: ${result.ErrorMessage}` };
     }
@@ -2243,7 +2438,7 @@ async function DownloadAppMigrations(
  */
 async function PreflightManifestPackages(
   manifest: MJAppManifest,
-  context: OrchestratorContext,
+  context: PackageStepContext,
   packageVersion: string,
   versionStrategy: VersionStrategy | undefined,
 ): Promise<InternalResult> {
@@ -2308,7 +2503,7 @@ export function DescribeRestoredUpgrade(info: RestoredUpgradeInfo): string {
  */
 async function HandlePackageInstallation(
   manifest: MJAppManifest,
-  context: OrchestratorContext,
+  context: PackageStepContext,
   packageVersion?: string,
   versionStrategy?: VersionStrategy,
   verbose?: boolean,
@@ -2451,7 +2646,7 @@ interface ServerConfigOptions {
 /**
  * Adds server dynamic package entries and entity package mapping to mj.config.cjs for the app.
  */
-function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContext, options: ServerConfigOptions): InternalResult {
+function HandleServerConfig(manifest: MJAppManifest, context: PackageStepContext, options: ServerConfigOptions): InternalResult {
   context.Callbacks?.OnProgress?.('Config', 'Updating server config...');
 
   // Each config write targets EVERY mj.config.cjs a consumer may load (the server workspace's
@@ -2510,7 +2705,7 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
  * emitted but the install/upgrade continues — the app will still work in
  * production builds, just the dev server may have the singleton bug.
  */
-function HandleAngularPrebundleExcludes(manifest: MJAppManifest, context: OrchestratorContext): void {
+function HandleAngularPrebundleExcludes(manifest: MJAppManifest, context: PackageStepContext): void {
   const manager = new AngularConfigManager(context.RepoRoot, context.ClientPackagePath);
   if (!manager.Load()) {
     return; // angular.json not found — not an error, skip silently

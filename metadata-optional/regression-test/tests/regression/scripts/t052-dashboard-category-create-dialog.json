@@ -1,0 +1,180 @@
+{
+  "TestId": "0E338E6F-5EF5-4E76-A2F5-466EE15CE459",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "85ae7a0c",
+  "RecordedAt": "2026-11-13T08:48:54.531Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the application switcher dropdown next to the logo (top left, element index 1).",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is now open. I need to click on 'Dashboards'. Looking at the interactive elements list, [4] is a link 'Dashboards' under RECENT and [11] is a link 'Dashboards' under AL",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Dashboards",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      }
+    },
+    {
+      "Instruction": "I am on the Dashboards Library page. Now I need to click the '+ New' button (index 20) to open its dropdown, which will offer 'Dashboard' and 'Category'.",
+      "UrlBefore": "http://localhost:4200/app/dashboards/Library",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-dashboard-browser[1]/div[1]/div[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 1157,
+            "YMin": 193,
+            "XMax": 1256,
+            "YMax": 229
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      }
+    },
+    {
+      "Instruction": "The '+ New' dropdown is open and shows 'Category' (index 22). I will click 'Category'.",
+      "UrlBefore": "http://localhost:4200/app/dashboards/Library",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Category",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-dashboard-browser[1]/div[1]/div[1]/div[1]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1096,
+            "YMin": 273,
+            "XMax": 1256,
+            "YMax": 313
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      }
+    },
+    {
+      "Instruction": "The 'Create Category' dialog is now open. I will enter 'CU Test Folder' into the Name field (index 27) and then click the Create button (index 29).",
+      "UrlBefore": "http://localhost:4200/app/dashboards/Library",
+      "Action": {
+        "Method": "type",
+        "Text": "CU Test Folder",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Name *",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-dashboard-browser[1]/div[1]/div[4]/div[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 460,
+            "YMin": 289,
+            "XMax": 820,
+            "YMax": 327
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      }
+    },
+    {
+      "Instruction": "The 'Create Category' dialog is now open. I will enter 'CU Test Folder' into the Name field (index 27) and then click the Create button (index 29).",
+      "UrlBefore": "http://localhost:4200/app/dashboards/Library",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Create",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-dashboard-browser[1]/div[1]/div[4]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 460,
+            "YMin": 486,
+            "XMax": 555,
+            "YMax": 522
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/dashboards/Library",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

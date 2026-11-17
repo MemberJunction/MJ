@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t111-lists-browse-view-mode-toggle.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,lists",
@@ -51,7 +52,7 @@
     "ID": "F011EE33-C0AD-4DAB-B979-2B858BAB655C"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.752Z",
-    "checksum": "9aaeb183a1d9b8fc385e0bff265531701b606f5d38b5e21aa4fe4186c75c7256"
+    "lastModified": "2026-11-13T09:22:10.907Z",
+    "checksum": "64e90f299440ff406392f88ebc308cbba82f1f3a34fb5f5c73c0e542efcdae24"
   }
 }

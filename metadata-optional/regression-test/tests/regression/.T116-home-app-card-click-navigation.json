@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t116-home-app-card-click-navigation.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,home",
@@ -51,7 +52,7 @@
     "ID": "105FD41D-201B-4E3C-BAA2-B7C4BD703690"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.788Z",
-    "checksum": "180f6a960f19b38f14e2532a067d8b7b5ddbf0a3afde330c4f2fd75a51916824"
+    "lastModified": "2026-11-13T09:22:10.948Z",
+    "checksum": "0a7d71e1d7dc1831280ce384293b277455a9529b88fc49b261af71f74cac9730"
   }
 }

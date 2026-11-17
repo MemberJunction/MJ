@@ -37,12 +37,18 @@ COPY metadata-optional/ ./metadata-optional/
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
+# Package step for the Open Apps pinned in open-apps.json (see scripts/open-apps.cjs). It needs
+# mj.config.cjs, because it writes dynamicPackages, entityPackageName and excludeSchemas into it.
+# GITHUB_TOKEN is a BuildKit secret (compose build.secrets), so it is in no image layer; without
+# it, public repos still install.
+COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+COPY docker/regression/open-apps.json ./docker/regression/open-apps.json
+COPY docker/regression/scripts/open-apps.cjs ./docker/regression/scripts/open-apps.cjs
+RUN --mount=type=secret,id=github_token node docker/regression/scripts/open-apps.cjs packages
+
 # Build all packages (turbo handles dependency order)
 # --concurrency=2 limits parallel tsc processes to avoid OOM in Docker's memory-constrained environment
 RUN pnpm exec turbo build --concurrency=2 --filter="@memberjunction*"
-
-# Copy MJ config
-COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
 
 # Bootstrap: imports ComputerUseTestDriver so @RegisterClass fires before CLI runs
 RUN echo "import '/app/packages/AI/MJComputerUse/dist/index.js';" > /app/bootstrap.mjs

@@ -606,6 +606,32 @@ mj app remove <name> --keep-data
 mj app check-updates
 ```
 
+#### Two-step install (Docker)
+
+`mj app install` does a database step (schema, migrations, app records, post-install hooks and
+template user) and a package step (`package.json` files, the lockfile, `mj.config.cjs`,
+`angular.json`). A Docker build has no database, so run the two steps separately:
+
+- `--packages-only` — run in the Dockerfile. Runs only the package step, for the app and every
+  dependency app. It opens no database connection and needs no database settings in
+  `mj.config.cjs` or `.env`. It writes no app records and runs no hooks.
+- `--database-only` — run at container start, with the same source and `--version`. Runs only the
+  database step, for the app and every dependency app. It changes no files and runs no package
+  install.
+
+The two flags cannot be used together. With neither, `mj app install` runs both steps.
+
+```bash
+# Dockerfile (build time, no database)
+mj app install https://github.com/acme/mj-crm --version 1.2.0 --packages-only
+
+# Container entrypoint (database available)
+mj app install https://github.com/acme/mj-crm --version 1.2.0 --database-only --non-interactive
+```
+
+`--database-only` does the same "already installed" check as a full install, so it fails for an app
+that is already `Active`. Run it once per new install, not on every container start.
+
 #### Private repositories
 
 Some BizApp repositories are private or internal (`bizapps-ats` is one). GitHub answers **404, not 403**, for a repository

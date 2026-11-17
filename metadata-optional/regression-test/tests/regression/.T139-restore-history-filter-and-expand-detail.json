@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t139-restore-history-filter-and-expand-detail.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,version-history",
@@ -51,7 +52,7 @@
     "ID": "545BD460-1611-40FD-A36C-15D5455144E1"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.749Z",
-    "checksum": "2dd835e52d5ff94eb6f28110c8a0eeec4f49712f8cdd0bad489078d81cc1a87a"
+    "lastModified": "2026-11-13T09:22:10.907Z",
+    "checksum": "1b25f3d67ed2882f9c919e358a396016a6ba4dbfb3acc77065b106ffc1ff6820"
   }
 }

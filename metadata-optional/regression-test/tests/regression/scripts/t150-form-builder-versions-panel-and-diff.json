@@ -1,0 +1,184 @@
+{
+  "TestId": "D2B2D2CB-E1AD-41E4-964B-21F7294A5D1F",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "cff68070",
+  "RecordedAt": "2026-11-13T09:17:58.368Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open Component Studio to access Form Studio. First I will click the Application Switcher dropdown at the top left.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is open and shows 'Component Studio' in the RECENT section (or ALL APPS). I will click on 'Component Studio' (index 4 or 38).",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Component Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    },
+    {
+      "Instruction": "Now in Component Studio. The top nav has 'Form Studio' (index 4). Clicking 'Form Studio' to switch to Form Studio.",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Components",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Form Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 474,
+            "YMin": 13,
+            "XMax": 609,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/component-studio/Form%20Studio"
+      }
+    },
+    {
+      "Instruction": "Now in Form Studio. I need to select an existing form from the left rail (e.g., 'MJFormField') to load it and inspect its Versions panel.",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Form%20Studio",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "MJFormField\n· 11/13/26, 8:17 AM",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-form-builder-resource[1]/div[1]/as-split[1]/as-split-area[1]/aside[1]/as-split[1]/as-split-area[1]/div[1]/div[4]/button[1]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 228,
+            "XMax": 629,
+            "YMax": 275
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Form%20Studio"
+      }
+    },
+    {
+      "Instruction": "Let's check if the other forms have multiple versions. Let's click 'SingleRecordView' (index 19) to see its versions panel.",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Form%20Studio",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "SingleRecordView\n· 11/13/26, 8:17 AM",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-form-builder-resource[1]/div[1]/as-split[1]/as-split-area[1]/aside[1]/as-split[1]/as-split-area[1]/div[1]/div[4]/button[2]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 307,
+            "XMax": 271,
+            "YMax": 354
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Form%20Studio"
+      }
+    },
+    {
+      "Instruction": "I clicked 'SingleRecordView', and its VERSIONS panel shows 1 version (v1.0.0 INACTIVE). Now let's click 'MJFormFields' (index 21) to check its versions.",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Form%20Studio",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "MJFormFields\n· 7/9/26, 6:24 PM",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-form-builder-resource[1]/div[1]/as-split[1]/as-split-area[1]/aside[1]/as-split[1]/as-split-area[1]/div[1]/div[4]/button[3]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 358,
+            "XMax": 271,
+            "YMax": 405
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Form%20Studio"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/component-studio/Form%20Studio",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

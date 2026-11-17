@@ -1,0 +1,379 @@
+{
+  "TestId": "86A2215D-D672-4994-AD8E-F64E372F970C",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "e75c204f",
+  "RecordedAt": "2026-11-13T09:04:15.450Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to switch to the Knowledge Hub application. I'll click the application switcher dropdown next to the Home logo.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is open and Knowledge Hub is visible under RECENT (and available in the app list). I will click on 'Knowledge Hub' (Index 4).",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Knowledge Hub",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Classify"
+      }
+    },
+    {
+      "Instruction": "We have switched to Knowledge Hub. Now we need to click 'Vectors' in navigation. Looking at the top nav bar, there is 'More 5' (Index 6) which likely contains 'Vectors', or let's check 'More 5' menu.",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Classify",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[4]",
+          "BoundingBox": {
+            "XMin": 642,
+            "YMin": 13,
+            "XMax": 757,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Classify"
+      }
+    },
+    {
+      "Instruction": "The 'More' menu is open and 'Vectors' (Index 10) is visible. I will click on 'Vectors' to navigate to the Vector Management page.",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Classify",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Vectors",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[4]",
+          "BoundingBox": {
+            "XMin": 625,
+            "YMin": 170,
+            "XMax": 823,
+            "YMax": 207
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Classify"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Vectors"
+      }
+    },
+    {
+      "Instruction": "We have arrived at Vector Management (vectors-management section). We see KPI cards, Entity Sync Status table, Vector DB Health sidebar, view toggle icons top right (Index View / Operations View). We ",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Operations View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-vector-management-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/mj-view-toggle[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1224,
+            "YMin": 86,
+            "XMax": 1252,
+            "YMax": 114
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Vectors"
+      }
+    },
+    {
+      "Instruction": "I am on the Vector Management page. I will first register the checkpoint 'vectors-management', toggle the view mode using the Operations View button (index 12), and click a 'Sync' button (index 15) to",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Operations View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-vector-management-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/mj-view-toggle[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1224,
+            "YMin": 86,
+            "XMax": 1252,
+            "YMax": 114
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Vectors"
+      }
+    },
+    {
+      "Instruction": "I am on the Vector Management page. I will first register the checkpoint 'vectors-management', toggle the view mode using the Operations View button (index 12), and click a 'Sync' button (index 15) to",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Sync now",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-vector-management-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[2]/div[1]/div[2]/table[1]/tbody[1]/tr[1]/td[7]/button[1]",
+          "BoundingBox": {
+            "XMin": 750,
+            "YMin": 475,
+            "XMax": 819,
+            "YMax": 501
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "We have completed all requirements for section (1) vectors-management: confirmed KPI cards, Entity Sync Status table, sidebar info, view mode toggle response, and clicked Sync button (now shows 10%/sy",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Use AI to suggest an Entity Document template",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-vector-management-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[2]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 637,
+            "YMin": 381,
+            "XMax": 789,
+            "YMax": 409
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Vectors"
+      }
+    },
+    {
+      "Instruction": "We are now on section (2) suggest-document-dialog. The AI Document Suggestion slide-in panel is open. I need to set checkpointReached to 'suggest-document-dialog', select an entity from the dropdown, ",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Search and select an entity...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-vector-management-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[2]/div[1]/div[2]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 824,
+            "YMin": 113,
+            "XMax": 1256,
+            "YMax": 148
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Vectors"
+      }
+    },
+    {
+      "Instruction": "I need to pick an entity from the entity dropdown list, pick a use case, click 'Generate Template' (or verify it can be clicked), then close the panel by clicking the 'x' button in the top right corne",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "MJ_BizApps_Accounting: Accounting Company Profiles",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-vector-management-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[2]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 825,
+            "YMin": 221,
+            "XMax": 1255,
+            "YMax": 250
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Vectors"
+      }
+    },
+    {
+      "Instruction": "I need to pick an entity from the entity dropdown list, pick a use case, click 'Generate Template' (or verify it can be clicked), then close the panel by clicking the 'x' button in the top right corne",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Search",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-vector-management-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[2]/div[1]/div[2]/div[1]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1005,
+            "YMin": 186,
+            "XMax": 1099,
+            "YMax": 219
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I will select the 'Search' use case, click 'Generate Template', and then close the slide-in panel using the close 'X' button to complete the suggest-document-dialog task.",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Search",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-vector-management-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[2]/div[1]/div[2]/div[1]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 997,
+            "YMin": 186,
+            "XMax": 1092,
+            "YMax": 219
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Vectors"
+      }
+    },
+    {
+      "Instruction": "I will select the 'Search' use case, click 'Generate Template', and then close the slide-in panel using the close 'X' button to complete the suggest-document-dialog task.",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Generate Template",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-vector-management-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[2]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 824,
+            "YMin": 235,
+            "XMax": 1256,
+            "YMax": 270
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I will select the 'Search' use case, click 'Generate Template', and then close the slide-in panel using the close 'X' button to complete the suggest-document-dialog task.",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-vector-management-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[2]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1236,
+            "YMin": 20,
+            "XMax": 1256,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/knowledge-hub/Vectors",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

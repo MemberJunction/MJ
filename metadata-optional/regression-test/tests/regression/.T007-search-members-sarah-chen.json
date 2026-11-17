@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T007 - Data Explorer Search Members",
-    "Description": "Verifies the Members grid quick-filter is functional.",
-    "InputDefinition": "{\n  \"goal\": \"Open the 'Members' entity grid \u2014 type 'Members' in the LEFT sidebar 'Search record types...' box and click the EXACT 'Members' match (not 'Board Members'/'Memberships'); if that is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Members. The grid loads ~100 of ~2,002 records per page. Type a value into the grid's filter box (placeholder 'Filter records...') \u2014 e.g. a common first-name fragment \u2014 and verify the grid RESPONDS to the filter: the displayed rows narrow to matching ones, OR a clear 'No Matching Rows' state appears if none match on the loaded page. Either response confirms the filter is functional (it is client-side over the loaded page). Pages can take 10-30s to load \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
-    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 45,\n  \"judgeValidationCriteria\": [\n    \"The Members entity grid is displayed with rows\",\n    \"The grid responded to filter input (rows narrowed to matches, or a clear no-match state was shown)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Description": "Verifies the People grid quick-filter is functional.",
+    "InputDefinition": "{\n  \"goal\": \"Open the 'People' entity grid \u2014 type 'People' in the LEFT sidebar 'Search record types...' box and click the EXACT 'People' match (not 'Person Job Functions'/'Member Profiles'/'Memberships'); if that is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common:%20People. The grid loads ~100 of ~3,000 records per page. Type a value into the grid's filter box (placeholder 'Filter records...') \u2014 e.g. a last name such as 'Rodriguez' \u2014 and verify the grid RESPONDS to the filter: the displayed rows narrow to matching ones, OR a clear 'No Matching Rows' state appears if none match on the loaded page. Either response confirms the filter is functional (it is client-side over the loaded page). Pages can take 10-30s to load \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 45,\n  \"judgeValidationCriteria\": [\n    \"The People entity grid is displayed with rows\",\n    \"The grid responded to filter input (rows narrowed to matches such as Rodriguez, or a clear no-match state was shown)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
       "maxSteps": 45,
@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t007-data-explorer-search-members.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,search",
@@ -51,7 +52,7 @@
     "ID": "FB8724E6-22E4-4E8A-8695-82A49A27306D"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.773Z",
-    "checksum": "e26bda7946bf821bb0107dbf138540aebe2bfae02e857bf1c17da994f5106366"
+    "lastModified": "2026-11-13T09:22:10.939Z",
+    "checksum": "acca664d1d9c27526358d07214c02b089adf0601312e5610c4dc6ec055fc8ff7"
   }
 }

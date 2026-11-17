@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t150-form-builder-versions-panel-and-diff.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,component-studio",
@@ -51,7 +52,7 @@
     "ID": "D2B2D2CB-E1AD-41E4-964B-21F7294A5D1F"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.749Z",
-    "checksum": "fd6b49083b880021d52a9ab1671652b510dc4afab54c0dade500dd8e088796e4"
+    "lastModified": "2026-11-13T09:22:10.907Z",
+    "checksum": "269195e99ce6e423c10f675268f6ab0de7b65e2705855eca54568d28740d3828"
   }
 }

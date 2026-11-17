@@ -3,7 +3,7 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T022 - Global Search Member",
     "Description": "Verifies the global 'Search everything' (Ctrl+K) returns results.",
-    "InputDefinition": "{\n  \"goal\": \"Use the 'Search everything' box (Ctrl+K) in the top bar to run a global search — type a broad term such as 'Certification'. Verify the global search executes and shows a results panel/list with one or more results from across entities. The search is functional if a results list appears (you do NOT need to find one specific record). Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "InputDefinition": "{\n  \"goal\": \"Use the 'Search everything' box (Ctrl+K) in the top bar to run a global search — type a broad term such as 'Cheese'. Verify the global search executes and shows a results panel/list with one or more results from across entities. The search is functional if a results list appears (you do NOT need to find one specific record). Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"The global 'Search everything' box accepted a query and executed it\",\n    \"A search results panel/list with one or more results is displayed\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t022-global-search-member.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,search",
@@ -51,7 +52,7 @@
     "ID": "E55BE17E-5177-49A3-9386-721E6A240120"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.770Z",
-    "checksum": "ecb56e885405cc1e497ced0d5d07a8ca60487314429c4838e8d4a2840d31652d"
+    "lastModified": "2026-11-13T09:22:10.935Z",
+    "checksum": "4e56582f183571162d909341eb773a1cf018449faca6db8f13bf602cd5a75014"
   }
 }

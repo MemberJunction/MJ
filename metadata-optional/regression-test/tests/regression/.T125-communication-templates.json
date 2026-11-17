@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t125-communication-templates-tour.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,communication",
@@ -51,7 +52,7 @@
     "ID": "B96D18C5-C3E1-420E-921D-3F0AC89AB3F3"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.761Z",
-    "checksum": "64003dce007ab37a43751c7ea23a6c3ec6813180518216a0ddd9355b04ad45f2"
+    "lastModified": "2026-11-13T09:22:10.931Z",
+    "checksum": "dc8e7406dd6982b1c0ddd398a0cbdb75ed0b810f335312ff666c2b55563bdff2"
   }
 }

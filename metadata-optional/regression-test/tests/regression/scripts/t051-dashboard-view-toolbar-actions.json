@@ -1,0 +1,336 @@
+{
+  "TestId": "0A683189-636C-41AE-A335-9C2077F1499B",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "9cc9e435",
+  "RecordedAt": "2026-11-13T08:51:23.855Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the application switcher dropdown next to the logo (or click 'Dashboards' under My Applications / app switcher) to navigate to the Dashboards application library page.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher overlay is open. I need to click on 'Dashboards' (index 4 under RECENT or index 11 under ALL APPS).",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Dashboards",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      }
+    },
+    {
+      "Instruction": "We are now on the Dashboards Library page. We can open an existing dashboard we own, such as 'CU Test Rename' or 'Regression Test Dashboard'. Let's click on 'CU Test Rename' (index 24) to open it in v",
+      "UrlBefore": "http://localhost:4200/app/dashboards/Library",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open CU Test Rename",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-dashboard-browser[1]/div[1]/div[3]/mj-dashboard-card[1]/article[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 277,
+            "YMin": 521,
+            "XMax": 568,
+            "YMax": 538
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}"
+      }
+    },
+    {
+      "Instruction": "We are now on the dashboard 'CU Test Rename' in view mode. The top-right toolbar displays: robot icon, star, '+ Add to', share icon (three connected dots, 'Share dashboard'), and blue 'Edit' button. T",
+      "UrlBefore": "http://localhost:4200/app/dashboards/dashboard/{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Share dashboard",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/as-split[1]/as-split-area[1]/mj-dashboard-editor[1]/header[1]/div[2]/span[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1107,
+            "YMin": 80,
+            "XMax": 1151,
+            "YMax": 112
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}"
+      }
+    },
+    {
+      "Instruction": "The share dialog titled 'Share \"CU Test Rename\"' is open with the required search box, 'People with access' showing owner, 'Not shared with anyone yet', and Save/Cancel buttons. Reached checkpoint 'da",
+      "UrlBefore": "http://localhost:4200/app/dashboards/dashboard/{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/mj-dashboard-share-dialog[1]/mj-resource-share-dialog[1]/mj-window[1]/div[1]/div[2]/div[1]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 739,
+            "YMin": 627,
+            "XMax": 821,
+            "YMax": 661
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}"
+      }
+    },
+    {
+      "Instruction": "The share dialog has closed and we are back in view mode. Now proceed to checkpoint (2) dashboard-add-part: click 'Edit' [13] to enter edit mode.",
+      "UrlBefore": "http://localhost:4200/app/dashboards/dashboard/{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Edit",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/as-split[1]/as-split-area[1]/mj-dashboard-editor[1]/header[1]/div[2]/button[3]",
+          "BoundingBox": {
+            "XMin": 1176,
+            "YMin": 79,
+            "XMax": 1248,
+            "YMax": 112
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}"
+      }
+    },
+    {
+      "Instruction": "We are now in edit mode (an 'Editing' badge is visible, along with 'Add part', 'Properties', 'Save', 'Cancel'). We need to click 'Add part' to open the 'Add a part' dialog.",
+      "UrlBefore": "http://localhost:4200/app/dashboards/dashboard/{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add part",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/as-split[1]/as-split-area[1]/mj-dashboard-editor[1]/header[1]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 847,
+            "YMin": 90,
+            "XMax": 947,
+            "YMax": 124
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}"
+      }
+    },
+    {
+      "Instruction": "The 'Add a part' dialog is open with selectable tiles (View, Query, Artifact, Web page, Component). This completes checkpoint (2) 'dashboard-add-part'. I will record this checkpoint, then click 'Cance",
+      "UrlBefore": "http://localhost:4200/app/dashboards/dashboard/{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/as-split[1]/as-split-area[1]/mj-dashboard-editor[1]/mj-dashboard-part-dialog[1]/mj-dialog[1]/div[1]/div[1]/mj-dialog-actions[1]/div[1]/button[2]",
+          "Scope": "dialog:Add a part",
+          "BoundingBox": {
+            "XMin": 493,
+            "YMin": 624,
+            "XMax": 582,
+            "YMax": 668
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}"
+      }
+    },
+    {
+      "Instruction": "The 'Add a part' dialog has closed (Cancel was clicked in the previous step). Now I need to click 'Cancel' in the dashboard header (index 15) to exit edit mode and return to view mode for checkpoint (",
+      "UrlBefore": "http://localhost:4200/app/dashboards/dashboard/{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/as-split[1]/as-split-area[1]/mj-dashboard-editor[1]/header[1]/div[2]/button[5]",
+          "BoundingBox": {
+            "XMin": 1178,
+            "YMin": 90,
+            "XMax": 1248,
+            "YMax": 124
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}"
+      }
+    },
+    {
+      "Instruction": "Now in view mode, I will click the '+ Add to' dropdown button (index 11).",
+      "UrlBefore": "http://localhost:4200/app/dashboards/dashboard/{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add to",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/as-split[1]/as-split-area[1]/mj-dashboard-editor[1]/header[1]/div[2]/span[1]/mj-dashboard-add-to-menu[1]/span[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1000,
+            "YMin": 78,
+            "XMax": 1099,
+            "YMax": 114
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}"
+      }
+    },
+    {
+      "Instruction": "We are at Checkpoint 3 (dashboard-pin-to-home). The '+ Add to' dropdown is open showing 'Pin card'. I will click 'Pin card' (index 12).",
+      "UrlBefore": "http://localhost:4200/app/dashboards/dashboard/{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "menuitem",
+          "Name": "Pin card\nA thumbnail card in Pinned",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/as-split[1]/as-split-area[1]/mj-dashboard-editor[1]/header[1]/div[2]/span[1]/mj-dashboard-add-to-menu[1]/span[1]/div[1]/button[1]",
+          "Scope": "menu:Add to",
+          "BoundingBox": {
+            "XMin": 786,
+            "YMin": 153,
+            "XMax": 1092,
+            "YMax": 199
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}"
+      }
+    },
+    {
+      "Instruction": "The toast 'Pinned \"CU Test Rename\" to Home' appeared. Now I need to click '+ Add to' dropdown again to open it and verify that 'Pin card' now displays a green '✓ Added' badge, completing checkpoint (3",
+      "UrlBefore": "http://localhost:4200/app/dashboards/dashboard/{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add to",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-resource[1]/div[1]/as-split[1]/as-split-area[1]/mj-dashboard-editor[1]/header[1]/div[2]/span[1]/mj-dashboard-add-to-menu[1]/span[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1000,
+            "YMin": 78,
+            "XMax": 1099,
+            "YMax": 114
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/dashboards/dashboard/{uuid}",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

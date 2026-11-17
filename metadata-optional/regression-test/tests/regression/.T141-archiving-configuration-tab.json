@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t141-archiving-configuration-tab.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,archiving",
@@ -51,7 +52,7 @@
     "ID": "F023B65A-C0A5-40B0-8C26-0B48D519C6D5"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.746Z",
-    "checksum": "05e1f074bb22187b851385d2964464038436692d2f4445d1f3c40a325f97fb73"
+    "lastModified": "2026-11-13T09:22:10.900Z",
+    "checksum": "10bdc1de87b9acd5fae6b5355f5fbcabd39f4bc445629dc553900978ce828a9c"
   }
 }

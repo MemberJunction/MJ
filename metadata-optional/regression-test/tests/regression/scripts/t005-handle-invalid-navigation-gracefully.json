@@ -1,0 +1,40 @@
+{
+  "TestId": "F41D1D9B-73B1-499A-841C-E4A6E2C08FB3",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "4f5f8916",
+  "RecordedAt": "2026-11-13T08:37:34.764Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to navigate to an invalid URL path like `http://localhost:4200/app/nonexistent/invalid-path` to verify that the app gracefully redirects to a valid page (Home).",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/nonexistent/invalid-path"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/nonexistent/invalid-path"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/home/Home",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

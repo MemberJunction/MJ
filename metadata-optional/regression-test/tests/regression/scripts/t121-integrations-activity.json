@@ -1,0 +1,160 @@
+{
+  "TestId": "A5624820-7FEB-485D-8D4B-B17639C81E2D",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "0370c464",
+  "RecordedAt": "2026-11-13T09:05:42.925Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click the application switcher dropdown next to the Home logo to switch to Integrations.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher overlay is open. I need to select 'Integrations'. I can either type 'Integrations' into the focused 'Find an app...' textbox or click the 'Integrations' link from the interact",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "type",
+        "Text": "Integrations",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Find an app",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[1]/div[1]/input[1]",
+          "Scope": "dialog:Application launcher",
+          "BoundingBox": {
+            "XMin": 256,
+            "YMin": 113,
+            "XMax": 1000,
+            "YMax": 135
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/integrations/Overview"
+      }
+    },
+    {
+      "Instruction": "Now in Integrations application. Clicking on 'Activity' tab (Index 5) to navigate to the Activity section.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Activity",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 544,
+            "YMin": 13,
+            "XMax": 652,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Overview"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/integrations/Activity"
+      }
+    },
+    {
+      "Instruction": "We are on the Integrations Activity page. The goal requires checking run-detail-tabs first (a valid 'No runs found' empty state is acceptable if there are no runs), and we see 'No runs found for the s",
+      "UrlBefore": "http://localhost:4200/app/integrations/Activity",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Filters",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-activity[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-filter-popover[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1157,
+            "YMin": 154,
+            "XMax": 1256,
+            "YMax": 187
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Activity"
+      }
+    },
+    {
+      "Instruction": "We are now at checkpoint (2) activity-filter-popover. The filter panel has rendered showing fields (Date Range, Status, Integration). I will choose a status filter value (e.g. 'Success', element index",
+      "UrlBefore": "http://localhost:4200/app/integrations/Activity",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Success",
+          "Selector": "xpath=/html/body[1]/div[1]/div[1]/div[2]/div[1]/div[2]/mj-filter-panel[1]/div[1]/div[1]/mj-filter-field[2]/label[1]/div[1]/mj-filter-chip[2]/button[1]",
+          "Scope": "dialog:Filters",
+          "BoundingBox": {
+            "XMin": 840,
+            "YMin": 317,
+            "XMax": 914,
+            "YMax": 346
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Activity"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/integrations/Activity",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

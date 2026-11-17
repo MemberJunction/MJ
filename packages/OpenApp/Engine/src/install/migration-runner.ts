@@ -122,9 +122,17 @@ export interface SkywayDatabaseConfig {
     Encrypt?: boolean;
     /** Whether to trust the server certificate (default: true for local, false for Azure SQL) */
     TrustServerCertificate?: boolean;
-    /** Request timeout in milliseconds */
+    /** Request timeout in milliseconds. Defaults to {@link DEFAULT_APP_MIGRATION_REQUEST_TIMEOUT_MS}. */
     RequestTimeout?: number;
 }
+
+/**
+ * Per-request timeout for an app's migrations when `SkywayDatabaseConfig.RequestTimeout` is not set
+ * (30 minutes, the same default as `mj migrate`). Skyway's own default is 5 minutes, which a large
+ * data migration can exceed. Override with `MJ_MIGRATION_REQUEST_TIMEOUT` (milliseconds) or
+ * `dbRequestTimeout` in mj.config.cjs.
+ */
+export const DEFAULT_APP_MIGRATION_REQUEST_TIMEOUT_MS = 1_800_000;
 
 /**
  * @deprecated Use SkywayDatabaseConfig instead
@@ -365,7 +373,7 @@ export function BuildSkywayConfig(
             Options: {
                 Encrypt: encrypt,
                 TrustServerCertificate: trustCert,
-                ...(dbConfig.RequestTimeout ? { RequestTimeout: dbConfig.RequestTimeout } : {}),
+                RequestTimeout: dbConfig.RequestTimeout || DEFAULT_APP_MIGRATION_REQUEST_TIMEOUT_MS,
             },
         },
         Migrations: {

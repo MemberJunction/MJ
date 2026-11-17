@@ -1,0 +1,263 @@
+{
+  "TestId": "B5E11A7F-17AB-4106-B303-3814B73E792A",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "1b9b6f0c",
+  "RecordedAt": "2026-11-13T08:54:50.688Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Switch to Admin application via application switcher dropdown next to logo.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open. I need to switch to the Admin application. In the interactive elements, Admin is listed at index 35 (or 84). Let's click link 'Admin' [index 35].",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Admin",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[28]",
+          "Scope": "group:All applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 1090,
+            "XMax": 492,
+            "YMax": 1168
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    },
+    {
+      "Instruction": "We are now on Admin -> Identity & Access -> Users. We need to reach the first checkpoint 'users-bulk-selection'. To exercise checkpoint 1:",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "checkbox",
+          "Name": "Select Anonymous",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-user-management[1]/mj-page-body-interior[1]/div[1]/div[2]/div[1]/div[1]/input[1]",
+          "Scope": "list:Users list",
+          "BoundingBox": {
+            "XMin": 301,
+            "YMin": 451,
+            "XMax": 321,
+            "YMax": 471
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    },
+    {
+      "Instruction": "Checkpoint 1 'users-bulk-selection' is reached: user checkbox selected, contextual bulk toolbar is visible with '1 user selected', Clear, Enable, Disable, Assign Role, Delete. Now I need to click 'Cle",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Clear selection",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-user-management[1]/div[1]/div[1]/button[1]",
+          "Scope": "toolbar:Bulk actions",
+          "BoundingBox": {
+            "XMin": 409,
+            "YMin": 352,
+            "XMax": 489,
+            "YMax": 386
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    },
+    {
+      "Instruction": "The 'Clear' button was clicked in the previous action (or the selection cleared), so the bulk toolbar has disappeared. Now I will move to Checkpoint 2: 'users-filter-popover'. First step for checkpoin",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Filters",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-user-management[1]/mj-page-header-interior[1]/div[1]/div[2]/div[1]/mj-filter-popover[1]/button[1]",
+          "Scope": "search:Filter users",
+          "BoundingBox": {
+            "XMin": 1148,
+            "YMin": 278,
+            "XMax": 1247,
+            "YMax": 311
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    },
+    {
+      "Instruction": "Click on the 'Inactive' status filter button to apply a filter. This will update the filtered results (showing no results or inactive users) and fulfill the filter testing requirement for Checkpoint 2",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Inactive",
+          "Selector": "xpath=/html/body[1]/div[1]/div[1]/div[2]/div[1]/div[2]/mj-filter-panel[1]/div[1]/div[1]/mj-filter-field[1]/label[1]/div[1]/mj-filter-chip[3]/button[1]",
+          "Scope": "dialog:Filters",
+          "BoundingBox": {
+            "XMin": 1060,
+            "YMin": 378,
+            "XMax": 1131,
+            "YMax": 407
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    },
+    {
+      "Instruction": "The Inactive filter is applied, showing '0 of 6 users', 'Filters 1' badge, and 'No users found' empty state. This verifies Checkpoint 2 (users-filter-popover). Now I will signal checkpointReached: 'us",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Reset filters",
+          "Selector": "xpath=/html/body[1]/div[1]/div[1]/div[2]/div[1]/div[2]/mj-filter-panel[1]/div[1]/div[2]/button[1]",
+          "Scope": "dialog:Filters",
+          "BoundingBox": {
+            "XMin": 1119,
+            "YMin": 510,
+            "XMax": 1230,
+            "YMax": 539
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    },
+    {
+      "Instruction": "We need to clear/close the filter popover if needed or directly click a user card header (not checkbox) to expand it and reach Checkpoint 3 ('users-card-expand'). Clicking on the user card button [22]",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "A\nAnonymous\n\nanonymous@magic-link.local\n\nACTIVE",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-user-management[1]/mj-page-body-interior[1]/div[1]/div[2]/div[1]",
+          "Scope": "list:Users list",
+          "BoundingBox": {
+            "XMin": 273,
+            "YMin": 417,
+            "XMax": 1247,
+            "YMax": 505
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    },
+    {
+      "Instruction": "The user card for Anonymous is expanded, showing stats (Type, Full Name, Created, Updated) and 'Assigned Roles' section ('No roles assigned to this user'). I am setting checkpointReached to 'users-car",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "A\nAnonymous\n\nanonymous@magic-link.local\n\nACTIVE",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-user-management[1]/mj-page-body-interior[1]/div[1]/div[2]/div[1]",
+          "Scope": "list:Users list",
+          "BoundingBox": {
+            "XMin": 273,
+            "YMin": 336,
+            "XMax": 1247,
+            "YMax": 424
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

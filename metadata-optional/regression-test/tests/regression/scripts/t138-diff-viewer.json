@@ -1,0 +1,210 @@
+{
+  "TestId": "DFA8851A-B8E5-4B14-8BCF-C4E28B9114F6",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "5a751365",
+  "RecordedAt": "2026-11-13T09:15:34.036Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Open application switcher dropdown to select 'Version History'.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open and contains a search box 'Find an app...'. I will type 'Version History' into it to quickly filter the applications.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "type",
+        "Text": "Version History",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Find an app",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[1]/div[1]/input[1]",
+          "Scope": "dialog:Application launcher",
+          "BoundingBox": {
+            "XMin": 256,
+            "YMin": 113,
+            "XMax": 1000,
+            "YMax": 135
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "Click on the filtered 'Version History' application card (or link) to switch to the Version History app.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Version History",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[1]/div[1]",
+          "Scope": "dialog:Application launcher",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 155,
+            "XMax": 492,
+            "YMax": 233
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/version-history/Labels"
+      }
+    },
+    {
+      "Instruction": "Now in the Version History app. I need to click the 'Diff Viewer' navigation tab to enter the Diff Viewer section and start the checkpoints tour.",
+      "UrlBefore": "http://localhost:4200/app/version-history/Labels",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Diff Viewer",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 412,
+            "YMin": 13,
+            "XMax": 542,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/version-history/Labels"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/version-history/Diff%20Viewer"
+      }
+    },
+    {
+      "Instruction": "We are now on the Diff Viewer page. We need to reach checkpoint 1: 'diff-mode-toggle'. We see two mode buttons 'Label vs Current' and 'Label vs Label'. We will switch to 'Label vs Label', verify secon",
+      "UrlBefore": "http://localhost:4200/app/version-history/Diff%20Viewer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Label vs Label",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-version-history-diff-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 229,
+            "YMin": 190,
+            "XMax": 382,
+            "YMax": 226
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/version-history/Diff%20Viewer"
+      }
+    },
+    {
+      "Instruction": "In 'Label vs Label' mode, we confirmed the 'To label' dropdown and swap button appear. Now switching back to 'Label vs Current' mode to complete checkpoint (1) 'diff-mode-toggle' and confirm 'Current ",
+      "UrlBefore": "http://localhost:4200/app/version-history/Diff%20Viewer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Label vs Current",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-version-history-diff-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 49,
+            "YMin": 190,
+            "XMax": 214,
+            "YMax": 226
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/version-history/Diff%20Viewer"
+      }
+    },
+    {
+      "Instruction": "We switched back to 'Label vs Current' mode, confirming the 'Current State' indicator is visible. Section (1) diff-mode-toggle is complete. Now moving to section (2) run-comparison: keeping 'Label vs ",
+      "UrlBefore": "http://localhost:4200/app/version-history/Diff%20Viewer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Select a label...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-version-history-diff-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[2]/div[1]/select[1]",
+          "BoundingBox": {
+            "XMin": 49,
+            "YMin": 268,
+            "XMax": 1127,
+            "YMax": 308
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/version-history/Diff%20Viewer"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/version-history/Diff%20Viewer",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "TestId": "1C476FA9-84B9-4D5F-82A4-62C8A5B25D7F",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "7143ccc9",
+  "RecordedAt": "2026-11-13T15:36:47.461Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to navigate to the People entity grid. The instructions mention navigating directly to http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common:%20People or searching in the left s",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    },
+    {
+      "Instruction": "The People entity grid is loaded. Next, I need to type 'Rodriguez' into the grid's filter box ('Filter records...'). Element index 18 is the 'Filter records...' input box.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Action": {
+        "Method": "type",
+        "Text": "Rodriguez",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Filter records... (press / to focus)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[2]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 582,
+            "YMin": 121,
+            "XMax": 1182,
+            "YMax": 159
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    },
+    {
+      "Instruction": "I typed 'Rodriguez' into the filter box, but need to press Enter for the filter to execute, or click the search/filter action.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    },
+    {
+      "Instruction": "The grid is filtered and shows Elena Rodriguez. I will click on her row to open the preview or full record panel.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "row",
+          "Name": "Elena\nRodriguez\nHead Cheesemaker\nelena.rodriguez.000101@lakemail.example\nActive\nElena Rodriguez\n—\nelena.rodriguez.000101",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[4]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/div[2]/ag-grid-angular[1]/div[3]/div[1]/div[2]/div[3]/div[1]/div[2]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 282,
+            "YMin": 406,
+            "XMax": 1982,
+            "YMax": 446
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    },
+    {
+      "Instruction": "The preview side panel for Elena Rodriguez is open. I need to click 'Open Full Record' (button index 56) to open her full People form.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[3]/mj-entity-record-detail-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 906,
+            "YMin": 664,
+            "XMax": 1265,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Common:%20People/ID%7C{uuid}"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Common:%20People/ID%7C{uuid}",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

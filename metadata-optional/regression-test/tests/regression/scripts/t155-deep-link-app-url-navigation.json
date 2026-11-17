@@ -1,0 +1,160 @@
+{
+  "TestId": "72D0058B-6E19-4FD4-BCC9-A8238B610AE4",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "84fa8166",
+  "RecordedAt": "2026-11-13T09:16:40.048Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to navigate directly to http://localhost:4200/app/Admin. However, I am currently on the login page. Let's first log in or navigate directly to http://localhost:4200/app/Admin. The prompt says '",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/Admin"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/Admin"
+      }
+    },
+    {
+      "Instruction": "The application is currently showing the login screen. I need to click the 'Log in' button to proceed with authentication.",
+      "UrlBefore": "http://localhost:4200/app/Admin",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Log in",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/div[2]/div[1]/mj-login-picker[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 760,
+            "YMin": 342,
+            "XMax": 1160,
+            "YMax": 396
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/Admin"
+      },
+      "Postcondition": {
+        "UrlPattern": "/u/login"
+      }
+    },
+    {
+      "Instruction": "I need to log in with the specified credentials: %authUsername% / %authPassword%. I'll enter the email into element 0, password into element 1, and click Continue (element 4).",
+      "UrlBefore": "/u/login",
+      "Action": {
+        "Method": "type",
+        "Text": "%authUsername%",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Email address *",
+          "Selector": "xpath=/html/body[1]/div[1]/main[1]/section[1]/div[1]/div[2]/div[1]/form[1]/div[2]/div[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 480,
+            "YMin": 314,
+            "XMax": 800,
+            "YMax": 366
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "/u/login"
+      }
+    },
+    {
+      "Instruction": "I need to log in with the specified credentials: %authUsername% / %authPassword%. I'll enter the email into element 0, password into element 1, and click Continue (element 4).",
+      "UrlBefore": "/u/login",
+      "Action": {
+        "Method": "type",
+        "Text": "%authPassword%",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Password *",
+          "Selector": "xpath=/html/body[1]/div[1]/main[1]/section[1]/div[1]/div[2]/div[1]/form[1]/div[2]/div[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 481,
+            "YMin": 379,
+            "XMax": 755,
+            "YMax": 431
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I need to log in with the specified credentials: %authUsername% / %authPassword%. I'll enter the email into element 0, password into element 1, and click Continue (element 4).",
+      "UrlBefore": "/u/login",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Continue",
+          "Selector": "xpath=/html/body[1]/div[1]/main[1]/section[1]/div[1]/div[2]/div[1]/form[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 480,
+            "YMin": 493,
+            "XMax": 800,
+            "YMax": 545
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/"
+      }
+    },
+    {
+      "Instruction": "Login completed and we landed on the Home page. Now I will navigate directly to http://localhost:4200/app/Admin via the browser's address bar as requested.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/Admin"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/Admin"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/Admin",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

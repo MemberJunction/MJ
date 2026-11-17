@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t043-entity-form-coderich-text-field-editor-rendering.json"
     },
     "Status": "Active",
     "Tags": "P3,regression,form",
@@ -51,7 +52,7 @@
     "ID": "94B49AA3-DB65-4724-B48C-E26A6B5E5E3C"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.797Z",
-    "checksum": "005f3744b744d9340484923efd730ecb29a7597c6d34924018da036a9bd8fd77"
+    "lastModified": "2026-11-13T09:22:10.949Z",
+    "checksum": "7fdd8f44a37fecab795c99654cfea2d200bf97adfce1fb0b124322de85416de0"
   }
 }

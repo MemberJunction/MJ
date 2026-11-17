@@ -1,0 +1,206 @@
+{
+  "TestId": "71FB46FB-86BB-49FC-9B1A-05D99CBCAE1F",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "874bf805",
+  "RecordedAt": "2026-11-13T15:29:41.114Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Directly navigate to http://localhost:4200/app/data-explorer/Data?entity=Committees:%20Meetings to open the 'Meetings' entity grid as suggested in the instructions.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      }
+    },
+    {
+      "Instruction": "I am on the Meetings grid. The instructions state: 'Click a meeting row (for example 'Standards Committee — Q4 2015 meeting'), then click 'Open Full Record'.' Let's search for 'Standards Committee — Q",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings",
+      "Action": {
+        "Method": "type",
+        "Text": "Standards Committee — Q4 2015",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Filter records... (press / to focus)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[2]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 586,
+            "YMin": 121,
+            "XMax": 1186,
+            "YMax": 159
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      }
+    },
+    {
+      "Instruction": "I need to press Enter or wait for the quick-filter box to filter the table, or simply click on the row in the grid or under 'RECENT' on the left where 'Standards Committee — Q4...' is already visible ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Filter records... (press / to focus)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[2]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 586,
+            "YMin": 121,
+            "XMax": 1186,
+            "YMax": 159
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      }
+    },
+    {
+      "Instruction": "I need to press Enter or wait for the quick-filter box to filter the table, or simply click on the row in the grid or under 'RECENT' on the left where 'Standards Committee — Q4...' is already visible ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The quick-filter finished updating and now shows exactly 1 matching row ('Standards Committee — Q4 2015 meeting'). I need to click on this row to open its preview / side sheet, which contains the 'Ope",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "row",
+          "Name": "Standards Committee — Q4 2015 meeting\nOct 13, 2015\nOct 14, 2015\nInPerson\nScheduled",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[4]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/div[2]/ag-grid-angular[1]/div[3]/div[1]/div[2]/div[3]/div[1]/div[2]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 282,
+            "YMin": 406,
+            "XMax": 982,
+            "YMax": 446
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      }
+    },
+    {
+      "Instruction": "The preview panel for 'Standards Committee — Q4 2015 meeting' is open on the right side. I need to click 'Open Full Record' button [55] at the bottom right.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[3]/mj-entity-record-detail-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 901,
+            "YMin": 664,
+            "XMax": 1260,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The full record form for 'Standards Committee — Q4 2015 meeting' is loaded. I need to click the '... More' button on the top-left toolbar to see the 'Add to list' option.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More actions",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 183,
+            "YMin": 156,
+            "XMax": 271,
+            "YMax": 189
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The 'More' menu is currently open. I need to click the 'Add to list' option in this dropdown menu. In the element list, index 24 corresponds to 'Add to a list'.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add to a list",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/div[1]/div[1]/div[4]/button[1]",
+          "Scope": "group:More actions",
+          "BoundingBox": {
+            "XMin": 188,
+            "YMin": 282,
+            "XMax": 408,
+            "YMax": 310
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}
