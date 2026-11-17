@@ -6365,7 +6365,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             safeFastPath = false;
                             break;
                         }
-                        if (struct.content instanceof Y.ContentString && /[<>{}]|mj-lock|-->/i.test(struct.content.str)) {
+                        if (struct.content instanceof Y.ContentString && /[<>{}]|mj-lock|--/i.test(struct.content.str)) {
                             safeFastPath = false;
                             break;
                         }
