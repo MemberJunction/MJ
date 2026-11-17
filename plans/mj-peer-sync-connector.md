@@ -655,11 +655,11 @@ Field maps stay optional. The default is 1:1 over the field intersection, exclud
 
 ## 16. Data model and provider changes
 
-All schema changes are additive, in line with the publish-then-no-breaking-changes policy. SQL migrations in `migrations/v6/` (and `migrations-pg/v6/`) ship with CodeGen output appended, core proc updates are mirrored in `SQL Scripts/MJ_BASE_BEFORE_SQL.sql`, and metadata JSON (scopes, operations, the Integration row) ships via `Metadata_Sync`.
+All schema changes are additive, in line with the publish-then-no-breaking-changes policy. T-SQL migrations in `migrations/v6/` ship with CodeGen output appended (the PostgreSQL migrations are generated from them at release with `mj migrate convert`, not written by hand), core proc updates are mirrored in `SQL Scripts/MJ_BASE_BEFORE_SQL.sql`, and metadata JSON (scopes, operations, the Integration row) ships via `Metadata_Sync`.
 
 1. **`RecordChange` (SQL + TypeScript providers):**
    - add `'Sync'` to `CHK_RecordChange_Source`;
-   - let `spCreateRecordChange_Internal` take `@IntegrationID` (`V202609302340…:76-129`), updating **both** the migration and `SQL Scripts/MJ_BASE_BEFORE_SQL.sql:704` (and the PostgreSQL equivalent);
+   - let `spCreateRecordChange_Internal` take `@IntegrationID` (`V202609302340…:76-129`), updating **both** the migration and `SQL Scripts/MJ_BASE_BEFORE_SQL.sql:704` (the PostgreSQL function comes from the release-time conversion);
    - update `BaseEntity.SetSyncContext`, `GenericDatabaseProvider`, `SQLServerDataProvider.renderRecordChangeEXEC` (`SQLServerDataProvider.ts:1800-1818`, which previously handled only `Restore` and `Clone`), and `PostgreSQLDataProvider` to thread `Source = 'Sync'`, `ChangeContext`, and `IntegrationID`;
    - add `IX_RecordChange_EntityID_ChangedAt` from Section 8.6;
    - add `'Sync'` to `IRecordChangeContext.Kind`, plus `IRecordChangeSyncContext`.
