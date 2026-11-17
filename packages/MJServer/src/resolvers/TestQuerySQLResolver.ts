@@ -126,7 +126,7 @@ export class TestQuerySQLResolver extends ResolverBase {
                 return this.buildErrorResult('Ad-hoc SQL execution is not permitted for scope-limited sessions.');
             }
             // Use read-only provider for security — no mutation possible
-            const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
+            const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false, purpose: 'adhoc' });
             if (!provider) {
                 return this.buildErrorResult('Read-only data source is not available. TestQuerySQL requires a read-only connection for security.');
             }
