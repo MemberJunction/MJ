@@ -122,6 +122,29 @@ describe('LocalAppSource versions and manifest', () => {
         expect(fetched.ErrorMessage).toContain('outside');
     });
 
+    it('refuses an mj-app.json that is a link to a file outside the repository root', async () => {
+        symlinkSync(join(writeOutsideApp(), 'mj-app.json'), join(appDir, 'mj-app.json'));
+
+        const fetched = await newSource().FetchManifest();
+
+        expect(fetched.Success).toBe(false);
+        expect(fetched.ErrorMessage).toContain('outside');
+    });
+
+    it('reports a missing folder as missing, not outside, when the repository root is reached through a link', async () => {
+        const alias = `${repoRoot}-link`;
+        symlinkSync(repoRoot, alias);
+        try {
+            const fetched = await new LocalAppSource('file:openapps/missing', alias).FetchManifest();
+
+            expect(fetched.Success).toBe(false);
+            expect(fetched.ErrorMessage).toContain('mj-app.json not found');
+            expect(NormalizeAppSource('./openapps/missing', alias)).toEqual({ Success: true, Source: 'file:openapps/missing' });
+        } finally {
+            rmSync(alias, { force: true });
+        }
+    });
+
     it('keeps its folder and the workspace package strategy for the app files of any manifest', () => {
         const appFiles = newSource().ForManifest({ name: 'analytics', repository: 'https://github.com/acme/platform' });
 

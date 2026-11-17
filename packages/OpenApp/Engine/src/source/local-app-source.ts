@@ -161,6 +161,9 @@ export class LocalAppSource implements OpenAppSource {
         if (!existsSync(manifestPath)) {
             return { ErrorMessage: `${MANIFEST_FILE} not found in the app folder '${this.folderName}' (${this.folder}).` };
         }
+        if (IsOutsideRealPath(this.folder, manifestPath)) {
+            return { ErrorMessage: `${MANIFEST_FILE} in the app folder '${this.folderName}' is a link to a file outside the app folder.` };
+        }
         const json = readFileSync(manifestPath, 'utf-8');
         return { Json: json, Version: ReadManifestVersion(json) };
     }
