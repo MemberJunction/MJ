@@ -1,4 +1,5 @@
 ---
+"@memberjunction/ai-agents": patch
 "@memberjunction/ai-realtime-client": patch
 "@memberjunction/ng-conversations": patch
 "@memberjunction/scheduling-engine": patch
