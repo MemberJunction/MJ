@@ -4728,9 +4728,101 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Client-safe query descriptor loading `MJ: Conversation Details.ID` values visible in `scope`,
+     * optionally narrowed to `candidateDetailIds`. Runs directly against `MJ: Conversation Details`
+     * so server `PostRunView` security hooks apply and `ClientClauseScreen` never rejects a base-view subquery.
+     */
+    public static BuildScopedDetailIdsQuery(
+        scope: ConversationScope,
+        candidateDetailIds?: ReadonlyArray<string>
+    ): RunViewParams {
+        let filter = ConversationEngine.ScopeFilter(scope);
+        if (candidateDetailIds && candidateDetailIds.length > 0) {
+            const uniqueEscaped = [...new Set(candidateDetailIds.map((id) => id.trim()).filter(Boolean))]
+                .map((id) => `'${EscapeSQLString(id)}'`);
+            if (uniqueEscaped.length > 0) {
+                filter = `(${filter}) AND [ID] IN (${uniqueEscaped.join(',')})`;
+            }
+        }
+        return {
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: filter,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            IgnoreMaxRows: true
+        };
+    }
+
+    /**
+     * Loads lowercased `MJ: Conversation Details.ID` values visible in `scope` via `RunView`, returning
+     * `null` if the read fails so callers can fail closed. Avoids emitting `[__mj].[vwConversationDetails]`
+     * subqueries from GraphQL client filters.
+     */
+    public static async LoadScopedDetailIds(
+        scope: ConversationScope,
+        provider: IMetadataProvider,
+        contextUser?: UserInfo,
+        candidateDetailIds?: ReadonlyArray<string>
+    ): Promise<Set<string> | null> {
+        if (candidateDetailIds) {
+            const unique = candidateDetailIds.map((id) => id.trim()).filter(Boolean);
+            if (unique.length === 0) {
+                return new Set<string>();
+            }
+        }
+        const rv = RunView.FromMetadataProvider(provider);
+        const res = await rv.RunView<{ ID: string }>(
+            ConversationEngine.BuildScopedDetailIdsQuery(scope, candidateDetailIds),
+            contextUser
+        );
+        if (!res?.Success || !Array.isArray(res.Results)) {
+            return null;
+        }
+        const ids = new Set<string>();
+        for (const row of res.Results) {
+            const id = typeof row.ID === 'string' ? row.ID.trim().toLowerCase() : '';
+            if (id) {
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Filters artifact versions to those visible in `scope` (`{@link ArtifactVersionScopeFilter}` semantics):
+     * keeps versions linked in any direction to a detail in `scopedDetailIds`, plus versions that have
+     * no `MJ: Conversation Detail Artifacts` link at all.
+     */
+    public static FilterArtifactVersionsByScope<T extends { ID: string }>(
+        versions: readonly T[],
+        links: ReadonlyArray<{ ConversationDetailID?: string | null; ArtifactVersionID?: string | null }>,
+        scopedDetailIds: ReadonlySet<string>
+    ): T[] {
+        const allLinkedVersionIds = new Set<string>();
+        const scopedLinkedVersionIds = new Set<string>();
+        for (const link of links) {
+            const versionId = typeof link.ArtifactVersionID === 'string' ? link.ArtifactVersionID.trim().toLowerCase() : '';
+            if (!versionId) continue;
+            allLinkedVersionIds.add(versionId);
+            const detailId = typeof link.ConversationDetailID === 'string' ? link.ConversationDetailID.trim().toLowerCase() : '';
+            if (detailId && scopedDetailIds.has(detailId)) {
+                scopedLinkedVersionIds.add(versionId);
+            }
+        }
+        return versions.filter((v) => {
+            const id = typeof v.ID === 'string' ? v.ID.trim().toLowerCase() : '';
+            return id ? (!allLinkedVersionIds.has(id) || scopedLinkedVersionIds.has(id)) : false;
+        });
+    }
+
+    /**
      * Filter over MJ: Artifact Versions for the versions of one artifact visible in scope: versions
      * linked (in any direction) from a message on the path, and versions with no conversation link
      * at all.
+     *
+     * Note: server/internal callers only — GraphQL clients must use {@link BuildScopedDetailIdsQuery} +
+     * {@link FilterArtifactVersionsByScope} because `ClientClauseScreen` blocks `[__mj].[vwConversationDetails]`
+     * subqueries in client-supplied `ExtraFilter`s.
      */
     public static ArtifactVersionScopeFilter(scope: ConversationScope, artifactId: string): string {
         const path = ConversationEngine.ScopeFilter(scope);

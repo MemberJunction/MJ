@@ -23,7 +23,7 @@ vi.mock('@huggingface/transformers', () => ({
     env: { allowLocalModels: true, cacheDir: '/tmp/cache' },
 }));
 
-import { BGEReRanker, ResetBGEPipelineCacheForTests } from '../rerankers/BGEReRanker';
+import { BGEReRanker, DEFAULT_BGE_MAX_CANDIDATES, ResetBGEPipelineCacheForTests } from '../rerankers/BGEReRanker';
 import type { SearchResultItem } from '../generic/search.types';
 import type { UserInfo } from '@memberjunction/core';
 
@@ -60,8 +60,9 @@ describe('BGEReRanker', () => {
             expect(rr.Version).toBe('1');
         });
 
-        it('GetMaxResultCount = 5000 (memory-bounded for local-model rerank)', () => {
-            expect(new BGEReRanker().GetMaxResultCount()).toBe(5000);
+        it('GetMaxResultCount = 100 (bounded for CPU/latency-safe local cross-encoder reranking)', () => {
+            expect(new BGEReRanker().GetMaxResultCount()).toBe(DEFAULT_BGE_MAX_CANDIDATES);
+            expect(new BGEReRanker().GetMaxResultCount()).toBe(100);
         });
 
         it('EstimateCostCents always returns 0 (local model, no API charges)', () => {
@@ -159,6 +160,39 @@ describe('BGEReRanker', () => {
             const items = [makeItem('a', 't', 0), makeItem('b', 't', 0), makeItem('c', 't', 0)];
             const result = await rr.ReRank('q', items, 2, fakeUser);
             expect(result.map(r => r.RecordID)).toEqual(['b', 'c']);
+        });
+
+        it('chunks large pair arrays into bounded mini-batches using config.batchSize', async () => {
+            mockPipelineFn.mockImplementation(async (pairs: Array<[string, string]>) =>
+                pairs.map((_, idx) => ({ label: 'L', score: 0.1 + idx * 0.01 }))
+            );
+            const rr = new BGEReRanker();
+            const items = Array.from({ length: 7 }, (_, i) => makeItem(`id-${i}`, `Title ${i}`, 0.5));
+            const result = await rr.ReRank('q', items, 3, fakeUser, { batchSize: 3 });
+
+            // 7 candidates with batchSize=3 -> 3 calls of sizes 3, 3, 1
+            expect(mockPipelineFn).toHaveBeenCalledTimes(3);
+            expect((mockPipelineFn.mock.calls[0][0] as unknown[]).length).toBe(3);
+            expect((mockPipelineFn.mock.calls[1][0] as unknown[]).length).toBe(3);
+            expect((mockPipelineFn.mock.calls[2][0] as unknown[]).length).toBe(1);
+            expect(result).toHaveLength(3);
+        });
+
+        it('caps cross-encoded candidates to GetMaxResultCount (100) instead of scoring 5000 items', async () => {
+            mockPipelineFn.mockImplementation(async (pairs: Array<[string, string]>) =>
+                pairs.map(([, doc]) => ({ label: 'L', score: doc.startsWith('Title 50\n') ? 0.99 : 0.1 }))
+            );
+            const rr = new BGEReRanker();
+            const items = Array.from({ length: 250 }, (_, i) => makeItem(`id-${i}`, `Title ${i}`, 0.5));
+            const result = await rr.ReRank('q', items, 5, fakeUser);
+
+            const totalScored = mockPipelineFn.mock.calls.reduce(
+                (sum, call) => sum + (call[0] as unknown[]).length,
+                0,
+            );
+            expect(totalScored).toBe(100);
+            expect(result).toHaveLength(5);
+            expect(result[0].RecordID).toBe('id-50');
         });
     });
 });

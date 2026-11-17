@@ -792,10 +792,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     artifactDirective?: ArtifactDirective;
     /**
      * Artifact type ID (`MJ: Artifact Types.ID`) to use when persisting this step's payload as an
-     * artifact. Propagated from a terminating `Sub-Agent` step (`terminateAfter: true`) — preferring
-     * the child's own `payloadArtifactTypeID`, else the child agent's `DefaultArtifactTypeID` — so a
+     * artifact. Propagated on `ParentID` child (and folded 1-node task-graph) `Sub-Agent` steps
+     * when terminating the parent run — preferring the child's `payloadArtifactTypeID`, else the
+     * child agent's `DefaultArtifactTypeID` (unless `ArtifactCreationMode === 'Never'`) — so a
      * router/orchestrator whose own `DefaultArtifactTypeID` differs from the specialist's does not
-     * overwrite the specialist's artifact type.
+     * overwrite the specialist's artifact type. Not stamped on `AgentRelationships` related-agent
+     * merges (where the payload retains the parent's shape) or parallel `subAgents` fan-out.
      */
     payloadArtifactTypeID?: string;
     /** Index of the message to expand when step is 'expand-message' */

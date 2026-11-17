@@ -104,27 +104,14 @@ export class AgentDecisionService {
     public async Ask(args: AgentDecisionAskParams): Promise<AIDecisionRunResult> {
         try {
             await AIEngine.Instance.Config(false, args.ContextUser);
-            const targetName = (args.PromptName ?? AgentDecisionService.DEFAULT_PROMPT_NAME).trim().toLowerCase();
-            const prompt = AIEngine.Instance.Prompts?.find(p => (p.Name ?? '').trim().toLowerCase() === targetName);
-
-            if (!prompt) {
+            const params = AgentDecisionService.BuildDecisionParams(args);
+            if (!params) {
                 return {
                     success: false,
                     errorMessage: `Decision prompt "${args.PromptName ?? AgentDecisionService.DEFAULT_PROMPT_NAME}" not found`,
                     Answers: {},
                 };
             }
-
-            const params = new AIDecisionParams();
-            if (args.ExecutionScope) {
-                Object.assign(params, PickPromptExecutionScope(args.ExecutionScope));
-            }
-            params.prompt = prompt;
-            params.contextUser = args.ContextUser;
-            params.State = args.State;
-            params.Questions = args.Questions;
-            params.cancellationToken = args.CancellationToken;
-            params.agentId = args.AgentID;
             return await new AIDecisionRunner().ExecuteDecision(params);
         } catch (error) {
             return {
@@ -133,6 +120,33 @@ export class AgentDecisionService {
                 Answers: {},
             };
         }
+    }
+
+    /**
+     * The runner params for a decision, as {@link Ask} would run it: the named prompt (by name, trimmed
+     * and case-insensitive) with the run's execution scope, user, state, questions, cancellation and
+     * agent. Null when the prompt is not in the engine's catalog. Synchronous: it reads the already
+     * loaded `AIEngine`, so a caller that runs the decision itself (`RunDecisionUse`) loads it first.
+     *
+     * @param args The decision to build.
+     */
+    public static BuildDecisionParams(args: AgentDecisionAskParams): AIDecisionParams | null {
+        const targetName = (args.PromptName ?? AgentDecisionService.DEFAULT_PROMPT_NAME).trim().toLowerCase();
+        const prompt = AIEngine.Instance.Prompts?.find(p => (p.Name ?? '').trim().toLowerCase() === targetName);
+        if (!prompt) {
+            return null;
+        }
+        const params = new AIDecisionParams();
+        if (args.ExecutionScope) {
+            Object.assign(params, PickPromptExecutionScope(args.ExecutionScope));
+        }
+        params.prompt = prompt;
+        params.contextUser = args.ContextUser;
+        params.State = args.State;
+        params.Questions = args.Questions;
+        params.cancellationToken = args.CancellationToken;
+        params.agentId = args.AgentID;
+        return params;
     }
 
     /**

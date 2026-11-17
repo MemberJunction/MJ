@@ -14,7 +14,7 @@ export * from './lib/models/navigation-request.model';
 export * from './lib/models/agent-turn.model';
 export * from './lib/utils/agent-turn-routing';
 export * from './lib/utils/agent-handoff-map';
-// Opt-in decision routing for an unmentioned message (EnableDecisionRouting)
+// Decision routing for an unmentioned message (EnableDecisionRouting, on by default)
 // NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
 // @memberjunction/ai-core-plus — import them from there directly.
 export * from './lib/utils/decision-routing';
@@ -61,6 +61,10 @@ export * from './lib/services/realtime-pairing';
 export * from './lib/services/user-authorization';
 export * from './lib/services/realtime-sessions-adapter';
 export * from './lib/services/realtime-session-review.service';
+// Shared lazy ONNX/WASM Edge AI worker host + Stage 6C.1 pre-discovery service
+export * from './lib/services/edge-ai/edge-ai-protocol';
+export * from './lib/services/edge-ai/edge-ai-worker-host';
+export * from './lib/services/edge-ai/edge-agent-pre-discovery.service';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';

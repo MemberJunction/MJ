@@ -157,6 +157,7 @@ import {
     TAINTED_EGRESS_BLOCKED,
     TenantContextCarryProblem,
     type TaskSecurityEnvelope,
+    ReadEdgePreDiscoveryHint,
 } from '@memberjunction/ai-core-plus';
 import {
     ActionEngineBase, MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
@@ -210,6 +211,7 @@ import {
     SelectCatalogNarrowing,
 } from './catalog-narrowing';
 import {
+    AgentsWithoutDescription,
     BuildDecisionDiscoveryOptionSet,
     BuildDecisionDiscoveryQuestions,
     CanSearchEntities,
@@ -218,11 +220,15 @@ import {
     DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     DecisionDiscoveryAgentSearch,
+    DecisionDiscoveryCatalog,
     DecisionDiscoveryFromResult,
+    DecisionDiscoveryOptions,
     DecisionDiscoveryOptionSet,
     DecisionDiscoveryOutcome,
     DecisionDiscoveryRunnableAgents,
+    DecisionOptionLimit,
     DecisionPromptOptionCap,
+    EvaluateEdgePreDiscoveryHint,
     FailedDecisionDiscovery,
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
@@ -1710,6 +1716,19 @@ export class BaseAgent {
     private _lastSubAgentArtifactDirective: ArtifactDirective | undefined = undefined;
     private _lastSubAgentPayloadArtifactTypeID: string | undefined = undefined;
 
+    private resolveChildPayloadArtifactTypeID<R>(
+        subAgentResult: ExecuteAgentResult<R>,
+        subAgentEntity?: MJAIAgentEntityExtended
+    ): string | undefined {
+        if (subAgentResult.payloadArtifactTypeID) {
+            return subAgentResult.payloadArtifactTypeID;
+        }
+        if (subAgentEntity?.ArtifactCreationMode === 'Never') {
+            return undefined;
+        }
+        return subAgentEntity?.DefaultArtifactTypeID || undefined;
+    }
+
     /**
      * The resolved FileStorageAccount ID for this agent run. Set during Execute()
      * via the hierarchical resolution chain (Runtime → Agent → Category → Type → fallback).
@@ -2271,6 +2290,16 @@ export class BaseAgent {
      * @private
      */
     private _runExecutionScope: AIPromptExecutionScope | undefined;
+
+    /**
+     * The current run's {@link AIPromptExecutionScope} (its user, provider, configuration, runtime API
+     * keys and credential scope), set when the run starts, or undefined before one has. A subclass that
+     * asks a decision or runs a prompt outside the agent's own turn passes it on, so the call runs on
+     * the run's keys and configuration rather than the platform's.
+     */
+    protected get RunExecutionScope(): AIPromptExecutionScope | undefined {
+        return this._runExecutionScope;
+    }
 
     /**
      * Whether the run answers its conversation's opening request ({@link IsOpeningTurn}), read from
@@ -5350,7 +5379,13 @@ export class BaseAgent {
                 return;
             }
             const promptParams = this.decisionDiscoveryPromptParams(agent, overrides);
-            const outcome = await this.runDecisionDiscovery(agent, contextUser, promptParams, HostAllowedAgentIDs(data));
+            const outcome = await this.runDecisionDiscovery(
+                agent,
+                contextUser,
+                promptParams,
+                HostAllowedAgentIDs(data),
+                ReadEdgePreDiscoveryHint(data)
+            );
             if (outcome.Injected && outcome.Message) {
                 conversationMessages.unshift({ role: 'system', content: outcome.Message });
                 this.logStatus(`Decision discovery suggested '${outcome.Answer?.Agent.Name}' to '${agent.Name}'`, true);
@@ -5409,13 +5444,17 @@ export class BaseAgent {
         agent: MJAIAgentEntityExtended,
         contextUser: UserInfo,
         promptParams: Record<string, unknown>,
-        hostAllowedIDs: string[] | undefined
+        hostAllowedIDs: string[] | undefined,
+        rawEdgeHint?: unknown
     ): Promise<DecisionDiscoveryOutcome> {
         const promptName = typeof promptParams.decisionPromptName === 'string'
             ? promptParams.decisionPromptName
             : AgentDecisionService.DEFAULT_PROMPT_NAME;
         const step = await this.startDecisionDiscoveryStep(contextUser, promptName);
-        const outcome = await this.boundDecisionDiscovery(signal => this.discoverAgent(agent, contextUser, promptName, hostAllowedIDs, signal), step);
+        const outcome = await this.boundDecisionDiscovery(
+            signal => this.discoverAgent(agent, contextUser, promptName, hostAllowedIDs, rawEdgeHint, signal),
+            step
+        );
         await this.finishDecisionDiscoveryStep(step, outcome);
         if (!outcome.Succeeded) {
             this.warnDecisionDiscovery(agent, outcome.Reason ?? 'unknown error');
@@ -5445,8 +5484,8 @@ export class BaseAgent {
         BaseAgent._uncalibratedDiscoveryModelsWarned.add(model);
         LogErrorEx({
             message: `Decision discovery answered by ${model} suggests nothing: the model has no discovery calibration `
-                + '(DECISION_DISCOVERY_CALIBRATION), so its answers are treated as unsure. Fit one with the agent-discovery '
-                + 'Decision Eval, or check that the model was not renamed or moved to another version.',
+                + "(use 'agent-discovery' in its ModelConfiguration.Decision.Calibrations), so its answers are treated as unsure. "
+                + 'Fit one with the fit-decision-calibration rig, or check that the model was not renamed or moved to another version.',
             severity: 'warning',
             category: 'DecisionDiscovery',
         });
@@ -5502,11 +5541,60 @@ export class BaseAgent {
         contextUser: UserInfo,
         promptName: string,
         hostAllowedIDs: string[] | undefined,
+        rawEdgeHint: unknown,
         signal: AbortSignal
     ): Promise<DecisionDiscoveryOutcome> {
         try {
-            const { Options: options, Error: optionsError, ...rest } = await this.decisionDiscoveryOptionSet(agent, contextUser, promptName, hostAllowedIDs);
-            const sizes = { ...rest, OptionCount: options.length };
+            const runnableAgents = await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser);
+            const catalog = KeepHostAllowedAgents(DecisionDiscoveryCatalog(runnableAgents, agent.ID), hostAllowedIDs);
+            const fullOptions = DecisionDiscoveryOptions(catalog);
+            const declaredCap = DecisionPromptOptionCap(AIEngine.Instance, promptName);
+            const optionLimit = DecisionOptionLimit(declaredCap);
+
+            if (fullOptions.length < DECISION_DISCOVERY_MIN_OPTIONS) {
+                return {
+                    Injected: false,
+                    Succeeded: true,
+                    Reason: `there are ${fullOptions.length} agents to choose from, fewer than the ${DECISION_DISCOVERY_MIN_OPTIONS} a suggestion needs, so nothing was asked`,
+                    CatalogSize: catalog.length,
+                    HostAllowListSize: hostAllowedIDs?.length,
+                    WithoutDescription: AgentsWithoutDescription(catalog),
+                    OptionCount: fullOptions.length,
+                    OptionLimit: optionLimit,
+                    DeclaredOptionCap: declaredCap,
+                };
+            }
+
+            // Server remains guard of truth: verify every hinted ID against the server-authoritative
+            // permitted, runnable, directly-discoverable, host-allowed catalog before any fast-path or narrowing.
+            const edgeEval = EvaluateEdgePreDiscoveryHint(rawEdgeHint, fullOptions);
+            if (edgeEval.DirectOutcome) {
+                return {
+                    ...edgeEval.DirectOutcome,
+                    CatalogSize: catalog.length,
+                    HostAllowListSize: hostAllowedIDs?.length,
+                    WithoutDescription: AgentsWithoutDescription(catalog),
+                    OptionCount: fullOptions.length,
+                    OptionLimit: optionLimit,
+                    DeclaredOptionCap: declaredCap,
+                };
+            }
+
+            const { Options: options, Error: optionsError, ...rest } = await this.decisionDiscoveryOptionSet(
+                agent,
+                contextUser,
+                promptName,
+                hostAllowedIDs,
+                runnableAgents,
+                declaredCap,
+                edgeEval.SanitizedHint?.CandidateAgentIds
+            );
+            const sizes = {
+                ...rest,
+                OptionCount: options.length,
+                EdgeHintUsed: (edgeEval.SanitizedHint?.CandidateAgentIds.length ?? 0) > 0 && fullOptions.length > optionLimit,
+                EdgeHintDiscardedCount: edgeEval.DiscardedCount,
+            };
             if (optionsError) {
                 return { ...FailedDecisionDiscovery(optionsError), ...sizes };
             }
@@ -5525,7 +5613,7 @@ export class BaseAgent {
                 CancellationToken: signal,
                 ExecutionScope: this._runExecutionScope,
             });
-            return { ...DecisionDiscoveryFromResult(result, options, DECISION_DISCOVERY_MIN_CONFIDENCE), ...sizes };
+            return { ...DecisionDiscoveryFromResult(result, options, DECISION_DISCOVERY_MIN_CONFIDENCE), Source: 'decision-model', ...sizes };
         } catch (error) {
             return FailedDecisionDiscovery(error instanceof Error ? error.message : String(error));
         }
@@ -5534,20 +5622,24 @@ export class BaseAgent {
     /**
      * The Choice's options, rebuilt on every call and never cached ({@link BuildDecisionDiscoveryOptionSet}):
      * from AIEngine's current catalog, the agents the user may run, the decision prompt's option cap,
-     * and the semantic search over the opening request when the provider can run it.
+     * and the client's sanitized pre-filter or semantic search over the opening request when the provider can run it.
      */
     private async decisionDiscoveryOptionSet(
         agent: MJAIAgentEntityExtended,
         contextUser: UserInfo,
         promptName: string,
-        hostAllowedIDs: string[] | undefined
+        hostAllowedIDs: string[] | undefined,
+        runnableAgents?: MJAIAgentEntityExtended[],
+        declaredCap?: number,
+        preferredCandidateIDs?: ReadonlyArray<string>
     ): Promise<DecisionDiscoveryOptionSet> {
         const provider = this.ProviderToUse;
         return BuildDecisionDiscoveryOptionSet({
-            Agents: await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser),
+            Agents: runnableAgents ?? await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser),
             RunningAgentID: agent.ID,
             HostAllowedIDs: hostAllowedIDs,
-            DeclaredCap: DecisionPromptOptionCap(AIEngine.Instance, promptName),
+            DeclaredCap: declaredCap ?? DecisionPromptOptionCap(AIEngine.Instance, promptName),
+            PreferredCandidateIDs: preferredCandidateIDs,
             Search: CanSearchEntities(provider) ? DecisionDiscoveryAgentSearch(provider, this._openingRequest, contextUser) : undefined,
         });
     }
@@ -5612,6 +5704,15 @@ export class BaseAgent {
             tokensUsed: result?.tokensUsed,
             model: result?.DecisionResult?.ResolvedModel ?? result?.modelInfo?.modelName,
             promptRunId: result?.promptRun?.ID,
+            ...(outcome.Source === 'edge-pre-discovery' ? { source: outcome.Source } : {}),
+            ...(outcome.EdgeHintUsed || (outcome.EdgeHintDiscardedCount ?? 0) > 0
+                ? {
+                    edgePreDiscovery: {
+                        used: outcome.EdgeHintUsed ?? false,
+                        discardedCount: outcome.EdgeHintDiscardedCount ?? 0,
+                    },
+                }
+                : {}),
         });
     }
 
@@ -6263,6 +6364,8 @@ export class BaseAgent {
                     consultEnabled: this.isSubAgentConsultEnabledForSubAgent(params.agent, sa),
                     ...(presetNames.length > 0 ? { presetNames } : {})
                 };
+            }, {
+                IncludeArtifactDirective: control.NativeOnly && this.isArtifactSupportEnabled(params.agent)
             });
             if (control.NativeOnly && promptParams.data) {
                 // The template renders the tools-only prompt when this is set AND the runner resolves implicit control flow.
@@ -17587,8 +17690,10 @@ The context is now within limits. Please retry your request with the recovered c
             await this.finalizeStepEntity(stepEntity, subAgentResult.success,
                 subAgentResult.agentRun?.ErrorMessage, outputData);
 
-            const childPayloadArtifactTypeID =
-                subAgentResult.payloadArtifactTypeID ?? (subAgentEntity?.DefaultArtifactTypeID || undefined);
+            const childPayloadArtifactTypeID = this.resolveChildPayloadArtifactTypeID(
+                subAgentResult,
+                subAgentEntity
+            );
 
             // When a sub-agent (e.g. Workflow Planner) submits a durable task graph, its run parks
             // with Status === 'Paused'. Propagate the parked state to the parent run and terminate
@@ -17657,9 +17762,10 @@ The context is now within limits. Please retry your request with the recovered c
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
-                // Preserve the parent's own directive and artifact type on this Sub-Agent step, or
-                // when the sub-agent terminates the parent run directly (shouldTerminate=true), carry
-                // the terminal sub-agent's directive and artifact type if the parent did not specify one.
+                // Preserve an explicit directive on previousDecision when supplied; otherwise, when
+                // the child sub-agent terminates the parent run directly (shouldTerminate=true),
+                // propagate the child's directive and artifact type so it overrides the parent's
+                // DefaultArtifactTypeID in AgentRunner.createArtifactHeader.
                 artifactDirective: previousDecision?.artifactDirective
                     ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined),
                 payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID
@@ -18601,8 +18707,12 @@ The context is now within limits. Please retry your request with the recovered c
             outputData
         );
 
-        const childPayloadArtifactTypeID =
-            subAgentResult.payloadArtifactTypeID ?? (subAgentEntity?.DefaultArtifactTypeID || undefined);
+        // Propagate the sub-agent's artifact type only on non-relationship (ParentID / folded)
+        // delegations where the child's payload becomes the parent's payload; on AgentRelationships
+        // paths mergedPayload retains the parent's shape.
+        const childPayloadArtifactTypeID = relationship
+            ? undefined
+            : this.resolveChildPayloadArtifactTypeID(subAgentResult, subAgentEntity);
         const chatStep: BaseAgentNextStep<SR, SC> = {
             step: 'Chat',
             terminate: true,
@@ -18657,7 +18767,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
      */
-    private async executeRelatedSubAgentStep<SC = any, SR = any>(
+    protected async executeRelatedSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision: BaseAgentNextStep<SR, SC>,
         subAgentEntity: MJAIAgentEntityExtended,
@@ -18881,12 +18991,10 @@ The context is now within limits. Please retry your request with the recovered c
                 outputData
             );
 
-            const childPayloadArtifactTypeID =
-                subAgentResult.payloadArtifactTypeID ?? (subAgentEntity?.DefaultArtifactTypeID || undefined);
-
-            // When a related sub-agent submits a durable task graph, its run parks with Status === 'Paused'.
-            // Propagate the parked state to the parent run and terminate immediately with the sub-agent's
-            // workflow launch message instead of continuing the parent loop.
+            // Note: on the AgentRelationships path, mergedPayload starts from the parent's payload
+            // (with optional SubAgentOutputMapping field copies), so the resulting payload retains
+            // the parent's shape. Explicitly preserve previousDecision?.payloadArtifactTypeID rather
+            // than spreading or stamping the related sub-agent's artifact type.
             if (subAgentParkedOnWorkflow) {
                 this._awaitingWorkflowTaskID = this.extractSubAgentWorkflowTaskID(subAgentResult.agentRun);
                 if (this._agentRun) {
@@ -18903,7 +19011,7 @@ The context is now within limits. Please retry your request with the recovered c
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands,
                     artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective,
-                    payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID ?? childPayloadArtifactTypeID,
+                    payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID,
                     handoff: undefined
                 };
             }
@@ -18926,13 +19034,8 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
 
-            if (previousDecision?.taskGraph?.folded === true) {
-                if (subAgentResult.artifactDirective) {
-                    this._lastSubAgentArtifactDirective = subAgentResult.artifactDirective;
-                }
-                if (childPayloadArtifactTypeID) {
-                    this._lastSubAgentPayloadArtifactTypeID = childPayloadArtifactTypeID;
-                }
+            if (previousDecision?.taskGraph?.folded === true && subAgentResult.artifactDirective) {
+                this._lastSubAgentArtifactDirective = subAgentResult.artifactDirective;
             } else if (!previousDecision?.artifactDirective && !shouldTerminate) {
                 this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
             }
@@ -18952,8 +19055,7 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: mergedPayload,
                 artifactDirective: previousDecision?.artifactDirective
                     ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined),
-                payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID
-                    ?? (shouldTerminate ? childPayloadArtifactTypeID : undefined),
+                payloadArtifactTypeID: previousDecision?.payloadArtifactTypeID,
                 handoff: undefined
             };
         } catch (error) {

@@ -3,4 +3,4 @@
 "@memberjunction/ai-agents": patch
 ---
 
-Preserve a terminating sub-agent's `artifactDirective` and `payloadArtifactTypeID` (resolved from `subAgentResult.payloadArtifactTypeID ?? subAgentEntity.DefaultArtifactTypeID`) through `BaseAgent` and `AgentRunner.ProcessAgentArtifacts` so router agents do not overwrite a specialist child agent's artifact type or directive when `terminateAfter: true` (or when a sub-agent parks on a workflow, propagates a Chat step, or runs as a folded 1-node task graph).
+Propagate a terminating child sub-agent's `artifactDirective`, `payloadArtifactTypeID` (on `ParentID` child and folded 1-node task-graph delegations, excluding `AgentRelationships` related-agent merges and parallel fan-out), and run `Message` through `BaseAgent` and `AgentRunner.ProcessAgentArtifacts` so router agents do not overwrite a specialist child agent's artifact type, directive, or final response message when `terminateAfter: true`, parking on a workflow, or returning a `Chat` step.

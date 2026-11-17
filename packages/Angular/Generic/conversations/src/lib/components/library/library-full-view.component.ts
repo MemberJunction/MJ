@@ -1,7 +1,14 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfo, RunView } from '@memberjunction/core';
-import { MJCollectionEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import {
+  ArtifactPermissionEngine,
+  MJArtifactEntity,
+  MJArtifactVersionEntity,
+  MJCollectionArtifactEntity,
+  MJCollectionEntity,
+} from '@memberjunction/core-entities';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Full-panel Collections view component
@@ -15,13 +22,13 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       <div class="collections-header">
         <div class="collections-breadcrumb">
           <div class="breadcrumb-item">
-            <i class="fas fa-home"></i>
+            <i class="fa-solid fa-house"></i>
             <a class="breadcrumb-link" (click)="navigateToRoot()">Collections</a>
           </div>
           @if (breadcrumbs.length > 0) {
             <span class="breadcrumb-path">
-              @for (crumb of breadcrumbs; track crumb; let last = $last) {
-                <i class="fas fa-chevron-right breadcrumb-separator"></i>
+              @for (crumb of breadcrumbs; track crumb.id; let last = $last) {
+                <i class="fa-solid fa-chevron-right breadcrumb-separator"></i>
                 <a class="breadcrumb-link"
                   [class.active]="last"
                   (click)="navigateTo(crumb)">
@@ -32,7 +39,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
           }
         </div>
         <div class="collections-search">
-          <i class="fas fa-search"></i>
+          <i class="fa-solid fa-magnifying-glass"></i>
           <input type="text"
             [(ngModel)]="searchQuery"
             (ngModelChange)="onSearchChange($event)"
@@ -41,7 +48,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
         </div>
         <div class="collections-actions">
           <button class="btn-secondary" (click)="refresh()" title="Refresh">
-            <i class="fas fa-sync"></i>
+            <i class="fa-solid fa-rotate"></i>
           </button>
         </div>
       </div>
@@ -51,20 +58,20 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
             <mj-loading text="Loading collections..." size="large"></mj-loading>
           </div>
         }
-        @if (!isLoading && filteredCollections.length === 0) {
+        @if (!isLoading && filteredCollections.length === 0 && FilteredArtifacts.length === 0) {
           <mj-empty-state
             [Variant]="searchQuery ? 'no-results' : 'empty'"
             Icon="fa-solid fa-folder-open"
-            [Title]="searchQuery ? 'No collections found' : 'No collections yet'" />
+            [Title]="searchQuery ? 'No matching items found' : (CurrentCollectionId ? 'This collection is empty' : 'No collections yet')" />
         }
         @if (!isLoading && filteredCollections.length > 0) {
           <div class="library-folders">
-            @for (collection of filteredCollections; track collection) {
+            @for (collection of filteredCollections; track collection.ID) {
               <div
                 class="library-folder"
                 (click)="openCollection(collection)">
                 <div class="folder-icon">
-                  <i class="fas fa-folder"></i>
+                  <i class="fa-solid fa-folder"></i>
                 </div>
                 <div class="folder-info">
                   <div class="folder-name">{{ collection.Name }}</div>
@@ -78,6 +85,32 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
             }
           </div>
         }
+        @if (!isLoading && CurrentCollectionId && FilteredArtifacts.length > 0) {
+          <div class="library-artifacts-section">
+            @if (filteredCollections.length > 0) {
+              <h4 class="library-section-heading">Artifacts</h4>
+            }
+            <div class="library-folders">
+              @for (artifact of FilteredArtifacts; track artifact.ID) {
+                <div
+                  class="library-folder library-artifact-card"
+                  (click)="OpenArtifact(artifact)">
+                  <div class="folder-icon artifact-icon">
+                    <i class="fa-solid fa-file-lines"></i>
+                  </div>
+                  <div class="folder-info">
+                    <div class="folder-name">{{ artifact.Name }}</div>
+                    @if (artifact.Description) {
+                      <div class="folder-meta">
+                        {{ artifact.Description }}
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
       </div>
     </div>
     `,
@@ -86,14 +119,15 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: white;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
     }
 
     .collections-header {
       display: flex;
       align-items: center;
       padding: 16px 24px;
-      border-bottom: 1px solid #E5E7EB;
+      border-bottom: 1px solid var(--mj-border-default);
       gap: 16px;
     }
 
@@ -112,12 +146,12 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
     }
 
     .breadcrumb-item i {
-      color: #6B7280;
+      color: var(--mj-text-secondary);
       font-size: 14px;
     }
 
     .breadcrumb-link {
-      color: #111827;
+      color: var(--mj-text-primary);
       font-weight: 500;
       cursor: pointer;
       text-decoration: none;
@@ -126,11 +160,11 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
     }
 
     .breadcrumb-link:hover {
-      color: #1e40af;
+      color: var(--mj-brand-primary);
     }
 
     .breadcrumb-link.active {
-      color: #6B7280;
+      color: var(--mj-text-secondary);
       cursor: default;
     }
 
@@ -142,7 +176,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
     }
 
     .breadcrumb-separator {
-      color: #D1D5DB;
+      color: var(--mj-border-strong);
       font-size: 10px;
     }
 
@@ -150,15 +184,15 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       display: flex;
       align-items: center;
       gap: 8px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       padding: 8px 12px;
       min-width: 300px;
     }
 
     .collections-search i {
-      color: #9CA3AF;
+      color: var(--mj-text-muted);
       font-size: 14px;
     }
 
@@ -168,11 +202,11 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       outline: none;
       font-size: 14px;
       flex: 1;
-      color: #111827;
+      color: var(--mj-text-primary);
     }
 
     .library-search-input::placeholder {
-      color: #9CA3AF;
+      color: var(--mj-text-muted);
     }
 
     .collections-actions {
@@ -183,16 +217,16 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
     .btn-secondary {
       padding: 8px 12px;
       background: transparent;
-      border: 1px solid #E5E7EB;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       cursor: pointer;
-      color: #6B7280;
+      color: var(--mj-text-secondary);
       transition: all 150ms ease;
     }
 
     .btn-secondary:hover {
-      background: #F9FAFB;
-      color: #111827;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .collections-content {
@@ -207,7 +241,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       align-items: center;
       justify-content: center;
       height: 100%;
-      color: #9CA3AF;
+      color: var(--mj-text-muted);
     }
 
     .collections-content mj-empty-state {
@@ -220,21 +254,34 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       gap: 16px;
     }
 
+    .library-artifacts-section {
+      margin-top: 20px;
+    }
+
+    .library-section-heading {
+      margin: 0 0 12px 0;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--mj-text-secondary);
+    }
+
     .library-folder {
       display: flex;
       align-items: start;
       gap: 16px;
       padding: 20px;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       cursor: pointer;
       transition: all 150ms ease;
     }
 
     .library-folder:hover {
-      border-color: #1e40af;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border-color: var(--mj-brand-primary);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .folder-icon {
@@ -243,14 +290,14 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #EFF6FF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
       border-radius: 8px;
       flex-shrink: 0;
     }
 
     .folder-icon i {
       font-size: 20px;
-      color: #1e40af;
+      color: var(--mj-brand-primary);
     }
 
     .folder-info {
@@ -261,7 +308,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
     .folder-name {
       font-size: 15px;
       font-weight: 500;
-      color: #111827;
+      color: var(--mj-text-primary);
       margin-bottom: 4px;
       white-space: nowrap;
       overflow: hidden;
@@ -270,7 +317,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
 
     .folder-meta {
       font-size: 13px;
-      color: #6B7280;
+      color: var(--mj-text-secondary);
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -300,6 +347,8 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
     return this.CurrentUser;
   }
 
+  @Output() ArtifactSelected = new EventEmitter<MJArtifactEntity>();
+
   public Collections: MJCollectionEntity[] = [];
 
   /** @deprecated Use {@link Collections}. */
@@ -320,6 +369,8 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
   public set filteredCollections(value: MJCollectionEntity[]) {
     this.FilteredCollections = value;
   }
+  public Artifacts: MJArtifactEntity[] = [];
+  public FilteredArtifacts: MJArtifactEntity[] = [];
   public SearchQuery: string = '';
 
   /** @deprecated Use {@link SearchQuery}. */
@@ -353,23 +404,24 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
   }
 
   constructor() {
-  super();}
+    super();
+  }
 
   ngOnInit() {
-    this.LoadCollections();
+    void this.LoadCollections();
   }
 
   async LoadCollections(): Promise<void> {
     this.isLoading = true;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const filter = `EnvironmentID='${this.EnvironmentId}'` +
-                     (this.CurrentCollectionId ? ` AND ParentID='${this.CurrentCollectionId}'` : ' AND ParentID IS NULL');
+      const escapedEnv = EscapeSQLString(this.EnvironmentId || '');
+      const envFilter = escapedEnv ? `EnvironmentID='${escapedEnv}'` : '1=1';
 
-      const result = await rv.RunView<MJCollectionEntity>(
+      const allCollectionsRes = await rv.RunView<MJCollectionEntity>(
         {
           EntityName: 'MJ: Collections',
-          ExtraFilter: filter,
+          ExtraFilter: envFilter,
           OrderBy: 'Name ASC',
           MaxRows: 1000,
           ResultType: 'entity_object'
@@ -377,15 +429,140 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
         this.CurrentUser
       );
 
-      if (result.Success) {
-        this.Collections = result.Results || [];
-        this.applySearch();
+      if (allCollectionsRes.Success) {
+        const allCollections = allCollectionsRes.Results || [];
+        const parentFiltered = allCollections.filter((col) =>
+          this.CurrentCollectionId
+            ? UUIDsEqual(col.ParentID, this.CurrentCollectionId)
+            : !col.ParentID
+        );
+        const readableIds = await this.resolveReadableCollectionIds(parentFiltered);
+        this.Collections = parentFiltered.filter((col) =>
+          readableIds.has(NormalizeUUID(col.ID))
+        );
+      } else {
+        this.Collections = [];
       }
+
+      this.Artifacts = this.CurrentCollectionId
+        ? await this.loadCollectionArtifacts(rv, this.CurrentCollectionId)
+        : [];
+
+      this.applySearch();
     } catch (error) {
       console.error('Failed to load collections:', error);
+      this.Collections = [];
+      this.Artifacts = [];
+      this.applySearch();
     } finally {
       this.isLoading = false;
     }
+  }
+
+  private async resolveReadableCollectionIds(
+    collections: MJCollectionEntity[]
+  ): Promise<Set<string>> {
+    const readable = new Set<string>();
+    const currentUserId = this.CurrentUser?.ID ? NormalizeUUID(this.CurrentUser.ID) : '';
+    if (!currentUserId) {
+      for (const c of collections) {
+        readable.add(NormalizeUUID(c.ID));
+      }
+      return readable;
+    }
+
+    const provider = this.ProviderToUse ?? Metadata.Provider;
+    const engine = ArtifactPermissionEngine.Instance;
+
+    for (const col of collections) {
+      const normId = NormalizeUUID(col.ID);
+      if (UUIDsEqual(col.OwnerID, currentUserId)) {
+        readable.add(normId);
+        continue;
+      }
+      const effective = await engine.ResolveCollectionAncestryPermissions(
+        provider,
+        col.ID,
+        this.CurrentUser
+      );
+      if (effective?.CanRead) {
+        readable.add(normId);
+      }
+    }
+    return readable;
+  }
+
+  private async loadCollectionArtifacts(
+    rv: RunView,
+    collectionId: string
+  ): Promise<MJArtifactEntity[]> {
+    const linksRes = await rv.RunView<MJCollectionArtifactEntity>(
+      {
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID='${EscapeSQLString(collectionId)}'`,
+        OrderBy: 'Sequence ASC, __mj_CreatedAt DESC',
+        ResultType: 'entity_object'
+      },
+      this.CurrentUser
+    );
+    if (!linksRes.Success || !linksRes.Results?.length) {
+      return [];
+    }
+    const versionIds = Array.from(
+      new Set(linksRes.Results.map((l) => l.ArtifactVersionID).filter((id): id is string => Boolean(id)))
+    );
+    if (versionIds.length === 0) {
+      return [];
+    }
+
+    const verInClause = versionIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    const versionsRes = await rv.RunView<MJArtifactVersionEntity>(
+      {
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ID IN (${verInClause})`,
+        ResultType: 'entity_object'
+      },
+      this.CurrentUser
+    );
+    if (!versionsRes.Success || !versionsRes.Results?.length) {
+      return [];
+    }
+
+    const artifactIds = Array.from(
+      new Set(versionsRes.Results.map((v) => v.ArtifactID).filter((id): id is string => Boolean(id)))
+    );
+    if (artifactIds.length === 0) {
+      return [];
+    }
+
+    const inClause = artifactIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    const envClause = this.EnvironmentId
+      ? ` AND EnvironmentID='${EscapeSQLString(this.EnvironmentId)}'`
+      : '';
+    const artifactsRes = await rv.RunView<MJArtifactEntity>(
+      {
+        EntityName: 'MJ: Artifacts',
+        ExtraFilter: `ID IN (${inClause})${envClause} AND Visibility <> 'System Only'`,
+        OrderBy: 'Name ASC',
+        ResultType: 'entity_object'
+      },
+      this.CurrentUser
+    );
+    if (!artifactsRes.Success || !artifactsRes.Results?.length) {
+      return [];
+    }
+
+    const artifacts = artifactsRes.Results;
+    if (!this.CurrentUser?.ID) {
+      return artifacts;
+    }
+
+    const provider = this.ProviderToUse ?? Metadata.Provider;
+    const readableArtifactIds = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
+      provider,
+      this.CurrentUser
+    );
+    return artifacts.filter((a) => readableArtifactIds.has(NormalizeUUID(a.ID)));
   }
 
   /** @deprecated Use {@link LoadCollections}. */
@@ -393,7 +570,7 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
     return this.LoadCollections();
   }
 
-  OnSearchChange(query: string): void {
+  OnSearchChange(_query: string): void {
     this.applySearch();
   }
 
@@ -405,20 +582,29 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
   private applySearch(): void {
     if (!this.SearchQuery.trim()) {
       this.FilteredCollections = [...this.Collections];
+      this.FilteredArtifacts = [...this.Artifacts];
     } else {
       const query = this.SearchQuery.toLowerCase();
       this.FilteredCollections = this.Collections.filter(c =>
         c.Name.toLowerCase().includes(query) ||
         (c.Description && c.Description.toLowerCase().includes(query))
       );
+      this.FilteredArtifacts = this.Artifacts.filter(a =>
+        a.Name.toLowerCase().includes(query) ||
+        (a.Description && a.Description.toLowerCase().includes(query))
+      );
     }
+  }
+
+  OpenArtifact(artifact: MJArtifactEntity): void {
+    this.ArtifactSelected.emit(artifact);
   }
 
   OpenCollection(collection: MJCollectionEntity): void {
     this.Breadcrumbs.push({ id: collection.ID, name: collection.Name });
     this.CurrentCollectionId = collection.ID;
     this.SearchQuery = '';
-    this.LoadCollections();
+    void this.LoadCollections();
   }
 
   /** @deprecated Use {@link OpenCollection}. */
@@ -432,7 +618,7 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
       this.Breadcrumbs = this.Breadcrumbs.slice(0, index + 1);
       this.CurrentCollectionId = crumb.id;
       this.SearchQuery = '';
-      this.LoadCollections();
+      void this.LoadCollections();
     }
   }
 
@@ -445,7 +631,7 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
     this.Breadcrumbs = [];
     this.CurrentCollectionId = null;
     this.SearchQuery = '';
-    this.LoadCollections();
+    void this.LoadCollections();
   }
 
   /** @deprecated Use {@link NavigateToRoot}. */
@@ -454,7 +640,7 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
   }
 
   Refresh(): void {
-    this.LoadCollections();
+    void this.LoadCollections();
   }
 
   /** @deprecated Use {@link Refresh}. */

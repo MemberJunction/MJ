@@ -82,13 +82,26 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
 
   /**
    * Initializes the keypair from a provided PEM (raw or base64-encoded) or, if
-   * none is supplied, generates an ephemeral 2048-bit RSA keypair. Idempotent.
+   * none is supplied, generates an ephemeral 2048-bit RSA keypair. Idempotent, except
+   * that calling again with `requireExplicitKeyInProduction: true` in production after
+   * an earlier ephemeral initialization still fails closed.
    *
    * @param env - process environment used to decide whether the ephemeral fallback is a local-dev
-   *   default (verbose-only notice) or a production misconfiguration (warning). Defaults to `process.env`.
+   *   default (verbose-only notice) or a production misconfiguration (warning/error). Defaults to `process.env`.
    */
-  public Initialize(privateKeyPem?: string, env: NodeJS.ProcessEnv = process.env): void {
+  public Initialize(
+    privateKeyPem?: string,
+    env: NodeJS.ProcessEnv = process.env,
+    options?: { requireExplicitKeyInProduction?: boolean },
+  ): void {
+    const requireExplicit = Boolean(options?.requireExplicitKeyInProduction);
     if (this._initialized) {
+      if (requireExplicit && this._isEphemeral && !IsMagicLinkLocalDevEnvironment(env)) {
+        throw new Error(
+          '[MagicLink] Refusing to use an ephemeral RSA signing key in production when Magic Link or Artifact Guest Sharing is enabled. ' +
+            'Configure magicLink.rsaPrivateKey (or MJ_MAGIC_LINK_PRIVATE_KEY).',
+        );
+      }
       return;
     }
 
@@ -97,6 +110,12 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
     if (supplied) {
       priv = createPrivateKey(this.normalizePem(supplied));
     } else {
+      if (requireExplicit && !IsMagicLinkLocalDevEnvironment(env)) {
+        throw new Error(
+          '[MagicLink] Refusing to generate an ephemeral RSA signing key in production when Magic Link or Artifact Guest Sharing is enabled. ' +
+            'Configure magicLink.rsaPrivateKey (or MJ_MAGIC_LINK_PRIVATE_KEY).',
+        );
+      }
       const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
       priv = privateKey;
       this._isEphemeral = true;

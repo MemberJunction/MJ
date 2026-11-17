@@ -95,8 +95,10 @@ export class AnalyzeArtifactService {
     const { snapshot, currentUser, environmentId } = args;
     const title = args.title || snapshot.title || 'Untitled Snapshot';
 
-    // Resolve the "Data Snapshot" artifact type.
-    const engine = ArtifactMetadataEngine.Instance;
+    // Resolve the "Data Snapshot" artifact type using the scoped provider when set.
+    const engine = (this._provider
+      ? ArtifactMetadataEngine.GetProviderInstance<ArtifactMetadataEngine>(this._provider, ArtifactMetadataEngine)
+      : ArtifactMetadataEngine.Instance) as ArtifactMetadataEngine;
     await engine.Config(false, currentUser);
     let snapshotType = engine.FindArtifactType('Data Snapshot');
     if (!snapshotType) {

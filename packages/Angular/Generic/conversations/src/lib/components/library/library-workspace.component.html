@@ -1,60 +1,7 @@
 <!-- ========================================================================= -->
-<!-- 0. EXTERNAL GUEST SHARE LINK READ-ONLY FROZEN SNAPSHOT VIEW (§6.3)       -->
+<!-- 1. FULL CANVAS ARTIFACT READER / EDITOR (when an artifact is opened full-screen) -->
 <!-- ========================================================================= -->
-@if (ActiveGuestToken) {
-  <div class="library-guest-view" data-testid="library-guest-share-view">
-    <header class="library-guest-banner">
-      <div class="library-guest-banner-left">
-        <span class="library-guest-badge">
-          <i class="fa-solid fa-lock"></i>
-          Frozen Read-Only Guest Snapshot
-        </span>
-        @if (ActiveGuestShareSnapshot; as guest) {
-          <strong class="library-guest-title">{{ guest.Title || 'Shared Artifact' }}</strong>
-          <span class="library-guest-meta">
-            v{{ guest.VersionNumber ?? 1 }}
-            @if (guest.ExpiresAt) {
-              · Expires {{ guest.ExpiresAt | date: 'medium' }}
-            }
-          </span>
-        }
-      </div>
-      <button
-        type="button"
-        mjButton
-        variant="secondary"
-        size="sm"
-        (click)="ExitGuestShareView()"
-        data-testid="guest-share-exit-btn"
-      >
-        <i class="fa-solid fa-arrow-left"></i>
-        Back to Library
-      </button>
-    </header>
-
-    <div class="library-guest-stage">
-      @if (IsGuestShareLoading) {
-        <mj-loading text="Loading frozen guest snapshot..."></mj-loading>
-      } @else if (GuestShareLoadError) {
-        <mj-empty-state
-          Icon="fa-solid fa-link-slash"
-          Title="Guest Link Unavailable"
-          [Message]="GuestShareLoadError"
-          ActionText="Open Library"
-          ActionIcon="fa-solid fa-book-open"
-          (Action)="ExitGuestShareView()"
-        ></mj-empty-state>
-      } @else if (GuestShareVersionEntity && ActiveGuestShareSnapshot) {
-        <mj-artifact-type-plugin-viewer
-          [artifactVersion]="GuestShareVersionEntity"
-          [ArtifactTypeName]="ActiveGuestShareSnapshot.ArtifactTypeName || 'Document'"
-          [readonly]="true"
-          height="100%"
-        ></mj-artifact-type-plugin-viewer>
-      }
-    </div>
-  </div>
-} @else if (IsFullCanvasOpen && ActiveArtifactId) {
+@if (IsFullCanvasOpen && ActiveArtifactId) {
   <div class="library-full-canvas" data-testid="library-full-canvas">
     <header class="full-canvas-topbar">
       <div class="full-canvas-left">
@@ -153,7 +100,7 @@
       [Subtitle]="CurrentScopeSubtitle"
     >
       <ng-container meta>
-        <mj-stat-badge [Count]="AllItems.length" Label="items"></mj-stat-badge>
+        <mj-stat-badge [Count]="TotalArtifactCount || AllItems.length" Label="items"></mj-stat-badge>
         <mj-stat-badge [Count]="FlatCollections.length" Label="collections"></mj-stat-badge>
         <mj-stat-badge [Count]="ConnectedDrives.length" Label="drives"></mj-stat-badge>
       </ng-container>
@@ -816,120 +763,6 @@
 <!-- SHARED TEMPLATES                                                          -->
 <!-- ========================================================================= -->
 
-<!-- Navigator Interior Header Card -->
-<ng-template #navigatorInteriorChromeTemplate>
-  <mj-page-header-interior
-    [Title]="NavigatorHeaderTitle"
-    [Subtitle]="NavigatorHeaderSubtitle"
-  >
-    <ng-container meta>
-      @if (NavigatorSection === 'collection' && SelectedCollectionAncestors.length > 1) {
-        <div class="interior-breadcrumbs">
-          @for (anc of SelectedCollectionAncestors; track anc.Id; let isLast = $last) {
-            <button
-              type="button"
-              class="interior-crumb"
-              [class.current]="isLast"
-              (click)="OpenCollectionById(anc.Id)"
-            >
-              {{ anc.Name }}
-            </button>
-            @if (!isLast) {
-              <i class="fa-solid fa-chevron-right interior-crumb-sep"></i>
-            }
-          }
-        </div>
-      }
-      @if (NavigatorSection === 'collections') {
-        <mj-stat-badge [Count]="FilteredCollections.length" Label="collections"></mj-stat-badge>
-      } @else {
-        <mj-stat-badge [Count]="FilteredItems.length" Label="items"></mj-stat-badge>
-      }
-    </ng-container>
-
-    <div actions>
-      @if (NavigatorSection === 'collections') {
-        <button
-          type="button"
-          mjButton
-          variant="secondary"
-          size="sm"
-          (click)="OpenNewCollectionModal()"
-        >
-          <i class="fa-solid fa-folder-plus"></i>
-          New Collection
-        </button>
-      } @else if (NavigatorSection === 'collection' && SelectedCollectionNode; as colNode) {
-        @if (FilteredItems.length > 0) {
-          <button
-            type="button"
-            mjButton
-            variant="secondary"
-            size="sm"
-            (click)="OpenSynthesizeDialog()"
-            data-testid="collection-synthesize-btn"
-          >
-            <i class="fa-solid fa-wand-magic-sparkles"></i>
-            Synthesize Collection
-          </button>
-        }
-        @if (colNode.CanShare) {
-          <button
-            type="button"
-            mjButton
-            variant="secondary"
-            size="sm"
-            (click)="OpenShareCollectionModal(colNode)"
-          >
-            <i class="fa-solid fa-share-nodes"></i>
-            Share
-          </button>
-        }
-        @if (colNode.CanEdit) {
-          <button
-            type="button"
-            mjButton
-            variant="secondary"
-            size="sm"
-            (click)="OpenNewCollectionModal(colNode)"
-          >
-            <i class="fa-solid fa-folder-plus"></i>
-            Subfolder
-          </button>
-        }
-      }
-      <mj-refresh-button [Loading]="IsLoading" (Clicked)="ReloadWorkspaceData()"></mj-refresh-button>
-    </div>
-
-    <div toolbar>
-      <mj-page-search
-        AriaLabel="Filter items"
-        Placeholder="Filter items..."
-        [Value]="SearchQuery"
-        (ValueChange)="SetSearchQuery($event)"
-      ></mj-page-search>
-      <mj-filter-popover
-        Label="Filters"
-        [ActiveCount]="ActiveFilterCount"
-        (Cleared)="ResetFilters()"
-      >
-        <mj-filter-panel
-          [Fields]="FilterFields"
-          [Values]="FilterPanelValues"
-          (ValuesChange)="OnFilterValuesChange($event)"
-          (Reset)="ResetFilters()"
-        ></mj-filter-panel>
-      </mj-filter-popover>
-      <div class="toolbar-spacer"></div>
-      <mj-view-toggle
-        [Options]="ListStyleOptions"
-        [ActiveKey]="ListStyle"
-        (KeyChange)="SetListStyle($event)"
-      ></mj-view-toggle>
-    </div>
-  </mj-page-header-interior>
-</ng-template>
-
 <!-- Navigator Subfolders + Items -->
 <ng-template #navigatorSubfoldersAndItemsTemplate>
   @if (NavigatorSection === 'collections') {
@@ -1272,7 +1105,7 @@
                 <i class="fa-solid fa-share-nodes"></i>
               </button>
             }
-            @if (NavigatorSection === 'collection' && SelectedCollectionNode?.CanEdit) {
+            @if (UnifiedScope === 'collection' && SelectedCollectionNode?.CanEdit) {
               <button
                 type="button"
                 class="card-mini-btn"
@@ -1367,6 +1200,16 @@
                   (click)="OpenShareArtifactModal(item, $event)"
                 >
                   <i class="fa-solid fa-share-nodes"></i>
+                </button>
+              }
+              @if (UnifiedScope === 'collection' && SelectedCollectionNode?.CanEdit) {
+                <button
+                  type="button"
+                  class="card-mini-btn"
+                  title="Remove from this collection"
+                  (click)="RemoveItemFromCurrentCollection(item, $event)"
+                >
+                  <i class="fa-solid fa-xmark"></i>
                 </button>
               }
             </td>
