@@ -1635,4 +1635,25 @@ describe('Security & Hardening Regression Coverage (SavedQuery, Component, Artif
     );
     expect(resFakeWorkbookContent.Allowed).toBe(false);
   });
+
+  it('allows owner updates when prior Configuration holds slides and Content holds Markdown (Lower)', () => {
+    const ownerUser = { ID: 'owner-slides-md-1', Email: 'owner@test.com', Name: 'Owner' } as UserInfo;
+    const lockedSlidesConfig = JSON.stringify({
+      Slides: [
+        {
+          SlideID: 's1',
+          Title: 'Intro',
+          LockInfo: { LockedByUserID: ownerUser.ID, LockedByUserName: 'Owner', LockedAt: new Date().toISOString() },
+        },
+      ],
+    });
+    const res = ValidateArtifactContentMutationAgainstLocks(
+      '# Companion Markdown Notes\n\nNormal text.',
+      '# Updated Companion Markdown Notes',
+      ownerUser.ID,
+      true,
+      { currentConfiguration: lockedSlidesConfig, nextConfiguration: lockedSlidesConfig },
+    );
+    expect(res.Allowed).toBe(true);
+  });
 });

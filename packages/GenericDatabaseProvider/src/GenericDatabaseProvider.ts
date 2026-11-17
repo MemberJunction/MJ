@@ -6810,9 +6810,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *   refusal echoes it and nothing else. The query's ID when omitted.
      * @throws Error if the user does not have permission to run the query
      */
+    private static readonly RESTRICTED_MAGIC_LINK_ARTIFACT_QUERY_IDS = new Set<string>([
+        '34d2d4d2-c727-4366-996f-3aaf87fc103e', // GetArtifactVersionsByID
+        '8f84dfb4-c38e-4b8d-80e7-9ccf30039e77', // GetConversationComplete
+        'ee272535-9d1d-4e4b-8613-1332cb564501', // GetConversationArtifactsMap
+        'a1b2c3d4-e5f6-4789-abcd-123456789abc', // GetConversationArtifactsForAgent
+    ]);
+
     private static isMagicLinkRestrictedArtifactQuery(query: MJQueryEntityExtended, user: UserInfo | undefined): boolean {
         if (!user || (!user.IsMagicLinkAnonymous && !user.MagicLinkScope)) {
             return false;
+        }
+        if (query.ID && GenericDatabaseProvider.RESTRICTED_MAGIC_LINK_ARTIFACT_QUERY_IDS.has(NormalizeUUID(query.ID))) {
+            return true;
         }
         const normalized = (query.Name ?? '').trim().toLowerCase();
         return (

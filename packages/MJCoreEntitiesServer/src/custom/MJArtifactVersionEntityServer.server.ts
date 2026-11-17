@@ -47,6 +47,7 @@ import {
     ConsumePreResolvedIdsForParams,
     EmptyPostRunViewResult,
     FinalizePostRunViewResult,
+    GetWorkingStateContentDeserializer,
     PrepareScopedPreRunView,
     QualifyOuterEntityColumnAsync,
     ShouldBypassPostRunViewAsync,
@@ -784,7 +785,8 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                             const wsParams: RunViewParams = {
                                 EntityName: 'MJ: Artifact Working States',
                                 ExtraFilter: `ArtifactID='${EscapeSQLString(authArtifactId)}'`,
-                                Fields: ['ID', 'Content'],
+                                Fields: ['ID', 'ArtifactID', 'YjsState'],
+                                IncludeBinaryFields: true,
                                 MaxRows: 1,
                                 SkipTotalRowCount: true,
                                 ResultType: 'simple'
@@ -792,7 +794,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                             ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(wsParams);
                             const wsRes = await RunView.FromMetadataProvider(provider).RunView<{
                                 ID?: string;
-                                Content?: string | null;
+                                YjsState?: string | Uint8Array | null;
                             }>(wsParams, systemActor);
                             if (!wsRes.Success && provider.ProviderType === 'Database' && !isArtifactOwner) {
                                 return this.recordPermissionFailure(
@@ -800,24 +802,37 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                     'Permission denied: unable to verify active artifact working state locks before saving version.'
                                 );
                             }
-                            const wsContent =
-                                wsRes.Success && typeof wsRes.Results?.[0]?.Content === 'string'
-                                    ? wsRes.Results[0].Content
-                                    : '';
-                            if (wsContent && wsContent !== (priorRow?.Content ?? '')) {
-                                const wsLockCheck = ValidateArtifactContentMutationAgainstLocks(
-                                    wsContent,
-                                    nextContent,
-                                    actor.ID,
-                                    isArtifactOwner,
-                                    { currentConfiguration: priorRow?.Configuration ?? null, nextConfiguration: nextConfig }
-                                );
-                                if (!wsLockCheck.Allowed) {
-                                    return this.recordPermissionFailure(
-                                        saveType,
-                                        wsLockCheck.Reason ??
-                                            'Write rejected: new version content conflicts with a locked region in the active working state.'
-                                    );
+                            const rawYjsState = wsRes.Success ? wsRes.Results?.[0]?.YjsState : null;
+                            const hasWorkingStateBytes =
+                                (typeof rawYjsState === 'string' && rawYjsState.trim().length > 0) ||
+                                (rawYjsState instanceof Uint8Array && rawYjsState.byteLength > 0);
+                            if (hasWorkingStateBytes) {
+                                const deserializer = GetWorkingStateContentDeserializer();
+                                if (!deserializer) {
+                                    if (provider.ProviderType === 'Database' && !isArtifactOwner) {
+                                        return this.recordPermissionFailure(
+                                            saveType,
+                                            'Permission denied: unable to decode active working-state locks before saving version.'
+                                        );
+                                    }
+                                } else {
+                                    const wsContent = deserializer(rawYjsState);
+                                    if (wsContent && wsContent !== (priorRow?.Content ?? '')) {
+                                        const wsLockCheck = ValidateArtifactContentMutationAgainstLocks(
+                                            wsContent,
+                                            nextContent,
+                                            actor.ID,
+                                            isArtifactOwner,
+                                            { currentConfiguration: priorRow?.Configuration ?? null, nextConfiguration: nextConfig }
+                                        );
+                                        if (!wsLockCheck.Allowed) {
+                                            return this.recordPermissionFailure(
+                                                saveType,
+                                                wsLockCheck.Reason ??
+                                                    'Write rejected: new version content conflicts with a locked region in the active working state.'
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }

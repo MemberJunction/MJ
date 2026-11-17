@@ -4,6 +4,8 @@
 --   1. Using JOINs instead of separate queries
 --   2. Excluding the Content field to reduce payload size
 --   3. Filtering server-side for efficiency
+-- Security note: Anchored conversations require non-SQL-scoped Artifacts/Collections anchors (`vwEntities`)
+-- rather than evaluating TypeScript FieldSecuritySQLGate restrictedFields per anchor entity.
 WITH ReadableCollections AS (
     SELECT c.ID, 0 AS Depth
     FROM [__mj].[vwCollections] c

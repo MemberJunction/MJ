@@ -3062,9 +3062,8 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       return { success: true, artifacts: [] };
     }
 
-    // Batch-load versions for all matching artifacts instead of N+1 LoadReadableArtifactState queries
-    const artIdInList = candidateArts.map((a) => `'${EscapeSQLString(a.ID)}'`).join(',');
-    const batchVerRes = await rv.RunView<{
+    // Batch-load versions for all matching artifacts in bounded UUID chunks instead of N+1 or one giant IN(...) (`S5-6`)
+    const versionRows: Array<{
       ID: string;
       ArtifactID: string;
       VersionNumber?: number | null;
@@ -3073,18 +3072,38 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       Content?: string | null;
       Configuration?: string | null;
       MimeType?: string | null;
-    }>(
-      {
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID IN (${artIdInList})`,
-        OrderBy: 'VersionNumber DESC',
-        Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'ContentMode', 'Content', 'Configuration', 'MimeType'],
-        MaxRows: candidateArts.length * 10,
-        SkipTotalRowCount: true,
-        ResultType: 'simple',
-      },
-      params.contextUser,
-    );
+    }> = [];
+    const VER_CHUNK_SIZE = 2_500;
+    for (let i = 0; i < candidateArts.length; i += VER_CHUNK_SIZE) {
+      const chunkIn = candidateArts
+        .slice(i, i + VER_CHUNK_SIZE)
+        .map((a) => `'${EscapeSQLString(a.ID)}'`)
+        .join(',');
+      const batchVerRes = await rv.RunView<{
+        ID: string;
+        ArtifactID: string;
+        VersionNumber?: number | null;
+        Name?: string | null;
+        ContentMode?: string | null;
+        Content?: string | null;
+        Configuration?: string | null;
+        MimeType?: string | null;
+      }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID IN (${chunkIn})`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'ContentMode', 'Content', 'Configuration', 'MimeType'],
+          IgnoreMaxRows: true,
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        },
+        params.contextUser,
+      );
+      if (batchVerRes.Success && Array.isArray(batchVerRes.Results)) {
+        versionRows.push(...batchVerRes.Results);
+      }
+    }
     const latestVersionByArtId = new Map<
       string,
       {
@@ -3097,7 +3116,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         MimeType?: string | null;
       }
     >();
-    for (const v of batchVerRes.Success && batchVerRes.Results ? batchVerRes.Results : []) {
+    for (const v of versionRows) {
       const normArt = NormalizeUUID(v.ArtifactID);
       const existing = latestVersionByArtId.get(normArt);
       if (!existing || (v.VersionNumber ?? 0) > (existing.VersionNumber ?? 0)) {

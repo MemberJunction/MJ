@@ -8,6 +8,8 @@
 --     that previously received a JSON string keep receiving a JSON string
 --     (T-SQL FOR JSON PATH returns a string, not an array of rows).
 --   * `cd.*` is preserved as-is — PG's SELECT * doesn't need quoting per-column.
+-- Security note: Anchored conversations require non-SQL-scoped Artifacts/Collections anchors (`vwEntities`)
+-- rather than evaluating TypeScript FieldSecuritySQLGate restrictedFields per anchor entity.
 WITH RECURSIVE "ReadableCollections" AS (
     SELECT c."ID", 0 AS "Depth"
     FROM __mj."vwCollections" c

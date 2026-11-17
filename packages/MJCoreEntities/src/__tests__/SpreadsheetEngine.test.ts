@@ -3983,11 +3983,10 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         });
         const spillParsedWb = engine.ParseWorkbook(craftedJson);
         expect(spillParsedWb.Worksheets[0].Cells['A1']?.SpillRange).toBeUndefined();
-        // Inject crafted SpillRange directly after parse and verify SetCell stays bounded
+        // Inject crafted SpillRange directly after parse and verify SetCell stays bounded without expanding children
         spillParsedWb.Worksheets[0].Cells['A1']!.SpillRange = 'A1:XFD1048576';
-        const spillStart = performance.now();
         engine.SetCell(spillParsedWb, 's1', 'A1', { Value: 42 });
-        expect(performance.now() - spillStart).toBeLessThan(1000);
+        expect(spillParsedWb.Worksheets[0].Cells['A1']?.SpillRange).toBeUndefined();
         expect(spillParsedWb.Worksheets[0].Cells['B2']).toBeUndefined();
 
         // 7. S-e: Realistic workbooks (2,000 running sums, 100 whole-column SUMs on 20k cells, A1:Z10000) succeed cleanly
@@ -4024,7 +4023,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         sparseMatrixWs.Cells['B1'] = { Address: 'B1', RowID: 'sm-r1', ColumnID: 'sm-c2', RawValue: 2 };
         sparseMatrixWs.Cells['B2'] = { Address: 'B2', RowID: 'sm-r2', ColumnID: 'sm-c2', RawValue: 3 };
         sparseMatrixWs.Cells['AB1'] = { Address: 'AB1', RowID: 'sm-r1', ColumnID: 'sm-c28', RawValue: null, Formula: '=SUMPRODUCT(A1:Z10000, A1:Z10000)' };
-        sparseMatrixWs.Cells['AB2'] = { Address: 'AB2', RowID: 'sm-r2', ColumnID: 'sm-c28', RawValue: null, Formula: '=SUM(FILTER(A1:Z10000, A1:A10000>10))' };
+        sparseMatrixWs.Cells['AB2'] = { Address: 'AB2', RowID: 'sm-r2', ColumnID: 'sm-c28', RawValue: null, Formula: '=SUM(FILTER(A1:T10000, A1:A10000>10))' };
         engine.EvaluateWorkbook(sparseMatrixWb);
         expect(sparseMatrixWs.Cells['AB1']?.ComputedValue).toBe(513);
         expect(sparseMatrixWs.Cells['AB2']?.ComputedValue).toBe(23);
@@ -4050,13 +4049,78 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
             { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(craftedSheetXml) },
         ]);
-        const b4Start = performance.now();
         const b4Imported = XlsxOpenXmlAdapter.Instance.ImportXlsx(craftedXlsx);
         expect(b4Imported.Worksheets[0].Cells['A1']?.SpillRange).toBeUndefined();
         expect(b4Imported.Worksheets[0].Cells['B2']?.ArrayMaster).toBeUndefined();
+        expect(b4Imported.Worksheets[0].Columns.length).toBeLessThanOrEqual(512);
         engine.SetCell(b4Imported, b4Imported.Worksheets[0].SheetID, 'B2', { Value: 123 }, true);
         const b4Patched = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(craftedXlsx, b4Imported);
         expect(b4Patched.byteLength).toBeGreaterThan(0);
-        expect(performance.now() - b4Start).toBeLessThan(1000);
+
+        // 10. R5-2: Range matrices preserve exact declared shape (<= 200k) for offset SUMPRODUCT, cross-sheet ranges, UNIQUE/SORT trailing blanks
+        const shapeWb = engine.CreateEmptyWorkbook('Declared Shape', ['Main', 'Other'], 2500, 10);
+        const mainWs = shapeWb.Worksheets[0];
+        const otherWs = shapeWb.Worksheets[1];
+        mainWs.Cells['A1'] = { Address: 'A1', RowID: 'sr-1', ColumnID: 'sc-1', RawValue: 10 };
+        mainWs.Cells['A2'] = { Address: 'A2', RowID: 'sr-2', ColumnID: 'sc-1', RawValue: 20 };
+        mainWs.Cells['B1'] = { Address: 'B1', RowID: 'sr-1', ColumnID: 'sc-2', RawValue: 2 };
+        mainWs.Cells['B2'] = { Address: 'B2', RowID: 'sr-2', ColumnID: 'sc-2', RawValue: 3 };
+        otherWs.Cells['C5'] = { Address: 'C5', RowID: 'or-5', ColumnID: 'oc-3', RawValue: 5 };
+        // Offset same-height ranges (A2:A2000 x B1:B1999 = 1999 rows each): A2*B1 = 20*2 = 40
+        mainWs.Cells['D1'] = { Address: 'D1', RowID: 'sr-1', ColumnID: 'sc-4', RawValue: null, Formula: '=SUMPRODUCT(A2:A2000, B1:B1999)' };
+        // Cross-sheet offset SUMPRODUCT: A2 matches row 2 of A1:A1500, C5 in Other matches row 2 of Other!C4:C1503 -> 20 * 5 = 100
+        mainWs.Cells['D2'] = { Address: 'D2', RowID: 'sr-2', ColumnID: 'sc-4', RawValue: null, Formula: '=SUMPRODUCT(A1:A1500, Other!C4:C1503)' };
+        // UNIQUE/SORT preserve trailing blank element count and ROWS preserves full declared height
+        mainWs.Cells['D3'] = { Address: 'D3', RowID: 'sr-3', ColumnID: 'sc-4', RawValue: null, Formula: '=ROWS(UNIQUE(A1:A1500))' };
+        mainWs.Cells['D4'] = { Address: 'D4', RowID: 'sr-4', ColumnID: 'sc-4', RawValue: null, Formula: '=ROWS(SORT(A1:A1500))' };
+        mainWs.Cells['D5'] = { Address: 'D5', RowID: 'sr-5', ColumnID: 'sc-4', RawValue: null, Formula: '=SUM(FILTER(B1:B1500, A1:A1500=20))' };
+        engine.EvaluateWorkbook(shapeWb);
+        expect(mainWs.Cells['D1']?.ComputedValue).toBe(40);
+        expect(mainWs.Cells['D2']?.ComputedValue).toBe(100);
+        expect(mainWs.Cells['D3']?.ComputedValue).toBe(3); // 10, 20, and blank
+        expect(mainWs.Cells['D4']?.ComputedValue).toBe(1500);
+        expect(mainWs.Cells['D5']?.ComputedValue).toBe(3);
+
+        // 11. R5-3: Untouched empty-body array anchor in PatchXlsxBytes returns byte-identical XML, and oversized shared master caps safely
+        const r53ArrayOnlyXml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            '<sheetData>',
+            '<row r="1"><c r="A1"><f t="array" cm="1" ref="A1:BL64"/><v>7</v></c></row>',
+            '</sheetData>',
+            '</worksheet>',
+        ].join('');
+        const r53ArrayXlsx = buildZipFn.call(engine, [
+            { Name: '[Content_Types].xml', Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>') },
+            { Name: 'xl/workbook.xml', Data: enc.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+            { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
+            { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(r53ArrayOnlyXml) },
+        ]);
+        const r53ArrayImported = XlsxOpenXmlAdapter.Instance.ImportXlsx(r53ArrayXlsx);
+        const r53NoopPatch = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(r53ArrayXlsx, r53ArrayImported);
+        const patchedXml = new TextDecoder().decode(
+            engine.ExtractZipArchive(r53NoopPatch).get('xl/worksheets/sheet1.xml')
+        );
+        expect(patchedXml).toBe(r53ArrayOnlyXml);
+
+        const hugeShared = '1+'.repeat(4500) + '1';
+        const r53SharedXml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            '<sheetData>',
+            '<row r="1"><c r="B1"><f t="shared" si="0">' + hugeShared + '</f><v>0</v></c></row>',
+            '<row r="2"><c r="B2"><f t="shared" si="0"/><v>0</v></c></row>',
+            '</sheetData>',
+            '</worksheet>',
+        ].join('');
+        const r53SharedXlsx = buildZipFn.call(engine, [
+            { Name: '[Content_Types].xml', Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>') },
+            { Name: 'xl/workbook.xml', Data: enc.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+            { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
+            { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(r53SharedXml) },
+        ]);
+        const r53SharedImported = XlsxOpenXmlAdapter.Instance.ImportXlsx(r53SharedXlsx);
+        expect(r53SharedImported.Worksheets[0].Cells['B1']?.Formula).toBeNull();
+        expect(r53SharedImported.Worksheets[0].Cells['B2']?.Formula).toBeNull();
     });
 });

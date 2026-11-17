@@ -618,6 +618,9 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
                     : undefined,
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] })
         } as unknown as IMetadataProvider;
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet').mockResolvedValueOnce(
+            new Set()
+        );
         vi.spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet').mockResolvedValue(
             new Set([ARTIFACT_ID])
         );
@@ -710,6 +713,9 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
         for (let i = 0; i < 5500; i++) {
             bigSet.add(`00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
         }
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet').mockResolvedValueOnce(
+            new Set(['22222222-2222-4222-8222-222222222222'])
+        );
         vi.spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet').mockResolvedValue(bigSet);
         const sqlScoped = await ArtifactPreRunViewHook(
             { EntityName: 'MJ: Artifacts', ResultType: 'simple' },
@@ -853,6 +859,7 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             expect(inexactAsync.clause).toContain(projEntityId);
 
             // When isExact=false (custom delegate active), count_only on empty results must NOT trust TotalRowCount
+            vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet').mockResolvedValueOnce(new Set());
             const countOnlyParams: RunViewParams = {
                 EntityName: 'MJ: Artifact Versions',
                 ExtraFilter: "Content LIKE '%secret%'",
@@ -1089,5 +1096,100 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
         );
         expect(postDbRes.Success).toBe(true);
         expect(postDbRes.Results).toEqual([{ ID: 'ver-readable', Content: 'Shared readable doc' }]);
+    });
+
+    it('enforces S5-2 cache separation (readable vs shareOrDelete) and R5-4 bounded <260 table counts across collection/artifact matrix', async () => {
+        const b5Provider = {
+            ProviderType: 'Database',
+            PlatformKey: 'sqlserver',
+            ConfigData: { MJCoreSchemaName: '__mj' },
+            Entities: [
+                { ID: '00000000-0000-4000-8000-0000000000e1', Name: 'MJ: Artifacts', BaseView: 'vwArtifacts', SchemaName: '__mj' },
+                { ID: '00000000-0000-4000-8000-0000000000e2', Name: 'MJ: Artifact Guest Share Links', BaseView: 'vwArtifactGuestShareLinks', SchemaName: '__mj' },
+                { ID: '00000000-0000-4000-8000-0000000000e3', Name: 'MJ: Collection Artifacts', BaseView: 'vwCollectionArtifacts', SchemaName: '__mj' }
+            ],
+            EntityByName: (name: string) =>
+                b5Provider.Entities.find((e) => e.Name.trim().toLowerCase() === name.trim().toLowerCase()),
+            RunView: vi.fn(async () => ({ Success: true, Results: [] }))
+        };
+        const makeUuids = (n: number, prefix: string): Set<string> => {
+            const set = new Set<string>();
+            for (let i = 0; i < n; i++) {
+                set.add(`${prefix}-0000-4000-8000-${String(i).padStart(12, '0')}`);
+            }
+            return set;
+        };
+
+        // S5-2: Per-call CollectionIdSetCache MUST keep readable and shareOrDelete entries isolated
+        const readableCols = makeUuids(2, '11111111');
+        const shareOrDeleteCols = makeUuids(1, '22222222');
+        const tryColsSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet')
+            .mockImplementation(async (_p, _u, opts) => (opts?.requireShareOrDelete ? shareOrDeleteCols : readableCols));
+        const sharedCache = new Map<'readable' | 'shareOrDelete', Promise<Set<string> | null>>();
+        const readPred = await BuildSqlArtifactReadablePredicateAsync('[vwArtifacts].[ID]', b5Provider as unknown as IMetadataProvider, sharedEditorUser, {
+            requireShareOrDelete: false,
+            precomputedCollectionCache: sharedCache
+        });
+        const sharePred = await BuildSqlArtifactReadablePredicateAsync('[vwArtifacts].[ID]', b5Provider as unknown as IMetadataProvider, sharedEditorUser, {
+            requireShareOrDelete: true,
+            precomputedCollectionCache: sharedCache
+        });
+        expect(tryColsSpy).toHaveBeenCalledTimes(2);
+        expect(readPred.clause).toContain('11111111-0000-4000-8000-000000000001');
+        expect(sharePred.clause).toContain('22222222-0000-4000-8000-000000000000');
+        expect(sharePred.clause).not.toContain('11111111-0000-4000-8000-000000000001');
+
+        // R5-4 matrix: <=500 / >500 collections x <=5000 / >5000 / null artifacts x requireShareOrDelete false/true
+        const countTables = (sql: string): number => (sql.match(/\[vw[A-Za-z]+\]/g) ?? []).length;
+        const cases: Array<{
+            cols: Set<string> | null;
+            arts: Set<string>;
+            expectedExact: boolean;
+            expectedFailClosed: boolean;
+        }> = [
+            { cols: makeUuids(10, 'aaaaaaaa'), arts: makeUuids(5, 'bbbbbbbb'), expectedExact: true, expectedFailClosed: false },
+            { cols: makeUuids(501, 'cccccccc'), arts: makeUuids(20, 'dddddddd'), expectedExact: true, expectedFailClosed: false },
+            { cols: makeUuids(501, 'eeeeeeee'), arts: makeUuids(5001, 'ffffffff'), expectedExact: false, expectedFailClosed: true },
+            { cols: null, arts: makeUuids(5, '99999999'), expectedExact: false, expectedFailClosed: true }
+        ];
+
+        for (const c of cases) {
+            for (const requireShareOrDelete of [false, true]) {
+                tryColsSpy.mockResolvedValue(c.cols);
+                const artSpy = vi
+                    .spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet')
+                    .mockResolvedValue(c.arts);
+
+                const res = await BuildSqlArtifactReadablePredicateAsync(
+                    '[vwArtifacts].[ID]',
+                    b5Provider as unknown as IMetadataProvider,
+                    sharedEditorUser,
+                    { requireShareOrDelete }
+                );
+                expect(countTables(res.clause)).toBeLessThan(260);
+                expect(res.isExact).toBe(c.expectedExact);
+                if (c.expectedFailClosed) {
+                    expect(res.clause).toBe('1 = 0');
+                }
+
+                const guestParams = await ArtifactGuestShareLinkPreRunViewHook(
+                    { EntityName: 'MJ: Artifact Guest Share Links', ResultType: 'simple' },
+                    sharedEditorUser,
+                    b5Provider as unknown as IMetadataProvider
+                );
+                expect(countTables(String(guestParams.ExtraFilter ?? ''))).toBeLessThan(260);
+
+                const colArtParams = await CollectionArtifactPreRunViewHook(
+                    { EntityName: 'MJ: Collection Artifacts', ResultType: 'simple' },
+                    sharedEditorUser,
+                    b5Provider as unknown as IMetadataProvider
+                );
+                expect(countTables(String(colArtParams.ExtraFilter ?? ''))).toBeLessThan(260);
+
+                artSpy.mockRestore();
+            }
+        }
+        tryColsSpy.mockRestore();
     });
 });

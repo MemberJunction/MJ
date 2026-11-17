@@ -119,7 +119,9 @@ export * from './custom/MJTaskEntityServer.server';
 export * from './custom/MJTaskDependencyEntityServer.server';
 export {
     ARTIFACT_POST_RUN_VIEW_PROTECTED_ENTITIES,
-    RegisterArtifactPostRunViewProtectedEntityRegistry
+    RegisterArtifactPostRunViewProtectedEntityRegistry,
+    RegisterWorkingStateContentDeserializer,
+    type WorkingStateContentDeserializer
 } from './custom/ArtifactSecurityHookHelpers';
 
 import { RegisterArtifactPostRunViewProtectedEntityRegistry } from './custom/ArtifactSecurityHookHelpers';

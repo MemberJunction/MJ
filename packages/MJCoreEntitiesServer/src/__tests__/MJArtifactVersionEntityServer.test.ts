@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+    BaseEntity,
     ClearAllDataHooks,
     CompositeKey,
     DatabaseProviderBase,
@@ -32,6 +33,7 @@ import {
     MarkTrustedServerRestoreSave,
     MJArtifactVersionEntityServer
 } from '../custom/MJArtifactVersionEntityServer.server';
+import { RegisterWorkingStateContentDeserializer } from '../custom/ArtifactSecurityHookHelpers';
 
 function makeUser(id: string, email: string): UserInfo {
     return new UserInfo(null, {
@@ -2043,6 +2045,112 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
         } finally {
             superSaveSpy.mockRestore();
             superDeleteSpy.mockRestore();
+        }
+    });
+
+    it('R5-1: Save() decodes MJ: Artifact Working States.YjsState via registered deserializer and fails closed when undecodable', async () => {
+        const ownerId = '77777777-0000-4000-8000-000000000001';
+        const editorId = '77777777-0000-4000-8000-000000000002';
+        const artId = '77777777-0000-4000-8000-000000000003';
+        const sysUserId = '00000000-0000-4000-8000-000000000001';
+        const editor = new UserInfo(undefined, { ID: editorId, Email: 'editor@test.com', Name: 'Editor' });
+        const sysUser = new UserInfo(undefined, { ID: sysUserId, Email: 'sys@test.com', Name: 'System' });
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(sysUser);
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: artId,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'ArtifactPermission',
+            Reason: 'Editor'
+        });
+
+        const superSaveSpy = vi
+            .spyOn(BaseEntity.prototype, 'Save')
+            .mockResolvedValue(true);
+
+        try {
+            const lockedWsText = [
+                `<!-- mj-lock: owner-only user=${ownerId} -->`,
+                '## Locked Working State Section',
+                'Uncompacted confidential terms.'
+            ].join('\n');
+            const wsBytesB64 = Buffer.from('mock-yjs-update', 'utf8').toString('base64');
+
+            const provider = {
+                ProviderType: 'Database',
+                Entities: [],
+                RunView: vi.fn(async (params: RunViewParams, runUser?: UserInfo) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: artId, TypeID: 't-md', UserID: ownerId }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: ''
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'v-prev', VersionNumber: 1, Content: 'Old unlocked baseline', Configuration: null }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: ''
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Working States') {
+                        expect(runUser?.ID).toBe(sysUserId);
+                        expect(params.Fields).toEqual(['ID', 'ArtifactID', 'YjsState']);
+                        expect(params.IncludeBinaryFields).toBe(true);
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'ws-r51', ArtifactID: artId, YjsState: wsBytesB64 }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: ''
+                        };
+                    }
+                    return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+                })
+            } as unknown as IMetadataProvider;
+
+            const makeSave = () => {
+                const ent = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+                const hist: MJArtifactVersionEntityServer['ResultHistory'] = [];
+                Object.defineProperty(ent, 'ResultHistory', { value: hist, writable: true });
+                Object.defineProperty(ent, 'IsSaved', { value: false, writable: true });
+                Object.defineProperty(ent, 'ArtifactID', { value: artId, writable: true });
+                Object.defineProperty(ent, 'Content', { value: 'Old unlocked baseline overwritten', writable: true });
+                Object.defineProperty(ent, 'Configuration', { value: null, writable: true });
+                Object.defineProperty(ent, 'ContextCurrentUser', { value: editor, writable: true });
+                Object.defineProperty(ent, 'ProviderToUse', { value: provider, configurable: true });
+                Object.defineProperty(ent, 'GetFieldByName', {
+                    value: () => ({ Dirty: true, OldValue: null }),
+                    configurable: true
+                });
+                return { ent, hist };
+            };
+
+            // 1. Fails closed if YjsState exists and no deserializer is registered
+            RegisterWorkingStateContentDeserializer(null);
+            const noDeser = makeSave();
+            expect(await noDeser.ent.Save()).toBe(false);
+            expect(noDeser.hist[0]?.Message).toMatch(/unable to decode/i);
+
+            // 2. With registered deserializer returning locked text, blocks non-owner overwrite
+            RegisterWorkingStateContentDeserializer(() => lockedWsText);
+            const lockedAttempt = makeSave();
+            expect(await lockedAttempt.ent.Save()).toBe(false);
+            expect(lockedAttempt.hist[0]?.Message).toMatch(/lock/i);
+        } finally {
+            RegisterWorkingStateContentDeserializer(null);
+            superSaveSpy.mockRestore();
         }
     });
 });

@@ -28,6 +28,7 @@ import {
     MJArtifactVersionAttributeEntity,
     MJMagicLinkInviteEntity,
     UserViewEngine,
+    ViewInfo,
     type MJUserViewEntity
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -616,33 +617,41 @@ export async function QualifyOuterEntityColumnAsync(
         if (
             !viewEntity &&
             typeof params.AlternateBaseView !== 'string' &&
-            (params.ViewID || params.ViewName) &&
-            provider &&
-            typeof (provider as { RunView?: unknown }).RunView === 'function'
+            (params.ViewID || params.ViewName)
         ) {
             try {
-                const systemActor = (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? contextUser;
-                const viewFilter = params.ViewID
-                    ? `ID='${EscapeSQLString(params.ViewID)}'`
-                    : `Name='${EscapeSQLString(params.ViewName!)}'`;
-                const viewLookupParams: RunViewParams = {
-                    EntityName: 'MJ: User Views',
-                    ExtraFilter: viewFilter,
-                    MaxRows: 1,
-                    SkipTotalRowCount: true,
-                    ResultType: 'entity_object'
-                };
-                GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_HELPER_PARAMS).add(viewLookupParams);
-                ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(viewLookupParams);
-                const viewRes = await RunView.FromMetadataProvider(provider).RunView<MJUserViewEntity>(
-                    viewLookupParams,
-                    systemActor
-                );
-                if (viewRes.Success && viewRes.Results?.length) {
-                    viewEntity = viewRes.Results[0];
-                }
+                viewEntity = params.ViewID
+                    ? await ViewInfo.GetViewEntity(params.ViewID, contextUser)
+                    : await ViewInfo.GetViewEntityByName(params.ViewName!, contextUser);
             } catch {
-                // Fall back cleanly to base entity schema/view
+                // Fall back to provider RunView as contextUser when UserViewEngine is unloaded (e.g. unit test mocks)
+                if (provider && typeof (provider as { RunView?: unknown }).RunView === 'function') {
+                    try {
+                        const lookupActor =
+                            contextUser ?? (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? undefined;
+                        const viewFilter = params.ViewID
+                            ? `ID='${EscapeSQLString(params.ViewID)}'`
+                            : `Name='${EscapeSQLString(params.ViewName!)}'`;
+                        const viewLookupParams: RunViewParams = {
+                            EntityName: 'MJ: User Views',
+                            ExtraFilter: viewFilter,
+                            MaxRows: 1,
+                            SkipTotalRowCount: true,
+                            ResultType: 'entity_object'
+                        };
+                        GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_HELPER_PARAMS).add(viewLookupParams);
+                        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(viewLookupParams);
+                        const viewRes = await RunView.FromMetadataProvider(provider).RunView<MJUserViewEntity>(
+                            viewLookupParams,
+                            lookupActor
+                        );
+                        if (viewRes.Success && viewRes.Results?.length) {
+                            viewEntity = viewRes.Results[0];
+                        }
+                    } catch {
+                        // Fall back cleanly to base entity schema/view
+                    }
+                }
             }
         }
         const effectiveAbvName = GetEffectiveAlternateBaseViewName(params, viewEntity);
@@ -667,7 +676,8 @@ export async function QualifyOuterEntityColumnAsync(
         ) {
             if (provider && typeof (provider as { RunView?: unknown }).RunView === 'function' && entityInfo.ID && IsValidUUID(entityInfo.ID)) {
                 try {
-                    const systemActor = (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? contextUser;
+                    const lookupActor =
+                        contextUser ?? (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? undefined;
                     const matParams: RunViewParams = {
                         EntityName: 'MJ: Materialized Results',
                         ExtraFilter: `SourceType='EntityBaseView' AND SourceEntityID='${EscapeSQLString(entityInfo.ID)}'`,
@@ -681,7 +691,7 @@ export async function QualifyOuterEntityColumnAsync(
                     const matRes = await RunView.FromMetadataProvider(provider).RunView<{
                         Status?: string;
                         ViewName?: string | null;
-                    }>(matParams, systemActor);
+                    }>(matParams, lookupActor);
                     const row = matRes.Success && matRes.Results?.length ? matRes.Results[0] : null;
                     if (row?.Status === 'Active') {
                         effectiveBaseView = row.ViewName?.trim() || `materialized_vw${entityInfo.CodeName}`;
@@ -946,9 +956,10 @@ export async function BuildSqlCollectionReadablePredicateAsync(
             options?.requireShareOrDelete === true,
             options?.precomputedCollectionCache
         );
-        if (resolvedCols && resolvedCols.size <= MAX_SQL_SCOPED_IN_IDS) {
-            precomputedCollectionIds = resolvedCols;
+        if (!resolvedCols || resolvedCols.size > MAX_SQL_SCOPED_IN_IDS) {
+            return { clause: '1 = 0', isExact: false };
         }
+        precomputedCollectionIds = resolvedCols;
     }
     return {
         clause: BuildSqlCollectionReadablePredicate(collectionIdExpr, provider, user, {
@@ -1008,24 +1019,29 @@ export async function BuildSqlArtifactReadablePredicateAsync(
             requireShareOrDelete,
             options?.precomputedCollectionCache
         );
-        if (resolvedCols) {
-            if (resolvedCols.size <= MAX_SQL_MULTI_HOP_COLLECTION_IN_IDS) {
-                precomputedCollectionIds = resolvedCols;
-            } else {
-                // Avoid emitting 9x >500 literal lists (~45k literals, SQL Server 8623) or 260+ tables (`B5`, `N6`)
-                const { isExact } = resolveRegisteredDelegateSqlScope(provider);
-                const readableArtifacts = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
-                    provider,
-                    user,
-                    requireShareOrDelete ? (p) => p.CanShare || p.CanDelete : undefined
-                );
-                if (readableArtifacts.size <= MAX_SQL_SCOPED_IN_IDS) {
-                    return {
-                        clause: BuildUuidInScopeClause(artifactIdExpr, readableArtifacts) ?? '1 = 0',
-                        isExact
-                    };
-                }
+        // R5-4: Never fall back to the unbounded 16-level walk inside 9 delegate hops (>= 260 tables -> SQL 4414).
+        if (!resolvedCols) {
+            return { clause: '1 = 0', isExact: false };
+        }
+        if (resolvedCols.size <= MAX_SQL_MULTI_HOP_COLLECTION_IN_IDS) {
+            precomputedCollectionIds = resolvedCols;
+        } else {
+            // Avoid emitting 9x >500 literal lists (~45k literals, SQL Server 8623) or 260+ tables (`B5`, `N6`, `R5-4`)
+            const { isExact } = resolveRegisteredDelegateSqlScope(provider);
+            const readableArtifacts = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
+                provider,
+                user,
+                requireShareOrDelete ? (p) => p.CanShare || p.CanDelete : undefined
+            );
+            if (readableArtifacts.size <= MAX_SQL_SCOPED_IN_IDS) {
+                return {
+                    clause: BuildUuidInScopeClause(artifactIdExpr, readableArtifacts) ?? '1 = 0',
+                    isExact
+                };
             }
+            // Both collections (> 500) and artifacts (> 5000) exceeded bounded SQL IN caps: fail closed cleanly
+            // with 0 tables + isExact=false rather than blowing SQL Server's 260-table limit (`R5-4`).
+            return { clause: '1 = 0', isExact: false };
         }
     }
     return buildSqlArtifactReadablePredicateWithExactness(artifactIdExpr, provider, user, {
@@ -1239,7 +1255,7 @@ export async function PrepareScopedPreRunView(
             if (priorOrigFields) {
                 config.OriginalFieldsMap.set(updatedParams, priorOrigFields);
             }
-            if (allClausesBuilt || clauses.includes('1 = 0')) {
+            if (allClausesBuilt) {
                 config.SqlScopedParams.add(updatedParams);
             }
         } else if (allClausesBuilt) {
@@ -1730,4 +1746,32 @@ export function StripSyntheticFieldsFromRow<T extends object>(
         }
     }
     return copy;
+}
+
+const GLOBAL_KEY_WORKING_STATE_DESERIALIZER = '__MJ_ARTIFACT_WORKING_STATE_DESERIALIZER__';
+
+export type WorkingStateContentDeserializer = (rawYjsState: string | Uint8Array | null | undefined) => string;
+
+/**
+ * Registers the server-side Yjs working-state binary-to-serialized-content deserializer (`R5-1`),
+ * called by `ArtifactCollaborationServer` so `MJArtifactVersionEntityServer` and lock validators
+ * can verify locks on `MJ: Artifact Working States.YjsState` without a circular package dependency.
+ */
+export function RegisterWorkingStateContentDeserializer(fn: WorkingStateContentDeserializer | null): void {
+    const store = GetGlobalObjectStore();
+    if (!store) {
+        return;
+    }
+    if (fn) {
+        store[GLOBAL_KEY_WORKING_STATE_DESERIALIZER] = fn;
+    } else {
+        delete store[GLOBAL_KEY_WORKING_STATE_DESERIALIZER];
+    }
+}
+
+/** Returns the registered {@link WorkingStateContentDeserializer}, if any (`R5-1`). */
+export function GetWorkingStateContentDeserializer(): WorkingStateContentDeserializer | null {
+    const store = GetGlobalObjectStore();
+    const fn = store?.[GLOBAL_KEY_WORKING_STATE_DESERIALIZER];
+    return typeof fn === 'function' ? (fn as WorkingStateContentDeserializer) : null;
 }

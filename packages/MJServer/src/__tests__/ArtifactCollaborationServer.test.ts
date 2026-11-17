@@ -5948,6 +5948,10 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
     });
 
     it('R9: verified Round 9 restore mutation & idempotency (R9-2), mutation dryRun (R9-5), and monotonic counter AST merge (R9-8)', async () => {
+        const sysSpy = vi
+            .spyOn(UserCache.Instance, 'GetSystemUser')
+            .mockReturnValue(createTestUser('system-user-r9', 'System', 'sys@example.com'));
+        try {
         const server = ArtifactCollaborationServer.Instance;
         const resolver = new DocumentCollaborationResolver();
         const artR9 = 'e8090000-0000-4000-8000-000000000001';
@@ -6100,6 +6104,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(mergedObj.idCounter).toBe(15);
         expect(mergedObj.pages.some((it) => it.id === 'item-15')).toBe(true);
         expect(mergedObj.pages.some((it) => it.id === 'item-12')).toBe(true);
+        } finally {
+            sysSpy.mockRestore();
+        }
     });
 
     it('R9: multi-node concurrent restore, cold working-state restore, and deferCommit + MJ_ARTIFACT_VERSION_SAVED idempotency', async () => {

@@ -2,6 +2,8 @@
 -- the full content.
 -- Mirrors get-conversation-artifacts-map.sql. Differences:
 --   * `[__mj].[X]` → `__mj."X"`; column names double-quoted, since PG folds unquoted names to lower case.
+-- Security note: Anchored conversations require non-SQL-scoped Artifacts/Collections anchors (`vwEntities`)
+-- rather than evaluating TypeScript FieldSecuritySQLGate restrictedFields per anchor entity.
 WITH RECURSIVE "ReadableCollections" AS (
     SELECT c."ID", 0 AS "Depth"
     FROM __mj."vwCollections" c

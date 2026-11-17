@@ -45,7 +45,10 @@ import {
     type WorkbookSpec,
     type WorksheetSpec
 } from '@memberjunction/core-entities';
-import { MarkTrustedCompactionVersionSave } from '@memberjunction/core-entities-server';
+import {
+    MarkTrustedCompactionVersionSave,
+    RegisterWorkingStateContentDeserializer,
+} from '@memberjunction/core-entities-server';
 import { ApiRoute } from '../apiRoot.js';
 import { configInfo } from '../config.js';
 import { getUserPayload } from '../context.js';
@@ -382,6 +385,8 @@ export interface CollaborationRoom {
     BaseVersionText: string;
     /** Raw `Configuration` JSON string of the latest `MJ: Artifact Versions` row reconciled into this room. */
     BaseConfiguration?: string | null;
+    /** Preserves live `BaseConfiguration` across compaction when a lock-conflicted OOB/restore version carried a stripped config (`S5-1`). */
+    PreserveLiveConfiguration?: boolean;
     /** Trusted DB `__mj_UpdatedAt` epoch millis of the last working-state row hydrated or saved by this room. */
     LastPersistedWorkingStateMs?: number;
     /** In-memory ID of the most recent authoritative restore applied on this node (`R9-2`). */
@@ -699,6 +704,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     protected constructor() {
         super();
+        RegisterWorkingStateContentDeserializer((raw) => this.DeserializeWorkingStateBytesToContent(raw));
         this.ensurePermissionListenerRegistered();
         this.ensureGlobalMutationListenerRegistered();
     }
@@ -2044,7 +2050,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const rawBaseConfig =
                 room.Doc.getMap('worksheetsById').size > 0
                     ? currentContent
-                    : (latest?.Configuration ?? room.BaseConfiguration ?? null);
+                    : room.PreserveLiveConfiguration && room.BaseConfiguration != null
+                      ? room.BaseConfiguration
+                      : (latest?.Configuration ?? room.BaseConfiguration ?? null);
             const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
                 rawBaseConfig,
                 currentContent,
@@ -2099,6 +2107,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 room.BaseVersionNumber = versionEntity.VersionNumber;
                 room.BaseVersionText = currentContent;
                 room.BaseConfiguration = versionEntity.Configuration ?? null;
+                room.PreserveLiveConfiguration = false;
                 this.recordServerWatermark(room);
                 const versionVectorMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${versionEntity.VersionNumber}`;
                 const preMetaSnapshotB64 = BytesToBase64(Y.encodeSnapshot(Y.snapshot(room.Doc)));
@@ -4695,10 +4704,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     }
                 );
                 if (!restoreLockCheck.Allowed) {
-                    room.BaseVersionID = version.ID;
-                    room.BaseVersionNumber = version.VersionNumber;
-                    room.BaseVersionText = targetText;
-                    room.BaseConfiguration = version.Configuration ?? null;
+                    // S5-1: Keep prior BaseConfiguration & BaseVersion baseline intact when a peer
+                    // restore is rejected for locks so compaction persists live Content + protected config.
+                    room.LastAppliedRestoreVersionID = version.ID;
+                    room.LastAppliedRestoreVersionNumber = version.VersionNumber;
+                    room.PreserveLiveConfiguration = true;
                     room.DirtyVersion = true;
                     room.LastCompactedStateVector = null;
                     room.DirtyWorkingState = true;
@@ -4989,7 +4999,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         room.BaseVersionID = version.ID;
         room.BaseVersionNumber = version.VersionNumber;
         room.BaseVersionText = targetText;
-        room.BaseConfiguration = version.Configuration ?? null;
+        if (oobLockConflict) {
+            // Preserve live BaseConfiguration across lock-conflicted OOB reconciliations (`S5-1`)
+            room.PreserveLiveConfiguration = true;
+        } else {
+            room.BaseConfiguration = version.Configuration ?? null;
+            room.PreserveLiveConfiguration = false;
+        }
         room.HasActiveLocks = this.computeContentHasActiveLocks(this.extractRoomSerializedContent(room.Doc));
         room.DirtyWorkingState = true;
         this.recordServerWatermark(room);
@@ -10067,4 +10083,28 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         return doc.getText('content').toString();
     }
+
+    /**
+     * Decodes a persisted `MJ: Artifact Working States.YjsState` binary blob (raw `Uint8Array` or
+     * base64 string) into serialized document/deck/workbook text (`R5-1`).
+     */
+    public DeserializeWorkingStateBytesToContent(raw: unknown): string {
+        const bytes = DecodeWorkingStateBytes(raw);
+        if (bytes.byteLength === 0) {
+            return '';
+        }
+        const tempDoc = new Y.Doc();
+        try {
+            Y.applyUpdate(tempDoc, bytes);
+            return this.extractRoomSerializedContent(tempDoc);
+        } finally {
+            tempDoc.destroy();
+        }
+    }
 }
+
+// Register immediately at module load so MJArtifactVersionEntityServer can decode working-state
+// binary blobs even before ArtifactCollaborationServer.Instance is accessed (`R5-1`).
+RegisterWorkingStateContentDeserializer((raw) =>
+    ArtifactCollaborationServer.Instance.DeserializeWorkingStateBytesToContent(raw)
+);

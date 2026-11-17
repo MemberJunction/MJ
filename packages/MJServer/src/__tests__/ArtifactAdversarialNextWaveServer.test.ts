@@ -2331,7 +2331,9 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             },
         } as unknown as IMetadataProvider;
 
+        const r3SystemUser = { ID: 'sys-r3-r5', Email: 'system@mj.local' } as UserInfo;
         const restoreResolver = new DocumentCollaborationResolver();
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(r3SystemUser);
         vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
         vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
             ArtifactID: restoreArtId,
@@ -2368,7 +2370,15 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         const unlockedContent = '# Spec\n\nUnlocked baseline.\n';
         const lockedOnlyInWsOrRoom = `# Spec\n\n<!-- mj-lock: owner-only user=${ownerUser.ID} -->\n## Locked Live\nOwner secret\n`;
 
-        let workingStateRow: { Content: string } | null = { Content: lockedOnlyInWsOrRoom };
+        const sysUser = { ID: 'sys-b2-user', Email: 'system@mj.local' } as UserInfo;
+        const wsDoc = new Y.Doc();
+        wsDoc.getText('content').insert(0, lockedOnlyInWsOrRoom);
+        let workingStateRow: { ID: string; ArtifactID: string; YjsState: string } | null = {
+            ID: 'ws-b2',
+            ArtifactID: artId,
+            YjsState: BytesToBase64(Y.encodeStateAsUpdate(wsDoc)),
+        };
+        wsDoc.destroy();
         let versionQuerySuccess = true;
         let savedCount = 0;
 
@@ -2407,7 +2417,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                 }
                 return {} as MJArtifactVersionEntity;
             },
-            RunView: async (params: RunViewParams) => {
+            RunView: async (params: RunViewParams, runUser?: UserInfo) => {
                 if (params.EntityName === 'MJ: Artifacts') {
                     return {
                         Success: true,
@@ -2432,6 +2442,18 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                     };
                 }
                 if (params.EntityName === 'MJ: Artifact Working States') {
+                    expect(params.Fields).toEqual(['ID', 'ArtifactID', 'YjsState']);
+                    expect(params.IncludeBinaryFields).toBe(true);
+                    if (runUser?.ID !== sysUser.ID) {
+                        return {
+                            Success: false,
+                            Results: [],
+                            RowCount: 0,
+                            TotalRowCount: 0,
+                            ExecutionTime: 1,
+                            ErrorMessage: 'CanRead: false for UI role',
+                        };
+                    }
                     return {
                         Success: true,
                         Results: workingStateRow ? [workingStateRow] : [],
@@ -2446,6 +2468,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         } as unknown as IMetadataProvider;
 
         const resolver = new DocumentCollaborationResolver();
+        const sysUserSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
         vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
         vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
             ArtifactID: artId,
@@ -2462,10 +2485,17 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             providers: [{ type: 'Read-Write', provider: b2Provider }],
         };
 
-        // 1. Lock present only in persisted working state blocks non-owner restore
+        // 1. Lock present only in persisted Yjs working state blocks non-owner restore
         const wsBlocked = await resolver.RestoreArtifactVersion(artId, v1Id, editorCtx);
         expect(wsBlocked.Success).toBe(false);
         expect(wsBlocked.ErrorMessage).toMatch(/lock/i);
+        expect(savedCount).toBe(0);
+
+        // 1b. Missing system user fails closed before reading working states
+        sysUserSpy.mockReturnValueOnce(null as unknown as UserInfo);
+        const noSysBlocked = await resolver.RestoreArtifactVersion(artId, v1Id, editorCtx);
+        expect(noSysBlocked.Success).toBe(false);
+        expect(noSysBlocked.ErrorMessage).toMatch(/system user|unable to verify/i);
         expect(savedCount).toBe(0);
 
         // 2. Lock present only in active in-memory room blocks non-owner restore even when working state is clear
@@ -2610,13 +2640,15 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                 { timeout: 4_000, interval: 25 },
             );
 
-            // Now add owner lock directly in peerRoom, then receive non-owner restore -> peerRoom retains lock!
+            // Now add owner lock + live BaseConfiguration directly in peerRoom, then receive non-owner restore -> peerRoom retains lock AND BaseConfiguration (S5-1)!
             peerRoom.Doc.transact(() => {
                 const yt = peerRoom.Doc.getText('content');
                 yt.delete(0, yt.length);
                 yt.insert(0, lockedOnlyInWsOrRoom);
             });
             peerRoom.HasActiveLocks = true;
+            const liveCfg = JSON.stringify({ theme: 'locked-cfg' });
+            peerRoom.BaseConfiguration = liveCfg;
             const v3Id = '46464646-4646-4464-8464-464646464643';
             currentDbLatest = {
                 ID: v3Id,
@@ -2636,6 +2668,8 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             });
             await new Promise((r) => setTimeout(r, 1_750));
             expect(peerRoom.Doc.getText('content').toString()).toBe(lockedOnlyInWsOrRoom);
+            expect(peerRoom.BaseConfiguration).toBe(liveCfg);
+            expect(peerRoom.PreserveLiveConfiguration).toBe(true);
         } finally {
             await nodeA.Shutdown();
             await nodeB.Shutdown();

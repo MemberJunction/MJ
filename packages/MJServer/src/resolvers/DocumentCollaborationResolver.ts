@@ -1667,11 +1667,16 @@ export class DocumentCollaborationResolver extends ResolverBase {
         const nextRestoredContent = sourceVersion.Content ?? '';
         const nextRestoredConfig = enrichedRestoredConfig ?? sourceVersion.Configuration ?? null;
 
-        // B2 / R5: Verify restored content & configuration against latest persisted version, persisted
-        // working state, and any active collaboration room before saving (and on every conflict retry).
+        // B2 / R5 / R5-1: Verify restored content & configuration against latest persisted version,
+        // persisted working state (YjsState decoded as SystemUser since UI roles have CanRead: false),
+        // and any active collaboration room before saving (and on every conflict retry).
         const verifyRestoreLocks = async (): Promise<string | null> => {
             if (isArtifactOwner) {
                 return null;
+            }
+            const systemActor = UserCache.Instance.GetSystemUser();
+            if (!systemActor) {
+                return 'Permission denied: unable to verify active artifact working-state locks before restore.';
             }
             const [latestForLockRes, wsForLockRes] = await Promise.all([
                 rv.RunView<{
@@ -1690,16 +1695,17 @@ export class DocumentCollaborationResolver extends ResolverBase {
                     },
                     user
                 ),
-                rv.RunView<{ Content?: string | null }>(
+                rv.RunView<{ ID?: string; YjsState?: string | Uint8Array | null }>(
                     {
                         EntityName: 'MJ: Artifact Working States',
                         ExtraFilter: `ArtifactID='${EscapeSQLString(normalizedArtifactId)}'`,
-                        Fields: ['Content'],
+                        Fields: ['ID', 'ArtifactID', 'YjsState'],
+                        IncludeBinaryFields: true,
                         MaxRows: 1,
                         SkipTotalRowCount: true,
                         ResultType: 'simple'
                     },
-                    user
+                    systemActor
                 )
             ]);
             if (!latestForLockRes.Success) {
@@ -1735,11 +1741,14 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 });
             }
             const wsRow = wsForLockRes.Results?.[0];
-            if (typeof wsRow?.Content === 'string' && wsRow.Content.length > 0) {
-                baselines.push({
-                    content: wsRow.Content,
-                    configuration: latestForLock?.Configuration ?? null
-                });
+            if (wsRow?.YjsState) {
+                const wsContent = ArtifactCollaborationServer.Instance.DeserializeWorkingStateBytesToContent(wsRow.YjsState);
+                if (wsContent.length > 0) {
+                    baselines.push({
+                        content: wsContent,
+                        configuration: latestForLock?.Configuration ?? null
+                    });
+                }
             }
 
             for (const baseline of baselines) {

@@ -28,8 +28,9 @@ import { GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass, UUIDSe
  * Security & abuse controls (`S2`, `S-d`, `N5`):
  * - Requires authenticated non-magic-link user with `artifact:edit` API-key scope and `CanEdit` ACL on `ArtifactID`.
  * - Enforces prompt-model allowlisting against `AIEngine` `PromptModels` for `Spreadsheet MJ.AI Formula Evaluator`.
- * - Bounds payload sizes (`MAX_AI_FORMULA_BATCH_CELLS` = 25, prompt <= 16 KiB, context <= 64 KiB, batch <= 256 KiB)
- *   and enforces a process-scoped per-user sliding-window rate quota (30 req/min, 200 cells/min per instance).
+ * - Bounds payload sizes (`MAX_AI_FORMULA_BATCH_CELLS` = 50, prompt <= 16 KiB, context <= 64 KiB, batch <= 256 KiB)
+ *   and enforces a process-scoped per-user fixed-window (`ResetAt`) rate quota (30 req/min, 200 cells/min per instance;
+ *   up to ~400 cells across a window reset boundary; map capped at 5,000 keys with oldest-entry eviction resetting that key).
  */
 export type AiFormulaCompletionFn = (
     prompt: string,
@@ -120,9 +121,9 @@ function computeServerAiFormulaInputHash(
  * Server-side Remote Operation implementing `Artifact.EvaluateAiFormula` (`§5.2b`).
  *
  * Enforces `MAX_AI_FORMULA_BATCH_CELLS` (`50`), `CanEdit` permission on a valid `ArtifactID` UUID,
- * per-user process-scoped rate-limit quota (`30` requests / `200` cells per `60s` sliding window per
- * server process), prompt/context byte budgets, non-empty prompt validation, server-computed SHA-256
- * deduplication, bounded concurrency (`6`), and governed execution via `AIPromptRunner.ExecutePrompt`.
+ * per-user process-scoped fixed-window (`ResetAt`) rate-limit quota (`30` requests / `200` cells per `60s`
+ * window per instance; map capped at `5,000` keys), prompt/context byte budgets, non-empty prompt validation,
+ * server-computed SHA-256 deduplication, bounded concurrency (`6`), and governed execution via `AIPromptRunner.ExecutePrompt`.
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_EVALUATE_AI_FORMULA_KEY)
 export class ArtifactEvaluateAiFormulaServerOperation extends ArtifactEvaluateAiFormulaOperation {

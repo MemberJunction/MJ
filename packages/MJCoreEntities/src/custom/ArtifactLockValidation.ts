@@ -615,20 +615,29 @@ export function ValidateArtifactContentMutationAgainstLocks(
             };
 
             if (hasCurrentSlides) {
-                // R4: SlideDeckArtifactViewerComponent renders `Content` directly (falling back to Configuration only if Content is empty).
-                const prevRenderedSlide = currentContent.trim()
-                    ? currentContent
-                    : currentConfigKind === 'slides'
-                      ? currentConfig!
-                      : '';
-                const nextRenderedSlide = nextContent.trim()
+                // R4 / Lower: Use the Content slot only when it parses as slides (so an owner with Markdown
+                // Content + slides Configuration never fails parsing); still block non-owners replacing
+                // locked slides with non-slide Markdown Content (`R4`).
+                const prevRenderedSlide =
+                    currentContentKind === 'slides'
+                        ? currentContent
+                        : currentConfigKind === 'slides'
+                          ? currentConfig!
+                          : '';
+                const nonOwnerNonSlideContentOverride =
+                    !isOwner && nextContent.trim().length > 0 && nextContentKind !== 'slides';
+                const nextRenderedSlide = nonOwnerNonSlideContentOverride
                     ? nextContent
-                    : nextConfigKind === 'slides'
-                      ? nextConfig!
-                      : '';
-                const renderedCheck = checkSlidePair(prevRenderedSlide, nextRenderedSlide);
-                if (renderedCheck) {
-                    return renderedCheck;
+                    : nextContentKind === 'slides'
+                      ? nextContent
+                      : nextConfigKind === 'slides'
+                        ? nextConfig!
+                        : '';
+                if (prevRenderedSlide || nextRenderedSlide) {
+                    const renderedCheck = checkSlidePair(prevRenderedSlide, nextRenderedSlide);
+                    if (renderedCheck) {
+                        return renderedCheck;
+                    }
                 }
             } else {
                 // Prior state was not slides (e.g. locked Markdown); validate any newly introduced slide locks

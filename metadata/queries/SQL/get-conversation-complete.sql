@@ -2,6 +2,8 @@
 -- Returns ALL data needed to display a conversation: messages, agent runs, and artifacts
 -- Uses JSON aggregation to include related data without row multiplication
 -- This replaces 4 separate queries with 1 query for ~70% performance improvement
+-- Security note: Anchored conversations require non-SQL-scoped Artifacts/Collections anchors (`vwEntities`)
+-- rather than evaluating TypeScript FieldSecuritySQLGate restrictedFields per anchor entity.
 WITH ReadableCollections AS (
     SELECT c.ID, 0 AS Depth
     FROM [__mj].[vwCollections] c
