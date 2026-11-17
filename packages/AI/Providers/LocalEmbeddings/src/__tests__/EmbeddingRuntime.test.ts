@@ -35,12 +35,13 @@ vi.mock('@memberjunction/ai', () => ({
   ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ message: 'analyzed' }) },
 }));
 
-import { ClearEmbeddingPipelines, EmbedTextsWithModel } from '../models/embeddingRuntime';
+import { ClearEmbeddingPipelines, EmbedTextsWithModel, LOCAL_EMBEDDINGS_CPU_ARENA_ENV } from '../models/embeddingRuntime';
 
 const MODEL = 'Xenova/all-MiniLM-L6-v2';
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'log').mockImplementation(() => {});
   await ClearEmbeddingPipelines();
@@ -54,8 +55,13 @@ beforeEach(async () => {
   fake.lengthOf = () => fake.tokensPerText;
   Object.assign(fake.tokenizer, { encode: (text: string) => new Array(fake.lengthOf(text)).fill(0) });
   fake.tokenizerFromPretrained.mockImplementation(async () => fake.tokenizer);
-  fake.modelFromPretrained.mockImplementation(async () => async (inputs: FakeBatch) => ({ last_hidden_state: inputs }));
+  fake.modelFromPretrained.mockImplementation(async () => fakeModel());
 });
+
+/** A callable fake ONNX model whose `dispose` is observable. */
+function fakeModel(dispose: () => Promise<void> = async () => undefined) {
+  return Object.assign(async (inputs: FakeBatch) => ({ last_hidden_state: inputs }), { dispose: vi.fn(dispose) });
+}
 
 describe('EmbedTextsWithModel', () => {
   it('loads the q8 ONNX model on the CPU, with one thread per CPU the process may use', async () => {
@@ -129,6 +135,83 @@ describe('EmbedTextsWithModel', () => {
     await expect(EmbedTextsWithModel(MODEL, ['a'])).rejects.toThrow('Failed to load local embedding model');
     const { Vectors } = await EmbedTextsWithModel(MODEL, ['a']);
     expect(Vectors).toHaveLength(1);
+    expect(fake.modelFromPretrained).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps each text's length in the batch budget at maxInputTokens", async () => {
+    fake.lengthOf = () => 9000;
+    await EmbedTextsWithModel(MODEL, ['a', 'b'], 4096);
+    // Truncated to 4096 each, 2 x 4096 = 8192 fits the budget: one call.
+    expect(fake.tokenizer.mock.calls.map((c) => c[0])).toEqual([['a', 'b']]);
+  });
+});
+
+describe('CPU memory arena', () => {
+  const sessionOptionsOf = () => fake.modelFromPretrained.mock.calls[0][1].session_options;
+
+  it('is turned off, with the memory pattern, by default', async () => {
+    await EmbedTextsWithModel(MODEL, ['a']);
+    expect(sessionOptionsOf()).toEqual(expect.objectContaining({
+      enableCpuMemArena: false,
+      enableMemPattern: false,
+      intraOpNumThreads: availableParallelism(),
+    }));
+  });
+
+  it.each(['true', '1', 'YES'])('is kept when %s is set in %s', async (value) => {
+    vi.stubEnv(LOCAL_EMBEDDINGS_CPU_ARENA_ENV, value);
+    await EmbedTextsWithModel(MODEL, ['a']);
+    expect(sessionOptionsOf()).not.toHaveProperty('enableCpuMemArena');
+    expect(sessionOptionsOf()).not.toHaveProperty('enableMemPattern');
+  });
+
+  it.each(['false', ''])('stays off when the variable is %j', async (value) => {
+    vi.stubEnv(LOCAL_EMBEDDINGS_CPU_ARENA_ENV, value);
+    await EmbedTextsWithModel(MODEL, ['a']);
+    expect(sessionOptionsOf()).toEqual(expect.objectContaining({ enableCpuMemArena: false, enableMemPattern: false }));
+  });
+});
+
+describe('ClearEmbeddingPipelines', () => {
+  it("releases every loaded model's ONNX sessions", async () => {
+    const models = [fakeModel(), fakeModel()];
+    fake.modelFromPretrained.mockImplementationOnce(async () => models[0]).mockImplementationOnce(async () => models[1]);
+    await EmbedTextsWithModel('model-a', ['x']);
+    await EmbedTextsWithModel('model-b', ['x']);
+
+    await ClearEmbeddingPipelines();
+
+    expect(models[0].dispose).toHaveBeenCalledOnce();
+    expect(models[1].dispose).toHaveBeenCalledOnce();
+    await EmbedTextsWithModel('model-a', ['x']);
+    expect(fake.modelFromPretrained).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not keep a model whose load finished after the clear', async () => {
+    let finishLoad: (model: ReturnType<typeof fakeModel>) => void = () => undefined;
+    const late = fakeModel();
+    fake.modelFromPretrained.mockImplementationOnce(() => new Promise((resolve) => { finishLoad = resolve; }));
+    const embedding = EmbedTextsWithModel(MODEL, ['x']);
+    await vi.waitFor(() => expect(fake.modelFromPretrained).toHaveBeenCalled());
+
+    const cleared = ClearEmbeddingPipelines();
+    finishLoad(late);
+    await cleared;
+    await embedding;
+
+    expect(late.dispose).toHaveBeenCalledOnce();
+    await EmbedTextsWithModel(MODEL, ['x']);
+    expect(fake.modelFromPretrained).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects with the model ID when a release fails, and still empties the cache', async () => {
+    const stuck = fakeModel(async () => { throw new Error('session busy'); });
+    fake.modelFromPretrained.mockImplementationOnce(async () => stuck);
+    await EmbedTextsWithModel('model-stuck', ['x']);
+
+    await expect(ClearEmbeddingPipelines()).rejects.toThrow(/model-stuck.*session busy/);
+
+    await EmbedTextsWithModel('model-stuck', ['x']);
     expect(fake.modelFromPretrained).toHaveBeenCalledTimes(2);
   });
 });

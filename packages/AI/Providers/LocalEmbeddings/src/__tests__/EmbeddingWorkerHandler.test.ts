@@ -14,7 +14,7 @@ function fakeOperations(overrides: Partial<EmbeddingRuntimeOperations> = {}): Em
       Tokens: texts.join('').length,
     })),
     Preload: vi.fn(async () => undefined),
-    Clear: vi.fn(),
+    Clear: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -65,5 +65,29 @@ describe('HandleEmbeddingRequest', () => {
     const { Result } = await HandleEmbeddingRequest({ Kind: 'clear' }, ops);
     expect(ops.Clear).toHaveBeenCalledOnce();
     expect(Result).toEqual({ Vectors: [], Tokens: 0 });
+  });
+
+  it("awaits the runtime's release before answering clear", async () => {
+    let release: () => void = () => undefined;
+    const ops = fakeOperations({ Clear: vi.fn(() => new Promise<void>((resolve) => { release = resolve; })) });
+    let answered = false;
+    const answer = HandleEmbeddingRequest({ Kind: 'clear' }, ops).then(() => { answered = true; });
+    await Promise.resolve();
+    expect(answered).toBe(false);
+    release();
+    await answer;
+    expect(answered).toBe(true);
+  });
+
+  it('fails the clear call when the release fails', async () => {
+    const ops = fakeOperations({ Clear: vi.fn(async () => { throw new Error('Releasing models failed: m'); }) });
+    await expect(HandleEmbeddingRequest({ Kind: 'clear' }, ops)).rejects.toThrow('Releasing models failed: m');
+  });
+
+  it('hands out a fresh result for each preload and clear, so none is shared', async () => {
+    const first = await HandleEmbeddingRequest({ Kind: 'clear' }, fakeOperations());
+    const second = await HandleEmbeddingRequest({ Kind: 'clear' }, fakeOperations());
+    expect(first.Result).not.toBe(second.Result);
+    expect(first.Result.Vectors).not.toBe(second.Result.Vectors);
   });
 });

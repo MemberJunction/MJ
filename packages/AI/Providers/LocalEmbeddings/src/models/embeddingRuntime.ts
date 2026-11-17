@@ -2,6 +2,7 @@ import { availableParallelism } from 'node:os';
 import { ErrorAnalyzer } from '@memberjunction/ai';
 import type { PreTrainedModel, PreTrainedTokenizer, PretrainedConfig, Tensor } from '@huggingface/transformers';
 import type { EmbeddingSettings } from '../worker/EmbeddingWorkerProtocol.js';
+import { IsTruthyEnvValue } from '../worker/WorkerThreadHost.js';
 
 /**
  * The model side of local embeddings: loading @huggingface/transformers, caching one tokenizer +
@@ -84,6 +85,12 @@ const pendingSettings: EmbeddingSettings = {};
 const models = new Map<string, Promise<LoadedModel>>();
 
 /**
+ * Set to `true`, `1` or `yes` to keep ONNX Runtime's CPU memory arena on. Opt in only on a
+ * dedicated inference host that wants the ~4% speed-up and can spare the memory.
+ */
+export const LOCAL_EMBEDDINGS_CPU_ARENA_ENV = 'MJ_LOCAL_EMBEDDINGS_CPU_ARENA';
+
+/**
  * Records settings to apply to transformers.js. Applied immediately when it is already loaded,
  * otherwise when it loads.
  */
@@ -150,9 +157,39 @@ export async function PreloadEmbeddingModel(modelName: string): Promise<void> {
   await getModel(modelName);
 }
 
-/** Drops every loaded model to free memory. */
-export function ClearEmbeddingPipelines(): void {
+/**
+ * Drops every loaded model and releases its ONNX sessions, which is what frees the native memory:
+ * forgetting the JS object alone leaves the session (weights and arena) alive until a GC that may
+ * never run it. A load still in flight is released when it finishes; its cache entry is already
+ * gone, so no call can reuse it. Rejects, naming the model IDs, when a release fails; the cache is
+ * emptied either way.
+ */
+export async function ClearEmbeddingPipelines(): Promise<void> {
+  const dropped = Array.from(models.entries());
   models.clear();
+  const outcomes = await Promise.all(dropped.map(([modelId, loading]) => releaseModel(modelId, loading)));
+  const failures = outcomes.filter((failure): failure is string => failure !== null);
+  if (failures.length > 0) {
+    throw new Error(`Failed to release local embedding models: ${failures.join('; ')}`);
+  }
+}
+
+/** Releases one model's sessions once its load settles; returns a failure description, or null on success. */
+async function releaseModel(modelId: string, loading: Promise<LoadedModel>): Promise<string | null> {
+  let loaded: LoadedModel;
+  try {
+    loaded = await loading;
+  } catch {
+    // The load failed, so there is nothing to release; the callers that awaited it saw the error.
+    return null;
+  }
+  try {
+    await loaded.model.dispose();
+    return null;
+  } catch (error) {
+    console.error(`Releasing embedding model ${modelId} failed:`, error);
+    return `${modelId}: ${error instanceof Error ? error.message : String(error)}`;
+  }
 }
 
 function delay(ms: number): Promise<void> {
@@ -204,12 +241,24 @@ function textOnly(config: PretrainedConfig): PretrainedConfig {
 }
 
 /**
- * ONNX Runtime session options. ONNX Runtime sizes its thread pool from the host's cores and
- * ignores a container's CPU limit; with 2 CPUs on an 18-core host that made EmbeddingGemma 2
- * queries 1.3 s instead of 0.1 s. availableParallelism() honors cpusets and CPU quotas.
+ * ONNX Runtime session options, read at each model load.
+ *
+ * Threads: ONNX Runtime sizes its thread pool from the host's cores and ignores a container's CPU
+ * limit; with 2 CPUs on an 18-core host that made EmbeddingGemma 2 queries 1.3 s instead of 0.1 s.
+ * availableParallelism() honors cpusets and CPU quotas.
+ *
+ * Arena: ONNX Runtime's CPU arena and memory pattern keep every buffer they ever grew to for the
+ * life of the session, so a sync's long inputs left the process holding the peak. Measured on Linux
+ * arm64 with 4 CPUs, replaying the nightly sync's calls: arena on keeps 1245 MB after the sync;
+ * arena off peaks at 433 MB and holds it, for ~4% more time (68 s to 71 s per pass). MJ #6689.
+ * Off by default; MJ_LOCAL_EMBEDDINGS_CPU_ARENA=true opts back in.
  */
-function sessionOptions(): { intraOpNumThreads: number } {
-  return { intraOpNumThreads: availableParallelism() };
+function sessionOptions(): { intraOpNumThreads: number; enableCpuMemArena?: false; enableMemPattern?: false } {
+  const threads = { intraOpNumThreads: availableParallelism() };
+  if (IsTruthyEnvValue(process.env[LOCAL_EMBEDDINGS_CPU_ARENA_ENV])) {
+    return threads;
+  }
+  return { ...threads, enableCpuMemArena: false, enableMemPattern: false };
 }
 
 /**

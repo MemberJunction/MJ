@@ -202,9 +202,13 @@ export class LocalEmbedding extends BaseEmbeddings {
         console.log('Cleared shared local embedding model cache');
     }
 
-    /** Drops the models loaded in this thread and, if one is running, in the embedding worker. */
+    /**
+     * Drops the models loaded in this thread and, if one is running, in the embedding worker. The
+     * release is asynchronous and this stays synchronous for its callers, so a failed release is
+     * logged here instead of thrown.
+     */
     private static clearLoadedModels(): void {
-        ClearEmbeddingPipelines();
+        ClearEmbeddingPipelines().catch(error => console.warn('[LocalEmbedding] Releasing in-process models failed:', error));
         const host = EmbeddingWorkerHost.Instance;
         if (host.IsAvailable) {
             host.Run({ Kind: 'clear' }).catch(error => console.warn(`[LocalEmbedding] Clearing the worker's models failed: ${error}`));

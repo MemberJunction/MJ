@@ -60,7 +60,7 @@ vi.mock('../worker/EmbeddingWorkerHost.js', () => ({
 const runtime = vi.hoisted(() => ({
   embed: vi.fn(),
   preload: vi.fn(),
-  clear: vi.fn(),
+  clear: vi.fn(async () => undefined),
   apply: vi.fn(),
   current: vi.fn(() => ({ CacheDir: '/models' })),
 }));
@@ -147,6 +147,13 @@ describe('LocalEmbedding', () => {
 
   /* ---- clearSharedCache ---- */
   describe('clearSharedCache', () => {
+    it('releases in-process models and logs a failed release without throwing', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      runtime.clear.mockRejectedValueOnce(new Error('release failed for model-x'));
+      expect(() => LocalEmbedding.clearSharedCache()).not.toThrow();
+      await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(expect.stringContaining('Releasing in-process models failed'), expect.any(Error)));
+    });
+
     it('should clear shared static cache without errors', () => {
       expect(() => LocalEmbedding.clearSharedCache()).not.toThrow();
     });

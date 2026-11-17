@@ -133,6 +133,26 @@ LocalEmbedding.clearSharedCache(); // Static method
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TRANSFORMERS_CACHE_DIR` | `./.cache/transformers` | Directory for storing downloaded models |
+| `MJ_LOCAL_EMBEDDINGS_CPU_ARENA` | off | `true`, `1` or `yes` keeps ONNX Runtime's CPU memory arena on (see Memory) |
+| `MJ_LOCAL_EMBEDDINGS_IN_PROCESS` | off | `true`, `1` or `yes` runs embedding on the calling thread instead of a worker thread |
+
+## Memory
+
+ONNX Runtime keeps a CPU memory arena: every buffer it grows to while embedding stays reserved for
+the life of the model session. A sync that embeds long texts therefore left the process holding its
+peak, long after the work finished. This package turns the arena (and the memory pattern) off, and
+`ClearSharedCache()` releases the model's ONNX sessions, not just the JavaScript object.
+
+Measured on Linux arm64 with 4 CPUs, replaying the nightly sync's calls (MJ #6689):
+
+| | Peak | Held after the sync | Time per pass |
+|---|---|---|---|
+| Arena on | | 1245 MB | 68 s |
+| Arena off (default) | 433 MB | 433 MB | 71 s (about 4% slower) |
+
+To keep the arena on a dedicated inference host that can spare the memory, set
+`MJ_LOCAL_EMBEDDINGS_CPU_ARENA=true` (`1` and `yes` also work). It is read each time a model loads.
+A remote embedding model avoids local model memory entirely.
 
 ## Runtime loading
 

@@ -24,8 +24,10 @@ const DEFAULT_OPERATIONS: EmbeddingRuntimeOperations = {
   Clear: ClearEmbeddingPipelines,
 };
 
-/** The answer to calls that embed nothing (`preload`, `clear`). */
-const NO_VECTORS: EmbeddedTexts = { Vectors: [], Tokens: 0 };
+/** The answer to calls that embed nothing (`preload`, `clear`); fresh per call so an in-process caller cannot mutate a shared one. */
+function noVectors(): EmbeddedTexts {
+  return { Vectors: [], Tokens: 0 };
+}
 
 /**
  * Runs one call. The vectors' buffers are transferred back rather than copied. Throws when the
@@ -44,10 +46,10 @@ export async function HandleEmbeddingRequest(
     case 'preload':
       operations.ApplySettings(call.Settings);
       await operations.Preload(call.Model);
-      return { Result: NO_VECTORS };
+      return { Result: noVectors() };
     case 'clear':
-      operations.Clear();
-      return { Result: NO_VECTORS };
+      await operations.Clear();
+      return { Result: noVectors() };
     default:
       throw new Error(`Unknown embedding worker call: ${(call as { Kind: string }).Kind}`);
   }
