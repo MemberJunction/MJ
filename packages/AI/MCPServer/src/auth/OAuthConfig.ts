@@ -10,13 +10,25 @@
 import { McpServerAuth, McpServerSettings } from '../config.js';
 import type { AuthMode } from './types.js';
 
+/** The mode startup settled on, when it differs from the configured one; see {@link SetEffectiveAuthMode}. */
+let effectiveAuthMode: AuthMode | undefined;
+
 /**
- * Gets the current authentication mode from configuration.
+ * Records the auth mode startup settled on. The configured mode defaults to `'both'`, and with no
+ * OAuth provider configured startup falls back to `'apiKey'`; every later check must see that, or a
+ * 401 advertises OAuth discovery that leads nowhere. Pass `undefined` to clear it.
+ */
+export function SetEffectiveAuthMode(mode: AuthMode | undefined): void {
+  effectiveAuthMode = mode;
+}
+
+/**
+ * Gets the current authentication mode: the one startup settled on, else the configured one.
  *
- * @returns The configured auth mode ('apiKey', 'oauth', 'both', or 'none')
+ * @returns The auth mode ('apiKey', 'oauth', 'both', or 'none')
  */
 export function GetAuthMode(): AuthMode {
-  return McpServerAuth?.mode ?? 'apiKey';
+  return effectiveAuthMode ?? McpServerAuth?.mode ?? 'apiKey';
 }
 
 /** @deprecated Use {@link GetAuthMode}. */

@@ -36,20 +36,24 @@ const userB = { ID: 'user-b', Name: 'B', Email: 'b@example.com' } as unknown as 
 /** x-api-key -> user. Deleting a key revokes it. */
 const keys = new Map<string, UserInfo>();
 
-/** Accepts the keys in `keys`; every session gets one `Echo` tool. */
+/** Builds the per-session MCP server: one `Echo` tool. Counted, to prove when no work is done. */
+const createSessionServer = vi.fn(async () => {
+    const server = new McpServer({ name: 'test', version: '1.0.0' });
+    server.registerTool('Echo', { description: 'Echoes', inputSchema: { text: z.string() } },
+        async ({ text }) => ({ content: [{ type: 'text', text }] }));
+    return server;
+});
+
+/** Accepts the keys in `keys`; each key is its own credential (its hash is the key itself). */
 const fakeSessions: MCPSessionFactory = {
     Authenticate: async (req): Promise<AuthResult> => {
-        const user = keys.get(String(req.headers['x-api-key'] ?? ''));
+        const key = String(req.headers['x-api-key'] ?? '');
+        const user = keys.get(key);
         return user
-            ? { authenticated: true, method: 'apiKey', user }
+            ? { authenticated: true, method: 'apiKey', user, apiKeyContext: { apiKey: key, apiKeyId: key, apiKeyHash: key } }
             : { authenticated: false, method: 'none', error: { status: 401, code: 'missing_credentials', message: 'No credentials' } };
     },
-    CreateSessionServer: async () => {
-        const server = new McpServer({ name: 'test', version: '1.0.0' });
-        server.registerTool('Echo', { description: 'Echoes', inputSchema: { text: z.string() } },
-            async ({ text }) => ({ content: [{ type: 'text', text }] }));
-        return server;
-    },
+    CreateSessionServer: createSessionServer,
 };
 
 let httpServer: Server | undefined;
@@ -81,7 +85,9 @@ async function startServer(
 beforeEach(() => {
     keys.clear();
     keys.set('key-a', userA);
+    keys.set('key-a-narrow', userA); // a second key for the same user
     keys.set('key-b', userB);
+    createSessionServer.mockClear();
 });
 
 afterEach(async () => {
@@ -241,17 +247,45 @@ describe('Streamable HTTP sessions', () => {
         expect(await waitForSessionCount(0, 2_000)).toBe(0);
     });
 
-    it('does not keep a transport for a request that never initializes a session', async () => {
+    it('builds nothing for a request that is not an initialize (building registers every tool)', async () => {
         const base = await startServer();
-        const res = await fetch(`${base}${MOUNT}`, {
+        const post = await fetch(`${base}${MOUNT}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'x-api-key': 'key-a' },
             body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
         });
-        await res.text();
+        await post.text();
+        const get = await fetch(`${base}${MOUNT}`, { headers: { Accept: 'text/event-stream', 'x-api-key': 'key-a' } });
+        await get.text();
+
+        expect(post.status).toBe(400);
+        expect(get.status).toBe(400);
+        expect(createSessionServer).not.toHaveBeenCalled();
+        expect(transportRouter!.SessionCount()).toBe(0);
+    });
+
+    it('answers a body that is not JSON with JSON-RPC\'s parse error', async () => {
+        const base = await startServer();
+        const res = await fetch(`${base}${MOUNT}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'x-api-key': 'key-a' },
+            body: '{not json',
+        });
+        const body = await res.json() as { error: { code: number } };
 
         expect(res.status).toBe(400);
-        expect(transportRouter!.SessionCount()).toBe(0);
+        expect(body.error.code).toBe(-32700);
+    });
+
+    it('REGRESSION: gives the same user\'s other credential a 404, so a session keeps the rights it was opened with', async () => {
+        const base = await startServer();
+        const { client, sessionId } = await openSession(base, 'key-a');
+
+        const res = await listToolsRaw(base, sessionId, 'key-a-narrow');
+        await res.text();
+
+        expect(res.status).toBe(404);
+        await client.close();
     });
 });
 
@@ -282,5 +316,71 @@ describe('MCP CORS', () => {
         expect(listed.headers.get('access-control-allow-origin')).toBe('https://app.example');
         expect(other.headers.get('access-control-allow-origin')).toBeNull();
         expect(other.headers.get('vary')).toContain('Origin');
+    });
+});
+
+describe('legacy SSE messages', () => {
+    /** Opens an SSE stream as `key` and returns its session ID from the endpoint event, plus a closer. */
+    async function openSSE(base: string, key: string): Promise<{ sessionId: string; close: () => Promise<void> }> {
+        const res = await fetch(`${base}${MOUNT}/sse`, { headers: { 'x-api-key': key } });
+        const reader = res.body!.getReader();
+        const first = new TextDecoder().decode((await reader.read()).value);
+        const match = /sessionId=([\w-]+)/.exec(first);
+        expect(match).not.toBeNull();
+        return { sessionId: match![1], close: () => reader.cancel() };
+    }
+
+    function postMessage(base: string, sessionId: string, key: string | undefined): Promise<Response> {
+        return fetch(`${base}${MOUNT}/messages?sessionId=${sessionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(key ? { 'x-api-key': key } : {}) },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+        });
+    }
+
+    it('REGRESSION: refuses a post without credentials, although the session ID is valid', async () => {
+        const base = await startServer();
+        const sse = await openSSE(base, 'key-a');
+
+        const res = await postMessage(base, sse.sessionId, undefined);
+        await res.text();
+
+        expect(res.status).toBe(401);
+        await sse.close();
+    });
+
+    it('refuses a post once the key that opened the stream is revoked', async () => {
+        const base = await startServer();
+        const sse = await openSSE(base, 'key-a');
+        keys.delete('key-a');
+
+        const res = await postMessage(base, sse.sessionId, 'key-a');
+        await res.text();
+
+        expect(res.status).toBe(401);
+        await sse.close();
+    });
+
+    it('treats a post with another credential as an unknown session', async () => {
+        const base = await startServer();
+        const sse = await openSSE(base, 'key-a');
+
+        const res = await postMessage(base, sse.sessionId, 'key-b');
+        const body = await res.json() as { error: string };
+
+        expect(res.status).toBe(401);
+        expect(body.error).toBe('session_expired');
+        await sse.close();
+    });
+
+    it('accepts a post from the credential that opened the stream', async () => {
+        const base = await startServer();
+        const sse = await openSSE(base, 'key-a');
+
+        const res = await postMessage(base, sse.sessionId, 'key-a');
+        await res.text();
+
+        expect(res.status).toBe(202);
+        await sse.close();
     });
 });

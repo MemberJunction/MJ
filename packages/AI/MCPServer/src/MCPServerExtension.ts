@@ -145,6 +145,7 @@ export class MCPServerExtension extends BaseServerExtension {
             // first. Inside MJAPI the module is already loaded, so this costs nothing.
             const server = await import('@memberjunction/server');
             refuseMultiTenancy(server.configInfo.multiTenancy?.enabled === true);
+            refuseUnseenPostAuthMiddleware(server.GetActiveServerMiddleware());
             const mount = ResolveMCPMount(context.config.RootPath, context.apiRootPath, sub => server.ApiRoute(sub, { absolute: true }));
 
             await InitConfig();
@@ -230,6 +231,27 @@ function refuseMultiTenancy(multiTenancyEnabled: boolean): void {
     }
 }
 
+/**
+ * Server middleware known to only read after login (it stamps nothing MCP's tools depend on). Any
+ * other middleware that adds after-login handlers blocks hosted MCP; see {@link refuseUnseenPostAuthMiddleware}.
+ */
+const READ_ONLY_POST_AUTH_MIDDLEWARE = ['mj:diagnostics'];
+
+/**
+ * Fails closed when a server middleware adds after-login handlers. Those handlers (a tenant plugin
+ * stamping the user's tenant, an org-membership loader) never run for pre-auth routes, and the data
+ * hooks that rely on them typically skip filtering when the stamp is missing, so MCP's tools would
+ * run unrestricted. MJ's own tenant filter is refused separately, by {@link refuseMultiTenancy}.
+ */
+function refuseUnseenPostAuthMiddleware(active: ReadonlyArray<{ Label: string; PostAuthHandlerCount: number }>): void {
+    const blocking = active
+        .filter(mw => mw.PostAuthHandlerCount > 0 && !READ_ONLY_POST_AUTH_MIDDLEWARE.includes(mw.Label))
+        .map(mw => mw.Label);
+    if (blocking.length > 0) {
+        throw new Error(`MCPServerExtension refuses to mount while server middleware adds after-login handlers that MCP requests would skip: ${blocking.join(', ')}. Hosted MCP mounts before MJAPI's authentication, so those handlers never run for its tools.`);
+    }
+}
+
 /** The stock `mcpServerSettings.systemApiKey` in the repo's `mj.config.cjs`. */
 const PLACEHOLDER_SYSTEM_API_KEY = 'MY_API_KEY_FOR_MCP_SERVER';
 
@@ -242,10 +264,11 @@ function refuseOpenSystemAccess(): void {
     if (GetAuthMode() === 'none') {
         throw new Error("MCPServerExtension refuses to mount with mcpServerSettings.auth.mode 'none': every request would run as the system user, with no credentials, on MJAPI's public port. Use 'apiKey', 'oauth' or 'both'.");
     }
-    // The placeholder is published in the repo's mj.config.cjs, so anyone could send it and get
-    // every tool as the system user. The standalone server still accepts it (local dev default).
+    // The placeholder is published in the repo's mj.config.cjs, so anyone could send it and be the
+    // system user: list every tool and its schema, and run any tool without a scope check. The
+    // standalone server still accepts it (local dev default).
     if (McpServerSettings?.systemApiKey === PLACEHOLDER_SYSTEM_API_KEY) {
-        throw new Error(`MCPServerExtension refuses to mount while mcpServerSettings.systemApiKey is the stock placeholder '${PLACEHOLDER_SYSTEM_API_KEY}': it is published, and it grants every MCP tool as the system user on MJAPI's public port. Set it to a secret value or remove it.`);
+        throw new Error(`MCPServerExtension refuses to mount while mcpServerSettings.systemApiKey is the stock placeholder '${PLACEHOLDER_SYSTEM_API_KEY}': it is published, and whoever sends it is the system user on MJAPI's public port, able to list every MCP tool and run any tool without a scope check. Set it to a secret value or remove it.`);
     }
 }
 

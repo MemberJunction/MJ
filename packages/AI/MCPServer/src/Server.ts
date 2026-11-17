@@ -20,6 +20,7 @@ import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { randomUUID } from 'crypto';
 import express, { Request, Response, NextFunction, Router, RequestHandler } from 'express';
 import sql from "mssql";
@@ -53,6 +54,7 @@ import {
 } from './auth/types.js';
 import {
     GetAuthMode,
+    SetEffectiveAuthMode,
     GetResourceIdentifier,
     IsOAuthEnabled,
     ValidateOAuthConfig,
@@ -76,7 +78,7 @@ import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
 import { ResolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
 import { ApplyTrustProxy } from './ProxySettings.js';
 import { BuildAPIKeySessionUser, SystemKeyMatches } from './auth/APIKeySessionUser.js';
-import { MCPSessionRegistry } from './sessionRegistry.js';
+import { MCPSessionRegistry, SessionCredentialKey } from './sessionRegistry.js';
 import type { APIKeySessionUserDeps } from './auth/APIKeySessionUser.js';
 
 
@@ -295,6 +297,9 @@ function extractRequestContext(request: Request | http.IncomingMessage): {
     };
 }
 
+/** Stands in for the API key ID and hash of a session opened with the system key, which has no key record. */
+const SYSTEM_API_KEY_HASH = 'system';
+
 /**
  * Validates an API key and returns the validation result.
  * This is used by the AuthGate middleware for API key authentication.
@@ -331,8 +336,8 @@ async function validateApiKey(
                 valid: true,
                 user: systemUser,
                 // System API key doesn't have an ID/hash in the database
-                apiKeyId: 'system',
-                apiKeyHash: 'system',
+                apiKeyId: SYSTEM_API_KEY_HASH,
+                apiKeyHash: SYSTEM_API_KEY_HASH,
             };
         }
 
@@ -496,6 +501,15 @@ async function authorizeApiKeyToolCall(
     sessionContext: MCPSessionContext,
     scopeInfo: ToolScopeInfo
 ): Promise<{ allowed: boolean; error?: string }> {
+    // The system key has no API-key record, so no scopes to check: it may list tools, not run
+    // scope-checked ones. (MJAPI's GraphQL treats it differently; over MCP it stays read-only.)
+    if (sessionContext.apiKeyHash === SYSTEM_API_KEY_HASH) {
+        return {
+            allowed: false,
+            error: 'The system API key cannot run scope-checked tools over MCP. Use an MJ API key with the scopes this tool needs.',
+        };
+    }
+
     const systemUser = UserCache.Instance.GetSystemUser();
     if (!systemUser) {
         return { allowed: false, error: 'System user not available for authorization' };
@@ -1041,13 +1055,13 @@ export interface MCPTransportRouterOptions {
      */
     SSEMessagesPath: string;
     Sessions: MCPSessionFactory;
-    /** A Streamable HTTP session with no request for this long is closed. Default 30 minutes. */
+    /** A session (either transport) with no request for this long is closed. Default 30 minutes. */
     IdleSessionTimeoutMs?: number;
     /** How often idle sessions are swept. Default: half the idle timeout, at most one minute. */
     SweepIntervalMs?: number;
 }
 
-/** Default idle timeout for Streamable HTTP sessions. */
+/** Default idle timeout for MCP sessions. */
 const DEFAULT_IDLE_SESSION_TIMEOUT_MS = 30 * 60_000;
 
 /** A transport router plus the live sessions it holds. */
@@ -1070,40 +1084,46 @@ export function BuildMCPTransportRouter(options: MCPTransportRouterOptions): MCP
         throw new Error(`SSEMessagesPath must be an absolute path, got: ${options.SSEMessagesPath}`);
     }
     const router = express.Router();
-    const sseTransports = new Map<string, SSEServerTransport>();
     const idleTimeoutMs = options.IdleSessionTimeoutMs ?? DEFAULT_IDLE_SESSION_TIMEOUT_MS;
+    const sse = new MCPSessionRegistry<SSEServerTransport>(idleTimeoutMs);
     const streamable = new MCPSessionRegistry<StreamableHTTPServerTransport>(idleTimeoutMs);
 
     const sweepTimer = setInterval(() => {
-        streamable.SweepIdle().catch(error => console.error('[StreamableHTTP] Idle session sweep failed:', error));
+        for (const registry of [sse, streamable]) {
+            registry.SweepIdle().catch(error => console.error('[MCP] Idle session sweep failed:', error));
+        }
     }, options.SweepIntervalMs ?? Math.min(idleTimeoutMs / 2, 60_000));
     // The sweep alone never keeps the process alive.
     sweepTimer.unref();
 
     router.get('/sse', (req: Request, res: Response) =>
-        handleSSEConnect(req, res, options.Sessions, options.SSEMessagesPath, sseTransports));
-    router.post('/messages', (req: Request, res: Response) => handleSSEMessage(req, res, sseTransports));
+        handleSSEConnect(req, res, options.Sessions, options.SSEMessagesPath, sse));
+    router.post('/messages', (req: Request, res: Response) => handleSSEMessage(req, res, options.Sessions, sse));
+    // Parsed here so a new session's initialize request can be recognised before any work is done.
+    router.post('/', express.json({ limit: MAX_MCP_MESSAGE_SIZE }), sendJsonRpcParseError);
     router.all('/', (req: Request, res: Response) =>
         handleStreamableRequest(req, res, options.Sessions, streamable));
 
     return {
         Router: router,
-        SessionCount: () => sseTransports.size + streamable.Size,
+        SessionCount: () => sse.Size + streamable.Size,
         Shutdown: async () => {
             clearInterval(sweepTimer);
-            await Promise.all([closeAllTransports([...sseTransports.values()]), streamable.CloseAll()]);
+            await Promise.all([sse.CloseAll(), streamable.CloseAll()]);
         },
     };
 }
 
-/** Closes every transport, logging (not throwing) individual failures so the rest still close. */
-async function closeAllTransports(all: SSEServerTransport[]): Promise<void> {
-    const results = await Promise.allSettled(all.map(t => t.close()));
-    for (const r of results) {
-        if (r.status === 'rejected') {
-            console.error('[MCP] Error closing a session during shutdown:', r.reason);
-        }
+/** The largest MCP message body accepted, matching the MCP SDK's own limit. */
+const MAX_MCP_MESSAGE_SIZE = '4mb';
+
+/** Answers a body that is not valid JSON with JSON-RPC's parse error, instead of the host's HTML error page. */
+function sendJsonRpcParseError(error: Error, _req: Request, res: Response, next: NextFunction): void {
+    if (res.headersSent) {
+        next(error);
+        return;
     }
+    res.status(400).json({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error' }, id: null });
 }
 
 /** GET `/sse`: opens a legacy SSE session for an authenticated client. */
@@ -1112,7 +1132,7 @@ async function handleSSEConnect(
     res: Response,
     sessions: MCPSessionFactory,
     sseMessagesPath: string,
-    transports: Map<string, SSEServerTransport>
+    registry: MCPSessionRegistry<SSEServerTransport>
 ): Promise<void> {
     // Authenticate the request with full result for proper error handling
     const authResult = await sessions.Authenticate(req);
@@ -1130,9 +1150,9 @@ async function handleSSEConnect(
         // Create SSE transport for this connection
         const transport = new SSEServerTransport(sseMessagesPath, res);
 
-        // Store transport for message routing
+        // Store transport for message routing, owned by the credential that opened it
         const sessionId = transport.sessionId;
-        transports.set(sessionId, transport);
+        registry.Add(sessionId, transport, SessionCredentialKey(sessionContext));
         console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId}`);
 
         // Set up keepalive ping to prevent connection timeout (every 15 seconds)
@@ -1146,7 +1166,7 @@ async function handleSSEConnect(
         // Clean up on connection close
         res.on('close', () => {
             clearInterval(keepaliveInterval);
-            transports.delete(sessionId);
+            registry.Delete(sessionId);
         });
 
         res.on('error', (err: NodeJS.ErrnoException) => {
@@ -1178,14 +1198,18 @@ async function handleSSEConnect(
 }
 
 /**
- * POST `/messages`: routes a message to an existing SSE session.
- * Authentication happens when establishing the SSE connection (`/sse`); the sessionId acts as a
- * session token, so clients must first authenticate there.
+ * POST `/messages`: routes a message to an existing SSE session. Every post is authenticated, as
+ * the MCP spec requires, and must come from the credential that opened the session; the session
+ * ID in the URL is not a credential.
  */
-async function handleSSEMessage(req: Request, res: Response, transports: Map<string, SSEServerTransport>): Promise<void> {
-    const sessionId = req.query.sessionId as string;
-
-    if (!sessionId) {
+async function handleSSEMessage(
+    req: Request,
+    res: Response,
+    sessions: MCPSessionFactory,
+    registry: MCPSessionRegistry<SSEServerTransport>
+): Promise<void> {
+    const sessionId = req.query.sessionId;
+    if (typeof sessionId !== 'string' || !sessionId) {
         // Protocol error - client didn't follow MCP protocol
         res.status(400).json({
             error: 'invalid_request',
@@ -1194,27 +1218,22 @@ async function handleSSEMessage(req: Request, res: Response, transports: Map<str
         return;
     }
 
-    const transport = transports.get(sessionId);
-    if (!transport) {
-        // Session expired or invalid - client needs to re-authenticate
-        // When OAuth is enabled, include WWW-Authenticate header to guide client
-        if (IsOAuthEnabled()) {
-            Send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
-                errorDescription: 'Session not found - establish a new authenticated session'
-            });
-        } else {
-            res.status(401).json({
-                error: 'session_expired',
-                message: 'Session not found. Please re-establish connection via /mcp/sse endpoint.'
-            });
-        }
+    const authResult = await sessions.Authenticate(req);
+    if (!authResult.authenticated) {
+        SendAuthErrorResponse(res, authResult);
+        return;
+    }
+
+    const entry = registry.GetForOwner(sessionId, SessionCredentialKey(ToSessionContext(authResult)));
+    if (!entry) {
+        sendSSESessionNotFound(res);
         return;
     }
 
     try {
         // The SDK reads the raw body itself, with its own size limit. req.body is set only if a host
         // middleware already parsed it; the SDK then uses that instead of reading the stream.
-        await transport.handlePostMessage(req, res, req.body);
+        await entry.Transport.handlePostMessage(req, res, req.body);
     } catch (error) {
         console.error('[Messages] Error handling message:', error);
         if (!res.headersSent) {
@@ -1223,6 +1242,21 @@ async function handleSSEMessage(req: Request, res: Response, transports: Map<str
             });
         }
     }
+}
+
+/** The legacy SSE "session not found" answer: the client must reconnect through `/sse`. */
+function sendSSESessionNotFound(res: Response): void {
+    // When OAuth is enabled, include WWW-Authenticate header to guide client
+    if (IsOAuthEnabled()) {
+        Send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
+            errorDescription: 'Session not found - establish a new authenticated session'
+        });
+        return;
+    }
+    res.status(401).json({
+        error: 'session_expired',
+        message: 'Session not found. Please re-establish connection via /mcp/sse endpoint.'
+    });
 }
 
 /**
@@ -1245,24 +1279,29 @@ async function handleStreamableRequest(
 
     const sessionId = req.headers['mcp-session-id'];
     if (typeof sessionId === 'string' && sessionId) {
-        await continueStreamableSession(req, res, sessionId, sessionContext, registry);
+        await continueStreamableSession(req, res, sessionId, SessionCredentialKey(sessionContext), registry);
+        return;
+    }
+    if (req.method !== 'POST' || !isInitializeRequest(req.body)) {
+        // Checked before any work: building a session server registers every tool.
+        res.status(400).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Bad Request: No valid session ID provided' }, id: null });
         return;
     }
     await startStreamableSession(req, res, sessions, sessionContext, registry);
 }
 
 /**
- * Routes a request to its open session. An unknown session, or one another user opened, gets the
- * spec's 404 so the client starts a new session.
+ * Routes a request to its open session. An unknown session, or one another credential opened (even
+ * the same user's), gets the spec's 404 so the client starts a new session.
  */
 async function continueStreamableSession(
     req: Request,
     res: Response,
     sessionId: string,
-    sessionContext: MCPSessionContext,
+    ownerKey: string,
     registry: MCPSessionRegistry<StreamableHTTPServerTransport>
 ): Promise<void> {
-    const entry = registry.GetForUser(sessionId, sessionContext.user.ID);
+    const entry = registry.GetForOwner(sessionId, ownerKey);
     if (!entry) {
         res.status(404).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Session not found' }, id: null });
         return;
@@ -1281,7 +1320,7 @@ async function continueStreamableSession(
 /**
  * Starts a session for an initialize request. The session is registered from the SDK's
  * `onsessioninitialized` hook, before the response goes out, so the client's next request finds
- * it. A request that does not initialize a session has its transport closed straight away.
+ * it. If no session came of the request, on success or failure, the transport is closed.
  */
 async function startStreamableSession(
     req: Request,
@@ -1290,31 +1329,13 @@ async function startStreamableSession(
     sessionContext: MCPSessionContext,
     registry: MCPSessionRegistry<StreamableHTTPServerTransport>
 ): Promise<void> {
+    let transport: StreamableHTTPServerTransport | undefined;
     try {
         // Create a new MCP server for this session, with tools scoped to the session's user
         const mcpServer = await sessions.CreateSessionServer(sessionContext);
-
-        const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => randomUUID(),
-            onsessioninitialized: (newSessionId: string) => {
-                registry.Add(newSessionId, transport, sessionContext.user.ID);
-                console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
-            },
-        });
-        // Set before connect(): the SDK wraps an existing onclose, while assigning one after
-        // connect() would replace the server's own close handling.
-        transport.onclose = () => {
-            if (transport.sessionId) {
-                registry.Delete(transport.sessionId);
-            }
-        };
-
+        transport = createStreamableTransport(sessionContext, registry);
         await mcpServer.connect(transport);
         await transport.handleRequest(req, res, req.body);
-
-        if (!transport.sessionId) {
-            await transport.close();
-        }
     } catch (error) {
         console.error('[StreamableHTTP] Connection error:', error);
         if (!res.headersSent) {
@@ -1323,7 +1344,33 @@ async function startStreamableSession(
                 message: error instanceof Error ? error.message : 'Connection failed'
             });
         }
+    } finally {
+        if (transport && !transport.sessionId) {
+            await transport.close().catch(error => console.error('[StreamableHTTP] Error closing an unused transport:', error));
+        }
     }
+}
+
+/** A Streamable HTTP transport that registers its session, owned by the opening credential, once initialized. */
+function createStreamableTransport(
+    sessionContext: MCPSessionContext,
+    registry: MCPSessionRegistry<StreamableHTTPServerTransport>
+): StreamableHTTPServerTransport {
+    const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (newSessionId: string) => {
+            registry.Add(newSessionId, transport, SessionCredentialKey(sessionContext));
+            console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
+        },
+    });
+    // Set before connect(): the SDK wraps an existing onclose, while assigning one after
+    // connect() would replace the server's own close handling.
+    transport.onclose = () => {
+        if (transport.sessionId) {
+            registry.Delete(transport.sessionId);
+        }
+    };
+    return transport;
 }
 
 /** Request headers an MCP client sends (the MCP SDK's Streamable HTTP and SSE transports, plus MJ keys). */
@@ -1404,7 +1451,9 @@ async function initializeAuth(allowQueryStringApiKey: boolean): Promise<UserInfo
         AllowQueryStringApiKey: allowQueryStringApiKey,
     };
 
-    // Validate OAuth configuration if OAuth is enabled
+    // Validate OAuth configuration if OAuth is enabled. Start from the configured mode, not one a
+    // previous initialization recorded.
+    SetEffectiveAuthMode(undefined);
     const authMode = GetAuthMode();
     let effectiveAuthMode = authMode;
     let configuredProviderNames: string[] = [];
@@ -1440,7 +1489,8 @@ async function initializeAuth(allowQueryStringApiKey: boolean): Promise<UserInfo
         }
     }
 
-    // Log auth configuration
+    // Every later check (401 challenges, metadata routes, the gate) uses the mode we settled on
+    SetEffectiveAuthMode(effectiveAuthMode);
     LogAuthConfig(effectiveAuthMode, configuredProviderNames);
 
     return systemUser;
@@ -1770,8 +1820,9 @@ function createStandaloneApp(routers: MCPRouters): express.Express {
  * Initializes and starts the standalone MemberJunction MCP server on its own port
  * (`mcpServerSettings.port`, default 3100).
  *
- * To serve MCP from MJAPI instead, add an `MCPServerExtension` entry to `serverExtensions[]` —
- * see the package README.
+ * To serve MCP from MJAPI instead, list this package in `dynamicPackages.server[]` (with
+ * `Processes: ['mjapi']`), which loads it and mounts `MCPServerExtension`; a `serverExtensions[]`
+ * entry alone does not load the package. See the package README.
  *
  * This function performs the following setup:
  * 1. Loads configuration and the installed Open Apps' server packages

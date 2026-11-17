@@ -24,11 +24,14 @@ const fakes = vi.hoisted(() => ({
     /** MJAPI_BASE_PATH as ApiRoute composes it. */
     basePath: '/api',
     multiTenancyEnabled: false,
+    /** What MJServer's GetActiveServerMiddleware() reports. */
+    middleware: [] as Array<{ Label: string; PostAuthHandlerCount: number }>,
 }));
 
 vi.mock('@memberjunction/server', () => ({
     ApiRoute: (subpath: string, options?: { absolute?: boolean }) =>
         options?.absolute ? fakes.apiRoute(subpath) : `${fakes.basePath}${subpath}`,
+    GetActiveServerMiddleware: () => fakes.middleware,
     get configInfo() {
         return { cors: { allowedOrigins: ['*'] }, multiTenancy: { enabled: fakes.multiTenancyEnabled } };
     },
@@ -79,6 +82,7 @@ beforeEach(() => {
     fakes.systemApiKey = undefined;
     fakes.basePath = '/api';
     fakes.multiTenancyEnabled = false;
+    fakes.middleware = [];
     fakes.apiRoute = (subpath: string) => `http://localhost:4000/api${subpath}`;
     fakes.createMCPRouters.mockReset();
     fakes.createMCPRouters.mockResolvedValue({
@@ -166,6 +170,31 @@ describe('MCPServerExtension.Initialize', () => {
         await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'));
 
         expect(fakes.createMCPRouters).toHaveBeenCalledWith(expect.objectContaining({ AllowQueryStringApiKey: false }));
+    });
+
+    it('refuses to load while custom after-login middleware is active (it never runs for MCP requests)', async () => {
+        fakes.middleware = [
+            { Label: 'mj:rateLimit', PostAuthHandlerCount: 0 },
+            { Label: 'bcsaas', PostAuthHandlerCount: 1 },
+        ];
+
+        const result = await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'));
+
+        expect(result.Success).toBe(false);
+        expect(result.Message).toContain('bcsaas');
+        expect(result.Message).not.toContain('mj:rateLimit');
+        expect(fakes.createMCPRouters).not.toHaveBeenCalled();
+    });
+
+    it('loads alongside middleware that only reads after login (Diagnostics) or adds nothing there', async () => {
+        fakes.middleware = [
+            { Label: 'mj:diagnostics', PostAuthHandlerCount: 1 },
+            { Label: 'mj:rateLimit', PostAuthHandlerCount: 0 },
+        ];
+
+        const result = await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'));
+
+        expect(result.Success).toBe(true);
     });
 
     it('refuses to load while MJAPI multi-tenancy is on (MCP requests would carry no tenant)', async () => {

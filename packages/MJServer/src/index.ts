@@ -214,6 +214,25 @@ export function GetServerExtensionLoader(): ServerExtensionLoader | null {
     return _currentExtensionLoader;
 }
 
+/** One enabled `BaseServerMiddleware` and what it contributed to the request pipeline. */
+export interface ActiveServerMiddlewareInfo {
+    /** The middleware's `Label` (e.g. `'mj:tenantFilter'`). */
+    Label: string;
+    /** How many handlers it added after authentication (they never run for pre-auth extensions). */
+    PostAuthHandlerCount: number;
+}
+
+let _activeServerMiddleware: ActiveServerMiddlewareInfo[] = [];
+
+/**
+ * The server middleware `serve()` activated, in order. Populated before server extensions load, so
+ * a pre-auth extension can see which post-auth steps (tenant stamping, org loading) will not run
+ * for its own routes. Empty before the server starts.
+ */
+export function GetActiveServerMiddleware(): ReadonlyArray<ActiveServerMiddlewareInfo> {
+    return _activeServerMiddleware;
+}
+
 export * from './generic/PushStatusResolver.js';
 export * from './generic/PubSubManager.js';
 export * from './generic/CacheInvalidationResolver.js';
@@ -1108,9 +1127,12 @@ const setupComplete$ = new ReplaySubject(1);
   const mwSchemaTransformers: ((schema: GraphQLSchema) => GraphQLSchema)[] = [];
   const mwResolverPaths: string[] = [];
 
+  _activeServerMiddleware = [];
   for (const mw of middlewares) {
       mwPreAuth.push(...mw.GetPreAuthMiddleware());
-      mwPostAuth.push(...mw.GetPostAuthMiddleware());
+      const postAuth = mw.GetPostAuthMiddleware();
+      mwPostAuth.push(...postAuth);
+      _activeServerMiddleware.push({ Label: mw.Label, PostAuthHandlerCount: postAuth.length });
       mwPostRoute.push(...mw.GetPostRouteMiddleware());
       mwApolloPlugins.push(...mw.GetApolloPlugins());
       mwSchemaTransformers.push(...mw.GetSchemaTransformers());
