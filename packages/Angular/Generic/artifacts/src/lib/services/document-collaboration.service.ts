@@ -28,6 +28,7 @@ import {
   ComputeLineDiff as computeLineDiffFromUtil,
   type SequenceDiffOp,
 } from '../utils/line-diff';
+import { ARTIFACT_AI_ASSISTANT_ENABLED } from './artifact-ai-assistant-bridge';
 
 export type { SequenceDiffOp } from '../utils/line-diff';
 export type ArtifactEffectivePermissions = ResolvedArtifactPermissions;
@@ -43,6 +44,20 @@ export interface VerifiedArtifactPermissions extends ResolvedArtifactPermissions
 }
 
 const ANCHORED_COMMENT_MENTION_SOURCE = '(?:^|[\\s([{"\'])@([A-Za-z][A-Za-z0-9_-]*)';
+const SAFE_AWARENESS_COLOR_RE =
+  /^(#[0-9a-fA-F]{3,8}|var\(--mj-[a-zA-Z0-9-]+\)|(rgb|hsl)a?\([0-9.,\s%/]+\))$/;
+
+/**
+ * Validates a CSS color or `--mj-*` design token from untrusted Yjs awareness state,
+ * rejecting arbitrary CSS payloads such as `url(...)` exfiltration beacons.
+ */
+export function SanitizeAwarenessColor(rawColor: string | null | undefined): string {
+  if (typeof rawColor !== 'string') {
+    return 'var(--mj-brand-primary)';
+  }
+  const trimmed = rawColor.trim();
+  return SAFE_AWARENESS_COLOR_RE.test(trimmed) ? trimmed : 'var(--mj-brand-primary)';
+}
 
 /**
  * Extracts unique `@handle` mentions from comment text while strictly ignoring email addresses
@@ -93,8 +108,8 @@ const MINT_COLLABORATION_TICKET_MUTATION = `
 `;
 
 const COMMIT_ARTIFACT_INLINE_EDIT_MUTATION = `
-  mutation CommitArtifactInlineEdit($artifactId: String!, $content: String!, $saveVersion: Boolean) {
-    CommitArtifactInlineEdit(artifactId: $artifactId, content: $content, saveVersion: $saveVersion) {
+  mutation CommitArtifactInlineEdit($artifactId: String!, $content: String!, $saveVersion: Boolean, $thumbnailDataUrl: String) {
+    CommitArtifactInlineEdit(artifactId: $artifactId, content: $content, saveVersion: $saveVersion, thumbnailDataUrl: $thumbnailDataUrl) {
       Success
       VersionID
       VersionNumber
@@ -172,8 +187,8 @@ const FREEZE_DOCUMENT_LIVE_BLOCK_MUTATION = `
 `;
 
 const VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY = `
-  query VerifyFrozenBlockSnapshot($specJson: String!) {
-    VerifyFrozenBlockSnapshot(specJson: $specJson) {
+  query VerifyFrozenBlockSnapshot($specJson: String!, $hostArtifactId: String!) {
+    VerifyFrozenBlockSnapshot(specJson: $specJson, hostArtifactId: $hostArtifactId) {
       Valid
       SnapshotVerified
       ErrorMessage
@@ -443,6 +458,23 @@ export type CollaborationConnectionStatus =
   | 'error';
 
 /**
+ * Structural coordinate for live agent presence across Docs, Slides, Sheets, and Whiteboards.
+ */
+export interface CollaboratorAgentLocation {
+  Domain: 'spreadsheet' | 'document' | 'slides' | 'whiteboard' | 'generic';
+  SheetID?: string;
+  SheetName?: string;
+  Range?: string;
+  SlideID?: string;
+  SlideNumber?: number;
+  ElementID?: string;
+  SectionHeading?: string;
+  BlockID?: string;
+  StartLine?: number;
+  EndLine?: number;
+}
+
+/**
  * Active collaborator presence metadata broadcast via Yjs awareness.
  */
 export interface CollaboratorPresence {
@@ -453,6 +485,18 @@ export interface CollaboratorPresence {
   Color: string;
   ActiveBlockID?: string;
   CanEdit: boolean;
+  IsAgent?: boolean;
+  AgentPresenceKey?: string;
+  AgentRunID?: string;
+  AgentName?: string;
+  ActingForUserID?: string;
+  ActingForUserName?: string;
+  ActingForUserEmail?: string;
+  AgentPhase?: 'enter' | 'working' | 'settled' | 'exit';
+  ToolName?: string;
+  ActionSummary?: string;
+  AgentLocation?: CollaboratorAgentLocation;
+  TimestampMs?: number;
 }
 
 /**
@@ -490,7 +534,7 @@ export interface DocumentSlashCommand {
   Command: string;
   Label: string;
   Description: string;
-  Category: 'Structure' | 'Live Data' | 'Embedded Artifact';
+  Category: 'Structure' | 'Live Data' | 'Embedded Artifact' | 'AI Assistant';
   Icon: string;
   BlockType?: DocumentBlockKind;
   Snippet?: string;
@@ -502,6 +546,8 @@ export interface DocumentSlashCommand {
 export interface DocumentSuggestionItem {
   SuggestionID: string;
   BlockID: string;
+  Heading?: string;
+  Quote?: string;
   AuthorName: string;
   AuthorUserID?: string;
   CreatedAt: string;
@@ -587,13 +633,32 @@ export interface DocumentWordDiffResult {
 }
 
 /**
+ * Local unsent draft captured when a server `'room-reset'` replaces a diverged document,
+ * so the editor can present a non-destructive recovery choice without clobbering the reset baseline.
+ */
+export interface CollaborationResetConflictDraft {
+  ArtifactID: string;
+  BaseBeforeReset: string;
+  LocalDraft: string;
+  ResetBaseline: string;
+  CapturedAt: string;
+}
+
+const FROZEN_VERIFICATION_CACHE_MAX_SIZE = 200;
+
+function canonicalVerificationKey(blockId: string | undefined, payload: string): string {
+  // Exact canonical key (bounded by LRU size 200) eliminates lossy 32-bit hash collisions cleanly.
+  return `${blockId ?? ''}:${payload}`;
+}
+
+/**
  * Active Yjs collaboration session bound to a single artifact.
  */
 export class DocumentCollaborationSession {
   public readonly ArtifactID: string;
   public Doc: Y.Doc;
   public ContentText: Y.Text;
-  public readonly Awareness: awarenessProtocol.Awareness;
+  public Awareness: awarenessProtocol.Awareness;
 
   private socket: WebSocket | null = null;
   private status: CollaborationConnectionStatus = 'local';
@@ -608,8 +673,22 @@ export class DocumentCollaborationSession {
   private liveSyncErrorReason = '';
   private lastSyncedRemoteContent = '';
   private hasUnsentLocalEdits = false;
+  private hasRetried4401Ticket = false;
+  private retrying4401 = false;
+  private pendingResetConflictDraft: CollaborationResetConflictDraft | null = null;
   private docUpdateHandler:
     | ((update: Uint8Array, origin: string | number | symbol | object | null | undefined) => void)
+    | null = null;
+  private suggestionsMapRef: Y.Map<string> | null = null;
+  private suggestionsObserver:
+    | ((event: Y.YMapEvent<string>, tr: Y.Transaction) => void)
+    | null = null;
+  private awarenessChangeHandler: (() => void) | null = null;
+  private awarenessUpdateHandler:
+    | ((
+        changed: { added: number[]; updated: number[]; removed: number[] },
+        origin: string | number | symbol | object | null | undefined,
+      ) => void)
     | null = null;
   private destroyed = false;
   private recoverable = true;
@@ -632,7 +711,15 @@ export class DocumentCollaborationSession {
   private readonly collaboratorsChanged$ = new Subject<CollaboratorPresence[]>();
   private readonly versionSaved$ = new Subject<{ versionId: string; versionNumber: number }>();
   private readonly mergeConflict$ = new Subject<CollaborationMergeConflictEvent>();
+  private readonly roomResetConflict$ = new Subject<CollaborationResetConflictDraft | null>();
+  private readonly suggestionsChanged$ = new Subject<void>();
   private readonly liveSyncUnavailable$ = new BehaviorSubject<boolean>(false);
+  private readonly canUndo$ = new BehaviorSubject<boolean>(false);
+  private readonly canRedo$ = new BehaviorSubject<boolean>(false);
+  private undoManager: Y.UndoManager | null = null;
+  private readonly undoStateListener = (): void => {
+    this.syncUndoRedoSubjects();
+  };
 
   public get YDoc(): Y.Doc {
     return this.Doc;
@@ -709,6 +796,109 @@ export class DocumentCollaborationSession {
 
   public get MergeConflict$(): Observable<CollaborationMergeConflictEvent> {
     return this.mergeConflict$.asObservable();
+  }
+
+  public get RoomResetConflict$(): Observable<CollaborationResetConflictDraft | null> {
+    return this.roomResetConflict$.asObservable();
+  }
+
+  public get PendingResetConflictDraft(): CollaborationResetConflictDraft | null {
+    return this.pendingResetConflictDraft;
+  }
+
+  public ApplyResetConflictDraft(): boolean {
+    const draft = this.pendingResetConflictDraft;
+    if (!draft || !this.CanMutateDocument) {
+      return false;
+    }
+    this.SetContent(draft.LocalDraft);
+    this.pendingResetConflictDraft = null;
+    this.roomResetConflict$.next(null);
+    return true;
+  }
+
+  public DismissResetConflictDraft(): void {
+    if (this.pendingResetConflictDraft !== null) {
+      this.pendingResetConflictDraft = null;
+      this.roomResetConflict$.next(null);
+    }
+  }
+
+  public get SuggestionsChanged$(): Observable<void> {
+    return this.suggestionsChanged$.asObservable();
+  }
+
+  public GetSharedSuggestionsRaw(): Map<string, string> {
+    const result = new Map<string, string>();
+    const map = this.Doc.getMap<string>('suggestions');
+    map.forEach((value, key) => {
+      result.set(key, value);
+    });
+    return result;
+  }
+
+  public SetSharedSuggestionRaw(id: string, serializedJson: string): void {
+    if (this.destroyed || !this.CanMutateDocument || !id) {
+      return;
+    }
+    const map = this.Doc.getMap<string>('suggestions');
+    this.Doc.transact(() => {
+      map.set(id, serializedJson);
+    }, 'local');
+  }
+
+  public DeleteSharedSuggestion(id: string): void {
+    if (this.destroyed || !this.CanMutateDocument || !id) {
+      return;
+    }
+    const map = this.Doc.getMap<string>('suggestions');
+    if (map.has(id)) {
+      this.Doc.transact(() => {
+        map.delete(id);
+      }, 'local');
+    }
+  }
+
+  public get CanUndo(): boolean {
+    return this.canUndo$.value;
+  }
+
+  public get CanRedo(): boolean {
+    return this.canRedo$.value;
+  }
+
+  public get CanUndo$(): Observable<boolean> {
+    return this.canUndo$.asObservable();
+  }
+
+  public get CanRedo$(): Observable<boolean> {
+    return this.canRedo$.asObservable();
+  }
+
+  public Undo(): boolean {
+    if (!this.CanMutateDocument || !this.undoManager || !this.undoManager.canUndo()) {
+      return false;
+    }
+    this.undoManager.undo();
+    this.syncUndoRedoSubjects();
+    return true;
+  }
+
+  public Redo(): boolean {
+    if (!this.CanMutateDocument || !this.undoManager || !this.undoManager.canRedo()) {
+      return false;
+    }
+    this.undoManager.redo();
+    this.syncUndoRedoSubjects();
+    return true;
+  }
+
+  /**
+   * Closes the current undo capture window so subsequent edits form a distinct undo step
+   * (e.g., when moving focus between blocks, cells, or slides).
+   */
+  public StopUndoCapture(): void {
+    this.undoManager?.stopCapturing();
   }
 
   public get Recoverable(): boolean {
@@ -798,7 +988,14 @@ export class DocumentCollaborationSession {
   constructor(
     artifactId: string,
     initialContent: string,
-    user: { id: string; name: string; email?: string; color?: string },
+    user: {
+      id: string;
+      name: string;
+      email?: string;
+      color?: string;
+      isAgent?: boolean;
+      role?: string;
+    },
     canEdit = true,
     deferInitialSeedForRemoteSync = false,
     endpointResolver?: (
@@ -835,15 +1032,78 @@ export class DocumentCollaborationSession {
       userId: user.id,
       name: user.name,
       email: user.email,
-      color: user.color ?? 'var(--mj-brand-primary)',
+      color: SanitizeAwarenessColor(user.color),
       canEdit,
+      isAgent: user.isAgent,
+      role: user.role,
     });
 
     this.bindDocObservers(this.Doc);
+    this.initUndoManager(this.Doc);
+    this.bindAwarenessObservers(this.Awareness);
+  }
 
-    this.Awareness.on('change', () => {
-      this.collaboratorsChanged$.next(this.GetCollaborators());
-    });
+  private bindAwarenessObservers(awareness: awarenessProtocol.Awareness): void {
+    this.detachAwarenessObservers(awareness);
+    const changeHandler = (): void => {
+      if (!this.destroyed && awareness === this.Awareness) {
+        this.collaboratorsChanged$.next(this.GetCollaborators());
+      }
+    };
+    const updateHandler = (
+      changed: { added: number[]; updated: number[]; removed: number[] },
+      origin: string | number | symbol | object | null | undefined,
+    ): void => {
+      if (
+        this.destroyed ||
+        awareness !== this.Awareness ||
+        origin === 'remote' ||
+        !this.socket ||
+        this.socket.readyState !== WebSocket.OPEN
+      ) {
+        return;
+      }
+      const changedClients = changed.added.concat(changed.updated, changed.removed);
+      if (changedClients.length === 0) {
+        return;
+      }
+      const encoder = encoding.createEncoder();
+      encoding.writeVarUint(encoder, MSG_AWARENESS);
+      encoding.writeVarUint8Array(
+        encoder,
+        awarenessProtocol.encodeAwarenessUpdate(awareness, changedClients),
+      );
+      this.socket.send(encoding.toUint8Array(encoder));
+    };
+    this.awarenessChangeHandler = changeHandler;
+    this.awarenessUpdateHandler = updateHandler;
+    awareness.on('change', changeHandler);
+    awareness.on('update', updateHandler);
+  }
+
+  private detachAwarenessObservers(awareness: awarenessProtocol.Awareness): void {
+    if (this.awarenessChangeHandler) {
+      awareness.off('change', this.awarenessChangeHandler);
+      this.awarenessChangeHandler = null;
+    }
+    if (this.awarenessUpdateHandler) {
+      awareness.off('update', this.awarenessUpdateHandler);
+      this.awarenessUpdateHandler = null;
+    }
+  }
+
+  private rebindAwarenessToDoc(nextDoc: Y.Doc): void {
+    const prevAwareness = this.Awareness;
+    const prevLocalState = prevAwareness.getLocalState();
+    this.detachAwarenessObservers(prevAwareness);
+    prevAwareness.destroy();
+
+    const nextAwareness = new awarenessProtocol.Awareness(nextDoc);
+    if (prevLocalState) {
+      nextAwareness.setLocalState(prevLocalState);
+    }
+    this.Awareness = nextAwareness;
+    this.bindAwarenessObservers(nextAwareness);
   }
 
   private bindDocObservers(doc: Y.Doc): void {
@@ -874,12 +1134,81 @@ export class DocumentCollaborationSession {
     };
     this.docUpdateHandler = handler;
     doc.on('update', handler);
+
+    const suggestionsMap = doc.getMap<string>('suggestions');
+    const suggestionsObs = (): void => {
+      if (!this.destroyed && doc === this.Doc) {
+        this.suggestionsChanged$.next();
+      }
+    };
+    this.suggestionsMapRef = suggestionsMap;
+    this.suggestionsObserver = suggestionsObs;
+    suggestionsMap.observe(suggestionsObs);
   }
 
   private detachDocObservers(doc: Y.Doc): void {
     if (this.docUpdateHandler) {
       doc.off('update', this.docUpdateHandler);
       this.docUpdateHandler = null;
+    }
+    if (this.suggestionsMapRef && this.suggestionsObserver) {
+      this.suggestionsMapRef.unobserve(this.suggestionsObserver);
+      this.suggestionsMapRef = null;
+      this.suggestionsObserver = null;
+    }
+  }
+
+  private initUndoManager(doc: Y.Doc): void {
+    this.destroyUndoManager();
+    const scopes = [
+      this.ContentText,
+      doc.getMap<string>('slidesById'),
+      doc.getArray<string>('slideOrder'),
+      doc.getMap<string>('deckMeta'),
+      doc.getMap<string>('sheetCellsByCoord'),
+      doc.getMap<string>('worksheetsById'),
+      doc.getArray<string>('sheetOrder'),
+      doc.getMap<string>('workbookMeta'),
+    ];
+    this.undoManager = new Y.UndoManager(scopes, {
+      trackedOrigins: new Set<string>(['local']),
+      captureTimeout: 500,
+    });
+    this.undoManager.on('stack-item-added', this.undoStateListener);
+    this.undoManager.on('stack-item-popped', this.undoStateListener);
+    this.undoManager.on('stack-cleared', this.undoStateListener);
+    this.syncUndoRedoSubjects();
+  }
+
+  private destroyUndoManager(): void {
+    if (this.undoManager) {
+      this.undoManager.off('stack-item-added', this.undoStateListener);
+      this.undoManager.off('stack-item-popped', this.undoStateListener);
+      this.undoManager.off('stack-cleared', this.undoStateListener);
+      this.undoManager.destroy();
+      this.undoManager = null;
+    }
+    if (!this.destroyed) {
+      if (this.canUndo$.value) {
+        this.canUndo$.next(false);
+      }
+      if (this.canRedo$.value) {
+        this.canRedo$.next(false);
+      }
+    }
+  }
+
+  private syncUndoRedoSubjects(): void {
+    if (this.destroyed) {
+      return;
+    }
+    const nextCanUndo = this.undoManager?.canUndo() ?? false;
+    const nextCanRedo = this.undoManager?.canRedo() ?? false;
+    if (this.canUndo$.value !== nextCanUndo) {
+      this.canUndo$.next(nextCanUndo);
+    }
+    if (this.canRedo$.value !== nextCanRedo) {
+      this.canRedo$.next(nextCanRedo);
     }
   }
 
@@ -896,6 +1225,7 @@ export class DocumentCollaborationSession {
     const baseBeforeReset = this.lastSyncedRemoteContent;
 
     const previousDoc = this.Doc;
+    this.destroyUndoManager();
     this.detachDocObservers(previousDoc);
 
     const nextDoc = new Y.Doc();
@@ -950,27 +1280,31 @@ export class DocumentCollaborationSession {
     this.lastSyncedRemoteContent = resetBaseline;
 
     this.bindDocObservers(nextDoc);
+    this.initUndoManager(nextDoc);
+    this.rebindAwarenessToDoc(nextDoc);
+    previousDoc.destroy();
 
-    // Re-apply any unsynced local prose hunks on top of the reset baseline so local edits are never dropped
+    // Preserve diverged unsent local edits in pendingResetConflictDraft for explicit recovery
+    // instead of blindly appending lines at EOF or silently discarding structured JSON drafts.
     if (
       unsentLocalSnapshot !== null &&
       unsentLocalSnapshot !== baseBeforeReset &&
       unsentLocalSnapshot !== resetBaseline &&
-      !unsentLocalSnapshot.trim().startsWith('{') &&
       this.canEdit
     ) {
-      const replayed = this.replayLocalLineDiffOntoReset(
-        baseBeforeReset,
-        unsentLocalSnapshot,
-        resetBaseline,
-      );
-      if (replayed !== resetBaseline) {
-        this.SetContent(replayed);
-      }
+      this.pendingResetConflictDraft = {
+        ArtifactID: this.ArtifactID,
+        BaseBeforeReset: baseBeforeReset,
+        LocalDraft: unsentLocalSnapshot,
+        ResetBaseline: resetBaseline,
+        CapturedAt: new Date().toISOString(),
+      };
+      this.roomResetConflict$.next(this.pendingResetConflictDraft);
     }
 
     this.statusChanged$.next(this.status);
     this.contentChanged$.next(this.GetContent());
+    this.suggestionsChanged$.next();
   }
 
   /**
@@ -986,6 +1320,7 @@ export class DocumentCollaborationSession {
       return;
     }
     const previousDoc = this.Doc;
+    this.destroyUndoManager();
     this.detachDocObservers(previousDoc);
     const nextDoc = new Y.Doc();
     this.Doc = nextDoc;
@@ -996,33 +1331,10 @@ export class DocumentCollaborationSession {
     this.hasUnsentLocalEdits = false;
     this.hasCompletedInitialSync = false;
     this.bindDocObservers(nextDoc);
+    this.initUndoManager(nextDoc);
+    this.rebindAwarenessToDoc(nextDoc);
+    previousDoc.destroy();
     this.statusChanged$.next(this.status);
-  }
-
-  private replayLocalLineDiffOntoReset(
-    baseBeforeReset: string,
-    localBeforeReset: string,
-    resetBaseline: string,
-  ): string {
-    const baseLines = baseBeforeReset.replace(/\r\n/g, '\n').split('\n');
-    const localLines = localBeforeReset.replace(/\r\n/g, '\n').split('\n');
-    const resetLines = resetBaseline.replace(/\r\n/g, '\n').split('\n');
-    const ops = computeBoundedSequenceDiffFromUtil(
-      baseLines,
-      localLines,
-      (a, b) => a === b,
-      (s) => s,
-    );
-    const addedLines: string[] = [];
-    for (const op of ops) {
-      if (op.Kind === 'insert') {
-        addedLines.push(localLines[op.NewIndex]);
-      }
-    }
-    if (addedLines.length === 0) {
-      return resetBaseline;
-    }
-    return [...resetLines, ...addedLines].join('\n');
   }
 
   /**
@@ -1031,6 +1343,11 @@ export class DocumentCollaborationSession {
    * exponential-backoff reconnection on transient disconnects.
    */
   public async Connect(wsUrl?: string | null, provider?: IMetadataProvider | null): Promise<void> {
+    const is4401Retry = this.retrying4401;
+    this.retrying4401 = false;
+    if (!is4401Retry) {
+      this.hasRetried4401Ticket = false;
+    }
     if (this.destroyed || typeof WebSocket === 'undefined') {
       if (this.transport === 'local-only') {
         this.ensureLocalSeedIfUnseeded();
@@ -1178,6 +1495,14 @@ export class DocumentCollaborationSession {
         this.recoverable = true;
         if (event.code === 4401) {
           this.clearReconnectTimer();
+          if (!this.hasRetried4401Ticket && this.endpointResolver) {
+            this.hasRetried4401Ticket = true;
+            this.retrying4401 = true;
+            this.setStatus('connecting');
+            void this.Connect(this.configuredWsUrlOverride, this.configuredProvider);
+            return;
+          }
+          this.setLiveSyncUnavailable(true, 'Collaboration ticket expired. Please refresh to reconnect.');
           this.setStatus(this.canEdit ? 'local' : 'readonly');
           return;
         }
@@ -1430,6 +1755,42 @@ export class DocumentCollaborationSession {
   }
 
   /**
+   * Applies a batch of spreadsheet cell updates and deletions inside a single `'local'`
+   * Yjs transaction so multi-cell paste or range clear forms one atomic undo/redo step.
+   */
+  public BatchUpdateSpreadsheetCells(
+    sheetId: string,
+    updates: ReadonlyArray<SpreadsheetCellSpec>,
+    deletes: ReadonlyArray<{ rowId: string; colId: string }> = [],
+    fullWorkbookFallback?: WorkbookSpec,
+  ): void {
+    if (!this.CanMutateDocument || this.applyingRemote) {
+      return;
+    }
+    if (updates.length === 0 && deletes.length === 0) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getMap<string>('worksheetsById').size === 0 && fullWorkbookFallback) {
+        this.populateSpreadsheetCrdtIfWorkbook(
+          SpreadsheetEngine.Instance.SerializeWorkbook(fullWorkbookFallback),
+        );
+      }
+      const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+      for (const cell of updates) {
+        sheetCellsByCoord.set(`${sheetId}::${cell.RowID}::${cell.ColumnID}`, JSON.stringify(cell));
+      }
+      for (const del of deletes) {
+        sheetCellsByCoord.delete(`${sheetId}::${del.rowId}::${del.colId}`);
+      }
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
    * Surgically updates worksheet structural metadata (`Rows`, `Columns`, `LiveTables`, `Charts`,
    * `EmbeddedArtifacts`, `Sort`, `Filters`, `FrozenRows`, `FrozenColumns`) in `worksheetsById` (`Y.Map`)
    * without touching individual cell entries in `sheetCellsByCoord` (`Accept #1`).
@@ -1488,13 +1849,19 @@ export class DocumentCollaborationSession {
    * Sends a `save-version` control frame (`MSG_CONTROL = 2`) to the collaboration server
    * to compact the active room into a new immutable `MJ: Artifact Versions` record.
    */
-  public RequestSaveVersion(): boolean {
+  public RequestSaveVersion(thumbnailDataUrl?: string | null): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.canEdit) {
       return false;
     }
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MSG_CONTROL);
-    encoding.writeVarString(encoder, JSON.stringify({ action: 'save-version' }));
+    const framePayload: { action: 'save-version'; thumbnailDataUrl?: string } = {
+      action: 'save-version',
+    };
+    if (thumbnailDataUrl && thumbnailDataUrl.startsWith('data:image/')) {
+      framePayload.thumbnailDataUrl = thumbnailDataUrl;
+    }
+    encoding.writeVarString(encoder, JSON.stringify(framePayload));
     this.socket.send(encoding.toUint8Array(encoder));
     return true;
   }
@@ -1522,11 +1889,40 @@ export class DocumentCollaborationSession {
   /**
    * Returns all active collaborators from the Yjs Awareness state map.
    */
+  private deriveActiveBlockIdFromLocation(
+    loc: CollaboratorAgentLocation | undefined,
+  ): string | undefined {
+    if (!loc) {
+      return undefined;
+    }
+    if (loc.Domain === 'spreadsheet') {
+      const sheet = loc.SheetID || loc.SheetName;
+      if (sheet && loc.Range) {
+        return `${sheet}:${loc.Range}`;
+      }
+      return loc.Range || sheet || undefined;
+    }
+    if (loc.Domain === 'slides') {
+      if (loc.SlideID) {
+        return loc.SlideID;
+      }
+      if (typeof loc.SlideNumber === 'number') {
+        return `Slide ${loc.SlideNumber}`;
+      }
+    }
+    if (loc.Domain === 'document') {
+      return loc.BlockID || loc.SectionHeading || undefined;
+    }
+    return loc.ElementID || loc.BlockID || undefined;
+  }
+
   public GetCollaborators(): CollaboratorPresence[] {
     const result: CollaboratorPresence[] = [];
     this.Awareness.getStates().forEach(
       (
         state: {
+          agentPhase?: CollaboratorPresence['AgentPhase'];
+          agentLocation?: CollaboratorAgentLocation;
           user?: {
             userId?: string | number;
             name?: string;
@@ -1534,20 +1930,58 @@ export class DocumentCollaborationSession {
             color?: string;
             activeBlockId?: string;
             canEdit?: boolean;
+            isAgent?: boolean;
+            role?: string;
+            agentPresenceKey?: string;
+            agentRunId?: string;
+            agentName?: string;
+            actingForUserId?: string;
+            actingForUserName?: string;
+            actingForUserEmail?: string;
+            agentPhase?: CollaboratorPresence['AgentPhase'];
+            toolName?: string;
+            actionSummary?: string;
+            agentLocation?: CollaboratorAgentLocation;
+            timestampMs?: number;
           };
         },
         clientId: number,
       ) => {
         const u = state.user;
         if (u && typeof u.name === 'string') {
+          const isAgent = u.isAgent === true;
+          const agentLocation = state.agentLocation ?? u.agentLocation;
+          const activeBlockId =
+            typeof u.activeBlockId === 'string'
+              ? u.activeBlockId
+              : this.deriveActiveBlockIdFromLocation(agentLocation);
           result.push({
             ClientID: clientId,
             UserID: String(u.userId ?? clientId),
             Name: u.name,
             Email: typeof u.email === 'string' ? u.email : undefined,
-            Color: typeof u.color === 'string' ? u.color : 'var(--mj-brand-primary)',
-            ActiveBlockID: typeof u.activeBlockId === 'string' ? u.activeBlockId : undefined,
+            Color: SanitizeAwarenessColor(typeof u.color === 'string' ? u.color : undefined),
+            ActiveBlockID: activeBlockId,
             CanEdit: u.canEdit !== false,
+            IsAgent: isAgent,
+            AgentPresenceKey:
+              isAgent && typeof u.agentPresenceKey === 'string' ? u.agentPresenceKey : undefined,
+            AgentRunID: isAgent && typeof u.agentRunId === 'string' ? u.agentRunId : undefined,
+            AgentName: isAgent && typeof u.agentName === 'string' ? u.agentName : undefined,
+            ActingForUserID:
+              isAgent && typeof u.actingForUserId === 'string' ? u.actingForUserId : undefined,
+            ActingForUserName:
+              isAgent && typeof u.actingForUserName === 'string' ? u.actingForUserName : undefined,
+            ActingForUserEmail:
+              isAgent && typeof u.actingForUserEmail === 'string'
+                ? u.actingForUserEmail
+                : undefined,
+            AgentPhase: isAgent ? (state.agentPhase ?? u.agentPhase) : undefined,
+            ToolName: isAgent && typeof u.toolName === 'string' ? u.toolName : undefined,
+            ActionSummary:
+              isAgent && typeof u.actionSummary === 'string' ? u.actionSummary : undefined,
+            AgentLocation: isAgent ? agentLocation : undefined,
+            TimestampMs: isAgent && typeof u.timestampMs === 'number' ? u.timestampMs : undefined,
           });
         }
       },
@@ -1559,16 +1993,26 @@ export class DocumentCollaborationSession {
    * Cleanly cancels any pending reconnect timer, closes the WebSocket, and destroys the Yjs document.
    */
   public Destroy(): void {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      awarenessProtocol.removeAwarenessStates(this.Awareness, [this.Awareness.clientID], 'local');
+    }
     this.destroyed = true;
     this.connectGeneration++;
     this.clearReconnectTimer();
     this.closeActiveSocketWithoutReconnect();
+    this.detachAwarenessObservers(this.Awareness);
+    this.detachDocObservers(this.Doc);
     this.contentChanged$.complete();
     this.statusChanged$.complete();
     this.collaboratorsChanged$.complete();
     this.versionSaved$.complete();
     this.mergeConflict$.complete();
+    this.roomResetConflict$.complete();
+    this.suggestionsChanged$.complete();
     this.liveSyncUnavailable$.complete();
+    this.destroyUndoManager();
+    this.canUndo$.complete();
+    this.canRedo$.complete();
     this.Awareness.destroy();
     this.Doc.destroy();
     this.onDestroyed?.(this);
@@ -1598,6 +2042,7 @@ export class DocumentCollaborationSession {
       }
       if (syncMsgType === syncProtocol.messageYjsSyncStep2) {
         this.hasCompletedInitialSync = true;
+        this.hasRetried4401Ticket = false;
         this.reconnectAttempts = 0;
         this.setLiveSyncUnavailable(false);
         this.overrideSeedContent = null;
@@ -1816,11 +2261,22 @@ export class DocumentCollaborationSession {
     }
 
     const nextIds: string[] = [];
+    const nextIdSet = new Set<string>();
     for (const slide of parsed.Slides) {
       if (slide && typeof slide.SlideID === 'string' && slide.SlideID.trim()) {
         slidesById.set(slide.SlideID, JSON.stringify(slide));
         nextIds.push(slide.SlideID);
+        nextIdSet.add(slide.SlideID);
       }
+    }
+    const staleSlideIds: string[] = [];
+    slidesById.forEach((_raw, slideId) => {
+      if (!nextIdSet.has(slideId)) {
+        staleSlideIds.push(slideId);
+      }
+    });
+    for (const staleId of staleSlideIds) {
+      slidesById.delete(staleId);
     }
     const currentOrder = slideOrder.toArray();
     const sameOrder =
@@ -1898,7 +2354,7 @@ export class DocumentCollaborationSession {
       SchemaVersion: '1.0',
       DeckID: deckMeta.get('DeckID') || baseDeck.DeckID || 'deck-1',
       Title: deckMeta.get('Title') || baseDeck.Title || 'Presentation',
-      Subtitle: deckMeta.get('Subtitle') || baseDeck.Subtitle,
+      Subtitle: deckMeta.has('Subtitle') ? (deckMeta.get('Subtitle') || undefined) : baseDeck.Subtitle,
       AspectRatio: (deckMeta.get('AspectRatio') as '16:9' | '4:3') || baseDeck.AspectRatio || '16:9',
       Theme: theme,
       Master: master,
@@ -1941,6 +2397,18 @@ export class DocumentCollaborationSession {
     workbookMeta.set('Title', parsed.Title || 'Workbook');
     workbookMeta.set('ActiveSheetID', parsed.ActiveSheetID || parsed.Worksheets[0].SheetID);
     workbookMeta.set('NamedRanges', JSON.stringify(parsed.NamedRanges ?? []));
+    if (typeof parsed.CreatedAt === 'string' && parsed.CreatedAt.length > 0) {
+      workbookMeta.set('CreatedAt', parsed.CreatedAt);
+    }
+    if (
+      typeof parsed.PreferredObjectsPaneHeightPx === 'number' &&
+      Number.isFinite(parsed.PreferredObjectsPaneHeightPx) &&
+      parsed.PreferredObjectsPaneHeightPx > 0
+    ) {
+      workbookMeta.set('PreferredObjectsPaneHeightPx', String(Math.round(parsed.PreferredObjectsPaneHeightPx)));
+    } else {
+      workbookMeta.delete('PreferredObjectsPaneHeightPx');
+    }
 
     const nextSheetIds: string[] = [];
     const activeCellKeys = new Set<string>();
@@ -2042,8 +2510,20 @@ export class DocumentCollaborationSession {
     }
 
     const sheetMap = new Map<string, WorksheetSpec>();
+    const rowMapBySheet = new Map<string, Map<string, WorksheetSpec['Rows'][number]>>();
+    const colMapBySheet = new Map<string, Map<string, WorksheetSpec['Columns'][number]>>();
     for (const ws of worksheets) {
       sheetMap.set(ws.SheetID, ws);
+      const rMap = new Map<string, WorksheetSpec['Rows'][number]>();
+      for (const r of ws.Rows) {
+        rMap.set(r.RowID, r);
+      }
+      rowMapBySheet.set(ws.SheetID, rMap);
+      const cMap = new Map<string, WorksheetSpec['Columns'][number]>();
+      for (const c of ws.Columns) {
+        cMap.set(c.ColumnID, c);
+      }
+      colMapBySheet.set(ws.SheetID, cMap);
     }
 
     sheetCellsByCoord.forEach((rawCell, coordKey) => {
@@ -2056,8 +2536,8 @@ export class DocumentCollaborationSession {
       if (!cell) {
         return;
       }
-      const row = ws.Rows.find((r) => r.RowID === cell.RowID);
-      const col = ws.Columns.find((c) => c.ColumnID === cell.ColumnID);
+      const row = rowMapBySheet.get(sheetId)?.get(cell.RowID);
+      const col = colMapBySheet.get(sheetId)?.get(cell.ColumnID);
       if (!row || !col) {
         return;
       }
@@ -2072,22 +2552,32 @@ export class DocumentCollaborationSession {
       namedRanges = SafeJSONParse<SpreadsheetNamedRangeSpec[]>(rawNamedRanges) ?? [];
     }
 
+    const rawPrefPaneHeight = workbookMeta.get('PreferredObjectsPaneHeightPx');
+    const parsedPrefPaneHeight = rawPrefPaneHeight ? Number(rawPrefPaneHeight) : NaN;
+
     const nowIso = new Date().toISOString();
+    const preservedCreatedAt = workbookMeta.get('CreatedAt') || nowIso;
     const wb: WorkbookSpec = {
       WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
       Title: workbookMeta.get('Title') || 'Workbook',
       ActiveSheetID: workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID,
       Worksheets: worksheets,
       NamedRanges: namedRanges,
-      CreatedAt: nowIso,
+      ...(Number.isFinite(parsedPrefPaneHeight) && parsedPrefPaneHeight > 0
+        ? { PreferredObjectsPaneHeightPx: Math.round(parsedPrefPaneHeight) }
+        : {}),
+      CreatedAt: preservedCreatedAt,
       UpdatedAt: nowIso,
     };
 
+    // Bind `wb` in SpreadsheetEngine before per-sheet reindex so cross-sheet
+    // `FormulaStable` references (@SHEET_CELL, @SHEET_RANGE, etc.) resolve instead of #REF!
+    SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
     for (const ws of wb.Worksheets) {
       SpreadsheetEngine.Instance.ReindexWorksheetAndResolveFormulas(ws);
     }
     SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
-    return SpreadsheetEngine.Instance.SerializeWorkbook(wb);
+    return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
   }
 
   private syncContentTextFromSpreadsheetCrdt(): void {
@@ -2284,6 +2774,21 @@ export class DocumentCollaborationService implements OnDestroy {
   }
   private readonly slashCommands: ReadonlyArray<DocumentSlashCommand> = [
     {
+      Command: '/ai',
+      Label: 'Ask AI',
+      Description: 'Open the slide-in AI Assistant to draft, rewrite, or summarize using this document',
+      Category: 'AI Assistant',
+      Icon: 'fa-wand-magic-sparkles',
+    },
+    {
+      Command: '/paragraph',
+      Label: 'Paragraph',
+      Description: 'Standard body text paragraph block',
+      Category: 'Structure',
+      Icon: 'fa-paragraph',
+      Snippet: '\n',
+    },
+    {
       Command: '/heading-1',
       Label: 'Heading 1',
       Description: 'Large top-level section heading (#)',
@@ -2306,6 +2811,22 @@ export class DocumentCollaborationService implements OnDestroy {
       Category: 'Structure',
       Icon: 'fa-heading',
       Snippet: '### Topic Heading\n',
+    },
+    {
+      Command: '/bullet-list',
+      Label: 'Bulleted List',
+      Description: 'Unordered bulleted list (- item)',
+      Category: 'Structure',
+      Icon: 'fa-list-ul',
+      Snippet: '- \n',
+    },
+    {
+      Command: '/numbered-list',
+      Label: 'Numbered List',
+      Description: 'Ordered numbered list (1. item)',
+      Category: 'Structure',
+      Icon: 'fa-list-ol',
+      Snippet: '1. \n',
     },
     {
       Command: '/table',
@@ -2387,6 +2908,22 @@ export class DocumentCollaborationService implements OnDestroy {
       Icon: 'fa-cube',
       BlockType: 'Artifact',
     },
+    {
+      Command: '/sheet-chart',
+      Label: 'Spreadsheet Chart',
+      Description: 'Embed a live chart from an MJ Spreadsheet workbook with version pinning',
+      Category: 'Embedded Artifact',
+      Icon: 'fa-chart-column',
+      BlockType: 'Artifact',
+    },
+    {
+      Command: '/sheet-range',
+      Label: 'Spreadsheet Range',
+      Description: 'Embed a live cell range (e.g. A1:D8) from an MJ Spreadsheet workbook',
+      Category: 'Embedded Artifact',
+      Icon: 'fa-table-cells',
+      BlockType: 'Artifact',
+    },
   ];
 
   /**
@@ -2410,7 +2947,14 @@ export class DocumentCollaborationService implements OnDestroy {
   public CreateSession(
     artifactId: string,
     initialContent: string,
-    user: { id: string; name: string; email?: string; color?: string },
+    user: {
+      id: string;
+      name: string;
+      email?: string;
+      color?: string;
+      isAgent?: boolean;
+      role?: string;
+    },
     canEdit = true,
     deferInitialSeedForRemoteSync = false,
   ): DocumentCollaborationSession {
@@ -2930,6 +3474,7 @@ export class DocumentCollaborationService implements OnDestroy {
 
   private computeFrozenVerificationCacheKey(
     block: DocumentBlockSpec & { SourceType?: string; SourceID?: string },
+    hostArtifactId?: string | null,
   ): string {
     const snap = block.FrozenSnapshot;
     if (!snap) {
@@ -2946,7 +3491,8 @@ export class DocumentCollaborationService implements OnDestroy {
       block.EntityName ??
       block.QueryName ??
       '';
-    return JSON.stringify({
+    const payload = JSON.stringify({
+      HostArtifactID: (hostArtifactId ?? '').trim().toLowerCase(),
       BlockID: block.BlockID,
       SourceType: resolvedSourceType,
       SourceID: resolvedSourceId,
@@ -2961,13 +3507,40 @@ export class DocumentCollaborationService implements OnDestroy {
       SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged,
       SnapshotContentHash: snap.SnapshotContentHash ?? '',
     });
+    return canonicalVerificationKey(block.BlockID, payload);
   }
 
-  private recordFrozenSnapshotVerification(block: DocumentBlockSpec, verified: boolean): void {
-    const key = this.computeFrozenVerificationCacheKey(block);
-    if (key) {
-      this.frozenSnapshotVerificationCache.set(key, verified);
+  private getCachedFrozenVerification(key: string): boolean | undefined {
+    if (!key || !this.frozenSnapshotVerificationCache.has(key)) {
+      return undefined;
     }
+    const val = this.frozenSnapshotVerificationCache.get(key);
+    if (val !== undefined) {
+      // Touch for LRU ordering
+      this.frozenSnapshotVerificationCache.delete(key);
+      this.frozenSnapshotVerificationCache.set(key, val);
+    }
+    return val;
+  }
+
+  private recordFrozenSnapshotVerification(
+    block: DocumentBlockSpec,
+    verified: boolean,
+    hostArtifactId?: string | null,
+  ): void {
+    const key = this.computeFrozenVerificationCacheKey(block, hostArtifactId);
+    if (!key) {
+      return;
+    }
+    if (this.frozenSnapshotVerificationCache.has(key)) {
+      this.frozenSnapshotVerificationCache.delete(key);
+    } else if (this.frozenSnapshotVerificationCache.size >= FROZEN_VERIFICATION_CACHE_MAX_SIZE) {
+      const oldestKey = this.frozenSnapshotVerificationCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.frozenSnapshotVerificationCache.delete(oldestKey);
+      }
+    }
+    this.frozenSnapshotVerificationCache.set(key, verified);
   }
 
   /**
@@ -2981,6 +3554,7 @@ export class DocumentCollaborationService implements OnDestroy {
       FrozenMetadata?: { SnapshotVerified?: boolean };
       FrozenSnapshot?: { SnapshotVerified?: boolean };
     } | null,
+    hostArtifactId?: string | null,
   ): boolean {
     if (!block || block.Mode !== 'Frozen' || !block.FrozenSnapshot) {
       return false;
@@ -3005,20 +3579,25 @@ export class DocumentCollaborationService implements OnDestroy {
     ) {
       return false;
     }
-    const key = this.computeFrozenVerificationCacheKey(block);
-    return key ? this.frozenSnapshotVerificationCache.get(key) === true : false;
+    const key = this.computeFrozenVerificationCacheKey(block, hostArtifactId);
+    return key ? this.getCachedFrozenVerification(key) === true : false;
   }
 
   /**
-   * Verifies a frozen snapshot strictly on the server via `VerifyFrozenBlockSnapshot`, returning
-   * cached verification results immediately and deduplicating concurrent in-flight GraphQL requests
-   * for the same `cacheKey` so rapid editor re-parses emit zero redundant network calls (`E3`).
+   * Verifies a frozen snapshot strictly on the server via `VerifyFrozenBlockSnapshot` bound to `hostArtifactId`,
+   * returning cached verification results immediately and deduplicating concurrent in-flight GraphQL requests
+   * for the same `cacheKey` so rapid editor re-parses emit zero redundant network calls (`E3`, `S-b`).
    */
   public async VerifyFrozenSnapshotOnServer(
     block: DocumentBlockSpec,
+    hostArtifactId: string,
     providerOverride?: IMetadataProvider | null,
   ): Promise<boolean> {
     if (!block || block.Mode !== 'Frozen' || !block.FrozenSnapshot) {
+      return false;
+    }
+    const normalizedHostId = (hostArtifactId ?? '').trim();
+    if (!normalizedHostId) {
       return false;
     }
     const snap = block.FrozenSnapshot;
@@ -3027,12 +3606,12 @@ export class DocumentCollaborationService implements OnDestroy {
       typeof snap.SnapshotContentHash !== 'string' ||
       snap.SnapshotContentHash.trim().length === 0
     ) {
-      this.recordFrozenSnapshotVerification(block, false);
+      this.recordFrozenSnapshotVerification(block, false, normalizedHostId);
       return false;
     }
-    const cacheKey = this.computeFrozenVerificationCacheKey(block);
+    const cacheKey = this.computeFrozenVerificationCacheKey(block, normalizedHostId);
     if (cacheKey) {
-      const cached = this.frozenSnapshotVerificationCache.get(cacheKey);
+      const cached = this.getCachedFrozenVerification(cacheKey);
       if (cached !== undefined) {
         return cached;
       }
@@ -3048,20 +3627,22 @@ export class DocumentCollaborationService implements OnDestroy {
         try {
           const gqlRes = await provider.ExecuteGQL(VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY, {
             specJson: JSON.stringify(block),
+            hostArtifactId: normalizedHostId,
           });
           const verifyPayload = gqlRes?.VerifyFrozenBlockSnapshot;
           if (verifyPayload && typeof verifyPayload.SnapshotVerified === 'boolean') {
-            this.recordFrozenSnapshotVerification(block, verifyPayload.SnapshotVerified);
+            this.recordFrozenSnapshotVerification(block, verifyPayload.SnapshotVerified, normalizedHostId);
             return verifyPayload.SnapshotVerified;
           }
         } catch (err) {
           LogError(err);
+          // Do NOT poison verification cache on transient network/GraphQL errors.
+          return false;
         } finally {
           if (cacheKey) {
             this.inFlightFrozenVerifications.delete(cacheKey);
           }
         }
-        this.recordFrozenSnapshotVerification(block, false);
         return false;
       };
 
@@ -3071,7 +3652,7 @@ export class DocumentCollaborationService implements OnDestroy {
       }
       return promise;
     }
-    return this.IsFrozenSnapshotVerified(block);
+    return this.IsFrozenSnapshotVerified(block, undefined, normalizedHostId);
   }
 
   /**
@@ -3083,6 +3664,7 @@ export class DocumentCollaborationService implements OnDestroy {
     content: string,
     saveVersion = true,
     providerOverride?: IMetadataProvider | null,
+    thumbnailDataUrl?: string | null,
   ): Promise<{
     HandledByServer: boolean;
     Success: boolean;
@@ -3099,6 +3681,7 @@ export class DocumentCollaborationService implements OnDestroy {
         artifactId,
         content,
         saveVersion,
+        ...(thumbnailDataUrl ? { thumbnailDataUrl } : {}),
       });
       const payload = gqlRes?.CommitArtifactInlineEdit;
       if (!payload) {
@@ -3294,11 +3877,14 @@ export class DocumentCollaborationService implements OnDestroy {
    * Returns `/slash` commands filtered by an optional query string.
    */
   public GetSlashCommands(query = ''): DocumentSlashCommand[] {
+    const enabledCommands = ARTIFACT_AI_ASSISTANT_ENABLED
+      ? this.slashCommands
+      : this.slashCommands.filter((cmd) => cmd.Command !== '/ai');
     const trimmed = query.trim().toLowerCase().replace(/^\//, '');
     if (!trimmed) {
-      return [...this.slashCommands];
+      return [...enabledCommands];
     }
-    return this.slashCommands.filter(
+    return enabledCommands.filter(
       (cmd) =>
         cmd.Command.toLowerCase().includes(trimmed) ||
         cmd.Label.toLowerCase().includes(trimmed) ||
@@ -3601,13 +4187,14 @@ export class DocumentCollaborationService implements OnDestroy {
       }
 
       const blockStartIdx = idx;
+      const rawFirstLine = lines[idx].trimStart();
       const firstLine = lines[idx].trim();
 
-      // Heading block
-      const headingMatch = /^(#{1,6})\s+(.+)$/.exec(firstLine);
+      // Heading block (including freshly turned-into empty headings like "# " or "## ")
+      const headingMatch = /^(#{1,6})(?:\s+(.*)|$)$/.exec(rawFirstLine);
       if (headingMatch) {
         const level = headingMatch[1].length;
-        const text = headingMatch[2].trim();
+        const text = (headingMatch[2] ?? '').trim();
         const slug = text
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
@@ -3656,7 +4243,7 @@ export class DocumentCollaborationService implements OnDestroy {
       while (
         idx < lines.length &&
         lines[idx].trim().length > 0 &&
-        !/^#{1,6}\s+/.test(lines[idx].trim()) &&
+        !/^#{1,6}(?:\s+|$)/.test(lines[idx].trimStart()) &&
         !lines[idx].trim().startsWith('```')
       ) {
         chunkLines.push(lines[idx]);
@@ -3671,7 +4258,7 @@ export class DocumentCollaborationService implements OnDestroy {
         blockKind = 'callout';
       } else if (firstLine.startsWith('|')) {
         blockKind = 'table';
-      } else if (/^[-*+]\s+/.test(firstLine) || /^\d+\.\s+/.test(firstLine)) {
+      } else if (/^[-*+](?:\s+|$)/.test(rawFirstLine) || /^\d+\.(?:\s+|$)/.test(rawFirstLine)) {
         blockKind = 'list';
       }
 

@@ -7,6 +7,7 @@ vi.mock('@memberjunction/core-entities', () => {
     return {
         SearchEngineBase: {
             Instance: {
+                HasActiveAgentScopes: vi.fn(async () => true),
                 Config: vi.fn(async () => {}),
                 GetAgentScopes: vi.fn(() => []),
                 GetActiveScopeByID: vi.fn(() => undefined),
@@ -510,5 +511,22 @@ describe('AgentPreExecutionRAG', () => {
             expect((payload as { tables: { rows: unknown[] }[] }).tables[0].rows.length).toBe(1);
             expect(Array.isArray((payload as { computations: unknown[] }).computations)).toBe(true);
         });
+    });
+
+    it('skips SearchEngineBase.Config when HasActiveAgentScopes returns false', async () => {
+        const hasScopesSpy = vi.mocked(SearchEngineBase.Instance.HasActiveAgentScopes);
+        const configSpy = vi.mocked(SearchEngineBase.Instance.Config);
+        hasScopesSpy.mockResolvedValueOnce(false);
+
+        const rag = new AgentPreExecutionRAG();
+        const res = await rag.Execute({
+            agent: { ID: 'agent-no-scopes', Name: 'Empty' } as MJAIAgentEntity,
+            lastUserMessage: 'hello',
+            contextUser: fakeUser,
+        });
+
+        expect(res).toBeNull();
+        expect(hasScopesSpy).toHaveBeenCalledWith('agent-no-scopes', 'PreExecution', fakeUser);
+        expect(configSpy).not.toHaveBeenCalled();
     });
 });

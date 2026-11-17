@@ -1,8 +1,9 @@
-import { Component, EventEmitter, Input, Type } from '@angular/core';
-import { DataSnapshot } from '@memberjunction/core';
+import { Component, ElementRef, EventEmitter, inject, Input, Output, Type } from '@angular/core';
+import { CompositeKey, DataSnapshot, type IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
+import { CaptureRenderedElementThumbnail } from '../utils/artifact-dom-capture';
 import type { PdfOrientation } from '@memberjunction/ng-react';
 
 /**
@@ -65,9 +66,11 @@ export interface ArtifactViewerTab {
   /** Language hint for code highlighting (used with 'code' contentType) */
   language?: string;
   /** Angular component class to render (used with 'component' contentType) */
-  component?: Type<any>;
+  component?: Type<object>;
   /** Inputs to pass to the custom component */
-  componentInputs?: Record<string, any> | (() => Record<string, any>);
+  componentInputs?:
+    | Record<string, string | number | boolean | object | null | undefined>
+    | (() => Record<string, string | number | boolean | object | null | undefined>);
 }
 
 /**
@@ -78,7 +81,55 @@ export interface ArtifactViewerTab {
 export interface IArtifactVersionDiffViewer {
   BaseVersion: MJArtifactVersionEntity;
   TargetVersion: MJArtifactVersionEntity;
+  Provider?: IMetadataProvider | null;
 }
+
+/**
+ * Interactive viewing/editing mode accepted by unified artifact viewers (`NW-6`).
+ */
+export type ArtifactViewerViewMode = 'edit' | 'suggest' | 'diff' | 'present';
+
+/**
+ * Target location inside a document, spreadsheet, or slide deck for deep linking (`NW-6`).
+ */
+export interface ArtifactNavigationAnchor {
+  Sheet?: string;
+  Range?: string;
+  SlideNumber?: number;
+  SlideID?: string;
+  ElementID?: string;
+  Heading?: string;
+  BlockID?: string;
+  HighlightMs?: number;
+}
+
+export type ArtifactSelectionDomain = 'document' | 'spreadsheet' | 'slides' | 'whiteboard';
+
+/**
+ * User selection context emitted by artifact viewers (`NW-6`).
+ */
+export interface ArtifactSelectionAnchor {
+  domain: ArtifactSelectionDomain;
+  heading?: string;
+  blockId?: string;
+  quote?: string;
+  sheet?: string;
+  range?: string;
+  slideNumber?: number;
+  slideId?: string;
+  elementId?: string;
+}
+
+/**
+ * Server-verified frozen snapshot provenance entry passed in anonymous/guest share views (`NW-1`).
+ */
+export interface PreVerifiedFrozenSnapshotEntry {
+  Verified: boolean;
+  FrozenByUserName?: string;
+  FrozenAt?: string;
+}
+
+export type PreVerifiedFrozenSnapshotMap = Record<string, PreVerifiedFrozenSnapshotEntry>;
 
 /**
  * Abstract base component for all artifact viewer plugins.
@@ -90,10 +141,32 @@ export interface IArtifactVersionDiffViewer {
   template: ''
 })
 export abstract class BaseArtifactViewerPluginComponent extends BaseAngularComponent implements IArtifactViewerComponent {
+  private _artifactVersion!: MJArtifactVersionEntity;
+
   /**
    * The artifact version to display
    */
-  @Input() artifactVersion!: MJArtifactVersionEntity;
+  @Input()
+  public get artifactVersion(): MJArtifactVersionEntity {
+    return this._artifactVersion;
+  }
+  public set artifactVersion(value: MJArtifactVersionEntity) {
+    const previous = this._artifactVersion;
+    const isFirstChange = previous === undefined;
+    this._artifactVersion = value;
+    if (previous !== value) {
+      this.onArtifactVersionChanged(previous, value, isFirstChange);
+    }
+  }
+
+  /**
+   * Optional lifecycle hook invoked when {@link artifactVersion} is assigned a new reference.
+   */
+  protected onArtifactVersionChanged(
+    _previous: MJArtifactVersionEntity | undefined,
+    _current: MJArtifactVersionEntity,
+    _isFirstChange: boolean,
+  ): void {}
 
   /**
    * Inline-PREVIEW resolution does NOT live here.
@@ -127,6 +200,124 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    * scope. Null when the viewer has no scope, so every version of the artifact counts.
    */
   @Input() VisibleVersionNumbers: ReadonlyArray<number> | null = null;
+
+  private _preVerifiedFrozenSnapshots: PreVerifiedFrozenSnapshotMap | null = null;
+  private _guestSnapshotMode = false;
+  private _viewerViewMode: ArtifactViewerViewMode | undefined = undefined;
+  private _navigationAnchor: ArtifactNavigationAnchor | null = null;
+
+  /**
+   * Forces offline snapshot-only rendering without Yjs WebSocket connections, server permission lookups,
+   * or live query refreshes — even when the host browser has an authenticated `Metadata.Provider` (`P0-P3-4`).
+   */
+  @Input()
+  public get GuestSnapshotMode(): boolean {
+    return this._guestSnapshotMode;
+  }
+  public set GuestSnapshotMode(value: boolean | undefined) {
+    const next = Boolean(value);
+    if (this._guestSnapshotMode !== next) {
+      this._guestSnapshotMode = next;
+      this.onGuestSnapshotModeChanged(next);
+    }
+  }
+
+  /** CamelCase alias for {@link GuestSnapshotMode}. */
+  @Input()
+  public get guestSnapshotMode(): boolean {
+    return this.GuestSnapshotMode;
+  }
+  public set guestSnapshotMode(value: boolean | undefined) {
+    this.GuestSnapshotMode = value;
+  }
+
+  /**
+   * Effective guest snapshot isolation flag: explicit `[GuestSnapshotMode]="true"` OR
+   * an ephemeral guest snapshot version (empty `ArtifactID` paired with `PreVerifiedFrozenSnapshots !== null`).
+   */
+  protected get isGuestSnapshotMode(): boolean {
+    return (
+      this._guestSnapshotMode ||
+      (!this.artifactVersion?.ArtifactID && this._preVerifiedFrozenSnapshots !== null)
+    );
+  }
+
+  /** Optional lifecycle hook invoked when {@link GuestSnapshotMode} changes. */
+  protected onGuestSnapshotModeChanged(_guestMode: boolean): void {}
+
+  /**
+   * Server-verified frozen block/table/slide provenance passed for pre-auth guest share views (`NW-1`).
+   */
+  @Input()
+  public get PreVerifiedFrozenSnapshots(): PreVerifiedFrozenSnapshotMap | null {
+    return this._preVerifiedFrozenSnapshots;
+  }
+  public set PreVerifiedFrozenSnapshots(value: PreVerifiedFrozenSnapshotMap | null | undefined) {
+    this._preVerifiedFrozenSnapshots = value ?? null;
+    this.onPreVerifiedFrozenSnapshotsChanged(this._preVerifiedFrozenSnapshots);
+  }
+
+  /**
+   * Optional synchronized mode (`'edit' | 'suggest' | 'diff' | 'present'`) pushed from host containers (`NW-6`).
+   * Aliased to `'ViewMode'` / `'viewMode'` so plugin subclasses that define their own `ViewMode` property do not collide.
+   */
+  @Input('ViewMode')
+  public get SyncViewMode(): ArtifactViewerViewMode | undefined {
+    return this._viewerViewMode;
+  }
+  public set SyncViewMode(value: ArtifactViewerViewMode | undefined) {
+    if (value !== undefined && this._viewerViewMode !== value) {
+      this._viewerViewMode = value;
+      this.onViewerViewModeChanged(value);
+    }
+  }
+
+  /** CamelCase alias for {@link SyncViewMode}. */
+  @Input('viewMode')
+  public get syncViewMode(): ArtifactViewerViewMode | undefined {
+    return this.SyncViewMode;
+  }
+  public set syncViewMode(value: ArtifactViewerViewMode | undefined) {
+    this.SyncViewMode = value;
+  }
+
+  /**
+   * Optional target heading, block, sheet/range, or slide/element anchor to focus (`NW-6`).
+   */
+  @Input()
+  public get NavigationAnchor(): ArtifactNavigationAnchor | null {
+    return this._navigationAnchor;
+  }
+  public set NavigationAnchor(value: ArtifactNavigationAnchor | null | undefined) {
+    this._navigationAnchor = value ?? null;
+    if (this._navigationAnchor) {
+      this.onNavigationAnchorChanged(this._navigationAnchor);
+    }
+  }
+
+  /** CamelCase alias for {@link NavigationAnchor}. */
+  @Input()
+  public get navigationAnchor(): ArtifactNavigationAnchor | null {
+    return this.NavigationAnchor;
+  }
+  public set navigationAnchor(value: ArtifactNavigationAnchor | null | undefined) {
+    this.NavigationAnchor = value;
+  }
+
+  /** Emitted when the active selection (heading, block, cell range, or slide) changes (`NW-6`). */
+  @Output() public SelectionChanged = new EventEmitter<ArtifactSelectionAnchor>();
+
+  /** CamelCase alias for {@link SelectionChanged}. */
+  @Output() public selectionChanged = this.SelectionChanged;
+
+  /** Optional lifecycle hook invoked when {@link PreVerifiedFrozenSnapshots} changes. */
+  protected onPreVerifiedFrozenSnapshotsChanged(_snapshots: PreVerifiedFrozenSnapshotMap | null): void {}
+
+  /** Optional lifecycle hook invoked when {@link ViewMode} changes. */
+  protected onViewerViewModeChanged(_mode: ArtifactViewerViewMode): void {}
+
+  /** Optional lifecycle hook invoked when {@link NavigationAnchor} is assigned. */
+  protected onNavigationAnchorChanged(_anchor: ArtifactNavigationAnchor): void {}
 
   /**
    * Emitted when an inline-editable plugin (such as `MarkdownArtifactViewerComponent` or
@@ -206,7 +397,7 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
   /**
    * Parse JSON content safely
    */
-  protected parseJsonContent<T = any>(): T | null {
+  protected parseJsonContent<T = Record<string, string | number | boolean | object | null | undefined>>(): T | null {
     try {
       const content = this.getContent();
       return JSON.parse(content);
@@ -246,6 +437,16 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    * host application where NavigationService handles the actual navigation.
    */
   public navigationRequest?: EventEmitter<NavigationRequest>;
+
+  /**
+   * Optional: Emitted when the plugin wants to open a MemberJunction entity record.
+   */
+  public OpenEntityRecord?: EventEmitter<{ entityName: string; compositeKey: CompositeKey }>;
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   */
+  public openEntityRecord?: EventEmitter<{ entityName: string; compositeKey: CompositeKey }>;
 
   /**
    * Whether this plugin supports user feedback.
@@ -340,6 +541,35 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    * @returns A DataSnapshot describing the current state, or null if no data is available.
    */
   public abstract GetCurrentStateSnapshot(): DataSnapshot | null;
+
+  protected readonly captureHostElementRef: ElementRef<HTMLElement> | null = (() => {
+    try {
+      return inject(ElementRef, { optional: true }) as ElementRef<HTMLElement> | null;
+    } catch {
+      return null;
+    }
+  })();
+
+  /**
+   * Captures a rendered visual thumbnail (`data:image/webp|jpeg|png|svg+xml;base64,...`) of this
+   * plugin's primary display surface, masking live data blocks when requested by the Artifact Type policy.
+   */
+  public async CaptureRenderedThumbnail(options?: { maskLiveDataBlocks?: boolean }): Promise<string | null> {
+    const target = this.resolveCaptureRootElement();
+    if (!target) {
+      return null;
+    }
+    return CaptureRenderedElementThumbnail(target, {
+      MaskLiveDataBlocks: options?.maskLiveDataBlocks !== false,
+    });
+  }
+
+  /**
+   * Returns the DOM element representing the visual canvas/stage to screenshot (excluding viewer chrome).
+   */
+  protected resolveCaptureRootElement(): HTMLElement | null {
+    return this.captureHostElementRef?.nativeElement ?? null;
+  }
 
   /**
    * Get the raw text content from the artifact version.

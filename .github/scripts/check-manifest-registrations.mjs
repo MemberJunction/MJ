@@ -137,26 +137,71 @@ function owningPackage(file) {
 export function parseManifestImports(text) {
    const identifiers = new Map();
    const packages = new Set();
+   const byPackage = new Map();
    for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*['\"]([^'\"]+)['\"]/g)) {
       const pkg = m[2];
       packages.add(pkg);
+      let pkgSet = byPackage.get(pkg);
+      if (!pkgSet) {
+         pkgSet = new Set();
+         byPackage.set(pkg, pkgSet);
+      }
       for (const raw of m[1].split(',')) {
          const name = raw.trim().split(/\s+as\s+/)[0].trim();
-         if (name) identifiers.set(name, pkg);
+         if (name) {
+            identifiers.set(name, pkg);
+            pkgSet.add(name);
+         }
       }
    }
-   return { identifiers, packages };
+   return { identifiers, packages, byPackage };
 }
+
+const MONITORED_BASE_CLASSES = [
+   'BaseEntity',
+   'BaseRealtimeChannelServer',
+   'BaseRealtimeChannelClient',
+   'BaseArtifactToolLibrary',
+   'BaseArtifactViewerPluginComponent',
+];
 
 /** An optional trailing `// …` comment after a decorator. */
 const TRAILING_COMMENT = String.raw`(?:[ \t]*\/\/[^\n]*)?`;
 /** Zero or more further decorators, each `@Name` or `@Name(…)`, each with an optional trailing comment. */
 const STACKED_DECORATORS = String.raw`(?:\s*@[A-Za-z_$][\w$.]*(?:\([^)]*\))?` + TRAILING_COMMENT + ')*';
-const REGISTRATION_PATTERN = new RegExp(
-   String.raw`@RegisterClass\(\s*BaseEntity\b[^)]*\)` + TRAILING_COMMENT + STACKED_DECORATORS +
-      String.raw`\s*export\s+(?:abstract\s+)?class\s+([A-Za-z0-9_$]+)`,
+const MONITORED_REGISTRATION_PATTERN = new RegExp(
+   String.raw`@RegisterClass\(\s*(${MONITORED_BASE_CLASSES.join('|')})\b[^)]*\)` +
+      TRAILING_COMMENT +
+      STACKED_DECORATORS +
+      String.raw`\s*export\s+(abstract\s+)?class\s+([A-Za-z0-9_$]+)`,
    'g'
 );
+
+/**
+ * Every monitored `@RegisterClass(<Base>, …)` class declared in a source file.
+ * Concrete-only for non-`BaseEntity` families so shared abstract base classes don't create noise.
+ */
+export function extractMonitoredRegistrations(raw) {
+   const text = stripComments(raw);
+   const rawLines = raw.split('\n');
+   const out = [];
+   const pattern = MONITORED_REGISTRATION_PATTERN;
+   pattern.lastIndex = 0;
+   let match;
+   while ((match = pattern.exec(text))) {
+      const baseClass = match[1];
+      const isAbstract = Boolean(match[2]);
+      const className = match[3];
+      if (match[0].includes('${') || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(className)) continue;
+      if (baseClass !== 'BaseEntity' && isAbstract) continue;
+      const lineIndex = text.slice(0, match.index).split('\n').length - 1;
+      // The marker may sit just above the class, below any stacked decorators.
+      const classLineIndex = lineIndex + match[0].split('\n').length - 1;
+      const window = rawLines.slice(Math.max(0, lineIndex - 2), Math.max(classLineIndex, lineIndex + 2) + 1).join('\n');
+      out.push({ className, baseClass, lineIndex, allowed: window.includes(ALLOW_MARKER) });
+   }
+   return out;
+}
 
 /**
  * Every `@RegisterClass(BaseEntity, …)` class declared in a source file.
@@ -174,30 +219,58 @@ const REGISTRATION_PATTERN = new RegExp(
  * decorator's arguments, ends the match early. Nothing in the repo does either today.
  */
 export function extractBaseEntityRegistrations(raw) {
-   const text = stripComments(raw);
-   const rawLines = raw.split('\n');
-   const out = [];
-   const pattern = REGISTRATION_PATTERN;
-   pattern.lastIndex = 0;
-   let match;
-   while ((match = pattern.exec(text))) {
-      const className = match[1];
-      if (match[0].includes('${') || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(className)) continue;
-      const lineIndex = text.slice(0, match.index).split('\n').length - 1;
-      // The marker may sit just above the class, below any stacked decorators.
-      const classLineIndex = lineIndex + match[0].split('\n').length - 1;
-      const window = rawLines.slice(Math.max(0, lineIndex - 2), Math.max(classLineIndex, lineIndex + 2) + 1).join('\n');
-      out.push({ className, lineIndex, allowed: window.includes(ALLOW_MARKER) });
-   }
-   return out;
+   return extractMonitoredRegistrations(raw)
+      .filter((r) => r.baseClass === 'BaseEntity')
+      .map(({ className, lineIndex, allowed }) => ({ className, lineIndex, allowed }));
 }
 
 function readManifests() {
    const files = collectSourceFiles(PACKAGES).filter((f) => MANIFEST_BASENAMES.includes(basename(f)));
    return files.map((file) => {
-      const { identifiers, packages } = parseManifestImports(readFileSync(file, 'utf8'));
-      return { file, relPath: relative(REPO_ROOT, file), identifiers, packages };
+      const { identifiers, packages, byPackage } = parseManifestImports(readFileSync(file, 'utf8'));
+      return { file, relPath: relative(REPO_ROOT, file), identifiers, packages, byPackage };
    });
+}
+
+const SIBLING_MANIFEST_PAIRS = [
+   { fullPrefix: 'packages/ServerBootstrap/', litePrefix: 'packages/ServerBootstrapLite/' },
+   { fullPrefix: 'packages/Angular/Bootstrap/', litePrefix: 'packages/Angular/BootstrapLite/' },
+];
+
+export function findSiblingParityViolations(manifests) {
+   const parityViolations = [];
+   for (const pair of SIBLING_MANIFEST_PAIRS) {
+      const fullManifest = manifests.find((m) => m.relPath.replaceAll('\\', '/').startsWith(pair.fullPrefix));
+      const liteManifest = manifests.find((m) => m.relPath.replaceAll('\\', '/').startsWith(pair.litePrefix));
+      if (!fullManifest || !liteManifest) continue;
+
+      for (const pkg of liteManifest.packages) {
+         if (!fullManifest.packages.has(pkg)) continue;
+         const fullClasses = fullManifest.byPackage.get(pkg) ?? new Set();
+         const liteClasses = liteManifest.byPackage.get(pkg) ?? new Set();
+         for (const cls of fullClasses) {
+            if (!liteClasses.has(cls)) {
+               parityViolations.push({
+                  className: cls,
+                  pkg,
+                  missingFrom: liteManifest.relPath,
+                  presentIn: fullManifest.relPath,
+               });
+            }
+         }
+         for (const cls of liteClasses) {
+            if (!fullClasses.has(cls)) {
+               parityViolations.push({
+                  className: cls,
+                  pkg,
+                  missingFrom: fullManifest.relPath,
+                  presentIn: liteManifest.relPath,
+               });
+            }
+         }
+      }
+   }
+   return parityViolations;
 }
 
 /** Which root script regenerates a given manifest, read from package.json rather than hardcoded. */
@@ -238,7 +311,7 @@ function main() {
          continue;
       }
       if (!raw.includes('@RegisterClass')) continue;
-      for (const hit of extractBaseEntityRegistrations(raw)) {
+      for (const hit of extractMonitoredRegistrations(raw)) {
          if (hit.allowed) {
             allowed++;
             continue;
@@ -249,33 +322,44 @@ function main() {
          if (!pkg) continue;
          const covering = manifests.filter((m) => m.packages.has(pkg));
          if (covering.length === 0) continue; // nothing ships this package's registrations
-         const missing = covering.filter((m) => m.identifiers.get(className) !== pkg);
+         const missing = covering.filter((m) => !(m.byPackage.get(pkg)?.has(className)));
          if (missing.length > 0) {
             violations.push({ className, pkg, file: relative(REPO_ROOT, file), missing: missing.map((m) => m.relPath) });
          }
       }
    }
 
+   const parityViolations = findSiblingParityViolations(manifests);
+
    if (scanned === 0 && allowed === 0) {
-      console.error('check:manifest-registrations — found no @RegisterClass(BaseEntity, …) classes in packages/. This gate would check nothing.');
+      console.error('check:manifest-registrations — found no monitored @RegisterClass classes in packages/. This gate would check nothing.');
       process.exit(2);
    }
 
-   if (violations.length === 0) {
+   if (violations.length === 0 && parityViolations.length === 0) {
       console.log(
-         `✅ check:manifest-registrations — ${scanned} BaseEntity registration(s) across ${manifests.length} manifest(s); ` +
+         `✅ check:manifest-registrations — ${scanned} monitored registration(s) across ${manifests.length} manifest(s); ` +
             `all present${allowed ? `, ${allowed} allow-marked` : ''}.`
       );
       return;
    }
 
-   console.error(`❌ check:manifest-registrations — ${violations.length} registered entity class(es) missing from a manifest that ships their package:\n`);
+   console.error(
+      `❌ check:manifest-registrations — ${violations.length} missing source registration(s), ` +
+         `${parityViolations.length} sibling manifest parity drift(s):\n`
+   );
    const scriptsToRun = new Set();
    for (const v of violations) {
       console.error(`  ${v.className}`);
       console.error(`    declared in : ${v.file}  (${v.pkg})`);
       console.error(`    missing from: ${v.missing.join('\n                  ')}`);
       for (const m of v.missing) for (const s of regenerationScripts(m)) scriptsToRun.add(s);
+   }
+   for (const p of parityViolations) {
+      console.error(`  ${p.className} (${p.pkg})`);
+      console.error(`    present in  : ${p.presentIn}`);
+      console.error(`    missing from: ${p.missingFrom}`);
+      for (const s of regenerationScripts(p.missingFrom)) scriptsToRun.add(s);
    }
    console.error('\nA class missing here compiles and tests green, then the app instantiates the BASE class at runtime.');
    console.error('PR CI cannot catch this any other way: the freshness gate that regenerates and diffs the manifests');

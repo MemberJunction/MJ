@@ -175,6 +175,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT175 - List Refresh From Source",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "079BA540-54B1-4F76-8EBC-22F9E90A741E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT21 - Open-App Metadata Teardown",
             "Sequence": 15,
             "Status": "Active"
@@ -1341,6 +1352,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT156 - Widget Guest Row Isolation",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "51AEF347-7646-43D5-95BD-CA000E453594"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT133 - FLS Close-out (server)",
             "Sequence": 49,
             "Status": "Active"
@@ -1506,6 +1528,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT173 - Transaction Group Concurrency over GraphQL",
+            "Sequence": 84,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "48e68478-dd3b-4be1-ab4f-7e5f974372e0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT146 - SQL Pipeline Scenario Cross Products",
             "Sequence": 49,
             "Status": "Active"
@@ -1556,6 +1589,17 @@
           },
           "primaryKey": {
             "ID": "B3E731A9-F19F-4DF1-AAA9-A20B77C19FA5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT174 - Conversation Delete Guard (client transport)",
+            "Sequence": 83,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "02D61BD5-5BE3-4648-A4EE-C2673E136547"
           }
         },
         {
@@ -1644,6 +1688,17 @@
           },
           "primaryKey": {
             "ID": "78E3D9A1-2C4B-4F6A-9E15-3B8D4C5E6F70"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT172 - Gemini Decision 1 Decision Model",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "260A41E9-9367-4D7D-AABE-754921CBF6E3"
           }
         }
       ]

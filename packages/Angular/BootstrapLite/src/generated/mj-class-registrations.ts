@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (499 classes)
+// @memberjunction/core-entities (500 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -160,6 +160,7 @@ import {
     MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
     MJArtifactEntity,
+    MJArtifactGuestShareLinkEntity,
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
@@ -646,9 +647,10 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-conversations (13 classes)
+// @memberjunction/ng-conversations (14 classes)
 import {
     AgentMentionProvider,
+    ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
@@ -924,6 +926,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
     MJArtifactEntity,
+    MJArtifactGuestShareLinkEntity,
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
@@ -988,11 +991,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
-    MJConversationBranchEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJConversationBranchEntity,
     MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
@@ -1192,11 +1195,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
     MJRecordProcessWatermarkEntity,
-    MJRemoteOperationCategoryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
@@ -1365,6 +1368,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
     AgentMentionProvider,
+    ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
@@ -1395,12 +1399,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EntityRecordResource,
     LibraryResource,
     ListDetailResource,
-    MeetingsResource,
-    OmnibarAgentProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MeetingsResource,
+    OmnibarAgentProvider,
     OmnibarCommandProvider,
     OmnibarRecordProvider,
     OmnibarSearchProvider,
@@ -1496,7 +1500,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 681;
+export const CLASS_REGISTRATIONS_COUNT = 683;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -6,14 +6,16 @@
       "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
       "ContentType": "application/json",
       "ExtractRules": "@file:extract-rules/marketing-content.json",
-      "Icon": "fa-solid fa-bullhorn"
+      "Icon": "fa-solid fa-bullhorn",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "931E8903-7937-4ED1-8C00-6A6568133C7A"
-    },
-    "sync": {
-      "lastModified": "2026-01-08T14:58:21.019Z",
-      "checksum": "0360cf0a71606d4bdc4dc52ff122fcddc31997a1d80c26c8693a11dd43febadd"
     }
   },
   {
@@ -23,14 +25,16 @@
       "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
       "ContentType": "application/json",
       "ExtractRules": "@file:extract-rules/research-content.json",
-      "Icon": "fa-solid fa-magnifying-glass-chart"
+      "Icon": "fa-solid fa-magnifying-glass-chart",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "A7B8C9D0-E1F2-3A4B-5C6D-7E8F9A0B1C2D"
-    },
-    "sync": {
-      "lastModified": "2026-01-08T14:58:21.024Z",
-      "checksum": "9b8d3a762634330956ac4efff892b62903fc128f9e2d54c0f035055c6ac05d0a"
     }
   },
   {
@@ -41,14 +45,16 @@
       "ContentType": "text/x-python",
       "DriverClass": "CodeArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-brands fa-python"
+      "Icon": "fa-brands fa-python",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "1B9C0E57-A939-4B02-866F-034E2FFE9D82"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:46.062Z",
-      "checksum": "9524e2d16c4f87832dc6d2aa3e6cd18bcdb3c3129cc4a4e1a6a24a4cfdbe1419"
     }
   },
   {
@@ -60,14 +66,16 @@
       "DriverClass": "JsonArtifactViewerPlugin",
       "ToolLibraryClass": "JSONToolLibrary",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-file-code"
+      "Icon": "fa-solid fa-file-code",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "AE674C7E-EA0D-49EA-89E4-0649F5EB20D4"
-    },
-    "sync": {
-      "lastModified": "2026-10-20T23:18:43.101Z",
-      "checksum": "42d8883c89a54d4a0974c476712a96d1df1251236706820112cc6aeb6c533199"
     }
   },
   {
@@ -78,14 +86,16 @@
       "ContentType": "application/vnd.mj.report",
       "DriverClass": "ComponentArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-chart-line"
+      "Icon": "fa-solid fa-chart-line",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "62D0243B-57A9-4702-BC2C-06F1E5A751B5"
-    },
-    "sync": {
-      "lastModified": "2026-10-20T23:18:43.108Z",
-      "checksum": "32b424a21a012021bb946aaef7c8101fdb91348d1a52d2b7d716d5f704166dff"
     }
   },
   {
@@ -96,14 +106,16 @@
       "ContentType": "text/css",
       "DriverClass": "CodeArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-brands fa-css3-alt"
+      "Icon": "fa-brands fa-css3-alt",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "34B65CAA-1CBD-4555-ADDD-39605DC88154"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:46.080Z",
-      "checksum": "b7aae9623c3a55b0e6d400da03f8b8339322ae303c961f74c13fde33cfbe5706"
     }
   },
   {
@@ -115,14 +127,16 @@
       "DriverClass": "ComponentArtifactViewerPlugin",
       "ExtractRules": "@file:extract-rules/component-artifact.json",
       "IsEnabled": true,
-      "Icon": "fa-brands fa-codepen"
+      "Icon": "fa-brands fa-codepen",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "E8BA10A3-019F-4C51-A8AA-397AB124F212"
-    },
-    "sync": {
-      "lastModified": "2026-01-08T14:58:20.933Z",
-      "checksum": "b2e7d153d1fef97260ba16374db3d5a01089cb60d534d5a4fc22b40d1ccc4ef8"
     }
   },
   {
@@ -133,14 +147,16 @@
       "ContentType": "application/xml",
       "DriverClass": "CodeArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-code"
+      "Icon": "fa-solid fa-code",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "9110871A-1997-48F7-B7EB-39AE6D37E19D"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:46.091Z",
-      "checksum": "ffbc909fed2455bdf84f2ce4488060fb7ddec23ad8af6e1034ff0fc4883214ad"
     }
   },
   {
@@ -151,14 +167,17 @@
       "ContentType": "image/svg+xml",
       "DriverClass": "SvgArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-vector-square"
+      "Icon": "fa-solid fa-vector-square",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": true,
+          "Mode": "Rendered",
+          "MaskLiveDataBlocks": true
+        }
+      }
     },
     "primaryKey": {
       "ID": "21F6FCAA-1179-40F7-8F09-5044E645E9B4"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:46.097Z",
-      "checksum": "c5b2d29f4cebe9b18eb2017f831601eeed76cde8aedf8786600e4396bd49d23d"
     }
   },
   {
@@ -169,14 +188,17 @@
       "ContentType": "text/html",
       "DriverClass": "HtmlArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-brands fa-html5"
+      "Icon": "fa-brands fa-html5",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": true,
+          "Mode": "Rendered",
+          "MaskLiveDataBlocks": true
+        }
+      }
     },
     "primaryKey": {
       "ID": "4D0987F6-6269-4142-AECD-594B6DE34E0F"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:46.102Z",
-      "checksum": "c3aab9e355dfa430634c9a3dcd9154e4245eb3d8a02731128b4946b50186fed5"
     }
   },
   {
@@ -187,14 +209,16 @@
       "ContentType": "text/x-csharp",
       "DriverClass": "CodeArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-file-code"
+      "Icon": "fa-solid fa-file-code",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "F91A3C3A-7BB1-4C52-BB54-7345DB130E89"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:46.107Z",
-      "checksum": "37452bfb1a040e5ca3cd9333097d96e209852c5109b03a02849c83606887369d"
     }
   },
   {
@@ -205,14 +229,16 @@
       "ContentType": "text/x-java",
       "DriverClass": "CodeArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-brands fa-java"
+      "Icon": "fa-brands fa-java",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "5E28DFE1-C846-4953-B911-80D1DFAD7C71"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:46.112Z",
-      "checksum": "9d542a7c917bf76735ccd919c3896b5908348b0b1ee06f22c904e7bdf12865b2"
     }
   },
   {
@@ -223,14 +249,16 @@
       "ContentType": "application/sql",
       "DriverClass": "CodeArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-database"
+      "Icon": "fa-solid fa-database",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "41B12648-A9BA-4595-A522-B1427ECAACC4"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:46.151Z",
-      "checksum": "0af81043d8e27e25c9e1187459691f7f595fd3aaf9d3cf14b7a8564cf551053c"
     }
   },
   {
@@ -241,14 +269,16 @@
       "ContentType": "application/typescript",
       "DriverClass": "CodeArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-file-code"
+      "Icon": "fa-solid fa-file-code",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "7CF1E417-0D0D-447F-91F2-C7861F8BA5A2"
-    },
-    "sync": {
-      "lastModified": "2026-10-20T23:18:43.116Z",
-      "checksum": "da06b9fa50f858fe6159abafdf46b62a1c9af6c37f4aacf42e12cd6deb5a41c4"
     }
   },
   {
@@ -259,14 +289,16 @@
       "ContentType": "application/javascript",
       "DriverClass": "CodeArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-brands fa-js"
+      "Icon": "fa-brands fa-js",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "99E915CA-32F8-4FA1-AFED-D6F75F5DAE09"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:46.161Z",
-      "checksum": "3dfd6a725e3b764d07d80b42c4b85cf809d03d262347b9f6dcd12cad299fb061"
     }
   },
   {
@@ -278,7 +310,14 @@
       "DriverClass": "MarkdownArtifactViewerPlugin",
       "ToolLibraryClass": "DocumentToolLibrary",
       "IsEnabled": true,
-      "Icon": "fa-brands fa-markdown"
+      "Icon": "fa-brands fa-markdown",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": true,
+          "Mode": "Rendered",
+          "MaskLiveDataBlocks": true
+        }
+      }
     },
     "primaryKey": {
       "ID": "5E5883C2-0185-4E1E-8A1C-F514DBF52DB7"
@@ -294,14 +333,17 @@
       "DriverClass": "PdfArtifactViewerPlugin",
       "ToolLibraryClass": "PDFToolLibrary",
       "IsEnabled": true,
-      "Icon": "fa-file-pdf"
+      "Icon": "fa-solid fa-file-pdf",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": true,
+          "Mode": "Rendered",
+          "MaskLiveDataBlocks": true
+        }
+      }
     },
     "primaryKey": {
       "ID": "95B9A870-76A8-47FF-A44E-06784380490B"
-    },
-    "sync": {
-      "lastModified": "2026-04-22T21:08:13.631Z",
-      "checksum": "e8a15a2bf676ce68298679613fc0607f6262e8c3159ab53d205dd70a2be52eda"
     }
   },
   {
@@ -314,7 +356,14 @@
       "DriverClass": "SpreadsheetArtifactViewerPlugin",
       "ToolLibraryClass": "SpreadsheetToolLibrary",
       "IsEnabled": true,
-      "Icon": "fa-file-excel"
+      "Icon": "fa-solid fa-file-excel",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": true,
+          "Mode": "Structural",
+          "MaskLiveDataBlocks": true
+        }
+      }
     },
     "primaryKey": {
       "ID": "E197541F-484B-4462-8160-70993E18CEF6"
@@ -330,14 +379,16 @@
       "DriverClass": "DocxArtifactViewerPlugin",
       "ToolLibraryClass": "DocxToolLibrary",
       "IsEnabled": true,
-      "Icon": "fa-file-word"
+      "Icon": "fa-solid fa-file-word",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "CDF6218A-8250-437E-9074-EC1900D093A2"
-    },
-    "sync": {
-      "lastModified": "2026-04-22T21:08:13.659Z",
-      "checksum": "49fa6d211b6734bdb91f53912f888db7b799ead37dd09dbea946483861f0b858"
     }
   },
   {
@@ -350,14 +401,16 @@
       "DriverClass": "DataArtifactViewerPlugin",
       "ToolLibraryClass": "SearchResultSetToolLibrary",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-magnifying-glass-plus"
+      "Icon": "fa-solid fa-magnifying-glass-plus",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "249B4A72-7A7A-4CBC-BAAE-91DC66853795"
-    },
-    "sync": {
-      "lastModified": "2026-04-28T13:30:08.532Z",
-      "checksum": "02d9f97ae3797cc6f48845fbf7f7b5b4ceeec7f1e4a8866f2cf5f44a14b43879"
     }
   },
   {
@@ -369,7 +422,14 @@
       "DriverClass": "WhiteboardArtifactViewerPlugin",
       "ToolLibraryClass": "WhiteboardToolLibrary",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-chalkboard"
+      "Icon": "fa-solid fa-chalkboard",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": true,
+          "Mode": "Rendered",
+          "MaskLiveDataBlocks": true
+        }
+      }
     },
     "primaryKey": {
       "ID": "D37C0785-C5FD-42B4-9442-D48B076E2BA4"
@@ -385,7 +445,14 @@
       "DriverClass": "SlideDeckArtifactViewerPlugin",
       "ToolLibraryClass": "SlideDeckToolLibrary",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-person-chalkboard"
+      "Icon": "fa-solid fa-person-chalkboard",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": true,
+          "Mode": "Rendered",
+          "MaskLiveDataBlocks": true
+        }
+      }
     },
     "primaryKey": {
       "ID": "5AEC55B8-6302-4DC6-ABBC-E9DC9254A3EF"

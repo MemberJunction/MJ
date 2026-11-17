@@ -37,7 +37,7 @@ All inputs are optional and default to the historical behaviour, so existing cal
 | `[ShowDensityPicker]` | `boolean` | `true` | Density picker (in the gear). |
 | `[ShowMinimize]` | `boolean` | `true` | Minimize (collapse call, keep it live). |
 | `[ShowEnd]` | `boolean` | `true` | End‑call control. |
-| `[ShowSurfacePanel]` | `boolean` | `true` | Right surface panel (whiteboard/browser/channels). Console + earned only. |
+| `[ShowSurfacePanel]` | `boolean` | `true` | Right surface panel (`ArtifactWorkspace`/whiteboard/browser/channels). Console + earned only. |
 | `[ShowChannels]` | `boolean` | `true` | Channel strip. |
 | `[ShowActivityRail]` | `boolean` | `true` | Activity rail/tab (delegations, artifacts). |
 | `[ShowDevLinks]` | `boolean` | `true` | Developer links and the gear's dev toggle (still gated by per‑session dev mode). |
@@ -168,9 +168,32 @@ RealtimeUiSignals ─┘        (pure, tested)        (single source of truth)
 
 ---
 
+## Built-in Channels
+
+`@memberjunction/ng-conversations` ships the following built-in channel plugins alongside the call overlay:
+
+| Channel Key | Plugin / Surface | Purpose |
+|---|---|---|
+| `ArtifactWorkspace` | `ArtifactWorkspaceChannel` (`RealtimeArtifactWorkspaceChannel`) + `<mj-realtime-artifact-workspace-surface>` | Multi-tab collaborative viewer/editor for **MJ Docs**, **MJ Slides**, **MJ Sheets**, and **Whiteboards** (`DefaultAvailability: 'all-sessions'`, `MaxExposure: 'pixels'`, `MultiInstance: true`, default `MaxInstances: 6`). |
+| `InteractiveComponent` | `InteractiveComponentChannel` (`RealtimeInteractiveComponentChannel`) + `<mj-realtime-interactive-component-surface>` | Spec-driven live React/Angular `Component` host (`DefaultAvailability: 'opt-in'`, `MaxExposure: 'pixels'`, `MultiInstance: true`). |
+| `Whiteboard` | `WhiteboardChannel` (`RealtimeWhiteboardChannel`) + `<mj-whiteboard-artifact-viewer>` | Shared live whiteboard canvas (`SupportsInlineEdit = true`). |
+| `RemoteBrowser` | `RemoteBrowserChannel` (`RealtimeRemoteBrowserChannel`) + `<mj-remote-browser-surface>` | Co-browsed headless browser stream. |
+| `Media` | `MediaChannel` + `<mj-realtime-media-surface>` | Media/recording playback surface. |
+| `Camera` / `ScreenShare` | `RealtimeCameraChannel` / `RealtimeScreenShareChannel` + `<mj-realtime-capture-surface>` | Live device camera and screen-share video feeds (`capture/`). |
+| `Avatar` | `RealtimeAvatarChannel` + `<mj-realtime-avatar-surface>` | Animated avatar video surface (`avatar/`). |
+| `IdentityVerification` | `IdentityVerificationChannel` (`RealtimeIdentityVerificationChannel`) + `<mj-identity-verification-surface>` | Voice/session identity verification flow (`identity-verification/`). |
+
+### Artifact Workspace channel (`artifact-workspace/`)
+
+Hosts collaborative `Markdown Document`, `Presentation`, `Excel Spreadsheet`, and `Whiteboard` artifacts inside `<mj-artifact-viewer-panel>` tabs (`w1`, `w2`, …) beside the live call (`ArtifactWorkspaceChannelServer` in `@memberjunction/ai-agents`):
+
+- **Delegation partitioning**: `AcceptsDelegationArtifacts` inspects `ParsedDelegationArtifact.ArtifactTypeName` and `DriverClass` (`IsCollaborativeArtifactDescriptor`) so Docs, Slides, Sheets, and Whiteboards route to `ArtifactWorkspace` while `Component` artifacts route exclusively to `InteractiveComponent` (passing a `Component` artifact to `ArtifactWorkspace.open` returns `use_interactive_component`).
+- **Verbs**: `open` (`artifactId`, `artifactVersionId`, `versionNumber`, `name`, `artifactTypeName`, `driverClass`), `focus`, `show_version`, `refresh`, `close`, `navigate_to_anchor` (`sheet`, `range`, `slideNumber`, `elementId`, `heading`, `blockId`, `highlightMs`), and `set_view_mode` (`'edit' | 'suggest' | 'diff' | 'present'`).
+- **Bidirectional awareness & events**: Emits `opened`, `focused`, `version_changed`, `newer_version_available`, `refreshed`, `selection_changed` (`EmitSelectionDelta`), `navigated_to_anchor`, `view_mode_changed`, and `closed`. Visual frame capture (`EnableChannelFrameCapture`) is also supported at `MaxExposure: 'pixels'`.
+
 ## "Agent can see" (`<mj-realtime-perception-chip>`)
 
-When the model can be shown pictures of the call's surfaces (a whiteboard, a remote browser, a component, a shared screen), a small chip above the channel strip says so: **Agent can see: Whiteboard**, **Agent can see 2 sources**, or **Agent view off**. It opens a panel with one switch per source, each saying whether the agent is viewing it now, could view it, or is off. A switch off removes that source from the model's view and tells the agent; the choice is remembered per user per channel (`UserInfoEngine`, key `mj.realtime.visualPerception.v1`; in memory for anonymous or connect-only sessions). The chip is presentational (input `Sources`, output `SourceToggled`); the overlay wires it to `RealtimeSessionService.VideoSources$` / `SetVideoSourceEnabled`, and reports which channel tab the user is on (`SetFocusedChannel`) so that, when the model can watch only one source, it is the one the user is looking at. Design tokens only; keyboard and screen-reader operable.
+When the model can be shown pictures of the call's surfaces (a whiteboard, an `ArtifactWorkspace` document/sheet/slide tab, a remote browser, a component, a camera, or a shared screen), a small chip above the channel strip says so: **Agent can see: Whiteboard**, **Agent can see 2 sources**, or **Agent view off**. It opens a panel with one switch per source, each saying whether the agent is viewing it now, could view it, or is off. A switch off removes that source from the model's view and tells the agent; the choice is remembered per user per channel (`UserInfoEngine`, key `mj.realtime.visualPerception.v1`; in memory for anonymous or connect-only sessions). The chip is presentational (input `Sources`, output `SourceToggled`); the overlay wires it to `RealtimeSessionService.VideoSources$` / `SetVideoSourceEnabled`, and reports which channel tab the user is on (`SetFocusedChannel`) so that, when the model can watch only one source, it is the one the user is looking at. Design tokens only; keyboard and screen-reader operable.
 
 ## Interactive Component channel (`interactive-component/`)
 
@@ -190,7 +213,7 @@ Built-ins: `open { artifactId | artifactVersionId, inputs? }` (the dispatcher's 
 
 **Access.** Artifacts are loaded through the signed-in user's own session and read permission (`RunViewComponentArtifactSource`: ids are validated as UUIDs, the artifact must be a `Component` type, access is the same owner / explicit grant / collection rule the rest of the conversation UI applies). The agent cannot open anything the user cannot. Content stored as a file rather than inline is not supported.
 
-**Delegated artifacts.** When a delegated run produces artifacts: one that is already open moves to the newer version in place (`swapToNewerVersions`, default on; otherwise the agent is only told one exists); with `autoOpenDelegatedComponents: true` a component that is not open is opened. Auto-open is off by default, and the channel cannot tell a component from another artifact until it has loaded it, so with it on the channel is mounted for any delegated artifact and quietly ignores those that are not components.
+**Delegated artifacts.** When a delegated run produces artifacts: one that is already open moves to the newer version in place (`swapToNewerVersions`, default on; otherwise the agent is only told one exists). `AcceptsDelegationArtifacts` uses `ParsedDelegationArtifact.ArtifactTypeName` and `DriverClass` (`IsComponentArtifactDescriptor`, while rejecting `IsCollaborativeArtifactDescriptor`) so `InteractiveComponent` dynamically claims only `Component` artifacts (or untyped legacy fallbacks) and never mounts collaborative Docs/Slides/Sheets/Whiteboards (which route to `ArtifactWorkspace`). With `autoOpenDelegatedComponents: true`, new delegated `Component` artifacts open automatically.
 
 **Configuration** (`channels.config.InteractiveComponent` in the config cascade, all optional): `autoOpenDelegatedComponents`, `swapToNewerVersions`, `maxInstances` (1-8), `maxStateRows` (default 25), `maxStateChars` (default 6000), and the runtime-level `maxExposure`. A value of the wrong type falls back to its default with a console warning.
 

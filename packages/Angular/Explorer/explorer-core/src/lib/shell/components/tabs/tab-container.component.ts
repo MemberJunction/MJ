@@ -1977,14 +1977,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (isNewRecordTransition) {
       // Re-key the cache entry first, so when the workspace config emission triggers
       // signature/needsReload checks below, the cache lookup at the new id succeeds.
-      this.cacheManager.rekeyComponent(driverClass, oldRecordId, newRecordId, appId, oldDiscriminator, undefined);
+      this.cacheManager.rekeyComponent(driverClass, oldRecordId, newRecordId, appId, oldDiscriminator, oldDiscriminator);
 
       // Keep the in-memory single-resource identity in sync so detach uses the correct key.
       if (this.singleResourceCacheIdentity?.tabId === tabId) {
         this.singleResourceCacheIdentity = {
           ...this.singleResourceCacheIdentity,
           recordId: newRecordId,
-          discriminator: undefined
+          discriminator: oldDiscriminator
         };
       }
 

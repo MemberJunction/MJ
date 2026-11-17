@@ -135,6 +135,8 @@ export interface HarnessSessionConfig {
     SandboxMetadata?: CloudSandboxMetadata;
     /** When true, instructs a resumed cloud session to harvest an already-submitted background turn without posting a duplicate turn. */
     ReattachPendingTurn?: boolean;
+    /** Extra host directories exposed to CLI harnesses via `--add-dir`. */
+    AdditionalDirectories?: string[];
 }
 
 /** Alias for {@link HarnessSessionConfig} used by cloud session initialization callers. */
@@ -198,6 +200,8 @@ export interface HarnessTurnResult {
     CostUsd?: number;
     /** Set when the turn failed rather than completed. */
     ErrorMessage?: string;
+    /** True when the turn was stopped because it exceeded limits.maxWallClockSeconds. */
+    TimedOut?: boolean;
     /** Vendor session id, persisted to `AIAgentRun.ExternalSessionID` for resume and log correlation. */
     SessionId?: string;
     /**

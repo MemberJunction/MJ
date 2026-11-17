@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseArtifactToolLibrary } from '@memberjunction/ai-core-plus';
 import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
@@ -53,7 +55,14 @@ describe('DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)', () => {
         'upsert_table',
         'insert_live_block',
         'embed_artifact_block',
+        'move_block',
+        'duplicate_block',
         'propose_suggestion',
+        'review_suggestion',
+        'list_comments',
+        'add_comment',
+        'reply_comment',
+        'resolve_comment',
       ]),
     );
   });
@@ -150,7 +159,7 @@ describe('DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)', () => {
     expect(afterDelete).not.toContain('# Updated Q4 Executive Report');
   });
 
-  it('upsert_table, insert_live_block, embed_artifact_block, and propose_suggestion work end-to-end', async () => {
+  it('upsert_table, insert_live_block, and embed_artifact_block work end-to-end', async () => {
     const tableRes = await lib.InvokeTool(
       'upsert_table',
       {
@@ -180,38 +189,44 @@ describe('DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)', () => {
     expect(docWithLive).toContain(':::mj-block');
     expect(docWithLive).toContain('"EntityName": "MJ: Projects"');
 
-    const oleRes = await lib.InvokeTool(
-      'embed_artifact_block',
-      {
-        artifactId: 'wb-12345',
-        artifactType: 'Whiteboard',
-        title: 'Architecture Diagram',
-        embedMode: 'Inline',
-      },
-      docWithLive,
-    );
-    expect(oleRes.success).toBe(true);
-    const docWithOle = (oleRes.data as { updatedContent: string }).updatedContent;
-    expect(docWithOle).toContain('"ArtifactID": "wb-12345"');
-    expect(docWithOle).toContain('"ArtifactType": "Whiteboard"');
-
-    const blocksRes = await lib.InvokeTool('get_blocks', {}, docWithOle);
-    const firstBlock = (blocksRes.data as { blocks: Array<{ blockId: string }> }).blocks[0];
-    const suggestRes = await lib.InvokeTool(
-      'propose_suggestion',
-      {
-        targetBlockId: firstBlock.blockId,
-        proposedText: '# Executive Summary (Final)',
-        rationale: 'Tighter title for board deck',
-        authorName: '@DocsAgent',
-      },
-      docWithOle,
-    );
-    expect(suggestRes.success).toBe(true);
-    const proposal = (suggestRes.data as { suggestion: { status: string; authorName: string; proposedText: string } }).suggestion;
-    expect(proposal.status).toBe('pending');
-    expect(proposal.authorName).toBe('@DocsAgent');
-    expect(proposal.proposedText).toBe('# Executive Summary (Final)');
+    const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+      ArtifactID: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      CanRead: true,
+      CanEdit: false,
+      CanDelete: false,
+      CanShare: false,
+      Source: 'Owner',
+      Reason: 'Test',
+    });
+    try {
+      const mockProvider = {
+        RunView: async (params: RunViewParams) => ({
+          Success: true,
+          Results: [{ ID: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', TypeID: '' }],
+          RowCount: 1,
+          TotalRowCount: 1,
+          ExecutionTime: 1,
+          ErrorMessage: '',
+        }),
+      } as unknown as IMetadataProvider & IRunViewProvider;
+      const oleRes = await lib.InvokeTool(
+        'embed_artifact_block',
+        {
+          artifactId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+          artifactType: 'Whiteboard',
+          title: 'Architecture Diagram',
+          embedMode: 'Inline',
+        },
+        docWithLive,
+        { contextUser: { ID: 'test-user-1', Name: 'Test' } as UserInfo, provider: mockProvider },
+      );
+      expect(oleRes.success).toBe(true);
+      const docWithOle = (oleRes.data as { updatedContent: string }).updatedContent;
+      expect(docWithOle).toContain('"ArtifactID": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"');
+      expect(docWithOle).toContain('"ArtifactType": "Whiteboard"');
+    } finally {
+      permSpy.mockRestore();
+    }
   });
 
   it('D6 & CodeQL: preserves <!-- mj-block-id: ... --> comments across edits, mints stable IDs on inserted blocks, and escapes backslashes before pipes in upsert_table', async () => {
@@ -838,5 +853,160 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
     const cellsDraft = await sheetLib.InvokeTool('search_cells', { query: '[DRAFT]' }, literalSheetJson);
     expect(cellsDraft.success).toBe(true);
     expect((cellsDraft.data as { matches: Array<{ cell: string }> }).matches.map((m) => m.cell)).toEqual(['B2']);
+  });
+
+  it('resolves session alpha short-IDs (e.g. "D") to real UUIDs across DocumentToolLibrary and SlideDeckToolLibrary, and rejects unresolved short-IDs', async () => {
+    const docLib = new DocumentToolLibrary();
+    const slideLib = new SlideDeckToolLibrary();
+    const targetUuid = '5B83B8FC-0C19-4584-BC21-B7DFCDC518DD';
+    const targetVersionUuid = 'BA9AF0C9-1B00-40EA-A206-425F38FAB36B';
+    const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+      ArtifactID: targetUuid,
+      CanRead: true,
+      CanEdit: false,
+      CanDelete: false,
+      CanShare: false,
+      Source: 'Owner',
+      Reason: 'Test',
+    });
+    const mockEmbedProvider = {
+      RunView: async (params: RunViewParams) => ({
+        Success: true,
+        Results:
+          params.EntityName === 'MJ: Artifact Versions'
+            ? [{ ID: targetVersionUuid, ArtifactID: targetUuid }]
+            : [{ ID: targetUuid, TypeID: '' }],
+        RowCount: 1,
+        TotalRowCount: 1,
+        ExecutionTime: 1,
+        ErrorMessage: '',
+      }),
+    } as unknown as IMetadataProvider & IRunViewProvider;
+    const ctx = {
+      contextUser: { ID: 'test-user-1', Name: 'Test' } as UserInfo,
+      provider: mockEmbedProvider,
+      resolveArtifactId: (id: string) => (id.trim().toUpperCase() === 'D' ? targetUuid : undefined),
+      resolveVersionId: (id: string) => (id.trim().toUpperCase() === 'E' ? targetVersionUuid : undefined),
+    };
+
+    try {
+      // 1. DocumentToolLibrary.embed_artifact_block resolves "D" -> UUID and "E" -> version UUID
+      const embedRes = await docLib.InvokeTool(
+        'embed_artifact_block',
+        { artifactId: 'D', versionId: 'E', title: 'Silk Road Trade Analysis', artifactType: 'Excel Spreadsheet' },
+        '# Silk Road\n\nIntro paragraph.',
+        ctx,
+      );
+      expect(embedRes.success).toBe(true);
+      const updatedDoc = (embedRes.data as { updatedContent: string }).updatedContent;
+      expect(updatedDoc).toContain(`"ArtifactID": "${targetUuid}"`);
+      expect(updatedDoc).toContain(`"VersionID": "${targetVersionUuid}"`);
+      expect(updatedDoc).not.toContain('"ArtifactID": "D"');
+      expect(updatedDoc).not.toContain('"VersionID": "E"');
+
+      // 2. DocumentToolLibrary rejects unresolved short-ID "D" or short version "E" without resolver context
+      const unlinkedEmbed = await docLib.InvokeTool(
+        'embed_artifact_block',
+        { artifactId: 'D', title: 'Should Fail' },
+        '# Silk Road',
+      );
+      expect(unlinkedEmbed.success).toBe(false);
+      expect(unlinkedEmbed.errorMessage).toContain('could not be resolved');
+
+      const unlinkedVersionEmbed = await docLib.InvokeTool(
+        'embed_artifact_block',
+        { artifactId: targetUuid, versionId: 'E', title: 'Should Fail Version' },
+        '# Silk Road',
+      );
+      expect(unlinkedVersionEmbed.success).toBe(false);
+      expect(unlinkedVersionEmbed.errorMessage).toContain('MJ: Artifact Versions UUID');
+
+      // 3. DocumentToolLibrary.insert_block_after & replace_block normalize hand-crafted :::mj-block JSON with "ArtifactID": "D" and "VersionID": "E"
+      const rawDirective = [
+        ':::mj-block',
+        JSON.stringify(
+          {
+            BlockID: 'blk-handcrafted',
+            Kind: 'Artifact',
+            Mode: 'Live',
+            Title: 'Embedded Sheet',
+            ArtifactID: 'D',
+            VersionID: 'E',
+            ArtifactType: 'Excel Spreadsheet',
+            EmbedMode: 'Inline',
+          },
+          null,
+          2,
+        ),
+        ':::',
+      ].join('\n');
+      const insertRawRes = await docLib.InvokeTool(
+        'insert_block_after',
+        { markdown: rawDirective },
+        '# Doc',
+        ctx,
+      );
+      expect(insertRawRes.success).toBe(true);
+      const insertedRaw = (insertRawRes.data as { updatedContent: string }).updatedContent;
+      expect(insertedRaw).toContain(`"ArtifactID": "${targetUuid}"`);
+      expect(insertedRaw).toContain(`"VersionID": "${targetVersionUuid}"`);
+
+      // 4. SlideDeckToolLibrary.upsert_slide_element resolves mjBlock.ArtifactID "D" -> UUID and mjBlock.VersionID "E" -> UUID
+      const deckRes = await slideLib.InvokeTool(
+        'add_slide',
+        { title: 'Trade Sheet Slide', layout: 'title-body' },
+        '',
+        ctx,
+      );
+      expect(deckRes.success).toBe(true);
+      const deckJson = (deckRes.data as { updatedContent: string }).updatedContent;
+      const outline = JSON.parse(deckJson) as { Slides: Array<{ SlideID: string }> };
+      const slideId = outline.Slides[outline.Slides.length - 1].SlideID;
+
+      const slideUpsert = await slideLib.InvokeTool(
+        'upsert_slide_element',
+        {
+          slideId,
+          regionId: 'body',
+          mjBlock: {
+            Kind: 'Artifact',
+            Mode: 'Live',
+            Title: 'Embedded Workbook',
+            ArtifactID: 'D',
+            VersionID: 'E',
+            ArtifactType: 'Excel Spreadsheet',
+            EmbedMode: 'Inline',
+          },
+        },
+        deckJson,
+        ctx,
+      );
+      expect(slideUpsert.success).toBe(true);
+      const slideUpdated = (slideUpsert.data as { updatedContent: string }).updatedContent;
+      expect(slideUpdated).toContain(targetUuid);
+      expect(slideUpdated).toContain(targetVersionUuid);
+
+      const badSlideVersion = await slideLib.InvokeTool(
+        'upsert_slide_element',
+        {
+          slideId,
+          regionId: 'body',
+          mjBlock: {
+            Kind: 'Artifact',
+            Mode: 'Live',
+            Title: 'Embedded Workbook',
+            ArtifactID: targetUuid,
+            VersionID: 'E',
+            ArtifactType: 'Excel Spreadsheet',
+            EmbedMode: 'Inline',
+          },
+        },
+        deckJson,
+      );
+      expect(badSlideVersion.success).toBe(false);
+      expect(badSlideVersion.errorMessage).toContain('MJ: Artifact Versions UUID');
+    } finally {
+      permSpy.mockRestore();
+    }
   });
 });

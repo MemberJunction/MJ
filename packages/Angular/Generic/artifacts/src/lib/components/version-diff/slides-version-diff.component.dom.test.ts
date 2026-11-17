@@ -70,5 +70,51 @@ describe('SlidesVersionDiffComponent DOM', () => {
     f.detectChanges();
     expect(f.componentInstance.ChangedSlidesOnly).toBe(true);
     expect(f.componentInstance.FilteredSlides.length).toBe(0);
+    expect(text(f, '[data-testid="slides-visual-version-diff"]')).toContain('No changed slides match the current filter');
+  });
+
+  it('renders deck theme deltas, quote/image/mj-block regions, and speaker notes redlines', () => {
+    const baseDeck = SlideDeckEngine.Instance.CreateDefaultDeck('Deck v1', 'deck-4');
+    baseDeck.Slides[0].SpeakerNotes = 'Old intro note';
+    baseDeck.Slides[0].Regions.push(
+      {
+        RegionID: 'q-1',
+        Label: 'Quote',
+        Kind: 'quote',
+        MarkdownContent: 'Revenue grew steadily',
+        QuoteAttribution: 'CFO',
+      },
+      {
+        RegionID: 'img-1',
+        Label: 'Hero',
+        Kind: 'image',
+        MarkdownContent: '',
+        ImageUrl: 'https://example.com/hero.png',
+        ImageAlt: 'Hero chart',
+      },
+    );
+
+    const targetDeck = SlideDeckEngine.Instance.ParseDeckSpec(
+      SlideDeckEngine.Instance.SerializeDeckSpec(baseDeck),
+      'Deck v2',
+    );
+    targetDeck.Theme.PrimaryColor = '#ff5500';
+    targetDeck.Slides[0].SpeakerNotes = 'Updated executive note';
+    targetDeck.Slides[0].Regions[1].MarkdownContent = 'Revenue accelerated 24%';
+
+    const f = renderComponentFixture(SlidesVersionDiffComponent, {
+      imports: [SlidesVersionDiffComponent],
+      inputs: {
+        BaseVersion: makeVersion('sv1', 1, SlideDeckEngine.Instance.SerializeDeckSpec(baseDeck)),
+        TargetVersion: makeVersion('sv2', 2, SlideDeckEngine.Instance.SerializeDeckSpec(targetDeck)),
+      },
+    });
+    f.detectChanges();
+
+    const hostText = text(f, '[data-testid="slides-visual-version-diff"]');
+    expect(hostText).toContain('Deck & Theme Changes');
+    expect(hostText).toContain('Speaker Notes');
+    expect(hostText).toContain('Hero chart');
+    expect(hostText).toContain('CFO');
   });
 });

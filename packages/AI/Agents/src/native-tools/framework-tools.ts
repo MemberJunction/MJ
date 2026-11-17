@@ -12,7 +12,7 @@
  * the capability behind each through {@link FrameworkToolHost}.
  * @module @memberjunction/ai-agents
  */
-import type { AgentDecisionRequest, AgentScratchpad, AgentTask } from '@memberjunction/ai-core-plus';
+import type { AgentDecisionRequest, AgentScratchpad, AgentTask, ArtifactJsonValue, ArtifactToolArgs } from '@memberjunction/ai-core-plus';
 import type { AgentToolDefinition, AgentToolResult } from './agent-tools';
 
 export const SCRATCHPAD_TOOL = 'scratchpad_write';
@@ -36,12 +36,13 @@ export interface FrameworkToolAvailability {
 export interface FrameworkToolHost {
     ApplyScratchpad(changes: AgentScratchpad): string;
     WriteMemory(note: string, type: 'Preference' | 'Context', scopeHint: 'user' | 'agent' | undefined): Promise<AgentToolResult>;
-    RunArtifactTool(artifactId: string, tool: string, input: Record<string, unknown>): Promise<AgentToolResult>;
-    RunConversationTool(tool: string, input: Record<string, unknown>): Promise<AgentToolResult>;
+    RunArtifactTool(artifactId: string, tool: string, input: ArtifactToolArgs): Promise<AgentToolResult>;
+    RunConversationTool(tool: string, input: ArtifactToolArgs): Promise<AgentToolResult>;
     RunDecisions(requests: AgentDecisionRequest[], payload: object): Promise<AgentToolResult>;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isRecord = (value: ArtifactJsonValue | object | null | undefined): value is ArtifactToolArgs =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
 const fail = (Content: string): AgentToolResult => ({ Content, IsError: true });
 
 function scratchpadTool(host: FrameworkToolHost): AgentToolDefinition {
@@ -75,7 +76,7 @@ function scratchpadTool(host: FrameworkToolHost): AgentToolDefinition {
                 }
             }
         },
-        Execute: async (args) => {
+        Execute: async (args: ArtifactToolArgs) => {
             const changes = readScratchpadChanges(args);
             return typeof changes === 'string' ? fail(changes) : { Content: host.ApplyScratchpad(changes), IsError: false };
         }
@@ -85,7 +86,7 @@ function scratchpadTool(host: FrameworkToolHost): AgentToolDefinition {
 const TASK_STATUSES: readonly string[] = ['pending', 'in_progress', 'completed', 'blocked'];
 
 /** One task from `taskList.upsert`, or undefined when it lacks an id, a title or a known status. */
-function readTask(raw: unknown): AgentTask | undefined {
+function readTask(raw: ArtifactJsonValue | undefined): AgentTask | undefined {
     if (!isRecord(raw) || typeof raw.id !== 'string' || typeof raw.title !== 'string' || typeof raw.status !== 'string') {
         return undefined;
     }
@@ -97,7 +98,7 @@ function readTask(raw: unknown): AgentTask | undefined {
 }
 
 /** The scratchpad changes in a call's arguments, or a message saying what is wrong with them. */
-function readScratchpadChanges(args: Record<string, unknown>): AgentScratchpad | string {
+function readScratchpadChanges(args: ArtifactToolArgs): AgentScratchpad | string {
     if (args.notes !== undefined && typeof args.notes !== 'string') {
         return 'scratchpad_write.notes must be a string.';
     }
@@ -128,7 +129,7 @@ function memoryTool(host: FrameworkToolHost): AgentToolDefinition {
             },
             required: ['note', 'type']
         },
-        Execute: async (args) => {
+        Execute: async (args: ArtifactToolArgs) => {
             const type = args.type === 'Preference' || args.type === 'Context' ? args.type : undefined;
             if (typeof args.note !== 'string' || !args.note.trim() || !type) {
                 return fail("memory_write needs a non-empty note and a type of 'Preference' or 'Context'.");
@@ -139,25 +140,38 @@ function memoryTool(host: FrameworkToolHost): AgentToolDefinition {
     };
 }
 
+const WORKSPACE_ARTIFACT_TOOLS: ReadonlySet<string> = new Set([
+    'create_artifact',
+    'open_artifact',
+    'list_workspace_artifacts',
+    'create_synthesized_artifact',
+    'refresh_and_snapshot_artifact',
+]);
+
 function artifactTool(host: FrameworkToolHost): AgentToolDefinition {
     return {
         Name: ARTIFACT_TOOL,
-        Description: 'Run one artifact tool on an artifact listed in Available Artifacts, to explore or inspect it. '
-            + 'Call this with the artifact id (A, B, …), the tool name and its input; the result is returned to you on this turn.',
+        Description: 'Run one artifact or workspace tool (for example `create_artifact`, `open_artifact`, `list_workspace_artifacts`, `create_synthesized_artifact`, `refresh_and_snapshot_artifact`, or a domain tool like `upsert_live_table` / `write_cells` / `insert_block_after` / `add_slide` on an artifact in Available Artifacts). Call with `tool`, optional `artifactId` (A, B, … — required for domain tools, optional for workspace tools), and `input`.',
         InputSchema: {
             type: 'object',
             properties: {
-                artifactId: { type: 'string', description: 'The artifact id from Available Artifacts, such as "A".' },
-                tool: { type: 'string', description: 'The artifact tool to run, as listed under Artifact Tools.' },
+                artifactId: { type: 'string', description: 'The artifact alpha ID from Available Artifacts (such as "A"), or "workspace" / omitted for workspace-level tools like `create_artifact`.' },
+                tool: { type: 'string', description: 'The artifact or workspace tool to run, as listed under Artifact Tools.' },
                 input: { type: 'object', description: "The tool's input parameters." }
             },
-            required: ['artifactId', 'tool']
+            required: ['tool']
         },
-        Execute: async (args) => {
-            if (typeof args.artifactId !== 'string' || typeof args.tool !== 'string') {
-                return fail('artifact_tool needs an artifactId and a tool name.');
+        Execute: async (args: ArtifactToolArgs) => {
+            if (typeof args.tool !== 'string' || !args.tool.trim()) {
+                return fail('artifact_tool needs a tool name.');
             }
-            return host.RunArtifactTool(args.artifactId, args.tool, isRecord(args.input) ? args.input : {});
+            const toolName = args.tool.trim();
+            const hasExplicitArtifactId = typeof args.artifactId === 'string' && args.artifactId.trim().length > 0;
+            if (!hasExplicitArtifactId && !WORKSPACE_ARTIFACT_TOOLS.has(toolName)) {
+                return fail('artifact_tool needs an artifactId for domain tools (or use a workspace tool: create_artifact, open_artifact, list_workspace_artifacts, create_synthesized_artifact).');
+            }
+            const artifactId = hasExplicitArtifactId ? (args.artifactId as string).trim() : 'workspace';
+            return host.RunArtifactTool(artifactId, toolName, isRecord(args.input) ? args.input : {});
         }
     };
 }
@@ -175,7 +189,7 @@ function conversationTool(host: FrameworkToolHost): AgentToolDefinition {
             },
             required: ['tool', 'input']
         },
-        Execute: async (args) => {
+        Execute: async (args: ArtifactToolArgs) => {
             if (typeof args.tool !== 'string') {
                 return fail('conversation_tool needs a tool name.');
             }

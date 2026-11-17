@@ -171,6 +171,36 @@ describe('ConversationScope', () => {
         expect(f.startsWith(`[ArtifactID]='a''1' AND (`)).toBe(true);
     });
 
+    it('FilterArtifactVersionsByScope keeps path-linked (any direction) and unlinked versions while hiding sibling-branch versions', () => {
+        const versions = [{ ID: 'v-out' }, { ID: 'v-in' }, { ID: 'v-other' }, { ID: 'v-unlinked' }];
+        const links = [
+            { ConversationDetailID: 'd-path-1', ArtifactVersionID: 'v-out' },
+            { ConversationDetailID: 'd-path-2', ArtifactVersionID: 'v-in' },
+            { ConversationDetailID: 'd-sibling', ArtifactVersionID: 'v-other' }
+        ];
+        const visible = ConversationEngine.FilterArtifactVersionsByScope(
+            versions,
+            links,
+            new Set(['d-path-1', 'd-path-2'])
+        );
+        expect(visible.map((v) => v.ID)).toEqual(['v-out', 'v-in', 'v-unlinked']);
+    });
+
+    it('LoadScopedDetailIds queries MJ: Conversation Details via RunView without base-view subqueries and fails closed on error', async () => {
+        const scope = ConversationEngine.TrunkScope(C);
+        const q = ConversationEngine.BuildScopedDetailIdsQuery(scope, ['d1', 'd2']);
+        expect(q.EntityName).toBe('MJ: Conversation Details');
+        expect(q.ExtraFilter).toContain(ConversationEngine.ScopeFilter(scope));
+        expect(q.ExtraFilter).toContain(`[ID] IN ('d1','d2')`);
+
+        runViewFixture.results.push({ Success: true, Results: [{ ID: 'D1' }] });
+        const ids = await ConversationEngine.LoadScopedDetailIds(scope, {} as never, user, ['D1']);
+        expect(ids).toEqual(new Set(['d1']));
+
+        runViewFixture.results.push({ Success: false, Results: [], ErrorMessage: 'denied' });
+        expect(await ConversationEngine.LoadScopedDetailIds(scope, {} as never, user, ['D1'])).toBeNull();
+    });
+
     it('LoadScope normalises an empty branch id to the trunk without loading branches', async () => {
         const spy = vi.spyOn(ConversationEngine, 'LoadBranchesFresh');
         const s = await ConversationEngine.LoadScope(C, '', user);

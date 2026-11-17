@@ -22,6 +22,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { ResolveConversationAgentPreset, AgentPresetSource } from '@memberjunction/ai-engine-base';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
+import { GetArtifactLiveContentReaderHook } from './artifact-presence-locator';
 import { CreateAgentInstance } from './agent-instance';
 import { HostAllowedAgentIDs } from './decision-discovery';
 import { ResolveHandoffTarget, HandoffRefusalReasonText } from './handoff-target';
@@ -33,6 +34,35 @@ import {
 import { ActionEngineServer } from '@memberjunction/actions';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { FileStorageEngine } from '@memberjunction/storage';
+
+/** JSON-compatible primitive or structural value used internally by AgentRunner without falling back to `any`/`unknown`. */
+type AgentRunnerJsonScalar = string | number | boolean | null | undefined;
+type AgentRunnerJsonValue = AgentRunnerJsonScalar | AgentRunnerJsonValue[] | { [key: string]: AgentRunnerJsonValue };
+type AgentRunnerJsonObject = Record<string, AgentRunnerJsonValue>;
+
+interface SqlBackedTableShape {
+    metadata?: {
+        sql?: string;
+        rowCount?: number;
+        executionTimeMs?: number;
+    };
+    rows?: AgentRunnerJsonObject[];
+}
+
+interface SqlBackedPayloadShape {
+    metadata?: {
+        sql?: string;
+        rowCount?: number;
+        executionTimeMs?: number;
+    };
+    rows?: AgentRunnerJsonObject[];
+    tables?: SqlBackedTableShape[];
+}
+
+type UserInfoWithEnvironment = UserInfo & { EnvironmentID?: string | null };
+type ArtifactVersionWithAttributes = MJArtifactVersionEntity & {
+    Attributes?: Array<{ StandardProperty?: string; Name?: string; Value?: string }>;
+};
 
 /**
  * Row shape returned by the `GetArtifactVersionsByID` stored query.
@@ -163,7 +193,7 @@ export interface FollowHandoffsHooks {
 /**
  * Input options for {@link AgentRunner.FollowHandoffs}.
  */
-export interface FollowHandoffsInput<C = any> {
+export interface FollowHandoffsInput<C = object> {
     params: ExecuteAgentParams<C>;
     sourceResult: ExecuteAgentResult;
     conversationId: string;
@@ -275,7 +305,7 @@ export class AgentRunner {
      * 
      * @throws {Error} Throws if agent type loading fails or agent instantiation fails
      */
-    public async RunAgent<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
+    public async RunAgent<C = object, R = AgentRunnerJsonObject>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         try {
             LogStatusEx({
                 message: `AgentRunner: Starting execution for agent: ${params.agent.Name} (ID: ${params.agent.ID})`,
@@ -420,7 +450,7 @@ export class AgentRunner {
      * });
      * ```
      */
-    public async RunAgentInConversation<C = any, R = any>(
+    public async RunAgentInConversation<C = object, R = AgentRunnerJsonObject>(
         params: ExecuteAgentParams<C>,
         options: {
             /** Optional existing conversation ID. If not provided, a new conversation will be created */
@@ -644,8 +674,8 @@ export class AgentRunner {
 
             // Wrap progress callback to update agent response detail
             const originalOnProgress = params.onProgress;
-            const wrappedOnProgress = agentResponseDetail
-                ? async (progress: any) => {
+            const wrappedOnProgress: AgentExecutionProgressCallback | undefined = agentResponseDetail
+                ? async (progress: Parameters<AgentExecutionProgressCallback>[0]) => {
                     // Skip DB save if agent already completed - prevents race condition
                     // where late progress overwrites final Status='Complete'
                     if (agentExecutionCompleted) {
@@ -837,6 +867,75 @@ export class AgentRunner {
                 return [];
             };
 
+            // Step 6c: Link any governed collaborative artifacts touched/created mid-run
+            // (Docs, Sheets, Slides created via workspace tools or CoreActions) so the
+            // conversation message shows artifact cards even when `payload` is empty.
+            const processTouchedArtifacts = async (): Promise<CreatedArtifactInfo[]> => {
+                if (suppressArtifacts || !agentResult.success || !agentResponseDetailId || !agentResult.touchedArtifacts?.length) {
+                    return [];
+                }
+                const rv = RunView.FromMetadataProvider(md);
+                const existingLinksRes = await rv.RunView<{ ArtifactVersionID?: string | null }>(
+                    {
+                        EntityName: 'MJ: Conversation Detail Artifacts',
+                        ExtraFilter: `ConversationDetailID='${EscapeSQLString(agentResponseDetailId)}'`,
+                        Fields: ['ArtifactVersionID'],
+                        MaxRows: 100,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple'
+                    },
+                    contextUser
+                );
+                const linkedVersionIds = new Set<string>(
+                    (existingLinksRes.Success && existingLinksRes.Results ? existingLinksRes.Results : [])
+                        .map(r => (r.ArtifactVersionID ?? '').trim().toLowerCase())
+                        .filter(Boolean)
+                );
+
+                const linked: CreatedArtifactInfo[] = [];
+                for (const touched of agentResult.touchedArtifacts) {
+                    let versionId = (touched.ArtifactVersionID ?? '').trim();
+                    let versionNumber = touched.VersionNumber ?? 1;
+                    if (!versionId) {
+                        const latestVer = await rv.RunView<{ ID: string; VersionNumber?: number | null }>(
+                            {
+                                EntityName: 'MJ: Artifact Versions',
+                                ExtraFilter: `ArtifactID='${EscapeSQLString(touched.ArtifactID)}'`,
+                                OrderBy: 'VersionNumber DESC',
+                                Fields: ['ID', 'VersionNumber'],
+                                MaxRows: 1,
+                                SkipTotalRowCount: true,
+                                ResultType: 'simple'
+                            },
+                            contextUser
+                        );
+                        if (latestVer.Success && latestVer.Results?.length) {
+                            versionId = latestVer.Results[0].ID;
+                            versionNumber = latestVer.Results[0].VersionNumber ?? versionNumber;
+                        }
+                    }
+                    if (!versionId) continue;
+                    if (!linkedVersionIds.has(versionId.toLowerCase())) {
+                        const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
+                            'MJ: Conversation Detail Artifacts',
+                            contextUser
+                        );
+                        junction.ConversationDetailID = agentResponseDetailId;
+                        junction.ArtifactVersionID = versionId;
+                        junction.Direction = 'Output';
+                        if (await junction.Save()) {
+                            linkedVersionIds.add(versionId.toLowerCase());
+                        }
+                    }
+                    linked.push({
+                        artifactId: touched.ArtifactID,
+                        versionId,
+                        versionNumber
+                    });
+                }
+                return linked;
+            };
+
             // Step 7: Save media outputs to AIAgentRunMedia (audit) and create artifacts (display)
             const saveMedia = async () => {
                 if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
@@ -911,7 +1010,7 @@ export class AgentRunner {
                 replySaveError = error instanceof Error ? error : new Error(String(error));
             }
             if (replySaveError) {
-                const runDespiteFailedReply = async (stepName: string, step: () => Promise<unknown>): Promise<void> => {
+                const runDespiteFailedReply = async (stepName: string, step: () => Promise<CreatedArtifactInfo | CreatedArtifactInfo[] | string[] | void>): Promise<void> => {
                     try {
                         await step();
                     } catch (stepError) {
@@ -931,19 +1030,18 @@ export class AgentRunner {
                 } else {
                     await runDespiteFailedReply('Step 6 (payload artifacts)', processArtifacts);
                     await runDespiteFailedReply('Step 6b (file artifacts)', processFileArtifacts);
+                    await runDespiteFailedReply('Step 6c (touched workspace artifacts)', processTouchedArtifacts);
                     await runDespiteFailedReply('Step 7 (media)', saveMedia);
                 }
                 throw replySaveError;
             }
             const payloadArtifact = await processArtifacts();
             const fileArtifacts = await processFileArtifacts();
+            const touchedArtifacts = await processTouchedArtifacts();
             await saveMedia();
 
-            // A file artifact wins: it is the thing the user asked for. The payload artifact is a
-            // snapshot of the agent's internal state, useful when the payload IS the deliverable
-            // (a report agent) and misleading when it is not — a document run reported the
-            // payload, so "open the artifact" opened raw JSON instead of the document.
-            const artifactInfo = SelectPrimaryArtifact(fileArtifacts, payloadArtifact);
+            // A file or workspace-touched collaborative artifact wins over raw JSON payload state.
+            const artifactInfo = SelectPrimaryArtifact([...fileArtifacts, ...touchedArtifacts], payloadArtifact);
 
             return {
                 agentResult,
@@ -980,7 +1078,7 @@ export class AgentRunner {
      * Executes server-side handoff hops sequentially in the same turn while the active run's
      * result carries a resolved `handoff`.
      */
-    public async FollowHandoffs<C = any>(input: FollowHandoffsInput<C>): Promise<HandoffHopOutcome[]> {
+    public async FollowHandoffs<C = object>(input: FollowHandoffsInput<C>): Promise<HandoffHopOutcome[]> {
         const outcomes: HandoffHopOutcome[] = [];
         const onHopStart = input.hooks?.OnHopStart;
         const onHopEnd = input.hooks?.OnHopEnd;
@@ -1254,12 +1352,12 @@ export class AgentRunner {
             return;
         }
         try {
-            let parsedOutput: Record<string, unknown> = {};
+            let parsedOutput: AgentRunnerJsonObject = {};
             if (handoffStep.OutputData) {
                 try {
-                    const parsed = JSON.parse(handoffStep.OutputData);
+                    const parsed = JSON.parse(handoffStep.OutputData) as AgentRunnerJsonValue;
                     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                        parsedOutput = parsed as Record<string, unknown>;
+                        parsedOutput = parsed as AgentRunnerJsonObject;
                     }
                 } catch {
                     // keep empty object if prior OutputData was not valid JSON
@@ -1331,7 +1429,7 @@ export class AgentRunner {
         return undefined;
     }
 
-    private buildHandoffTargetParams<C = any>(
+    private buildHandoffTargetParams<C = object>(
         sourceParams: ExecuteAgentParams<C>,
         baseHistory: readonly ChatMessage[],
         targetAgent: MJAIAgentEntityExtended,
@@ -1753,7 +1851,7 @@ export class AgentRunner {
      * }
      * ```
      */
-    public async ProcessAgentArtifacts<R>(
+    public async ProcessAgentArtifacts<R = AgentRunnerJsonObject>(
         agentResult: ExecuteAgentResult<R>,
         conversationDetailId: string | undefined,
         sourceArtifactId: string | undefined,
@@ -1835,7 +1933,7 @@ export class AgentRunner {
             // producer sending the wrong JSON type shows up in the run log rather than only as an
             // artifact that versioned the run's source.
             if (directive?.behavior === 'version-source') {
-                const rawTarget: unknown = directive.targetArtifactId;
+                const rawTarget: AgentRunnerJsonValue = directive.targetArtifactId;
                 if (rawTarget !== undefined && rawTarget !== null && typeof rawTarget !== 'string') {
                     LogError(
                         `Ignoring targetArtifactId from agent "${agent?.Name}": ` +
@@ -1847,6 +1945,24 @@ export class AgentRunner {
             let plan = PlanArtifactTarget(directive, sourceArtifactId);
             if (plan.kind === 'suppress') {
                 LogStatus(`Skipping artifact creation - agent "${agent?.Name}" suppressed artifacts for this step`);
+                return undefined;
+            }
+
+            // Governed collaborative artifacts created/mutated mid-run via ArtifactToolManager or
+            // GovernedArtifactService already persisted their authoritative MJ: Artifact Versions row.
+            // Never overwrite those artifacts with JSON.stringify(agentResult.payload), and do not emit
+            // a legacy payload artifact when the run's deliverable was produced via artifact tools without
+            // an explicit create-new directive.
+            const touchedArtifactIds = new Set<string>(
+                (agentResult.touchedArtifacts ?? [])
+                    .map((item) => (item.ArtifactID ?? '').trim().toLowerCase())
+                    .filter(Boolean)
+            );
+            if (plan.kind === 'legacy' && touchedArtifactIds.size > 0) {
+                LogStatus(
+                    `Skipping legacy payload artifact creation for agent "${agent?.Name}" - ` +
+                    `${touchedArtifactIds.size} governed artifact(s) already persisted via artifact tools`
+                );
                 return undefined;
             }
 
@@ -1862,6 +1978,13 @@ export class AgentRunner {
                 const candidateId = typeof plan.artifactId === 'string' && IsValidUUID(plan.artifactId)
                     ? plan.artifactId.trim()
                     : undefined;
+                if (candidateId && touchedArtifactIds.has(candidateId.toLowerCase())) {
+                    LogStatus(
+                        `Skipping payload artifact version for ${candidateId} - ` +
+                        `artifact was already persisted via governed artifact tools in this run`
+                    );
+                    return undefined;
+                }
                 const vetted = await this.VetArtifactVersionTarget(plan, contextUser, md, agent?.Name, rejectedIds);
                 if (vetted) {
                     plan = vetted;
@@ -1873,6 +1996,14 @@ export class AgentRunner {
                 plan = plan.source === 'directive'
                     ? PlanArtifactTarget(undefined, sourceArtifactId) // drop the directive, keep the caller's id
                     : { kind: 'legacy' };                             // the caller's own id failed; nothing left to try
+            }
+
+            if (plan.kind === 'legacy' && touchedArtifactIds.size > 0) {
+                LogStatus(
+                    `Skipping legacy payload artifact creation for agent "${agent?.Name}" - ` +
+                    `${touchedArtifactIds.size} governed artifact(s) already persisted via artifact tools`
+                );
+                return undefined;
             }
 
             let artifactId: string;
@@ -1923,6 +2054,13 @@ export class AgentRunner {
                 }
 
                 if (previousArtifact) {
+                    if (touchedArtifactIds.has(previousArtifact.artifactId.trim().toLowerCase())) {
+                        LogStatus(
+                            `Skipping payload artifact version for ${previousArtifact.artifactId} - ` +
+                            `artifact was already persisted via governed artifact tools in this run`
+                        );
+                        return undefined;
+                    }
                     artifactId = previousArtifact.artifactId;
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
@@ -1949,7 +2087,7 @@ export class AgentRunner {
                         agent,
                         creationMode,
                         directive,
-                        payload,
+                        payload as AgentRunnerJsonValue | object,
                         forkCommentNote
                     );
                     artifactId = artifact.ID;
@@ -2027,13 +2165,13 @@ export class AgentRunner {
             const directiveName = AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH);
             const directiveDescription = AgentRunner.safeDirectiveText(directive?.description);
             const payloadRecord = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
-                ? (payload as Record<string, unknown>)
+                ? (payload as AgentRunnerJsonObject)
                 : undefined;
             const reportRecord = (typeof payloadRecord?.report === 'object' && payloadRecord.report !== null && !Array.isArray(payloadRecord.report))
-                ? (payloadRecord.report as Record<string, unknown>)
+                ? (payloadRecord.report as AgentRunnerJsonObject)
                 : undefined;
             const synthesisRecord = (typeof payloadRecord?.synthesis === 'object' && payloadRecord.synthesis !== null && !Array.isArray(payloadRecord.synthesis))
-                ? (payloadRecord.synthesis as Record<string, unknown>)
+                ? (payloadRecord.synthesis as AgentRunnerJsonObject)
                 : undefined;
             const payloadName = AgentRunner.safeDirectiveText(
                 payloadRecord?.title ?? payloadRecord?.name ?? payloadRecord?.savedQueryName ?? reportRecord?.name,
@@ -2062,7 +2200,7 @@ export class AgentRunner {
             // First version of a new artifact: adopt the extracted Name/Description attribute (or payload title/description)
             // unless the agent explicitly named/described it via artifactDirective.
             if (isNewArtifact && newVersionNumber === 1 && (!directiveName || !directiveDescription)) {
-                const attrs = (version as unknown as { Attributes?: Array<{ StandardProperty?: string; Name?: string; Value?: string }> }).Attributes;
+                const attrs = (version as ArtifactVersionWithAttributes).Attributes;
                 const nameAttr = attrs?.find((attr) =>
                     attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
                 );
@@ -2127,7 +2265,7 @@ export class AgentRunner {
      * @param value - Any value, however malformed.
      * @returns A short single-line description, never throwing.
      */
-    private static describeUntrustedValue(value: unknown): string {
+    private static describeUntrustedValue(value: AgentRunnerJsonValue | object | symbol | bigint): string {
         let text: string;
         try {
             text = typeof value === 'string' ? value : (JSON.stringify(value) ?? Object.prototype.toString.call(value));
@@ -2173,7 +2311,7 @@ export class AgentRunner {
      * @param maxLength - Column limit to clamp to; omit for `nvarchar(MAX)` columns.
      * @returns The trimmed (and clamped) text, or `undefined` when there is nothing usable.
      */
-    private static safeDirectiveText(value: unknown, maxLength?: number): string | undefined {
+    private static safeDirectiveText(value: AgentRunnerJsonValue, maxLength?: number): string | undefined {
         if (typeof value !== 'string') {
             return undefined;
         }
@@ -2577,7 +2715,7 @@ export class AgentRunner {
         agent: (typeof AIEngine.Instance.Agents)[number] | undefined,
         creationMode: string | undefined,
         directive: ArtifactDirective | undefined,
-        payload?: unknown,
+        payload?: AgentRunnerJsonValue | object,
         comments?: string
     ): Promise<MJArtifactEntity> {
         const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
@@ -2594,17 +2732,17 @@ export class AgentRunner {
         // Use agent's DefaultArtifactTypeID if available; otherwise infer Research Content when
         // the payload carries a non-empty report.html string (e.g., Research Report Writer).
         const payloadObj = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
-            ? (payload as Record<string, unknown>)
+            ? (payload as AgentRunnerJsonObject)
             : undefined;
         const reportObj = (typeof payloadObj?.report === 'object' && payloadObj.report !== null && !Array.isArray(payloadObj.report))
-            ? (payloadObj.report as Record<string, unknown>)
+            ? (payloadObj.report as AgentRunnerJsonObject)
             : undefined;
         const hasReportHtml = typeof reportObj?.html === 'string' && reportObj.html.trim().length > 0;
         artifact.TypeID = agent?.DefaultArtifactTypeID
             || (hasReportHtml ? AgentRunner.RESEARCH_CONTENT_ARTIFACT_TYPE_ID : AgentRunner.JSON_ARTIFACT_TYPE_ID);
 
         artifact.UserID = contextUser.ID;
-        artifact.EnvironmentID = (contextUser as any).EnvironmentID || MJEnvironmentEntityExtended.DefaultEnvironmentID;
+        artifact.EnvironmentID = (contextUser as UserInfoWithEnvironment).EnvironmentID || MJEnvironmentEntityExtended.DefaultEnvironmentID;
 
         // Set visibility based on agent's ArtifactCreationMode
         if (creationMode === 'System Only') {
@@ -2739,7 +2877,7 @@ export class AgentRunner {
 
         try {
             try {
-                await FileStorageEngine.Instance.Config(false, contextUser);
+                await FileStorageEngine.Instance.Config(false, contextUser, md);
             } catch (configError) {
                 LogError(`SaveAgentRunMedia: failed to configure FileStorageEngine, falling back to inline: ${(configError as Error).message}`);
             }
@@ -2933,11 +3071,11 @@ export class AgentRunner {
         // until it has loaded, so checking HasStorageAccounts without configuring it first reads
         // an empty cache and silently routes every media artifact inline — indistinguishable from
         // a deployment that genuinely has no storage.
+        const md = provider || this._provider;
         await Promise.all([
             ArtifactMetadataEngine.Instance.Config(false, contextUser),
-            FileStorageEngine.Instance.Config(false, contextUser),
+            FileStorageEngine.Instance.Config(false, contextUser, md),
         ]);
-        const md = provider || this._provider;
         let successCount = 0;
 
         for (let i = 0; i < mediaOutputs.length; i++) {
@@ -3058,7 +3196,7 @@ export class AgentRunner {
         // Hoist engine configs before parallel processing
         await Promise.all([
             ArtifactMetadataEngine.Instance.Config(false, contextUser),
-            FileStorageEngine.Instance.Config(false, contextUser),
+            FileStorageEngine.Instance.Config(false, contextUser, md),
         ]);
 
         const created = await Promise.all(
@@ -3178,10 +3316,10 @@ export class AgentRunner {
         // TransactionGroup. This ensures saves execute immediately within the SQL transaction,
         // so server-side entity hooks (e.g. ArtifactVersion.ExtractAndSaveAttributes) can
         // Load() parent records that were saved earlier in the same transaction.
-        const dbProvider = provider as unknown as DatabaseProviderBase;
-        const useTransaction = dbProvider.ProviderType === ProviderType.Database;
+        const dbProvider = provider instanceof DatabaseProviderBase ? provider : undefined;
+        const useTransaction = dbProvider != null && dbProvider.ProviderType === ProviderType.Database;
 
-        if (useTransaction) {
+        if (useTransaction && dbProvider) {
             await dbProvider.BeginTransaction();
         }
 
@@ -3439,8 +3577,9 @@ export class AgentRunner {
         provider?: IMetadataProvider
     ): Promise<InputArtifact[]> {
         try {
-            const rv = new RunView();
-            const pathFilter = await ConversationEngine.BranchPathFilterFresh(conversationId, branchId, contextUser);
+            const effectiveProvider = provider ?? this._provider;
+            const rv = RunView.FromMetadataProvider(effectiveProvider);
+            const pathFilter = await ConversationEngine.BranchPathFilterFresh(conversationId, branchId, contextUser, effectiveProvider);
 
             // Get the IDs of the live conversation details on the run's branch path (from its floor, if the run has one)
             const details = await rv.RunView<{ ID: string }>(
@@ -3459,7 +3598,7 @@ export class AgentRunner {
                 return [];
             }
 
-            const detailIds = details.Results.map((d) => d.ID);
+            const detailIds = details.Results.map((d) => EscapeSQLString(d.ID));
 
             // Get all artifact junctions for these conversation details
             const junctions = await rv.RunView<{ ID: string; ArtifactVersionID: string | null }>(
@@ -3490,7 +3629,7 @@ export class AgentRunner {
             if (uniqueJunctions.length > 0) {
                 const versionIds = uniqueJunctions.map((j) => j.ArtifactVersionID);
 
-                const rq = new RunQuery();
+                const rq = effectiveProvider instanceof DatabaseProviderBase ? new RunQuery(effectiveProvider) : new RunQuery();
                 const versionResult = await rq.RunQuery(
                     {
                         QueryName: 'GetArtifactVersionsByID',
@@ -3500,12 +3639,132 @@ export class AgentRunner {
                     contextUser,
                 );
 
+                const rawRows: ArtifactVersionRow[] =
+                    versionResult.Success && Array.isArray(versionResult.Results)
+                        ? [...(versionResult.Results as ArtifactVersionRow[])]
+                        : [];
                 if (!versionResult.Success) {
                     LogError(`[AgentRunner] GetArtifactVersionsByID failed: ${versionResult.ErrorMessage}`);
-                } else {
-                    const rows = versionResult.Results as ArtifactVersionRow[];
+                }
+
+                // S12 / R2 companion: if GetArtifactVersionsByID failed OR excluded delegate-authorized
+                // artifacts, fall back to RunView('MJ: Artifact Versions', contextUser) so delegate ACLs run cleanly.
+                const hydrateArtifactVersionsViaRunView = async (targetVersionIds: string[]): Promise<ArtifactVersionRow[]> => {
+                    const hydrated: ArtifactVersionRow[] = [];
+                    if (!effectiveProvider || targetVersionIds.length === 0) {
+                        return hydrated;
+                    }
+                    const rvMissing = RunView.FromMetadataProvider(effectiveProvider);
+                    const inMissing = targetVersionIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+                    const missingRes = await rvMissing.RunView<{
+                        ID: string;
+                        ArtifactID: string;
+                        VersionNumber: number;
+                        Name: string | null;
+                        Description: string | null;
+                        ContentMode: 'File' | 'Text' | null;
+                        FileID: string | null;
+                        Content: string | null;
+                        MimeType: string | null;
+                        ForceToolsOnly: boolean | null;
+                    }>(
+                        {
+                            EntityName: 'MJ: Artifact Versions',
+                            ExtraFilter: `ID IN (${inMissing})`,
+                            Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'Description', 'ContentMode', 'FileID', 'Content', 'MimeType', 'ForceToolsOnly'],
+                            MaxRows: targetVersionIds.length,
+                            SkipTotalRowCount: true,
+                            ResultType: 'simple',
+                        },
+                        contextUser,
+                    );
+                    if (missingRes.Success && missingRes.Results?.length) {
+                        const missingArtIds = Array.from(new Set(missingRes.Results.map((v) => v.ArtifactID).filter(Boolean)));
+                        const artMap = new Map<string, { Name: string; Description: string | null; TypeID: string }>();
+                        if (missingArtIds.length > 0) {
+                            const artRes = await rvMissing.RunView<{ ID: string; Name: string; Description: string | null; TypeID: string }>(
+                                {
+                                    EntityName: 'MJ: Artifacts',
+                                    ExtraFilter: `ID IN (${missingArtIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`,
+                                    Fields: ['ID', 'Name', 'Description', 'TypeID'],
+                                    MaxRows: missingArtIds.length,
+                                    SkipTotalRowCount: true,
+                                    ResultType: 'simple',
+                                },
+                                contextUser,
+                            );
+                            if (artRes.Success && artRes.Results) {
+                                for (const a of artRes.Results) {
+                                    artMap.set(NormalizeUUID(a.ID), a);
+                                }
+                            }
+                        }
+                        await ArtifactMetadataEngine.Instance.Config(false, contextUser, effectiveProvider);
+                        const artifactTypesById = IndexByUUID(ArtifactMetadataEngine.Instance.ArtifactTypes, (t) => t.ID);
+                        for (const vr of missingRes.Results) {
+                            const art = artMap.get(NormalizeUUID(vr.ArtifactID));
+                            const artType = art?.TypeID
+                                ? artifactTypesById.Get(art.TypeID)
+                                : undefined;
+                            hydrated.push({
+                                VersionID: vr.ID,
+                                ArtifactID: vr.ArtifactID,
+                                VersionNumber: vr.VersionNumber,
+                                VersionName: vr.Name,
+                                VersionDescription: vr.Description,
+                                ContentMode: vr.ContentMode === 'File' ? 'File' : 'Text',
+                                FileID: vr.FileID,
+                                Content: vr.Content,
+                                MimeType: vr.MimeType,
+                                ForceToolsOnly: vr.ForceToolsOnly,
+                                ArtifactName: art?.Name ?? 'Artifact',
+                                ArtifactDescription: art?.Description ?? null,
+                                TypeName: artType?.Name ?? '',
+                                ToolLibraryClass: artType?.ToolLibraryClass ?? null,
+                                DefaultDeliveryMode: artType?.DefaultDeliveryMode === 'ToolsOnly' ? 'ToolsOnly' : artType?.DefaultDeliveryMode === 'Inline' ? 'Inline' : null,
+                            });
+                        }
+                    } else if (!missingRes.Success) {
+                        LogError(`[AgentRunner] Fallback RunView('MJ: Artifact Versions') failed: ${missingRes.ErrorMessage}`);
+                    }
+                    return hydrated;
+                };
+
+                if (effectiveProvider) {
+                    const returnedIds = new Set(rawRows.map((r) => NormalizeUUID(r.VersionID)));
+                    const missingIds = versionIds.filter((id) => !returnedIds.has(NormalizeUUID(id)));
+                    if (missingIds.length > 0) {
+                        try {
+                            const fallbackRows = await hydrateArtifactVersionsViaRunView(missingIds);
+                            rawRows.push(...fallbackRows);
+                        } catch (fallbackErr) {
+                            LogError(
+                                `[AgentRunner] Fallback artifact version hydration failed: ${
+                                    fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+                                }`,
+                            );
+                        }
+                    }
+                }
+                if (rawRows.length > 0) {
+                    // Deduplicate by normalized ArtifactID keeping the highest VersionNumber so multiple
+                    // conversation messages referencing earlier and newer versions collapse onto the latest one.
+                    const latestByArtifactId = new Map<string, ArtifactVersionRow>();
+                    for (const row of rawRows) {
+                        const artId = (row.ArtifactID ?? '').trim();
+                        if (!artId) {
+                            continue;
+                        }
+                        const normArtId = NormalizeUUID(artId);
+                        const existing = latestByArtifactId.get(normArtId);
+                        if (!existing || (row.VersionNumber ?? 0) >= (existing.VersionNumber ?? 0)) {
+                            latestByArtifactId.set(normArtId, row);
+                        }
+                    }
+
+                    const rows = Array.from(latestByArtifactId.values());
                     const canReadByArtifactId = new Map<string, boolean>();
-                    const permissionProvider = provider ?? this._provider;
+                    const permissionProvider = effectiveProvider;
 
                     for (const row of rows) {
                         const artId = (row.ArtifactID ?? '').trim();
@@ -3527,7 +3786,115 @@ export class AgentRunner {
                         }
                     }
 
-                    for (const row of rows) {
+                    // P0-17: Resolve the latest MJ: Artifact Versions row per readable ArtifactID
+                    // so agents always hydrate from the current head version rather than a stale
+                    // version pinned when an earlier conversation message was written.
+                    if (effectiveProvider) {
+                        const readableRows = rows.filter((r) => {
+                            const aid = (r.ArtifactID ?? '').trim();
+                            return aid && canReadByArtifactId.get(NormalizeUUID(aid)) === true;
+                        });
+                        if (readableRows.length > 0) {
+                            try {
+                                const rv = RunView.FromMetadataProvider(effectiveProvider);
+                                const inList = Array.from(new Set(readableRows.map((r) => r.ArtifactID.trim())))
+                                    .map((id) => `'${EscapeSQLString(id)}'`)
+                                    .join(',');
+                                const latestVerRes = await rv.RunView<{
+                                    ID: string;
+                                    ArtifactID: string;
+                                    VersionNumber?: number | null;
+                                }>(
+                                    {
+                                        EntityName: 'MJ: Artifact Versions',
+                                        ExtraFilter: `ArtifactID IN (${inList})`,
+                                        OrderBy: 'VersionNumber DESC',
+                                        Fields: ['ID', 'ArtifactID', 'VersionNumber'],
+                                        MaxRows: readableRows.length * 10,
+                                        SkipTotalRowCount: true,
+                                        ResultType: 'simple',
+                                    },
+                                    contextUser,
+                                );
+                                if (latestVerRes.Success && latestVerRes.Results?.length) {
+                                    const newerVersionIds: string[] = [];
+                                    const seenLatestByArt = new Map<string, { ID: string; VersionNumber: number }>();
+                                    for (const vr of latestVerRes.Results) {
+                                        const vrArtId = (vr.ArtifactID ?? '').trim();
+                                        const vrVerId = (vr.ID ?? '').trim();
+                                        if (!vrArtId || !vrVerId) continue;
+                                        const normArt = NormalizeUUID(vrArtId);
+                                        const vNum = vr.VersionNumber ?? 0;
+                                        const prev = seenLatestByArt.get(normArt);
+                                        if (!prev || vNum > prev.VersionNumber) {
+                                            seenLatestByArt.set(normArt, { ID: vrVerId, VersionNumber: vNum });
+                                        }
+                                    }
+                                    for (const [normArt, latestDb] of seenLatestByArt.entries()) {
+                                        const currentRow = latestByArtifactId.get(normArt);
+                                        if (
+                                            currentRow &&
+                                            latestDb.VersionNumber > (currentRow.VersionNumber ?? 0) &&
+                                            !UUIDsEqual(latestDb.ID, currentRow.VersionID)
+                                        ) {
+                                            newerVersionIds.push(latestDb.ID);
+                                        }
+                                    }
+                                    if (newerVersionIds.length > 0) {
+                                        const refreshedRes = await rq.RunQuery(
+                                            {
+                                                QueryName: 'GetArtifactVersionsByID',
+                                                CategoryPath: '/MJ/AI/Agents/',
+                                                Parameters: { versionIds: newerVersionIds },
+                                            },
+                                            contextUser,
+                                        );
+                                        const refreshedRows: ArtifactVersionRow[] =
+                                            refreshedRes.Success && Array.isArray(refreshedRes.Results)
+                                                ? [...(refreshedRes.Results as ArtifactVersionRow[])]
+                                                : [];
+                                        if (!refreshedRes.Success) {
+                                            LogError(`[AgentRunner] Refresh GetArtifactVersionsByID failed: ${refreshedRes.ErrorMessage}`);
+                                        }
+                                        const refreshedIds = new Set(refreshedRows.map((r) => NormalizeUUID(r.VersionID)));
+                                        const missingRefreshedIds = newerVersionIds.filter((id) => !refreshedIds.has(NormalizeUUID(id)));
+                                        if (missingRefreshedIds.length > 0) {
+                                            try {
+                                                const fallbackLatestRows = await hydrateArtifactVersionsViaRunView(missingRefreshedIds);
+                                                refreshedRows.push(...fallbackLatestRows);
+                                            } catch (fallbackLatestErr) {
+                                                LogError(
+                                                    `[AgentRunner] Fallback latest artifact version hydration failed: ${
+                                                        fallbackLatestErr instanceof Error ? fallbackLatestErr.message : String(fallbackLatestErr)
+                                                    }`,
+                                                );
+                                            }
+                                        }
+                                        for (const freshRow of refreshedRows) {
+                                            const freshArtId = (freshRow.ArtifactID ?? '').trim();
+                                            if (!freshArtId) continue;
+                                            const normFresh = NormalizeUUID(freshArtId);
+                                            const prior = latestByArtifactId.get(normFresh);
+                                            if (!prior || (freshRow.VersionNumber ?? 0) > (prior.VersionNumber ?? 0)) {
+                                                latestByArtifactId.set(normFresh, freshRow);
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (latestErr) {
+                                LogError(
+                                    `[AgentRunner] Failed resolving latest artifact versions: ${
+                                        latestErr instanceof Error ? latestErr.message : String(latestErr)
+                                    }`,
+                                );
+                            }
+                        }
+                    }
+
+                    const effectiveRows = Array.from(latestByArtifactId.values());
+                    const liveReader = GetArtifactLiveContentReaderHook();
+
+                    for (const row of effectiveRows) {
                         const rowArtifactId = (row.ArtifactID ?? '').trim();
                         if (!rowArtifactId || canReadByArtifactId.get(NormalizeUUID(rowArtifactId)) !== true) {
                             continue;
@@ -3535,17 +3902,41 @@ export class AgentRunner {
                         const artifactName = row.VersionName || row.ArtifactName || 'Untitled';
                         const typeName = row.TypeName || 'Text';
 
+                        let effectiveVersionId = row.VersionID;
+                        let effectiveVersionNumber = row.VersionNumber;
                         let content: string | Buffer = '';
-                        if (row.ContentMode === 'File' && row.FileID) {
-                            const downloaded = await this.DownloadArtifactFileContent(row.FileID, contextUser);
-                            if (downloaded) {
-                                content = downloaded;
-                            } else {
-                                LogError(`[AgentRunner] Failed to download file content for artifact "${artifactName}" (FileID: ${row.FileID})`);
-                                continue;
+                        let liveHydrated = false;
+
+                        if (liveReader) {
+                            try {
+                                const liveSnap = await liveReader(rowArtifactId, contextUser);
+                                if (liveSnap && typeof liveSnap.Content === 'string') {
+                                    content = liveSnap.Content;
+                                    liveHydrated = true;
+                                    if (typeof liveSnap.VersionNumber === 'number') {
+                                        effectiveVersionNumber = liveSnap.VersionNumber;
+                                    }
+                                    if (liveSnap.VersionID) {
+                                        effectiveVersionId = liveSnap.VersionID;
+                                    }
+                                }
+                            } catch (liveErr) {
+                                LogError(`[AgentRunner] Live content reader failed for artifact ${rowArtifactId}: ${liveErr instanceof Error ? liveErr.message : String(liveErr)}`);
                             }
-                        } else {
-                            content = row.Content || '';
+                        }
+
+                        if (!liveHydrated) {
+                            if (row.ContentMode === 'File' && row.FileID) {
+                                const downloaded = await this.DownloadArtifactFileContent(row.FileID, contextUser, effectiveProvider);
+                                if (downloaded) {
+                                    content = downloaded;
+                                } else {
+                                    LogError(`[AgentRunner] Failed to download file content for artifact "${artifactName}" (FileID: ${row.FileID})`);
+                                    continue;
+                                }
+                            } else {
+                                content = row.Content ?? '';
+                            }
                         }
 
                         // Binary artifacts stored as a base64 data URL by the
@@ -3563,7 +3954,7 @@ export class AgentRunner {
                             content = await this.hydrateSqlBackedContent(content, contextUser);
                         }
 
-                        if (content) {
+                        if (typeof content === 'string' || content.length > 0) {
                             const rawDescription = row.VersionDescription || row.ArtifactDescription;
                             const cleanDescription = rawDescription && !rawDescription.startsWith('Payload returned by ')
                                 ? rawDescription
@@ -3573,8 +3964,8 @@ export class AgentRunner {
                                 typeName,
                                 content,
                                 ...(row.ArtifactID ? { artifactId: row.ArtifactID } : {}),
-                                ...(row.VersionID ? { versionId: row.VersionID } : {}),
-                                ...(row.VersionNumber != null ? { versionNumber: row.VersionNumber } : {}),
+                                ...(effectiveVersionId ? { versionId: effectiveVersionId } : {}),
+                                ...(effectiveVersionNumber != null ? { versionNumber: effectiveVersionNumber } : {}),
                                 ...(cleanDescription ? { description: cleanDescription } : {}),
                                 mimeType: row.MimeType ?? undefined,
                                 ...(row.ToolLibraryClass ? { toolLibraryClass: row.ToolLibraryClass } : {}),
@@ -3618,9 +4009,13 @@ export class AgentRunner {
      * database login when one is configured, and on the default provider otherwise.
      */
     private async hydrateSqlBackedContent(content: string, contextUser: UserInfo): Promise<string> {
-        let parsed: Record<string, unknown>;
+        let parsed: SqlBackedPayloadShape;
         try {
-            parsed = JSON.parse(content);
+            const raw = JSON.parse(content) as AgentRunnerJsonValue;
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+                return content;
+            }
+            parsed = raw as SqlBackedPayloadShape;
         } catch {
             return content;
         }
@@ -3631,12 +4026,12 @@ export class AgentRunner {
         let changed = false;
         const rq = await this.adhocSqlRunner();
 
-        const rootMeta = parsed?.metadata as { sql?: string; rowCount?: number; executionTimeMs?: number } | undefined;
-        const rootRows = parsed?.rows as unknown[] | undefined;
+        const rootMeta = parsed.metadata;
+        const rootRows = parsed.rows;
         if (rootMeta?.sql && (!rootRows || rootRows.length === 0)) {
             const result = await rq.RunQuery({ SQL: rootMeta.sql }, contextUser);
             if (result.Success) {
-                parsed.rows = result.Results;
+                parsed.rows = result.Results as AgentRunnerJsonObject[];
                 parsed.metadata = {
                     ...rootMeta,
                     rowCount: result.RowCount,
@@ -3648,13 +4043,13 @@ export class AgentRunner {
             }
         }
 
-        const tables = parsed?.tables as Array<{ metadata?: { sql?: string; rowCount?: number; executionTimeMs?: number }; rows?: unknown[] }> | undefined;
+        const tables = parsed.tables;
         if (Array.isArray(tables)) {
             for (const table of tables) {
                 if (table?.metadata?.sql && (!table.rows || table.rows.length === 0)) {
                     const result = await rq.RunQuery({ SQL: table.metadata.sql }, contextUser);
                     if (result.Success) {
-                        table.rows = result.Results;
+                        table.rows = result.Results as AgentRunnerJsonObject[];
                         table.metadata.rowCount = result.RowCount;
                         table.metadata.executionTimeMs = result.ExecutionTime;
                         changed = true;
@@ -3669,13 +4064,13 @@ export class AgentRunner {
     }
 
     /** True when the parsed artifact carries stored SQL whose rows are missing. */
-    private hasUnhydratedSql(parsed: Record<string, unknown>): boolean {
-        const rootMeta = parsed?.metadata as { sql?: string } | undefined;
-        const rootRows = parsed?.rows as unknown[] | undefined;
+    private hasUnhydratedSql(parsed: SqlBackedPayloadShape): boolean {
+        const rootMeta = parsed.metadata;
+        const rootRows = parsed.rows;
         if (rootMeta?.sql && (!rootRows || rootRows.length === 0)) {
             return true;
         }
-        const tables = parsed?.tables as Array<{ metadata?: { sql?: string }; rows?: unknown[] }> | undefined;
+        const tables = parsed.tables;
         return Array.isArray(tables) && tables.some(t => !!t?.metadata?.sql && (!t.rows || t.rows.length === 0));
     }
 
@@ -3718,15 +4113,16 @@ export class AgentRunner {
      * @param contextUser - User context for storage driver authentication
      * @returns Buffer of file content, or null if download fails
      */
-    protected async DownloadArtifactFileContent(fileId: string, contextUser: UserInfo): Promise<Buffer | null> {
+    protected async DownloadArtifactFileContent(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<Buffer | null> {
         if (!IsValidUUID(fileId)) {
             LogError(`[AgentRunner] Refusing to read artifact file content: '${fileId}' is not a file ID`);
             return null;
         }
         try {
-            await FileStorageEngine.Instance.Config(false, contextUser);
+            const md = provider ?? this._provider;
+            await FileStorageEngine.Instance.Config(false, contextUser, md);
 
-            const rv = RunView.FromMetadataProvider(this._provider);
+            const rv = RunView.FromMetadataProvider(md);
             const fileResult = await rv.RunView<{ ID: string; Name: string; ContentType: string; ProviderID: string; ProviderKey: string }>(
                 {
                     EntityName: 'MJ: Files',
@@ -3743,7 +4139,7 @@ export class AgentRunner {
             }
 
             // Account gate and tracked-file rule first; a refusal throws and is logged below.
-            const resolved = await FileStorageEngine.Instance.ResolveFileObject(fileResult.Results[0], contextUser, 'Read', this._provider);
+            const resolved = await FileStorageEngine.Instance.ResolveFileObject(fileResult.Results[0], contextUser, 'Read', md);
             if (!resolved) {
                 LogError(`[AgentRunner] No FileStorageAccount found for ProviderID: ${fileResult.Results[0].ProviderID}`);
                 return null;

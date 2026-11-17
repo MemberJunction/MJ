@@ -2,16 +2,25 @@ import {
     EntityInfo,
     IMetadataProvider,
     IRunQueryProvider,
+    LogError,
     Metadata,
     ProjectEntityValueRowsForUser,
     QueryInfo,
     RunQuery,
     RunView,
+    RunViewParams,
     StripServerOnlyRunQueryParams,
     UserInfo
 } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
 import {
+    ArtifactAiFormulaCellRequest,
+    ArtifactEvaluateAiFormulaOperation
+} from '../generated/remote_operations.js';
+import { MAX_AI_FORMULA_BATCH_CELLS } from './operations/ArtifactEvaluateAiFormulaOperation';
+import {
+    BuildBlockIdentityBinding,
     ComputeFrozenSnapshotHash,
     DocumentBlockColumn,
     DocumentBlockExecutionResult,
@@ -19,6 +28,7 @@ import {
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
     FrozenBlockSnapshot,
+    FrozenSnapshotIdentityBinding,
     ValidateFrozenBlockSnapshot
 } from './DocumentLiveBlockEngine';
 
@@ -478,38 +488,110 @@ export function IsSafeUserRegex(pattern: string, flags?: string): boolean {
             const classBodyStart = j;
             let classSet = createEmptyAtomSet();
 
+            const readClassEscape = (
+                idx: number
+            ): { nextIdx: number; codePoint: number | null; atomSet: ReturnType<typeof createEmptyAtomSet> } | null => {
+                if (idx + 1 >= pattern.length) return null;
+                const esc = pattern[idx + 1];
+                let afterEsc = idx + 2;
+                if (esc === 'x') {
+                    const hex = pattern.slice(afterEsc, afterEsc + 2);
+                    if (!/^[0-9A-Fa-f]{2}$/.test(hex)) return null;
+                    const code = parseInt(hex, 16);
+                    return { nextIdx: afterEsc + 2, codePoint: code, atomSet: classifySingleRegexChar(String.fromCharCode(code)) };
+                }
+                if (esc === 'u') {
+                    if (pattern[afterEsc] === '{') {
+                        const uBrace = /^\{([0-9A-Fa-f]{1,6})\}/.exec(pattern.slice(afterEsc));
+                        if (!uBrace) return null;
+                        const code = parseInt(uBrace[1], 16);
+                        if (code > 0x10ffff) return null;
+                        return {
+                            nextIdx: afterEsc + uBrace[0].length,
+                            codePoint: code,
+                            atomSet: code <= 0xffff ? classifySingleRegexChar(String.fromCharCode(code)) : createWildcardAtomSet()
+                        };
+                    }
+                    const hex = pattern.slice(afterEsc, afterEsc + 4);
+                    if (!/^[0-9A-Fa-f]{4}$/.test(hex)) return null;
+                    const code = parseInt(hex, 16);
+                    return { nextIdx: afterEsc + 4, codePoint: code, atomSet: classifySingleRegexChar(String.fromCharCode(code)) };
+                }
+                const controlEscapes: Record<string, number> = {
+                    b: 8,
+                    t: 9,
+                    n: 10,
+                    v: 11,
+                    f: 12,
+                    r: 13,
+                    '0': 0
+                };
+                if (Object.hasOwn(controlEscapes, esc)) {
+                    const code = controlEscapes[esc];
+                    return { nextIdx: afterEsc, codePoint: code, atomSet: classifySingleRegexChar(String.fromCharCode(code)) };
+                }
+                const escSet = classifyEscapedRegexAtom(esc);
+                const isShorthandClass = esc === 'd' || esc === 'D' || esc === 'w' || esc === 'W' || esc === 's' || esc === 'S' || esc === 'p' || esc === 'P';
+                if ((esc === 'p' || esc === 'P') && pattern[afterEsc] === '{') {
+                    const propMatch = /^\{[^}]*\}/.exec(pattern.slice(afterEsc));
+                    if (propMatch) afterEsc += propMatch[0].length;
+                }
+                return {
+                    nextIdx: afterEsc,
+                    codePoint: isShorthandClass ? null : esc.charCodeAt(0),
+                    atomSet: escSet
+                };
+            };
+
             while (j < pattern.length) {
                 const c = pattern[j];
                 if (c === ']' && j > classBodyStart) {
                     j++;
                     break;
                 }
+                let startParsed: { nextIdx: number; codePoint: number | null; atomSet: ReturnType<typeof createEmptyAtomSet> } | null = null;
                 if (c === '\\') {
-                    if (j + 1 >= pattern.length) return false;
-                    const esc = pattern[j + 1];
-                    const escSet = esc === 'b' ? classifySingleRegexChar('\b') : classifyEscapedRegexAtom(esc);
-                    classSet = unionAtomSets(classSet, escSet) ?? classSet;
-                    j += 2;
-                    continue;
+                    startParsed = readClassEscape(j);
+                    if (!startParsed) return false;
+                } else {
+                    startParsed = {
+                        nextIdx: j + 1,
+                        codePoint: c.charCodeAt(0),
+                        atomSet: classifySingleRegexChar(c)
+                    };
                 }
-                if (j + 2 < pattern.length && pattern[j + 1] === '-' && pattern[j + 2] !== ']') {
-                    const startCode = c.charCodeAt(0);
-                    let endCode = pattern[j + 2].charCodeAt(0);
-                    let stepLen = 3;
-                    if (pattern[j + 2] === '\\' && j + 3 < pattern.length) {
-                        endCode = pattern[j + 3].charCodeAt(0);
-                        stepLen = 4;
+
+                if (
+                    startParsed.codePoint !== null &&
+                    startParsed.nextIdx + 1 < pattern.length &&
+                    pattern[startParsed.nextIdx] === '-' &&
+                    pattern[startParsed.nextIdx + 1] !== ']'
+                ) {
+                    const endStartIdx = startParsed.nextIdx + 1;
+                    let endCode: number | null = null;
+                    let afterRangeIdx = endStartIdx + 1;
+                    if (pattern[endStartIdx] === '\\') {
+                        const endParsed = readClassEscape(endStartIdx);
+                        if (!endParsed) return false;
+                        endCode = endParsed.codePoint;
+                        afterRangeIdx = endParsed.nextIdx;
+                    } else {
+                        endCode = pattern[endStartIdx].charCodeAt(0);
                     }
-                    const span = Math.min(256, Math.max(0, endCode - startCode));
-                    for (let k = 0; k <= span; k++) {
-                        const rangeCharSet = classifySingleRegexChar(String.fromCharCode(startCode + k));
-                        classSet = unionAtomSets(classSet, rangeCharSet) ?? classSet;
+                    if (endCode !== null) {
+                        const startCode = startParsed.codePoint;
+                        const span = Math.min(256, Math.max(0, endCode - startCode));
+                        for (let k = 0; k <= span; k++) {
+                            const rangeCharSet = classifySingleRegexChar(String.fromCharCode(startCode + k));
+                            classSet = unionAtomSets(classSet, rangeCharSet) ?? classSet;
+                        }
+                        j = afterRangeIdx;
+                        continue;
                     }
-                    j += stepLen;
-                    continue;
                 }
-                classSet = unionAtomSets(classSet, classifySingleRegexChar(c)) ?? classSet;
-                j++;
+
+                classSet = unionAtomSets(classSet, startParsed.atomSet) ?? classSet;
+                j = startParsed.nextIdx;
             }
 
             if (negated) {
@@ -828,7 +910,18 @@ interface CompiledSafeRegexPlan {
     hasQuantifiedAlternation: boolean;
 }
 
-const SAFE_REGEX_VALIDATION_CACHE = new WeakMap<RegExp, CompiledSafeRegexPlan | false>();
+const SAFE_REGEX_VALIDATION_CACHE_STORE_KEY = '___MJ_SPREADSHEET_SAFE_REGEX_VALIDATION_CACHE';
+function getSafeRegexValidationCache(): WeakMap<RegExp, CompiledSafeRegexPlan | false> {
+    const store = MJGlobal.Instance.GetGlobalObjectStore();
+    let cache = store[SAFE_REGEX_VALIDATION_CACHE_STORE_KEY] as
+        | WeakMap<RegExp, CompiledSafeRegexPlan | false>
+        | undefined;
+    if (!cache) {
+        cache = new WeakMap<RegExp, CompiledSafeRegexPlan | false>();
+        store[SAFE_REGEX_VALIDATION_CACHE_STORE_KEY] = cache;
+    }
+    return cache;
+}
 
 /**
  * Pure-ECMAScript WHATWG-compliant UTF-8 encoder fallback for bare VMs without `TextEncoder` or `Buffer`.
@@ -1086,12 +1179,13 @@ function analyzeSafeRegexRuntimeProfile(
 }
 
 function getOrCompileSafeRegexPlan(regex: RegExp): CompiledSafeRegexPlan | false {
-    const cached = SAFE_REGEX_VALIDATION_CACHE.get(regex);
+    const cache = getSafeRegexValidationCache();
+    const cached = cache.get(regex);
     if (cached !== undefined) {
         return cached;
     }
     if (!IsSafeUserRegex(regex.source, regex.flags)) {
-        SAFE_REGEX_VALIDATION_CACHE.set(regex, false);
+        cache.set(regex, false);
         return false;
     }
     const cleanFlags = regex.flags.replace(/[gy]/g, () => '');
@@ -1102,7 +1196,7 @@ function getOrCompileSafeRegexPlan(regex: RegExp): CompiledSafeRegexPlan | false
         isLinearGuaranteed: profile.isLinearGuaranteed,
         hasQuantifiedAlternation: profile.hasQuantifiedAlternation
     };
-    SAFE_REGEX_VALIDATION_CACHE.set(regex, plan);
+    cache.set(regex, plan);
     return plan;
 }
 
@@ -1398,6 +1492,40 @@ export interface SpreadsheetCellSpec {
     LiveTableID?: string | null;
     /** Optional plain-text cell note. */
     Note?: string | null;
+    /** Input content hash stored when an opt-in `=MJ.AI(...)` formula was last evaluated (`§5.2b`). */
+    AiInputHash?: string | null;
+}
+
+/**
+ * Governance lock rule protecting a rectangular range on a worksheet (`§6.2`).
+ */
+export interface SpreadsheetProtectedRangeSpec {
+    /** Stable unique ID for this protection rule. */
+    RangeID: string;
+    /** Canonical A1 cell or rectangular range (e.g. `'A1:D10'`). */
+    Range: string;
+    /** `UserInfo.ID` of the creator/owner who locked this range. */
+    LockedByUserID: string;
+    /** Optional human-readable description shown in lock banners/tooltips. */
+    Description?: string;
+    /** When true, users with `CanEdit` artifact permission may still edit cells inside the range. */
+    AllowEditors?: boolean;
+    /** ISO 8601 timestamp when the range was locked. */
+    LockedAt?: string;
+}
+
+/**
+ * Authorization context supplied when mutating worksheet cells with {@link SpreadsheetProtectedRangeSpec} enforcement.
+ */
+export interface SpreadsheetCellEditContext {
+    /** Acting user ID performing the edit. */
+    UserID?: string | null;
+    /** Artifact owner/creator user ID (always allowed to edit or unlock). */
+    OwnerUserID?: string | null;
+    /** True when actor holds editor permission on the artifact. */
+    IsEditor?: boolean;
+    /** Internal import/system bypass flag. */
+    BypassProtection?: boolean;
 }
 
 /**
@@ -1413,12 +1541,22 @@ interface SpreadsheetCellXmlMeta {
     formulaDirty?: boolean;
 }
 
-const CELL_XML_META = new WeakMap<SpreadsheetCellSpec, SpreadsheetCellXmlMeta>();
+const CELL_XML_META_STORE_KEY = '___MJ_SPREADSHEET_CELL_XML_META';
+function getCellXmlMetaMap(): WeakMap<SpreadsheetCellSpec, SpreadsheetCellXmlMeta> {
+    const store = MJGlobal.Instance.GetGlobalObjectStore();
+    let map = store[CELL_XML_META_STORE_KEY] as WeakMap<SpreadsheetCellSpec, SpreadsheetCellXmlMeta> | undefined;
+    if (!map) {
+        map = new WeakMap<SpreadsheetCellSpec, SpreadsheetCellXmlMeta>();
+        store[CELL_XML_META_STORE_KEY] = map;
+    }
+    return map;
+}
 
 function copyCellXmlMeta(fromCell: SpreadsheetCellSpec, toCell: SpreadsheetCellSpec): void {
-    const meta = CELL_XML_META.get(fromCell);
+    const cellXmlMeta = getCellXmlMetaMap();
+    const meta = cellXmlMeta.get(fromCell);
     if (meta) {
-        CELL_XML_META.set(toCell, { ...meta });
+        cellXmlMeta.set(toCell, { ...meta });
     }
 }
 
@@ -1560,7 +1698,7 @@ export interface SpreadsheetLiveTableSpec {
     /** Target `MJ: Queries` name when `SourceType === 'SavedQuery'`. */
     QueryName?: string;
     /** Caller-settable query parameters (`IsServerSet` parameters are stripped automatically). */
-    QueryParameters?: Record<string, unknown>;
+    QueryParameters?: Record<string, string | number | boolean | null>;
     /** Maximum rows to fetch (default 100). */
     MaxRows?: number;
     /** Top-left A1 cell where headers (and rows below) are written (default `'A1'`). */
@@ -1577,6 +1715,8 @@ export interface SpreadsheetLiveTableSpec {
     LastRefreshedAt?: string | null;
     /** Number of data rows written on the last refresh. */
     LastRowCount?: number;
+    /** Number of columns (source fields + calculated columns) written on the last refresh. */
+    LastColumnCount?: number;
     /** True when the current viewer was denied access to the underlying entity/view/query. */
     AccessDenied?: boolean;
     /** Error or access-denied message from the last execution. */
@@ -1600,16 +1740,32 @@ export interface SpreadsheetChartSpec {
     ChartType: SpreadsheetChartType;
     /** Worksheet ID owning the source range. */
     SheetID: string;
-    /** A1 range feeding the chart (e.g. `'A1:C6'`). First column provides category labels; subsequent numeric columns become series. */
+    /** A1 range or comma-separated range union feeding the chart (e.g. `'A1:C6'` or `'A1:A6,D1:D6'`). */
     SourceRange: string;
     /** Anchor cell where the floating chart card sits on the worksheet (e.g. `'E2'`). */
     PositionCell: string;
+    /** Where the chart renders: `'dock'` in the bottom strip (default) or `'sheet'` floating over the grid. */
+    Placement?: 'dock' | 'sheet';
+    /** Optional horizontal pixel offset within the grid canvas when `Placement === 'sheet'`. */
+    OffsetX?: number;
+    /** Optional vertical pixel offset within the grid canvas when `Placement === 'sheet'`. */
+    OffsetY?: number;
     /** Optional width in pixels. */
     WidthPx?: number;
     /** Optional height in pixels. */
     HeightPx?: number;
     /** Whether to display the series legend (default `true`). */
     ShowLegend?: boolean;
+    /** Header row handling (`'auto'` detects automatically, `true` uses first row/col as labels, `false` treats all as data). */
+    HasHeaderRow?: boolean | 'auto';
+    /** Series orientation (`'columns'` = each column is a series, `'rows'` = each row is a series). Default `'columns'`. */
+    SeriesOrientation?: 'columns' | 'rows';
+    /** Zero-based index within the extracted grid for the category/X-axis column (or row when `SeriesOrientation === 'rows'`). */
+    CategoryColumnIndex?: number;
+    /** Zero-based grid column (or transposed row) indices to include as plotted numeric series. Omit or empty for all numeric series. */
+    IncludedSeriesIndices?: number[];
+    /** Whether to render value data labels directly on chart bars/points/slices. */
+    ShowDataLabels?: boolean;
 }
 
 /**
@@ -1622,10 +1778,14 @@ export interface SpreadsheetChartDataset {
     SheetID: string;
     SourceRange: string;
     Categories: string[];
-    Series: Array<{ Name: string; Values: number[] }>;
+    Series: Array<{ Name: string; Values: number[]; ColumnIndex?: number }>;
     Columns: DocumentBlockColumn[];
-    Rows: Array<Record<string, unknown>>;
+    Rows: Array<Record<string, string | number>>;
     RevisionHash: string;
+    /** Detected columns (or transposed rows when `SeriesOrientation === 'rows'`) available in the source range. */
+    DetectedColumns?: Array<{ Index: number; Name: string; IsNumeric: boolean }>;
+    /** Effective header detection result after applying `HasHeaderRow`. */
+    EffectiveHasHeaderRow?: boolean;
 }
 
 /**
@@ -1702,6 +1862,10 @@ export interface WorksheetSpec {
     Charts: SpreadsheetChartSpec[];
     /** Embedded OLE Artifact / Whiteboard objects. */
     EmbeddedArtifacts: SpreadsheetEmbeddedArtifactSpec[];
+    /** Protected cell/range rules enforced against unauthorized edits (`§6.2`). */
+    ProtectedRanges?: SpreadsheetProtectedRangeSpec[];
+    /** Merged cell regions in canonical A1 notation (e.g. `['A1:C1', 'B3:D5']`). */
+    MergeRanges?: string[];
     /** Former dynamic-array spill / CSE array child coordinates cleared after import (`R8-8`). */
     ClearedSpillChildren?: string[];
 }
@@ -1720,6 +1884,8 @@ export interface WorkbookSpec {
     Worksheets: WorksheetSpec[];
     /** Workbook-level named ranges. */
     NamedRanges: SpreadsheetNamedRangeSpec[];
+    /** Persisted preferred height (px) of the docked bottom strip containing charts, live tables, and embedded canvases. */
+    PreferredObjectsPaneHeightPx?: number;
     /** ISO creation timestamp. */
     CreatedAt: string;
     /** ISO last-modified timestamp. */
@@ -1727,14 +1893,14 @@ export interface WorkbookSpec {
 }
 
 /**
- * Parsed representation of an `=MJ.QUERY(...)` or `=MJ.VIEW(...)` custom function call (`§ 6.3`, `§ 7.2`).
+ * Parsed representation of an `=MJ.QUERY(...)`, `=MJ.VIEW(...)`, or `=MJ.IMPORTRANGE(...)` custom function call (`§ 6.3`, `§ 7.2`, `§ 4.2`).
  */
 export interface ParsedMjCustomFunctionCall {
-    /** Function kind (`'QUERY'` or `'VIEW'`). */
-    Kind: 'QUERY' | 'VIEW';
-    /** Query name/ID (for `QUERY`) or Entity name (for `VIEW`). */
+    /** Function kind (`'QUERY'`, `'VIEW'`, `'IMPORTRANGE'`, or `'AI'`). */
+    Kind: 'QUERY' | 'VIEW' | 'IMPORTRANGE' | 'AI';
+    /** Query name/ID (`QUERY`), Entity name (`VIEW`), target Artifact ID/Name (`IMPORTRANGE`), or prompt (`AI`). */
     PrimaryTarget: string;
-    /** View name/ID when `Kind === 'VIEW'`. */
+    /** View name/ID (`VIEW`) or `'Sheet!A1:D20'` range string (`IMPORTRANGE`). */
     SecondaryTarget?: string;
     /** Positional or key=value arguments passed to the function. */
     Arguments: SpreadsheetCellValue[];
@@ -1743,7 +1909,30 @@ export interface ParsedMjCustomFunctionCall {
 }
 
 /**
- * Options for evaluating `=MJ.QUERY` and `=MJ.VIEW` custom functions and live tables.
+ * Request envelope passed to a custom `ImportRangeResolver` for `=MJ.IMPORTRANGE(...)` (`§ 4.2`).
+ */
+export interface SpreadsheetImportRangeRequest {
+    ArtifactIDOrName: string;
+    RangeString: string;
+    VersionNumber?: number;
+    ContextUser: UserInfo;
+    Provider: IMetadataProvider;
+    VisitedArtifactKeys: string[];
+    Depth: number;
+}
+
+/**
+ * Parsed representation of an opt-in `=MJ.AI(prompt, [cellOrRange...])` formula (`§ 5.2b`).
+ */
+export interface ParsedMjAiFormulaCall {
+    /** Natural-language instruction literal. */
+    Prompt: string;
+    /** Cell or range reference tokens passed as context arguments. */
+    References: string[];
+}
+
+/**
+ * Options for evaluating `=MJ.QUERY`, `=MJ.VIEW`, and `=MJ.IMPORTRANGE` custom functions and live tables.
  */
 export interface SpreadsheetMjEvaluationOptions {
     /** Override cache TTL in milliseconds (defaults to 60,000 ms). */
@@ -1752,6 +1941,51 @@ export interface SpreadsheetMjEvaluationOptions {
     MaxConcurrency?: number;
     /** Bypass the viewer result cache when `true`. */
     BypassCache?: boolean;
+    /** Optional resolver override for `=MJ.IMPORTRANGE(...)` (useful in tests or custom hosts). */
+    ImportRangeResolver?: (request: SpreadsheetImportRangeRequest) => Promise<DocumentBlockExecutionResult>;
+    /** Recursion cycle-tracking stack for nested `=MJ.IMPORTRANGE` calls (max depth 3). */
+    ImportRangeVisitedKeys?: string[];
+    /** Current recursion depth for `=MJ.IMPORTRANGE` (starts at `0`). */
+    ImportRangeDepth?: number;
+    /** Hosting artifact ID for self-reference / cycle attribution. */
+    HostArtifactID?: string;
+    /** Optional edit context used to enforce `ProtectedRanges` on non-anchor spill destination cells. */
+    EditContext?: SpreadsheetCellEditContext;
+    /** Optional binary file resolver override for `ContentMode = 'File'` `.xlsx` targets in `=MJ.IMPORTRANGE`. */
+    ResolveFileBytes?: (fileId: string, versionId: string) => Promise<Uint8Array | ArrayBuffer | null>;
+}
+
+/**
+ * Options for explicit opt-in batch evaluation of `=MJ.AI(...)` spreadsheet cells (`§ 5.2b`).
+ */
+export interface SpreadsheetAiEvaluationOptions {
+    /** Optional hosting `MJ: Artifacts` ID. */
+    ArtifactID?: string | null;
+    /** Optional actor/permission context checked before mutating protected cells with AI results. */
+    EditContext?: SpreadsheetCellEditContext;
+    /** Restrict evaluation to these canonical `'SheetID::Addr'` or `'Addr'` keys. */
+    TargetAddresses?: string[];
+    /** Maximum cells per batch (clamped to `MAX_AI_FORMULA_BATCH_CELLS = 50`). */
+    MaxCells?: number;
+    /** Re-evaluate even if `AiInputHash` already matches cached output. */
+    ForceRefresh?: boolean;
+    /** Optional explicit AI model override. */
+    ModelOverride?: string | null;
+    /** Optional custom batch evaluator (defaults to `ArtifactEvaluateAiFormulaOperation`). */
+    AiEvaluator?: (
+        cells: ArtifactAiFormulaCellRequest[]
+    ) => Promise<Array<{ SheetID: string; Address: string; InputHash: string; Value: string; ErrorMessage?: string | null; AccessDenied?: boolean }>>;
+}
+
+/**
+ * Summary returned by {@link SpreadsheetEngine.EvaluateAiFormulas}.
+ */
+export interface SpreadsheetAiEvaluationResult {
+    EvaluatedCount: number;
+    CacheHitCount: number;
+    SkippedOverCapCount: number;
+    AccessDeniedCount: number;
+    ErrorCount: number;
 }
 
 interface ViewerFunctionCacheEntry {
@@ -1774,6 +2008,93 @@ export const MAX_XLSX_COMPRESSED_BYTES = 15 * 1024 * 1024;
 export const MAX_XLSX_UNCOMPRESSED_TOTAL_BYTES = 64 * 1024 * 1024;
 /** Maximum uncompressed size of any single ZIP entry in `.xlsx` import (32 MiB, `B6`, `R8-3`). */
 export const MAX_XLSX_ENTRY_BYTES = 32 * 1024 * 1024;
+/** Maximum formula expression character length accepted before returning `#VALUE!` (`P0-11`). */
+export const MAX_FORMULA_LENGTH = 8192;
+/** Maximum parser/evaluator AST recursion depth before returning `#VALUE!` / `#CALC!` (`P0-11`). */
+export const MAX_AST_DEPTH = 128;
+/** Maximum formula AST/lambda evaluation operations permitted within a single workbook pass (`B5`). */
+export const MAX_EVAL_OPS_PER_WORKBOOK = 2_000_000;
+/** Maximum wall-clock duration (ms) permitted for a single workbook evaluation pass (`B5`). */
+export const MAX_EVAL_TIME_MS = 5_000;
+/** Maximum character length permitted in any formula string result (matches Excel's 32,767 cell limit, `B5`). */
+export const MAX_CELL_STRING_LENGTH = 32_767;
+/** Maximum total cell grid entries emitted in a single `ExportToCsv` pass (`B5`). */
+export const MAX_EXPORT_CSV_CELLS = 500_000;
+
+class EvalBudgetExceededError extends Error {
+    constructor() {
+        super('Formula evaluation exceeded operation or time budget.');
+        this.name = 'EvalBudgetExceededError';
+    }
+}
+
+/**
+ * Builds the canonical {@link FrozenSnapshotIdentityBinding} for a {@link SpreadsheetLiveTableSpec} (`S3`).
+ */
+export function BuildLiveTableIdentityBinding(
+    table: Pick<
+        SpreadsheetLiveTableSpec,
+        'TableID' | 'SourceType' | 'EntityName' | 'ViewID' | 'ViewName' | 'QueryID' | 'QueryName'
+    >,
+    hostArtifactId?: string | null
+): FrozenSnapshotIdentityBinding {
+    return BuildBlockIdentityBinding(
+        {
+            BlockID: table.TableID,
+            Kind: table.SourceType,
+            EntityName: table.EntityName,
+            ViewID: table.ViewID,
+            ViewName: table.ViewName,
+            QueryID: table.QueryID,
+            QueryName: table.QueryName
+        },
+        hostArtifactId
+    );
+}
+
+/**
+ * Sanitizes a worksheet name for Excel/OOXML compatibility: strips forbidden characters
+ * (`[`, `]`, `:`, `*`, `?`, `/`, `\`), trims whitespace, limits length to 31 characters,
+ * and deduplicates case-insensitively against `existingLowerNames` using `" (2)"`, `" (3)"`, ...
+ */
+export function SanitizeWorksheetName(name: string, existingLowerNames?: ReadonlySet<string>): string {
+    const cleaned = (name ?? '').replace(/[\[\]:*?/\\]/g, ' ').trim();
+    const base = cleaned.slice(0, 31).trim() || 'Sheet';
+    if (!existingLowerNames || !existingLowerNames.has(base.toLowerCase())) {
+        return base;
+    }
+    for (let i = 2; i < 999; i++) {
+        const suffix = ` (${i})`;
+        const prefixMax = Math.max(1, 31 - suffix.length);
+        const candidate = `${base.slice(0, prefixMax).trimEnd()}${suffix}`;
+        if (!existingLowerNames.has(candidate.toLowerCase())) {
+            return candidate;
+        }
+    }
+    return base;
+}
+
+/**
+ * Resolves a relative OOXML relationship `Target` against a base directory inside the ZIP archive,
+ * collapsing `.` and `..` segments and rejecting any traversal escaping the archive root (`P1-6`).
+ */
+function normalizeOoxmlRelTarget(baseDir: string, target: string): string | null {
+    if (!target || /[\u0000-\u001f]/.test(target)) return null;
+    const raw = target.replace(/\\/g, '/');
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) return null;
+    const joined = raw.startsWith('/') ? raw.slice(1) : baseDir ? `${baseDir}/${raw}` : raw;
+    const out: string[] = [];
+    for (const seg of joined.split('/')) {
+        if (!seg || seg === '.') continue;
+        if (seg === '..') {
+            if (out.length === 0) return null;
+            out.pop();
+            continue;
+        }
+        out.push(seg);
+    }
+    return out.length > 0 ? out.join('/') : null;
+}
 /** Excel 1900 date serial epoch offset from Unix epoch (`1970-01-01` = serial `25569`). */
 const EXCEL_UNIX_EPOCH_SERIAL_OFFSET = 25569;
 const MS_PER_DAY = 86_400_000;
@@ -1923,8 +2244,291 @@ export function ParseRangeAddress(
 
 const MAX_DENSE_ROWS = 10_000;
 const MAX_DENSE_COLS = 512;
-const EXCEL_MAX_ROWS = 1_048_576;
-const EXCEL_MAX_COLS = 16_384;
+export const EXCEL_MAX_ROWS = 1_048_576;
+export const EXCEL_MAX_COLS = 16_384;
+const MAX_DYNAMIC_ARRAY_CELLS = 200_000;
+export const MAX_IMPORT_SHEETS = 128;
+export const MAX_IMPORT_WORKBOOK_CELLS = 250_000;
+export const MAX_IMPORT_WORKBOOK_FORMULAS = 100_000;
+export const MAX_IMPORT_WORKBOOK_ARRAY_ANCHORS = 25_000;
+export const MAX_IMPORT_WORKBOOK_COL_TAGS = 25_000;
+export const MAX_VALIDATION_RULES_PER_SHEET = 5_000;
+export const MAX_PROTECTED_RANGES_PER_WORKBOOK = 2_000;
+export const MAX_VALIDATION_ALLOWED_VALUES = 1_000;
+export const MAX_VALIDATION_CHECKS_PER_WORKBOOK = 2_000_000;
+export const MAX_IMPORT_WORKBOOK_MERGE_RANGES = 50_000;
+export const MAX_IMPORT_WORKBOOK_CHARTS = 2_000;
+export const MAX_IMPORT_DRAWING_ANCHORS = 10_000;
+export const MAX_IMPORT_WORKBOOK_CONDITIONAL_FORMATS = 5_000;
+export const MAX_IMPORT_WORKBOOK_LIVE_TABLES = 1_000;
+export const MAX_IMPORT_WORKBOOK_EMBEDDED_ARTIFACTS = 1_000;
+export const MAX_IMPORTED_FORMULA_BYTES = 16 * 1024 * 1024;
+export const MAX_DAG_EDGES_PER_WORKBOOK = 1_000_000;
+export const MAX_DAG_EXPANDED_WIDE_EDGES = 750_000;
+export const MAX_DAG_RANGE_WATCHERS = 250_000;
+export const MAX_EVAL_MATRIX_CELLS_PER_FORMULA = 1_000_000;
+export const MAX_EVAL_MATRIX_CELLS_PER_WORKBOOK = 4_000_000;
+
+interface SpreadsheetImportBudget {
+    cells: number;
+    formulas: number;
+    formulaBytes: number;
+    arrayAnchors: number;
+    validationRules: number;
+    colTags: number;
+    merges: number;
+    charts: number;
+    drawingAnchors: number;
+}
+
+interface ArrayAnchorRect {
+    anchorAddr: string;
+    startRow: number;
+    endRow: number;
+    startCol: number;
+    endCol: number;
+}
+
+/**
+ * Verifies in `O(N log N)` time that no two multi-cell array/spill anchor rectangles overlap (`R6-1`).
+ */
+function assertNoOverlappingArrayAnchors(anchors: readonly ArrayAnchorRect[]): void {
+    if (anchors.length <= 1) {
+        return;
+    }
+    const sorted = [...anchors].sort((a, b) => a.startRow - b.startRow || a.startCol - b.startCol);
+    // Because we reject immediately on any overlap, `active` intervals are always pairwise disjoint by [startCol, endCol].
+    const active: ArrayAnchorRect[] = [];
+    for (const cur of sorted) {
+        if (active.length > 0) {
+            let writeIdx = 0;
+            for (let i = 0; i < active.length; i++) {
+                if (active[i].endRow >= cur.startRow) {
+                    active[writeIdx++] = active[i];
+                }
+            }
+            active.length = writeIdx;
+        }
+        // Binary search first active interval with endCol >= cur.startCol
+        let lo = 0;
+        let hi = active.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (active[mid].endCol < cur.startCol) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        if (lo < active.length && active[lo].startCol <= cur.endCol) {
+            throw new Error(
+                `Spreadsheet rejected: overlapping array formula ranges (${active[lo].anchorAddr} and ${cur.anchorAddr}).`
+            );
+        }
+        // Maintain sorted startCol invariant (first active interval with startCol > cur.startCol is `lo`)
+        active.splice(lo, 0, cur);
+    }
+}
+
+export interface SpreadsheetWorkerIsolationRunner {
+    ImportFromXlsxBytes(
+        bytes: Uint8Array,
+        configurationJson?: string | null,
+        options?: { SkipEvaluate?: boolean }
+    ): Promise<WorkbookSpec>;
+    PatchXlsxBytes(originalBytes: Uint8Array, workbook: WorkbookSpec): Promise<Uint8Array>;
+    EvaluateWorkbook(
+        workbook: WorkbookSpec,
+        editContext?: SpreadsheetCellEditContext
+    ): Promise<{ Workbook: WorkbookSpec; EvaluatedFormulaCount: number }>;
+}
+
+const SPREADSHEET_WORKER_RUNNER_KEY = '___MJ_SPREADSHEET_WORKER_ISOLATION_RUNNER___';
+const SPREADSHEET_WORKER_REQUIRED_KEY = '___MJ_SPREADSHEET_WORKER_ISOLATION_REQUIRED___';
+const SPREADSHEET_WORKER_WARNED_KEY = '___MJ_SPREADSHEET_WORKER_FALLBACK_WARNED___';
+
+/**
+ * Registers the server-side `worker_threads` isolation runner used by {@link SpreadsheetEngine}
+ * async `Isolated` entry points (`R6-1`). Keeps `@memberjunction/core-entities` free of Node imports.
+ */
+export function RegisterSpreadsheetWorkerRunner(runner: SpreadsheetWorkerIsolationRunner | null): void {
+    const store = GetGlobalObjectStore();
+    if (runner) {
+        store[SPREADSHEET_WORKER_RUNNER_KEY] = runner;
+    } else {
+        delete store[SPREADSHEET_WORKER_RUNNER_KEY];
+    }
+}
+
+/**
+ * Configures whether isolated entry points must fail closed in Node/server mode when no
+ * {@link SpreadsheetWorkerIsolationRunner} is registered (`R7-1`).
+ */
+export function SetSpreadsheetWorkerIsolationRequired(required: boolean): void {
+    const store = GetGlobalObjectStore();
+    if (required) {
+        store[SPREADSHEET_WORKER_REQUIRED_KEY] = true;
+    } else {
+        delete store[SPREADSHEET_WORKER_REQUIRED_KEY];
+    }
+}
+
+/**
+ * Returns the registered {@link SpreadsheetWorkerIsolationRunner}, or `null` in browser / standalone mode.
+ */
+export function GetSpreadsheetWorkerRunner(): SpreadsheetWorkerIsolationRunner | null {
+    const runner = GetGlobalObjectStore()[SPREADSHEET_WORKER_RUNNER_KEY] as
+        | SpreadsheetWorkerIsolationRunner
+        | undefined;
+    return runner ?? null;
+}
+
+function handleMissingWorkerRunner(opName: string): void {
+    const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node);
+    if (!isNode) {
+        return;
+    }
+    const store = GetGlobalObjectStore();
+    if (store[SPREADSHEET_WORKER_REQUIRED_KEY] === true) {
+        throw new Error(
+            `Spreadsheet operation '${opName}' rejected: server worker isolation runner is required but not registered.`
+        );
+    }
+    if (!store[SPREADSHEET_WORKER_WARNED_KEY]) {
+        store[SPREADSHEET_WORKER_WARNED_KEY] = true;
+        LogError(
+            `SpreadsheetEngine.${opName}: no worker_threads isolation runner is registered in this Node process; falling back to main-thread execution.`
+        );
+    }
+}
+
+function buildColSortedAddrIndex(addrs: Iterable<string>): Map<number, Array<{ row: number; addr: string }>> {
+    const byCol = new Map<number, Array<{ row: number; addr: string }>>();
+    for (const addr of addrs) {
+        const pos = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
+        if (!pos) continue;
+        let list = byCol.get(pos.col);
+        if (!list) {
+            list = [];
+            byCol.set(pos.col, list);
+        }
+        list.push({ row: pos.row, addr });
+    }
+    for (const list of byCol.values()) {
+        if (list.length > 1) {
+            list.sort((a, b) => a.row - b.row);
+        }
+    }
+    return byCol;
+}
+
+function scanColSortedAddrIndex(
+    byCol: ReadonlyMap<number, ReadonlyArray<{ row: number; addr: string }>>,
+    startRow: number,
+    endRow: number,
+    startCol: number,
+    endCol: number,
+    visitor: (addr: string) => void
+): void {
+    const visitCol = (list: ReadonlyArray<{ row: number; addr: string }>): void => {
+        let lo = 0;
+        let hi = list.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (list[mid].row < startRow) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        for (let i = lo; i < list.length; i++) {
+            const entry = list[i];
+            if (entry.row > endRow) break;
+            visitor(entry.addr);
+        }
+    };
+    if (endCol - startCol + 1 <= byCol.size) {
+        for (let c = startCol; c <= endCol; c++) {
+            const list = byCol.get(c);
+            if (list) visitCol(list);
+        }
+    } else {
+        for (const [col, list] of byCol.entries()) {
+            if (col < startCol || col > endCol) continue;
+            visitCol(list);
+        }
+    }
+}
+
+interface CompiledValidationEntry {
+    rule: SpreadsheetValidationRuleSpec;
+    startRow: number;
+    endRow: number;
+    startCol: number;
+    endCol: number;
+    allowedValuesLowerSet?: Set<string>;
+}
+
+interface CompiledValidationIndex {
+    byRow: Map<number, CompiledValidationEntry[]>;
+    byCol: Map<number, CompiledValidationEntry[]>;
+    wideRules: CompiledValidationEntry[];
+}
+
+function buildCompiledValidationIndex(rules: readonly SpreadsheetValidationRuleSpec[]): CompiledValidationIndex {
+    if (rules.length > MAX_VALIDATION_RULES_PER_SHEET) {
+        throw new Error(
+            `Spreadsheet rejected: worksheet exceeds maximum validation rule limit (${MAX_VALIDATION_RULES_PER_SHEET}).`
+        );
+    }
+    const byRow = new Map<number, CompiledValidationEntry[]>();
+    const byCol = new Map<number, CompiledValidationEntry[]>();
+    const wideRules: CompiledValidationEntry[] = [];
+    for (let i = 0; i < rules.length; i++) {
+        const rule = rules[i];
+        if (Array.isArray(rule.AllowedValues) && rule.AllowedValues.length > MAX_VALIDATION_ALLOWED_VALUES) {
+            throw new Error(
+                `Spreadsheet rejected: validation rule '${rule.Range}' exceeds maximum allowed values limit (${MAX_VALIDATION_ALLOWED_VALUES}).`
+            );
+        }
+        const bounds = ParseRangeAddress(rule.Range);
+        if (!bounds) continue;
+        const allowedValuesLowerSet =
+            rule.RuleType === 'list' && Array.isArray(rule.AllowedValues)
+                ? new Set(rule.AllowedValues.map((a) => String(a).toLowerCase()))
+                : undefined;
+        const entry: CompiledValidationEntry = {
+            rule,
+            startRow: bounds.startRow,
+            endRow: bounds.endRow,
+            startCol: bounds.startCol,
+            endCol: bounds.endCol,
+            allowedValuesLowerSet
+        };
+        if (bounds.endRow - bounds.startRow <= 64) {
+            for (let r = bounds.startRow; r <= bounds.endRow; r++) {
+                let rowList = byRow.get(r);
+                if (!rowList) {
+                    rowList = [];
+                    byRow.set(r, rowList);
+                }
+                rowList.push(entry);
+            }
+        } else if (bounds.endCol - bounds.startCol <= 64) {
+            for (let c = bounds.startCol; c <= bounds.endCol; c++) {
+                let colList = byCol.get(c);
+                if (!colList) {
+                    colList = [];
+                    byCol.set(c, colList);
+                }
+                colList.push(entry);
+            }
+        } else {
+            wideRules.push(entry);
+        }
+    }
+    return { byRow, byCol, wideRules };
+}
 
 /**
  * Zero-regex ASCII coordinate parser for canonical or `$`-prefixed A1 cell keys (`'B2'`, `'$AA$100'`).
@@ -1972,23 +2576,33 @@ function parseCellCoordsFast(addr: string): { row: number; col: number } | null 
 // SpreadsheetEngine Singleton
 // ---------------------------------------------------------------------------
 
-const WORKSHEET_CLEARED_SPILL_CHILDREN = new WeakMap<WorksheetSpec, Set<string>>();
+const WORKSHEET_CLEARED_SPILL_STORE_KEY = '___MJ_SPREADSHEET_WORKSHEET_CLEARED_SPILL_CHILDREN';
+function getWorksheetClearedSpillMap(): WeakMap<WorksheetSpec, Set<string>> {
+    const store = MJGlobal.Instance.GetGlobalObjectStore();
+    let map = store[WORKSHEET_CLEARED_SPILL_STORE_KEY] as WeakMap<WorksheetSpec, Set<string>> | undefined;
+    if (!map) {
+        map = new WeakMap<WorksheetSpec, Set<string>>();
+        store[WORKSHEET_CLEARED_SPILL_STORE_KEY] = map;
+    }
+    return map;
+}
 
 function getClearedSpillSet(ws: WorksheetSpec): Set<string> | undefined {
-    return WORKSHEET_CLEARED_SPILL_CHILDREN.get(ws);
+    return getWorksheetClearedSpillMap().get(ws);
 }
 
 function addClearedSpillAddr(ws: WorksheetSpec, addr: string): void {
-    let s = WORKSHEET_CLEARED_SPILL_CHILDREN.get(ws);
+    const clearedMap = getWorksheetClearedSpillMap();
+    let s = clearedMap.get(ws);
     if (!s) {
         s = new Set<string>();
-        WORKSHEET_CLEARED_SPILL_CHILDREN.set(ws, s);
+        clearedMap.set(ws, s);
     }
     s.add(addr.toUpperCase());
 }
 
 function deleteClearedSpillAddr(ws: WorksheetSpec, addr: string): void {
-    const s = WORKSHEET_CLEARED_SPILL_CHILDREN.get(ws);
+    const s = getWorksheetClearedSpillMap().get(ws);
     if (s) {
         s.delete(addr.toUpperCase());
     }
@@ -2013,6 +2627,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private viewerCache = new Map<string, ViewerFunctionCacheEntry>();
     private sheetToWorkbook = new WeakMap<WorksheetSpec, WorkbookSpec>();
     private workbookDagCache = new WeakMap<WorkbookSpec, WorkbookDependencyGraph>();
+    private workbookCellCountCache = new WeakMap<WorkbookSpec, number>();
     private sheetLookupCache = new WeakMap<
         WorksheetSpec,
         { rowLen: number; colLen: number; rowIndexById: Map<string, number>; colIndexById: Map<string, number> }
@@ -2028,8 +2643,229 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private sheetsWithVirtualAxisIds = new WeakSet<WorksheetSpec>();
     private workbooksWithVirtualAxisIds = new WeakSet<WorkbookSpec>();
     private unimplementedResultCells = new WeakSet<SpreadsheetCellSpec>();
+    private validationIndexCache = new WeakMap<
+        WorksheetSpec,
+        { rulesRef: readonly SpreadsheetValidationRuleSpec[]; rulesLen: number; index: CompiledValidationIndex }
+    >();
     private monotonicIdCounter = 0;
     private _lastEvaluatedFormulaCount = 0;
+    private activeEvalBudget: {
+        ops: number;
+        maxOps: number;
+        deadlineMs: number;
+        exceeded: boolean;
+        matrixCellsLive: number;
+        totalMatrixCellsAllocated: number;
+        sheetColIndex: WeakMap<WorksheetSpec, Map<number, Array<{ row: number; addr: string }>>>;
+    } | null = null;
+
+    private runWithEvalBudget<T>(fn: () => T): T {
+        if (this.activeEvalBudget) {
+            return fn();
+        }
+        this.activeEvalBudget = {
+            ops: 0,
+            maxOps: MAX_EVAL_OPS_PER_WORKBOOK,
+            deadlineMs: Date.now() + MAX_EVAL_TIME_MS,
+            exceeded: false,
+            matrixCellsLive: 0,
+            totalMatrixCellsAllocated: 0,
+            sheetColIndex: new WeakMap<WorksheetSpec, Map<number, Array<{ row: number; addr: string }>>>()
+        };
+        try {
+            return fn();
+        } finally {
+            this.activeEvalBudget = null;
+        }
+    }
+
+    private chargeMatrixAllocation(cellCount: number): void {
+        if (!Number.isFinite(cellCount) || cellCount < 0) {
+            throw new EvalBudgetExceededError();
+        }
+        const budget = this.activeEvalBudget;
+        if (!budget) {
+            if (cellCount > MAX_DYNAMIC_ARRAY_CELLS) {
+                throw new EvalBudgetExceededError();
+            }
+            return;
+        }
+        if (budget.exceeded) {
+            throw new EvalBudgetExceededError();
+        }
+        if (budget.matrixCellsLive + cellCount > MAX_EVAL_MATRIX_CELLS_PER_FORMULA) {
+            throw new EvalBudgetExceededError();
+        }
+        if (budget.totalMatrixCellsAllocated + cellCount > MAX_EVAL_MATRIX_CELLS_PER_WORKBOOK) {
+            budget.exceeded = true;
+            throw new EvalBudgetExceededError();
+        }
+        this.consumeEvalBudget(Math.max(1, cellCount));
+        budget.matrixCellsLive += cellCount;
+        budget.totalMatrixCellsAllocated += cellCount;
+    }
+
+    private getOrBuildValidationIndex(sheet: WorksheetSpec): CompiledValidationIndex {
+        const cached = this.validationIndexCache.get(sheet);
+        if (cached && cached.rulesRef === sheet.ValidationRules && cached.rulesLen === sheet.ValidationRules.length) {
+            return cached.index;
+        }
+        const index = buildCompiledValidationIndex(sheet.ValidationRules);
+        this.validationIndexCache.set(sheet, {
+            rulesRef: sheet.ValidationRules,
+            rulesLen: sheet.ValidationRules.length,
+            index
+        });
+        return index;
+    }
+
+    private getOrBuildSheetColIndex(sheet: WorksheetSpec): Map<number, Array<{ row: number; addr: string }>> {
+        const cached = this.activeEvalBudget?.sheetColIndex.get(sheet);
+        if (cached) {
+            return cached;
+        }
+        const keys = Object.keys(sheet.Cells);
+        if (this.activeEvalBudget && keys.length > 0) {
+            this.consumeEvalBudget(keys.length);
+        }
+        const byCol = new Map<number, Array<{ row: number; addr: string }>>();
+        for (const addr of keys) {
+            const pos = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
+            if (!pos) continue;
+            let entries = byCol.get(pos.col);
+            if (!entries) {
+                entries = [];
+                byCol.set(pos.col, entries);
+            }
+            entries.push({ row: pos.row, addr });
+        }
+        for (const entries of byCol.values()) {
+            if (entries.length > 1) {
+                entries.sort((a, b) => a.row - b.row);
+            }
+        }
+        this.activeEvalBudget?.sheetColIndex.set(sheet, byCol);
+        return byCol;
+    }
+
+    private upsertCellInEvalColIndex(sheet: WorksheetSpec, row: number, col: number, addr: string): void {
+        const byCol = this.activeEvalBudget?.sheetColIndex.get(sheet);
+        if (!byCol) {
+            return;
+        }
+        let entries = byCol.get(col);
+        if (!entries) {
+            entries = [{ row, addr }];
+            byCol.set(col, entries);
+            return;
+        }
+        let lo = 0;
+        let hi = entries.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (entries[mid].row < row) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        if (lo < entries.length && entries[lo].row === row) {
+            entries[lo] = { row, addr };
+        } else if (entries.length === 0 || row > entries[entries.length - 1].row) {
+            entries.push({ row, addr });
+        } else {
+            entries.splice(lo, 0, { row, addr });
+        }
+    }
+
+    private removeCellFromEvalColIndex(sheet: WorksheetSpec, row: number, col: number): void {
+        const byCol = this.activeEvalBudget?.sheetColIndex.get(sheet);
+        if (!byCol) {
+            return;
+        }
+        const entries = byCol.get(col);
+        if (!entries || entries.length === 0) {
+            return;
+        }
+        if (entries[entries.length - 1].row === row) {
+            entries.pop();
+            if (entries.length === 0) {
+                byCol.delete(col);
+            }
+            return;
+        }
+        let lo = 0;
+        let hi = entries.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (entries[mid].row < row) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        if (lo < entries.length && entries[lo].row === row) {
+            entries.splice(lo, 1);
+            if (entries.length === 0) {
+                byCol.delete(col);
+            }
+        }
+    }
+
+    private getPopulatedCellBounds(sheet: WorksheetSpec): { maxRow: number; maxCol: number } {
+        const byCol = this.getOrBuildSheetColIndex(sheet);
+        let maxRow = 1;
+        let maxCol = 1;
+        for (const [col, entries] of byCol.entries()) {
+            if (col > maxCol) {
+                maxCol = col;
+            }
+            if (entries.length > 0) {
+                const lastRow = entries[entries.length - 1].row;
+                if (lastRow > maxRow) {
+                    maxRow = lastRow;
+                }
+            }
+        }
+        return { maxRow, maxCol };
+    }
+
+    private consumeEvalBudget(cost = 1): void {
+        const budget = this.activeEvalBudget;
+        if (!budget) {
+            throw new EvalBudgetExceededError();
+        }
+        if (budget.exceeded) {
+            throw new EvalBudgetExceededError();
+        }
+        const units = Number.isFinite(cost) && cost > 1 ? Math.trunc(cost) : 1;
+        const prevOps = budget.ops;
+        budget.ops += units;
+        if (
+            budget.ops > budget.maxOps ||
+            units > 64 ||
+            (budget.ops >>> 10) !== (prevOps >>> 10)
+        ) {
+            if (budget.ops > budget.maxOps || Date.now() > budget.deadlineMs) {
+                budget.exceeded = true;
+                throw new EvalBudgetExceededError();
+            }
+        }
+    }
+
+    private joinCappedStrings(parts: readonly string[], delim = ''): string {
+        let totalLen = parts.length > 1 ? delim.length * (parts.length - 1) : 0;
+        if (totalLen > MAX_CELL_STRING_LENGTH) {
+            return '#VALUE!';
+        }
+        for (let i = 0; i < parts.length; i++) {
+            totalLen += parts[i].length;
+            if (totalLen > MAX_CELL_STRING_LENGTH) {
+                return '#VALUE!';
+            }
+        }
+        return parts.join(delim);
+    }
 
     /**
      * Number of cell formulas evaluated in the most recent `EvaluateWorkbook` or incremental recalculation pass.
@@ -2131,29 +2967,49 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ConditionalFormats: [],
             LiveTables: [],
             Charts: [],
-            EmbeddedArtifacts: []
+            EmbeddedArtifacts: [],
+            ProtectedRanges: []
         };
         this.indexedSheets.add(ws);
         return ws;
     }
 
+    private assertSynchronousEvaluationAllowed(opName: string): void {
+        const store = GetGlobalObjectStore();
+        if (store[SPREADSHEET_WORKER_REQUIRED_KEY] === true) {
+            throw new Error(
+                `Spreadsheet operation '${opName}' rejected: synchronous main-thread evaluation is prohibited while server worker isolation is required.`
+            );
+        }
+    }
+
     /**
      * Parses a workbook from JSON string, `Configuration` metadata string, CSV text, or returns a default workbook.
      */
-    public ParseWorkbook(content?: string | null, configuration?: string | null): WorkbookSpec {
+    public ParseWorkbook(
+        content?: string | null,
+        configuration?: string | null,
+        options?: { SkipEvaluate?: boolean }
+    ): WorkbookSpec {
+        if (!options?.SkipEvaluate) {
+            this.assertSynchronousEvaluationAllowed('ParseWorkbook(SkipEvaluate=false)');
+        }
         for (const candidate of [configuration, content]) {
             if (!candidate || typeof candidate !== 'string') continue;
             const trimmed = candidate.trim();
             if (!trimmed.startsWith('{')) continue;
+            let parsed: Partial<WorkbookSpec> | null = null;
             try {
-                const parsed = JSON.parse(trimmed) as Partial<WorkbookSpec>;
-                if (parsed && Array.isArray(parsed.Worksheets) && parsed.Worksheets.length > 0) {
-                    const wb = this.NormalizeWorkbook(parsed);
-                    this.EvaluateWorkbook(wb);
-                    return wb;
-                }
+                parsed = JSON.parse(trimmed) as Partial<WorkbookSpec>;
             } catch {
-                // Continue to next candidate
+                parsed = null;
+            }
+            if (parsed && Array.isArray(parsed.Worksheets) && parsed.Worksheets.length > 0) {
+                const wb = this.NormalizeWorkbook(parsed);
+                if (!options?.SkipEvaluate) {
+                    this.EvaluateWorkbook(wb);
+                }
+                return wb;
             }
         }
 
@@ -2163,13 +3019,62 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (trimmed.startsWith('data:') || trimmed.startsWith('UEsDB')) {
                 const bytes = this.decodeBase64OrDataUrl(trimmed);
                 if (bytes && bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
-                    const imported = this.ImportFromXlsxBytes(bytes, configuration);
+                    const imported = this.ImportFromXlsxBytes(bytes, configuration, options);
                     return imported;
                 }
             }
             // Plain CSV fallback
             if (trimmed.length > 0 && !trimmed.startsWith('{') && !trimmed.startsWith('data:')) {
-                return this.ImportFromCsv(trimmed, 'Sheet 1');
+                return this.ImportFromCsv(trimmed, 'Sheet 1', 'Imported CSV', options);
+            }
+        }
+
+        return this.CreateEmptyWorkbook();
+    }
+
+    /**
+     * Isolated async counterpart to {@link ParseWorkbook}: enforces workbook limits in
+     * {@link NormalizeWorkbook} and delegates `.xlsx` binary imports as well as formula
+     * evaluation to the registered server `worker_threads` runner when active (`R7-1`).
+     */
+    public async ParseWorkbookIsolated(
+        content?: string | null,
+        configuration?: string | null,
+        options?: { SkipEvaluate?: boolean }
+    ): Promise<WorkbookSpec> {
+        for (const candidate of [configuration, content]) {
+            if (!candidate || typeof candidate !== 'string') continue;
+            const trimmed = candidate.trim();
+            if (!trimmed.startsWith('{')) continue;
+            let parsed: Partial<WorkbookSpec> | null = null;
+            try {
+                parsed = JSON.parse(trimmed) as Partial<WorkbookSpec>;
+            } catch {
+                parsed = null;
+            }
+            if (parsed && Array.isArray(parsed.Worksheets) && parsed.Worksheets.length > 0) {
+                const wb = this.NormalizeWorkbook(parsed);
+                if (!options?.SkipEvaluate) {
+                    await this.EvaluateWorkbookIsolated(wb);
+                }
+                return wb;
+            }
+        }
+
+        if (content && typeof content === 'string') {
+            const trimmed = content.trim();
+            if (trimmed.startsWith('data:') || trimmed.startsWith('UEsDB')) {
+                const bytes = this.decodeBase64OrDataUrl(trimmed);
+                if (bytes && bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
+                    return await this.ImportFromXlsxBytesIsolated(bytes, configuration, options);
+                }
+            }
+            if (trimmed.length > 0 && !trimmed.startsWith('{') && !trimmed.startsWith('data:')) {
+                const wb = this.ImportFromCsv(trimmed, 'Sheet 1', 'Imported CSV', { SkipEvaluate: true });
+                if (!options?.SkipEvaluate) {
+                    await this.EvaluateWorkbookIsolated(wb);
+                }
+                return wb;
             }
         }
 
@@ -2181,10 +3086,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * `=MJ.*` spill cells, `Mode === 'Live'` table cells, and `=MJ.QUERY`/`=MJ.VIEW` computed values
      * so viewer-scoped data is never persisted (`B4`).
      */
-    public SerializeWorkbook(workbook: WorkbookSpec): string {
-        workbook.UpdatedAt = new Date().toISOString();
+    public SerializeWorkbook(workbook: WorkbookSpec, options?: { preserveTimestamps?: boolean }): string {
+        if (!options?.preserveTimestamps) {
+            workbook.UpdatedAt = new Date().toISOString();
+        }
         const sanitized = this.cloneWorkbookWithoutViewerScopedData(workbook);
         return JSON.stringify(sanitized, null, 2);
+    }
+
+    /**
+     * Returns a deep-cloned workbook with all viewer-scoped data (`=MJ.*` cells/spills,
+     * `Mode === 'Live'` tables, and transitively dependent formula cells) stripped (`B7b`).
+     */
+    public CloneWorkbookWithoutViewerScopedData(workbook: WorkbookSpec): WorkbookSpec {
+        return this.cloneWorkbookWithoutViewerScopedData(workbook);
     }
 
     private isCellInLiveTableFootprint(ws: WorksheetSpec, rowIndex: number, colIndex: number): string | null {
@@ -2197,7 +3112,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (rowSpan <= 0) continue;
             const colSpan = Math.max(
                 1,
-                (table.Fields?.length ?? 0) + (table.CalculatedColumns?.length ?? 0)
+                table.LastColumnCount ?? ((table.Fields?.length ?? 0) + (table.CalculatedColumns?.length ?? 0))
             );
             if (
                 rowIndex >= anchor.row &&
@@ -2212,9 +3127,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     private cloneWorkbookWithoutViewerScopedData(workbook: WorkbookSpec): WorkbookSpec {
-        // 1. Identify all viewer-scoped cells across the workbook in O(cells)
+        // 1. Identify all viewer-scoped cells across the workbook in O(cells), and index spill children by anchor
+        //    so static dynamic-array spills (e.g. =SEQUENCE(5)) are preserved while viewer-scoped spills are stripped.
         const viewerScopedSeedKeys = new Set<string>();
         const liveTableIdsBySheet = new Map<string, Set<string>>();
+        const spilledChildrenByAnchorKey = new Map<string, string[]>();
 
         for (const ws of workbook.Worksheets) {
             const liveModeTableIds = new Set(
@@ -2226,34 +3143,92 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 if (!cell) continue;
                 const pos = ParseCellAddress(addr);
                 const canonicalAddr = pos ? FormatCellAddress(pos.row, pos.col) : addr;
+                const cellKey = `${ws.SheetID}::${canonicalAddr}`;
+                if (cell.SpilledFrom) {
+                    const anchorPos = ParseCellAddress(cell.SpilledFrom);
+                    const canonicalAnchor = anchorPos
+                        ? FormatCellAddress(anchorPos.row, anchorPos.col)
+                        : cell.SpilledFrom.toUpperCase();
+                    const anchorKey = `${ws.SheetID}::${canonicalAnchor}`;
+                    let children = spilledChildrenByAnchorKey.get(anchorKey);
+                    if (!children) {
+                        children = [];
+                        spilledChildrenByAnchorKey.set(anchorKey, children);
+                    }
+                    children.push(cellKey);
+                }
                 const footprintTableId = pos ? this.isCellInLiveTableFootprint(ws, pos.row, pos.col) : null;
+                const parsedMj = cell.Formula ? this.ParseMjCustomFunctionFormula(cell.Formula) : null;
                 if (
-                    cell.SpilledFrom ||
                     (cell.LiveTableID && liveModeTableIds.has(cell.LiveTableID)) ||
                     footprintTableId !== null ||
-                    (cell.Formula && this.ParseMjCustomFunctionFormula(cell.Formula))
+                    (parsedMj && parsedMj.Kind !== 'AI')
                 ) {
-                    viewerScopedSeedKeys.add(`${ws.SheetID}::${canonicalAddr}`);
+                    viewerScopedSeedKeys.add(cellKey);
                 }
             }
         }
 
-        // 2. If any viewer-scoped cells exist, find all formula cells that transitively depend on them
+        // 2. If any viewer-scoped cells exist, find all formula cells and dynamic spills that transitively depend on them
         //    via a fast O(V + E) BFS over the dependency graph WITHOUT calling EvaluateWorkbook!
+        //    Includes >256-cell range watchers (e.g. =SUM(A:A), =VLOOKUP(..., A1:D500, ...), =MJ.AI(..., B2:D300)).
         const transitivelyDependentFormulaKeys = new Set<string>();
+        const viewerScopedSpillChildKeys = new Set<string>();
         if (viewerScopedSeedKeys.size > 0) {
             const dag = this.workbookDagCache.get(workbook) ?? this.buildWorkbookDependencyGraph(workbook);
             this.workbookDagCache.set(workbook, dag);
+            const queuedKeys = new Set<string>(viewerScopedSeedKeys);
             const queue = Array.from(viewerScopedSeedKeys);
             let head = 0;
             while (head < queue.length) {
                 const current = queue[head++];
+                const spillChildren = spilledChildrenByAnchorKey.get(current);
+                if (spillChildren) {
+                    for (const childKey of spillChildren) {
+                        viewerScopedSpillChildKeys.add(childKey);
+                        if (!queuedKeys.has(childKey)) {
+                            queuedKeys.add(childKey);
+                            queue.push(childKey);
+                        }
+                    }
+                }
                 const revDeps = dag.reverseCellDeps.get(current);
-                if (!revDeps) continue;
-                for (const depKey of revDeps) {
-                    if (!viewerScopedSeedKeys.has(depKey) && !transitivelyDependentFormulaKeys.has(depKey)) {
-                        transitivelyDependentFormulaKeys.add(depKey);
-                        queue.push(depKey);
+                if (revDeps) {
+                    for (const depKey of revDeps) {
+                        if (!viewerScopedSeedKeys.has(depKey) && !transitivelyDependentFormulaKeys.has(depKey)) {
+                            transitivelyDependentFormulaKeys.add(depKey);
+                        }
+                        if (!queuedKeys.has(depKey)) {
+                            queuedKeys.add(depKey);
+                            queue.push(depKey);
+                        }
+                    }
+                }
+                const sepIdx = current.indexOf('::');
+                if (sepIdx > 0) {
+                    const sheetId = current.slice(0, sepIdx);
+                    const addr = current.slice(sepIdx + 2);
+                    const watchers = dag.rangeWatchersBySheet.get(sheetId);
+                    if (watchers && watchers.length > 0) {
+                        const pos = ParseCellAddress(addr);
+                        if (pos) {
+                            for (const w of watchers) {
+                                if (
+                                    pos.row >= w.startRow &&
+                                    pos.row <= w.endRow &&
+                                    pos.col >= w.startCol &&
+                                    pos.col <= w.endCol
+                                ) {
+                                    if (!viewerScopedSeedKeys.has(w.watcherKey) && !transitivelyDependentFormulaKeys.has(w.watcherKey)) {
+                                        transitivelyDependentFormulaKeys.add(w.watcherKey);
+                                    }
+                                    if (!queuedKeys.has(w.watcherKey)) {
+                                        queuedKeys.add(w.watcherKey);
+                                        queue.push(w.watcherKey);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -2272,8 +3247,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     const canonicalAddr = pos ? FormatCellAddress(pos.row, pos.col) : addr;
                     const cellKey = `${ws.SheetID}::${canonicalAddr}`;
 
-                    if (cell.Formula && this.ParseMjCustomFunctionFormula(cell.Formula)) {
-                        cleanedCells[addr] = {
+                    const parsedMj = cell.Formula ? this.ParseMjCustomFunctionFormula(cell.Formula) : null;
+                    if (parsedMj && parsedMj.Kind !== 'AI') {
+                        const clearedMj: SpreadsheetCellSpec = {
                             ...cell,
                             RawValue: null,
                             ComputedValue: null,
@@ -2283,12 +3259,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                             SpilledFrom: null,
                             Style: cell.Style ? { ...cell.Style } : undefined
                         };
+                        delete clearedMj.AiInputHash;
+                        cleanedCells[addr] = clearedMj;
                         continue;
                     }
 
                     const footprintTableId = pos ? this.isCellInLiveTableFootprint(ws, pos.row, pos.col) : null;
                     const isLiveOrSpilled =
-                        Boolean(cell.SpilledFrom) ||
+                        viewerScopedSpillChildKeys.has(cellKey) ||
                         Boolean(cell.LiveTableID && liveModeTableIds.has(cell.LiveTableID)) ||
                         footprintTableId !== null;
 
@@ -2342,12 +3320,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         const cellCopy: SpreadsheetCellSpec = {
                             ...cell,
                             Formula: resolvedFormula,
+                            RawValue: null,
                             ComputedValue: null,
                             DisplayValue: '',
                             Style: cell.Style ? { ...cell.Style } : undefined
                         };
+                        delete cellCopy.AiInputHash;
                         copyCellXmlMeta(cell, cellCopy);
-                        if (!Boolean(cell.Formula && this.ParseMjCustomFunctionFormula(cell.Formula))) {
+                        if (!(parsedMj && parsedMj.Kind !== 'AI')) {
                             delete cellCopy.AccessDenied;
                             delete cellCopy.ErrorMessage;
                         }
@@ -2380,7 +3360,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         ConditionalFormats: ws.ConditionalFormats.map((cf) => ({ ...cf })),
                         LiveTables: ws.LiveTables.map((t) => ({ ...t })),
                         Charts: ws.Charts.map((c) => ({ ...c })),
-                        EmbeddedArtifacts: ws.EmbeddedArtifacts.map((e) => ({ ...e }))
+                        EmbeddedArtifacts: ws.EmbeddedArtifacts.map((e) => ({ ...e })),
+                        ProtectedRanges: (ws.ProtectedRanges ?? []).map((p) => ({ ...p }))
                     };
                 })
         };
@@ -2672,9 +3653,171 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     /**
+     * Validates workbook-wide structural limits across JSON, room hydration, and `.xlsx` payloads (`R7-1`, `S7-2`, `S7-3`).
+     */
+    public AssertWorkbookWithinLimits(raw: Partial<WorkbookSpec>): void {
+        const sheets = Array.isArray(raw.Worksheets) ? raw.Worksheets : [];
+        if (sheets.length > MAX_IMPORT_SHEETS) {
+            throw new Error(
+                `Spreadsheet rejected: workbook exceeds maximum sheet limit (${MAX_IMPORT_SHEETS}).`
+            );
+        }
+
+        let totalCells = 0;
+        let totalDenseRows = 0;
+        let totalDenseCols = 0;
+        let totalFormulas = 0;
+        let totalFormulaBytes = 0;
+        let totalArrayAnchors = 0;
+        let totalMerges = 0;
+        let totalCharts = 0;
+        let totalCondFormats = 0;
+        let totalLiveTables = 0;
+        let totalEmbedded = 0;
+        let totalProtectedRanges = 0;
+
+        for (const ws of sheets) {
+            if (!ws || typeof ws !== 'object') {
+                continue;
+            }
+            const protectedRanges = Array.isArray(ws.ProtectedRanges) ? ws.ProtectedRanges : [];
+            totalProtectedRanges += protectedRanges.length;
+            if (totalProtectedRanges > MAX_PROTECTED_RANGES_PER_WORKBOOK) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum protected range limit (${MAX_PROTECTED_RANGES_PER_WORKBOOK}).`
+                );
+            }
+            const validationRules = Array.isArray(ws.ValidationRules) ? ws.ValidationRules : [];
+            if (validationRules.length > MAX_VALIDATION_RULES_PER_SHEET) {
+                throw new Error(
+                    `Spreadsheet rejected: worksheet exceeds maximum validation rule limit (${MAX_VALIDATION_RULES_PER_SHEET}).`
+                );
+            }
+            for (const vRule of validationRules) {
+                if (
+                    vRule &&
+                    Array.isArray(vRule.AllowedValues) &&
+                    vRule.AllowedValues.length > MAX_VALIDATION_ALLOWED_VALUES
+                ) {
+                    throw new Error(
+                        `Spreadsheet rejected: validation rule '${vRule.Range}' exceeds maximum allowed values limit (${MAX_VALIDATION_ALLOWED_VALUES}).`
+                    );
+                }
+            }
+
+            totalDenseRows += Array.isArray(ws.Rows) ? ws.Rows.length : 0;
+            if (totalDenseRows > MAX_IMPORT_WORKBOOK_CELLS) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum dense row limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+                );
+            }
+            totalDenseCols += Array.isArray(ws.Columns) ? ws.Columns.length : 0;
+            if (totalDenseCols > MAX_IMPORT_WORKBOOK_COL_TAGS) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum dense column limit (${MAX_IMPORT_WORKBOOK_COL_TAGS}).`
+                );
+            }
+
+            totalMerges += Array.isArray(ws.MergeRanges) ? ws.MergeRanges.length : 0;
+            if (totalMerges > MAX_IMPORT_WORKBOOK_MERGE_RANGES) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum merge range limit (${MAX_IMPORT_WORKBOOK_MERGE_RANGES}).`
+                );
+            }
+            totalCharts += Array.isArray(ws.Charts) ? ws.Charts.length : 0;
+            if (totalCharts > MAX_IMPORT_WORKBOOK_CHARTS) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum chart limit (${MAX_IMPORT_WORKBOOK_CHARTS}).`
+                );
+            }
+            totalCondFormats += Array.isArray(ws.ConditionalFormats) ? ws.ConditionalFormats.length : 0;
+            if (totalCondFormats > MAX_IMPORT_WORKBOOK_CONDITIONAL_FORMATS) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum conditional format limit (${MAX_IMPORT_WORKBOOK_CONDITIONAL_FORMATS}).`
+                );
+            }
+            totalLiveTables += Array.isArray(ws.LiveTables) ? ws.LiveTables.length : 0;
+            if (totalLiveTables > MAX_IMPORT_WORKBOOK_LIVE_TABLES) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum live table limit (${MAX_IMPORT_WORKBOOK_LIVE_TABLES}).`
+                );
+            }
+            totalEmbedded += Array.isArray(ws.EmbeddedArtifacts) ? ws.EmbeddedArtifacts.length : 0;
+            if (totalEmbedded > MAX_IMPORT_WORKBOOK_EMBEDDED_ARTIFACTS) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum embedded artifact limit (${MAX_IMPORT_WORKBOOK_EMBEDDED_ARTIFACTS}).`
+                );
+            }
+
+            const rawCells = ws.Cells && typeof ws.Cells === 'object' ? ws.Cells : {};
+            const cellKeys = Object.keys(rawCells);
+            totalCells += cellKeys.length;
+            if (totalCells > MAX_IMPORT_WORKBOOK_CELLS) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum cell limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+                );
+            }
+
+            const anchorRects: ArrayAnchorRect[] = [];
+            for (const key of cellKeys) {
+                const cell = rawCells[key];
+                if (!cell) continue;
+                const formula = typeof cell.Formula === 'string' ? cell.Formula : '';
+                if (formula.length > 0) {
+                    if (formula.length > MAX_FORMULA_LENGTH) {
+                        throw new Error(
+                            `Spreadsheet rejected: formula exceeds maximum length (${MAX_FORMULA_LENGTH} chars).`
+                        );
+                    }
+                    totalFormulas++;
+                    if (totalFormulas > MAX_IMPORT_WORKBOOK_FORMULAS) {
+                        throw new Error(
+                            `Spreadsheet rejected: workbook exceeds maximum formula count (${MAX_IMPORT_WORKBOOK_FORMULAS}).`
+                        );
+                    }
+                    totalFormulaBytes += formula.length;
+                    if (totalFormulaBytes > MAX_IMPORTED_FORMULA_BYTES) {
+                        throw new Error(
+                            `Spreadsheet rejected: workbook exceeds maximum formula bytes (${MAX_IMPORTED_FORMULA_BYTES} bytes).`
+                        );
+                    }
+                }
+                if (typeof cell.SpillRange === 'string' && cell.SpillRange.trim().length > 0) {
+                    const anchorAddr = cell.Address || key;
+                    const anchorPos = parseCellCoordsFast(anchorAddr) ?? ParseCellAddress(anchorAddr);
+                    const bounds = ParseRangeAddress(cell.SpillRange, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                    if (bounds) {
+                        if (++totalArrayAnchors > MAX_IMPORT_WORKBOOK_ARRAY_ANCHORS) {
+                            throw new Error(
+                                `Spreadsheet rejected: workbook exceeds maximum array formula anchor limit (${MAX_IMPORT_WORKBOOK_ARRAY_ANCHORS}).`
+                            );
+                        }
+                        if (anchorPos && (anchorPos.row !== bounds.startRow || anchorPos.col !== bounds.startCol)) {
+                            throw new Error(
+                                `Spreadsheet rejected: array formula anchor '${anchorAddr}' must match top-left of range '${cell.SpillRange}'.`
+                            );
+                        }
+                        anchorRects.push({
+                            anchorAddr,
+                            startRow: bounds.startRow,
+                            endRow: bounds.endRow,
+                            startCol: bounds.startCol,
+                            endCol: bounds.endCol
+                        });
+                    }
+                }
+            }
+            if (anchorRects.length > 1) {
+                assertNoOverlappingArrayAnchors(anchorRects);
+            }
+        }
+    }
+
+    /**
      * Ensures a partial or deserialized workbook has valid `Rows`, `Columns`, `Cells`, and stable IDs.
      */
     public NormalizeWorkbook(raw: Partial<WorkbookSpec>): WorkbookSpec {
+        this.AssertWorkbookWithinLimits(raw);
         const now = new Date().toISOString();
         const rawSheets = Array.isArray(raw.Worksheets) && raw.Worksheets.length > 0
             ? raw.Worksheets
@@ -2693,6 +3836,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ActiveSheetID: activeId,
             Worksheets: worksheets,
             NamedRanges: Array.isArray(raw.NamedRanges) ? raw.NamedRanges : [],
+            ...(typeof raw.PreferredObjectsPaneHeightPx === 'number' &&
+            Number.isFinite(raw.PreferredObjectsPaneHeightPx) &&
+            raw.PreferredObjectsPaneHeightPx > 0
+                ? { PreferredObjectsPaneHeightPx: Math.round(raw.PreferredObjectsPaneHeightPx) }
+                : {}),
             CreatedAt: raw.CreatedAt || now,
             UpdatedAt: raw.UpdatedAt || now
         };
@@ -2792,7 +3940,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ConditionalFormats: Array.isArray(raw.ConditionalFormats) ? raw.ConditionalFormats : [],
             LiveTables: Array.isArray(raw.LiveTables) ? raw.LiveTables : [],
             Charts: Array.isArray(raw.Charts) ? raw.Charts : [],
-            EmbeddedArtifacts: Array.isArray(raw.EmbeddedArtifacts) ? raw.EmbeddedArtifacts : []
+            EmbeddedArtifacts: Array.isArray(raw.EmbeddedArtifacts) ? raw.EmbeddedArtifacts : [],
+            ProtectedRanges: Array.isArray(raw.ProtectedRanges)
+                ? raw.ProtectedRanges.map((p) => ({ ...p }))
+                : []
         };
         if (Array.isArray(raw.ClearedSpillChildren)) {
             for (const addr of raw.ClearedSpillChildren) {
@@ -2844,6 +3995,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (prevAtCanonical) {
                 this.removeCellFromVirtualAxisIndex(sheet, prevAtCanonical);
             }
+            let sanitizedSpillRange: string | undefined;
+            if (typeof cell.SpillRange === 'string' && formula) {
+                const spillBounds = ParseRangeAddress(cell.SpillRange, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                if (spillBounds) {
+                    const spillArea =
+                        (spillBounds.endRow - spillBounds.startRow + 1) *
+                        (spillBounds.endCol - spillBounds.startCol + 1);
+                    if (spillArea > 0 && spillArea <= MAX_DYNAMIC_ARRAY_CELLS) {
+                        sanitizedSpillRange = cell.SpillRange;
+                    }
+                }
+            }
             const normalizedCell: SpreadsheetCellSpec = {
                 ...cell,
                 RowID: rowId,
@@ -2851,11 +4014,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 Address: canonicalAddr,
                 RawValue: cell.RawValue ?? null,
                 Formula: formula,
-                FormulaStable: formulaStable
+                FormulaStable: formulaStable,
+                SpillRange: sanitizedSpillRange
             };
             copyCellXmlMeta(cell, normalizedCell);
-            if (!CELL_XML_META.has(normalizedCell) && normalizedCell.SpillRange) {
-                CELL_XML_META.set(normalizedCell, {
+            const xmlMetaMap = getCellXmlMetaMap();
+            if (!xmlMetaMap.has(normalizedCell) && normalizedCell.SpillRange) {
+                xmlMetaMap.set(normalizedCell, {
                     fType: 'array',
                     fRef: normalizedCell.SpillRange,
                     formulaDirty: false
@@ -2871,6 +4036,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     // -----------------------------------------------------------------------
     // Stable Row & Column ID Formula Translation (§ 6.2 & Accept #1)
     // -----------------------------------------------------------------------
+
+    /**
+     * Shifts relative A1 cell and range references inside `formula` by `(rowDelta, colDelta)`
+     * using the formula tokenizer so string literals, sheet prefixes, and function names (e.g. `LOG10`)
+     * are never corrupted, and `$`-anchored coordinates stay fixed.
+     */
+    public ShiftFormulaReferences(formula: string, rowDelta: number, colDelta: number): string {
+        if (!formula || (rowDelta === 0 && colDelta === 0)) {
+            return formula;
+        }
+        const eqIdx = formula.indexOf('=');
+        if (eqIdx === -1 || formula.slice(0, eqIdx).trim() !== '') {
+            return formula;
+        }
+        const shiftedBody = shiftFormulaBodyReferences(formula.slice(eqIdx + 1), rowDelta, colDelta);
+        return `${formula.slice(0, eqIdx + 1)}${shiftedBody}`;
+    }
 
     /**
      * Translates an A1 formula (e.g. `'=SUM(B2:B9) + $C$2'`) into a stable-ID formula
@@ -3146,92 +4328,139 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return `${absR ? '$' : ''}${rIdx}`;
         };
 
-        let resolved = formulaStable.replace(
-            /@SHEET_RANGE\(([^,]+),([^,]+),([^,]+),([^,]+),([^)]+)\)/g,
-            (_full, sId: string, r1: string, c1: string, r2: string, c2: string) => {
-                const cross = getCrossLookup(sId.trim());
-                if (!cross) return '#REF!';
-                const start = resolveTokenAgainst(cross, r1.trim(), c1.trim());
-                const end = resolveTokenAgainst(cross, r2.trim(), c2.trim());
-                if (start === '#REF!' || end === '#REF!') {
-                    return '#REF!';
+        const replaceFormulaMacro = (
+            input: string,
+            prefix: string,
+            expectedArgs: number,
+            formatter: (args: string[]) => string
+        ): string => {
+            let out = '';
+            let cursor = 0;
+            while (cursor < input.length) {
+                const start = input.indexOf(prefix, cursor);
+                if (start === -1) {
+                    out += input.slice(cursor);
+                    break;
                 }
-                return `${formatSheetQualifier(cross.ws.Name)}${start}:${end}`;
-            }
-        );
-
-        resolved = resolved.replace(
-            /@SHEET_COLS\(([^,]+),([^,]+),([^)]+)\)/g,
-            (_full, sId: string, c1: string, c2: string) => {
-                const cross = getCrossLookup(sId.trim());
-                if (!cross) return '#REF!';
-                const startC = resolveColTokenAgainst(cross, c1.trim());
-                const endC = resolveColTokenAgainst(cross, c2.trim());
-                if (startC === '#REF!' || endC === '#REF!') return '#REF!';
-                return `${formatSheetQualifier(cross.ws.Name)}${startC}:${endC}`;
-            }
-        );
-
-        resolved = resolved.replace(
-            /@SHEET_ROWS\(([^,]+),([^,]+),([^)]+)\)/g,
-            (_full, sId: string, r1: string, r2: string) => {
-                const cross = getCrossLookup(sId.trim());
-                if (!cross) return '#REF!';
-                const startR = resolveRowTokenAgainst(cross, r1.trim());
-                const endR = resolveRowTokenAgainst(cross, r2.trim());
-                if (startR === '#REF!' || endR === '#REF!') return '#REF!';
-                return `${formatSheetQualifier(cross.ws.Name)}${startR}:${endR}`;
-            }
-        );
-
-        resolved = resolved.replace(
-            /@SHEET_CELL\(([^,]+),([^,]+),([^)]+)\)/g,
-            (_full, sId: string, r: string, c: string) => {
-                const cross = getCrossLookup(sId.trim());
-                if (!cross) return '#REF!';
-                const addr = resolveTokenAgainst(cross, r.trim(), c.trim());
-                if (addr === '#REF!') return '#REF!';
-                return `${formatSheetQualifier(cross.ws.Name)}${addr}`;
-            }
-        );
-
-        resolved = resolved.replace(
-            /@RANGE\(([^,]+),([^,]+),([^,]+),([^)]+)\)/g,
-            (_full, r1: string, c1: string, r2: string, c2: string) => {
-                const start = resolveTokenAgainst(localLookup, r1.trim(), c1.trim());
-                const end = resolveTokenAgainst(localLookup, r2.trim(), c2.trim());
-                if (start === '#REF!' || end === '#REF!') {
-                    return '#REF!';
+                const argStart = start + prefix.length;
+                const end = input.indexOf(')', argStart);
+                if (end === -1) {
+                    out += input.slice(cursor);
+                    break;
                 }
-                return `${start}:${end}`;
+                const args = input.slice(argStart, end).split(',');
+                if (args.length !== expectedArgs || args.some((a) => a.length === 0)) {
+                    out += input.slice(cursor, argStart);
+                    cursor = argStart;
+                    continue;
+                }
+                out += input.slice(cursor, start) + formatter(args);
+                cursor = end + 1;
             }
-        );
+            return out;
+        };
 
-        resolved = resolved.replace(
-            /@COLS\(([^,]+),([^)]+)\)/g,
-            (_full, c1: string, c2: string) => {
-                const startC = resolveColTokenAgainst(localLookup, c1.trim());
-                const endC = resolveColTokenAgainst(localLookup, c2.trim());
-                if (startC === '#REF!' || endC === '#REF!') return '#REF!';
-                return `${startC}:${endC}`;
+        let resolved = replaceFormulaMacro(formulaStable, '@SHEET_RANGE(', 5, (args) => {
+            const [sId, r1, c1, r2, c2] = args;
+            const cross = getCrossLookup(sId.trim());
+            if (!cross) return '#REF!';
+            const start = resolveTokenAgainst(cross, r1.trim(), c1.trim());
+            const end = resolveTokenAgainst(cross, r2.trim(), c2.trim());
+            if (start === '#REF!' || end === '#REF!') {
+                return '#REF!';
             }
-        );
+            return `${formatSheetQualifier(cross.ws.Name)}${start}:${end}`;
+        });
 
-        resolved = resolved.replace(
-            /@ROWS\(([^,]+),([^)]+)\)/g,
-            (_full, r1: string, r2: string) => {
-                const startR = resolveRowTokenAgainst(localLookup, r1.trim());
-                const endR = resolveRowTokenAgainst(localLookup, r2.trim());
-                if (startR === '#REF!' || endR === '#REF!') return '#REF!';
-                return `${startR}:${endR}`;
+        resolved = replaceFormulaMacro(resolved, '@SHEET_COLS(', 3, (args) => {
+            const [sId, c1, c2] = args;
+            const cross = getCrossLookup(sId.trim());
+            if (!cross) return '#REF!';
+            const startC = resolveColTokenAgainst(cross, c1.trim());
+            const endC = resolveColTokenAgainst(cross, c2.trim());
+            if (startC === '#REF!' || endC === '#REF!') return '#REF!';
+            return `${formatSheetQualifier(cross.ws.Name)}${startC}:${endC}`;
+        });
+
+        resolved = replaceFormulaMacro(resolved, '@SHEET_ROWS(', 3, (args) => {
+            const [sId, r1, r2] = args;
+            const cross = getCrossLookup(sId.trim());
+            if (!cross) return '#REF!';
+            const startR = resolveRowTokenAgainst(cross, r1.trim());
+            const endR = resolveRowTokenAgainst(cross, r2.trim());
+            if (startR === '#REF!' || endR === '#REF!') return '#REF!';
+            return `${formatSheetQualifier(cross.ws.Name)}${startR}:${endR}`;
+        });
+
+        resolved = replaceFormulaMacro(resolved, '@SHEET_CELL(', 3, (args) => {
+            const [sId, r, c] = args;
+            const cross = getCrossLookup(sId.trim());
+            if (!cross) return '#REF!';
+            const addr = resolveTokenAgainst(cross, r.trim(), c.trim());
+            if (addr === '#REF!') return '#REF!';
+            return `${formatSheetQualifier(cross.ws.Name)}${addr}`;
+        });
+
+        resolved = replaceFormulaMacro(resolved, '@RANGE(', 4, (args) => {
+            const [r1, c1, r2, c2] = args;
+            const start = resolveTokenAgainst(localLookup, r1.trim(), c1.trim());
+            const end = resolveTokenAgainst(localLookup, r2.trim(), c2.trim());
+            if (start === '#REF!' || end === '#REF!') {
+                return '#REF!';
             }
-        );
+            return `${start}:${end}`;
+        });
 
-        const out = resolved.replace(
-            /@CELL\(([^,]+),([^)]+)\)/g,
-            (_full, r: string, c: string) => resolveTokenAgainst(localLookup, r.trim(), c.trim())
-        );
+        resolved = replaceFormulaMacro(resolved, '@COLS(', 2, (args) => {
+            const [c1, c2] = args;
+            const startC = resolveColTokenAgainst(localLookup, c1.trim());
+            const endC = resolveColTokenAgainst(localLookup, c2.trim());
+            if (startC === '#REF!' || endC === '#REF!') return '#REF!';
+            return `${startC}:${endC}`;
+        });
+
+        resolved = replaceFormulaMacro(resolved, '@ROWS(', 2, (args) => {
+            const [r1, r2] = args;
+            const startR = resolveRowTokenAgainst(localLookup, r1.trim());
+            const endR = resolveRowTokenAgainst(localLookup, r2.trim());
+            if (startR === '#REF!' || endR === '#REF!') return '#REF!';
+            return `${startR}:${endR}`;
+        });
+
+        const out = replaceFormulaMacro(resolved, '@CELL(', 2, (args) => {
+            const [r, c] = args;
+            return resolveTokenAgainst(localLookup, r.trim(), c.trim());
+        });
         return out.trim().startsWith('=') ? out : `=${out.trim()}`;
+    }
+
+    private assertProtectedRangesAllowStructuralEdit(
+        sheet: WorksheetSpec,
+        editBounds: { startRow: number; endRow: number; startCol: number; endCol: number },
+        actionLabel: string,
+        editContext?: SpreadsheetCellEditContext
+    ): void {
+        if (!editContext || editContext.BypassProtection) {
+            return;
+        }
+        const rules = sheet.ProtectedRanges;
+        if (!Array.isArray(rules) || rules.length === 0) {
+            return;
+        }
+        for (const rule of rules) {
+            const rb = ParseRangeAddress(rule.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (!rb) continue;
+            const overlaps =
+                rb.startRow <= editBounds.endRow &&
+                rb.endRow >= editBounds.startRow &&
+                rb.startCol <= editBounds.endCol &&
+                rb.endCol >= editBounds.startCol;
+            if (overlaps && !this.isActorAllowedForProtectedRule(rule, editContext)) {
+                throw new Error(
+                    `Cannot ${actionLabel}: intersects protected range '${rule.Range}' (locked by ${rule.LockedByUserID}).`
+                );
+            }
+        }
     }
 
     /**
@@ -3242,15 +4471,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         sheetId: string,
         atRowNumber: number,
-        count = 1
+        count = 1,
+        editContext?: SpreadsheetCellEditContext,
+        recalculate = true
     ): SpreadsheetRowSpec[] {
         const sheet = this.GetWorksheet(workbook, sheetId);
         if (!sheet) {
             throw new Error(`Worksheet '${sheetId}' not found.`);
         }
+        const requestedRow1 = Math.max(1, Math.min(EXCEL_MAX_ROWS, Math.floor(atRowNumber)));
+        this.assertProtectedRangesAllowStructuralEdit(
+            sheet,
+            { startRow: requestedRow1, endRow: EXCEL_MAX_ROWS, startCol: 1, endCol: EXCEL_MAX_COLS },
+            `insert rows at ${requestedRow1}`,
+            editContext
+        );
         this.bindSheetsToWorkbook(workbook);
         this.ensureAllWorkbookFormulasHaveStableIds(workbook);
-        const requestedRow1 = Math.max(1, Math.min(EXCEL_MAX_ROWS, Math.floor(atRowNumber)));
         const numToInsert = Math.max(1, Math.floor(count));
         if (requestedRow1 - 1 > sheet.Rows.length && requestedRow1 - 1 <= MAX_DENSE_ROWS) {
             this.ensureSheetCapacity(sheet, requestedRow1 - 1, 1);
@@ -3279,7 +4516,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         this.shiftVirtualAxisIds(workbook, sheet, 'row', 'insert', requestedRow1, numToInsert);
         this.shiftNonCellMetadataForRowEdit(workbook, sheet, 'insert', requestedRow1, numToInsert);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
         return inserted;
     }
 
@@ -3287,11 +4528,24 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * Deletes `count` rows starting at 1-based `atRowNumber` in `sheetId`, shrinking `@RANGE` endpoints
      * to surviving rows (or `#REF!` if the entire range was deleted) and updating non-cell range metadata (`D3`, `R6-10`).
      */
-    public DeleteRows(workbook: WorkbookSpec, sheetId: string, atRowNumber: number, count = 1): void {
+    public DeleteRows(
+        workbook: WorkbookSpec,
+        sheetId: string,
+        atRowNumber: number,
+        count = 1,
+        editContext?: SpreadsheetCellEditContext,
+        recalculate = true
+    ): void {
         const sheet = this.GetWorksheet(workbook, sheetId);
         if (!sheet) return;
         const requestedStart1 = Math.max(1, Math.min(EXCEL_MAX_ROWS, Math.floor(atRowNumber)));
         const requestedCount = Math.max(1, Math.min(EXCEL_MAX_ROWS - requestedStart1 + 1, Math.floor(count)));
+        this.assertProtectedRangesAllowStructuralEdit(
+            sheet,
+            { startRow: requestedStart1, endRow: EXCEL_MAX_ROWS, startCol: 1, endCol: EXCEL_MAX_COLS },
+            `delete rows ${requestedStart1}..${requestedStart1 + requestedCount - 1}`,
+            editContext
+        );
         if (sheet.Rows.length <= 1 && requestedStart1 === 1 && requestedCount === 1 && Object.keys(sheet.Cells).length === 0) {
             return;
         }
@@ -3320,13 +4574,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     delete sheet.Cells[addr];
                 }
             }
+            this.workbookCellCountCache.delete(workbook);
         }
         this.sheetLookupCache.delete(sheet);
         this.sheetAxisIdSets.delete(sheet);
         this.shiftVirtualAxisIds(workbook, sheet, 'row', 'delete', requestedStart1, requestedCount);
         this.shiftNonCellMetadataForRowEdit(workbook, sheet, 'delete', requestedStart1, requestedCount);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
     }
 
     /**
@@ -3337,15 +4596,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         sheetId: string,
         atColumnNumber: number,
-        count = 1
+        count = 1,
+        editContext?: SpreadsheetCellEditContext,
+        recalculate = true
     ): SpreadsheetColumnSpec[] {
         const sheet = this.GetWorksheet(workbook, sheetId);
         if (!sheet) {
             throw new Error(`Worksheet '${sheetId}' not found.`);
         }
+        const requestedCol1 = Math.max(1, Math.min(EXCEL_MAX_COLS, Math.floor(atColumnNumber)));
+        this.assertProtectedRangesAllowStructuralEdit(
+            sheet,
+            { startRow: 1, endRow: EXCEL_MAX_ROWS, startCol: requestedCol1, endCol: EXCEL_MAX_COLS },
+            `insert columns at ${requestedCol1}`,
+            editContext
+        );
         this.bindSheetsToWorkbook(workbook);
         this.ensureAllWorkbookFormulasHaveStableIds(workbook);
-        const requestedCol1 = Math.max(1, Math.min(EXCEL_MAX_COLS, Math.floor(atColumnNumber)));
         const numToInsert = Math.max(1, Math.floor(count));
         if (requestedCol1 - 1 > sheet.Columns.length && requestedCol1 - 1 <= MAX_DENSE_COLS) {
             this.ensureSheetCapacity(sheet, 1, requestedCol1 - 1);
@@ -3375,7 +4642,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         this.shiftVirtualAxisIds(workbook, sheet, 'col', 'insert', requestedCol1, numToInsert);
         this.shiftNonCellMetadataForColEdit(workbook, sheet, 'insert', requestedCol1, numToInsert);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
         return inserted;
     }
 
@@ -3383,11 +4654,24 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * Deletes `count` columns starting at 1-based `atColumnNumber` in `sheetId`, shrinking `@RANGE` endpoints
      * to surviving columns (or `#REF!` if the entire range was deleted) and updating non-cell range metadata (`D3`, `R6-10`).
      */
-    public DeleteColumns(workbook: WorkbookSpec, sheetId: string, atColumnNumber: number, count = 1): void {
+    public DeleteColumns(
+        workbook: WorkbookSpec,
+        sheetId: string,
+        atColumnNumber: number,
+        count = 1,
+        editContext?: SpreadsheetCellEditContext,
+        recalculate = true
+    ): void {
         const sheet = this.GetWorksheet(workbook, sheetId);
         if (!sheet) return;
         const requestedStart1 = Math.max(1, Math.min(EXCEL_MAX_COLS, Math.floor(atColumnNumber)));
         const requestedCount = Math.max(1, Math.min(EXCEL_MAX_COLS - requestedStart1 + 1, Math.floor(count)));
+        this.assertProtectedRangesAllowStructuralEdit(
+            sheet,
+            { startRow: 1, endRow: EXCEL_MAX_ROWS, startCol: requestedStart1, endCol: EXCEL_MAX_COLS },
+            `delete columns ${requestedStart1}..${requestedStart1 + requestedCount - 1}`,
+            editContext
+        );
         if (sheet.Columns.length <= 1 && requestedStart1 === 1 && requestedCount === 1 && Object.keys(sheet.Cells).length === 0) {
             return;
         }
@@ -3417,13 +4701,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     delete sheet.Cells[addr];
                 }
             }
+            this.workbookCellCountCache.delete(workbook);
         }
         this.sheetLookupCache.delete(sheet);
         this.sheetAxisIdSets.delete(sheet);
         this.shiftVirtualAxisIds(workbook, sheet, 'col', 'delete', requestedStart1, requestedCount);
         this.shiftNonCellMetadataForColEdit(workbook, sheet, 'delete', requestedStart1, requestedCount);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
     }
 
     private shiftVirtualAxisIds(
@@ -3588,12 +4877,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
         sheet.Cells = nextCells;
 
+        const xmlMetaMap = getCellXmlMetaMap();
         for (const cell of Object.values(sheet.Cells)) {
-            const meta = CELL_XML_META.get(cell);
+            const meta = xmlMetaMap.get(cell);
             if (meta?.fRef) {
                 const refStart = meta.fRef.split(':')[0].replace(/\$/g, '').toUpperCase();
                 if (refStart !== cell.Address.toUpperCase()) {
-                    CELL_XML_META.delete(cell);
+                    xmlMetaMap.delete(cell);
                 }
             }
             if (cell.SpillRange) {
@@ -3851,6 +5141,24 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 return shifted ? { ...cf, Range: shifted } : null;
             })
             .filter((cf): cf is SpreadsheetConditionalFormatRuleSpec => cf !== null);
+        if (Array.isArray(sheet.ProtectedRanges) && sheet.ProtectedRanges.length > 0) {
+            sheet.ProtectedRanges = sheet.ProtectedRanges
+                .map((pr) => {
+                    const shifted = shiftA1RangeRows(pr.Range, op, startRow1Based, count, false, maxSurvivingRow);
+                    return shifted ? { ...pr, Range: shifted } : null;
+                })
+                .filter((pr): pr is SpreadsheetProtectedRangeSpec => pr !== null);
+        }
+        if (Array.isArray(sheet.MergeRanges) && sheet.MergeRanges.length > 0) {
+            sheet.MergeRanges = sheet.MergeRanges
+                .map((mr) => {
+                    const shifted = shiftA1RangeRows(mr, op, startRow1Based, count, false, maxSurvivingRow);
+                    if (!shifted) return null;
+                    const b = ParseRangeAddress(shifted, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                    return b && (b.endRow > b.startRow || b.endCol > b.startCol) ? shifted : null;
+                })
+                .filter((mr): mr is string => mr !== null);
+        }
         for (const ws of workbook.Worksheets) {
             for (const chart of ws.Charts) {
                 if (chart.SheetID === sheet.SheetID && chart.SourceRange !== '#REF!') {
@@ -3872,15 +5180,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (shiftedAnchor) ea.AnchorCell = shiftedAnchor;
         }
         const maxSurvivingRowLimit = 1048576;
+        const xmlMetaMapRows = getCellXmlMetaMap();
         for (const cell of Object.values(sheet.Cells)) {
-            const meta = CELL_XML_META.get(cell);
+            const meta = xmlMetaMapRows.get(cell);
             if (meta?.fRef) {
                 const isSingle = !meta.fRef.includes(':');
                 const shiftedRef = shiftA1RangeRows(meta.fRef, op, startRow1Based, count, isSingle, maxSurvivingRowLimit);
                 if (shiftedRef) {
                     meta.fRef = shiftedRef;
                 } else {
-                    CELL_XML_META.delete(cell);
+                    xmlMetaMapRows.delete(cell);
                 }
             }
             if (cell.SpillRange) {
@@ -3915,6 +5224,24 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 return shifted ? { ...cf, Range: shifted } : null;
             })
             .filter((cf): cf is SpreadsheetConditionalFormatRuleSpec => cf !== null);
+        if (Array.isArray(sheet.ProtectedRanges) && sheet.ProtectedRanges.length > 0) {
+            sheet.ProtectedRanges = sheet.ProtectedRanges
+                .map((pr) => {
+                    const shifted = shiftA1RangeCols(pr.Range, op, startCol1Based, count, false, maxSurvivingCol);
+                    return shifted ? { ...pr, Range: shifted } : null;
+                })
+                .filter((pr): pr is SpreadsheetProtectedRangeSpec => pr !== null);
+        }
+        if (Array.isArray(sheet.MergeRanges) && sheet.MergeRanges.length > 0) {
+            sheet.MergeRanges = sheet.MergeRanges
+                .map((mr) => {
+                    const shifted = shiftA1RangeCols(mr, op, startCol1Based, count, false, maxSurvivingCol);
+                    if (!shifted) return null;
+                    const b = ParseRangeAddress(shifted, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                    return b && (b.endRow > b.startRow || b.endCol > b.startCol) ? shifted : null;
+                })
+                .filter((mr): mr is string => mr !== null);
+        }
         for (const ws of workbook.Worksheets) {
             for (const chart of ws.Charts) {
                 if (chart.SheetID === sheet.SheetID && chart.SourceRange !== '#REF!') {
@@ -3946,15 +5273,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             })
             .filter((fs): fs is SpreadsheetFilterSpec => fs !== null);
         const maxSurvivingColLimit = 16384;
+        const xmlMetaMapCols = getCellXmlMetaMap();
         for (const cell of Object.values(sheet.Cells)) {
-            const meta = CELL_XML_META.get(cell);
+            const meta = xmlMetaMapCols.get(cell);
             if (meta?.fRef) {
                 const isSingle = !meta.fRef.includes(':');
                 const shiftedRef = shiftA1RangeCols(meta.fRef, op, startCol1Based, count, isSingle, maxSurvivingColLimit);
                 if (shiftedRef) {
                     meta.fRef = shiftedRef;
                 } else {
-                    CELL_XML_META.delete(cell);
+                    xmlMetaMapCols.delete(cell);
                 }
             }
             if (cell.SpillRange) {
@@ -4029,15 +5357,21 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             Value?: SpreadsheetCellValue;
             Formula?: string | null;
             FormulaStable?: string | null;
+            Literal?: boolean;
             Style?: Partial<SpreadsheetCellStyleSpec>;
             Note?: string | null;
             SpilledFrom?: string | null;
             LiveTableID?: string | null;
             AccessDenied?: boolean;
             ErrorMessage?: string | null;
+            AiInputHash?: string | null;
         },
-        recalculate = true
+        recalculate = true,
+        editContext?: SpreadsheetCellEditContext
     ): SpreadsheetCellSpec {
+        if (recalculate) {
+            this.assertSynchronousEvaluationAllowed('SetCell(recalculate=true)');
+        }
         const sheet = this.GetWorksheet(workbook, sheetIdOrName);
         if (!sheet) {
             throw new Error(`Worksheet '${sheetIdOrName}' not found.`);
@@ -4047,11 +5381,33 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (!parsed) {
             throw new Error(`Invalid cell address '${address}'.`);
         }
+        const canonicalAddrPre = FormatCellAddress(parsed.row, parsed.col);
+        const writeCheck = this.CheckCellWritePermission(sheet, canonicalAddrPre, editContext);
+        if (!writeCheck.Allowed) {
+            throw new Error(writeCheck.Reason);
+        }
         this.ensureSheetCapacity(sheet, parsed.row, parsed.col);
         const canonicalAddr = FormatCellAddress(parsed.row, parsed.col);
         const rowId = this.getStableRowIdForIndex(sheet, parsed.row);
         const colId = this.getStableColIdForIndex(sheet, parsed.col);
         const existing = sheet.Cells[canonicalAddr];
+        let knownTotalCells: number | undefined;
+        if (!existing) {
+            knownTotalCells = this.workbookCellCountCache.get(workbook);
+            if (knownTotalCells === undefined) {
+                let sum = 0;
+                for (const ws of workbook.Worksheets) {
+                    sum += Object.keys(ws.Cells ?? {}).length;
+                }
+                knownTotalCells = sum;
+                this.workbookCellCountCache.set(workbook, knownTotalCells);
+            }
+            if (knownTotalCells + 1 > MAX_IMPORT_WORKBOOK_CELLS) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum cell limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+                );
+            }
+        }
         const isMetadataOnlyEdit =
             input.Value === undefined && input.Formula === undefined && input.FormulaStable === undefined;
 
@@ -4073,7 +5429,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        if (typeof input.Value === 'string' && input.Value.trim().startsWith('=') && input.Formula === undefined) {
+        if (typeof input.Value === 'string' && input.Value.trim().startsWith('=') && input.Formula === undefined && !input.Literal) {
             formula = input.Value.trim();
             rawValue = null;
         } else if (input.Value !== undefined && input.Formula === undefined) {
@@ -4108,7 +5464,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 : isMetadataOnlyEdit
                   ? existing?.LiveTableID ?? this.isCellInLiveTableFootprint(sheet, parsed.row, parsed.col)
                   : null;
-        const isMjFormula = Boolean(formula && /^=\s*_?(?:xll\.)?MJ\.(?:VIEW|QUERY|FIELD)\s*\(/i.test(formula));
+        const isMjFormula = Boolean(
+            formula && /^=\s*_?(?:xll\.)?MJ\.(?:VIEW|QUERY|FIELD|IMPORTRANGE|AI)\s*\(/i.test(formula)
+        );
         const keepExistingMjDiagnostics = isMetadataOnlyEdit || (isMjFormula && formula === existing?.Formula);
         const preservedErrorMessage =
             input.ErrorMessage !== undefined
@@ -4143,20 +5501,27 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             SpilledFrom: preservedSpilledFrom,
             SpillRange: isMetadataOnlyEdit ? existing?.SpillRange : undefined,
             ArrayMaster: isMetadataOnlyEdit ? existing?.ArrayMaster : undefined,
-            LiveTableID: preservedLiveTableId
+            LiveTableID: preservedLiveTableId,
+            AiInputHash:
+                input.AiInputHash !== undefined
+                    ? input.AiInputHash
+                    : keepExistingMjDiagnostics
+                      ? existing?.AiInputHash ?? null
+                      : null
         };
 
-        const existingMeta = existing ? CELL_XML_META.get(existing) : undefined;
+        const xmlMetaMapSet = getCellXmlMetaMap();
+        const existingMeta = existing ? xmlMetaMapSet.get(existing) : undefined;
         if (isMetadataOnlyEdit) {
             if (existingMeta) {
-                CELL_XML_META.set(cell, { ...existingMeta });
+                xmlMetaMapSet.set(cell, { ...existingMeta });
             }
         } else if (formula) {
             if (explicitCseFormula) {
                 if (!existingMeta?.cmAttr) {
                     cell.SpillRange = existingMeta?.fRef || existing?.SpillRange || canonicalAddr;
                 }
-                CELL_XML_META.set(cell, {
+                xmlMetaMapSet.set(cell, {
                     fType: 'array',
                     fRef: existingMeta?.fRef || canonicalAddr,
                     cmAttr: existingMeta?.cmAttr ?? null,
@@ -4167,7 +5532,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 if (!existingMeta?.cmAttr) {
                     cell.SpillRange = existingMeta.fRef || existing?.SpillRange || canonicalAddr;
                 }
-                CELL_XML_META.set(cell, {
+                xmlMetaMapSet.set(cell, {
                     fType: 'array',
                     fRef: existingMeta.fRef || canonicalAddr,
                     cmAttr: existingMeta.cmAttr ?? null,
@@ -4175,7 +5540,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     formulaDirty: true
                 });
             } else if (existingMeta && existingMeta.fType !== 'array') {
-                CELL_XML_META.set(cell, {
+                xmlMetaMapSet.set(cell, {
                     cmAttr: existingMeta.cmAttr ?? null,
                     sAttr: existingMeta.sAttr ?? null,
                     formulaDirty: true
@@ -4184,6 +5549,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
 
         sheet.Cells[canonicalAddr] = cell;
+        if (!existing && knownTotalCells !== undefined) {
+            this.workbookCellCountCache.set(workbook, knownTotalCells + 1);
+        }
         this.syncCellVirtualAxisIndex(sheet, cell);
 
         if (!isMetadataOnlyEdit && (rawValue !== null || Boolean(formula))) {
@@ -4195,7 +5563,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 this.validateCellAgainstSheetRules(sheet, cell);
                 cell.DisplayValue = this.formatCellForDisplay(cell);
             } else {
-                this.recalculateAfterCellEdit(workbook, sheet, canonicalAddr, clearedSpillAddrs);
+                this.recalculateAfterCellEdit(workbook, sheet, canonicalAddr, clearedSpillAddrs, editContext);
             }
         } else {
             if (!isMetadataOnlyEdit) {
@@ -4216,8 +5584,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         sheetIdOrName: string,
         rangeA1: string,
-        recalculate = true
+        recalculate = true,
+        editContext?: SpreadsheetCellEditContext
     ): string[] {
+        if (recalculate) {
+            this.assertSynchronousEvaluationAllowed('ClearRange(recalculate=true)');
+        }
         const sheet = this.GetWorksheet(workbook, sheetIdOrName);
         if (!sheet) {
             throw new Error(`Worksheet '${sheetIdOrName}' not found.`);
@@ -4226,6 +5598,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const bounds = ParseRangeAddress(rangeA1, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
         if (!bounds) {
             throw new Error(`Invalid A1 range '${rangeA1}'.`);
+        }
+        if ((sheet.ProtectedRanges?.length ?? 0) > 0 && !editContext?.BypassProtection) {
+            for (const rule of sheet.ProtectedRanges ?? []) {
+                const ruleBounds = ParseRangeAddress(rule.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                if (!ruleBounds) continue;
+                const overlaps =
+                    bounds.startRow <= ruleBounds.endRow &&
+                    bounds.endRow >= ruleBounds.startRow &&
+                    bounds.startCol <= ruleBounds.endCol &&
+                    bounds.endCol >= ruleBounds.startCol;
+                if (overlaps && !this.isActorAllowedForProtectedRule(rule, editContext)) {
+                    throw new Error(
+                        `Cannot clear range '${rangeA1}': intersects protected range '${rule.Range}' (locked by ${rule.LockedByUserID}).`
+                    );
+                }
+            }
         }
 
         const affectedSet = new Set<string>();
@@ -4272,8 +5660,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
         const affected = Array.from(affectedSet);
         if (affected.length > 0) {
+            this.workbookCellCountCache.delete(workbook);
             if (recalculate) {
-                this.recalculateAfterCellEdit(workbook, sheet, affected[0], affected.slice(1));
+                this.recalculateAfterCellEdit(workbook, sheet, affected[0], affected.slice(1), editContext);
             } else {
                 this.workbookDagCache.delete(workbook);
             }
@@ -4293,9 +5682,51 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
         const bounds = ParseRangeAddress(anchor.SpillRange, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
         if (!bounds) {
+            anchor.SpillRange = undefined;
             return [];
         }
+        const area = (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
+        if (area <= 0 || area > MAX_DYNAMIC_ARRAY_CELLS) {
+            anchor.SpillRange = undefined;
+        }
         const cleared: string[] = [];
+        let hasAtLeastAreaCells = false;
+        if (area > 0 && area <= MAX_DYNAMIC_ARRAY_CELLS) {
+            let count = 0;
+            for (const _ in sheet.Cells) {
+                if (Object.prototype.hasOwnProperty.call(sheet.Cells, _) && ++count >= area) {
+                    hasAtLeastAreaCells = true;
+                    break;
+                }
+            }
+        }
+
+        if (area <= 0 || area > MAX_DYNAMIC_ARRAY_CELLS || !hasAtLeastAreaCells) {
+            // Sparse cleanup (`R6`, `N3`, `S5-7`): only when area exceeds populated cell count or dynamic cap.
+            for (const key of Object.keys(sheet.Cells)) {
+                if (key === canonicalAnchorAddr) continue;
+                const pos = parseCellCoordsFast(key);
+                if (
+                    !pos ||
+                    pos.row < bounds.startRow ||
+                    pos.row > bounds.endRow ||
+                    pos.col < bounds.startCol ||
+                    pos.col > bounds.endCol
+                ) {
+                    continue;
+                }
+                const child = sheet.Cells[key];
+                if (child && (child.ArrayMaster === canonicalAnchorAddr || child.SpilledFrom === canonicalAnchorAddr)) {
+                    this.removeCellFromVirtualAxisIndex(sheet, child);
+                    this.unimplementedResultCells.delete(child);
+                    delete sheet.Cells[key];
+                    this.removeCellFromEvalColIndex(sheet, pos.row, pos.col);
+                    addClearedSpillAddr(sheet, key);
+                    cleared.push(key);
+                }
+            }
+            return cleared;
+        }
 
         for (let r = bounds.startRow; r <= bounds.endRow; r++) {
             for (let c = bounds.startCol; c <= bounds.endCol; c++) {
@@ -4307,6 +5738,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         this.removeCellFromVirtualAxisIndex(sheet, child);
                         this.unimplementedResultCells.delete(child);
                         delete sheet.Cells[childAddr];
+                        this.removeCellFromEvalColIndex(sheet, r, c);
                         addClearedSpillAddr(sheet, childAddr);
                         cleared.push(childAddr);
                     }
@@ -4427,14 +5859,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
     private makeUniqueWorksheetName(workbook: WorkbookSpec, desired: string): string {
         const existing = new Set(workbook.Worksheets.map((w) => w.Name.toLowerCase()));
-        const base = desired.replace(/[\[\]:*?/\\]/g, ' ').trim().slice(0, 31) || 'Sheet';
-        if (!existing.has(base.toLowerCase())) return base;
-        for (let i = 2; i < 999; i++) {
-            const suffix = ` (${i})`;
-            const candidate = `${base.slice(0, 31 - suffix.length)}${suffix}`;
-            if (!existing.has(candidate.toLowerCase())) return candidate;
-        }
-        return base;
+        return SanitizeWorksheetName(desired, existing);
     }
 
     private getOrSyncSheetAxisIdSets(
@@ -4614,7 +6039,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * Note: Cells containing `=MJ.QUERY(...)` or `=MJ.VIEW(...)` retain their last viewer-evaluated
      * `ComputedValue` (or `'#MJ_PENDING!'` until `EvaluateMjCustomFunctions` runs with a `UserInfo`).
      */
-    public EvaluateWorkbook(workbook: WorkbookSpec): void {
+    public EvaluateWorkbook(workbook: WorkbookSpec, editContext?: SpreadsheetCellEditContext): void {
+        this.assertSynchronousEvaluationAllowed('EvaluateWorkbook');
         this._lastEvaluatedFormulaCount = 0;
         this.bindSheetsToWorkbook(workbook);
 
@@ -4630,8 +6056,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         this.workbookDagCache.set(workbook, dag);
 
         const formulaKeys: string[] = [];
+        const validationCheckBudget = { remaining: MAX_VALIDATION_CHECKS_PER_WORKBOOK };
         for (const sheet of workbook.Worksheets) {
+            this.validationIndexCache.delete(sheet);
             const hasValidation = sheet.ValidationRules.length > 0;
+            const validationIndex = hasValidation ? this.getOrBuildValidationIndex(sheet) : null;
             for (const addr of Object.keys(sheet.Cells)) {
                 const cell = sheet.Cells[addr];
                 if (!cell) continue;
@@ -4642,8 +6071,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     this.unimplementedResultCells.delete(cell);
                     cell.ComputedValue = cell.RawValue ?? null;
                     cell.DisplayValue = this.formatCellForDisplay(cell);
-                    if (hasValidation) {
-                        this.validateCellAgainstSheetRules(sheet, cell);
+                    if (validationIndex) {
+                        this.validateCellAgainstSheetRules(sheet, cell, parsed, validationIndex, validationCheckBudget);
                     } else if (cell.ErrorMessage) {
                         cell.ErrorMessage = null;
                     }
@@ -4655,8 +6084,100 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
 
         if (formulaKeys.length > 0) {
-            this.evaluateCellKeysIteratively(workbook, dag, formulaKeys, null);
+            this.runWithEvalBudget(() => {
+                this.evaluateCellKeysIteratively(workbook, dag, formulaKeys, null, editContext);
+            });
         }
+    }
+
+    /**
+     * Evaluates `workbook` inside the registered server `worker_threads` isolation runner when available (`R6-1`),
+     * applying its mutated worksheets/named ranges back onto `workbook` in place.
+     */
+    public async EvaluateWorkbookIsolated(
+        workbook: WorkbookSpec,
+        editContext?: SpreadsheetCellEditContext
+    ): Promise<void> {
+        const runner = GetSpreadsheetWorkerRunner();
+        if (!runner) {
+            handleMissingWorkerRunner('EvaluateWorkbookIsolated');
+            this.EvaluateWorkbook(workbook, editContext);
+            return;
+        }
+        const res = await runner.EvaluateWorkbook(workbook, editContext);
+        this.workbookVirtualAxisIndex.delete(workbook);
+        this.workbooksWithVirtualAxisIds.delete(workbook);
+        const returnedById = new Map(res.Workbook.Worksheets.map((s) => [s.SheetID, s]));
+        for (let i = 0; i < workbook.Worksheets.length; i++) {
+            const targetSheet = workbook.Worksheets[i];
+            const evalSheet = returnedById.get(targetSheet.SheetID) ?? res.Workbook.Worksheets[i];
+            if (!evalSheet) continue;
+            targetSheet.Rows = evalSheet.Rows;
+            targetSheet.Columns = evalSheet.Columns;
+            targetSheet.Cells = evalSheet.Cells;
+            targetSheet.ProtectedRanges = evalSheet.ProtectedRanges;
+            targetSheet.ValidationRules = evalSheet.ValidationRules;
+            targetSheet.Charts = evalSheet.Charts;
+            targetSheet.LiveTables = evalSheet.LiveTables;
+            targetSheet.MergeRanges = evalSheet.MergeRanges;
+            targetSheet.SortSpec = evalSheet.SortSpec;
+            targetSheet.ConditionalFormats = evalSheet.ConditionalFormats;
+            targetSheet.EmbeddedArtifacts = evalSheet.EmbeddedArtifacts;
+            this.validationIndexCache.delete(targetSheet);
+            this.sheetLookupCache.delete(targetSheet);
+            this.sheetAxisIdSets.delete(targetSheet);
+            this.indexedSheets.delete(targetSheet);
+            this.sheetsWithVirtualAxisIds.delete(targetSheet);
+            this.sheetUnboundVirtualAxisIndex.delete(targetSheet);
+        }
+        if (res.Workbook.Worksheets.length > workbook.Worksheets.length) {
+            const existingIds = new Set(workbook.Worksheets.map((s) => s.SheetID));
+            for (const extra of res.Workbook.Worksheets) {
+                if (!existingIds.has(extra.SheetID)) {
+                    workbook.Worksheets.push(extra);
+                }
+            }
+        }
+        workbook.NamedRanges = res.Workbook.NamedRanges;
+        workbook.ActiveSheetID = res.Workbook.ActiveSheetID;
+        workbook.UpdatedAt = res.Workbook.UpdatedAt;
+        this._lastEvaluatedFormulaCount = res.EvaluatedFormulaCount;
+        this.bindSheetsToWorkbook(workbook);
+        this.workbookDagCache.delete(workbook);
+        this.workbookCellCountCache.delete(workbook);
+    }
+
+    /**
+     * Imports `.xlsx` bytes inside the registered server `worker_threads` isolation runner when available (`R6-1`).
+     */
+    public async ImportFromXlsxBytesIsolated(
+        bytes: Uint8Array | ArrayBuffer,
+        configurationJson?: string | null,
+        options?: { SkipEvaluate?: boolean }
+    ): Promise<WorkbookSpec> {
+        const runner = GetSpreadsheetWorkerRunner();
+        if (!runner) {
+            handleMissingWorkerRunner('ImportFromXlsxBytesIsolated');
+            return this.ImportFromXlsxBytes(bytes, configurationJson, options);
+        }
+        const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+        return runner.ImportFromXlsxBytes(u8, configurationJson, options);
+    }
+
+    /**
+     * Patches `.xlsx` bytes inside the registered server `worker_threads` isolation runner when available (`R6-1`).
+     */
+    public async PatchXlsxBytesIsolated(
+        originalBytes: Uint8Array | ArrayBuffer,
+        workbook: WorkbookSpec
+    ): Promise<Uint8Array> {
+        const runner = GetSpreadsheetWorkerRunner();
+        if (!runner) {
+            handleMissingWorkerRunner('PatchXlsxBytesIsolated');
+            return this.PatchXlsxBytes(originalBytes, workbook);
+        }
+        const u8 = originalBytes instanceof Uint8Array ? originalBytes : new Uint8Array(originalBytes);
+        return runner.PatchXlsxBytes(u8, workbook);
     }
 
     /**
@@ -4667,12 +6188,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         sheet: WorksheetSpec,
         canonicalAddr: string,
-        extraDirtyAddrs: readonly string[] = []
+        extraDirtyAddrs: readonly string[] = [],
+        editContext?: SpreadsheetCellEditContext
     ): void {
+        this.assertSynchronousEvaluationAllowed('recalculateAfterCellEdit');
         const namedSig = JSON.stringify(workbook.NamedRanges);
         const existingDag = this.workbookDagCache.get(workbook);
         if (!existingDag || existingDag.namedRangesSignature !== namedSig) {
-            this.EvaluateWorkbook(workbook);
+            this.EvaluateWorkbook(workbook, editContext);
             return;
         }
 
@@ -4720,21 +6243,35 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
+        // Re-evaluate any #SPILL!-blocked formula cells on this sheet in case clearing/editing a cell unblocked them
+        const spillBlockedOnSheet = existingDag.spillBlockedKeysBySheet.get(sheet.SheetID);
+        if (spillBlockedOnSheet && spillBlockedOnSheet.size > 0) {
+            for (const blockedKey of spillBlockedOnSheet) {
+                if (!dirtySet.has(blockedKey)) {
+                    dirtySet.add(blockedKey);
+                    queue.push(blockedKey);
+                }
+            }
+        }
+
         // Collect transitive dependents via iterative BFS
         let head = 0;
         while (head < queue.length) {
             const current = queue[head++];
             const dependents = existingDag.reverseCellDeps.get(current);
-            if (!dependents) continue;
-            for (const depKey of dependents) {
-                if (!dirtySet.has(depKey)) {
-                    dirtySet.add(depKey);
-                    queue.push(depKey);
+            if (dependents) {
+                for (const depKey of dependents) {
+                    if (!dirtySet.has(depKey)) {
+                        dirtySet.add(depKey);
+                        queue.push(depKey);
+                    }
                 }
             }
         }
 
-        this.evaluateCellKeysIteratively(workbook, existingDag, queue, dirtySet);
+        this.runWithEvalBudget(() => {
+            this.evaluateCellKeysIteratively(workbook, existingDag, queue, dirtySet, editContext);
+        });
     }
 
     /**
@@ -4745,6 +6282,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheetIdOrName: string,
         formula: string
     ): SpreadsheetCellValue {
+        this.assertSynchronousEvaluationAllowed('EvaluateFormulaExpression');
         const sheet = this.GetWorksheet(workbook, sheetIdOrName) ?? workbook.Worksheets[0];
         if (!sheet) return '#REF!';
         const trimmed = formula.trim();
@@ -4756,12 +6294,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             this.EvaluateWorkbook(workbook);
         }
         const ast = compileFormulaAstCached(body);
-        const raw = this.evalAstNode(ast, workbook, sheet, null);
-        if (raw === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return '#NAME?';
-        return raw === null ? 0 : raw;
+        try {
+            const raw = this.runWithEvalBudget(() => this.evalAstNode(ast, workbook, sheet, null));
+            if (raw === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return '#NAME?';
+            return raw === null ? 0 : raw;
+        } catch (err) {
+            if (err instanceof EvalBudgetExceededError) {
+                return '#CALC!';
+            }
+            return '#VALUE!';
+        }
     }
 
     private buildWorkbookDependencyGraph(workbook: WorkbookSpec): WorkbookDependencyGraph {
+        const formulaCellsBySheet = new Map<WorksheetSpec, Map<number, Array<{ row: number; key: string }>>>();
         const dag: WorkbookDependencyGraph = {
             namedRangesSignature: JSON.stringify(workbook.NamedRanges),
             astByCellKey: new Map<string, FormulaAstNode | null>(),
@@ -4769,12 +6315,39 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             directCellDepSets: new Map<string, Set<string>>(),
             reverseCellDeps: new Map<string, Set<string>>(),
             rangeWatchersBySheet: new Map<string, RangeWatcherEntry[]>(),
+            rangeWatchesByCell: new Map<string, Array<{ sheetId: string; startRow: number; endRow: number; startCol: number; endCol: number }>>(),
             watchedSheetsByCell: new Map<string, string[]>(),
+            formulaCellsBySheet,
+            spillBlockedKeysBySheet: new Map<string, Set<string>>(),
             sheetById: new Map<string, WorksheetSpec>()
         };
         for (const ws of workbook.Worksheets) {
             dag.sheetById.set(ws.SheetID, ws);
+            const byCol = new Map<number, Array<{ row: number; key: string }>>();
+            for (const addr of Object.keys(ws.Cells)) {
+                const c = ws.Cells[addr];
+                if (!c || (!c.Formula && !c.SpilledFrom)) continue;
+                const pos = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
+                if (!pos) continue;
+                let colList = byCol.get(pos.col);
+                if (!colList) {
+                    colList = [];
+                    byCol.set(pos.col, colList);
+                }
+                colList.push({ row: pos.row, key: `${ws.SheetID}::${FormatCellAddress(pos.row, pos.col)}` });
+            }
+            for (const colList of byCol.values()) {
+                if (colList.length > 1) {
+                    colList.sort((a, b) => a.row - b.row);
+                }
+            }
+            formulaCellsBySheet.set(ws, byCol);
         }
+        const dagEdgeBudget = {
+            totalRemaining: MAX_DAG_EDGES_PER_WORKBOOK,
+            wideRemaining: MAX_DAG_EXPANDED_WIDE_EDGES,
+            watchersRemaining: MAX_DAG_RANGE_WATCHERS
+        };
         for (const ws of workbook.Worksheets) {
             for (const addr of Object.keys(ws.Cells)) {
                 const cell = ws.Cells[addr];
@@ -4784,7 +6357,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const parsed = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
                 if (!parsed) continue;
                 const canonical = FormatCellAddress(parsed.row, parsed.col);
-                this.updateSingleCellInDag(workbook, ws, canonical, dag);
+                this.updateSingleCellInDag(workbook, ws, canonical, dag, formulaCellsBySheet, dagEdgeBudget);
             }
         }
         return dag;
@@ -4794,10 +6367,42 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         sheet: WorksheetSpec,
         canonicalAddr: string,
-        dag: WorkbookDependencyGraph
+        dag: WorkbookDependencyGraph,
+        formulaCellsBySheet?: ReadonlyMap<WorksheetSpec, ReadonlyMap<number, ReadonlyArray<{ row: number; key: string }>>>,
+        dagEdgeBudget?: {
+            totalRemaining: number;
+            wideRemaining: number;
+            watchersRemaining: number;
+        }
     ): void {
         dag.sheetById.set(sheet.SheetID, sheet);
         const cellKey = `${sheet.SheetID}::${canonicalAddr}`;
+
+        // Keep dag.formulaCellsBySheet up to date during incremental cell edits
+        if (!formulaCellsBySheet) {
+            const pos = parseCellCoordsFast(canonicalAddr) ?? ParseCellAddress(canonicalAddr);
+            if (pos) {
+                let byCol = dag.formulaCellsBySheet.get(sheet);
+                if (!byCol) {
+                    byCol = new Map<number, Array<{ row: number; key: string }>>();
+                    dag.formulaCellsBySheet.set(sheet, byCol);
+                }
+                const cellObj = sheet.Cells[canonicalAddr];
+                const isFormulaOrSpill = Boolean(cellObj && (cellObj.Formula || cellObj.SpilledFrom));
+                const colList = byCol.get(pos.col);
+                if (isFormulaOrSpill) {
+                    if (!colList) {
+                        byCol.set(pos.col, [{ row: pos.row, key: cellKey }]);
+                    } else if (!colList.some((e) => e.row === pos.row)) {
+                        colList.push({ row: pos.row, key: cellKey });
+                        if (colList.length > 1) colList.sort((a, b) => a.row - b.row);
+                    }
+                } else if (colList) {
+                    const idx = colList.findIndex((e) => e.row === pos.row);
+                    if (idx >= 0) colList.splice(idx, 1);
+                }
+            }
+        }
 
         // Remove previous dependency edges
         const oldDeps = dag.directCellDeps.get(cellKey);
@@ -4827,6 +6432,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             dag.watchedSheetsByCell.delete(cellKey);
         }
+        dag.rangeWatchesByCell.delete(cellKey);
 
         const cell = sheet.Cells[canonicalAddr];
         if (!cell || !cell.Formula || !cell.Formula.trim().startsWith('=')) {
@@ -4836,7 +6442,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return;
         }
 
-        if (this.ParseMjCustomFunctionFormula(cell.Formula)) {
+        const parsedMjCell = this.ParseMjCustomFunctionFormula(cell.Formula);
+        if (parsedMjCell && parsedMjCell.Kind !== 'AI') {
             dag.astByCellKey.delete(cellKey);
             dag.directCellDeps.delete(cellKey);
             dag.directCellDepSets.delete(cellKey);
@@ -4847,7 +6454,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const ast = compileFormulaAstCached(exprBody);
         dag.astByCellKey.set(cellKey, ast);
 
-        const extracted = this.extractAstCellDependencies(ast, workbook, sheet);
+        const extracted = this.extractAstCellDependencies(
+            ast,
+            workbook,
+            sheet,
+            formulaCellsBySheet ?? dag.formulaCellsBySheet,
+            dagEdgeBudget
+        );
         dag.directCellDeps.set(cellKey, extracted.cellDeps);
         dag.directCellDepSets.set(cellKey, new Set<string>(extracted.cellDeps));
         for (const dep of extracted.cellDeps) {
@@ -4859,6 +6472,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             rev.add(cellKey);
         }
         if (extracted.rangeWatches.length > 0) {
+            dag.rangeWatchesByCell.set(cellKey, extracted.rangeWatches);
             const sheetSet = new Set<string>();
             for (const rw of extracted.rangeWatches) {
                 sheetSet.add(rw.sheetId);
@@ -4882,12 +6496,19 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private extractAstCellDependencies(
         root: FormulaAstNode,
         workbook: WorkbookSpec,
-        currentSheet: WorksheetSpec
+        currentSheet: WorksheetSpec,
+        formulaCellsBySheet?: ReadonlyMap<WorksheetSpec, ReadonlyMap<number, ReadonlyArray<{ row: number; key: string }>>>,
+        dagEdgeBudget?: {
+            totalRemaining: number;
+            wideRemaining: number;
+            watchersRemaining: number;
+        }
     ): {
         cellDeps: string[];
         rangeWatches: Array<{ sheetId: string; startRow: number; endRow: number; startCol: number; endCol: number }>;
     } {
         const deps = new Set<string>();
+        const seenRangeKeys = new Set<string>();
         const rangeWatches: Array<{
             sheetId: string;
             startRow: number;
@@ -4896,6 +6517,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             endCol: number;
         }> = [];
         const stack: FormulaAstNode[] = [root];
+
+        const addDirectDep = (depKey: string): void => {
+            if (deps.has(depKey)) {
+                return;
+            }
+            if (dagEdgeBudget) {
+                if (--dagEdgeBudget.totalRemaining < 0) {
+                    throw new Error(
+                        `Spreadsheet rejected: workbook dependency graph exceeded maximum edge limit (${MAX_DAG_EDGES_PER_WORKBOOK} edges).`
+                    );
+                }
+            }
+            deps.add(depKey);
+        };
 
         const addSparseOrDenseBoxDeps = (
             targetSheet: WorksheetSpec,
@@ -4906,12 +6541,26 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         ): void => {
             const area = (endRow - startRow + 1) * (endCol - startCol + 1);
             if (area <= 256) {
+                if (dagEdgeBudget && dagEdgeBudget.totalRemaining < area) {
+                    // Quick check: compute exact new unique edges so shared/overlapping refs count accurately
+                    for (let r = startRow; r <= endRow; r++) {
+                        for (let c = startCol; c <= endCol; c++) {
+                            addDirectDep(`${targetSheet.SheetID}::${FormatCellAddress(r, c)}`);
+                        }
+                    }
+                    return;
+                }
                 for (let r = startRow; r <= endRow; r++) {
                     for (let c = startCol; c <= endCol; c++) {
-                        deps.add(`${targetSheet.SheetID}::${FormatCellAddress(r, c)}`);
+                        addDirectDep(`${targetSheet.SheetID}::${FormatCellAddress(r, c)}`);
                     }
                 }
                 return;
+            }
+            if (dagEdgeBudget && --dagEdgeBudget.watchersRemaining < 0) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook dependency graph exceeded maximum range watcher limit (${MAX_DAG_RANGE_WATCHERS}).`
+                );
             }
             rangeWatches.push({
                 sheetId: targetSheet.SheetID,
@@ -4920,16 +6569,86 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 startCol,
                 endCol
             });
+            const preindexedByCol = formulaCellsBySheet?.get(targetSheet);
+            if (preindexedByCol) {
+                const scanCol = (colList: ReadonlyArray<{ row: number; key: string }>): void => {
+                    let lo = 0;
+                    let hi = colList.length;
+                    while (lo < hi) {
+                        const mid = (lo + hi) >>> 1;
+                        if (colList[mid].row < startRow) {
+                            lo = mid + 1;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                    for (let i = lo; i < colList.length; i++) {
+                        const entry = colList[i];
+                        if (entry.row > endRow) break;
+                        if (!deps.has(entry.key)) {
+                            if (dagEdgeBudget) {
+                                if (--dagEdgeBudget.wideRemaining < 0) {
+                                    throw new Error(
+                                        `Spreadsheet rejected: workbook dependency graph exceeded maximum wide-range edge limit (${MAX_DAG_EXPANDED_WIDE_EDGES} edges).`
+                                    );
+                                }
+                                if (--dagEdgeBudget.totalRemaining < 0) {
+                                    throw new Error(
+                                        `Spreadsheet rejected: workbook dependency graph exceeded maximum edge limit (${MAX_DAG_EDGES_PER_WORKBOOK} edges).`
+                                    );
+                                }
+                            }
+                            deps.add(entry.key);
+                        }
+                    }
+                };
+                if (endCol - startCol + 1 <= preindexedByCol.size) {
+                    for (let c = startCol; c <= endCol; c++) {
+                        const colList = preindexedByCol.get(c);
+                        if (colList) scanCol(colList);
+                    }
+                } else {
+                    for (const [col, colList] of preindexedByCol.entries()) {
+                        if (col < startCol || col > endCol) continue;
+                        scanCol(colList);
+                    }
+                }
+                return;
+            }
             for (const addr of Object.keys(targetSheet.Cells)) {
+                const c = targetSheet.Cells[addr];
+                if (!c || (!c.Formula && !c.SpilledFrom)) continue;
                 const pos = parseCellCoordsFast(addr);
                 if (pos && pos.row >= startRow && pos.row <= endRow && pos.col >= startCol && pos.col <= endCol) {
-                    deps.add(`${targetSheet.SheetID}::${FormatCellAddress(pos.row, pos.col)}`);
+                    const key = `${targetSheet.SheetID}::${FormatCellAddress(pos.row, pos.col)}`;
+                    if (!deps.has(key)) {
+                        if (dagEdgeBudget) {
+                            if (--dagEdgeBudget.wideRemaining < 0) {
+                                throw new Error(
+                                    `Spreadsheet rejected: workbook dependency graph exceeded maximum wide-range edge limit (${MAX_DAG_EXPANDED_WIDE_EDGES} edges).`
+                                );
+                            }
+                            if (--dagEdgeBudget.totalRemaining < 0) {
+                                throw new Error(
+                                    `Spreadsheet rejected: workbook dependency graph exceeded maximum edge limit (${MAX_DAG_EDGES_PER_WORKBOOK} edges).`
+                                );
+                            }
+                        }
+                        deps.add(key);
+                    }
                 }
             }
         };
 
         const addRangeDeps = (targetSheet: WorksheetSpec, rangeStr: string): void => {
-            const parts = rangeStr.trim().split(':');
+            const trimmedRange = rangeStr.trim();
+            const normalizedRange = trimmedRange.toUpperCase().replace(/\$/g, '');
+            const dedupeKey = `${targetSheet.SheetID}::${normalizedRange}`;
+            if (seenRangeKeys.has(dedupeKey)) {
+                return;
+            }
+            seenRangeKeys.add(dedupeKey);
+            const parts = trimmedRange.split(':');
             if (parts.length === 2) {
                 const p0 = parts[0].trim();
                 const p1 = parts[1].trim();
@@ -4964,7 +6683,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             const single = parseCellCoordsFast(rangeStr.trim());
             if (single) {
-                deps.add(`${targetSheet.SheetID}::${FormatCellAddress(single.row, single.col)}`);
+                addDirectDep(`${targetSheet.SheetID}::${FormatCellAddress(single.row, single.col)}`);
             }
         };
 
@@ -4975,7 +6694,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     const ws = node.sheetName ? this.GetWorksheet(workbook, node.sheetName) : currentSheet;
                     const pos = parseCellCoordsFast(node.address.trim());
                     if (ws && pos) {
-                        deps.add(`${ws.SheetID}::${FormatCellAddress(pos.row, pos.col)}`);
+                        addDirectDep(`${ws.SheetID}::${FormatCellAddress(pos.row, pos.col)}`);
                     }
                     break;
                 }
@@ -5015,6 +6734,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         stack.push(node.args[i]);
                     }
                     break;
+                case 'InvokeLambda':
+                    stack.push(node.callee);
+                    for (let i = node.args.length - 1; i >= 0; i--) {
+                        stack.push(node.args[i]);
+                    }
+                    break;
             }
         }
         return {
@@ -5032,12 +6757,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         dag: WorkbookDependencyGraph,
         targetKeys: string[],
-        dirtyScope: ReadonlySet<string> | null
+        dirtyScope: ReadonlySet<string> | null,
+        editContext?: SpreadsheetCellEditContext
     ): void {
+        this.assertSynchronousEvaluationAllowed('evaluateCellKeysIteratively');
         // state: 1 = currently on active DFS path (visiting), 2 = evaluated
         const state = new Map<string, 1 | 2>();
         const memo = new Map<string, SpreadsheetCellValue>();
         const inCycle = new Set<string>();
+        const MAX_CELL_REEVALUATIONS = 32;
+        const requeueCountByCellKey = new Map<string, number>();
 
         interface WorkFrame {
             key: string;
@@ -5085,8 +6814,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 cell.DisplayValue = this.formatCellForDisplay(cell);
                 if (ws.ValidationRules.length > 0) {
                     this.validateCellAgainstSheetRules(ws, cell);
-                } else if (cell.ErrorMessage && !Boolean(cell.Formula && this.ParseMjCustomFunctionFormula(cell.Formula))) {
-                    cell.ErrorMessage = null;
+                } else {
+                    const pmj = cell.Formula ? this.ParseMjCustomFunctionFormula(cell.Formula) : null;
+                    if (cell.ErrorMessage && !(pmj && pmj.Kind !== 'AI') && normalizedVal !== '#SPILL!') {
+                        cell.ErrorMessage = null;
+                    }
                 }
             }
         };
@@ -5154,8 +6886,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     continue;
                 }
 
-                // Viewer-scoped =MJ.QUERY / =MJ.VIEW custom function cell
-                if (this.ParseMjCustomFunctionFormula(cell.Formula)) {
+                // Viewer-scoped =MJ.QUERY / =MJ.VIEW / =MJ.IMPORTRANGE custom function cell
+                const parsedMjCellFn = this.ParseMjCustomFunctionFormula(cell.Formula);
+                if (parsedMjCellFn && parsedMjCellFn.Kind !== 'AI') {
                     const mjVal: SpreadsheetCellValue = cell.AccessDenied
                         ? '#MJ_ACCESS_DENIED!'
                         : cell.ComputedValue !== undefined && cell.ComputedValue !== null
@@ -5166,54 +6899,57 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     continue;
                 }
 
+                // Opt-in =MJ.AI(...) cell: NEVER executes LLMs during synchronous recalc
+                if (this.ParseMjAiFormula(cell.Formula)) {
+                    const aiVal: SpreadsheetCellValue = cell.AccessDenied
+                        ? '#MJ_ACCESS_DENIED!'
+                        : cell.ComputedValue !== undefined && cell.ComputedValue !== null && cell.ComputedValue !== ''
+                          ? cell.ComputedValue
+                          : '#AI_PENDING';
+                    writeEvaluatedValue(top.key, aiVal, false);
+                    workStack.pop();
+                    continue;
+                }
+
                 if (!top.depsScheduled) {
                     state.set(top.key, 1);
                     top.depsScheduled = true;
 
                     const deps = dag.directCellDeps.get(top.key) ?? [];
                     const depSet = dag.directCellDepSets.get(top.key);
+                    const scheduleDepKey = (depKey: string): void => {
+                        const depState = state.get(depKey);
+                        if (depState === 1) {
+                            inCycle.add(depKey);
+                            for (let s = workStack.length - 1; s >= 0; s--) {
+                                inCycle.add(workStack[s].key);
+                                if (workStack[s].key === depKey) break;
+                            }
+                        } else if (depState !== 2) {
+                            if (dirtyScope && !dirtyScope.has(depKey)) {
+                                return;
+                            }
+                            if (!dirtyScope) {
+                                const dSep = depKey.indexOf('::');
+                                const dWs = dag.sheetById.get(depKey.slice(0, dSep));
+                                const dCell = dWs?.Cells[depKey.slice(dSep + 2)];
+                                const dFormula = dCell?.Formula;
+                                if (!dCell || !dFormula || (dFormula.charCodeAt(0) !== 61 && !dFormula.trim().startsWith('='))) {
+                                    return;
+                                }
+                            }
+                            workStack.push({ key: depKey, depsScheduled: false });
+                        }
+                    };
                     if (dirtyScope && depSet && dirtyScope.size < deps.length) {
                         // O(|dirtyScope|) fast path for formulas watching large ranges (e.g. SUM(A2:A4000))
                         for (const candKey of dirtyScope) {
                             if (!depSet.has(candKey)) continue;
-                            const depState = state.get(candKey);
-                            if (depState === 1) {
-                                inCycle.add(candKey);
-                                for (let s = workStack.length - 1; s >= 0; s--) {
-                                    inCycle.add(workStack[s].key);
-                                    if (workStack[s].key === candKey) break;
-                                }
-                            } else if (depState !== 2) {
-                                workStack.push({ key: candKey, depsScheduled: false });
-                            }
+                            scheduleDepKey(candKey);
                         }
                     } else {
                         for (let i = deps.length - 1; i >= 0; i--) {
-                            const depKey = deps[i];
-                            const depState = state.get(depKey);
-                            if (depState === 1) {
-                                inCycle.add(depKey);
-                                for (let s = workStack.length - 1; s >= 0; s--) {
-                                    inCycle.add(workStack[s].key);
-                                    if (workStack[s].key === depKey) break;
-                                }
-                            } else if (depState !== 2) {
-                                if (dirtyScope && !dirtyScope.has(depKey)) {
-                                    // Clean cell outside dirtyScope: read lazily on demand in O(1) without copying
-                                    continue;
-                                }
-                                // Skip pushing scalar non-formula cells during full EvaluateWorkbook since the scalar pass already evaluated them
-                                if (!dirtyScope) {
-                                    const dSep = depKey.indexOf('::');
-                                    const dWs = dag.sheetById.get(depKey.slice(0, dSep));
-                                    const dCell = dWs?.Cells[depKey.slice(dSep + 2)];
-                                    const dFormula = dCell?.Formula;
-                                    if (!dCell || !dFormula || (dFormula.charCodeAt(0) !== 61 && !dFormula.trim().startsWith('='))) {
-                                        continue;
-                                    }
-                                }
-                                workStack.push({ key: depKey, depsScheduled: false });
-                            }
+                            scheduleDepKey(deps[i]);
                         }
                     }
                     continue;
@@ -5225,34 +6961,149 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     writeEvaluatedValue(top.key, '#CYCLE!', true);
                     continue;
                 }
+                if (this.activeEvalBudget?.exceeded) {
+                    cell.ErrorMessage = 'Formula evaluation exceeded operation or time budget.';
+                    writeEvaluatedValue(top.key, '#CALC!', true);
+                    continue;
+                }
+                if (this.activeEvalBudget) {
+                    this.activeEvalBudget.matrixCellsLive = 0;
+                }
 
                 const ast = dag.astByCellKey.get(top.key) ?? compileFormulaAstCached(cell.Formula.trim().slice(1).trim());
                 this._lastEvaluatedFormulaCount++;
+                const xmlMeta = getCellXmlMetaMap().get(cell);
+                const isLegacyCse = Boolean(
+                    xmlMeta?.fType === 'array' &&
+                    !xmlMeta?.cmAttr &&
+                    !this.isTopLevelSpillCandidate(ast, workbook)
+                );
+                const clearedPriorSpill = isLegacyCse ? [] : this.clearOwnedArrayChildren(ws, addr);
                 let computed: SpreadsheetCellValue;
+                let spillErrorMessage: string | undefined;
+                const newlySpilledAddrs: string[] = [];
                 try {
-                    computed = this.evalAstNode(
-                        ast,
-                        workbook,
-                        ws,
-                        (lookupSheet, lookupAddr) => {
-                            const canonical = canonicalizeLookupAddress(lookupAddr);
-                            if (!canonical) return '#REF!';
-                            const targetCell = lookupSheet.Cells[canonical];
-                            if (!targetCell) return null;
-                            const tf = targetCell.Formula;
-                            if (!tf || (tf.charCodeAt(0) !== 61 && !tf.trim().startsWith('='))) {
-                                return targetCell.RawValue ?? null;
+                    const lookupFn = (lookupSheet: WorksheetSpec, lookupAddr: string): SpreadsheetCellValue => {
+                        const canonical = canonicalizeLookupAddress(lookupAddr);
+                        if (!canonical) return '#REF!';
+                        const targetCell = lookupSheet.Cells[canonical];
+                        if (!targetCell) return null;
+                        const tf = targetCell.Formula;
+                        if (!tf || (tf.charCodeAt(0) !== 61 && !tf.trim().startsWith('='))) {
+                            return targetCell.RawValue ?? null;
+                        }
+                        const k = `${lookupSheet.SheetID}::${canonical}`;
+                        if (memo.has(k)) return memo.get(k) ?? null;
+                        return readCleanOrEmptyCell(k);
+                    };
+                    if (this.isTopLevelSpillCandidate(ast, workbook)) {
+                        const matrix = this.evalAstMatrix(ast, workbook, ws, lookupFn, lookupFn, addr, 0);
+                        const rows = matrix.length;
+                        const cols = matrix[0]?.length ?? 0;
+                        if (rows > 1 || cols > 1) {
+                            const spillOutcome = this.applyDynamicArraySpillToSheet(
+                                ws,
+                                cell,
+                                addr,
+                                matrix,
+                                editContext
+                            );
+                            computed = spillOutcome.anchorValue;
+                            spillErrorMessage = spillOutcome.errorMessage;
+                            for (const spAddr of spillOutcome.writtenAddrs) {
+                                newlySpilledAddrs.push(spAddr);
                             }
-                            const k = `${lookupSheet.SheetID}::${canonical}`;
-                            if (memo.has(k)) return memo.get(k) ?? null;
-                            return readCleanOrEmptyCell(k);
-                        },
-                        addr
-                    );
-                } catch {
-                    computed = '#VALUE!';
+                        } else {
+                            delete cell.SpillRange;
+                            computed = matrix[0]?.[0] ?? null;
+                        }
+                    } else {
+                        if (!isLegacyCse) {
+                            delete cell.SpillRange;
+                        }
+                        computed = this.evalAstNode(ast, workbook, ws, lookupFn, addr, 0);
+                    }
+                } catch (err) {
+                    if (!isLegacyCse) {
+                        delete cell.SpillRange;
+                    }
+                    if (err instanceof EvalBudgetExceededError) {
+                        computed = '#CALC!';
+                        cell.ErrorMessage = err.message;
+                    } else {
+                        computed = '#VALUE!';
+                    }
                 }
                 writeEvaluatedValue(top.key, computed, true);
+                if (computed === '#SPILL!') {
+                    cell.ErrorMessage = spillErrorMessage ?? 'Spill range is blocked by non-empty cell(s).';
+                    let blocked = dag.spillBlockedKeysBySheet.get(ws.SheetID);
+                    if (!blocked) {
+                        blocked = new Set<string>();
+                        dag.spillBlockedKeysBySheet.set(ws.SheetID, blocked);
+                    }
+                    blocked.add(top.key);
+                } else {
+                    dag.spillBlockedKeysBySheet.get(ws.SheetID)?.delete(top.key);
+                }
+
+                // Re-queue downstream cells watching any spilled child cells written or cleared by this formula
+                const scheduleReevaluation = (targetKey: string): void => {
+                    const prevCount = requeueCountByCellKey.get(targetKey) ?? 0;
+                    if (prevCount >= MAX_CELL_REEVALUATIONS) {
+                        inCycle.add(targetKey);
+                        const sep = targetKey.indexOf('::');
+                        const tWs = sep > 0 ? dag.sheetById.get(targetKey.slice(0, sep)) : undefined;
+                        const tAddr = sep > 0 ? targetKey.slice(sep + 2) : '';
+                        const tCell = tWs?.Cells[tAddr];
+                        if (tWs && tCell) {
+                            this.clearOwnedArrayChildren(tWs, tAddr);
+                            delete tCell.SpillRange;
+                            tCell.ErrorMessage =
+                                'Cyclic dynamic-array spill dependency exceeded maximum re-evaluation limit.';
+                        }
+                        writeEvaluatedValue(targetKey, '#CYCLE!', true);
+                        return;
+                    }
+                    requeueCountByCellKey.set(targetKey, prevCount + 1);
+                    state.delete(targetKey);
+                    memo.delete(targetKey);
+                    workStack.push({ key: targetKey, depsScheduled: false });
+                };
+
+                const touchedSpillSet = new Set<string>([...clearedPriorSpill, ...newlySpilledAddrs]);
+                if (touchedSpillSet.size > 0) {
+                    const sheetWatchers = dag.rangeWatchersBySheet.get(ws.SheetID);
+                    for (const spAddr of touchedSpillSet) {
+                        const spKey = `${ws.SheetID}::${spAddr}`;
+                        const revDeps = dag.reverseCellDeps.get(spKey);
+                        if (revDeps) {
+                            for (const depKey of revDeps) {
+                                if (depKey !== top.key && !inCycle.has(depKey) && state.get(depKey) === 2) {
+                                    scheduleReevaluation(depKey);
+                                }
+                            }
+                        }
+                        if (sheetWatchers) {
+                            const spPos = parseCellCoordsFast(spAddr);
+                            if (spPos) {
+                                for (const w of sheetWatchers) {
+                                    if (
+                                        spPos.row >= w.startRow &&
+                                        spPos.row <= w.endRow &&
+                                        spPos.col >= w.startCol &&
+                                        spPos.col <= w.endCol &&
+                                        w.watcherKey !== top.key &&
+                                        !inCycle.has(w.watcherKey) &&
+                                        state.get(w.watcherKey) === 2
+                                    ) {
+                                        scheduleReevaluation(w.watcherKey);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -5276,8 +7127,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             case '>':
             case '>=':
                 return this.compareValues(left, right, op);
-            case '&':
-                return `${left ?? ''}${right ?? ''}`;
+            case '&': {
+                const sLeft = String(left ?? '');
+                const sRight = String(right ?? '');
+                if (sLeft.length + sRight.length > MAX_CELL_STRING_LENGTH) {
+                    return '#VALUE!';
+                }
+                return `${sLeft}${sRight}`;
+            }
             case '+':
             case '-':
             case '*':
@@ -5300,12 +7157,131 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return '#VALUE!';
     }
 
-    private nodeContainsArray(node: FormulaAstNode, workbook: WorkbookSpec): boolean {
+    private isTopLevelSpillCandidate(node: FormulaAstNode, workbook: WorkbookSpec): boolean {
+        switch (node.kind) {
+            case 'ArrayLiteral':
+            case 'InvokeLambda':
+                return true;
+            case 'FunctionCall': {
+                const fn = node.name.toUpperCase().replace(/^(?:_XLFN\.|_XLWS\.)+/, '');
+                if (DYNAMIC_ARRAY_FN_SET.has(fn)) {
+                    return true;
+                }
+                if (fn === 'IF') {
+                    return node.args.slice(1).some((a) => this.isTopLevelSpillCandidate(a, workbook));
+                }
+                if (fn === 'IFERROR' || fn === 'IFNA') {
+                    return node.args.some((a) => this.isTopLevelSpillCandidate(a, workbook));
+                }
+                return false;
+            }
+            default:
+                return false;
+        }
+    }
+
+    private applyDynamicArraySpillToSheet(
+        sheet: WorksheetSpec,
+        anchorCell: SpreadsheetCellSpec,
+        anchorAddr: string,
+        matrix: SpreadsheetCellValue[][],
+        editContext?: SpreadsheetCellEditContext
+    ): { anchorValue: SpreadsheetCellValue; writtenAddrs: string[]; errorMessage?: string } {
+        const anchorPos = ParseCellAddress(anchorAddr);
+        if (!anchorPos) {
+            return { anchorValue: '#REF!', writtenAddrs: [] };
+        }
+        const rows = matrix.length;
+        const cols = matrix.reduce((max, r) => Math.max(max, r.length), 0);
+        if (rows === 0 || cols === 0) {
+            delete anchorCell.SpillRange;
+            return { anchorValue: null, writtenAddrs: [] };
+        }
+        if (anchorPos.row + rows - 1 > EXCEL_MAX_ROWS || anchorPos.col + cols - 1 > EXCEL_MAX_COLS) {
+            delete anchorCell.SpillRange;
+            return { anchorValue: '#SPILL!', writtenAddrs: [], errorMessage: 'Spill range exceeds worksheet bounds.' };
+        }
+
+        // Check every non-anchor cell in the spill footprint for ProtectedRanges and collisions BEFORE mutating any cell
+        for (let rIdx = 0; rIdx < rows; rIdx++) {
+            for (let cIdx = 0; cIdx < cols; cIdx++) {
+                if (rIdx === 0 && cIdx === 0) continue;
+                const targetAddr = FormatCellAddress(anchorPos.row + rIdx, anchorPos.col + cIdx);
+                const perm = this.CheckCellWritePermission(sheet, targetAddr, editContext);
+                if (!perm.Allowed) {
+                    delete anchorCell.SpillRange;
+                    return {
+                        anchorValue: '#SPILL!',
+                        writtenAddrs: [],
+                        errorMessage: perm.Reason ?? `Spill range intersects protected range containing '${targetAddr}'.`
+                    };
+                }
+                const existing = sheet.Cells[targetAddr];
+                if (
+                    existing &&
+                    !existing.SpilledFrom &&
+                    (Boolean(existing.Formula && existing.Formula.trim().length > 0) ||
+                        (existing.RawValue !== null && existing.RawValue !== undefined && existing.RawValue !== ''))
+                ) {
+                    delete anchorCell.SpillRange;
+                    return { anchorValue: '#SPILL!', writtenAddrs: [] };
+                }
+            }
+        }
+
+        this.ensureSheetCapacity(sheet, anchorPos.row + rows - 1, anchorPos.col + cols - 1);
+        const endAddr = FormatCellAddress(anchorPos.row + rows - 1, anchorPos.col + cols - 1);
+        anchorCell.SpillRange = `${anchorAddr}:${endAddr}`;
+
+        const writtenAddrs: string[] = [];
+        for (let rIdx = 0; rIdx < rows; rIdx++) {
+            const rowArr = matrix[rIdx] ?? [];
+            for (let cIdx = 0; cIdx < cols; cIdx++) {
+                if (rIdx === 0 && cIdx === 0) continue;
+                const targetR = anchorPos.row + rIdx;
+                const targetC = anchorPos.col + cIdx;
+                const targetAddr = FormatCellAddress(targetR, targetC);
+                const val = rowArr[cIdx] ?? null;
+                const existing = sheet.Cells[targetAddr];
+                sheet.Cells[targetAddr] = {
+                    RowID: sheet.Rows[targetR - 1].RowID,
+                    ColumnID: sheet.Columns[targetC - 1].ColumnID,
+                    Address: targetAddr,
+                    RawValue: val,
+                    ComputedValue: val,
+                    DisplayValue: this.FormatCellValue(val, existing?.Style),
+                    Style: existing?.Style,
+                    Note: existing?.Note ?? null,
+                    SpilledFrom: anchorAddr
+                };
+                this.upsertCellInEvalColIndex(sheet, targetR, targetC, targetAddr);
+                writtenAddrs.push(targetAddr);
+            }
+        }
+        if (writtenAddrs.length > 0) {
+            const ownerWb = this.sheetToWorkbook.get(sheet);
+            if (ownerWb) {
+                this.workbookCellCountCache.delete(ownerWb);
+            }
+        }
+        return { anchorValue: matrix[0]?.[0] ?? null, writtenAddrs };
+    }
+
+    private nodeContainsArray(
+        node: FormulaAstNode,
+        workbook: WorkbookSpec,
+        lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
+    ): boolean {
         switch (node.kind) {
             case 'ArrayLiteral':
             case 'RangeRef':
+            case 'InvokeLambda':
                 return true;
             case 'Identifier': {
+                const lex = lexicalScope?.get(node.name.replace(/^_xlpm\./i, '').toLowerCase());
+                if (lex) {
+                    return lex.kind === 'matrix';
+                }
                 const named = workbook.NamedRanges.find(
                     (nr) => nr.Name.toLowerCase() === node.name.toLowerCase()
                 );
@@ -5313,9 +7289,26 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             case 'UnaryOp':
             case 'PostfixPercent':
-                return this.nodeContainsArray(node.operand, workbook);
+                return this.nodeContainsArray(node.operand, workbook, lexicalScope);
             case 'BinaryOp':
-                return this.nodeContainsArray(node.left, workbook) || this.nodeContainsArray(node.right, workbook);
+                return (
+                    this.nodeContainsArray(node.left, workbook, lexicalScope) ||
+                    this.nodeContainsArray(node.right, workbook, lexicalScope)
+                );
+            case 'FunctionCall': {
+                const upper = node.name.toUpperCase().replace(/^(?:_XLFN\.|_XLWS\.)+/, '');
+                if (DYNAMIC_ARRAY_FN_SET.has(upper)) {
+                    return true;
+                }
+                const bound = lexicalScope?.get(upper.replace(/^_XLPM\./, '').toLowerCase());
+                if (bound?.kind === 'lambda') {
+                    return true;
+                }
+                if (upper === 'IF' || upper === 'IFERROR') {
+                    return node.args.slice(1).some((a) => this.nodeContainsArray(a, workbook, lexicalScope));
+                }
+                return false;
+            }
             default:
                 return false;
         }
@@ -5326,8 +7319,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         sheet: WorksheetSpec,
         cellLookup: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null,
-        currentCellAddress?: string
+        currentCellAddress?: string,
+        depth = 0,
+        lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
     ): SpreadsheetCellValue {
+        this.consumeEvalBudget();
+        if (depth > MAX_AST_DEPTH) {
+            return '#CALC!';
+        }
         const getCellVal = (targetSheet: WorksheetSpec, addr: string): SpreadsheetCellValue => {
             if (cellLookup) {
                 return cellLookup(targetSheet, addr);
@@ -5369,10 +7368,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 return getCellVal(targetSheet, node.address);
             }
             case 'RangeRef': {
-                const matrix = this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                const matrix = this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 return matrix[0]?.[0] ?? null;
             }
             case 'Identifier': {
+                const normKey = node.name.replace(/^_xlpm\./i, '').toLowerCase();
+                const lex = lexicalScope?.get(normKey);
+                if (lex) {
+                    if (lex.kind === 'scalar') return lex.value;
+                    if (lex.kind === 'matrix') return lex.value[0]?.[0] ?? null;
+                    return '#CALC!';
+                }
                 const upper = node.name.toUpperCase();
                 if (upper === 'TRUE') return true;
                 if (upper === 'FALSE') return false;
@@ -5391,23 +7397,27 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 return '#NAME?';
             }
             case 'PostfixPercent': {
-                const v = this.evalAstNode(node.operand, workbook, sheet, cellLookup, currentCellAddress);
+                const v = this.evalAstNode(node.operand, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 if (this.isErrorValue(v)) return v;
                 const n = this.toNumberOrError(v);
                 if (typeof n === 'string') return n;
                 return this.finiteOrNumError(n / 100);
             }
             case 'UnaryOp': {
-                const v = this.evalAstNode(node.operand, workbook, sheet, cellLookup, currentCellAddress);
+                const v = this.evalAstNode(node.operand, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 if (this.isErrorValue(v)) return v;
                 const n = this.toNumberOrError(v);
                 if (typeof n === 'string') return n;
                 return this.finiteOrNumError(node.op === '-' ? (n === 0 ? 0 : -n) : n);
             }
             case 'BinaryOp': {
-                const left = this.evalAstNode(node.left, workbook, sheet, cellLookup, currentCellAddress);
-                const right = this.evalAstNode(node.right, workbook, sheet, cellLookup, currentCellAddress);
+                const left = this.evalAstNode(node.left, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                const right = this.evalAstNode(node.right, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 return this.evalBinaryOpScalars(left, right, node.op);
+            }
+            case 'InvokeLambda': {
+                const m = this.evalAstMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                return m[0]?.[0] ?? null;
             }
             case 'FunctionCall':
                 return this.evalAstFunctionCall(
@@ -5417,7 +7427,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     sheet,
                     cellLookup,
                     getCellVal,
-                    currentCellAddress
+                    currentCellAddress,
+                    depth + 1,
+                    lexicalScope
                 );
         }
     }
@@ -5483,36 +7495,81 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheet: WorksheetSpec,
         getCellVal: (targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue,
         cellLookup?: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null,
-        currentCellAddress?: string
+        currentCellAddress?: string,
+        depth = 0,
+        lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
     ): SpreadsheetCellValue[][] {
+        if (depth > MAX_AST_DEPTH) {
+            return [['#CALC!']];
+        }
+        if (argNode.kind === 'Identifier') {
+            const lex = lexicalScope?.get(argNode.name.replace(/^_xlpm\./i, '').toLowerCase());
+            if (lex) {
+                if (lex.kind === 'matrix') return lex.value;
+                if (lex.kind === 'scalar') return [[lex.value]];
+                return [['#CALC!']];
+            }
+        }
         const desc = this.resolveAstRangeDescriptor(argNode, workbook, sheet, false);
         if (desc === '#REF!') return [['#REF!']];
         if (desc) {
             let endRow = desc.endRow;
             let endCol = desc.endCol;
             const rawArea = (endRow - desc.startRow + 1) * (endCol - desc.startCol + 1);
-            if (rawArea > 200_000) {
-                const dims = getEffectiveSheetDimensions(desc.targetSheet);
+            // R5-2: Preserve exact declared range shape for all ranges within MAX_DYNAMIC_ARRAY_CELLS;
+            // only clamp whole-column / oversized ranges exceeding MAX_DYNAMIC_ARRAY_CELLS to populated bounds.
+            if (rawArea > MAX_DYNAMIC_ARRAY_CELLS || !Number.isFinite(rawArea)) {
+                const dims = this.getPopulatedCellBounds(desc.targetSheet);
                 endRow = Math.min(endRow, Math.max(desc.startRow, dims.maxRow));
                 endCol = Math.min(endCol, Math.max(desc.startCol, dims.maxCol));
             }
-            const matrix: SpreadsheetCellValue[][] = [];
-            for (let r = desc.startRow; r <= endRow; r++) {
-                const rowVals: SpreadsheetCellValue[] = [];
-                for (let c = desc.startCol; c <= endCol; c++) {
-                    rowVals.push(getCellVal(desc.targetSheet, FormatCellAddress(r, c)));
-                }
-                matrix.push(rowVals);
+            const rowCount = endRow - desc.startRow + 1;
+            const colCount = endCol - desc.startCol + 1;
+            const clampedArea = rowCount * colCount;
+            if (clampedArea > MAX_DYNAMIC_ARRAY_CELLS || !Number.isFinite(clampedArea)) {
+                return [['#NUM!']];
             }
+            this.chargeMatrixAllocation(clampedArea);
+            const byCol = this.getOrBuildSheetColIndex(desc.targetSheet);
+            const matrix: SpreadsheetCellValue[][] = Array.from({ length: rowCount }, () =>
+                new Array<SpreadsheetCellValue>(colCount).fill(null)
+            );
+            let populatedHits = 0;
+            for (let c = desc.startCol; c <= endCol; c++) {
+                const colEntries = byCol.get(c);
+                if (!colEntries || colEntries.length === 0) {
+                    continue;
+                }
+                let lo = 0;
+                let hi = colEntries.length;
+                while (lo < hi) {
+                    const mid = (lo + hi) >>> 1;
+                    if (colEntries[mid].row < desc.startRow) {
+                        lo = mid + 1;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                const cOffset = c - desc.startCol;
+                for (let idx = lo; idx < colEntries.length; idx++) {
+                    const entry = colEntries[idx];
+                    if (entry.row > endRow) {
+                        break;
+                    }
+                    matrix[entry.row - desc.startRow][cOffset] = getCellVal(desc.targetSheet, entry.addr);
+                    populatedHits++;
+                }
+            }
+            this.consumeEvalBudget(Math.max(1, populatedHits + Math.ceil(clampedArea / 1024)));
             return matrix;
         }
-        if (argNode.kind === 'ArrayLiteral' || this.nodeContainsArray(argNode, workbook)) {
-            const matrix = this.evalAstMatrix(argNode, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+        if (argNode.kind === 'ArrayLiteral' || this.nodeContainsArray(argNode, workbook, lexicalScope)) {
+            const matrix = this.evalAstMatrix(argNode, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
             if (matrix) {
                 return matrix;
             }
         }
-        return [[this.evalAstNode(argNode, workbook, sheet, cellLookup ?? null, currentCellAddress)]];
+        return [[this.evalAstNode(argNode, workbook, sheet, cellLookup ?? null, currentCellAddress, depth + 1, lexicalScope)]];
     }
 
     private evalAstMatrix(
@@ -5521,15 +7578,21 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheet: WorksheetSpec,
         getCellVal: (targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue,
         cellLookup?: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null,
-        currentCellAddress?: string
+        currentCellAddress?: string,
+        depth = 0,
+        lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
     ): SpreadsheetCellValue[][] {
+        this.consumeEvalBudget();
+        if (depth > MAX_AST_DEPTH) {
+            return [['#CALC!']];
+        }
         switch (node.kind) {
             case 'ArrayLiteral': {
                 const matrix: SpreadsheetCellValue[][] = [];
                 for (const row of node.rows) {
                     const rowVals: SpreadsheetCellValue[] = [];
                     for (const item of row) {
-                        rowVals.push(this.evalAstNode(item, workbook, sheet, cellLookup, currentCellAddress));
+                        rowVals.push(this.evalAstNode(item, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope));
                     }
                     matrix.push(rowVals);
                 }
@@ -5537,18 +7600,24 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             case 'RangeRef':
             case 'CellRef': {
-                return this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                return this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
             }
             case 'Identifier': {
+                const lex = lexicalScope?.get(node.name.replace(/^_xlpm\./i, '').toLowerCase());
+                if (lex) {
+                    if (lex.kind === 'matrix') return lex.value;
+                    if (lex.kind === 'scalar') return [[lex.value]];
+                    return [['#CALC!']];
+                }
                 const desc = this.resolveAstRangeDescriptor(node, workbook, sheet, false);
                 if (desc && desc !== '#REF!') {
-                    return this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                    return this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 }
-                const scalarVal = this.evalAstNode(node, workbook, sheet, cellLookup, currentCellAddress);
+                const scalarVal = this.evalAstNode(node, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 return [[scalarVal]];
             }
             case 'UnaryOp': {
-                const m = this.evalAstMatrix(node.operand, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                const m = this.evalAstMatrix(node.operand, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 return m.map((row) =>
                     row.map((val) => {
                         if (this.isErrorValue(val)) return val;
@@ -5559,7 +7628,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 );
             }
             case 'PostfixPercent': {
-                const m = this.evalAstMatrix(node.operand, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                const m = this.evalAstMatrix(node.operand, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 return m.map((row) =>
                     row.map((val) => {
                         if (this.isErrorValue(val)) return val;
@@ -5570,8 +7639,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 );
             }
             case 'BinaryOp': {
-                const leftM = this.evalAstMatrix(node.left, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
-                const rightM = this.evalAstMatrix(node.right, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                const leftM = this.evalAstMatrix(node.left, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                const rightM = this.evalAstMatrix(node.right, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 const leftRows = leftM.length;
                 const leftCols = leftM[0]?.length ?? 0;
                 const rightRows = rightM.length;
@@ -5586,6 +7655,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 ) {
                     return [['#VALUE!']];
                 }
+                const broadcastArea = outRows * outCols;
+                if (broadcastArea > MAX_DYNAMIC_ARRAY_CELLS || !Number.isFinite(broadcastArea)) {
+                    return [['#NUM!']];
+                }
+                this.consumeEvalBudget(broadcastArea);
 
                 const out: SpreadsheetCellValue[][] = [];
                 for (let r = 0; r < outRows; r++) {
@@ -5601,10 +7675,650 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
                 return out;
             }
-            default: {
-                const scalarVal = this.evalAstNode(node, workbook, sheet, cellLookup, currentCellAddress);
+            case 'InvokeLambda': {
+                const binding = this.evalAstNodeToLexicalBinding(
+                    node.callee,
+                    workbook,
+                    sheet,
+                    getCellVal,
+                    cellLookup,
+                    currentCellAddress,
+                    depth + 1,
+                    lexicalScope
+                );
+                if (binding.kind !== 'lambda') {
+                    if (binding.kind === 'scalar' && this.isErrorValue(binding.value)) {
+                        return [[binding.value]];
+                    }
+                    return [['#VALUE!']];
+                }
+                return this.invokeLambdaBinding(
+                    binding,
+                    node.args,
+                    workbook,
+                    sheet,
+                    getCellVal,
+                    cellLookup,
+                    currentCellAddress,
+                    depth + 1,
+                    lexicalScope
+                );
+            }
+            case 'FunctionCall': {
+                const fnName = node.name.toUpperCase().replace(/^(?:_XLFN\.|_XLWS\.)+/, () => '');
+                const boundLambda = lexicalScope?.get(node.name.replace(/^_xlpm\./i, '').toLowerCase());
+                if (boundLambda && boundLambda.kind === 'lambda') {
+                    return this.invokeLambdaBinding(
+                        boundLambda,
+                        node.args,
+                        workbook,
+                        sheet,
+                        getCellVal,
+                        cellLookup,
+                        currentCellAddress,
+                        depth + 1,
+                        lexicalScope
+                    );
+                }
+                if (DYNAMIC_ARRAY_FN_SET.has(fnName)) {
+                    return this.evalDynamicArrayMatrix(
+                        fnName,
+                        node.args,
+                        workbook,
+                        sheet,
+                        getCellVal,
+                        cellLookup,
+                        currentCellAddress,
+                        depth + 1,
+                        lexicalScope
+                    );
+                }
+                if (fnName === 'IF') {
+                    const cond = node.args[0]
+                        ? this.evalAstNode(node.args[0], workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope)
+                        : null;
+                    if (this.isErrorValue(cond)) return [[cond]];
+                    const truthy = this.toBooleanOrError(cond);
+                    if (typeof truthy === 'string') return [[truthy]];
+                    const branch = truthy ? node.args[1] : node.args[2];
+                    if (!branch || branch.kind === 'EmptyArg') {
+                        const fallback: SpreadsheetCellValue = truthy
+                            ? (node.args.length >= 2 ? 0 : true)
+                            : (node.args.length >= 3 ? 0 : false);
+                        return [[fallback]];
+                    }
+                    if (this.nodeContainsArray(branch, workbook, lexicalScope)) {
+                        return this.evalAstMatrix(branch, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                    }
+                    return [[this.evalAstNode(branch, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope)]];
+                }
+                if (fnName === 'IFERROR' || fnName === 'IFNA') {
+                    const primaryArg = node.args[0];
+                    if (!primaryArg || primaryArg.kind === 'EmptyArg') return [[null]];
+                    const primaryMatrix = this.nodeContainsArray(primaryArg, workbook, lexicalScope)
+                        ? this.evalAstMatrix(primaryArg, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope)
+                        : [[this.evalAstNode(primaryArg, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope)]];
+                    const is1x1 = primaryMatrix.length === 1 && (primaryMatrix[0]?.length ?? 0) === 1;
+                    const singleVal = primaryMatrix[0]?.[0];
+                    const matchesError = (v: SpreadsheetCellValue): boolean =>
+                        v !== '#MJ_ACCESS_DENIED!' &&
+                        v !== UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL &&
+                        (fnName === 'IFNA' ? v === '#N/A' : this.isErrorValue(v));
+                    if (is1x1 && matchesError(singleVal)) {
+                        const fallbackArg = node.args[1];
+                        if (!fallbackArg || fallbackArg.kind === 'EmptyArg') return [['']];
+                        if (this.nodeContainsArray(fallbackArg, workbook, lexicalScope)) {
+                            return this.evalAstMatrix(fallbackArg, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                        }
+                        return [[this.evalAstNode(fallbackArg, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope)]];
+                    }
+                    let hasCellError = false;
+                    for (const row of primaryMatrix) {
+                        for (const v of row) {
+                            if (matchesError(v)) {
+                                hasCellError = true;
+                                break;
+                            }
+                        }
+                        if (hasCellError) break;
+                    }
+                    if (!hasCellError) return primaryMatrix;
+                    const fallbackVal = node.args[1] && node.args[1].kind !== 'EmptyArg'
+                        ? this.evalAstNode(node.args[1], workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope)
+                        : '';
+                    return primaryMatrix.map((row) => row.map((v) => (matchesError(v) ? fallbackVal : v)));
+                }
+                const scalarVal = this.evalAstNode(node, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 return [[scalarVal]];
             }
+            default: {
+                const scalarVal = this.evalAstNode(node, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                return [[scalarVal]];
+            }
+        }
+    }
+
+    private evalAstNodeToLexicalBinding(
+        node: FormulaAstNode,
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        getCellVal: (targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue,
+        cellLookup: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null | undefined,
+        currentCellAddress: string | undefined,
+        depth: number,
+        lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
+    ): SpreadsheetLexicalBinding {
+        if (depth > MAX_AST_DEPTH) {
+            return { kind: 'scalar', value: '#CALC!' };
+        }
+        if (node.kind === 'FunctionCall') {
+            const fnName = node.name.toUpperCase().replace(/^(?:_XLFN\.|_XLWS\.)+/, () => '');
+            if (fnName === 'LAMBDA') {
+                return this.createLambdaBinding(node.args, lexicalScope);
+            }
+        }
+        if (node.kind === 'Identifier') {
+            const lex = lexicalScope?.get(node.name.replace(/^_xlpm\./i, '').toLowerCase());
+            if (lex) {
+                return lex;
+            }
+        }
+        if (node.kind === 'InvokeLambda') {
+            const matrix = this.evalAstMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+            if (matrix.length === 1 && (matrix[0]?.length ?? 0) === 1) {
+                return { kind: 'scalar', value: matrix[0][0] ?? null };
+            }
+            return { kind: 'matrix', value: matrix };
+        }
+        if (
+            node.kind === 'RangeRef' ||
+            node.kind === 'ArrayLiteral' ||
+            this.nodeContainsArray(node, workbook, lexicalScope)
+        ) {
+            const matrix = this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+            if (matrix.length === 1 && (matrix[0]?.length ?? 0) === 1 && node.kind !== 'RangeRef' && node.kind !== 'ArrayLiteral') {
+                return { kind: 'scalar', value: matrix[0][0] ?? null };
+            }
+            return { kind: 'matrix', value: matrix };
+        }
+        const desc = this.resolveAstRangeDescriptor(node, workbook, sheet, false);
+        if (desc && desc !== '#REF!') {
+            const matrix = this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+            if (matrix.length === 1 && (matrix[0]?.length ?? 0) === 1) {
+                return { kind: 'scalar', value: matrix[0][0] ?? null };
+            }
+            return { kind: 'matrix', value: matrix };
+        }
+        const scalar = this.evalAstNode(node, workbook, sheet, cellLookup ?? null, currentCellAddress, depth + 1, lexicalScope);
+        return { kind: 'scalar', value: scalar };
+    }
+
+    private createLambdaBinding(
+        args: FormulaAstNode[],
+        closureScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
+    ): SpreadsheetLexicalBinding {
+        if (args.length < 1) {
+            return { kind: 'scalar', value: '#VALUE!' };
+        }
+        const params: string[] = [];
+        const seen = new Set<string>();
+        for (let i = 0; i < args.length - 1; i++) {
+            const pNode = args[i];
+            if (pNode.kind !== 'Identifier') {
+                return { kind: 'scalar', value: '#VALUE!' };
+            }
+            const norm = pNode.name.replace(/^_xlpm\./i, '').toLowerCase();
+            if (!norm || seen.has(norm)) {
+                return { kind: 'scalar', value: '#VALUE!' };
+            }
+            seen.add(norm);
+            params.push(norm);
+        }
+        const body = args[args.length - 1];
+        if (!body || body.kind === 'EmptyArg') {
+            return { kind: 'scalar', value: '#VALUE!' };
+        }
+        return {
+            kind: 'lambda',
+            params,
+            body,
+            closureScope
+        };
+    }
+
+    private invokeLambdaBinding(
+        lambdaBinding: Extract<SpreadsheetLexicalBinding, { kind: 'lambda' }>,
+        argNodes: FormulaAstNode[],
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        getCellVal: (targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue,
+        cellLookup: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null | undefined,
+        currentCellAddress: string | undefined,
+        depth: number,
+        callerScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
+    ): SpreadsheetCellValue[][] {
+        this.consumeEvalBudget();
+        if (depth > MAX_AST_DEPTH) {
+            return [['#CALC!']];
+        }
+        if (argNodes.length !== lambdaBinding.params.length) {
+            return [['#VALUE!']];
+        }
+        const nextScope = new Map<string, SpreadsheetLexicalBinding>(lambdaBinding.closureScope);
+        for (let i = 0; i < lambdaBinding.params.length; i++) {
+            const valBinding = this.evalAstNodeToLexicalBinding(
+                argNodes[i],
+                workbook,
+                sheet,
+                getCellVal,
+                cellLookup,
+                currentCellAddress,
+                depth + 1,
+                callerScope
+            );
+            nextScope.set(lambdaBinding.params[i], valBinding);
+        }
+        return this.evalAstMatrix(
+            lambdaBinding.body,
+            workbook,
+            sheet,
+            getCellVal,
+            cellLookup,
+            currentCellAddress,
+            depth + 1,
+            nextScope
+        );
+    }
+
+    private dynamicArrayCellKey(val: SpreadsheetCellValue): string {
+        if (val === null || val === undefined) return 'e:';
+        if (typeof val === 'number') return `n:${Object.is(val, -0) ? 0 : val}`;
+        if (typeof val === 'boolean') return `b:${val ? 1 : 0}`;
+        return `s:${String(val).toLowerCase()}`;
+    }
+
+    private compareDynamicArraySortValues(a: SpreadsheetCellValue, b: SpreadsheetCellValue, order: number): number {
+        const aBlank = a === null || a === undefined || a === '';
+        const bBlank = b === null || b === undefined || b === '';
+        if (aBlank && bBlank) return 0;
+        // Excel always sorts blanks after all non-blank values regardless of ascending/descending
+        if (aBlank) return 1;
+        if (bBlank) return -1;
+
+        const rank = (v: SpreadsheetCellValue): number => {
+            if (typeof v === 'number') return 1;
+            if (this.isErrorValue(v)) return 4;
+            if (typeof v === 'boolean') return 3;
+            return 2; // string
+        };
+        const ra = rank(a);
+        const rb = rank(b);
+        if (ra !== rb) {
+            return (ra - rb) * order;
+        }
+        if (ra === 1) {
+            return ((a as number) - (b as number)) * order;
+        }
+        if (ra === 3) {
+            return ((a ? 1 : 0) - (b ? 1 : 0)) * order;
+        }
+        return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }) * order;
+    }
+
+    private evalDynamicArrayMatrix(
+        fnName: string,
+        args: FormulaAstNode[],
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        getCellVal: (targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue,
+        cellLookup: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null | undefined,
+        currentCellAddress: string | undefined,
+        depth: number,
+        lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
+    ): SpreadsheetCellValue[][] {
+        this.consumeEvalBudget();
+        if (depth > MAX_AST_DEPTH) {
+            return [['#CALC!']];
+        }
+        const evalScalarLocal = (arg?: FormulaAstNode, scopeOverride?: ReadonlyMap<string, SpreadsheetLexicalBinding>): SpreadsheetCellValue =>
+            arg
+                ? this.evalAstNode(arg, workbook, sheet, cellLookup ?? null, currentCellAddress, depth + 1, scopeOverride ?? lexicalScope)
+                : null;
+        const isProvided = (idx: number): boolean => idx < args.length && args[idx].kind !== 'EmptyArg';
+
+        switch (fnName) {
+            case 'LAMBDA':
+                // Bare uninvoked LAMBDA returns #CALC! when evaluated as a cell result
+                return [['#CALC!']];
+
+            case 'LET': {
+                if (args.length < 3 || args.length % 2 === 0) {
+                    return [['#VALUE!']];
+                }
+                const nextScope = new Map<string, SpreadsheetLexicalBinding>(lexicalScope);
+                for (let i = 0; i + 1 < args.length - 1; i += 2) {
+                    const nameNode = args[i];
+                    if (nameNode.kind !== 'Identifier') {
+                        return [['#VALUE!']];
+                    }
+                    const varName = nameNode.name.replace(/^_xlpm\./i, '').toLowerCase();
+                    if (!varName) {
+                        return [['#VALUE!']];
+                    }
+                    const binding = this.evalAstNodeToLexicalBinding(
+                        args[i + 1],
+                        workbook,
+                        sheet,
+                        getCellVal,
+                        cellLookup,
+                        currentCellAddress,
+                        depth + 1,
+                        nextScope
+                    );
+                    nextScope.set(varName, binding);
+                }
+                const bodyNode = args[args.length - 1];
+                if (!bodyNode || bodyNode.kind === 'EmptyArg') {
+                    return [['#VALUE!']];
+                }
+                if (this.nodeContainsArray(bodyNode, workbook, nextScope)) {
+                    return this.evalAstMatrix(bodyNode, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, nextScope);
+                }
+                return [[this.evalAstNode(bodyNode, workbook, sheet, cellLookup ?? null, currentCellAddress, depth + 1, nextScope)]];
+            }
+
+            case 'SEQUENCE': {
+                if (!isProvided(0)) return [['#VALUE!']];
+                const rowsNum = this.toNumberOrError(evalScalarLocal(args[0]));
+                if (typeof rowsNum === 'string') return [[rowsNum]];
+                const rows = Math.trunc(rowsNum);
+                if (rows < 0) return [['#VALUE!']];
+                if (rows === 0) return [['#CALC!']];
+
+                let cols = 1;
+                if (isProvided(1)) {
+                    const colsNum = this.toNumberOrError(evalScalarLocal(args[1]));
+                    if (typeof colsNum === 'string') return [[colsNum]];
+                    cols = Math.trunc(colsNum);
+                    if (cols < 0) return [['#VALUE!']];
+                    if (cols === 0) return [['#CALC!']];
+                }
+
+                if (rows * cols > MAX_DYNAMIC_ARRAY_CELLS) {
+                    return [['#NUM!']];
+                }
+                this.chargeMatrixAllocation(rows * cols);
+
+                let start = 1;
+                if (isProvided(2)) {
+                    const startNum = this.toNumberOrError(evalScalarLocal(args[2]));
+                    if (typeof startNum === 'string') return [[startNum]];
+                    start = startNum;
+                }
+
+                let step = 1;
+                if (isProvided(3)) {
+                    const stepNum = this.toNumberOrError(evalScalarLocal(args[3]));
+                    if (typeof stepNum === 'string') return [[stepNum]];
+                    step = stepNum;
+                }
+
+                const out: SpreadsheetCellValue[][] = [];
+                let cur = start;
+                for (let r = 0; r < rows; r++) {
+                    const rowArr: SpreadsheetCellValue[] = [];
+                    for (let c = 0; c < cols; c++) {
+                        this.consumeEvalBudget();
+                        rowArr.push(this.finiteOrNumError(cur));
+                        cur += step;
+                    }
+                    out.push(rowArr);
+                }
+                return out;
+            }
+
+            case 'FILTER': {
+                if (!isProvided(0) || !isProvided(1)) return [['#VALUE!']];
+                const arrayM = this.resolveAstRangeMatrix(args[0], workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                const includeM = this.resolveAstRangeMatrix(args[1], workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                if (arrayM.length === 1 && arrayM[0]?.length === 1 && this.isErrorValue(arrayM[0][0])) {
+                    return arrayM;
+                }
+                const arrRows = arrayM.length;
+                const arrCols = arrayM[0]?.length ?? 0;
+                const incRows = includeM.length;
+                const incCols = includeM[0]?.length ?? 0;
+
+                const toFilterFlag = (v: SpreadsheetCellValue): boolean | string => {
+                    if (this.isErrorValue(v)) return v;
+                    if (v === null || v === undefined) return false;
+                    if (typeof v === 'boolean') return v;
+                    if (typeof v === 'number') return v !== 0;
+                    return this.toBooleanOrError(v);
+                };
+
+                const returnEmptyFallback = (): SpreadsheetCellValue[][] => {
+                    if (isProvided(2)) {
+                        if (this.nodeContainsArray(args[2], workbook, lexicalScope)) {
+                            return this.evalAstMatrix(args[2], workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                        }
+                        return [[evalScalarLocal(args[2])]];
+                    }
+                    return [['#CALC!']];
+                };
+
+                if (incRows === arrRows && incCols === 1) {
+                    const out: SpreadsheetCellValue[][] = [];
+                    for (let r = 0; r < arrRows; r++) {
+                        const flag = toFilterFlag(includeM[r]?.[0] ?? null);
+                        if (typeof flag === 'string') return [[flag]];
+                        if (flag) {
+                            out.push([...(arrayM[r] ?? [])]);
+                        }
+                    }
+                    return out.length > 0 ? out : returnEmptyFallback();
+                }
+
+                if (incRows === 1 && incCols === arrCols) {
+                    const keepCols: number[] = [];
+                    for (let c = 0; c < arrCols; c++) {
+                        const flag = toFilterFlag(includeM[0]?.[c] ?? null);
+                        if (typeof flag === 'string') return [[flag]];
+                        if (flag) keepCols.push(c);
+                    }
+                    if (keepCols.length === 0) return returnEmptyFallback();
+                    return arrayM.map((row) => keepCols.map((c) => row[c] ?? null));
+                }
+
+                return [['#VALUE!']];
+            }
+
+            case 'UNIQUE': {
+                if (!isProvided(0)) return [['#VALUE!']];
+                const arrayM = this.resolveAstRangeMatrix(args[0], workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                if (arrayM.length === 1 && arrayM[0]?.length === 1 && this.isErrorValue(arrayM[0][0])) {
+                    return arrayM;
+                }
+                let byCol = false;
+                if (isProvided(1)) {
+                    const b = this.toBooleanOrError(evalScalarLocal(args[1]));
+                    if (typeof b === 'string') return [[b]];
+                    byCol = b;
+                }
+                let exactlyOnce = false;
+                if (isProvided(2)) {
+                    const e = this.toBooleanOrError(evalScalarLocal(args[2]));
+                    if (typeof e === 'string') return [[e]];
+                    exactlyOnce = e;
+                }
+
+                const numRows = arrayM.length;
+                const numCols = arrayM[0]?.length ?? 0;
+                if (!byCol) {
+                    const counts = new Map<string, number>();
+                    const rowKeys: string[] = [];
+                    for (let r = 0; r < numRows; r++) {
+                        const key = (arrayM[r] ?? []).map((v) => this.dynamicArrayCellKey(v)).join('\u0001');
+                        rowKeys.push(key);
+                        counts.set(key, (counts.get(key) ?? 0) + 1);
+                    }
+                    const seen = new Set<string>();
+                    const out: SpreadsheetCellValue[][] = [];
+                    for (let r = 0; r < numRows; r++) {
+                        const key = rowKeys[r];
+                        if (exactlyOnce) {
+                            if (counts.get(key) === 1) {
+                                out.push([...(arrayM[r] ?? [])]);
+                            }
+                        } else if (!seen.has(key)) {
+                            seen.add(key);
+                            out.push([...(arrayM[r] ?? [])]);
+                        }
+                    }
+                    return out.length > 0 ? out : [['#CALC!']];
+                }
+
+                const counts = new Map<string, number>();
+                const colKeys: string[] = [];
+                for (let c = 0; c < numCols; c++) {
+                    const parts: string[] = [];
+                    for (let r = 0; r < numRows; r++) {
+                        parts.push(this.dynamicArrayCellKey(arrayM[r]?.[c] ?? null));
+                    }
+                    const key = parts.join('\u0001');
+                    colKeys.push(key);
+                    counts.set(key, (counts.get(key) ?? 0) + 1);
+                }
+                const seen = new Set<string>();
+                const keepCols: number[] = [];
+                for (let c = 0; c < numCols; c++) {
+                    const key = colKeys[c];
+                    if (exactlyOnce) {
+                        if (counts.get(key) === 1) keepCols.push(c);
+                    } else if (!seen.has(key)) {
+                        seen.add(key);
+                        keepCols.push(c);
+                    }
+                }
+                if (keepCols.length === 0) return [['#CALC!']];
+                return arrayM.map((row) => keepCols.map((c) => row[c] ?? null));
+            }
+
+            case 'SORT': {
+                if (!isProvided(0)) return [['#VALUE!']];
+                const arrayM = this.resolveAstRangeMatrix(args[0], workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                if (arrayM.length === 1 && arrayM[0]?.length === 1 && this.isErrorValue(arrayM[0][0])) {
+                    return arrayM;
+                }
+                const numRows = arrayM.length;
+                const numCols = arrayM[0]?.length ?? 0;
+
+                let sortIndex = 1;
+                if (isProvided(1)) {
+                    const si = this.toNumberOrError(evalScalarLocal(args[1]));
+                    if (typeof si === 'string') return [[si]];
+                    sortIndex = Math.trunc(si);
+                }
+                let sortOrder = 1;
+                if (isProvided(2)) {
+                    const so = this.toNumberOrError(evalScalarLocal(args[2]));
+                    if (typeof so === 'string') return [[so]];
+                    sortOrder = Math.trunc(so);
+                    if (sortOrder !== 1 && sortOrder !== -1) return [['#VALUE!']];
+                }
+                let byCol = false;
+                if (isProvided(3)) {
+                    const bc = this.toBooleanOrError(evalScalarLocal(args[3]));
+                    if (typeof bc === 'string') return [[bc]];
+                    byCol = bc;
+                }
+
+                if (!byCol) {
+                    if (sortIndex < 1 || sortIndex > numCols) return [['#VALUE!']];
+                    const colIdx = sortIndex - 1;
+                    return arrayM
+                        .map((row, idx) => ({ row: [...row], idx }))
+                        .sort((a, b) => {
+                            const cmp = this.compareDynamicArraySortValues(a.row[colIdx] ?? null, b.row[colIdx] ?? null, sortOrder);
+                            return cmp !== 0 ? cmp : a.idx - b.idx;
+                        })
+                        .map((item) => item.row);
+                }
+
+                if (sortIndex < 1 || sortIndex > numRows) return [['#VALUE!']];
+                const rowIdx = sortIndex - 1;
+                const colIndices = Array.from({ length: numCols }, (_, i) => i).sort((ca, cb) => {
+                    const cmp = this.compareDynamicArraySortValues(
+                        arrayM[rowIdx]?.[ca] ?? null,
+                        arrayM[rowIdx]?.[cb] ?? null,
+                        sortOrder
+                    );
+                    return cmp !== 0 ? cmp : ca - cb;
+                });
+                return arrayM.map((row) => colIndices.map((c) => row[c] ?? null));
+            }
+
+            case 'SORTBY': {
+                if (args.length < 2) return [['#VALUE!']];
+                const arrayM = this.resolveAstRangeMatrix(args[0], workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                if (arrayM.length === 1 && arrayM[0]?.length === 1 && this.isErrorValue(arrayM[0][0])) {
+                    return arrayM;
+                }
+                const numRows = arrayM.length;
+                const numCols = arrayM[0]?.length ?? 0;
+
+                const by1 = this.resolveAstRangeMatrix(args[1], workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                const byRows = by1.length === numRows && (by1[0]?.length ?? 0) === 1;
+                const byCols = !byRows && by1.length === 1 && (by1[0]?.length ?? 0) === numCols;
+                if (!byRows && !byCols) return [['#VALUE!']];
+
+                const sortKeys: Array<{ vals: SpreadsheetCellValue[]; order: number }> = [];
+                for (let i = 1; i < args.length; i += 2) {
+                    const byM =
+                        i === 1
+                            ? by1
+                            : this.resolveAstRangeMatrix(args[i], workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
+                    let vals: SpreadsheetCellValue[];
+                    if (byRows) {
+                        if (byM.length !== numRows || (byM[0]?.length ?? 0) !== 1) return [['#VALUE!']];
+                        vals = byM.map((r) => r[0] ?? null);
+                    } else {
+                        if (byM.length !== 1 || (byM[0]?.length ?? 0) !== numCols) return [['#VALUE!']];
+                        vals = [...(byM[0] ?? [])];
+                    }
+                    let order = 1;
+                    if (isProvided(i + 1)) {
+                        const so = this.toNumberOrError(evalScalarLocal(args[i + 1]));
+                        if (typeof so === 'string') return [[so]];
+                        order = Math.trunc(so);
+                        if (order !== 1 && order !== -1) return [['#VALUE!']];
+                    }
+                    sortKeys.push({ vals, order });
+                }
+
+                if (byRows) {
+                    const rowIndices = Array.from({ length: numRows }, (_, idx) => idx).sort((ra, rb) => {
+                        for (const sk of sortKeys) {
+                            const cmp = this.compareDynamicArraySortValues(sk.vals[ra] ?? null, sk.vals[rb] ?? null, sk.order);
+                            if (cmp !== 0) return cmp;
+                        }
+                        return ra - rb;
+                    });
+                    return rowIndices.map((r) => [...(arrayM[r] ?? [])]);
+                }
+
+                const colIndices = Array.from({ length: numCols }, (_, idx) => idx).sort((ca, cb) => {
+                    for (const sk of sortKeys) {
+                        const cmp = this.compareDynamicArraySortValues(sk.vals[ca] ?? null, sk.vals[cb] ?? null, sk.order);
+                        if (cmp !== 0) return cmp;
+                    }
+                    return ca - cb;
+                });
+                return arrayM.map((row) => colIndices.map((c) => row[c] ?? null));
+            }
+
+            default:
+                return [[UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL]];
         }
     }
 
@@ -5615,23 +8329,45 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheet: WorksheetSpec,
         cellLookup: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null,
         getCellVal: (targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue,
-        currentCellAddress?: string
+        currentCellAddress?: string,
+        depth = 0,
+        lexicalScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>
     ): SpreadsheetCellValue {
+        this.consumeEvalBudget();
+        if (depth > MAX_AST_DEPTH) {
+            return '#CALC!';
+        }
+        const boundLambda = lexicalScope?.get(rawFnName.replace(/^_xlpm\./i, '').toLowerCase());
+        if (boundLambda && boundLambda.kind === 'lambda') {
+            const m = this.invokeLambdaBinding(
+                boundLambda,
+                args,
+                workbook,
+                sheet,
+                getCellVal,
+                cellLookup,
+                currentCellAddress,
+                depth + 1,
+                lexicalScope
+            );
+            return m[0]?.[0] ?? null;
+        }
         const fnName = rawFnName.toUpperCase().replace(/^(?:_XLFN\.|_XLWS\.)+/, () => '');
         const evalScalar = (arg?: FormulaAstNode): SpreadsheetCellValue =>
-            arg ? this.evalAstNode(arg, workbook, sheet, cellLookup, currentCellAddress) : null;
+            arg ? this.evalAstNode(arg, workbook, sheet, cellLookup, currentCellAddress, depth + 1, lexicalScope) : null;
         const isArgProvided = (idx: number): boolean => idx < args.length && args[idx].kind !== 'EmptyArg';
         const isDirectRangeOrRef = (arg: FormulaAstNode): boolean =>
             arg.kind === 'RangeRef' ||
             arg.kind === 'CellRef' ||
             (arg.kind === 'Identifier' &&
+                !lexicalScope?.has(arg.name.replace(/^_xlpm\./i, '').toLowerCase()) &&
                 workbook.NamedRanges.some((nr) => nr.Name.toLowerCase() === arg.name.toLowerCase()));
 
-        const nodeContainsArray = (node: FormulaAstNode): boolean => this.nodeContainsArray(node, workbook);
+        const nodeContainsArray = (node: FormulaAstNode): boolean => this.nodeContainsArray(node, workbook, lexicalScope);
 
         const resolveFlattenedRange = (arg?: FormulaAstNode): SpreadsheetCellValue[] => {
             if (!arg) return [];
-            const matrix = this.resolveAstRangeMatrix(arg, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+            const matrix = this.resolveAstRangeMatrix(arg, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
             const flat: SpreadsheetCellValue[] = [];
             for (const r of matrix) flat.push(...r);
             return flat;
@@ -5648,7 +8384,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (desc === '#REF!') return ['#REF!'];
             if (!desc) return resolveFlattenedRange(arg);
             const area = (desc.endRow - desc.startRow + 1) * (desc.endCol - desc.startCol + 1);
-            if (area <= 4096) {
+            if (area <= 256) {
+                this.consumeEvalBudget(1 + Math.ceil(area / 64));
                 const denseVals: SpreadsheetCellValue[] = [];
                 if (desc.startCol === desc.endCol) {
                     const colLetter = ColumnIndexToLetter(desc.startCol);
@@ -5675,29 +8412,50 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
                 return denseVals;
             }
-            const cellKeys = Object.keys(desc.targetSheet.Cells);
+            const byCol = this.getOrBuildSheetColIndex(desc.targetSheet);
+            const colSpan = desc.endCol - desc.startCol + 1;
             const hits: Array<{ row: number; col: number; val: SpreadsheetCellValue }> = [];
             let sawError = false;
-            for (let k = 0; k < cellKeys.length; k++) {
-                const addr = cellKeys[k];
-                const pos = parseCellCoordsFast(addr);
-                if (
-                    pos &&
-                    pos.row >= desc.startRow &&
-                    pos.row <= desc.endRow &&
-                    pos.col >= desc.startCol &&
-                    pos.col <= desc.endCol
-                ) {
-                    const v = getCellVal(desc.targetSheet, FormatCellAddress(pos.row, pos.col));
+            const collectColEntries = (col: number, entries: ReadonlyArray<{ row: number; addr: string }>): void => {
+                // Binary search first entry with row >= desc.startRow
+                let lo = 0;
+                let hi = entries.length;
+                while (lo < hi) {
+                    const mid = (lo + hi) >>> 1;
+                    if (entries[mid].row < desc.startRow) {
+                        lo = mid + 1;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                for (let i = lo; i < entries.length; i++) {
+                    const e = entries[i];
+                    if (e.row > desc.endRow) break;
+                    const v = getCellVal(desc.targetSheet, e.addr);
                     if (v !== null && v !== undefined) {
                         if (!sawError && typeof v === 'string' && v.charCodeAt(0) === 35) {
                             sawError = true;
                         }
-                        hits.push({ row: pos.row, col: pos.col, val: v });
+                        hits.push({ row: e.row, col, val: v });
+                    }
+                }
+            };
+            if (colSpan <= byCol.size * 2) {
+                for (let c = desc.startCol; c <= desc.endCol; c++) {
+                    const entries = byCol.get(c);
+                    if (entries) {
+                        collectColEntries(c, entries);
+                    }
+                }
+            } else {
+                for (const [col, entries] of byCol) {
+                    if (col >= desc.startCol && col <= desc.endCol) {
+                        collectColEntries(col, entries);
                     }
                 }
             }
-            if ((preserveOrder || sawError) && hits.length > 1) {
+            this.consumeEvalBudget(1 + Math.ceil((Math.min(colSpan, byCol.size) + hits.length) / 64));
+            if (colSpan > 1 && (preserveOrder || sawError) && hits.length > 1) {
                 hits.sort((a, b) => a.row - b.row || a.col - b.col);
             }
             const out: SpreadsheetCellValue[] = new Array(hits.length);
@@ -5796,6 +8554,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         const v = evalScalar(arg);
                         if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                         if (typeof v === 'number' && !Number.isNaN(v)) count++;
+                        else if (typeof v === 'boolean') count++;
                         else if (typeof v === 'string' && v.trim() !== '' && !this.isErrorValue(v) && !Number.isNaN(Number(v))) {
                             count++;
                         }
@@ -5905,7 +8664,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             case 'SUMPRODUCT': {
                 if (args.length === 0) return '#VALUE!';
-                const matrices = args.map((a) => this.resolveAstRangeMatrix(a, workbook, sheet, getCellVal, cellLookup));
+                const matrices = args.map((a) =>
+                    this.resolveAstRangeMatrix(a, workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope)
+                );
                 const rCount = matrices[0].length;
                 const cCount = matrices[0][0]?.length ?? 0;
                 for (const m of matrices) {
@@ -6172,7 +8933,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         }
                     }
                 }
-                return parts.join('');
+                return this.joinCappedStrings(parts, '');
             }
             case 'UPPER': {
                 const v = evalScalar(args[0]);
@@ -6880,7 +9641,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     return lookupColTaint ?? '#N/A';
                 }
 
-                const matrix = this.resolveAstRangeMatrix(args[1], workbook, sheet, getCellVal, cellLookup);
+                const matrix = this.resolveAstRangeMatrix(args[1], workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 if (
                     matrix.length === 1 &&
                     matrix[0]?.length === 1 &&
@@ -7149,7 +9910,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     return getCellVal(desc.targetSheet, FormatCellAddress(desc.startRow + idx1 - 1, desc.startCol + idx2 - 1));
                 }
 
-                const matrix = this.resolveAstRangeMatrix(args[0], workbook, sheet, getCellVal, cellLookup);
+                const matrix = this.resolveAstRangeMatrix(args[0], workbook, sheet, getCellVal, cellLookup, currentCellAddress, depth + 1, lexicalScope);
                 const rows = matrix.length;
                 const cols = matrix[0]?.length ?? 0;
                 if (rows === 0 || cols === 0) return '#REF!';
@@ -7789,7 +10550,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const newText = String(rawNew ?? '');
                 if (oldText === '') return text;
                 if (!isArgProvided(3)) {
-                    return text.split(oldText).join(newText);
+                    const parts = text.split(oldText);
+                    return this.joinCappedStrings(parts, newText);
                 }
                 const instNumVal = this.toNumberOrError(evalScalar(args[3]));
                 if (typeof instNumVal === 'string') return instNumVal;
@@ -7802,7 +10564,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     if (foundAt === -1) break;
                     occurrence++;
                     if (occurrence === instNum) {
-                        return text.slice(0, foundAt) + newText + text.slice(foundAt + oldText.length);
+                        const out = text.slice(0, foundAt) + newText + text.slice(foundAt + oldText.length);
+                        return out.length > MAX_CELL_STRING_LENGTH ? '#VALUE!' : out;
                     }
                     searchFrom = foundAt + oldText.length;
                 }
@@ -7855,7 +10618,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     s = s.slice(2).trim();
                 }
                 const withoutCommas = s.replace(/,/g, '');
-                if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(withoutCommas)) {
+                if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(withoutCommas)) {
                     let parsed = Number(withoutCommas);
                     if (isNegative) parsed = -parsed;
                     if (isPercent) parsed = parsed / 100;
@@ -7907,7 +10670,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         pieces.push(s);
                     }
                 }
-                return pieces.join(delim);
+                return this.joinCappedStrings(pieces, delim);
             }
             case 'MAXIFS':
             case 'MINIFS': {
@@ -8102,6 +10865,26 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
                 if (matched.length === 0) return 0;
                 return fnName === 'MAXIFS' ? Math.max(...matched) : Math.min(...matched);
+            }
+            case 'FILTER':
+            case 'UNIQUE':
+            case 'SORT':
+            case 'SORTBY':
+            case 'SEQUENCE':
+            case 'LET':
+            case 'LAMBDA': {
+                const matrix = this.evalDynamicArrayMatrix(
+                    fnName,
+                    args,
+                    workbook,
+                    sheet,
+                    getCellVal,
+                    cellLookup,
+                    currentCellAddress,
+                    depth + 1,
+                    lexicalScope
+                );
+                return matrix[0]?.[0] ?? null;
             }
             default:
                 // R7-7: Return the unimplemented sentinel for ALL unimplemented Excel functions (not just dynamic-array functions)
@@ -8567,36 +11350,51 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
     }
 
-    private validateCellAgainstSheetRules(sheet: WorksheetSpec, cell: SpreadsheetCellSpec): void {
+    private validateCellAgainstSheetRules(
+        sheet: WorksheetSpec,
+        cell: SpreadsheetCellSpec,
+        preparsedPos?: { row: number; col: number },
+        compiledIndex?: CompiledValidationIndex,
+        validationCheckBudget?: { remaining: number }
+    ): void {
         cell.ValidationError = null;
         if (!sheet.ValidationRules || sheet.ValidationRules.length === 0) return;
-        const pos = ParseCellAddress(cell.Address);
+        const pos = preparsedPos ?? parseCellCoordsFast(cell.Address) ?? ParseCellAddress(cell.Address);
         if (!pos) return;
         const effectiveVal = cell.ComputedValue ?? cell.RawValue;
 
-        for (const rule of sheet.ValidationRules) {
-            const bounds = ParseRangeAddress(rule.Range);
-            if (!bounds) continue;
-            if (
-                pos.row >= bounds.startRow &&
-                pos.row <= bounds.endRow &&
-                pos.col >= bounds.startCol &&
-                pos.col <= bounds.endCol
-            ) {
+        const evaluateEntries = (entries: readonly CompiledValidationEntry[] | undefined): boolean => {
+            if (!entries) return false;
+            for (const entry of entries) {
+                if (validationCheckBudget && --validationCheckBudget.remaining < 0) {
+                    throw new Error(
+                        'Spreadsheet evaluation rejected: validation rules exceed workbook check budget.'
+                    );
+                }
+                if (
+                    pos.row < entry.startRow ||
+                    pos.row > entry.endRow ||
+                    pos.col < entry.startCol ||
+                    pos.col > entry.endCol
+                ) {
+                    continue;
+                }
+                const { rule } = entry;
                 if (rule.RuleType === 'notEmpty') {
                     if (effectiveVal === null || effectiveVal === undefined || String(effectiveVal).trim() === '') {
                         cell.ValidationError = rule.ErrorMessage || 'This cell cannot be empty.';
-                        return;
+                        return true;
                     }
                 } else if (rule.RuleType === 'list' && Array.isArray(rule.AllowedValues)) {
                     if (effectiveVal !== null && effectiveVal !== undefined && String(effectiveVal) !== '') {
-                        const allowed = rule.AllowedValues.some(
-                            (a) => a.toLowerCase() === String(effectiveVal).toLowerCase()
-                        );
+                        const valLower = String(effectiveVal).toLowerCase();
+                        const allowed = entry.allowedValuesLowerSet
+                            ? entry.allowedValuesLowerSet.has(valLower)
+                            : rule.AllowedValues.some((a) => a.toLowerCase() === valLower);
                         if (!allowed) {
                             cell.ValidationError =
-                                rule.ErrorMessage || `Value must be one of: ${rule.AllowedValues.join(', ')}.`;
-                            return;
+                                rule.ErrorMessage || `Value must be one of: ${rule.AllowedValues.slice(0, 20).join(', ')}.`;
+                            return true;
                         }
                     }
                 } else if (rule.RuleType === 'numberRange') {
@@ -8610,12 +11408,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                             cell.ValidationError =
                                 rule.ErrorMessage ||
                                 `Value must be between ${rule.MinValue ?? '-∞'} and ${rule.MaxValue ?? '∞'}.`;
-                            return;
+                            return true;
                         }
                     }
                 }
             }
+            return false;
+        };
+
+        const index = compiledIndex ?? this.getOrBuildValidationIndex(sheet);
+        if (evaluateEntries(index.byRow.get(pos.row))) {
+            return;
         }
+        if (evaluateEntries(index.byCol.get(pos.col))) {
+            return;
+        }
+        evaluateEntries(index.wideRules);
     }
 
     /**
@@ -8673,54 +11481,608 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     // -----------------------------------------------------------------------
-    // =MJ.QUERY(...) and =MJ.VIEW(...) Custom Functions (§ 6.3, § 7.2)
+    // Protected Ranges Governance (§ 6.2)
     // -----------------------------------------------------------------------
 
     /**
-     * Parses an `=MJ.QUERY(name, ...params)` or `=MJ.VIEW(entity, view, ...params)` formula string.
-     * Returns `null` if `formula` is not an `=MJ.QUERY` or `=MJ.VIEW` call.
+     * Adds or updates a protected range rule on `sheetIdOrName` (`§ 6.2`).
      */
-    public ParseMjCustomFunctionFormula(formula?: string | null): ParsedMjCustomFunctionCall | null {
+    public AddProtectedRange(
+        workbook: WorkbookSpec,
+        sheetIdOrName: string,
+        spec: Omit<SpreadsheetProtectedRangeSpec, 'LockedAt'> & { LockedAt?: string },
+        editContext?: SpreadsheetCellEditContext
+    ): SpreadsheetProtectedRangeSpec {
+        const sheet = this.GetWorksheet(workbook, sheetIdOrName);
+        if (!sheet) {
+            throw new Error(`Worksheet '${sheetIdOrName}' not found.`);
+        }
+        const bounds = ParseRangeAddress(spec.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!bounds) {
+            throw new Error(`Invalid protected A1 range '${spec.Range}'.`);
+        }
+        const canonicalRange =
+            bounds.startRow === bounds.endRow && bounds.startCol === bounds.endCol
+                ? FormatCellAddress(bounds.startRow, bounds.startCol)
+                : `${FormatCellAddress(bounds.startRow, bounds.startCol)}:${FormatCellAddress(bounds.endRow, bounds.endCol)}`;
+
+        if (!Array.isArray(sheet.ProtectedRanges)) {
+            sheet.ProtectedRanges = [];
+        }
+        const entry: SpreadsheetProtectedRangeSpec = {
+            RangeID: spec.RangeID,
+            Range: canonicalRange,
+            LockedByUserID: spec.LockedByUserID,
+            Description: spec.Description,
+            AllowEditors: Boolean(spec.AllowEditors),
+            LockedAt: spec.LockedAt ?? new Date().toISOString()
+        };
+        const effectiveActor: SpreadsheetCellEditContext = editContext ?? { UserID: spec.LockedByUserID };
+        const existingIdx = sheet.ProtectedRanges.findIndex((p) => p.RangeID === entry.RangeID);
+        if (existingIdx >= 0) {
+            const existing = sheet.ProtectedRanges[existingIdx];
+            if (!editContext?.BypassProtection && !this.isActorAllowedForProtectedRule(existing, effectiveActor)) {
+                throw new Error(
+                    `Cannot modify protected range '${existing.Range}' (locked by ${existing.LockedByUserID}).`
+                );
+            }
+            sheet.ProtectedRanges[existingIdx] = entry;
+        } else {
+            for (const other of sheet.ProtectedRanges) {
+                const ob = ParseRangeAddress(other.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                if (
+                    ob &&
+                    ob.startRow <= bounds.endRow &&
+                    ob.endRow >= bounds.startRow &&
+                    ob.startCol <= bounds.endCol &&
+                    ob.endCol >= bounds.startCol &&
+                    !editContext?.BypassProtection &&
+                    !this.isActorAllowedForProtectedRule(other, effectiveActor)
+                ) {
+                    throw new Error(
+                        `Cannot add protected range '${canonicalRange}': overlaps protected range '${other.Range}' (locked by ${other.LockedByUserID}).`
+                    );
+                }
+            }
+            sheet.ProtectedRanges.push(entry);
+        }
+        workbook.UpdatedAt = new Date().toISOString();
+        return entry;
+    }
+
+    /**
+     * Removes a protected range rule by `rangeId` if the actor is authorized (`§ 6.2`).
+     */
+    public RemoveProtectedRange(
+        workbook: WorkbookSpec,
+        sheetIdOrName: string,
+        rangeId: string,
+        editContext?: SpreadsheetCellEditContext
+    ): boolean {
+        const sheet = this.GetWorksheet(workbook, sheetIdOrName);
+        if (!sheet || !Array.isArray(sheet.ProtectedRanges)) {
+            return false;
+        }
+        const target = sheet.ProtectedRanges.find((p) => p.RangeID === rangeId);
+        if (!target) {
+            return false;
+        }
+        if (!editContext?.BypassProtection && !this.isActorAllowedForProtectedRule(target, editContext)) {
+            throw new Error(
+                `Cannot unlock protected range '${target.Range}' (locked by ${target.LockedByUserID}).`
+            );
+        }
+        sheet.ProtectedRanges = sheet.ProtectedRanges.filter((p) => p.RangeID !== rangeId);
+        workbook.UpdatedAt = new Date().toISOString();
+        return true;
+    }
+
+    /**
+     * Merges a rectangular A1 range (`>= 2` cells) on `sheetIdOrName` and stores its canonical A1 range in `sheet.MergeRanges`.
+     */
+    public MergeCells(
+        workbook: WorkbookSpec,
+        sheetIdOrName: string,
+        range: string,
+        editContext?: SpreadsheetCellEditContext
+    ): string {
+        const sheet = this.GetWorksheet(workbook, sheetIdOrName);
+        if (!sheet) {
+            throw new Error(`Worksheet '${sheetIdOrName}' not found.`);
+        }
+        const bounds = ParseRangeAddress(range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!bounds || (bounds.startRow === bounds.endRow && bounds.startCol === bounds.endCol)) {
+            throw new Error(`Invalid merge range '${range}': must cover at least two cells.`);
+        }
+        this.assertProtectedRangesAllowStructuralEdit(sheet, bounds, 'merge cells', editContext);
+        const canonical = `${FormatCellAddress(bounds.startRow, bounds.startCol)}:${FormatCellAddress(bounds.endRow, bounds.endCol)}`;
+        if (!Array.isArray(sheet.MergeRanges)) {
+            sheet.MergeRanges = [];
+        }
+        for (const existing of sheet.MergeRanges) {
+            if (existing.toUpperCase() === canonical) {
+                return existing;
+            }
+            const eb = ParseRangeAddress(existing, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (
+                eb &&
+                eb.startRow <= bounds.endRow &&
+                eb.endRow >= bounds.startRow &&
+                eb.startCol <= bounds.endCol &&
+                eb.endCol >= bounds.startCol
+            ) {
+                throw new Error(`Cannot merge '${canonical}': overlaps existing merged range '${existing}'.`);
+            }
+        }
+        sheet.MergeRanges.push(canonical);
+        workbook.UpdatedAt = new Date().toISOString();
+        return canonical;
+    }
+
+    /**
+     * Unmerges any merged ranges matching or overlapping `range` on `sheetIdOrName`.
+     */
+    public UnmergeCells(
+        workbook: WorkbookSpec,
+        sheetIdOrName: string,
+        range: string,
+        editContext?: SpreadsheetCellEditContext
+    ): number {
+        const sheet = this.GetWorksheet(workbook, sheetIdOrName);
+        if (!sheet || !Array.isArray(sheet.MergeRanges) || sheet.MergeRanges.length === 0) {
+            return 0;
+        }
+        const bounds = ParseRangeAddress(range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!bounds) {
+            throw new Error(`Invalid merge range '${range}'.`);
+        }
+        this.assertProtectedRangesAllowStructuralEdit(sheet, bounds, 'unmerge cells', editContext);
+        const before = sheet.MergeRanges.length;
+        sheet.MergeRanges = sheet.MergeRanges.filter((existing) => {
+            const eb = ParseRangeAddress(existing, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (!eb) return true;
+            const overlaps =
+                eb.startRow <= bounds.endRow &&
+                eb.endRow >= bounds.startRow &&
+                eb.startCol <= bounds.endCol &&
+                eb.endCol >= bounds.startCol;
+            return !overlaps;
+        });
+        const removed = before - sheet.MergeRanges.length;
+        if (removed > 0) {
+            workbook.UpdatedAt = new Date().toISOString();
+        }
+        return removed;
+    }
+
+    /**
+     * Adds or updates a data validation rule on `sheetIdOrName` and re-validates affected cells.
+     */
+    public AddValidationRule(
+        workbook: WorkbookSpec,
+        sheetIdOrName: string,
+        rule: SpreadsheetValidationRuleSpec,
+        editContext?: SpreadsheetCellEditContext
+    ): SpreadsheetValidationRuleSpec {
+        const sheet = this.GetWorksheet(workbook, sheetIdOrName);
+        if (!sheet) {
+            throw new Error(`Worksheet '${sheetIdOrName}' not found.`);
+        }
+        const bounds = ParseRangeAddress(rule.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!bounds) {
+            throw new Error(`Invalid validation A1 range '${rule.Range}'.`);
+        }
+        this.assertProtectedRangesAllowStructuralEdit(sheet, bounds, 'add validation rule', editContext);
+        const canonicalRange =
+            bounds.startRow === bounds.endRow && bounds.startCol === bounds.endCol
+                ? FormatCellAddress(bounds.startRow, bounds.startCol)
+                : `${FormatCellAddress(bounds.startRow, bounds.startCol)}:${FormatCellAddress(bounds.endRow, bounds.endCol)}`;
+        const entry: SpreadsheetValidationRuleSpec = { ...rule, Range: canonicalRange };
+        const idx = sheet.ValidationRules.findIndex((r) => r.RuleID === entry.RuleID);
+        if (idx >= 0) {
+            const prevBounds = ParseRangeAddress(sheet.ValidationRules[idx].Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (prevBounds) {
+                this.assertProtectedRangesAllowStructuralEdit(sheet, prevBounds, 'update validation rule', editContext);
+            }
+            sheet.ValidationRules[idx] = entry;
+        } else {
+            sheet.ValidationRules.push(entry);
+        }
+        this.validationIndexCache.delete(sheet);
+        for (const cell of Object.values(sheet.Cells)) {
+            this.validateCellAgainstSheetRules(sheet, cell);
+        }
+        workbook.UpdatedAt = new Date().toISOString();
+        return entry;
+    }
+
+    /**
+     * Removes a data validation rule by `ruleId` from `sheetIdOrName` and clears stale rule errors.
+     */
+    public RemoveValidationRule(
+        workbook: WorkbookSpec,
+        sheetIdOrName: string,
+        ruleId: string,
+        editContext?: SpreadsheetCellEditContext
+    ): boolean {
+        const sheet = this.GetWorksheet(workbook, sheetIdOrName);
+        if (!sheet) return false;
+        const targets = sheet.ValidationRules.filter((r) => r.RuleID === ruleId);
+        if (targets.length === 0) return false;
+        for (const target of targets) {
+            const bounds = ParseRangeAddress(target.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (bounds) {
+                this.assertProtectedRangesAllowStructuralEdit(sheet, bounds, 'remove validation rule', editContext);
+            }
+        }
+        sheet.ValidationRules = sheet.ValidationRules.filter((r) => r.RuleID !== ruleId);
+        this.validationIndexCache.delete(sheet);
+        for (const cell of Object.values(sheet.Cells)) {
+            this.validateCellAgainstSheetRules(sheet, cell);
+        }
+        workbook.UpdatedAt = new Date().toISOString();
+        return true;
+    }
+
+    /**
+     * Adds or updates a conditional formatting rule on `sheetIdOrName`.
+     */
+    public AddConditionalFormat(
+        workbook: WorkbookSpec,
+        sheetIdOrName: string,
+        rule: SpreadsheetConditionalFormatRuleSpec,
+        editContext?: SpreadsheetCellEditContext
+    ): SpreadsheetConditionalFormatRuleSpec {
+        const sheet = this.GetWorksheet(workbook, sheetIdOrName);
+        if (!sheet) {
+            throw new Error(`Worksheet '${sheetIdOrName}' not found.`);
+        }
+        const bounds = ParseRangeAddress(rule.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!bounds) {
+            throw new Error(`Invalid conditional format A1 range '${rule.Range}'.`);
+        }
+        this.assertProtectedRangesAllowStructuralEdit(sheet, bounds, 'add conditional format', editContext);
+        const canonicalRange =
+            bounds.startRow === bounds.endRow && bounds.startCol === bounds.endCol
+                ? FormatCellAddress(bounds.startRow, bounds.startCol)
+                : `${FormatCellAddress(bounds.startRow, bounds.startCol)}:${FormatCellAddress(bounds.endRow, bounds.endCol)}`;
+        const entry: SpreadsheetConditionalFormatRuleSpec = { ...rule, Range: canonicalRange };
+        const idx = sheet.ConditionalFormats.findIndex((r) => r.RuleID === entry.RuleID);
+        if (idx >= 0) {
+            const prevBounds = ParseRangeAddress(sheet.ConditionalFormats[idx].Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (prevBounds) {
+                this.assertProtectedRangesAllowStructuralEdit(
+                    sheet,
+                    prevBounds,
+                    'update conditional format',
+                    editContext
+                );
+            }
+            sheet.ConditionalFormats[idx] = entry;
+        } else {
+            sheet.ConditionalFormats.push(entry);
+        }
+        workbook.UpdatedAt = new Date().toISOString();
+        return entry;
+    }
+
+    /**
+     * Removes a conditional formatting rule by `ruleId` from `sheetIdOrName`.
+     */
+    public RemoveConditionalFormat(
+        workbook: WorkbookSpec,
+        sheetIdOrName: string,
+        ruleId: string,
+        editContext?: SpreadsheetCellEditContext
+    ): boolean {
+        const sheet = this.GetWorksheet(workbook, sheetIdOrName);
+        if (!sheet) return false;
+        const targets = sheet.ConditionalFormats.filter((r) => r.RuleID === ruleId);
+        if (targets.length === 0) return false;
+        for (const target of targets) {
+            const bounds = ParseRangeAddress(target.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (bounds) {
+                this.assertProtectedRangesAllowStructuralEdit(
+                    sheet,
+                    bounds,
+                    'remove conditional format',
+                    editContext
+                );
+            }
+        }
+        sheet.ConditionalFormats = sheet.ConditionalFormats.filter((r) => r.RuleID !== ruleId);
+        workbook.UpdatedAt = new Date().toISOString();
+        return true;
+    }
+
+    /**
+     * Creates or updates a workbook-level named range and recalculates dependent formulas.
+     */
+    public SetNamedRange(
+        workbook: WorkbookSpec,
+        spec: SpreadsheetNamedRangeSpec,
+        recalculate = true
+    ): SpreadsheetNamedRangeSpec {
+        const cleanName = spec.Name.trim();
+        if (!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(cleanName)) {
+            throw new Error(`Invalid named range identifier '${spec.Name}'.`);
+        }
+        const targetSheet = this.GetWorksheet(workbook, spec.SheetID);
+        if (!targetSheet) {
+            throw new Error(`Worksheet '${spec.SheetID}' not found for named range '${cleanName}'.`);
+        }
+        const bounds = ParseRangeAddress(spec.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!bounds) {
+            throw new Error(`Invalid A1 range '${spec.Range}' for named range '${cleanName}'.`);
+        }
+        const canonicalRange =
+            bounds.startRow === bounds.endRow && bounds.startCol === bounds.endCol
+                ? FormatCellAddress(bounds.startRow, bounds.startCol)
+                : `${FormatCellAddress(bounds.startRow, bounds.startCol)}:${FormatCellAddress(bounds.endRow, bounds.endCol)}`;
+        const entry: SpreadsheetNamedRangeSpec = {
+            Name: cleanName,
+            SheetID: targetSheet.SheetID,
+            Range: canonicalRange,
+            Description: spec.Description
+        };
+        const idx = workbook.NamedRanges.findIndex((nr) => nr.Name.toLowerCase() === cleanName.toLowerCase());
+        if (idx >= 0) {
+            workbook.NamedRanges[idx] = entry;
+        } else {
+            workbook.NamedRanges.push(entry);
+        }
+        this.ensureAllWorkbookFormulasHaveStableIds(workbook, true);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
+        workbook.UpdatedAt = new Date().toISOString();
+        return entry;
+    }
+
+    /**
+     * Removes a workbook-level named range by `name`.
+     */
+    public RemoveNamedRange(workbook: WorkbookSpec, name: string, recalculate = true): boolean {
+        const targetLower = name.trim().toLowerCase();
+        const before = workbook.NamedRanges.length;
+        workbook.NamedRanges = workbook.NamedRanges.filter((nr) => nr.Name.toLowerCase() !== targetLower);
+        if (workbook.NamedRanges.length === before) return false;
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
+        workbook.UpdatedAt = new Date().toISOString();
+        return true;
+    }
+
+    /**
+     * Returns all {@link SpreadsheetProtectedRangeSpec} rules covering `address`.
+     */
+    private getProtectedRangesForCell(
+        sheet: WorksheetSpec,
+        address: string
+    ): SpreadsheetProtectedRangeSpec[] {
+        const rules = sheet.ProtectedRanges;
+        if (!Array.isArray(rules) || rules.length === 0) {
+            return [];
+        }
+        const pos = ParseCellAddress(address);
+        if (!pos) return [];
+        const matches: SpreadsheetProtectedRangeSpec[] = [];
+        for (const rule of rules) {
+            const bounds = ParseRangeAddress(rule.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (!bounds) continue;
+            if (
+                pos.row >= bounds.startRow &&
+                pos.row <= bounds.endRow &&
+                pos.col >= bounds.startCol &&
+                pos.col <= bounds.endCol
+            ) {
+                matches.push(rule);
+            }
+        }
+        return matches;
+    }
+
+    /**
+     * Returns the most-restrictive {@link SpreadsheetProtectedRangeSpec} covering `address`, or `null`.
+     * Evaluates all overlapping ranges and prefers `AllowEditors !== true` (`AllowEditors === false`)
+     * over `AllowEditors === true`.
+     */
+    public GetProtectedRangeForCell(
+        sheet: WorksheetSpec,
+        address: string
+    ): SpreadsheetProtectedRangeSpec | null {
+        const matches = this.getProtectedRangesForCell(sheet, address);
+        if (matches.length === 0) {
+            return null;
+        }
+        const restrictive = matches.find((rule) => !rule.AllowEditors);
+        return restrictive ?? matches[0];
+    }
+
+    /**
+     * Checks whether an actor may write or clear `address` on `sheet` given `ProtectedRanges` (`§ 6.2`).
+     * Evaluates all overlapping protected ranges using most-restrictive precedence.
+     */
+    public CheckCellWritePermission(
+        sheet: WorksheetSpec,
+        address: string,
+        editContext?: SpreadsheetCellEditContext
+    ): { Allowed: boolean; ProtectedRange?: SpreadsheetProtectedRangeSpec; Reason?: string } {
+        if (editContext?.BypassProtection) {
+            return { Allowed: true };
+        }
+        const matches = this.getProtectedRangesForCell(sheet, address);
+        if (matches.length === 0) {
+            return { Allowed: true };
+        }
+        for (const rule of matches) {
+            if (!this.isActorAllowedForProtectedRule(rule, editContext)) {
+                return {
+                    Allowed: false,
+                    ProtectedRange: rule,
+                    Reason: `Cell '${address}' falls inside protected range '${rule.Range}' (locked by ${rule.LockedByUserID}).`
+                };
+            }
+        }
+        return {
+            Allowed: true,
+            ProtectedRange: this.GetProtectedRangeForCell(sheet, address) ?? undefined
+        };
+    }
+
+    private isActorAllowedForProtectedRule(
+        rule: SpreadsheetProtectedRangeSpec,
+        editContext?: SpreadsheetCellEditContext
+    ): boolean {
+        if (editContext?.BypassProtection) {
+            return true;
+        }
+        const actor = (editContext?.UserID ?? '').trim();
+        if (actor && editContext?.OwnerUserID && UUIDsEqual(actor, editContext.OwnerUserID)) {
+            return true;
+        }
+        if (actor && rule.LockedByUserID && UUIDsEqual(actor, rule.LockedByUserID)) {
+            return true;
+        }
+        if (rule.AllowEditors && editContext?.IsEditor) {
+            return true;
+        }
+        return false;
+    }
+
+    // -----------------------------------------------------------------------
+    // =MJ.QUERY(...), =MJ.VIEW(...), =MJ.IMPORTRANGE(...), and =MJ.AI(...) Functions
+    // -----------------------------------------------------------------------
+
+    /**
+     * Parses an `=MJ.QUERY(name, ...params)`, `=MJ.VIEW(entity, view, ...params)`, or
+     * `=MJ.IMPORTRANGE(artifact, range, [versionNumber])` formula string.
+     * Returns `null` if `formula` is not one of those calls.
+     */
+    public ParseMjCustomFunctionFormula(
+        formula?: string | null,
+        workbook?: WorkbookSpec,
+        sheet?: WorksheetSpec,
+        currentCellAddress?: string
+    ): ParsedMjCustomFunctionCall | null {
         if (!formula || typeof formula !== 'string') return null;
         const trimmed = formula.trim();
-        const match = /^=\s*MJ\.(QUERY|VIEW)\s*\(([\s\S]*)\)$/i.exec(trimmed);
+        const match = /^=\s*(?:_xll\.)?MJ\.(QUERY|VIEW|IMPORTRANGE|AI)\s*\(([\s\S]*)\)$/i.exec(trimmed);
         if (!match) return null;
 
-        const kind = match[1].toUpperCase() as 'QUERY' | 'VIEW';
+        const kind = match[1].toUpperCase() as 'QUERY' | 'VIEW' | 'IMPORTRANGE' | 'AI';
         const rawArgs = this.splitTopLevelArgs(match[2]);
         if (rawArgs.length === 0) return null;
 
-        const parseLiteral = (token: string): SpreadsheetCellValue => {
-            const t = token.trim();
-            if (t.startsWith('"') && t.endsWith('"') && t.length >= 2) {
-                return t.slice(1, -1).replace(/""/g, '"');
+        const isSingleExcelStringLiteral = (t: string, quoteChar: '"' | "'"): boolean => {
+            if (t.length < 2 || !t.startsWith(quoteChar) || !t.endsWith(quoteChar)) return false;
+            for (let i = 1; i < t.length; i++) {
+                if (t[i] === quoteChar) {
+                    if (t[i + 1] === quoteChar) {
+                        i++;
+                        continue;
+                    }
+                    return i === t.length - 1;
+                }
             }
-            if (t.toUpperCase() === 'TRUE') return true;
-            if (t.toUpperCase() === 'FALSE') return false;
-            if (t !== '' && !Number.isNaN(Number(t))) return Number(t);
-            return t;
+            return false;
         };
 
-        const evaluatedArgs = rawArgs.map(parseLiteral);
+        const parseLiteral = (token: string): { isLiteral: boolean; value: SpreadsheetCellValue } => {
+            const t = token.trim();
+            if (isSingleExcelStringLiteral(t, '"')) {
+                return { isLiteral: true, value: t.slice(1, -1).replace(/""/g, '"') };
+            }
+            if (isSingleExcelStringLiteral(t, "'")) {
+                return { isLiteral: true, value: t.slice(1, -1).replace(/''/g, "'") };
+            }
+            if (t.toUpperCase() === 'TRUE') return { isLiteral: true, value: true };
+            if (t.toUpperCase() === 'FALSE') return { isLiteral: true, value: false };
+            if (t !== '' && !Number.isNaN(Number(t))) return { isLiteral: true, value: Number(t) };
+            return { isLiteral: false, value: t };
+        };
+
+        const evalTokenScalar = (token: string): SpreadsheetCellValue => {
+            const lit = parseLiteral(token);
+            if (lit.isLiteral) return lit.value;
+            const trimmedTok = token.trim();
+            if (!workbook || !sheet || !trimmedTok || kind === 'AI') {
+                return lit.value;
+            }
+            if (kind === 'QUERY') {
+                const kvMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]+)$/.exec(trimmedTok);
+                if (kvMatch && !trimmedTok.startsWith('"') && !trimmedTok.startsWith("'")) {
+                    const paramName = kvMatch[1];
+                    const rhsRaw = kvMatch[2].trim();
+                    const rhsLit = parseLiteral(rhsRaw);
+                    if (rhsLit.isLiteral) {
+                        return `${paramName}=${rhsLit.value ?? ''}`;
+                    }
+                    try {
+                        const rhsAst = compileFormulaAstCached(rhsRaw);
+                        const rhsVal = this.evalAstNode(rhsAst, workbook, sheet, null, currentCellAddress);
+                        if (rhsVal !== '#NAME?' || ParseCellAddress(rhsRaw)) {
+                            return `${paramName}=${rhsVal ?? ''}`;
+                        }
+                    } catch (err) {
+                        if (err instanceof EvalBudgetExceededError) {
+                            throw err;
+                        }
+                        // Fall through to raw assignment token
+                    }
+                    return trimmedTok;
+                }
+            }
+            try {
+                const ast = compileFormulaAstCached(trimmedTok);
+                const val = this.evalAstNode(ast, workbook, sheet, null, currentCellAddress);
+                if (val === '#NAME?' && /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(trimmedTok) && !ParseCellAddress(trimmedTok)) {
+                    return trimmedTok;
+                }
+                return val;
+            } catch (err) {
+                if (err instanceof EvalBudgetExceededError) {
+                    throw err;
+                }
+                return trimmedTok;
+            }
+        };
+
+        let evaluatedArgs: SpreadsheetCellValue[];
+        try {
+            evaluatedArgs = this.runWithEvalBudget(() => rawArgs.map(evalTokenScalar));
+        } catch (err) {
+            if (err instanceof EvalBudgetExceededError) {
+                return null;
+            }
+            throw err;
+        }
         const primaryTarget = String(evaluatedArgs[0] ?? '').trim();
         if (!primaryTarget) return null;
 
         let secondaryTarget: string | undefined;
         let paramStartIndex = 1;
-        if (kind === 'VIEW') {
+        if (kind === 'VIEW' || kind === 'IMPORTRANGE') {
             if (evaluatedArgs.length >= 2) {
                 secondaryTarget = String(evaluatedArgs[1] ?? '').trim();
                 paramStartIndex = 2;
             }
+        }
+        if (kind === 'IMPORTRANGE' && !secondaryTarget) {
+            return null;
         }
 
         const namedParameters: Record<string, SpreadsheetCellValue> = {};
         const positionalArgs: SpreadsheetCellValue[] = [];
         const remaining = evaluatedArgs.slice(paramStartIndex);
 
-        if (kind === 'VIEW') {
-            // A5: For =MJ.VIEW(entity, view, filter), NEVER split remaining[0] (the filter expression,
-            // e.g. "Status='Active'") into NamedParameters — keep positional Arguments intact!
+        if (kind === 'VIEW' || kind === 'IMPORTRANGE' || kind === 'AI') {
+            // Preserve positional args intact (VIEW filter, IMPORTRANGE optional versionNumber, or AI cell/range context args)
             positionalArgs.push(...remaining);
         } else {
             for (let i = 0; i < remaining.length; i++) {
@@ -8729,9 +12091,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     const eqIdx = val.indexOf('=');
                     const k = val.slice(0, eqIdx).trim();
                     const vRaw = val.slice(eqIdx + 1).trim();
-                    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && !vRaw.includes("'") && !vRaw.includes('"')) {
-                        namedParameters[k] =
-                            vRaw !== '' && !Number.isNaN(Number(vRaw)) ? Number(vRaw) : vRaw;
+                    if (
+                        k !== '__proto__' &&
+                        k !== 'constructor' &&
+                        k !== 'prototype' &&
+                        /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) &&
+                        !vRaw.includes("'") &&
+                        !vRaw.includes('"')
+                    ) {
+                        Object.defineProperty(namedParameters, k, {
+                            value: vRaw !== '' && !Number.isNaN(Number(vRaw)) ? Number(vRaw) : vRaw,
+                            writable: true,
+                            enumerable: true,
+                            configurable: true
+                        });
                         continue;
                     }
                 }
@@ -8770,7 +12143,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const ttlMs = options?.CacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
         const maxConcurrency = Math.max(1, options?.MaxConcurrency ?? DEFAULT_MAX_CONCURRENCY);
 
-        // Clear any previously spilled cells first
+        // Clear any previously spilled cells first, then ensure non-MJ precedent formulas are up to date
+        // so dynamic AST arguments inside =MJ.QUERY / =MJ.VIEW / =MJ.IMPORTRANGE see current values.
         for (const sheet of workbook.Worksheets) {
             for (const [addr, cell] of Object.entries(sheet.Cells)) {
                 if (cell.SpilledFrom) {
@@ -8778,6 +12152,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
             }
         }
+        this.workbookCellCountCache.delete(workbook);
+        await this.EvaluateWorkbookIsolated(workbook);
 
         interface PendingFunctionTask {
             sheet: WorksheetSpec;
@@ -8786,14 +12162,29 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
 
         const tasks: PendingFunctionTask[] = [];
-        for (const sheet of workbook.Worksheets) {
-            for (const cell of Object.values(sheet.Cells)) {
-                if (!cell.Formula) continue;
-                const parsed = this.ParseMjCustomFunctionFormula(cell.Formula);
-                if (parsed) {
-                    tasks.push({ sheet, cell, parsed });
+        let scanBudgetExceeded = false;
+        try {
+            this.runWithEvalBudget(() => {
+                for (const sheet of workbook.Worksheets) {
+                    for (const cell of Object.values(sheet.Cells)) {
+                        if (!cell.Formula) continue;
+                        this.consumeEvalBudget(1);
+                        const parsed = this.ParseMjCustomFunctionFormula(cell.Formula, workbook, sheet, cell.Address);
+                        if (parsed && parsed.Kind !== 'AI') {
+                            tasks.push({ sheet, cell, parsed });
+                        }
+                    }
                 }
+            });
+        } catch (err) {
+            if (err instanceof EvalBudgetExceededError) {
+                scanBudgetExceeded = true;
+            } else {
+                throw err;
             }
+        }
+        if (scanBudgetExceeded) {
+            return { EvaluatedCount: 0, AccessDeniedCount: 0 };
         }
 
         let evaluatedCount = 0;
@@ -8810,7 +12201,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         contextUser,
                         effectiveProvider,
                         ttlMs,
-                        options?.BypassCache === true
+                        options?.BypassCache === true,
+                        options
                     );
 
                     if (!execResult.Success || execResult.AccessDenied) {
@@ -8833,12 +12225,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
                     cell.AccessDenied = false;
                     cell.ErrorMessage = null;
-                    this.applyMjFunctionResultToSheet(sheet, cell, execResult);
+                    this.applyMjFunctionResultToSheet(sheet, cell, execResult, options?.EditContext);
                 })
             );
         }
 
-        this.EvaluateWorkbook(workbook);
+        await this.EvaluateWorkbookIsolated(workbook, options?.EditContext);
         return { EvaluatedCount: evaluatedCount, AccessDeniedCount: accessDeniedCount };
     }
 
@@ -8862,12 +12254,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         ttlMs: number,
-        bypassCache: boolean
+        bypassCache: boolean,
+        options?: SpreadsheetMjEvaluationOptions
     ): Promise<DocumentBlockExecutionResult> {
         if (!contextUser?.ID) {
             return {
                 BlockID: 'mj-fn',
-                Kind: parsed.Kind === 'QUERY' ? 'SavedQuery' : 'EntityView',
+                Kind: parsed.Kind === 'QUERY' ? 'SavedQuery' : parsed.Kind === 'IMPORTRANGE' ? 'Artifact' : 'EntityView',
                 Mode: 'Live',
                 Success: false,
                 AccessDenied: true,
@@ -8876,6 +12269,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 Rows: [],
                 TotalRowCount: 0
             };
+        }
+
+        if (parsed.Kind === 'IMPORTRANGE') {
+            return this.executeImportRangeFunction(parsed, contextUser, provider, ttlMs, bypassCache, options);
         }
 
         const cacheKey = `${contextUser.ID.toLowerCase()}::${JSON.stringify(parsed)}`;
@@ -8890,8 +12287,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         let spec: DocumentBlockSpec;
         if (parsed.Kind === 'QUERY') {
             // Map positional args to non-server-set query parameters if the query metadata is available
-            const params: Record<string, unknown> = { ...parsed.NamedParameters };
-            const queries: QueryInfo[] = (provider as { Queries?: QueryInfo[] }).Queries ?? [];
+            const params: Record<string, SpreadsheetCellValue> = { ...parsed.NamedParameters };
+            const queries: QueryInfo[] = provider?.Queries ?? [];
             const matchedQuery = queries.find(
                 (q) =>
                     UUIDsEqual(q.ID, parsed.PrimaryTarget) ||
@@ -8968,10 +12365,716 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return result;
     }
 
+    private async executeImportRangeFunction(
+        parsed: ParsedMjCustomFunctionCall,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        ttlMs: number,
+        bypassCache: boolean,
+        options?: SpreadsheetMjEvaluationOptions
+    ): Promise<DocumentBlockExecutionResult> {
+        const makeError = (message: string, accessDenied = false): DocumentBlockExecutionResult => ({
+            BlockID: `mj-importrange-${parsed.PrimaryTarget}`,
+            Kind: 'Artifact',
+            Mode: 'Live',
+            Success: false,
+            AccessDenied: accessDenied,
+            ErrorMessage: message,
+            Columns: [],
+            Rows: [],
+            TotalRowCount: 0
+        });
+
+        const rangeSpec = (parsed.SecondaryTarget ?? '').trim();
+        if (!rangeSpec) {
+            return makeError('=MJ.IMPORTRANGE requires a target range string such as "Sheet 1!A1:D20".');
+        }
+
+        const rawVersion = parsed.Arguments[0];
+        let versionNumber: number | undefined;
+        if (rawVersion !== undefined && rawVersion !== null && rawVersion !== '') {
+            const num = Number(rawVersion);
+            if (!Number.isInteger(num) || num <= 0) {
+                return makeError('=MJ.IMPORTRANGE optional versionNumber must be a positive integer.');
+            }
+            versionNumber = num;
+        }
+
+        const depth = options?.ImportRangeDepth ?? 0;
+        const maxDepth = 3;
+        if (depth >= maxDepth) {
+            return makeError(`Maximum =MJ.IMPORTRANGE recursion depth (${maxDepth}) exceeded.`);
+        }
+
+        const visitedKeys = [...(options?.ImportRangeVisitedKeys ?? [])];
+        if (options?.HostArtifactID && visitedKeys.length === 0) {
+            visitedKeys.push(options.HostArtifactID.trim().toLowerCase());
+        }
+
+        const requestedKey = `${parsed.PrimaryTarget.trim().toLowerCase()}::${versionNumber ?? 'latest'}`;
+        if (
+            visitedKeys.some(
+                (v) =>
+                    v === requestedKey ||
+                    v === parsed.PrimaryTarget.trim().toLowerCase()
+            )
+        ) {
+            return makeError('Circular =MJ.IMPORTRANGE reference detected.');
+        }
+
+        const cacheKey = `${contextUser.ID.toLowerCase()}::IMPORTRANGE::${requestedKey}::${rangeSpec}`;
+        const now = Date.now();
+        if (!bypassCache && !options?.ImportRangeResolver) {
+            const cached = this.viewerCache.get(cacheKey);
+            if (cached && cached.ExpiresAt > now) {
+                return cached.Result;
+            }
+        }
+
+        if (options?.ImportRangeResolver) {
+            return await options.ImportRangeResolver({
+                ArtifactIDOrName: parsed.PrimaryTarget,
+                RangeString: rangeSpec,
+                VersionNumber: versionNumber,
+                ContextUser: contextUser,
+                Provider: provider,
+                VisitedArtifactKeys: visitedKeys,
+                Depth: depth
+            });
+        }
+
+        const rv = RunView.FromMetadataProvider(provider);
+        const safeTarget = EscapeSQLString(parsed.PrimaryTarget);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            parsed.PrimaryTarget
+        );
+        const artifactFilter = isUuid ? `ID='${safeTarget}'` : `Name='${safeTarget}'`;
+        const artifactRes = await rv.RunView<{ ID: string; Name: string }>(
+            {
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: artifactFilter,
+                Fields: ['ID', 'Name'],
+                MaxRows: 1,
+                ResultType: 'simple'
+            },
+            contextUser
+        );
+        if (!artifactRes.Success || !artifactRes.Results || artifactRes.Results.length === 0) {
+            return makeError(`Target artifact '${parsed.PrimaryTarget}' was not found.`);
+        }
+
+        const targetArtifact = artifactRes.Results[0];
+        const canonicalArtifactKey = `${targetArtifact.ID.toLowerCase()}::${versionNumber ?? 'latest'}`;
+        if (
+            visitedKeys.some(
+                (v) =>
+                    v === canonicalArtifactKey ||
+                    UUIDsEqual(v, targetArtifact.ID)
+            )
+        ) {
+            return makeError(`Circular =MJ.IMPORTRANGE reference detected on artifact '${targetArtifact.Name}'.`);
+        }
+
+        const permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            targetArtifact.ID,
+            contextUser
+        );
+        if (!permissions.CanRead) {
+            return makeError(
+                `Access denied reading artifact '${targetArtifact.Name}' (${targetArtifact.ID}) for =MJ.IMPORTRANGE.`,
+                true
+            );
+        }
+
+        const safeArtifactId = EscapeSQLString(targetArtifact.ID);
+        const versionFilter =
+            versionNumber !== undefined
+                ? `ArtifactID='${safeArtifactId}' AND VersionNumber=${versionNumber}`
+                : `ArtifactID='${safeArtifactId}'`;
+        const versionRes = await rv.RunView<{
+            ID: string;
+            VersionNumber: number;
+            ContentMode: string | null;
+            FileID: string | null;
+            Content: string | null;
+            Configuration: string | null;
+        }>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: versionFilter,
+                OrderBy: 'VersionNumber DESC',
+                Fields: ['ID', 'VersionNumber', 'ContentMode', 'FileID', 'Content', 'Configuration'],
+                MaxRows: 1,
+                ResultType: 'simple'
+            },
+            contextUser
+        );
+        if (!versionRes.Success || !versionRes.Results || versionRes.Results.length === 0) {
+            return makeError(
+                versionNumber !== undefined
+                    ? `Version ${versionNumber} not found for artifact '${targetArtifact.Name}'.`
+                    : `No versions found for artifact '${targetArtifact.Name}'.`
+            );
+        }
+
+        const versionRow = versionRes.Results[0];
+        let targetWorkbook: WorkbookSpec;
+        if (versionRow.ContentMode === 'File' && !versionRow.Content) {
+            const fileBytes = options?.ResolveFileBytes
+                ? await options.ResolveFileBytes(versionRow.FileID ?? '', versionRow.ID)
+                : versionRow.FileID
+                  ? await DocumentLiveBlockEngine.Instance.LoadArtifactFileBytes(
+                        versionRow.FileID,
+                        contextUser,
+                        provider
+                    )
+                  : null;
+            if (!fileBytes) {
+                return makeError(
+                    `Target artifact '${targetArtifact.Name}' stores its workbook as a binary file (${versionRow.FileID ?? 'File'}); text workbook content is unavailable for =MJ.IMPORTRANGE.`
+                );
+            }
+            targetWorkbook = await this.ImportFromXlsxBytesIsolated(fileBytes, versionRow.Configuration);
+        } else {
+            targetWorkbook = await this.ParseWorkbookIsolated(versionRow.Content, versionRow.Configuration);
+        }
+
+        const nextVisited = [...visitedKeys, targetArtifact.ID.toLowerCase(), canonicalArtifactKey];
+        const hasLiveTables = targetWorkbook.Worksheets.some((ws) => ws.LiveTables && ws.LiveTables.length > 0);
+        if (hasLiveTables) {
+            await this.RefreshLiveTables(targetWorkbook, contextUser, provider);
+        }
+        const hasNestedCustomFns = targetWorkbook.Worksheets.some((ws) =>
+            Object.values(ws.Cells).some((c) => {
+                const p = c.Formula ? this.ParseMjCustomFunctionFormula(c.Formula) : null;
+                return Boolean(p && p.Kind !== 'AI');
+            })
+        );
+        if (hasNestedCustomFns) {
+            await this.EvaluateMjCustomFunctions(targetWorkbook, contextUser, provider, {
+                CacheTtlMs: ttlMs,
+                BypassCache: bypassCache,
+                MaxConcurrency: options?.MaxConcurrency,
+                ImportRangeVisitedKeys: nextVisited,
+                ImportRangeDepth: depth + 1,
+                HostArtifactID: targetArtifact.ID
+            });
+        } else {
+            await this.EvaluateWorkbookIsolated(targetWorkbook);
+        }
+
+        const extracted = this.extractWorkbookRangeResult(targetWorkbook, targetArtifact.ID, rangeSpec);
+        if (extracted.Success) {
+            this.viewerCache.set(cacheKey, {
+                ExpiresAt: now + ttlMs,
+                Result: extracted
+            });
+        }
+        return extracted;
+    }
+
+    /**
+     * Parses `'Sheet Name'!A1:D20`, `Sheet2!A1:D20`, or bare `A1:D20` range specifiers for `=MJ.IMPORTRANGE`.
+     */
+    public ParseSheetAndRangeSpecifier(
+        rangeSpec: string
+    ): { SheetName?: string; RangeA1: string } | null {
+        const trimmed = (rangeSpec ?? '').trim();
+        if (!trimmed) return null;
+        const bangIdx = trimmed.lastIndexOf('!');
+        if (bangIdx < 0) {
+            const bounds = ParseRangeAddress(trimmed, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            return bounds ? { RangeA1: trimmed.toUpperCase() } : null;
+        }
+        let rawSheet = trimmed.slice(0, bangIdx).trim();
+        const rangePart = trimmed.slice(bangIdx + 1).trim();
+        if (rawSheet.startsWith("'") && rawSheet.endsWith("'") && rawSheet.length >= 2) {
+            rawSheet = rawSheet.slice(1, -1).replace(/''/g, "'");
+        }
+        const bounds = ParseRangeAddress(rangePart, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!rawSheet || !bounds) return null;
+        return {
+            SheetName: rawSheet,
+            RangeA1: rangePart.toUpperCase()
+        };
+    }
+
+    private extractWorkbookRangeResult(
+        workbook: WorkbookSpec,
+        artifactId: string,
+        rangeSpec: string
+    ): DocumentBlockExecutionResult {
+        const makeError = (msg: string): DocumentBlockExecutionResult => ({
+            BlockID: `mj-importrange-${artifactId}`,
+            Kind: 'Artifact',
+            Mode: 'Live',
+            Success: false,
+            ErrorMessage: msg,
+            Columns: [],
+            Rows: [],
+            TotalRowCount: 0
+        });
+
+        const parsedRef = this.ParseSheetAndRangeSpecifier(rangeSpec);
+        if (!parsedRef) {
+            return makeError(`Invalid =MJ.IMPORTRANGE range specifier '${rangeSpec}'.`);
+        }
+
+        const ws = parsedRef.SheetName
+            ? this.GetWorksheet(workbook, parsedRef.SheetName)
+            : this.GetWorksheet(workbook, workbook.ActiveSheetID) ?? workbook.Worksheets[0];
+        if (!ws) {
+            return makeError(`Worksheet '${parsedRef.SheetName ?? ''}' not found in target artifact.`);
+        }
+
+        const bounds = ParseRangeAddress(parsedRef.RangeA1, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!bounds) {
+            return makeError(`Invalid A1 range '${parsedRef.RangeA1}'.`);
+        }
+
+        const colCount = bounds.endCol - bounds.startCol + 1;
+        const rowCount = bounds.endRow - bounds.startRow + 1;
+        if (rowCount * colCount > 25_000) {
+            return makeError(`=MJ.IMPORTRANGE slice exceeds 25,000 cells (${rowCount}x${colCount}).`);
+        }
+
+        const columns: DocumentBlockColumn[] = [];
+        for (let c = 0; c < colCount; c++) {
+            const key = `Col${c}`;
+            columns.push({
+                Name: key,
+                DisplayName: ColumnIndexToLetter(bounds.startCol + c)
+            });
+        }
+
+        const rows: Array<Record<string, SpreadsheetCellValue>> = [];
+        for (let r = bounds.startRow; r <= bounds.endRow; r++) {
+            const rowObj: Record<string, SpreadsheetCellValue> = {};
+            for (let c = bounds.startCol; c <= bounds.endCol; c++) {
+                const addr = FormatCellAddress(r, c);
+                const cell = ws.Cells[addr];
+                const colKey = `Col${c - bounds.startCol}`;
+                rowObj[colKey] = cell ? (cell.ComputedValue ?? cell.RawValue ?? null) : null;
+            }
+            rows.push(rowObj);
+        }
+
+        return {
+            BlockID: `mj-importrange-${artifactId}`,
+            Kind: 'Artifact',
+            Mode: 'Live',
+            Success: true,
+            Columns: columns,
+            Rows: rows,
+            TotalRowCount: rows.length
+        };
+    }
+
+    /**
+     * Parses an opt-in `=MJ.AI("prompt", [cellOrRange...])` formula string (`§ 5.2b`).
+     * Returns `null` if `formula` is not an `=MJ.AI` call.
+     */
+    public ParseMjAiFormula(formula?: string | null): ParsedMjAiFormulaCall | null {
+        if (!formula || typeof formula !== 'string') return null;
+        const trimmed = formula.trim();
+        const match = /^=\s*(?:_xll\.)?MJ\.AI\s*\(([\s\S]*)\)$/i.exec(trimmed);
+        if (!match) return null;
+
+        const rawArgs = this.splitTopLevelArgs(match[1]);
+        if (rawArgs.length === 0) return null;
+
+        let prompt = rawArgs[0].trim();
+        if (prompt.startsWith('"') && prompt.endsWith('"') && prompt.length >= 2) {
+            prompt = prompt.slice(1, -1).replace(/""/g, '"');
+        } else if (prompt.startsWith("'") && prompt.endsWith("'") && prompt.length >= 2) {
+            prompt = prompt.slice(1, -1).replace(/''/g, "'");
+        }
+        if (!prompt.trim()) return null;
+
+        const references = rawArgs.slice(1).map((r) => r.trim()).filter(Boolean);
+        return {
+            Prompt: prompt,
+            References: references
+        };
+    }
+
+    /**
+     * Builds the serialized context payload and deterministic content hash for a single `=MJ.AI(...)` cell.
+     */
+    public ComputeAiFormulaContextAndHash(
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        parsed: ParsedMjAiFormulaCall
+    ): { ContextValuesJSON: string; InputHash: string; AccessDenied: boolean } {
+        const resolvedArgs: Array<{ Ref: string; Value: SpreadsheetCellValue | SpreadsheetCellValue[][] }> = [];
+        let accessDenied = false;
+        const isCellDenied = (cell: SpreadsheetCellSpec | undefined): boolean =>
+            Boolean(cell && (cell.AccessDenied === true || (cell.ComputedValue ?? cell.RawValue) === '#MJ_ACCESS_DENIED!'));
+
+        for (const ref of parsed.References) {
+            if (ref.startsWith('"') && ref.endsWith('"') && ref.length >= 2) {
+                resolvedArgs.push({ Ref: ref, Value: ref.slice(1, -1).replace(/""/g, '"') });
+                continue;
+            }
+            let targetSheet = sheet;
+            let coordPart = ref;
+            const bangIdx = ref.lastIndexOf('!');
+            if (bangIdx > 0) {
+                let rawSheet = ref.slice(0, bangIdx).trim();
+                if (rawSheet.startsWith("'") && rawSheet.endsWith("'") && rawSheet.length >= 2) {
+                    rawSheet = rawSheet.slice(1, -1).replace(/''/g, "'");
+                }
+                const foundSheet = this.GetWorksheet(workbook, rawSheet);
+                if (foundSheet) {
+                    targetSheet = foundSheet;
+                    coordPart = ref.slice(bangIdx + 1).trim();
+                }
+            }
+            const rangeBounds = ParseRangeAddress(coordPart, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (rangeBounds) {
+                if (rangeBounds.startRow === rangeBounds.endRow && rangeBounds.startCol === rangeBounds.endCol) {
+                    const addr = FormatCellAddress(rangeBounds.startRow, rangeBounds.startCol);
+                    const c = targetSheet.Cells[addr];
+                    if (isCellDenied(c)) accessDenied = true;
+                    resolvedArgs.push({ Ref: ref, Value: c ? (c.ComputedValue ?? c.RawValue ?? null) : null });
+                } else {
+                    const matrix: SpreadsheetCellValue[][] = [];
+                    const maxCells = 500;
+                    let count = 0;
+                    for (let r = rangeBounds.startRow; r <= rangeBounds.endRow && count < maxCells; r++) {
+                        const rowArr: SpreadsheetCellValue[] = [];
+                        for (let col = rangeBounds.startCol; col <= rangeBounds.endCol && count < maxCells; col++) {
+                            const addr = FormatCellAddress(r, col);
+                            const c = targetSheet.Cells[addr];
+                            if (isCellDenied(c)) accessDenied = true;
+                            rowArr.push(c ? (c.ComputedValue ?? c.RawValue ?? null) : null);
+                            count++;
+                        }
+                        matrix.push(rowArr);
+                    }
+                    resolvedArgs.push({ Ref: ref, Value: matrix });
+                }
+            } else {
+                try {
+                    const exprAst = compileFormulaAstCached(ref);
+                    const deps = this.extractAstCellDependencies(exprAst, workbook, sheet);
+                    for (const depKey of deps.cellDeps) {
+                        const sep = depKey.indexOf('::');
+                        const depSheetId = depKey.slice(0, sep);
+                        const depAddr = depKey.slice(sep + 2);
+                        const depWs = workbook.Worksheets.find((w) => w.SheetID === depSheetId);
+                        if (depWs && isCellDenied(depWs.Cells[depAddr])) {
+                            accessDenied = true;
+                        }
+                    }
+                    const getVal = (targetWs: WorksheetSpec, addr: string): SpreadsheetCellValue => {
+                        const c = targetWs.Cells[addr];
+                        if (isCellDenied(c)) {
+                            accessDenied = true;
+                            return '#MJ_ACCESS_DENIED!';
+                        }
+                        return c ? (c.ComputedValue ?? c.RawValue ?? null) : null;
+                    };
+                    if (this.nodeContainsArray(exprAst, workbook)) {
+                        const evaluatedMatrix = this.runWithEvalBudget(() =>
+                            this.evalAstMatrix(exprAst, workbook, sheet, getVal, getVal)
+                        );
+                        for (const rowArr of evaluatedMatrix) {
+                            for (const v of rowArr) {
+                                if (v === '#MJ_ACCESS_DENIED!') accessDenied = true;
+                            }
+                        }
+                        resolvedArgs.push({
+                            Ref: ref,
+                            Value:
+                                evaluatedMatrix.length === 1 && (evaluatedMatrix[0]?.length ?? 0) === 1
+                                    ? (evaluatedMatrix[0][0] ?? null)
+                                    : evaluatedMatrix
+                        });
+                    } else {
+                        const evaluatedVal = this.runWithEvalBudget(() =>
+                            this.evalAstNode(exprAst, workbook, sheet, getVal)
+                        );
+                        if (evaluatedVal === '#MJ_ACCESS_DENIED!') accessDenied = true;
+                        resolvedArgs.push({ Ref: ref, Value: evaluatedVal === '#NAME?' ? ref : evaluatedVal });
+                    }
+                } catch (err) {
+                    if (err instanceof EvalBudgetExceededError) {
+                        resolvedArgs.push({ Ref: ref, Value: '#CALC!' });
+                    } else {
+                        resolvedArgs.push({ Ref: ref, Value: ref });
+                    }
+                }
+            }
+        }
+
+        const contextValuesJson = JSON.stringify(resolvedArgs);
+        const inputString = `${parsed.Prompt}\n---\n${contextValuesJson}`;
+        const inputHash = computeStableAiInputHash(inputString);
+        return { ContextValuesJSON: contextValuesJson, InputHash: inputHash, AccessDenied: accessDenied };
+    }
+
+    /**
+     * Summarizes all `=MJ.AI(...)` cells in `workbook` and how many are pending or have stale inputs.
+     */
+    public CountPendingAiFormulaCells(workbook: WorkbookSpec): {
+        TotalCount: number;
+        PendingOrStaleCount: number;
+        CellKeys: string[];
+    } {
+        let total = 0;
+        let pending = 0;
+        const cellKeys: string[] = [];
+        for (const ws of workbook.Worksheets) {
+            for (const cell of Object.values(ws.Cells)) {
+                const parsed = this.ParseMjAiFormula(cell.Formula);
+                if (!parsed) continue;
+                total++;
+                cellKeys.push(`${ws.SheetID}::${cell.Address}`);
+                const { InputHash } = this.ComputeAiFormulaContextAndHash(workbook, ws, parsed);
+                const hasCached =
+                    cell.ComputedValue !== undefined &&
+                    cell.ComputedValue !== null &&
+                    cell.ComputedValue !== '' &&
+                    cell.ComputedValue !== '#AI_PENDING';
+                if (!hasCached || cell.AiInputHash !== InputHash) {
+                    pending++;
+                }
+            }
+        }
+        return { TotalCount: total, PendingOrStaleCount: pending, CellKeys: cellKeys };
+    }
+
+    /**
+     * Explicitly evaluates opt-in `=MJ.AI(...)` cells across `workbook` (`§ 5.2b`).
+     * Enforces a hard batch cap of 50 cells per invocation and skips cells whose `AiInputHash`
+     * already matches (unless `ForceRefresh: true`). Never invoked automatically on open/recalc.
+     */
+    public async EvaluateAiFormulas(
+        workbook: WorkbookSpec,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider,
+        options?: SpreadsheetAiEvaluationOptions
+    ): Promise<SpreadsheetAiEvaluationResult> {
+        const targetFilter = options?.TargetAddresses
+            ? new Set(options.TargetAddresses.map((k) => k.toUpperCase()))
+            : null;
+        const maxCells = Math.max(1, Math.min(options?.MaxCells ?? MAX_AI_FORMULA_BATCH_CELLS, MAX_AI_FORMULA_BATCH_CELLS));
+
+        interface PendingAiCell {
+            sheet: WorksheetSpec;
+            cell: SpreadsheetCellSpec;
+            parsed: ParsedMjAiFormulaCall;
+            contextValuesJson: string;
+            inputHash: string;
+            accessDenied: boolean;
+        }
+
+        const matchedCells: PendingAiCell[] = [];
+        for (const sheet of workbook.Worksheets) {
+            const sortedAddrs = Object.keys(sheet.Cells).sort();
+            for (const addr of sortedAddrs) {
+                const cell = sheet.Cells[addr];
+                if (!cell?.Formula) continue;
+                const parsed = this.ParseMjAiFormula(cell.Formula);
+                if (!parsed) continue;
+                if (targetFilter) {
+                    const sheetKey = `${sheet.SheetID}::${cell.Address}`.toUpperCase();
+                    if (!targetFilter.has(sheetKey) && !targetFilter.has(cell.Address.toUpperCase())) {
+                        continue;
+                    }
+                }
+                if (options?.EditContext) {
+                    const perm = this.CheckCellWritePermission(sheet, cell.Address, options.EditContext);
+                    if (!perm.Allowed) {
+                        throw new Error(perm.Reason);
+                    }
+                }
+                const { ContextValuesJSON, InputHash, AccessDenied } = this.ComputeAiFormulaContextAndHash(
+                    workbook,
+                    sheet,
+                    parsed
+                );
+                matchedCells.push({
+                    sheet,
+                    cell,
+                    parsed,
+                    contextValuesJson: ContextValuesJSON,
+                    inputHash: InputHash,
+                    accessDenied: AccessDenied
+                });
+            }
+        }
+
+        let cacheHitCount = 0;
+        let preAccessDeniedCount = 0;
+        const toEvaluate: PendingAiCell[] = [];
+        for (const item of matchedCells) {
+            if (item.accessDenied) {
+                preAccessDeniedCount++;
+                item.cell.AccessDenied = true;
+                item.cell.ErrorMessage = 'Upstream referenced cell access denied.';
+                item.cell.ComputedValue = '#MJ_ACCESS_DENIED!';
+                item.cell.DisplayValue = '#MJ_ACCESS_DENIED!';
+                delete item.cell.AiInputHash;
+                continue;
+            }
+            const hasCached =
+                item.cell.ComputedValue !== undefined &&
+                item.cell.ComputedValue !== null &&
+                item.cell.ComputedValue !== '' &&
+                item.cell.ComputedValue !== '#AI_PENDING' &&
+                item.cell.ComputedValue !== '#MJ_ACCESS_DENIED!';
+            if (!options?.ForceRefresh && hasCached && item.cell.AiInputHash === item.inputHash) {
+                cacheHitCount++;
+            } else {
+                toEvaluate.push(item);
+            }
+        }
+
+        const batch = toEvaluate.slice(0, maxCells);
+        const skippedOverCapCount = Math.max(0, toEvaluate.length - batch.length);
+
+        if (batch.length === 0) {
+            if (preAccessDeniedCount > 0) {
+                await this.EvaluateWorkbookIsolated(workbook);
+            }
+            return {
+                EvaluatedCount: 0,
+                CacheHitCount: cacheHitCount,
+                SkippedOverCapCount: 0,
+                AccessDeniedCount: preAccessDeniedCount,
+                ErrorCount: 0
+            };
+        }
+
+        const requests: ArtifactAiFormulaCellRequest[] = batch.map((b) => ({
+            SheetID: b.sheet.SheetID,
+            Address: b.cell.Address,
+            Prompt: b.parsed.Prompt,
+            ContextValuesJSON: b.contextValuesJson,
+            InputHash: b.inputHash
+        }));
+
+        let results: Array<{
+            SheetID: string;
+            Address: string;
+            InputHash: string;
+            Value: string;
+            ErrorMessage?: string | null;
+            AccessDenied?: boolean;
+        }>;
+
+        if (options?.AiEvaluator) {
+            results = await options.AiEvaluator(requests);
+        } else {
+            const artifactId = (options?.ArtifactID ?? '').trim();
+            if (!artifactId) {
+                for (const item of batch) {
+                    item.cell.ErrorMessage = 'ArtifactID is required to evaluate =MJ.AI formulas.';
+                    item.cell.AccessDenied = false;
+                    item.cell.ComputedValue = '#VALUE!';
+                    item.cell.DisplayValue = String(item.cell.ComputedValue);
+                }
+                await this.EvaluateWorkbookIsolated(workbook);
+                return {
+                    EvaluatedCount: 0,
+                    CacheHitCount: cacheHitCount,
+                    SkippedOverCapCount: skippedOverCapCount,
+                    AccessDeniedCount: 0,
+                    ErrorCount: batch.length
+                };
+            }
+            const effectiveProvider = provider ?? Metadata.Provider;
+            const op = new ArtifactEvaluateAiFormulaOperation();
+            const res = await op.Execute(
+                {
+                    ArtifactID: artifactId,
+                    Cells: requests,
+                    ModelOverride: options?.ModelOverride ?? null
+                },
+                { provider: effectiveProvider, user: contextUser }
+            );
+            if (!res.Success || !res.Output) {
+                const errMsg = res.ErrorMessage || 'Failed to evaluate =MJ.AI formulas.';
+                for (const item of batch) {
+                    item.cell.ErrorMessage = errMsg;
+                    item.cell.AccessDenied = res.ResultCode === 'ACCESS_DENIED' || res.ResultCode === 'FORBIDDEN';
+                    item.cell.ComputedValue = item.cell.AccessDenied ? '#MJ_ACCESS_DENIED!' : '#VALUE!';
+                    item.cell.DisplayValue = String(item.cell.ComputedValue);
+                }
+                await this.EvaluateWorkbookIsolated(workbook);
+                return {
+                    EvaluatedCount: 0,
+                    CacheHitCount: cacheHitCount,
+                    SkippedOverCapCount: skippedOverCapCount,
+                    AccessDeniedCount: res.ResultCode === 'ACCESS_DENIED' || res.ResultCode === 'FORBIDDEN' ? batch.length : 0,
+                    ErrorCount: batch.length
+                };
+            }
+            results = res.Output.Results;
+        }
+
+        const resultByKey = new Map<string, (typeof results)[number]>();
+        for (const r of results) {
+            resultByKey.set(`${r.SheetID}::${r.Address.toUpperCase()}`, r);
+        }
+
+        let evaluatedCount = 0;
+        let accessDeniedCount = preAccessDeniedCount;
+        let errorCount = 0;
+
+        for (const item of batch) {
+            const match = resultByKey.get(`${item.sheet.SheetID}::${item.cell.Address.toUpperCase()}`);
+            if (!match) {
+                errorCount++;
+                item.cell.ErrorMessage = 'Missing AI evaluation result for cell.';
+                item.cell.ComputedValue = '#VALUE!';
+                item.cell.DisplayValue = '#VALUE!';
+                continue;
+            }
+            if (match.AccessDenied) {
+                accessDeniedCount++;
+                item.cell.AccessDenied = true;
+                item.cell.ErrorMessage = match.ErrorMessage || 'Access denied running =MJ.AI formula.';
+                item.cell.ComputedValue = '#MJ_ACCESS_DENIED!';
+                item.cell.DisplayValue = '#MJ_ACCESS_DENIED!';
+                continue;
+            }
+            if (match.ErrorMessage) {
+                errorCount++;
+                item.cell.AccessDenied = false;
+                item.cell.ErrorMessage = match.ErrorMessage;
+                item.cell.ComputedValue = '#VALUE!';
+                item.cell.DisplayValue = '#VALUE!';
+                continue;
+            }
+
+            evaluatedCount++;
+            item.cell.AccessDenied = false;
+            item.cell.ErrorMessage = null;
+            item.cell.AiInputHash = match.InputHash || item.inputHash;
+            const coerced = this.coerceCsvScalar(match.Value);
+            item.cell.ComputedValue = coerced;
+            item.cell.DisplayValue = this.FormatCellValue(coerced, item.cell.Style);
+        }
+
+        await this.EvaluateWorkbookIsolated(workbook);
+        return {
+            EvaluatedCount: evaluatedCount,
+            CacheHitCount: cacheHitCount,
+            SkippedOverCapCount: skippedOverCapCount,
+            AccessDeniedCount: accessDeniedCount,
+            ErrorCount: errorCount
+        };
+    }
+
     private applyMjFunctionResultToSheet(
         sheet: WorksheetSpec,
         anchorCell: SpreadsheetCellSpec,
-        result: DocumentBlockExecutionResult
+        result: DocumentBlockExecutionResult,
+        editContext?: SpreadsheetCellEditContext
     ): void {
         const rows = result.Rows ?? [];
         const cols =
@@ -8982,6 +13085,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                   : [];
 
         if (rows.length === 0 || cols.length === 0) {
+            delete anchorCell.SpillRange;
             anchorCell.ComputedValue = 0;
             anchorCell.DisplayValue = '0';
             return;
@@ -8989,6 +13093,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
         // Single scalar result (1 row x 1 col, or 1 row where the last column is a numeric metric)
         if (rows.length === 1 && cols.length === 1) {
+            delete anchorCell.SpillRange;
             const raw = rows[0][cols[0]];
             const scalar = this.toCellScalar(raw);
             anchorCell.ComputedValue = scalar;
@@ -8996,14 +13101,52 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return;
         }
 
-        // Multi-row or multi-column spill starting at anchorCell
+        // Multi-row or multi-column spill starting at anchorCell: check bounds, ProtectedRanges & collisions BEFORE mutating any cell
         const anchorPos = ParseCellAddress(anchorCell.Address);
         if (!anchorPos) return;
+        if (anchorPos.row + rows.length - 1 > EXCEL_MAX_ROWS || anchorPos.col + cols.length - 1 > EXCEL_MAX_COLS) {
+            delete anchorCell.SpillRange;
+            anchorCell.ComputedValue = '#SPILL!';
+            anchorCell.DisplayValue = '#SPILL!';
+            anchorCell.ErrorMessage = 'Spill range exceeds worksheet bounds.';
+            return;
+        }
+        for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+            for (let cIdx = 0; cIdx < cols.length; cIdx++) {
+                if (rIdx === 0 && cIdx === 0) continue;
+                const targetAddr = FormatCellAddress(anchorPos.row + rIdx, anchorPos.col + cIdx);
+                const perm = this.CheckCellWritePermission(sheet, targetAddr, editContext);
+                if (!perm.Allowed) {
+                    delete anchorCell.SpillRange;
+                    anchorCell.ComputedValue = '#SPILL!';
+                    anchorCell.DisplayValue = '#SPILL!';
+                    anchorCell.ErrorMessage =
+                        perm.Reason ?? `Spill range intersects protected range containing '${targetAddr}'.`;
+                    return;
+                }
+                const existing = sheet.Cells[targetAddr];
+                if (
+                    existing &&
+                    !existing.SpilledFrom &&
+                    (Boolean(existing.Formula && existing.Formula.trim().length > 0) ||
+                        (existing.RawValue !== null && existing.RawValue !== undefined && existing.RawValue !== ''))
+                ) {
+                    delete anchorCell.SpillRange;
+                    anchorCell.ComputedValue = '#SPILL!';
+                    anchorCell.DisplayValue = '#SPILL!';
+                    anchorCell.ErrorMessage = 'Spill range is blocked by non-empty cell(s).';
+                    return;
+                }
+            }
+        }
+
         const firstVal = this.toCellScalar(rows[0][cols[0]]);
         anchorCell.ComputedValue = firstVal;
         anchorCell.DisplayValue = this.FormatCellValue(firstVal, anchorCell.Style);
 
-        this.ensureSheetCapacity(sheet, anchorPos.row + rows.length, anchorPos.col + cols.length);
+        this.ensureSheetCapacity(sheet, anchorPos.row + rows.length - 1, anchorPos.col + cols.length - 1);
+        const endAddr = FormatCellAddress(anchorPos.row + rows.length - 1, anchorPos.col + cols.length - 1);
+        anchorCell.SpillRange = `${anchorCell.Address}:${endAddr}`;
         for (let rIdx = 0; rIdx < rows.length; rIdx++) {
             const rowObj = rows[rIdx];
             for (let cIdx = 0; cIdx < cols.length; cIdx++) {
@@ -9011,26 +13154,28 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const targetR = anchorPos.row + rIdx;
                 const targetC = anchorPos.col + cIdx;
                 const targetAddr = FormatCellAddress(targetR, targetC);
-                const existing = sheet.Cells[targetAddr];
-                if (existing && !existing.SpilledFrom && (existing.Formula || existing.RawValue !== null)) {
-                    // Do not overwrite user-authored cells
-                    continue;
-                }
                 const val = this.toCellScalar(rowObj[cols[cIdx]]);
+                const existing = sheet.Cells[targetAddr];
                 sheet.Cells[targetAddr] = {
                     RowID: sheet.Rows[targetR - 1].RowID,
                     ColumnID: sheet.Columns[targetC - 1].ColumnID,
                     Address: targetAddr,
                     RawValue: val,
                     ComputedValue: val,
-                    DisplayValue: this.FormatCellValue(val),
+                    DisplayValue: this.FormatCellValue(val, existing?.Style),
+                    Style: existing?.Style,
+                    Note: existing?.Note ?? null,
                     SpilledFrom: anchorCell.Address
                 };
             }
         }
+        const ownerWb = this.sheetToWorkbook.get(sheet);
+        if (ownerWb) {
+            this.workbookCellCountCache.delete(ownerWb);
+        }
     }
 
-    private toCellScalar(val: unknown): SpreadsheetCellValue {
+    private toCellScalar(val: SpreadsheetCellValue | Date | Record<string, SpreadsheetCellValue> | object | undefined): SpreadsheetCellValue {
         if (val === null || val === undefined) return null;
         if (typeof val === 'number' || typeof val === 'boolean' || typeof val === 'string') return val;
         if (val instanceof Date) return val.toISOString().slice(0, 10);
@@ -9058,7 +13203,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             for (const table of sheet.LiveTables) {
                 if (options?.TableID && table.TableID !== options.TableID) continue;
                 if (table.Mode === 'Frozen' && !options?.ForceRefreshFrozen) {
-                    const validation = ValidateFrozenBlockSnapshot(table.FrozenSnapshot);
+                    const validation = ValidateFrozenBlockSnapshot(
+                        table.FrozenSnapshot,
+                        undefined,
+                        BuildLiveTableIdentityBinding(table)
+                    );
                     if (!validation.Valid || !table.FrozenSnapshot || table.FrozenSnapshot.SecurityWarningAcknowledged !== true) {
                         const errMsg =
                             validation.ErrorMessage ||
@@ -9152,14 +13301,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        this.EvaluateWorkbook(workbook);
+        await this.EvaluateWorkbookIsolated(workbook);
         return resultsByTableId;
     }
 
     private clearPreviousLiveTableCells(sheet: WorksheetSpec, tableId: string): void {
+        let deletedAny = false;
         for (const [addr, cell] of Object.entries(sheet.Cells)) {
             if (cell?.LiveTableID === tableId) {
                 delete sheet.Cells[addr];
+                deletedAny = true;
+            }
+        }
+        if (deletedAny) {
+            const ownerWb = this.sheetToWorkbook.get(sheet);
+            if (ownerWb) {
+                this.workbookCellCountCache.delete(ownerWb);
             }
         }
     }
@@ -9191,13 +13348,26 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             // Also mark the table's known header + data footprint as #MJ_ACCESS_DENIED! so dependent formulas
             // referencing any cell in the denied table propagate #MJ_ACCESS_DENIED! rather than evaluating against blanks
+            let existingColSpan = 0;
+            let existingRowSpan = 0;
+            for (const existingAddr of affectedAddrs) {
+                const pos = ParseCellAddress(existingAddr);
+                if (pos) {
+                    existingColSpan = Math.max(existingColSpan, pos.col - anchor.col + 1);
+                    existingRowSpan = Math.max(existingRowSpan, pos.row - anchor.row + 1);
+                }
+            }
+            const declaredColCount = (table.Fields?.length ?? 0) + (table.CalculatedColumns?.length ?? 0);
             const colCount = Math.max(
                 1,
-                (table.Fields?.length ?? 0) + (table.CalculatedColumns?.length ?? 0)
+                table.LastColumnCount ?? 0,
+                declaredColCount,
+                existingColSpan
             );
             const rowCount = Math.max(
                 1,
-                (table.IncludeHeaders !== false ? 1 : 0) + Math.max(1, table.LastRowCount ?? 1)
+                (table.IncludeHeaders !== false ? 1 : 0) + Math.max(1, table.LastRowCount ?? 1),
+                existingRowSpan
             );
             for (let r = anchor.row; r < anchor.row + rowCount; r++) {
                 for (let c = anchor.col; c < anchor.col + colCount; c++) {
@@ -9222,7 +13392,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 Note: meta?.Note ?? null,
                 AccessDenied: true,
                 ErrorMessage: table.LastError ?? 'Access denied.',
-                LiveTableID: table.Mode !== 'Frozen' ? table.TableID : null
+                LiveTableID: table.TableID
             };
         }
     }
@@ -9246,7 +13416,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         // Delete any previously populated cells for this live table so shrinking results never leave stale rows (B4)
         this.clearPreviousLiveTableCells(sheet, table.TableID);
 
-        const liveTableStamp = table.Mode !== 'Frozen' ? table.TableID : null;
+        // Always stamp LiveTableID even when Mode === 'Frozen' so UnfreezeLiveTable can purge all table cells reliably
+        const liveTableStamp = table.TableID;
         const anchor = ParseCellAddress(table.AnchorCell || 'A1') ?? { row: 1, col: 1 };
         const includeHeaders = table.IncludeHeaders !== false;
         const columns: DocumentBlockColumn[] =
@@ -9256,6 +13427,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                   ? Object.keys(result.Rows[0]).map((k) => ({ Name: k, DisplayName: k }))
                   : [];
         const calcCols = table.CalculatedColumns ?? [];
+        table.LastRowCount = result.Rows.length;
+        table.LastColumnCount = columns.length + calcCols.length;
         const totalRowsNeeded = anchor.row + (includeHeaders ? 1 : 0) + result.Rows.length + 2;
         const totalColsNeeded = anchor.col + columns.length + calcCols.length + 1;
         this.ensureSheetCapacity(sheet, totalRowsNeeded, totalColsNeeded);
@@ -9321,6 +13494,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     LiveTableID: liveTableStamp
                 };
             }
+            const ownerWb = this.sheetToWorkbook.get(sheet);
+            if (ownerWb) {
+                this.workbookCellCountCache.delete(ownerWb);
+            }
 
             // Fill down calculated formula columns (§ 6.3)
             for (let cc = 0; cc < calcCols.length; cc++) {
@@ -9368,7 +13545,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         executionResult: DocumentBlockExecutionResult,
         freezingUser: Pick<UserInfo, 'ID' | 'Name'>,
         acknowledgeSecurityWarning: boolean,
-        preSignedSnapshot?: DocumentFrozenSnapshot
+        preSignedSnapshot?: DocumentFrozenSnapshot,
+        hostArtifactId?: string | null,
+        recalculate = true
     ): SpreadsheetLiveTableSpec {
         if (!acknowledgeSecurityWarning) {
             throw new Error(
@@ -9383,6 +13562,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (!table) {
             throw new Error(`Live table '${tableId}' not found on worksheet '${sheet.Name}'.`);
         }
+        const expectedBinding = BuildLiveTableIdentityBinding(table, hostArtifactId);
         const frozenAt = new Date().toISOString();
         const baseSnapshot = {
             FrozenAt: frozenAt,
@@ -9391,7 +13571,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             Columns: executionResult.Columns,
             Rows: executionResult.Rows,
             TotalRowCount: executionResult.TotalRowCount,
-            SecurityWarningAcknowledged: true
+            SecurityWarningAcknowledged: true,
+            Binding: expectedBinding
         };
         const resolvedSnapshot: DocumentFrozenSnapshot = preSignedSnapshot
             ? { ...preSignedSnapshot }
@@ -9419,7 +13600,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
               }
             : executionResult;
         this.populateSheetCellsFromLiveTable(sheet, table, effectiveResult);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
         workbook.UpdatedAt = new Date().toISOString();
         return table;
     }
@@ -9430,7 +13615,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     public UnfreezeLiveTable(
         workbook: WorkbookSpec,
         sheetIdOrName: string,
-        tableId: string
+        tableId: string,
+        recalculate = true
     ): SpreadsheetLiveTableSpec {
         const sheet = this.GetWorksheet(workbook, sheetIdOrName);
         if (!sheet) {
@@ -9440,8 +13626,41 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (!table) {
             throw new Error(`Live table '${tableId}' not found on worksheet '${sheet.Name}'.`);
         }
+        const prevSnapCols = table.FrozenSnapshot?.Columns?.length ?? 0;
+        const prevSnapRows = table.FrozenSnapshot?.Rows?.length ?? 0;
+        const anchor = ParseCellAddress(table.AnchorCell || 'A1');
+        const colCount = Math.max(
+            1,
+            table.LastColumnCount ??
+                (prevSnapCols + (table.CalculatedColumns?.length ?? 0) ||
+                    (table.Fields?.length ?? 0) + (table.CalculatedColumns?.length ?? 0))
+        );
+        const rowCount =
+            (table.IncludeHeaders !== false ? 1 : 0) + Math.max(table.LastRowCount ?? 0, prevSnapRows);
+
+        // Purge every cell tagged with this LiveTableID OR sitting within its frozen footprint
+        this.clearPreviousLiveTableCells(sheet, tableId);
+        if (anchor && rowCount > 0) {
+            for (let r = anchor.row; r < anchor.row + rowCount; r++) {
+                for (let c = anchor.col; c < anchor.col + colCount; c++) {
+                    const addr = FormatCellAddress(r, c);
+                    const cell = sheet.Cells[addr];
+                    if (cell && (!cell.LiveTableID || cell.LiveTableID === tableId)) {
+                        this.removeCellFromVirtualAxisIndex(sheet, cell);
+                        delete sheet.Cells[addr];
+                    }
+                }
+            }
+        }
+
         table.Mode = 'Live';
-        table.FrozenSnapshot = null;
+        delete table.FrozenSnapshot;
+        table.LastRowCount = 0;
+        table.LastColumnCount = 0;
+        this.workbookDagCache.delete(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        }
         workbook.UpdatedAt = new Date().toISOString();
         return table;
     }
@@ -9454,84 +13673,317 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * Extracts a live {@link SpreadsheetChartDataset} from a chart spec (or ad-hoc range) on `workbook`.
      * Always evaluates the workbook first so formula cells in the chart range reflect latest values (`Accept #5`).
      */
+    /**
+     * Reads one or more comma-separated A1 ranges (supporting optional `'SheetName'!` prefixes)
+     * into a single aligned 2D cell grid for chart dataset extraction.
+     */
+    private readChartSourceGrid(
+        workbook: WorkbookSpec,
+        defaultSheet: WorksheetSpec,
+        sourceRange: string
+    ): Array<Array<SpreadsheetCellSpec | null>> | null {
+        const parts = sourceRange
+            .split(',')
+            .map((p) => p.trim())
+            .filter((p) => p.length > 0);
+        if (parts.length === 0) return null;
+
+        const segmentGrids: Array<{
+            bounds: { startRow: number; endRow: number; startCol: number; endCol: number };
+            grid: Array<Array<SpreadsheetCellSpec | null>>;
+        }> = [];
+
+        for (const part of parts) {
+            let segSheet = defaultSheet;
+            let addrPart = part;
+            const bangIdx = part.lastIndexOf('!');
+            if (bangIdx > 0) {
+                const rawSheetToken = part.slice(0, bangIdx).trim().replace(/^'+|'+$/g, '').replace(/''/g, "'");
+                const matched = this.GetWorksheet(workbook, rawSheetToken);
+                if (!matched) {
+                    return null;
+                }
+                segSheet = matched;
+                addrPart = part.slice(bangIdx + 1).trim();
+            }
+            const bounds = ParseRangeAddress(addrPart);
+            if (!bounds) {
+                return null;
+            }
+            const grid = this.ReadRange(workbook, segSheet.SheetID, addrPart);
+            if (grid.length > 0 && grid[0].length > 0) {
+                segmentGrids.push({ bounds, grid });
+            }
+        }
+
+        if (segmentGrids.length === 0) return null;
+        if (segmentGrids.length === 1) {
+            return segmentGrids[0].grid;
+        }
+
+        const firstBounds = segmentGrids[0].bounds;
+        const allSameColumns = segmentGrids.every(
+            (s) => s.bounds.startCol === firstBounds.startCol && s.bounds.endCol === firstBounds.endCol
+        );
+        if (allSameColumns) {
+            const stacked: Array<Array<SpreadsheetCellSpec | null>> = [];
+            for (const seg of segmentGrids) {
+                for (const row of seg.grid) {
+                    stacked.push(row);
+                }
+            }
+            return stacked;
+        }
+
+        const maxRows = Math.max(...segmentGrids.map((s) => s.grid.length));
+        const combined: Array<Array<SpreadsheetCellSpec | null>> = [];
+        for (let r = 0; r < maxRows; r++) {
+            const rowCells: Array<SpreadsheetCellSpec | null> = [];
+            for (const seg of segmentGrids) {
+                const segWidth = seg.grid[0]?.length ?? 0;
+                const segRow = seg.grid[r];
+                if (segRow) {
+                    rowCells.push(...segRow);
+                } else {
+                    for (let c = 0; c < segWidth; c++) {
+                        rowCells.push(null);
+                    }
+                }
+            }
+            combined.push(rowCells);
+        }
+        return combined;
+    }
+
+    /**
+     * Transposes a 2D cell grid for row-oriented chart extraction (`SeriesOrientation === 'rows'`).
+     */
+    private transposeChartGrid(
+        grid: Array<Array<SpreadsheetCellSpec | null>>
+    ): Array<Array<SpreadsheetCellSpec | null>> {
+        const rowCount = grid.length;
+        const colCount = Math.max(0, ...grid.map((r) => r.length));
+        const transposed: Array<Array<SpreadsheetCellSpec | null>> = [];
+        for (let c = 0; c < colCount; c++) {
+            const outRow: Array<SpreadsheetCellSpec | null> = [];
+            for (let r = 0; r < rowCount; r++) {
+                outRow.push(grid[r]?.[c] ?? null);
+            }
+            transposed.push(outRow);
+        }
+        return transposed;
+    }
+
     public ExtractChartDataset(
         workbook: WorkbookSpec,
         sheetIdOrName: string,
-        chartIdOrRange: string
+        chartIdOrRange: string,
+        overrideSpec?: Partial<SpreadsheetChartSpec>,
+        options?: { SkipEvaluate?: boolean }
     ): SpreadsheetChartDataset | null {
-        this.EvaluateWorkbook(workbook);
+        if (!options?.SkipEvaluate) {
+            this.EvaluateWorkbook(workbook);
+        }
         const sheet = this.GetWorksheet(workbook, sheetIdOrName) ?? workbook.Worksheets[0];
         if (!sheet) return null;
 
         const existingChart = sheet.Charts.find((c) => c.ChartID === chartIdOrRange);
-        const sourceRange = existingChart ? existingChart.SourceRange : chartIdOrRange;
-        const bounds = ParseRangeAddress(sourceRange);
-        if (!bounds) return null;
+        const effectiveChart: Partial<SpreadsheetChartSpec> | undefined =
+            existingChart || overrideSpec ? { ...existingChart, ...overrideSpec } : undefined;
+        const sourceRange = effectiveChart?.SourceRange ?? chartIdOrRange;
+        const rawGrid = this.readChartSourceGrid(workbook, sheet, sourceRange);
+        if (!rawGrid || rawGrid.length === 0 || rawGrid[0].length === 0) return null;
 
-        const grid = this.ReadRange(workbook, sheet.SheetID, sourceRange);
+        const orientation = effectiveChart?.SeriesOrientation === 'rows' ? 'rows' : 'columns';
+        const grid = orientation === 'rows' ? this.transposeChartGrid(rawGrid) : rawGrid;
         if (grid.length === 0 || grid[0].length === 0) return null;
 
-        // Determine if row 0 is headers
         const firstRow = grid[0];
-        const hasHeaderRow =
+        const autoHasHeader =
             grid.length > 1 &&
-            firstRow.slice(1).some((cell) => typeof (cell.ComputedValue ?? cell.RawValue) === 'string');
+            firstRow.some((cell) => {
+                const raw = cell?.ComputedValue ?? cell?.RawValue;
+                return typeof raw === 'string' && raw.trim() !== '' && parseChartNumericValue(raw) === null;
+            });
+        const hasHeaderPref = effectiveChart?.HasHeaderRow ?? 'auto';
+        const hasHeaderRow =
+            hasHeaderPref === true ? grid.length > 1 : hasHeaderPref === false ? false : autoHasHeader;
 
         const dataRows = hasHeaderRow ? grid.slice(1) : grid;
+        const colCount = firstRow.length;
+
+        const columnNumericCounts: number[] = [];
+        const columnNonEmptyCounts: number[] = [];
+        for (let c = 0; c < colCount; c++) {
+            let numCount = 0;
+            let nonEmptyCount = 0;
+            for (const row of dataRows) {
+                const raw = row[c]?.ComputedValue ?? row[c]?.RawValue;
+                if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+                    nonEmptyCount++;
+                    if (parseChartNumericValue(raw) !== null) {
+                        numCount++;
+                    }
+                }
+            }
+            columnNumericCounts.push(numCount);
+            columnNonEmptyCounts.push(nonEmptyCount);
+        }
+
+        const explicitCatIdx =
+            typeof effectiveChart?.CategoryColumnIndex === 'number' &&
+            Number.isInteger(effectiveChart.CategoryColumnIndex) &&
+            effectiveChart.CategoryColumnIndex >= 0 &&
+            effectiveChart.CategoryColumnIndex < colCount
+                ? effectiveChart.CategoryColumnIndex
+                : undefined;
+
+        const detectedColumns: Array<{ Index: number; Name: string; IsNumeric: boolean }> = [];
+        const numericColIndices: number[] = [];
+        const textColIndices: number[] = [];
+        for (let c = 0; c < colCount; c++) {
+            const nonEmpty = columnNonEmptyCounts[c];
+            const isNumericDataCol = nonEmpty > 0 && columnNumericCounts[c] >= Math.ceil(nonEmpty * 0.5);
+            const rawHeader = firstRow[c]?.ComputedValue ?? firstRow[c]?.RawValue;
+            const colLabel =
+                hasHeaderRow && rawHeader !== null && rawHeader !== undefined && String(rawHeader).trim() !== ''
+                    ? String(rawHeader).trim()
+                    : colCount === 1
+                      ? 'Value'
+                      : orientation === 'rows'
+                        ? `Row ${c + 1}`
+                        : `Series ${c}`;
+            detectedColumns.push({ Index: c, Name: colLabel, IsNumeric: isNumericDataCol });
+
+            if (explicitCatIdx !== undefined) {
+                if (c === explicitCatIdx) {
+                    textColIndices.push(c);
+                } else if (isNumericDataCol) {
+                    numericColIndices.push(c);
+                }
+            } else if (isNumericDataCol && (colCount === 1 || c > 0)) {
+                numericColIndices.push(c);
+            } else {
+                textColIndices.push(c);
+            }
+        }
+
+        let activeSeriesIndices =
+            numericColIndices.length > 0
+                ? numericColIndices
+                : colCount === 1
+                  ? [0]
+                  : [];
+
+        if (Array.isArray(effectiveChart?.IncludedSeriesIndices) && effectiveChart.IncludedSeriesIndices.length > 0) {
+            const explicitIndices: number[] = [];
+            const seen = new Set<number>();
+            for (const idx of effectiveChart.IncludedSeriesIndices) {
+                if (Number.isInteger(idx) && idx >= 0 && idx < colCount && !seen.has(idx)) {
+                    seen.add(idx);
+                    explicitIndices.push(idx);
+                }
+            }
+            if (explicitIndices.length > 0) {
+                activeSeriesIndices = explicitIndices;
+            }
+        }
+
+        const categoryColIndices =
+            explicitCatIdx !== undefined
+                ? [explicitCatIdx]
+                : textColIndices.length > 0
+                  ? textColIndices
+                  : colCount > 1
+                    ? [0]
+                    : [];
+
         const categories: string[] = dataRows.map((r, idx) => {
-            const v = r[0]?.ComputedValue ?? r[0]?.RawValue;
-            return v !== null && v !== undefined && String(v).trim() !== '' ? String(v) : `Row ${idx + 1}`;
+            if (categoryColIndices.length === 0) {
+                return orientation === 'rows' ? `Column ${idx + 1}` : `Row ${idx + 1}`;
+            }
+            const parts = categoryColIndices
+                .map((cIdx) => {
+                    const v = r[cIdx]?.ComputedValue ?? r[cIdx]?.RawValue;
+                    return v !== null && v !== undefined ? String(v).trim() : '';
+                })
+                .filter((s) => s.length > 0);
+            return parts.length > 0 ? parts.join(' · ') : orientation === 'rows' ? `Column ${idx + 1}` : `Row ${idx + 1}`;
         });
 
-        const series: Array<{ Name: string; Values: number[] }> = [];
-        const colCount = firstRow.length;
-        for (let c = 1; c < colCount; c++) {
-            const headerCell = firstRow[c];
-            const sName = hasHeaderRow
-                ? String(headerCell?.ComputedValue ?? headerCell?.RawValue ?? `Series ${c}`)
-                : `Series ${c}`;
+        const categoryColName =
+            hasHeaderRow && categoryColIndices.length > 0
+                ? categoryColIndices
+                      .map((cIdx) => String(firstRow[cIdx]?.ComputedValue ?? firstRow[cIdx]?.RawValue ?? '').trim())
+                      .filter((s) => s.length > 0)
+                      .join(' · ') || 'Category'
+                : 'Category';
+
+        const rawSeriesNameCounts = new Map<string, number>();
+        for (const c of activeSeriesIndices) {
+            const rawName = detectedColumns[c]?.Name ?? `Series ${c}`;
+            rawSeriesNameCounts.set(rawName, (rawSeriesNameCounts.get(rawName) ?? 0) + 1);
+        }
+        const usedColumnKeys = new Set<string>([categoryColName]);
+
+        const series: Array<{ Name: string; Values: number[]; ColumnIndex?: number }> = activeSeriesIndices.map((c) => {
+            const colMeta = detectedColumns[c];
+            const baseName = colMeta ? colMeta.Name : `Series ${c}`;
+            const hasCollision = (rawSeriesNameCounts.get(baseName) ?? 0) > 1 || usedColumnKeys.has(baseName);
+            let sName = hasCollision ? `${baseName} (${ColumnIndexToLetter(c + 1)})` : baseName;
+            if (usedColumnKeys.has(sName)) {
+                let suffix = 2;
+                while (usedColumnKeys.has(`${sName}_${suffix}`)) {
+                    suffix++;
+                }
+                sName = `${sName}_${suffix}`;
+            }
+            usedColumnKeys.add(sName);
             const vals = dataRows.map((r) => {
                 const raw = r[c]?.ComputedValue ?? r[c]?.RawValue;
-                const num = Number(raw);
-                return Number.isNaN(num) ? 0 : num;
+                return parseChartNumericValue(raw) ?? 0;
             });
-            series.push({ Name: sName, Values: vals });
-        }
+            return { Name: sName, Values: vals, ColumnIndex: c };
+        });
 
-        // If only 1 column was selected, treat that column as values
-        if (colCount === 1) {
-            series.push({
-                Name: hasHeaderRow ? String(firstRow[0]?.ComputedValue ?? 'Value') : 'Value',
-                Values: dataRows.map((r) => Number(r[0]?.ComputedValue ?? r[0]?.RawValue) || 0)
-            });
-        }
-
-        const categoryColName = hasHeaderRow
-            ? String(firstRow[0]?.ComputedValue ?? firstRow[0]?.RawValue ?? 'Category')
-            : 'Category';
         const columns: DocumentBlockColumn[] = [
             { Name: categoryColName, DisplayName: categoryColName, Type: 'string' },
             ...series.map((s) => ({ Name: s.Name, DisplayName: s.Name, Type: 'number' }))
         ];
-        const rows: Array<Record<string, unknown>> = categories.map((cat, rIdx) => {
-            const rowObj: Record<string, unknown> = { [categoryColName]: cat };
+        const rows: Array<Record<string, string | number>> = categories.map((cat, rIdx) => {
+            const rowObj: Record<string, string | number> = {};
+            const safeSet = (key: string, value: string | number): void => {
+                if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+                    Object.defineProperty(rowObj, key, {
+                        value,
+                        writable: true,
+                        enumerable: true,
+                        configurable: true
+                    });
+                } else {
+                    rowObj[key] = value;
+                }
+            };
+            safeSet(categoryColName, cat);
             for (const s of series) {
-                rowObj[s.Name] = s.Values[rIdx] ?? 0;
+                safeSet(s.Name, s.Values[rIdx] ?? 0);
             }
             return rowObj;
         });
 
         return {
-            ChartID: existingChart?.ChartID ?? `range-${sourceRange}`,
-            Title: existingChart?.Title ?? `${sheet.Name} (${sourceRange})`,
-            ChartType: existingChart?.ChartType ?? 'bar',
+            ChartID: effectiveChart?.ChartID ?? `range-${sourceRange}`,
+            Title: effectiveChart?.Title ?? `${sheet.Name} (${sourceRange})`,
+            ChartType: effectiveChart?.ChartType ?? 'bar',
             SheetID: sheet.SheetID,
             SourceRange: sourceRange,
             Categories: categories,
             Series: series,
             Columns: columns,
             Rows: rows,
-            RevisionHash: this.ComputeRevisionHash(workbook)
+            RevisionHash: this.ComputeRevisionHash(workbook),
+            DetectedColumns: detectedColumns,
+            EffectiveHasHeaderRow: hasHeaderRow
         };
     }
 
@@ -9546,12 +13998,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     public SortWorksheet(
         workbook: WorkbookSpec,
         sheetIdOrName: string,
-        sortSpec: SpreadsheetSortSpec
+        sortSpec: SpreadsheetSortSpec,
+        editContext?: SpreadsheetCellEditContext,
+        recalculate = true
     ): void {
         const sheet = this.GetWorksheet(workbook, sheetIdOrName);
         if (!sheet) return;
-        sheet.SortSpec = sortSpec;
         const headerRows = Math.max(0, sortSpec.HeaderRows ?? 1);
+        this.assertProtectedRangesAllowStructuralEdit(
+            sheet,
+            { startRow: headerRows + 1, endRow: EXCEL_MAX_ROWS, startCol: 1, endCol: EXCEL_MAX_COLS },
+            'sort worksheet',
+            editContext
+        );
+        sheet.SortSpec = sortSpec;
         const colIdx = ColumnLetterToIndex(sortSpec.ColumnLetter);
         const targetColId = sheet.Columns[colIdx - 1]?.ColumnID;
         if (!targetColId) return;
@@ -9591,9 +14051,73 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return String(vA).localeCompare(String(vB)) * dir;
         });
 
+        const anchorRowIdForSingleRowRange = (rangeStr: string): { rowId: string; startCol: number; endCol: number; singleCell: boolean } | null => {
+            const b = ParseRangeAddress(rangeStr, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (!b || b.startRow !== b.endRow || b.startRow <= headerRows || b.startRow > lastPopulatedRowIndex) {
+                return null;
+            }
+            const rowObj = sheet.Rows[b.startRow - 1];
+            if (!rowObj) return null;
+            return {
+                rowId: rowObj.RowID,
+                startCol: b.startCol,
+                endCol: b.endCol,
+                singleCell: b.startCol === b.endCol
+            };
+        };
+        const vrAnchors = sheet.ValidationRules.map((vr) => anchorRowIdForSingleRowRange(vr.Range));
+        const cfAnchors = sheet.ConditionalFormats.map((cf) => anchorRowIdForSingleRowRange(cf.Range));
+        const prAnchors = (sheet.ProtectedRanges ?? []).map((pr) => anchorRowIdForSingleRowRange(pr.Range));
+        const mrAnchors = (sheet.MergeRanges ?? []).map((mr) => anchorRowIdForSingleRowRange(mr));
+        const nrAnchors = workbook.NamedRanges.map((nr) =>
+            nr.SheetID === sheet.SheetID && nr.Range !== '#REF!' ? anchorRowIdForSingleRowRange(nr.Range) : null
+        );
+
         sheet.Rows = [...fixedTop, ...sortable, ...trailingEmpty];
         this.reindexSheetStructureAndFormulas(sheet);
-        this.EvaluateWorkbook(workbook);
+
+        const rowIndexByIdAfterSort = new Map<string, number>();
+        for (let idx = 0; idx < sheet.Rows.length; idx++) {
+            rowIndexByIdAfterSort.set(sheet.Rows[idx].RowID, idx + 1);
+        }
+        const reformatAnchoredRange = (
+            anchor: { rowId: string; startCol: number; endCol: number; singleCell: boolean } | null,
+            fallback: string
+        ): string => {
+            if (!anchor) return fallback;
+            const newRow = rowIndexByIdAfterSort.get(anchor.rowId);
+            if (!newRow) return fallback;
+            const startAddr = FormatCellAddress(newRow, anchor.startCol);
+            return anchor.singleCell ? startAddr : `${startAddr}:${FormatCellAddress(newRow, anchor.endCol)}`;
+        };
+        sheet.ValidationRules = sheet.ValidationRules.map((vr, idx) => ({
+            ...vr,
+            Range: reformatAnchoredRange(vrAnchors[idx] ?? null, vr.Range)
+        }));
+        sheet.ConditionalFormats = sheet.ConditionalFormats.map((cf, idx) => ({
+            ...cf,
+            Range: reformatAnchoredRange(cfAnchors[idx] ?? null, cf.Range)
+        }));
+        if (Array.isArray(sheet.ProtectedRanges)) {
+            sheet.ProtectedRanges = sheet.ProtectedRanges.map((pr, idx) => ({
+                ...pr,
+                Range: reformatAnchoredRange(prAnchors[idx] ?? null, pr.Range)
+            }));
+        }
+        if (Array.isArray(sheet.MergeRanges)) {
+            sheet.MergeRanges = sheet.MergeRanges.map((mr, idx) => reformatAnchoredRange(mrAnchors[idx] ?? null, mr));
+        }
+        workbook.NamedRanges.forEach((nr, idx) => {
+            const anchor = nrAnchors[idx];
+            if (anchor) {
+                nr.Range = reformatAnchoredRange(anchor, nr.Range);
+            }
+        });
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
     }
 
     /**
@@ -9652,10 +14176,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     // -----------------------------------------------------------------------
 
     /**
-     * Imports a CSV string into a single-tab {@link WorkbookSpec}, inferring numeric/boolean values
-     * and formulas (`=...`).
+     * Imports a CSV string into a single-tab {@link WorkbookSpec}, inferring numeric/boolean values.
+     * By default (`AllowFormulas: false`), leading `=...` strings are imported safely as literal text
+     * to prevent CSV formula injection (`P1-6`); pass `{ AllowFormulas: true }` when formula promotion is desired.
      */
-    public ImportFromCsv(csvText: string, sheetName = 'Sheet 1', workbookTitle = 'Imported CSV'): WorkbookSpec {
+    public ImportFromCsv(
+        csvText: string,
+        sheetName = 'Sheet 1',
+        workbookTitle = 'Imported CSV',
+        options?: { AllowFormulas?: boolean; SkipEvaluate?: boolean }
+    ): WorkbookSpec {
+        const allowFormulas = options?.AllowFormulas === true;
         const lines = this.parseCsvRows(csvText);
         const rowCount = Math.max(DEFAULT_ROW_COUNT, lines.length + 5);
         const maxCols = lines.reduce((acc, r) => Math.max(acc, r.length), 0);
@@ -9670,16 +14201,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const rawToken = rowVals[c];
                 if (rawToken === '') continue;
                 const addr = FormatCellAddress(r + 1, c + 1);
-                if (rawToken.startsWith('=')) {
-                    this.SetCell(wb, ws.SheetID, addr, { Formula: rawToken }, false);
+                const startsWithFormulaEquals = rawToken.trimStart().startsWith('=');
+                if (allowFormulas && startsWithFormulaEquals) {
+                    this.SetCell(wb, ws.SheetID, addr, { Formula: rawToken.trimStart() }, false);
                 } else {
-                    const coerced = this.coerceCsvScalar(rawToken);
+                    const coerced = startsWithFormulaEquals ? rawToken : this.coerceCsvScalar(rawToken);
                     this.SetCell(
                         wb,
                         ws.SheetID,
                         addr,
                         {
                             Value: coerced,
+                            Literal: true,
                             Style: r === 0 ? { Bold: true } : undefined
                         },
                         false
@@ -9687,18 +14220,32 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
             }
         }
-        this.EvaluateWorkbook(wb);
+        this.AssertWorkbookWithinLimits(wb);
+        if (!options?.SkipEvaluate) {
+            this.EvaluateWorkbook(wb);
+        }
         return wb;
     }
 
     /**
      * Exports a worksheet of `workbook` to RFC 4180 CSV format (using computed values).
+     * By default, strips viewer-scoped live table/spill/`=MJ.*` values (`IncludeViewerScopedValues: false`)
+     * and neutralizes formula-injection prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`) on string cells (`NeutralizeFormulas: true`).
      */
-    public ExportToCsv(workbook: WorkbookSpec, sheetIdOrName?: string): string {
+    public ExportToCsv(
+        workbook: WorkbookSpec,
+        sheetIdOrName?: string,
+        options?: { IncludeViewerScopedValues?: boolean; NeutralizeFormulas?: boolean }
+    ): string {
         this.EvaluateWorkbook(workbook);
+        const effectiveWorkbook =
+            options?.IncludeViewerScopedValues === true
+                ? workbook
+                : this.cloneWorkbookWithoutViewerScopedData(workbook);
+        const neutralize = options?.NeutralizeFormulas !== false;
         const sheet = sheetIdOrName
-            ? this.GetWorksheet(workbook, sheetIdOrName)
-            : this.GetWorksheet(workbook, workbook.ActiveSheetID) ?? workbook.Worksheets[0];
+            ? this.GetWorksheet(effectiveWorkbook, sheetIdOrName)
+            : this.GetWorksheet(effectiveWorkbook, effectiveWorkbook.ActiveSheetID) ?? effectiveWorkbook.Worksheets[0];
         if (!sheet) return '';
 
         let maxRow = 0;
@@ -9706,6 +14253,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         for (const cell of Object.values(sheet.Cells)) {
             const pos = ParseCellAddress(cell.Address);
             if (!pos) continue;
+            if (pos.row > MAX_DENSE_ROWS || pos.col > MAX_DENSE_COLS) continue;
             const val = cell.ComputedValue ?? cell.RawValue;
             if (val !== null && val !== undefined && String(val) !== '') {
                 if (pos.row > maxRow) maxRow = pos.row;
@@ -9713,6 +14261,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
         if (maxRow === 0 || maxCol === 0) return '';
+        if (maxRow * maxCol > MAX_EXPORT_CSV_CELLS) {
+            throw new Error(
+                `CSV export grid (${maxRow}x${maxCol}) exceeds maximum allowed ${MAX_EXPORT_CSV_CELLS} cells.`
+            );
+        }
 
         const outLines: string[] = [];
         for (let r = 1; r <= maxRow; r++) {
@@ -9721,7 +14274,15 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const addr = FormatCellAddress(r, c);
                 const cell = sheet.Cells[addr];
                 const val = cell ? (cell.ComputedValue ?? cell.RawValue) : null;
-                const text = val === null || val === undefined ? '' : String(val);
+                let text = val === null || val === undefined ? '' : String(val);
+                if (
+                    neutralize &&
+                    typeof val === 'string' &&
+                    text.length > 0 &&
+                    (/^[=+\-@\t\r\n]/.test(text) || /^\s*[=+\-@]/.test(text))
+                ) {
+                    text = `'${text}`;
+                }
                 if (text.includes(',') || text.includes('"') || text.includes('\n') || text.includes('\r')) {
                     rowTokens.push(`"${text.replace(/"/g, '""')}"`);
                 } else {
@@ -9738,6 +14299,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         let currentRow: string[] = [];
         let currentField = '';
         let inQuotes = false;
+        let fieldCount = 0;
+
+        const pushField = (): void => {
+            if (++fieldCount > MAX_IMPORT_WORKBOOK_CELLS) {
+                throw new Error(
+                    `Spreadsheet rejected: CSV exceeds maximum cell limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+                );
+            }
+            currentRow.push(currentField);
+            currentField = '';
+        };
 
         for (let i = 0; i < csvText.length; i++) {
             const ch = csvText[i];
@@ -9756,26 +14328,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 if (ch === '"') {
                     inQuotes = true;
                 } else if (ch === ',') {
-                    currentRow.push(currentField);
-                    currentField = '';
+                    pushField();
                 } else if (ch === '\r') {
                     if (csvText[i + 1] === '\n') i++;
-                    currentRow.push(currentField);
+                    pushField();
                     rows.push(currentRow);
                     currentRow = [];
-                    currentField = '';
                 } else if (ch === '\n') {
-                    currentRow.push(currentField);
+                    pushField();
                     rows.push(currentRow);
                     currentRow = [];
-                    currentField = '';
                 } else {
                     currentField += ch;
                 }
             }
         }
         if (currentField.length > 0 || currentRow.length > 0) {
-            currentRow.push(currentField);
+            pushField();
             rows.push(currentRow);
         }
         return rows;
@@ -9810,26 +14379,69 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * - Frozen panes (`<pane ySplit="..." xSplit="..." state="frozen"/>`)
      * - Hidden `_mj_sheets_meta` worksheet holding the chunked `WorkbookSpec` JSON for lossless round-tripping
      */
-    public ExportToXlsxBytes(workbook: WorkbookSpec, includeMjMetadataSheet = true): Uint8Array {
-        this.EvaluateWorkbook(workbook);
+    public ExportToXlsxBytes(
+        workbook: WorkbookSpec,
+        includeMjMetadataSheet = true,
+        options?: { SkipEvaluate?: boolean }
+    ): Uint8Array {
+        if (!options?.SkipEvaluate) {
+            this.EvaluateWorkbook(workbook);
+        }
 
-        // Build custom numFmt + xf style table
+        // Build custom numFmt + font + fill + xf style table
         const numFmts: Array<{ Id: number; FormatCode: string }> = [];
         const numFmtIdByPattern = new Map<string, number>();
         let nextNumFmtId = 164;
 
+        interface OoxmlFontEntry {
+            Bold: boolean;
+            Italic: boolean;
+            ColorArgb?: string;
+        }
+        const fonts: OoxmlFontEntry[] = [
+            { Bold: false, Italic: false },
+            { Bold: true, Italic: false }
+        ];
+        const fontIndexByKey = new Map<string, number>([
+            ['0:0:', 0],
+            ['1:0:', 1]
+        ]);
+        const getFontIndex = (bold: boolean, italic: boolean, colorArgb?: string): number => {
+            const key = `${bold ? 1 : 0}:${italic ? 1 : 0}:${colorArgb ?? ''}`;
+            const existing = fontIndexByKey.get(key);
+            if (existing !== undefined) return existing;
+            const idx = fonts.length;
+            fonts.push({ Bold: bold, Italic: italic, ColorArgb: colorArgb });
+            fontIndexByKey.set(key, idx);
+            return idx;
+        };
+
+        const fillFgs: string[] = []; // index 0 = none, index 1 = gray125, index >= 2 -> fillFgs[idx - 2]
+        const fillIndexByArgb = new Map<string, number>();
+        const getFillIndex = (colorArgb?: string): number => {
+            if (!colorArgb) return 0;
+            const existing = fillIndexByArgb.get(colorArgb);
+            if (existing !== undefined) return existing;
+            const idx = 2 + fillFgs.length;
+            fillFgs.push(colorArgb);
+            fillIndexByArgb.set(colorArgb, idx);
+            return idx;
+        };
+
         interface XfStyleEntry {
             NumFmtId: number;
             FontId: number;
+            FillId: number;
+            HorizontalAlign?: 'left' | 'center' | 'right';
         }
         // Index 0 = default general, Index 1 = bold general
         const cellXfs: XfStyleEntry[] = [
-            { NumFmtId: 0, FontId: 0 },
-            { NumFmtId: 0, FontId: 1 }
+            { NumFmtId: 0, FontId: 0, FillId: 0 },
+            { NumFmtId: 0, FontId: 1, FillId: 0 }
         ];
         const xfIndexByKey = new Map<string, number>([
-            ['0:0', 0],
-            ['0:1', 1]
+            ['0:0:0:', 0],
+            ['0:1:0:', 1]
         ]);
 
         const getStyleIndex = (style?: SpreadsheetCellStyleSpec): number => {
@@ -9846,33 +14458,202 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     numFmts.push({ Id: numFmtId, FormatCode: pattern });
                 }
             }
-            const fontId = style.Bold ? 1 : 0;
-            const key = `${numFmtId}:${fontId}`;
+            const textArgb = cssColorToOoxmlArgb(style.TextColor);
+            const fillArgb = cssColorToOoxmlArgb(style.BackgroundColor);
+            const fontId = getFontIndex(Boolean(style.Bold), Boolean(style.Italic), textArgb);
+            const fillId = getFillIndex(fillArgb);
+            const align = style.HorizontalAlign;
+            const key = `${numFmtId}:${fontId}:${fillId}:${align ?? ''}`;
             const existingXf = xfIndexByKey.get(key);
             if (existingXf !== undefined) return existingXf;
             const newIdx = cellXfs.length;
-            cellXfs.push({ NumFmtId: numFmtId, FontId: fontId });
+            cellXfs.push({ NumFmtId: numFmtId, FontId: fontId, FillId: fillId, HorizontalAlign: align });
             xfIndexByKey.set(key, newIdx);
             return newIdx;
         };
 
         const zipEntries: Array<{ Name: string; Data: Uint8Array }> = [];
         const sheetDefs: Array<{ Name: string; SheetId: number; RelId: string; Path: string; Hidden: boolean }> = [];
+        const extraContentTypeOverrides: string[] = [];
 
         let hasDynamicArrayCm = false;
+        let globalChartNum = 1;
+        const usedExcelSheetNamesLower = new Set<string>([HIDDEN_META_SHEET_NAME.toLowerCase()]);
         const sanitizedWorkbook = this.cloneWorkbookWithoutViewerScopedData(workbook);
         sanitizedWorkbook.Worksheets.forEach((ws, idx) => {
             const sheetNum = idx + 1;
             const relId = `rId${sheetNum}`;
             const path = `xl/worksheets/sheet${sheetNum}.xml`;
+            const safeSheetName = SanitizeWorksheetName(ws.Name || `Sheet ${sheetNum}`, usedExcelSheetNamesLower);
+            usedExcelSheetNamesLower.add(safeSheetName.toLowerCase());
             sheetDefs.push({
-                Name: ws.Name.slice(0, 31) || `Sheet ${sheetNum}`,
+                Name: safeSheetName,
                 SheetId: sheetNum,
                 RelId: relId,
                 Path: path,
                 Hidden: false
             });
-            const xml = this.buildWorksheetXml(ws, getStyleIndex);
+
+            const wsRels: Array<{ Id: string; Type: string; Target: string; TargetMode?: string }> = [];
+            let nextWsRelIdx = 1;
+
+            // 1. External http(s) hyperlinks on worksheet cells
+            const sheetHyperlinks: Array<{ Ref: string; RelId: string; Display?: string }> = [];
+            const sortedCellEntries = Object.values(ws.Cells).sort((a, b) => a.Address.localeCompare(b.Address));
+            for (const cell of sortedCellEntries) {
+                let targetUrl: string | null = null;
+                let displayLabel: string | undefined;
+                if (typeof cell.RawValue === 'string' && /^https?:\/\/[^\s"'<>]+$/i.test(cell.RawValue.trim())) {
+                    targetUrl = cell.RawValue.trim();
+                } else if (cell.Formula) {
+                    const hlMatch = /^=\s*HYPERLINK\s*\(\s*"(https?:\/\/[^"]+)"(?:\s*,\s*"([^"]*)")?\s*\)$/i.exec(
+                        cell.Formula.trim()
+                    );
+                    if (hlMatch) {
+                        targetUrl = hlMatch[1];
+                        displayLabel = hlMatch[2];
+                    }
+                }
+                if (targetUrl) {
+                    const hRelId = `rId${nextWsRelIdx++}`;
+                    wsRels.push({
+                        Id: hRelId,
+                        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
+                        Target: targetUrl,
+                        TargetMode: 'External'
+                    });
+                    sheetHyperlinks.push({ Ref: cell.Address, RelId: hRelId, Display: displayLabel });
+                }
+            }
+
+            // 2. Native xl/comments*.xml for cell notes
+            const notedCells = sortedCellEntries.filter((c) => typeof c.Note === 'string' && c.Note.trim().length > 0);
+            if (notedCells.length > 0) {
+                const commentsFileName = `comments${sheetNum}.xml`;
+                const commentsPath = `xl/${commentsFileName}`;
+                const cmtRelId = `rId${nextWsRelIdx++}`;
+                wsRels.push({
+                    Id: cmtRelId,
+                    Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments',
+                    Target: `../${commentsFileName}`
+                });
+                extraContentTypeOverrides.push(
+                    `<Override PartName="/${commentsPath}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>`
+                );
+                const commentTags = notedCells
+                    .map(
+                        (c) =>
+                            `<comment ref="${this.escapeXml(c.Address)}" authorId="0"><text><r><t xml:space="preserve">${this.escapeXml(c.Note ?? '')}</t></r></text></comment>`
+                    )
+                    .join('');
+                const commentsXml = [
+                    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+                    '<comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+                    '<authors><author>MemberJunction</author></authors>',
+                    `<commentList>${commentTags}</commentList>`,
+                    '</comments>'
+                ].join('');
+                zipEntries.push({ Name: commentsPath, Data: this.encodeUtf8(commentsXml) });
+            }
+
+            // 3. Native DrawingML charts (xl/drawings/drawing*.xml + xl/charts/chart*.xml)
+            let drawingRelId: string | undefined;
+            if (Array.isArray(ws.Charts) && ws.Charts.length > 0) {
+                const drawingFileName = `drawing${sheetNum}.xml`;
+                const drawingPath = `xl/drawings/${drawingFileName}`;
+                drawingRelId = `rId${nextWsRelIdx++}`;
+                wsRels.push({
+                    Id: drawingRelId,
+                    Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing',
+                    Target: `../drawings/${drawingFileName}`
+                });
+                extraContentTypeOverrides.push(
+                    `<Override PartName="/${drawingPath}" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`
+                );
+
+                const drawingRels: string[] = [];
+                const anchorsXml: string[] = [];
+                for (let cIdx = 0; cIdx < ws.Charts.length; cIdx++) {
+                    const chart = ws.Charts[cIdx];
+                    const chartNum = globalChartNum++;
+                    const chartFileName = `chart${chartNum}.xml`;
+                    const chartPath = `xl/charts/${chartFileName}`;
+                    const cRelId = `rId${cIdx + 1}`;
+                    drawingRels.push(
+                        `<Relationship Id="${cRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/${chartFileName}"/>`
+                    );
+                    extraContentTypeOverrides.push(
+                        `<Override PartName="/${chartPath}" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`
+                    );
+
+                    const dataset = this.ExtractChartDataset(
+                        sanitizedWorkbook,
+                        chart.SheetID || ws.SheetID,
+                        chart.ChartID,
+                        undefined,
+                        { SkipEvaluate: true }
+                    );
+                    const chartXml = this.buildSpreadsheetDrawingMlChartXml(chart, safeSheetName, dataset);
+                    zipEntries.push({ Name: chartPath, Data: this.encodeUtf8(chartXml) });
+
+                    const pos = ParseCellAddress(chart.PositionCell || 'E2') ?? { row: 2, col: 5 };
+                    const fromCol = Math.max(0, pos.col - 1);
+                    const fromRow = Math.max(0, pos.row - 1);
+                    const toCol = fromCol + 7;
+                    const toRow = fromRow + 15;
+                    anchorsXml.push(
+                        `<xdr:twoCellAnchor>` +
+                            `<xdr:from><xdr:col>${fromCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${fromRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>` +
+                            `<xdr:to><xdr:col>${toCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${toRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>` +
+                            `<xdr:graphicFrame macro="">` +
+                            `<xdr:nvGraphicFramePr><xdr:cNvPr id="${cIdx + 2}" name="${this.escapeXml(chart.Title || chart.ChartID)}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>` +
+                            `<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>` +
+                            `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">` +
+                            `<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="${cRelId}"/>` +
+                            `</a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/>` +
+                            `</xdr:twoCellAnchor>`
+                    );
+                }
+                const drawingXml = [
+                    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+                    '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">',
+                    anchorsXml.join(''),
+                    '</xdr:wsDr>'
+                ].join('');
+                const drawingRelsXml = [
+                    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+                    drawingRels.join(''),
+                    '</Relationships>'
+                ].join('');
+                zipEntries.push({ Name: drawingPath, Data: this.encodeUtf8(drawingXml) });
+                zipEntries.push({
+                    Name: `xl/drawings/_rels/${drawingFileName}.rels`,
+                    Data: this.encodeUtf8(drawingRelsXml)
+                });
+            }
+
+            if (wsRels.length > 0) {
+                const wsRelsXml = [
+                    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+                    wsRels
+                        .map(
+                            (r) =>
+                                `<Relationship Id="${r.Id}" Type="${r.Type}" Target="${this.escapeXml(r.Target)}"${
+                                    r.TargetMode ? ` TargetMode="${r.TargetMode}"` : ''
+                                }/>`
+                        )
+                        .join(''),
+                    '</Relationships>'
+                ].join('');
+                zipEntries.push({ Name: `xl/worksheets/_rels/sheet${sheetNum}.xml.rels`, Data: this.encodeUtf8(wsRelsXml) });
+            }
+
+            const xml = this.buildWorksheetXml(ws, getStyleIndex, 1, {
+                drawingRelId,
+                hyperlinks: sheetHyperlinks
+            });
             if (/ cm="\d+"/.test(xml)) {
                 hasDynamicArrayCm = true;
             }
@@ -9902,7 +14683,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         zipEntries.unshift(
             {
                 Name: '[Content_Types].xml',
-                Data: this.encodeUtf8(this.buildContentTypesXml(sheetDefs.length, hasDynamicArrayCm))
+                Data: this.encodeUtf8(
+                    this.buildContentTypesXml(sheetDefs.length, hasDynamicArrayCm, extraContentTypeOverrides)
+                )
             },
             { Name: '_rels/.rels', Data: this.encodeUtf8(this.buildRootRelsXml()) },
             { Name: 'xl/workbook.xml', Data: this.encodeUtf8(this.buildWorkbookXml(sheetDefs)) },
@@ -9910,7 +14693,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 Name: 'xl/_rels/workbook.xml.rels',
                 Data: this.encodeUtf8(this.buildWorkbookRelsXml(sheetDefs, stylesRelId, metadataRelId))
             },
-            { Name: 'xl/styles.xml', Data: this.encodeUtf8(this.buildStylesXml(numFmts, cellXfs)) }
+            { Name: 'xl/styles.xml', Data: this.encodeUtf8(this.buildStylesXml(numFmts, cellXfs, fonts, fillFgs)) }
         );
 
         return this.buildZipArchive(zipEntries);
@@ -9928,17 +14711,59 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const files = this.extractZipArchive(u8);
         const sanitized = this.cloneWorkbookWithoutViewerScopedData(workbook);
 
+        const stripSelfClosingTagsWithAttr = (xml: string, openTagPrefix: string, attrPredicate: (tagBody: string) => boolean): string => {
+            let out = '';
+            let cursor = 0;
+            const lowerXml = xml.toLowerCase();
+            const lowerPrefix = openTagPrefix.toLowerCase();
+            while (cursor < xml.length) {
+                const start = lowerXml.indexOf(lowerPrefix, cursor);
+                if (start === -1) {
+                    out += xml.slice(cursor);
+                    break;
+                }
+                const afterPrefix = xml[start + openTagPrefix.length] ?? '';
+                if (!/\s/.test(afterPrefix)) {
+                    out += xml.slice(cursor, start + openTagPrefix.length);
+                    cursor = start + openTagPrefix.length;
+                    continue;
+                }
+                const closeIdx = xml.indexOf('>', start + openTagPrefix.length);
+                if (closeIdx === -1) {
+                    out += xml.slice(cursor);
+                    break;
+                }
+                const tagText = xml.slice(start, closeIdx + 1);
+                const isSelfClosing = xml[closeIdx - 1] === '/';
+                if (isSelfClosing && attrPredicate(tagText)) {
+                    out += xml.slice(cursor, start);
+                } else {
+                    out += xml.slice(cursor, closeIdx + 1);
+                }
+                cursor = closeIdx + 1;
+            }
+            return out;
+        };
+
         // Item 13: Remove stale xl/calcChain.xml and its references so Excel recalculates cleanly without repair prompts
         if (files.has('xl/calcChain.xml')) {
             files.delete('xl/calcChain.xml');
             if (files.has('[Content_Types].xml')) {
                 const ctXml = this.decodeUtf8(files.get('[Content_Types].xml')!);
-                const cleanedCt = ctXml.replace(/<Override\b[^>]*PartName="\/?xl\/calcChain\.xml"[^>]*\/>/gi, '');
+                const cleanedCt = stripSelfClosingTagsWithAttr(
+                    ctXml,
+                    '<Override',
+                    (tag) => /PartName="\/?xl\/calcChain\.xml"/i.test(tag)
+                );
                 files.set('[Content_Types].xml', this.encodeUtf8(cleanedCt));
             }
             if (files.has('xl/_rels/workbook.xml.rels')) {
                 const relsXml = this.decodeUtf8(files.get('xl/_rels/workbook.xml.rels')!);
-                const cleanedRels = relsXml.replace(/<Relationship\b[^>]*Target="\/?(?:xl\/)?calcChain\.xml"[^>]*\/>/gi, '');
+                const cleanedRels = stripSelfClosingTagsWithAttr(
+                    relsXml,
+                    '<Relationship',
+                    (tag) => /Target="\/?(?:xl\/)?calcChain\.xml"/i.test(tag)
+                );
                 files.set('xl/_rels/workbook.xml.rels', this.encodeUtf8(cleanedRels));
             }
         }
@@ -9956,12 +14781,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const id = this.extractXmlAttr(tag, 'Id');
             const target = this.extractXmlAttr(tag, 'Target');
             if (id && target) {
-                const cleanTarget = target.startsWith('/')
-                    ? target.slice(1)
-                    : target.startsWith('xl/')
-                      ? target
-                      : `xl/${target}`;
-                targetByRelId.set(id, cleanTarget);
+                const cleanTarget = normalizeOoxmlRelTarget('xl', target);
+                if (cleanTarget) {
+                    targetByRelId.set(id, cleanTarget);
+                }
             }
         }
 
@@ -10308,14 +15131,36 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        // R7-8 & R8-8: When a dynamic-array spill anchor or legacy CSE array anchor (`fType === 'array'` or `cm="..."`
-        // with `fRef` spanning a multi-cell range like `I6:I8`) had its formula edited, overwritten with a non-formula,
-        // or deleted, clear stale spilled/array values from its former non-anchor child cells unless the user
-        // independently authored a new formula or new constant there!
+        // R7-8, R8-8, R5-3 & R6-1: Enforce non-overlapping array anchors up front before clearing stale child cells.
+        const patchArrayAnchorRects: ArrayAnchorRect[] = [];
+        for (const orig of origCellsByAddr.values()) {
+            if (!(orig.fType === 'array' || Boolean(orig.cmAttr)) || !orig.fRef || !orig.fRef.includes(':')) continue;
+            if (!orig.fBodyRaw && !baselineWs?.Cells[orig.addr]?.Formula && !ws.Cells[orig.addr]?.Formula) continue;
+            const spillBounds = ParseRangeAddress(orig.fRef, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (!spillBounds) continue;
+            if (orig.row !== spillBounds.startRow || orig.col !== spillBounds.startCol) {
+                throw new Error(
+                    `Spreadsheet patch rejected: array anchor ${orig.addr} is not the top-left cell of '${orig.fRef}'.`
+                );
+            }
+            patchArrayAnchorRects.push({
+                anchorAddr: orig.addr,
+                startRow: spillBounds.startRow,
+                endRow: spillBounds.endRow,
+                startCol: spillBounds.startCol,
+                endCol: spillBounds.endCol
+            });
+        }
+        assertNoOverlappingArrayAnchors(patchArrayAnchorRects);
+
+        let sharedPatchAddrIndex: Map<number, Array<{ row: number; addr: string }>> | null = null;
         for (const orig of origCellsByAddr.values()) {
             if (!(orig.fType === 'array' || Boolean(orig.cmAttr)) || !orig.fRef || !orig.fRef.includes(':')) continue;
             const curAnchor = ws.Cells[orig.addr];
             const baseAnchor = baselineWs?.Cells[orig.addr];
+            if (!orig.fBodyRaw && !baseAnchor?.Formula && !curAnchor?.Formula) {
+                continue;
+            }
             const hasCurStandardFormula = Boolean(
                 curAnchor?.Formula &&
                     curAnchor.Formula.trim().startsWith('=') &&
@@ -10326,32 +15171,56 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (!curAnchor || !hasCurStandardFormula || curNorm !== baseNorm) {
                 const spillBounds = ParseRangeAddress(orig.fRef, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
                 if (!spillBounds) continue;
-                for (let r = spillBounds.startRow; r <= spillBounds.endRow; r++) {
-                    for (let c = spillBounds.startCol; c <= spillBounds.endCol; c++) {
-                        const childAddr = FormatCellAddress(r, c);
-                        if (childAddr === orig.addr) continue;
-                        const childOrig = origCellsByAddr.get(childAddr);
-                        if (childOrig?.fFullXml && childOrig.fBodyRaw.length > 0) continue;
-                        const curChild = ws.Cells[childAddr];
-                        const baseChild = baselineWs?.Cells[childAddr];
-                        if (curChild) {
-                            const hasNewUserFormula = Boolean(curChild.Formula && curChild.Formula.trim().length > 0);
-                            const userEditedRaw = (curChild.RawValue ?? null) !== (baseChild?.RawValue ?? null);
-                            if (!hasNewUserFormula && !userEditedRaw) {
-                                if (curChild.Style || curChild.Note || childOrig?.sAttr) {
-                                    ws.Cells[childAddr] = {
-                                        ...curChild,
-                                        RawValue: null,
-                                        ComputedValue: null,
-                                        DisplayValue: ''
-                                    };
-                                } else {
-                                    delete ws.Cells[childAddr];
-                                }
-                                dirtyAddrs.add(childAddr);
+                const fRefArea =
+                    (spillBounds.endRow - spillBounds.startRow + 1) *
+                    (spillBounds.endCol - spillBounds.startCol + 1);
+                if (fRefArea <= 0 || fRefArea > MAX_DYNAMIC_ARRAY_CELLS) continue;
+                const clearChildAt = (childAddr: string): void => {
+                    if (childAddr === orig.addr) return;
+                    const childOrig = origCellsByAddr.get(childAddr);
+                    if (childOrig?.fFullXml && childOrig.fBodyRaw.length > 0) return;
+                    const curChild = ws.Cells[childAddr];
+                    const baseChild = baselineWs?.Cells[childAddr];
+                    if (curChild) {
+                        const hasNewUserFormula = Boolean(curChild.Formula && curChild.Formula.trim().length > 0);
+                        const userEditedRaw = (curChild.RawValue ?? null) !== (baseChild?.RawValue ?? null);
+                        if (!hasNewUserFormula && !userEditedRaw) {
+                            if (curChild.Style || curChild.Note || childOrig?.sAttr) {
+                                ws.Cells[childAddr] = {
+                                    ...curChild,
+                                    RawValue: null,
+                                    ComputedValue: null,
+                                    DisplayValue: ''
+                                };
+                            } else {
+                                delete ws.Cells[childAddr];
                             }
-                        } else if (childOrig) {
                             dirtyAddrs.add(childAddr);
+                        }
+                    } else if (childOrig) {
+                        dirtyAddrs.add(childAddr);
+                    }
+                };
+                if (fRefArea > 256) {
+                    if (!sharedPatchAddrIndex) {
+                        const allAddrs = new Set<string>(origCellsByAddr.keys());
+                        for (const k of Object.keys(ws.Cells)) {
+                            allAddrs.add(k);
+                        }
+                        sharedPatchAddrIndex = buildColSortedAddrIndex(allAddrs);
+                    }
+                    scanColSortedAddrIndex(
+                        sharedPatchAddrIndex,
+                        spillBounds.startRow,
+                        spillBounds.endRow,
+                        spillBounds.startCol,
+                        spillBounds.endCol,
+                        clearChildAt
+                    );
+                } else {
+                    for (let r = spillBounds.startRow; r <= spillBounds.endRow; r++) {
+                        for (let c = spillBounds.startCol; c <= spillBounds.endCol; c++) {
+                            clearChildAt(FormatCellAddress(r, c));
                         }
                     }
                 }
@@ -10392,7 +15261,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             );
 
             // D2 & E7 Case A: Formula text did NOT change (only cached <v> changed) -> preserve <c> attrs and <f ...>...</f> verbatim!
-            const cellMeta = CELL_XML_META.get(cell);
+            const cellMeta = getCellXmlMetaMap().get(cell);
             const arrayRefMismatch = orig?.fType === 'array' && (
                 cellMeta?.fType !== 'array' || (cellMeta?.fRef ?? null) !== (orig.fRef ?? null)
             );
@@ -10635,8 +15504,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      */
     public ImportFromXlsxBytes(
         bytes: Uint8Array | ArrayBuffer,
-        configurationJson?: string | null
+        configurationJson?: string | null,
+        options?: { SkipEvaluate?: boolean }
     ): WorkbookSpec {
+        if (!options?.SkipEvaluate) {
+            this.assertSynchronousEvaluationAllowed('ImportFromXlsxBytes(SkipEvaluate=false)');
+        }
         const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
         const files = this.extractZipArchive(u8);
 
@@ -10670,12 +15543,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const id = this.extractXmlAttr(tag, 'Id');
             const target = this.extractXmlAttr(tag, 'Target');
             if (id && target) {
-                const cleanTarget = target.startsWith('/')
-                    ? target.slice(1)
-                    : target.startsWith('xl/')
-                      ? target
-                      : `xl/${target}`;
-                targetByRelId.set(id, cleanTarget);
+                const cleanTarget = normalizeOoxmlRelTarget('xl', target);
+                if (cleanTarget) {
+                    targetByRelId.set(id, cleanTarget);
+                }
             }
         }
 
@@ -10685,6 +15556,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             hidden: boolean;
         }
         const sheetEntries: SheetEntry[] = [];
+        const seenSheetPaths = new Set<string>();
+        const registerSheetEntry = (entry: SheetEntry): void => {
+            const normPath = entry.path.replace(/^\/+/, '').toLowerCase();
+            if (seenSheetPaths.has(normPath)) {
+                throw new Error(`Spreadsheet import rejected: duplicate worksheet part path '${entry.path}'.`);
+            }
+            seenSheetPaths.add(normPath);
+            sheetEntries.push(entry);
+            if (sheetEntries.length > MAX_IMPORT_SHEETS) {
+                throw new Error(
+                    `Spreadsheet import rejected: workbook exceeds maximum sheet limit (${MAX_IMPORT_SHEETS}).`
+                );
+            }
+        };
         const sheetTagRegex = /<sheet\b[^>]*?>/g;
         let sheetMatch: RegExpExecArray | null;
         while ((sheetMatch = sheetTagRegex.exec(wbXml)) !== null) {
@@ -10693,7 +15578,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const rId = this.extractXmlAttr(tag, 'r:id') || this.extractXmlAttr(tag, 'id') || '';
             const state = this.extractXmlAttr(tag, 'state') || '';
             const path = targetByRelId.get(rId) || `xl/worksheets/sheet${sheetEntries.length + 1}.xml`;
-            sheetEntries.push({
+            registerSheetEntry({
                 name,
                 path,
                 hidden: state === 'hidden' || state === 'veryHidden'
@@ -10703,7 +15588,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (sheetEntries.length === 0) {
             for (const key of Array.from(files.keys()).sort()) {
                 if (/^xl\/worksheets\/sheet\d+\.xml$/.test(key)) {
-                    sheetEntries.push({
+                    registerSheetEntry({
                         name: `Sheet ${sheetEntries.length + 1}`,
                         path: key,
                         hidden: false
@@ -10733,7 +15618,19 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
+        const importBudget: SpreadsheetImportBudget = {
+            cells: 0,
+            formulas: 0,
+            formulaBytes: 0,
+            arrayAnchors: 0,
+            validationRules: 0,
+            colTags: 0,
+            merges: 0,
+            charts: 0,
+            drawingAnchors: 0
+        };
         const worksheets: WorksheetSpec[] = [];
+        let totalCommentsSeen = 0;
         for (let idx = 0; idx < sheetEntries.length; idx++) {
             const entry = sheetEntries[idx];
             if (entry.name === HIDDEN_META_SHEET_NAME) continue;
@@ -10753,8 +15650,154 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 targetSheetId,
                 entry.name,
                 sharedStrings,
-                styleLookup
+                styleLookup,
+                importBudget
             );
+
+            // Resolve per-worksheet relationships (comments, drawings/charts) safely
+            const slashIdx = entry.path.lastIndexOf('/');
+            const wsDir = slashIdx >= 0 ? entry.path.slice(0, slashIdx) : 'xl/worksheets';
+            const wsFileName = slashIdx >= 0 ? entry.path.slice(slashIdx + 1) : entry.path;
+            const wsRelsPath = `${wsDir}/_rels/${wsFileName}.rels`;
+            if (files.has(wsRelsPath)) {
+                const wsRelsXml = this.decodeUtf8(files.get(wsRelsPath)!);
+                const wsRelRegex = /<Relationship\b[^>]*?>/g;
+                let wsRelMatch: RegExpExecArray | null;
+                while ((wsRelMatch = wsRelRegex.exec(wsRelsXml)) !== null) {
+                    const relTag = wsRelMatch[0];
+                    const relType = this.extractXmlAttr(relTag, 'Type') || '';
+                    const relTarget = this.extractXmlAttr(relTag, 'Target') || '';
+                    const targetMode = this.extractXmlAttr(relTag, 'TargetMode') || '';
+                    if (targetMode.toLowerCase() === 'external') continue;
+                    const resolvedPath = normalizeOoxmlRelTarget(wsDir, relTarget);
+                    if (!resolvedPath || !files.has(resolvedPath)) continue;
+
+                    if (relType.endsWith('/comments')) {
+                        const commentsXml = this.decodeUtf8(files.get(resolvedPath)!);
+                        const cmtRegex = /<comment\b([^>]*)>([\s\S]*?)<\/comment>/g;
+                        let cmtMatch: RegExpExecArray | null;
+                        while ((cmtMatch = cmtRegex.exec(commentsXml)) !== null) {
+                            if (++totalCommentsSeen > MAX_IMPORT_WORKBOOK_CELLS) {
+                                throw new Error(
+                                    `Spreadsheet import rejected: workbook exceeds maximum comment limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+                                );
+                            }
+                            const refAttr = this.extractXmlAttr(cmtMatch[1], 'ref');
+                            if (!refAttr) continue;
+                            const pos = ParseCellAddress(refAttr);
+                            if (!pos) continue;
+                            const canonical = FormatCellAddress(pos.row, pos.col);
+                            const tBodies = this.extractXmlElementBodies(cmtMatch[2], 't');
+                            const noteText = tBodies.map((tb) => this.unescapeXml(tb)).join('');
+                            if (!noteText) continue;
+                            const existingCell = Object.hasOwn(ws.Cells, canonical) ? ws.Cells[canonical] : undefined;
+                            if (existingCell) {
+                                if (!existingCell.Note) existingCell.Note = noteText;
+                            } else {
+                                if (++importBudget.cells > MAX_IMPORT_WORKBOOK_CELLS) {
+                                    throw new Error(
+                                        `Spreadsheet import rejected: workbook exceeds maximum cell limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+                                    );
+                                }
+                                this.ensureSheetCapacity(ws, pos.row, pos.col);
+                                ws.Cells[canonical] = {
+                                    RowID: this.getStableRowIdForIndex(ws, pos.row),
+                                    ColumnID: this.getStableColIdForIndex(ws, pos.col),
+                                    Address: canonical,
+                                    RawValue: null,
+                                    ComputedValue: null,
+                                    DisplayValue: '',
+                                    Note: noteText
+                                };
+                            }
+                        }
+                    } else if (relType.endsWith('/drawing') && (!matchedMetaWs?.Charts || matchedMetaWs.Charts.length === 0)) {
+                        const drawingXml = this.decodeUtf8(files.get(resolvedPath)!);
+                        const dSlash = resolvedPath.lastIndexOf('/');
+                        const dDir = dSlash >= 0 ? resolvedPath.slice(0, dSlash) : 'xl/drawings';
+                        const dFile = dSlash >= 0 ? resolvedPath.slice(dSlash + 1) : resolvedPath;
+                        const dRelsPath = `${dDir}/_rels/${dFile}.rels`;
+                        const chartByRelId = new Map<string, string>();
+                        if (files.has(dRelsPath)) {
+                            const dRelsXml = this.decodeUtf8(files.get(dRelsPath)!);
+                            const dRelRegex = /<Relationship\b[^>]*?>/g;
+                            let dm: RegExpExecArray | null;
+                            while ((dm = dRelRegex.exec(dRelsXml)) !== null) {
+                                const dId = this.extractXmlAttr(dm[0], 'Id');
+                                const dTarget = this.extractXmlAttr(dm[0], 'Target');
+                                const dType = this.extractXmlAttr(dm[0], 'Type') || '';
+                                if (dId && dTarget && dType.endsWith('/chart')) {
+                                    const chartPath = normalizeOoxmlRelTarget(dDir, dTarget);
+                                    if (chartPath) chartByRelId.set(dId, chartPath);
+                                }
+                            }
+                        }
+                        const anchors = this.extractXmlElementBodies(drawingXml, 'xdr:twoCellAnchor');
+                        importBudget.drawingAnchors += anchors.length;
+                        if (importBudget.drawingAnchors > MAX_IMPORT_DRAWING_ANCHORS) {
+                            throw new Error(
+                                `Spreadsheet import rejected: workbook exceeds maximum drawing anchor limit (${MAX_IMPORT_DRAWING_ANCHORS}).`
+                            );
+                        }
+                        for (let aIdx = 0; aIdx < anchors.length; aIdx++) {
+                            const anchorXml = anchors[aIdx];
+                            const chartRefMatch = /<c:chart\b[^>]*\br:id="([^"]+)"/i.exec(anchorXml);
+                            if (!chartRefMatch) continue;
+                            const chartPath = chartByRelId.get(chartRefMatch[1]);
+                            if (!chartPath || !files.has(chartPath)) continue;
+                            if (++importBudget.charts > MAX_IMPORT_WORKBOOK_CHARTS) {
+                                throw new Error(
+                                    `Spreadsheet import rejected: workbook exceeds maximum chart limit (${MAX_IMPORT_WORKBOOK_CHARTS}).`
+                                );
+                            }
+                            const chartXml = this.decodeUtf8(files.get(chartPath)!);
+                            const chartType: SpreadsheetChartType = chartXml.includes('<c:lineChart')
+                                ? 'line'
+                                : chartXml.includes('<c:pieChart')
+                                  ? 'pie'
+                                  : chartXml.includes('<c:areaChart')
+                                    ? 'area'
+                                    : 'bar';
+                            const titleBodies = this.extractXmlElementBodies(chartXml, 'a:t');
+                            const chartTitle = titleBodies.length > 0 ? this.unescapeXml(titleBodies.join(' ')) : `Chart ${ws.Charts.length + 1}`;
+                            const fBodies = this.extractXmlElementBodies(chartXml, 'c:f');
+                            let sourceRange = 'A1:B5';
+                            if (fBodies.length > 0) {
+                                const firstF = this.unescapeXml(fBodies[0]);
+                                const bangIdx = firstF.lastIndexOf('!');
+                                const rawA1 = (bangIdx >= 0 ? firstF.slice(bangIdx + 1) : firstF).replace(/\$/g, '');
+                                const lastF = fBodies.length > 1 ? this.unescapeXml(fBodies[fBodies.length - 1]) : firstF;
+                                const lastBang = lastF.lastIndexOf('!');
+                                const lastA1 = (lastBang >= 0 ? lastF.slice(lastBang + 1) : lastF).replace(/\$/g, '');
+                                const b1 = ParseRangeAddress(rawA1, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                                const b2 = ParseRangeAddress(lastA1, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                                if (b1 && b2) {
+                                    const minR = Math.max(1, Math.min(b1.startRow, b2.startRow) - 1);
+                                    const maxR = Math.max(b1.endRow, b2.endRow);
+                                    const minC = Math.min(b1.startCol, b2.startCol);
+                                    const maxC = Math.max(b1.endCol, b2.endCol);
+                                    sourceRange = `${FormatCellAddress(minR, minC)}:${FormatCellAddress(maxR, maxC)}`;
+                                }
+                            }
+                            const fromColMatch = /<xdr:from>[\s\S]*?<xdr:col>(\d+)<\/xdr:col>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/i.exec(
+                                anchorXml
+                            );
+                            const posCell = fromColMatch
+                                ? FormatCellAddress(parseInt(fromColMatch[2], 10) + 1, parseInt(fromColMatch[1], 10) + 1)
+                                : 'E2';
+                            ws.Charts.push({
+                                ChartID: `chart-${ws.Charts.length + 1}`,
+                                Title: chartTitle,
+                                ChartType: chartType,
+                                SheetID: ws.SheetID,
+                                SourceRange: sourceRange,
+                                PositionCell: posCell,
+                                ShowLegend: chartXml.includes('<c:legend')
+                            });
+                        }
+                    }
+                }
+            }
             worksheets.push(ws);
         }
 
@@ -10770,17 +15813,64 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     metaWorkbook.Worksheets[i];
                 if (metaWs) {
                     ws.SheetID = metaWs.SheetID || ws.SheetID;
+                    ws.SortSpec = metaWs.SortSpec ?? null;
+                    ws.FilterSpecs = Array.isArray(metaWs.FilterSpecs) ? metaWs.FilterSpecs : ws.FilterSpecs;
                     ws.LiveTables = Array.isArray(metaWs.LiveTables) ? metaWs.LiveTables : ws.LiveTables;
-                    ws.Charts = Array.isArray(metaWs.Charts) ? metaWs.Charts : ws.Charts;
+                    ws.Charts = Array.isArray(metaWs.Charts) && metaWs.Charts.length > 0 ? metaWs.Charts : ws.Charts;
                     ws.EmbeddedArtifacts = Array.isArray(metaWs.EmbeddedArtifacts)
                         ? metaWs.EmbeddedArtifacts
                         : ws.EmbeddedArtifacts;
-                    ws.ValidationRules = Array.isArray(metaWs.ValidationRules)
-                        ? metaWs.ValidationRules
-                        : ws.ValidationRules;
+                    ws.ValidationRules =
+                        Array.isArray(metaWs.ValidationRules) && metaWs.ValidationRules.length > 0
+                            ? metaWs.ValidationRules
+                            : ws.ValidationRules;
                     ws.ConditionalFormats = Array.isArray(metaWs.ConditionalFormats)
                         ? metaWs.ConditionalFormats
                         : ws.ConditionalFormats;
+                    ws.ProtectedRanges = Array.isArray(metaWs.ProtectedRanges)
+                        ? metaWs.ProtectedRanges
+                        : (ws.ProtectedRanges ?? []);
+                    if ((!ws.MergeRanges || ws.MergeRanges.length === 0) && Array.isArray(metaWs.MergeRanges)) {
+                        ws.MergeRanges = metaWs.MergeRanges;
+                    }
+                    if (Array.isArray(metaWs.Rows) && metaWs.Rows.length > 0) {
+                        let maxMetaRow = ws.Rows.length;
+                        for (const mr of metaWs.Rows) {
+                            if (typeof mr.Index === 'number' && mr.Index > maxMetaRow) {
+                                maxMetaRow = mr.Index;
+                            }
+                        }
+                        this.ensureSheetCapacity(ws, maxMetaRow, 1);
+                        for (const mr of metaWs.Rows) {
+                            if (typeof mr.Index !== 'number' || mr.Index < 1 || mr.Index > ws.Rows.length) continue;
+                            const targetRow = ws.Rows[mr.Index - 1];
+                            if (typeof mr.Height === 'number' && Number.isFinite(mr.Height) && mr.Height > 0) {
+                                targetRow.Height = mr.Height;
+                            }
+                            if (mr.Hidden !== undefined) {
+                                targetRow.Hidden = Boolean(mr.Hidden);
+                            }
+                        }
+                    }
+                    if (Array.isArray(metaWs.Columns) && metaWs.Columns.length > 0) {
+                        let maxMetaCol = ws.Columns.length;
+                        for (const mc of metaWs.Columns) {
+                            if (typeof mc.Index === 'number' && mc.Index > maxMetaCol) {
+                                maxMetaCol = mc.Index;
+                            }
+                        }
+                        this.ensureSheetCapacity(ws, 1, maxMetaCol);
+                        for (const mc of metaWs.Columns) {
+                            if (typeof mc.Index !== 'number' || mc.Index < 1 || mc.Index > ws.Columns.length) continue;
+                            const targetCol = ws.Columns[mc.Index - 1];
+                            if (typeof mc.Width === 'number' && Number.isFinite(mc.Width) && mc.Width > 0) {
+                                targetCol.Width = mc.Width;
+                            }
+                            if (mc.Hidden !== undefined) {
+                                targetCol.Hidden = Boolean(mc.Hidden);
+                            }
+                        }
+                    }
                     if (Array.isArray(metaWs.ClearedSpillChildren) && metaWs.ClearedSpillChildren.length > 0) {
                         for (const addr of metaWs.ClearedSpillChildren) {
                             if (typeof addr === 'string') {
@@ -10788,44 +15878,79 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                             }
                         }
                     }
-                    // Restore any =MJ.QUERY / =MJ.VIEW formulas and notes preserved in metaWs
+                    // Restore =MJ.* formulas, AiInputHash, notes, and extended/CSS-token styles preserved in metaWs
                     if (metaWs.Cells) {
                         for (const [addr, metaCell] of Object.entries(metaWs.Cells)) {
                             if (!metaCell) continue;
-                            const isMjFormula = Boolean(
-                                metaCell.Formula && this.ParseMjCustomFunctionFormula(metaCell.Formula)
+                            if (addr === '__proto__' || addr === 'constructor' || addr === 'prototype') continue;
+                            const pos = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
+                            if (!pos) continue;
+                            const canonical = FormatCellAddress(pos.row, pos.col);
+                            const parsedMjMeta = metaCell.Formula
+                                ? this.ParseMjCustomFunctionFormula(metaCell.Formula)
+                                : null;
+                            const isMjFormula = Boolean(parsedMjMeta);
+                            const hasMetaStyle = Boolean(
+                                metaCell.Style &&
+                                    (metaCell.Style.Bold ||
+                                        metaCell.Style.Italic ||
+                                        metaCell.Style.TextColor ||
+                                        metaCell.Style.BackgroundColor ||
+                                        metaCell.Style.HorizontalAlign ||
+                                        metaCell.Style.FormatType ||
+                                        metaCell.Style.NumberFormatPattern)
                             );
-                            if (isMjFormula) {
-                                let targetCell = ws.Cells[addr];
+                            let targetCell = Object.hasOwn(ws.Cells, canonical) ? ws.Cells[canonical] : undefined;
+                            if (!targetCell && (isMjFormula || hasMetaStyle || Boolean(metaCell.Note))) {
+                                this.ensureSheetCapacity(ws, pos.row, pos.col);
+                                targetCell = Object.hasOwn(ws.Cells, canonical) ? ws.Cells[canonical] : undefined;
                                 if (!targetCell) {
-                                    const pos = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
-                                    if (pos) {
-                                        this.ensureSheetCapacity(ws, pos.row, pos.col);
-                                        const canonical = FormatCellAddress(pos.row, pos.col);
-                                        targetCell = {
-                                            RowID: this.getStableRowIdForIndex(ws, pos.row),
-                                            ColumnID: this.getStableColIdForIndex(ws, pos.col),
-                                            Address: canonical,
-                                            RawValue: null,
-                                            Formula: metaCell.Formula,
-                                            FormulaStable: null,
-                                            ComputedValue: null,
-                                            DisplayValue: '',
-                                            Style: metaCell.Style
-                                        };
-                                        ws.Cells[canonical] = targetCell;
-                                    }
-                                }
-                                if (targetCell && metaCell.Formula) {
-                                    targetCell.Formula = metaCell.Formula;
-                                    targetCell.FormulaStable =
-                                        metaCell.FormulaStable ??
-                                        this.CompileFormulaToStableIds(ws, metaCell.Formula);
-                                    this.syncCellVirtualAxisIndex(ws, targetCell);
+                                    targetCell = {
+                                        RowID: this.getStableRowIdForIndex(ws, pos.row),
+                                        ColumnID: this.getStableColIdForIndex(ws, pos.col),
+                                        Address: canonical,
+                                        RawValue: null,
+                                        Formula: isMjFormula ? metaCell.Formula : null,
+                                        FormulaStable: null,
+                                        ComputedValue: null,
+                                        DisplayValue: '',
+                                        Style: metaCell.Style
+                                    };
+                                    ws.Cells[canonical] = targetCell;
                                 }
                             }
-                            if (metaCell.Note && ws.Cells[addr]) {
-                                ws.Cells[addr].Note = metaCell.Note;
+                            if (targetCell && isMjFormula && metaCell.Formula) {
+                                targetCell.Formula = metaCell.Formula;
+                                targetCell.FormulaStable =
+                                    metaCell.FormulaStable ??
+                                    this.CompileFormulaToStableIds(ws, metaCell.Formula);
+                                if (parsedMjMeta?.Kind === 'AI') {
+                                    if (typeof metaCell.AiInputHash === 'string' && metaCell.AiInputHash.length > 0) {
+                                        targetCell.AiInputHash = metaCell.AiInputHash;
+                                    }
+                                    if (metaCell.ComputedValue !== undefined && metaCell.ComputedValue !== null) {
+                                        targetCell.ComputedValue = metaCell.ComputedValue;
+                                        targetCell.DisplayValue =
+                                            metaCell.DisplayValue ?? this.FormatCellValue(metaCell.ComputedValue, targetCell.Style);
+                                    }
+                                    if (metaCell.AccessDenied !== undefined) {
+                                        targetCell.AccessDenied = metaCell.AccessDenied;
+                                    }
+                                    if (metaCell.ErrorMessage !== undefined) {
+                                        targetCell.ErrorMessage = metaCell.ErrorMessage;
+                                    }
+                                }
+                                this.syncCellVirtualAxisIndex(ws, targetCell);
+                            }
+                            if (targetCell && hasMetaStyle && metaCell.Style) {
+                                targetCell.Style = { ...(targetCell.Style ?? {}), ...metaCell.Style };
+                                targetCell.DisplayValue = this.FormatCellValue(
+                                    targetCell.ComputedValue ?? targetCell.RawValue,
+                                    targetCell.Style
+                                );
+                            }
+                            if (targetCell && metaCell.Note) {
+                                targetCell.Note = metaCell.Note;
                             }
                         }
                     }
@@ -10839,12 +15964,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ActiveSheetID: finalWorksheets[0].SheetID,
             Worksheets: finalWorksheets,
             NamedRanges: Array.isArray(metaWorkbook?.NamedRanges) ? metaWorkbook!.NamedRanges! : [],
+            ...(typeof metaWorkbook?.PreferredObjectsPaneHeightPx === 'number' &&
+            Number.isFinite(metaWorkbook.PreferredObjectsPaneHeightPx) &&
+            metaWorkbook.PreferredObjectsPaneHeightPx > 0
+                ? { PreferredObjectsPaneHeightPx: Math.round(metaWorkbook.PreferredObjectsPaneHeightPx) }
+                : {}),
             CreatedAt: metaWorkbook?.CreatedAt || now,
             UpdatedAt: now
         };
 
         this.bindSheetsToWorkbook(wb);
-        this.EvaluateWorkbook(wb);
+        this.AssertWorkbookWithinLimits(wb);
+        if (!options?.SkipEvaluate) {
+            this.EvaluateWorkbook(wb);
+        }
         return wb;
     }
 
@@ -10855,7 +15988,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private buildWorksheetXml(
         ws: WorksheetSpec,
         getStyleIndex: (style?: SpreadsheetCellStyleSpec) => number,
-        dynamicArrayCmIndex: number = 1
+        dynamicArrayCmIndex: number = 1,
+        ooxmlExtras?: {
+            drawingRelId?: string;
+            hyperlinks?: Array<{ Ref: string; RelId: string; Display?: string }>;
+        }
     ): string {
         let maxRow = 1;
         let maxCol = 1;
@@ -10869,9 +16006,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
         const colsXmlParts: string[] = [];
         for (const col of ws.Columns) {
-            if (col.Width && col.Width !== DEFAULT_COLUMN_WIDTH) {
+            const hasCustomWidth = typeof col.Width === 'number' && col.Width !== DEFAULT_COLUMN_WIDTH;
+            if (hasCustomWidth || col.Hidden) {
+                const widthVal = col.Width ?? DEFAULT_COLUMN_WIDTH;
+                const customAttr = hasCustomWidth ? ' customWidth="1"' : '';
+                const hiddenAttr = col.Hidden ? ' hidden="1"' : '';
                 colsXmlParts.push(
-                    `<col min="${col.Index}" max="${col.Index}" width="${col.Width}" customWidth="1"/>`
+                    `<col min="${col.Index}" max="${col.Index}" width="${widthVal}"${customAttr}${hiddenAttr}/>`
                 );
             }
         }
@@ -10896,10 +16037,31 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             cellsByRow.set(pos.row, list);
         }
 
-        const rowNums = Array.from(cellsByRow.keys()).sort((a, b) => a - b);
+        const rowSpecByIndex = new Map<number, SpreadsheetRowSpec>();
+        const rowNumSet = new Set<number>(cellsByRow.keys());
+        for (const row of ws.Rows) {
+            rowSpecByIndex.set(row.Index, row);
+            const hasCustomHeight = typeof row.Height === 'number' && row.Height !== DEFAULT_ROW_HEIGHT;
+            if (hasCustomHeight || row.Hidden) {
+                rowNumSet.add(row.Index);
+                if (row.Index > maxRow) maxRow = row.Index;
+            }
+        }
+
+        const rowNums = Array.from(rowNumSet).sort((a, b) => a - b);
         const rowsXmlParts: string[] = [];
 
         for (const rNum of rowNums) {
+            const rowSpec = rowSpecByIndex.get(rNum);
+            const hasCustomHeight =
+                typeof rowSpec?.Height === 'number' &&
+                Number.isFinite(rowSpec.Height) &&
+                rowSpec.Height > 0 &&
+                rowSpec.Height !== DEFAULT_ROW_HEIGHT;
+            const rowAttrs = `${hasCustomHeight ? ` ht="${rowSpec!.Height}" customHeight="1"` : ''}${
+                rowSpec?.Hidden ? ' hidden="1"' : ''
+            }`;
+
             const rowCells = (cellsByRow.get(rNum) ?? []).sort((a, b) => {
                 const pA = ParseCellAddress(a.Address);
                 const pB = ParseCellAddress(b.Address);
@@ -10917,7 +16079,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 );
                 const rawFormulaBody = hasStandardFormula ? cell.Formula!.trim().slice(1) : '';
                 const isSpillDynArray = rawFormulaBody.length > 0 && isSpillDynamicArrayFormulaBody(rawFormulaBody);
-                const origMeta = CELL_XML_META.get(cell);
+                const origMeta = getCellXmlMetaMap().get(cell);
                 const formulaDirty = origMeta?.formulaDirty ?? true;
                 const isCseExpr = this.isCseOrArrayFormula('=' + rawFormulaBody, this.sheetToWorkbook.get(ws));
                 const keepCseArray = origMeta?.fType === 'array' && (
@@ -10965,12 +16127,68 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     }
                 } else if (formulaXml) {
                     cellTags.push(`<c r="${cell.Address}"${sAttr}${cExtraMetaAttrs}>${formulaXml}</c>`);
+                } else if (sIdx > 0) {
+                    cellTags.push(`<c r="${cell.Address}"${sAttr}/>`);
                 }
             }
             if (cellTags.length > 0) {
-                rowsXmlParts.push(`<row r="${rNum}">${cellTags.join('')}</row>`);
+                rowsXmlParts.push(`<row r="${rNum}"${rowAttrs}>${cellTags.join('')}</row>`);
+            } else if (rowAttrs.length > 0) {
+                rowsXmlParts.push(`<row r="${rNum}"${rowAttrs}/>`);
             }
         }
+
+        const mergeRanges = (ws.MergeRanges ?? []).filter((mr) => {
+            const b = ParseRangeAddress(mr, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            return Boolean(b && (b.endRow > b.startRow || b.endCol > b.startCol));
+        });
+        const mergeCellsXml =
+            mergeRanges.length > 0
+                ? `<mergeCells count="${mergeRanges.length}">${mergeRanges
+                      .map((mr) => `<mergeCell ref="${this.escapeXml(mr.toUpperCase())}"/>`)
+                      .join('')}</mergeCells>`
+                : '';
+
+        const dvTags: string[] = [];
+        for (const vr of ws.ValidationRules ?? []) {
+            if (!ParseRangeAddress(vr.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS)) continue;
+            const errAttr = vr.ErrorMessage
+                ? ` showErrorMessage="1" error="${this.escapeXml(vr.ErrorMessage)}"`
+                : '';
+            if (vr.RuleType === 'list') {
+                const listCsv = (vr.AllowedValues ?? []).join(',');
+                dvTags.push(
+                    `<dataValidation type="list" allowBlank="1" showDropDown="0" sqref="${this.escapeXml(vr.Range.toUpperCase())}"${errAttr}><formula1>&quot;${this.escapeXml(listCsv)}&quot;</formula1></dataValidation>`
+                );
+            } else if (vr.RuleType === 'numberRange') {
+                const minV = vr.MinValue !== undefined ? String(vr.MinValue) : '0';
+                const maxV = vr.MaxValue !== undefined ? String(vr.MaxValue) : '999999999';
+                dvTags.push(
+                    `<dataValidation type="decimal" operator="between" allowBlank="1" sqref="${this.escapeXml(vr.Range.toUpperCase())}"${errAttr}><formula1>${this.escapeXml(minV)}</formula1><formula2>${this.escapeXml(maxV)}</formula2></dataValidation>`
+                );
+            } else if (vr.RuleType === 'notEmpty') {
+                const firstCell = vr.Range.split(':')[0].trim().toUpperCase();
+                dvTags.push(
+                    `<dataValidation type="custom" allowBlank="0" sqref="${this.escapeXml(vr.Range.toUpperCase())}"${errAttr}><formula1>LEN(TRIM(${this.escapeXml(firstCell)}))&gt;0</formula1></dataValidation>`
+                );
+            }
+        }
+        const dataValidationsXml =
+            dvTags.length > 0 ? `<dataValidations count="${dvTags.length}">${dvTags.join('')}</dataValidations>` : '';
+
+        const hyperlinksXml =
+            ooxmlExtras?.hyperlinks && ooxmlExtras.hyperlinks.length > 0
+                ? `<hyperlinks>${ooxmlExtras.hyperlinks
+                      .map(
+                          (h) =>
+                              `<hyperlink ref="${this.escapeXml(h.Ref)}" r:id="${h.RelId}"${
+                                  h.Display ? ` display="${this.escapeXml(h.Display)}"` : ''
+                              }/>`
+                      )
+                      .join('')}</hyperlinks>`
+                : '';
+
+        const drawingXml = ooxmlExtras?.drawingRelId ? `<drawing r:id="${ooxmlExtras.drawingRelId}"/>` : '';
 
         const dimensionRef = `A1:${FormatCellAddress(maxRow, maxCol)}`;
         return [
@@ -10981,6 +16199,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             '<sheetFormatPr defaultRowHeight="15"/>',
             colsSection,
             `<sheetData>${rowsXmlParts.join('')}</sheetData>`,
+            mergeCellsXml,
+            dataValidationsXml,
+            hyperlinksXml,
+            drawingXml,
             '</worksheet>'
         ].join('');
     }
@@ -10994,19 +16216,49 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             Title: sanitized.Title,
             ActiveSheetID: sanitized.ActiveSheetID,
             NamedRanges: sanitized.NamedRanges,
+            ...(typeof sanitized.PreferredObjectsPaneHeightPx === 'number' &&
+            Number.isFinite(sanitized.PreferredObjectsPaneHeightPx) &&
+            sanitized.PreferredObjectsPaneHeightPx > 0
+                ? { PreferredObjectsPaneHeightPx: Math.round(sanitized.PreferredObjectsPaneHeightPx) }
+                : {}),
             CreatedAt: sanitized.CreatedAt,
             UpdatedAt: sanitized.UpdatedAt,
             Worksheets: sanitized.Worksheets.map((ws) => {
                 const mjOnlyCells: Record<string, SpreadsheetCellSpec> = {};
                 for (const [addr, cell] of Object.entries(ws.Cells)) {
                     if (!cell) continue;
+                    const hasExtendedStyle = Boolean(
+                        cell.Style &&
+                            (cell.Style.Italic ||
+                                cell.Style.TextColor ||
+                                cell.Style.BackgroundColor ||
+                                cell.Style.HorizontalAlign)
+                    );
                     if (
                         (cell.Formula && this.ParseMjCustomFunctionFormula(cell.Formula)) ||
-                        Boolean(cell.Note)
+                        Boolean(cell.Note) ||
+                        hasExtendedStyle
                     ) {
                         mjOnlyCells[addr] = cell;
                     }
                 }
+                const nonDefaultRows = ws.Rows.filter(
+                    (r) => Boolean(r.Hidden) || (typeof r.Height === 'number' && r.Height !== DEFAULT_ROW_HEIGHT)
+                ).map((r) => ({
+                    RowID: r.RowID,
+                    Index: r.Index,
+                    ...(typeof r.Height === 'number' && r.Height !== DEFAULT_ROW_HEIGHT ? { Height: r.Height } : {}),
+                    ...(r.Hidden ? { Hidden: true } : {})
+                }));
+                const nonDefaultCols = ws.Columns.filter(
+                    (c) => Boolean(c.Hidden) || (typeof c.Width === 'number' && c.Width !== DEFAULT_COLUMN_WIDTH)
+                ).map((c) => ({
+                    ColumnID: c.ColumnID,
+                    Index: c.Index,
+                    Letter: c.Letter,
+                    ...(typeof c.Width === 'number' && c.Width !== DEFAULT_COLUMN_WIDTH ? { Width: c.Width } : {}),
+                    ...(c.Hidden ? { Hidden: true } : {})
+                }));
                 return {
                     SheetID: ws.SheetID,
                     Name: ws.Name,
@@ -11019,6 +16271,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     LiveTables: ws.LiveTables,
                     Charts: ws.Charts,
                     EmbeddedArtifacts: ws.EmbeddedArtifacts,
+                    ProtectedRanges: ws.ProtectedRanges ?? [],
+                    MergeRanges: ws.MergeRanges ?? [],
+                    Rows: nonDefaultRows,
+                    Columns: nonDefaultCols,
                     Cells: mjOnlyCells
                 };
             })
@@ -11107,8 +16363,27 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheetId: string,
         sheetName: string,
         sharedStrings: string[],
-        styleLookup: Array<{ FormatPattern?: string; Bold?: boolean }>
+        styleLookup: Array<{
+            FormatPattern?: string;
+            Bold?: boolean;
+            Italic?: boolean;
+            TextColor?: string;
+            BackgroundColor?: string;
+            HorizontalAlign?: 'left' | 'center' | 'right';
+        }>,
+        importBudget?: SpreadsheetImportBudget
     ): WorksheetSpec {
+        const budget: SpreadsheetImportBudget = importBudget ?? {
+            cells: 0,
+            formulas: 0,
+            formulaBytes: 0,
+            arrayAnchors: 0,
+            validationRules: 0,
+            colTags: 0,
+            merges: 0,
+            charts: 0,
+            drawingAnchors: 0
+        };
         const ws = this.CreateEmptyWorksheet(sheetId, sheetName);
 
         // Parse frozen panes if present
@@ -11153,22 +16428,62 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        // Parse column widths
-        const parsedColWidths: Array<{ min: number; max: number; width: number }> = [];
+        // Parse row height & hidden overrides when present
+        const parsedRowProps: Array<{ row: number; height?: number; hidden: boolean }> = [];
+        if (wsXml.indexOf('ht=') !== -1 || wsXml.indexOf('hidden=') !== -1) {
+            const rowOpenRegex = /<row\b([^>]*?)(?:\/>|>)/g;
+            let rowMatch: RegExpExecArray | null;
+            while ((rowMatch = rowOpenRegex.exec(wsXml)) !== null) {
+                const attrs = rowMatch[1];
+                if (attrs.indexOf('ht=') === -1 && attrs.indexOf('hidden=') === -1) {
+                    continue;
+                }
+                const rNum = parseInt(this.extractXmlAttr(attrs, 'r') || '0', 10);
+                if (rNum <= 0) continue;
+                const htNum = parseFloat(this.extractXmlAttr(attrs, 'ht') || '0');
+                const hiddenAttr = this.extractXmlAttr(attrs, 'hidden');
+                const isHidden = hiddenAttr === '1' || hiddenAttr?.toLowerCase() === 'true';
+                if (htNum > 0 || isHidden) {
+                    if (rNum > preMaxRow) preMaxRow = rNum;
+                    parsedRowProps.push({
+                        row: rNum,
+                        height: htNum > 0 ? Number(htNum.toFixed(2)) : undefined,
+                        hidden: isHidden
+                    });
+                }
+            }
+        }
+
+        // Parse column widths & hidden flags (enforcing workbook-wide <col> limit, R6-1)
+        const parsedCols: Array<{ min: number; max: number; width?: number; hidden: boolean }> = [];
         const colRegex = /<col\b([^>]*?)\/?>/g;
         let colMatch: RegExpExecArray | null;
         while ((colMatch = colRegex.exec(wsXml)) !== null) {
+            if (++budget.colTags > MAX_IMPORT_WORKBOOK_COL_TAGS) {
+                throw new Error(
+                    `Spreadsheet import rejected: workbook exceeds maximum <col> entry limit (${MAX_IMPORT_WORKBOOK_COL_TAGS}).`
+                );
+            }
             const attrs = colMatch[1];
             const min = parseInt(this.extractXmlAttr(attrs, 'min') || '0', 10);
             const max = parseInt(this.extractXmlAttr(attrs, 'max') || '0', 10);
             const width = parseFloat(this.extractXmlAttr(attrs, 'width') || '0');
-            if (min > 0 && max >= min && width > 0) {
-                if (max > preMaxCol) preMaxCol = max;
-                parsedColWidths.push({ min, max, width });
+            const hiddenAttr = this.extractXmlAttr(attrs, 'hidden');
+            const isHidden = hiddenAttr === '1' || hiddenAttr?.toLowerCase() === 'true';
+            if (min > 0 && min <= EXCEL_MAX_COLS && max >= min && (width > 0 || isHidden)) {
+                const cappedMax = Math.min(max, EXCEL_MAX_COLS);
+                const allocColMax = Math.min(cappedMax, MAX_DENSE_COLS);
+                if (allocColMax > preMaxCol) preMaxCol = allocColMax;
+                parsedCols.push({
+                    min,
+                    max: cappedMax,
+                    width: width > 0 ? width : undefined,
+                    hidden: isHidden
+                });
             }
         }
 
-        // Scan <c> tags once to determine exact max coordinates before materializing cells & formulas
+        // Scan <c> tags once to determine exact max coordinates and enforce workbook cell limit before materializing
         interface RawParsedXmlCell {
             row: number;
             col: number;
@@ -11190,6 +16505,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (inner.length === 0 && attrs.indexOf('s=') === -1 && attrs.indexOf('S=') === -1) {
                 continue;
             }
+            if (++budget.cells > MAX_IMPORT_WORKBOOK_CELLS) {
+                throw new Error(
+                    `Spreadsheet import rejected: workbook exceeds maximum cell limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+                );
+            }
             rawCells.push({
                 row: parsedPos.row,
                 col: parsedPos.col,
@@ -11201,18 +16521,76 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         // Single upfront capacity allocation for the entire worksheet!
         this.ensureSheetCapacity(ws, preMaxRow, preMaxCol);
 
-        for (const cw of parsedColWidths) {
+        // Iterate <col> rules in reverse so each dense column (<= MAX_DENSE_COLS) is written at most once (`S5-7`, `R6-1`).
+        const appliedColWidth = new Uint8Array(ws.Columns.length + 1);
+        const appliedColHidden = new Uint8Array(ws.Columns.length + 1);
+        let remainingWidthCols = ws.Columns.length;
+        let remainingHiddenCols = ws.Columns.length;
+        for (let i = parsedCols.length - 1; i >= 0; i--) {
+            if (remainingWidthCols === 0 && remainingHiddenCols === 0) {
+                break;
+            }
+            const cw = parsedCols[i];
+            if (cw.min < 1 || cw.min > ws.Columns.length) {
+                continue;
+            }
             const maxDenseCol = Math.min(cw.max, ws.Columns.length);
-            const roundedWidth = Number(cw.width.toFixed(2));
+            const roundedWidth = cw.width !== undefined ? Number(cw.width.toFixed(2)) : undefined;
             for (let c = cw.min; c <= maxDenseCol; c++) {
-                ws.Columns[c - 1].Width = roundedWidth;
+                if (roundedWidth !== undefined && appliedColWidth[c] === 0) {
+                    ws.Columns[c - 1].Width = roundedWidth;
+                    appliedColWidth[c] = 1;
+                    remainingWidthCols--;
+                }
+                if (cw.hidden && appliedColHidden[c] === 0) {
+                    ws.Columns[c - 1].Hidden = true;
+                    appliedColHidden[c] = 1;
+                    remainingHiddenCols--;
+                }
+            }
+        }
+
+        for (const rp of parsedRowProps) {
+            if (rp.row <= ws.Rows.length) {
+                if (rp.height !== undefined) {
+                    ws.Rows[rp.row - 1].Height = rp.height;
+                }
+                if (rp.hidden) {
+                    ws.Rows[rp.row - 1].Hidden = true;
+                }
             }
         }
 
         // Track OOXML shared formula masters (<f t="shared" si="0">...</f>) for follower expansion (E6)
         const sharedFormulaMasters = new Map<string, { masterRow: number; masterCol: number; formulaBody: string }>();
-        // Track array/spill anchor ranges (R8-8: both modern dynamic arrays with `cm` and legacy CSE `t="array"`)
-        const arrayAnchorRanges: Array<{ anchorAddr: string; fRef: string }> = [];
+        // Track array/spill anchor ranges (R8-8, R6-1: both modern dynamic arrays with `cm` and legacy CSE `t="array"`)
+        const arrayAnchorRanges: Array<{
+            anchorAddr: string;
+            fRef: string;
+            startRow: number;
+            endRow: number;
+            startCol: number;
+            endCol: number;
+        }> = [];
+        const recordFormulaBudget = (bodyLen: number): string => {
+            if (bodyLen >= MAX_FORMULA_LENGTH) {
+                throw new Error(
+                    `Spreadsheet import rejected: formula exceeds maximum length (${MAX_FORMULA_LENGTH} chars).`
+                );
+            }
+            if (++budget.formulas > MAX_IMPORT_WORKBOOK_FORMULAS) {
+                throw new Error(
+                    `Spreadsheet import rejected: workbook exceeds maximum formula count (${MAX_IMPORT_WORKBOOK_FORMULAS}).`
+                );
+            }
+            if (budget.formulaBytes + bodyLen + 1 > MAX_IMPORTED_FORMULA_BYTES) {
+                throw new Error(
+                    `Spreadsheet import rejected: workbook exceeds maximum formula bytes (${MAX_IMPORTED_FORMULA_BYTES} bytes).`
+                );
+            }
+            budget.formulaBytes += bodyLen + 1;
+            return '=';
+        };
         const fTagRegex = /<f\b([^>]*?)(?:\/>|>([\s\S]*?)<\/f>)/;
 
         for (let idx = 0; idx < rawCells.length; idx++) {
@@ -11227,10 +16605,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const styleInfo = styleLookup[styleIdx];
 
             let cellStyle: SpreadsheetCellStyleSpec | undefined;
-            if (styleInfo && (styleInfo.FormatPattern || styleInfo.Bold)) {
+            if (
+                styleInfo &&
+                (styleInfo.FormatPattern ||
+                    styleInfo.Bold ||
+                    styleInfo.Italic ||
+                    styleInfo.TextColor ||
+                    styleInfo.BackgroundColor ||
+                    styleInfo.HorizontalAlign)
+            ) {
                 cellStyle = {
-                    Bold: styleInfo.Bold,
-                    NumberFormatPattern: styleInfo.FormatPattern,
+                    ...(styleInfo.Bold ? { Bold: true } : {}),
+                    ...(styleInfo.Italic ? { Italic: true } : {}),
+                    ...(styleInfo.TextColor ? { TextColor: styleInfo.TextColor } : {}),
+                    ...(styleInfo.BackgroundColor ? { BackgroundColor: styleInfo.BackgroundColor } : {}),
+                    ...(styleInfo.HorizontalAlign ? { HorizontalAlign: styleInfo.HorizontalAlign } : {}),
+                    ...(styleInfo.FormatPattern ? { NumberFormatPattern: styleInfo.FormatPattern } : {}),
                     FormatType: this.InferFormatTypeFromPattern(styleInfo.FormatPattern)
                 };
             }
@@ -11283,6 +16673,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         const cleanMasterBody = stripOoxmlFormulaPrefixes(
                             fBodyRaw.startsWith('=') ? fBodyRaw.slice(1) : fBodyRaw
                         );
+                        recordFormulaBudget(cleanMasterBody.length);
                         sharedFormulaMasters.set(sharedIdx, {
                             masterRow: rc.row,
                             masterCol: rc.col,
@@ -11297,6 +16688,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                 rc.row - master.masterRow,
                                 rc.col - master.masterCol
                             );
+                            recordFormulaBudget(shiftedBody.length);
                             formula = `=${shiftedBody}`;
                         }
                     }
@@ -11304,15 +16696,39 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     const cleanBody = stripOoxmlFormulaPrefixes(
                         fBodyRaw.startsWith('=') ? fBodyRaw.slice(1) : fBodyRaw
                     );
+                    recordFormulaBudget(cleanBody.length);
                     formula = `=${cleanBody}`;
-                    if (fType === 'array' && !cmAttr) {
-                        spillRange = (fRef || canonicalAddr).toUpperCase();
-                        if (spillRange.includes(':')) {
-                            arrayAnchorRanges.push({ anchorAddr: canonicalAddr, fRef: spillRange });
+                    if (fType === 'array') {
+                        const rawArrayRef = ((fRef || (!cmAttr ? canonicalAddr : '')) || '').toUpperCase();
+                        if (rawArrayRef.includes(':')) {
+                            const refBounds = ParseRangeAddress(rawArrayRef, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                            if (refBounds && (rc.row !== refBounds.startRow || rc.col !== refBounds.startCol)) {
+                                throw new Error(
+                                    `Spreadsheet import rejected: array anchor ${canonicalAddr} is not the top-left cell of '${rawArrayRef}'.`
+                                );
+                            }
+                            const refArea = refBounds
+                                ? (refBounds.endRow - refBounds.startRow + 1) * (refBounds.endCol - refBounds.startCol + 1)
+                                : 0;
+                            if (refBounds && refArea > 0 && refArea <= MAX_DYNAMIC_ARRAY_CELLS) {
+                                if (++budget.arrayAnchors > MAX_IMPORT_WORKBOOK_ARRAY_ANCHORS) {
+                                    throw new Error(
+                                        `Spreadsheet import rejected: workbook exceeds maximum array anchor limit (${MAX_IMPORT_WORKBOOK_ARRAY_ANCHORS}).`
+                                    );
+                                }
+                                spillRange = rawArrayRef;
+                                arrayAnchorRanges.push({
+                                    anchorAddr: canonicalAddr,
+                                    fRef: rawArrayRef,
+                                    startRow: refBounds.startRow,
+                                    endRow: refBounds.endRow,
+                                    startCol: refBounds.startCol,
+                                    endCol: refBounds.endCol
+                                });
+                            }
+                        } else if (!cmAttr && rawArrayRef) {
+                            spillRange = rawArrayRef;
                         }
-                    } else if (fType === 'array' && fRef && fRef.includes(':')) {
-                        spillRange = fRef.toUpperCase();
-                        arrayAnchorRanges.push({ anchorAddr: canonicalAddr, fRef: spillRange });
                     }
                 }
 
@@ -11334,7 +16750,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 ...(spillRange ? { SpillRange: spillRange } : {})
             };
             if (fType === 'array' || Boolean(cmAttr) || Boolean(sAttr)) {
-                CELL_XML_META.set(createdCell, {
+                getCellXmlMetaMap().set(createdCell, {
                     fType: fType || undefined,
                     fRef: fRef || canonicalAddr,
                     cmAttr: cmAttr || undefined,
@@ -11348,18 +16764,117 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        // Mark non-formula child cells inside multi-cell array/spill ranges as owned children of their anchor (R8-8)
+        // Enforce non-overlapping array anchors up front before marking child cells (`R6-1`)
+        assertNoOverlappingArrayAnchors(arrayAnchorRanges);
+
+        // Mark non-formula child cells inside multi-cell array/spill ranges using a single column-sorted index (`R5-3`)
+        const importedByCol = arrayAnchorRanges.length > 0 ? buildColSortedAddrIndex(Object.keys(ws.Cells)) : null;
         for (const anchorEntry of arrayAnchorRanges) {
             const bounds = ParseRangeAddress(anchorEntry.fRef, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
             if (!bounds) continue;
-            for (let r = bounds.startRow; r <= bounds.endRow; r++) {
-                for (let c = bounds.startCol; c <= bounds.endCol; c++) {
-                    const childAddr = FormatCellAddress(r, c);
-                    if (childAddr === anchorEntry.anchorAddr) continue;
-                    const childCell = ws.Cells[childAddr];
-                    if (childCell && !childCell.Formula) {
-                        childCell.ArrayMaster = anchorEntry.anchorAddr;
+            const area = (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
+            if (area <= 0 || area > MAX_DYNAMIC_ARRAY_CELLS) {
+                continue;
+            }
+            if (importedByCol) {
+                scanColSortedAddrIndex(
+                    importedByCol,
+                    bounds.startRow,
+                    bounds.endRow,
+                    bounds.startCol,
+                    bounds.endCol,
+                    (key) => {
+                        if (key === anchorEntry.anchorAddr) return;
+                        const childCell = ws.Cells[key];
+                        if (childCell && !childCell.Formula) {
+                            childCell.ArrayMaster = anchorEntry.anchorAddr;
+                        }
                     }
+                );
+            }
+        }
+
+        // Parse native OOXML <mergeCells>
+        const mergeBody = this.extractFirstXmlElementBody(wsXml, 'mergeCells');
+        if (mergeBody) {
+            const mergeRegex = /<mergeCell\b([^>]*?)\/?>/g;
+            let mm: RegExpExecArray | null;
+            const mergeSeen = new Set<string>();
+            const merged: string[] = [];
+            while ((mm = mergeRegex.exec(mergeBody)) !== null) {
+                const ref = this.extractXmlAttr(mm[1], 'ref');
+                if (!ref) continue;
+                const b = ParseRangeAddress(ref, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                if (!b || (b.startRow === b.endRow && b.startCol === b.endCol)) continue;
+                const canonical = `${FormatCellAddress(b.startRow, b.startCol)}:${FormatCellAddress(b.endRow, b.endCol)}`;
+                if (!mergeSeen.has(canonical)) {
+                    if (++budget.merges > MAX_IMPORT_WORKBOOK_MERGE_RANGES) {
+                        throw new Error(
+                            `Spreadsheet import rejected: workbook exceeds maximum merge range limit (${MAX_IMPORT_WORKBOOK_MERGE_RANGES}).`
+                        );
+                    }
+                    mergeSeen.add(canonical);
+                    merged.push(canonical);
+                }
+            }
+            if (merged.length > 0) {
+                ws.MergeRanges = merged;
+            }
+        }
+
+        // Parse native OOXML <dataValidations> (enforcing workbook-wide limit with explicit rejection, R6-1/R6-2)
+        const dvContainerBody = this.extractFirstXmlElementBody(wsXml, 'dataValidations');
+        if (dvContainerBody) {
+            const dvRegex = /<dataValidation\b([^>]*)>([\s\S]*?)<\/dataValidation>/g;
+            let dm: RegExpExecArray | null;
+            while ((dm = dvRegex.exec(dvContainerBody)) !== null) {
+                if (++budget.validationRules > MAX_VALIDATION_RULES_PER_SHEET) {
+                    throw new Error(
+                        `Spreadsheet import rejected: workbook exceeds maximum validation rule limit (${MAX_VALIDATION_RULES_PER_SHEET}).`
+                    );
+                }
+                const attrs = dm[1];
+                const body = dm[2];
+                const sqref = this.extractXmlAttr(attrs, 'sqref');
+                const dvType = (this.extractXmlAttr(attrs, 'type') || '').toLowerCase();
+                const allowBlank = this.extractXmlAttr(attrs, 'allowBlank');
+                const errMsg = this.extractXmlAttr(attrs, 'error');
+                if (!sqref) continue;
+                const f1 = this.extractFirstXmlElementBody(body, 'formula1');
+                const f2 = this.extractFirstXmlElementBody(body, 'formula2');
+                const ruleId = `dv-xlsx-${ws.ValidationRules.length + 1}`;
+                if (dvType === 'list' && f1 !== null) {
+                    const decoded = this.unescapeXml(f1.trim());
+                    const unquoted = decoded.startsWith('"') && decoded.endsWith('"') ? decoded.slice(1, -1) : decoded;
+                    const allowed = unquoted
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter((s) => s.length > 0);
+                    ws.ValidationRules.push({
+                        RuleID: ruleId,
+                        Range: sqref.split(/\s+/)[0].toUpperCase(),
+                        RuleType: 'list',
+                        AllowedValues: allowed,
+                        ...(errMsg ? { ErrorMessage: this.unescapeXml(errMsg) } : {})
+                    });
+                } else if (dvType === 'decimal' || dvType === 'whole') {
+                    const minVal = f1 !== null && !Number.isNaN(Number(f1.trim())) ? Number(f1.trim()) : undefined;
+                    const maxVal = f2 !== null && !Number.isNaN(Number(f2.trim())) ? Number(f2.trim()) : undefined;
+                    ws.ValidationRules.push({
+                        RuleID: ruleId,
+                        Range: sqref.split(/\s+/)[0].toUpperCase(),
+                        RuleType: 'numberRange',
+                        MinValue: minVal,
+                        MaxValue: maxVal,
+                        ...(errMsg ? { ErrorMessage: this.unescapeXml(errMsg) } : {})
+                    });
+                } else if (allowBlank === '0' || dvType === 'custom') {
+                    ws.ValidationRules.push({
+                        RuleID: ruleId,
+                        Range: sqref.split(/\s+/)[0].toUpperCase(),
+                        RuleType: 'notEmpty',
+                        ...(errMsg ? { ErrorMessage: this.unescapeXml(errMsg) } : {})
+                    });
                 }
             }
         }
@@ -11367,7 +16882,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return ws;
     }
 
-    private parseStylesXml(stylesXml: string): Array<{ FormatPattern?: string; Bold?: boolean }> {
+    private parseStylesXml(stylesXml: string): Array<{
+        FormatPattern?: string;
+        Bold?: boolean;
+        Italic?: boolean;
+        TextColor?: string;
+        BackgroundColor?: string;
+        HorizontalAlign?: 'left' | 'center' | 'right';
+    }> {
         if (!stylesXml) return [{ FormatPattern: undefined, Bold: false }];
 
         // Map all standard OOXML built-in number, currency, percent, date, and datetime numFmtIds (E6)
@@ -11418,28 +16940,79 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        const fontBoldFlags: boolean[] = [];
+        const parsedFonts: Array<{ bold: boolean; italic: boolean; color?: string }> = [];
         const fontsSection = /<fonts\b[^>]*>([\s\S]*?)<\/fonts>/.exec(stylesXml);
         if (fontsSection) {
             const fontRegex = /<font\b[^>]*>([\s\S]*?)<\/font>/g;
             let fMatch: RegExpExecArray | null;
             while ((fMatch = fontRegex.exec(fontsSection[1])) !== null) {
-                fontBoldFlags.push(/<b\b/.test(fMatch[1]));
+                const body = fMatch[1];
+                const bold = /<b\b/.test(body) && !/<b\b[^>]*\bval=["']?(?:0|false)["']?/i.test(body);
+                const italic = /<i\b/.test(body) && !/<i\b[^>]*\bval=["']?(?:0|false)["']?/i.test(body);
+                const colorMatch = /<color\b([^>]*?)\/?>/.exec(body);
+                const rgbAttr = colorMatch ? this.extractXmlAttr(colorMatch[1], 'rgb') : null;
+                parsedFonts.push({
+                    bold,
+                    italic,
+                    color: ooxmlRgbToCssHex(rgbAttr)
+                });
             }
         }
 
-        const result: Array<{ FormatPattern?: string; Bold?: boolean }> = [];
+        const parsedFills: Array<string | undefined> = [];
+        const fillsSection = /<fills\b[^>]*>([\s\S]*?)<\/fills>/.exec(stylesXml);
+        if (fillsSection) {
+            const fillRegex = /<fill\b[^>]*>([\s\S]*?)<\/fill>/g;
+            let fillMatch: RegExpExecArray | null;
+            while ((fillMatch = fillRegex.exec(fillsSection[1])) !== null) {
+                const body = fillMatch[1];
+                const patMatch = /<patternFill\b([^>]*?)(?:\/>|>([\s\S]*?)<\/patternFill>)/.exec(body);
+                const patType = patMatch ? this.extractXmlAttr(patMatch[1], 'patternType') : null;
+                if (patType === 'solid' && patMatch?.[2]) {
+                    const fgMatch = /<fgColor\b([^>]*?)\/?>/.exec(patMatch[2]);
+                    const fgRgb = fgMatch ? this.extractXmlAttr(fgMatch[1], 'rgb') : null;
+                    parsedFills.push(ooxmlRgbToCssHex(fgRgb));
+                } else {
+                    parsedFills.push(undefined);
+                }
+            }
+        }
+
+        const result: Array<{
+            FormatPattern?: string;
+            Bold?: boolean;
+            Italic?: boolean;
+            TextColor?: string;
+            BackgroundColor?: string;
+            HorizontalAlign?: 'left' | 'center' | 'right';
+        }> = [];
         const cellXfsSection = /<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/.exec(stylesXml);
         if (cellXfsSection) {
-            const xfRegex = /<xf\b([^>]*?)(?:\/>|>[\s\S]*?<\/xf>)/g;
+            const xfRegex = /<xf\b([^>]*?)(?:\/>|>([\s\S]*?)<\/xf>)/g;
             let xfMatch: RegExpExecArray | null;
             while ((xfMatch = xfRegex.exec(cellXfsSection[1])) !== null) {
                 const attrs = xfMatch[1];
+                const inner = xfMatch[2] || '';
                 const nfId = parseInt(this.extractXmlAttr(attrs, 'numFmtId') || '0', 10);
                 const fontId = parseInt(this.extractXmlAttr(attrs, 'fontId') || '0', 10);
+                const fillId = parseInt(this.extractXmlAttr(attrs, 'fillId') || '0', 10);
+                const fontMeta = parsedFonts[fontId];
+                const bgHex = fillId > 1 ? parsedFills[fillId] : undefined;
+                let align: 'left' | 'center' | 'right' | undefined;
+                if (inner) {
+                    const alignMatch = /<alignment\b([^>]*?)\/?>/.exec(inner);
+                    const horiz = alignMatch ? this.extractXmlAttr(alignMatch[1], 'horizontal')?.toLowerCase() : null;
+                    if (horiz === 'left' || horiz === 'center' || horiz === 'right') {
+                        align = horiz;
+                    }
+                }
                 result.push({
                     FormatPattern: formatById.get(nfId),
-                    Bold: fontBoldFlags[fontId] ?? false
+                    Bold: fontMeta?.bold ?? false,
+                    ...(fontMeta?.italic ? { Italic: true } : {}),
+                    ...(fontMeta?.color ? { TextColor: fontMeta.color } : {}),
+                    ...(bgHex ? { BackgroundColor: bgHex } : {}),
+                    ...(align ? { HorizontalAlign: align } : {})
                 });
             }
         }
@@ -11450,7 +17023,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return result;
     }
 
-    private buildContentTypesXml(sheetCount: number, includeCellMetadata = false): string {
+    private buildContentTypesXml(
+        sheetCount: number,
+        includeCellMetadata = false,
+        extraOverrides: string[] = []
+    ): string {
         const sheetOverrides: string[] = [];
         for (let i = 1; i <= sheetCount; i++) {
             sheetOverrides.push(
@@ -11470,7 +17047,82 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                   ]
                 : []),
             ...sheetOverrides,
+            ...extraOverrides,
             '</Types>'
+        ].join('');
+    }
+
+    private buildSpreadsheetDrawingMlChartXml(
+        chart: SpreadsheetChartSpec,
+        sheetName: string,
+        dataset: SpreadsheetChartDataset | null
+    ): string {
+        const tagByType: Record<SpreadsheetChartType, string> = {
+            bar: 'c:barChart',
+            line: 'c:lineChart',
+            pie: 'c:pieChart',
+            area: 'c:areaChart'
+        };
+        const chartTag = tagByType[chart.ChartType] ?? 'c:barChart';
+        const categories = dataset?.Categories ?? [];
+        const seriesList = dataset?.Series ?? [];
+        const quotedSheet = `'${sheetName.replace(/'/g, "''")}'`;
+        const bounds = ParseRangeAddress(chart.SourceRange.split(',')[0] ?? 'A1:B2', EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+
+        const seriesXml = seriesList
+            .map((ser, sIdx) => {
+                const catPts = categories
+                    .map((lbl, idx) => `<c:pt idx="${idx}"><c:v>${this.escapeXml(lbl)}</c:v></c:pt>`)
+                    .join('');
+                const valPts = ser.Values.map(
+                    (val, idx) => `<c:pt idx="${idx}"><c:v>${Number.isFinite(val) ? val : 0}</c:v></c:pt>`
+                ).join('');
+                const catRefFormula = bounds
+                    ? `${quotedSheet}!$${ColumnIndexToLetter(bounds.startCol)}$${bounds.startRow + 1}:$${ColumnIndexToLetter(bounds.startCol)}$${Math.max(bounds.startRow + 1, bounds.endRow)}`
+                    : `${quotedSheet}!$A$2:$A$${Math.max(2, categories.length + 1)}`;
+                const valColLetter = bounds
+                    ? ColumnIndexToLetter(Math.min(bounds.endCol, bounds.startCol + sIdx + 1))
+                    : ColumnIndexToLetter(sIdx + 2);
+                const valRefFormula = bounds
+                    ? `${quotedSheet}!$${valColLetter}$${bounds.startRow + 1}:$${valColLetter}$${Math.max(bounds.startRow + 1, bounds.endRow)}`
+                    : `${quotedSheet}!$${valColLetter}$2:$${valColLetter}$${Math.max(2, ser.Values.length + 1)}`;
+                return (
+                    `<c:ser><c:idx val="${sIdx}"/><c:order val="${sIdx}"/>` +
+                    `<c:tx><c:v>${this.escapeXml(ser.Name || `Series ${sIdx + 1}`)}</c:v></c:tx>` +
+                    `<c:cat><c:strRef><c:f>${this.escapeXml(catRefFormula)}</c:f><c:strCache><c:ptCount val="${categories.length}"/>${catPts}</c:strCache></c:strRef></c:cat>` +
+                    `<c:val><c:numRef><c:f>${this.escapeXml(valRefFormula)}</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${ser.Values.length}"/>${valPts}</c:numCache></c:numRef></c:val>` +
+                    `</c:ser>`
+                );
+            })
+            .join('');
+
+        const isPie = chart.ChartType === 'pie';
+        const chartBody =
+            chart.ChartType === 'bar'
+                ? `<c:barDir val="col"/><c:grouping val="clustered"/>${seriesXml}<c:axId val="1"/><c:axId val="2"/>`
+                : isPie
+                  ? `${seriesXml}`
+                  : `<c:grouping val="standard"/>${seriesXml}<c:axId val="1"/><c:axId val="2"/>`;
+        const axesXml = isPie
+            ? ''
+            : `<c:catAx><c:axId val="1"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:crossAx val="2"/></c:catAx>` +
+              `<c:valAx><c:axId val="2"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:crossAx val="1"/></c:valAx>`;
+
+        const titleXml = chart.Title
+            ? `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>${this.escapeXml(chart.Title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>`
+            : '';
+        const legendXml = chart.ShowLegend !== false ? '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>' : '';
+
+        return [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+            '<c:chart>',
+            titleXml,
+            `<c:plotArea><c:layout/><${chartTag}>${chartBody}</${chartTag}>${axesXml}</c:plotArea>`,
+            legendXml,
+            '<c:plotVisOnly val="1"/>',
+            '</c:chart>',
+            '</c:chartSpace>'
         ].join('');
     }
 
@@ -11540,7 +17192,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
     private buildStylesXml(
         numFmts: Array<{ Id: number; FormatCode: string }>,
-        cellXfs: Array<{ NumFmtId: number; FontId: number }>
+        cellXfs: Array<{
+            NumFmtId: number;
+            FontId: number;
+            FillId: number;
+            HorizontalAlign?: 'left' | 'center' | 'right';
+        }>,
+        fonts: Array<{ Bold: boolean; Italic: boolean; ColorArgb?: string }>,
+        fillFgs: string[]
     ): string {
         const numFmtsXml =
             numFmts.length > 0
@@ -11548,20 +17207,42 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                       .map((nf) => `<numFmt numFmtId="${nf.Id}" formatCode="${this.escapeXml(nf.FormatCode)}"/>`)
                       .join('')}</numFmts>`
                 : '';
-        const xfsXml = cellXfs
+        const fontsXml = fonts
             .map(
-                (xf) =>
-                    `<xf numFmtId="${xf.NumFmtId}" fontId="${xf.FontId}" fillId="0" borderId="0" xfId="0"${
-                        xf.NumFmtId > 0 ? ' applyNumberFormat="1"' : ''
-                    }${xf.FontId > 0 ? ' applyFont="1"' : ''}/>`
+                (f) =>
+                    `<font>${f.Bold ? '<b/>' : ''}${f.Italic ? '<i/>' : ''}<sz val="11"/>${
+                        f.ColorArgb ? `<color rgb="${this.escapeXml(f.ColorArgb)}"/>` : ''
+                    }<name val="Calibri"/></font>`
             )
+            .join('');
+        const fillsXml = [
+            '<fill><patternFill patternType="none"/></fill>',
+            '<fill><patternFill patternType="gray125"/></fill>',
+            ...fillFgs.map(
+                (argb) =>
+                    `<fill><patternFill patternType="solid"><fgColor rgb="${this.escapeXml(argb)}"/></patternFill></fill>`
+            )
+        ].join('');
+        const xfsXml = cellXfs
+            .map((xf) => {
+                const attrs =
+                    `numFmtId="${xf.NumFmtId}" fontId="${xf.FontId}" fillId="${xf.FillId}" borderId="0" xfId="0"` +
+                    `${xf.NumFmtId > 0 ? ' applyNumberFormat="1"' : ''}` +
+                    `${xf.FontId > 0 ? ' applyFont="1"' : ''}` +
+                    `${xf.FillId > 1 ? ' applyFill="1"' : ''}` +
+                    `${xf.HorizontalAlign ? ' applyAlignment="1"' : ''}`;
+                if (xf.HorizontalAlign) {
+                    return `<xf ${attrs}><alignment horizontal="${xf.HorizontalAlign}"/></xf>`;
+                }
+                return `<xf ${attrs}/>`;
+            })
             .join('');
         return [
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
             '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
             numFmtsXml,
-            '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>',
-            '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>',
+            `<fonts count="${fonts.length}">${fontsXml}</fonts>`,
+            `<fills count="${2 + fillFgs.length}">${fillsXml}</fills>`,
             '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>',
             '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
             `<cellXfs count="${cellXfs.length}">${xfsXml}</cellXfs>`,
@@ -11570,7 +17251,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     private escapeXml(str: string): string {
-        return str
+        // Strip XML 1.0 illegal control characters (keeping tab \x09, LF \x0A, CR \x0D) and non-characters U+FFFE/U+FFFF
+        const clean = str.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
+        return clean
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
@@ -11579,7 +17262,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     private unescapeXml(str: string): string {
+        // Decode OOXML _xHHHH_ escapes and numeric character references (&#x...;, &#...;) before named entities
         return str
+            .replace(/_x([0-9A-Fa-f]{4})_/g, (_m, hex: string) => {
+                const cp = parseInt(hex, 16);
+                if (cp === 0 || (cp >= 0x01 && cp <= 0x08) || cp === 0x0b || cp === 0x0c || (cp >= 0x0e && cp <= 0x1f)) {
+                    return cp === 0x0d || cp === 0x0a || cp === 0x09 ? String.fromCharCode(cp) : '';
+                }
+                return String.fromCharCode(cp);
+            })
+            .replace(/&#x([0-9A-Fa-f]+);/gi, (_m, hex: string) => {
+                const cp = parseInt(hex, 16);
+                return cp >= 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : '';
+            })
+            .replace(/&#(\d+);/g, (_m, dec: string) => {
+                const cp = parseInt(dec, 10);
+                return cp >= 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : '';
+            })
             .replace(/&apos;/g, "'")
             .replace(/&quot;/g, '"')
             .replace(/&gt;/g, '>')
@@ -11953,6 +17652,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 throw new Error('Corrupt ZIP Central Directory signature.');
             }
             const method = view.getUint16(cdOffset + 10, true);
+            const expectedCrc = view.getUint32(cdOffset + 16, true);
             const compSize = view.getUint32(cdOffset + 20, true);
             const uncompSize = view.getUint32(cdOffset + 24, true);
             const nameLen = view.getUint16(cdOffset + 28, true);
@@ -11983,7 +17683,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
             const rawSlice = zipBytes.subarray(dataStart, dataStart + compSize);
             const remainingBudget = MAX_XLSX_UNCOMPRESSED_TOTAL_BYTES - totalUncompressedBytes;
-            const ratioCap = Math.max(12 * 1024 * 1024, compSize * 100);
+            const declaredValidLargeSheet =
+                uncompSize > 0 && uncompSize <= MAX_XLSX_ENTRY_BYTES && compSize >= 64 * 1024 ? uncompSize : 0;
+            const ratioCap = Math.max(12 * 1024 * 1024, compSize * 100, declaredValidLargeSheet);
             const entryCap = Math.min(MAX_XLSX_ENTRY_BYTES, remainingBudget, ratioCap);
 
             if (method === 0) {
@@ -11992,10 +17694,21 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         `Uncompressed ZIP size exceeds maximum allowed limit (${MAX_XLSX_UNCOMPRESSED_TOTAL_BYTES} bytes).`
                     );
                 }
+                if (expectedCrc !== 0 && this.crc32(rawSlice) !== expectedCrc) {
+                    throw new Error(`ZIP CRC-32 mismatch for '${fileName}'.`);
+                }
                 totalUncompressedBytes += rawSlice.byteLength;
                 files.set(fileName, rawSlice);
             } else if (method === 8) {
                 const inflated = this.inflateRawDeflate(rawSlice, entryCap);
+                if (uncompSize > 0 && inflated.byteLength !== uncompSize) {
+                    throw new Error(
+                        `ZIP entry size mismatch for '${fileName}': expected ${uncompSize} bytes, got ${inflated.byteLength}.`
+                    );
+                }
+                if (expectedCrc !== 0 && this.crc32(inflated) !== expectedCrc) {
+                    throw new Error(`ZIP CRC-32 mismatch for '${fileName}'.`);
+                }
                 totalUncompressedBytes += inflated.byteLength;
                 if (totalUncompressedBytes > MAX_XLSX_UNCOMPRESSED_TOTAL_BYTES) {
                     throw new Error(
@@ -12288,7 +18001,10 @@ interface WorkbookDependencyGraph {
     directCellDepSets: Map<string, Set<string>>;
     reverseCellDeps: Map<string, Set<string>>;
     rangeWatchersBySheet: Map<string, RangeWatcherEntry[]>;
+    rangeWatchesByCell: Map<string, Array<{ sheetId: string; startRow: number; endRow: number; startCol: number; endCol: number }>>;
     watchedSheetsByCell: Map<string, string[]>;
+    formulaCellsBySheet: Map<WorksheetSpec, Map<number, Array<{ row: number; key: string }>>>;
+    spillBlockedKeysBySheet: Map<string, Set<string>>;
     sheetById: Map<string, WorksheetSpec>;
 }
 
@@ -12307,7 +18023,28 @@ type FormulaAstNode =
     | { kind: 'UnaryOp'; op: '+' | '-'; operand: FormulaAstNode }
     | { kind: 'PostfixPercent'; operand: FormulaAstNode }
     | { kind: 'BinaryOp'; op: BinaryOperator; left: FormulaAstNode; right: FormulaAstNode }
-    | { kind: 'FunctionCall'; name: string; args: FormulaAstNode[] };
+    | { kind: 'FunctionCall'; name: string; args: FormulaAstNode[] }
+    | { kind: 'InvokeLambda'; callee: FormulaAstNode; args: FormulaAstNode[] };
+
+type SpreadsheetLexicalBinding =
+    | { kind: 'scalar'; value: SpreadsheetCellValue }
+    | { kind: 'matrix'; value: SpreadsheetCellValue[][] }
+    | {
+          kind: 'lambda';
+          params: string[];
+          body: FormulaAstNode;
+          closureScope?: ReadonlyMap<string, SpreadsheetLexicalBinding>;
+      };
+
+const DYNAMIC_ARRAY_FN_SET = new Set<string>([
+    'FILTER',
+    'UNIQUE',
+    'SORT',
+    'SORTBY',
+    'SEQUENCE',
+    'LET',
+    'LAMBDA'
+]);
 
 type FormulaToken =
     | { type: 'Number'; value: number }
@@ -12325,26 +18062,53 @@ type FormulaToken =
     | { type: 'RBrace' }
     | { type: 'Semicolon' };
 
-const FORMULA_AST_CACHE = new Map<string, FormulaAstNode>();
+const FORMULA_AST_CACHE_STORE_KEY = '___MJ_SPREADSHEET_FORMULA_AST_CACHE';
+function getFormulaAstCache(): Map<string, FormulaAstNode> {
+    const store = MJGlobal.Instance.GetGlobalObjectStore();
+    let cache = store[FORMULA_AST_CACHE_STORE_KEY] as Map<string, FormulaAstNode> | undefined;
+    if (!cache) {
+        cache = new Map<string, FormulaAstNode>();
+        store[FORMULA_AST_CACHE_STORE_KEY] = cache;
+    }
+    return cache;
+}
 
 function compileFormulaAstCached(exprBody: string): FormulaAstNode {
-    const existing = FORMULA_AST_CACHE.get(exprBody);
+    const cache = getFormulaAstCache();
+    const existing = cache.get(exprBody);
     if (existing) {
         return existing;
     }
     const ast = parseFormulaAst(exprBody);
-    if (FORMULA_AST_CACHE.size >= MAX_AST_CACHE_ENTRIES) {
-        const firstKey = FORMULA_AST_CACHE.keys().next().value;
+    if (cache.size >= MAX_AST_CACHE_ENTRIES) {
+        const firstKey = cache.keys().next().value;
         if (firstKey !== undefined) {
-            FORMULA_AST_CACHE.delete(firstKey);
+            cache.delete(firstKey);
         }
     }
-    FORMULA_AST_CACHE.set(exprBody, ast);
+    cache.set(exprBody, ast);
     return ast;
 }
 
+interface ScannedFormulaToken {
+    token: FormulaToken;
+    start: number;
+    end: number;
+}
+
 function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
-    const tokens: FormulaToken[] = [];
+    const scanned = scanFormulaTokens(expr);
+    if (!Array.isArray(scanned)) {
+        return scanned;
+    }
+    return scanned.map((entry) => entry.token);
+}
+
+function scanFormulaTokens(expr: string): ScannedFormulaToken[] | { error: string } {
+    if (expr.length > MAX_FORMULA_LENGTH) {
+        return { error: '#VALUE!' };
+    }
+    const tokens: ScannedFormulaToken[] = [];
     let i = 0;
     const len = expr.length;
 
@@ -12354,6 +18118,7 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
             i++;
             continue;
         }
+        const tokenStart = i;
 
         // String literal with doubled "" escapes
         if (ch === '"') {
@@ -12376,7 +18141,7 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
             if (!closed) {
                 return { error: '#VALUE!' };
             }
-            tokens.push({ type: 'String', value: buf });
+            tokens.push({ token: { type: 'String', value: buf }, start: tokenStart, end: i });
             continue;
         }
 
@@ -12402,7 +18167,7 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
                 return { error: '#VALUE!' };
             }
             i++; // consume '!'
-            tokens.push({ type: 'SheetPrefix', sheetName: sheetBuf });
+            tokens.push({ token: { type: 'SheetPrefix', sheetName: sheetBuf }, start: tokenStart, end: i });
             continue;
         }
 
@@ -12411,8 +18176,8 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
             const rest = expr.slice(i);
             const errMatch = /^#(REF!|DIV\/0!|VALUE!|NAME\?|N\/A|NUM!|NULL!|CYCLE!|SPILL!|CALC!|MJ_ACCESS_DENIED!|MJ_PENDING!)/i.exec(rest);
             if (errMatch) {
-                tokens.push({ type: 'Error', value: `#${errMatch[1].toUpperCase()}` });
                 i += errMatch[0].length;
+                tokens.push({ token: { type: 'Error', value: `#${errMatch[1].toUpperCase()}` }, start: tokenStart, end: i });
                 continue;
             }
             return { error: '#VALUE!' };
@@ -12420,10 +18185,10 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
 
         // Numeric literal (including leading dot .5 and scientific notation 1e-11, 1.5E+3)
         if ((ch >= '0' && ch <= '9') || (ch === '.' && i + 1 < len && expr[i + 1] >= '0' && expr[i + 1] <= '9')) {
-            const numMatch = /^(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/.exec(expr.slice(i));
+            const numMatch = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(expr.slice(i));
             if (numMatch) {
-                tokens.push({ type: 'Number', value: Number(numMatch[0]) });
                 i += numMatch[0].length;
+                tokens.push({ token: { type: 'Number', value: Number(numMatch[0]) }, start: tokenStart, end: i });
                 continue;
             }
         }
@@ -12431,55 +18196,55 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
         // Two-character comparison operators
         const twoChar = expr.slice(i, i + 2);
         if (twoChar === '<>' || twoChar === '<=' || twoChar === '>=') {
-            tokens.push({ type: 'Op', value: twoChar });
             i += 2;
+            tokens.push({ token: { type: 'Op', value: twoChar }, start: tokenStart, end: i });
             continue;
         }
 
         // Single-character operators and punctuation
         if (ch === '=' || ch === '<' || ch === '>' || ch === '&' || ch === '+' || ch === '-' || ch === '*' || ch === '/' || ch === '^') {
-            tokens.push({ type: 'Op', value: ch });
             i++;
+            tokens.push({ token: { type: 'Op', value: ch }, start: tokenStart, end: i });
             continue;
         }
         if (ch === '%') {
-            tokens.push({ type: 'Percent' });
             i++;
+            tokens.push({ token: { type: 'Percent' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === ':') {
-            tokens.push({ type: 'Colon' });
             i++;
+            tokens.push({ token: { type: 'Colon' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === ',') {
-            tokens.push({ type: 'Comma' });
             i++;
+            tokens.push({ token: { type: 'Comma' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === '(') {
-            tokens.push({ type: 'LParen' });
             i++;
+            tokens.push({ token: { type: 'LParen' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === ')') {
-            tokens.push({ type: 'RParen' });
             i++;
+            tokens.push({ token: { type: 'RParen' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === '{') {
-            tokens.push({ type: 'LBrace' });
             i++;
+            tokens.push({ token: { type: 'LBrace' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === '}') {
-            tokens.push({ type: 'RBrace' });
             i++;
+            tokens.push({ token: { type: 'RBrace' }, start: tokenStart, end: i });
             continue;
         }
         if (ch === ';') {
-            tokens.push({ type: 'Semicolon' });
             i++;
+            tokens.push({ token: { type: 'Semicolon' }, start: tokenStart, end: i });
             continue;
         }
 
@@ -12491,9 +18256,9 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
                 i += rawIdent.length;
                 if (expr[i] === '!') {
                     i++; // consume '!'
-                    tokens.push({ type: 'SheetPrefix', sheetName: rawIdent });
+                    tokens.push({ token: { type: 'SheetPrefix', sheetName: rawIdent }, start: tokenStart, end: i });
                 } else {
-                    tokens.push({ type: 'Ident', value: rawIdent });
+                    tokens.push({ token: { type: 'Ident', value: rawIdent }, start: tokenStart, end: i });
                 }
                 continue;
             }
@@ -12516,26 +18281,37 @@ function parseFormulaAst(expr: string): FormulaAstNode {
     }
 
     let pos = 0;
+    let astDepth = 0;
+    let astDepthExceeded = false;
     const peek = (): FormulaToken | undefined => tokens[pos];
     const consume = (): FormulaToken | undefined => tokens[pos++];
 
     // Precedence 1 (lowest): Comparison (=, <>, <, <=, >, >=)
     const parseComparison = (): FormulaAstNode => {
-        let left = parseConcat();
-        while (true) {
-            const t = peek();
-            if (
-                t?.type === 'Op' &&
-                (t.value === '=' || t.value === '<>' || t.value === '<' || t.value === '<=' || t.value === '>' || t.value === '>=')
-            ) {
-                consume();
-                const right = parseConcat();
-                left = { kind: 'BinaryOp', op: t.value, left, right };
-            } else {
-                break;
-            }
+        if (astDepth >= MAX_AST_DEPTH) {
+            astDepthExceeded = true;
+            return { kind: 'ErrorLiteral', error: '#VALUE!' };
         }
-        return left;
+        astDepth++;
+        try {
+            let left = parseConcat();
+            while (!astDepthExceeded) {
+                const t = peek();
+                if (
+                    t?.type === 'Op' &&
+                    (t.value === '=' || t.value === '<>' || t.value === '<' || t.value === '<=' || t.value === '>' || t.value === '>=')
+                ) {
+                    consume();
+                    const right = parseConcat();
+                    left = { kind: 'BinaryOp', op: t.value, left, right };
+                } else {
+                    break;
+                }
+            }
+            return left;
+        } finally {
+            astDepth--;
+        }
     };
 
     // Precedence 2: Concatenation (&)
@@ -12583,13 +18359,22 @@ function parseFormulaAst(expr: string): FormulaAstNode {
 
     // Precedence 5: Prefix Unary (+, -) and Exponentiation (^)
     const parseUnary = (): FormulaAstNode => {
-        const t = peek();
-        if (t?.type === 'Op' && (t.value === '+' || t.value === '-')) {
-            consume();
-            const operand = parseUnary();
-            return { kind: 'UnaryOp', op: t.value, operand };
+        if (astDepth >= MAX_AST_DEPTH) {
+            astDepthExceeded = true;
+            return { kind: 'ErrorLiteral', error: '#VALUE!' };
         }
-        return parsePower();
+        astDepth++;
+        try {
+            const t = peek();
+            if (t?.type === 'Op' && (t.value === '+' || t.value === '-')) {
+                consume();
+                const operand = parseUnary();
+                return { kind: 'UnaryOp', op: t.value, operand };
+            }
+            return parsePower();
+        } finally {
+            astDepth--;
+        }
     };
 
     const parsePower = (): FormulaAstNode => {
@@ -12780,7 +18565,38 @@ function parseFormulaAst(expr: string): FormulaAstNode {
                 const fnArgs: FormulaAstNode[] = [];
                 if (peek()?.type === 'RParen') {
                     consume();
-                    return { kind: 'FunctionCall', name: t.value, args: fnArgs };
+                    let node: FormulaAstNode = { kind: 'FunctionCall', name: t.value, args: fnArgs };
+                while (t.value.toUpperCase() === 'LAMBDA' && peek()?.type === 'LParen') {
+                    consume(); // '('
+                    const callArgs: FormulaAstNode[] = [];
+                    if (peek()?.type === 'RParen') {
+                        consume();
+                    } else {
+                        while (true) {
+                            if (peek()?.type === 'Comma' || peek()?.type === 'RParen') {
+                                callArgs.push({ kind: 'EmptyArg' });
+                            } else {
+                                callArgs.push(parseComparison());
+                            }
+                            if (peek()?.type === 'Comma') {
+                                consume();
+                                if (peek()?.type === 'RParen') {
+                                    callArgs.push({ kind: 'EmptyArg' });
+                                    consume();
+                                    break;
+                                }
+                                continue;
+                            }
+                            if (peek()?.type === 'RParen') {
+                                consume();
+                                break;
+                            }
+                            return { kind: 'ErrorLiteral', error: '#VALUE!' };
+                        }
+                    }
+                    node = { kind: 'InvokeLambda', callee: node, args: callArgs };
+                }
+                return node;
                 }
                 while (true) {
                     if (peek()?.type === 'Comma' || peek()?.type === 'RParen') {
@@ -12803,7 +18619,38 @@ function parseFormulaAst(expr: string): FormulaAstNode {
                     }
                     return { kind: 'ErrorLiteral', error: '#VALUE!' };
                 }
-                return { kind: 'FunctionCall', name: t.value, args: fnArgs };
+                let node: FormulaAstNode = { kind: 'FunctionCall', name: t.value, args: fnArgs };
+                while (t.value.toUpperCase() === 'LAMBDA' && peek()?.type === 'LParen') {
+                    consume(); // '('
+                    const callArgs: FormulaAstNode[] = [];
+                    if (peek()?.type === 'RParen') {
+                        consume();
+                    } else {
+                        while (true) {
+                            if (peek()?.type === 'Comma' || peek()?.type === 'RParen') {
+                                callArgs.push({ kind: 'EmptyArg' });
+                            } else {
+                                callArgs.push(parseComparison());
+                            }
+                            if (peek()?.type === 'Comma') {
+                                consume();
+                                if (peek()?.type === 'RParen') {
+                                    callArgs.push({ kind: 'EmptyArg' });
+                                    consume();
+                                    break;
+                                }
+                                continue;
+                            }
+                            if (peek()?.type === 'RParen') {
+                                consume();
+                                break;
+                            }
+                            return { kind: 'ErrorLiteral', error: '#VALUE!' };
+                        }
+                    }
+                    node = { kind: 'InvokeLambda', callee: node, args: callArgs };
+                }
+                return node;
             }
 
             // Boolean literals
@@ -12858,7 +18705,7 @@ function parseFormulaAst(expr: string): FormulaAstNode {
     };
 
     const root = parseComparison();
-    if (pos < tokens.length) {
+    if (astDepthExceeded || pos < tokens.length) {
         return { kind: 'ErrorLiteral', error: '#VALUE!' };
     }
     return root;
@@ -12908,12 +18755,37 @@ export class XlsxOpenXmlAdapter extends BaseSingleton<XlsxOpenXmlAdapter> {
         return SpreadsheetEngine.Instance.ExportToXlsxBytes(workbook, includeMjMetadataSheet);
     }
 
-    public ImportXlsx(bytes: Uint8Array | ArrayBuffer, configurationJson?: string | null): WorkbookSpec {
-        return SpreadsheetEngine.Instance.ImportFromXlsxBytes(bytes, configurationJson);
+    public ImportXlsx(
+        bytes: Uint8Array | ArrayBuffer,
+        configurationJson?: string | null,
+        options?: { SkipEvaluate?: boolean }
+    ): WorkbookSpec {
+        return SpreadsheetEngine.Instance.ImportFromXlsxBytes(bytes, configurationJson, options);
+    }
+
+    public ImportXlsxIsolated(
+        bytes: Uint8Array | ArrayBuffer,
+        configurationJson?: string | null,
+        options?: { SkipEvaluate?: boolean }
+    ): Promise<WorkbookSpec> {
+        if (!GetSpreadsheetWorkerRunner()) {
+            return Promise.resolve(this.ImportXlsx(bytes, configurationJson, options));
+        }
+        return SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated(bytes, configurationJson, options);
     }
 
     public PatchXlsxBytes(originalBytes: Uint8Array | ArrayBuffer, workbook: WorkbookSpec): Uint8Array {
         return SpreadsheetEngine.Instance.PatchXlsxBytes(originalBytes, workbook);
+    }
+
+    public PatchXlsxBytesIsolated(
+        originalBytes: Uint8Array | ArrayBuffer,
+        workbook: WorkbookSpec
+    ): Promise<Uint8Array> {
+        if (!GetSpreadsheetWorkerRunner()) {
+            return Promise.resolve(this.PatchXlsxBytes(originalBytes, workbook));
+        }
+        return SpreadsheetEngine.Instance.PatchXlsxBytesIsolated(originalBytes, workbook);
     }
 }
 
@@ -13006,18 +18878,11 @@ function getEffectiveSheetDimensions(ws: WorksheetSpec): { maxRow: number; maxCo
 }
 
 const OOXML_FUTURE_FUNCTION_REGEX =
-    /(?<![A-Za-z0-9_.])\b(SEQUENCE|XLOOKUP|XMATCH|FILTER|UNIQUE|SORT|SORTBY|RANDARRAY|LET|TEXTJOIN|IFS|SWITCH|MAXIFS|MINIFS|CONCAT|IFNA|DAYS)(?=\s*\()/gi;
+    /(?<![A-Za-z0-9_.])\b(SEQUENCE|XLOOKUP|XMATCH|FILTER|UNIQUE|SORT|SORTBY|RANDARRAY|LET|LAMBDA|TEXTJOIN|IFS|SWITCH|MAXIFS|MINIFS|CONCAT|IFNA|DAYS)(?=\s*\()/gi;
 
 const UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL = '#UNIMPL_DYN!';
 const UNIMPLEMENTED_DYNAMIC_ARRAY_FN_SET = new Set<string>([
-    'UNIQUE',
-    'SORT',
-    'SORTBY',
-    'FILTER',
-    'SEQUENCE',
     'RANDARRAY',
-    'LET',
-    'LAMBDA',
     'MAP',
     'REDUCE',
     'SCAN',
@@ -13038,7 +18903,7 @@ const UNIMPLEMENTED_DYNAMIC_ARRAY_FN_SET = new Set<string>([
 ]);
 
 const UNIMPLEMENTED_DYNAMIC_ARRAY_CALL_REGEX =
-    /\b(SEQUENCE|FILTER|UNIQUE|SORT|SORTBY|RANDARRAY|LET|LAMBDA|MAP|REDUCE|SCAN|MAKEARRAY|BYROW|BYCOL|VSTACK|HSTACK|TOCOL|TOROW|WRAPROWS|WRAPCOLS|TAKE|DROP|CHOOSEROWS|CHOOSECOLS|EXPAND)\s*\(/i;
+    /\b(RANDARRAY|MAP|REDUCE|SCAN|MAKEARRAY|BYROW|BYCOL|VSTACK|HSTACK|TOCOL|TOROW|WRAPROWS|WRAPCOLS|TAKE|DROP|CHOOSEROWS|CHOOSECOLS|EXPAND)\s*\(/i;
 
 function prefixLetParametersInMaskedFormula(expr: string, boundParams: ReadonlySet<string>): string {
     let out = '';
@@ -13372,13 +19237,71 @@ export function ValidateExtraFilter(extraFilter: string): {
         }
     }
 
+    const hasSqlFunctionCall = (sqlText: string): boolean => {
+        let searchFrom = 0;
+        while (searchFrom < sqlText.length) {
+            const openParen = sqlText.indexOf('(', searchFrom);
+            if (openParen === -1) {
+                return false;
+            }
+            let pos = openParen - 1;
+            while (pos >= 0 && /\s/.test(sqlText[pos])) {
+                pos--;
+            }
+            if (pos >= 0 && /[A-Za-z0-9_]/.test(sqlText[pos])) {
+                let identStart = pos;
+                while (identStart > 0 && /[A-Za-z0-9_]/.test(sqlText[identStart - 1])) {
+                    identStart--;
+                }
+                if (/[A-Za-z_]/.test(sqlText[identStart])) {
+                    return true;
+                }
+            }
+            searchFrom = openParen + 1;
+        }
+        return false;
+    };
+
+    const splitSqlAndClauses = (sqlText: string): string[] => {
+        const parts: string[] = [];
+        const upper = sqlText.toUpperCase();
+        let clauseStart = 0;
+        let scan = 0;
+        while (scan < upper.length) {
+            const andIdx = upper.indexOf('AND', scan);
+            if (andIdx === -1) {
+                break;
+            }
+            const beforeOk = andIdx > clauseStart && /\s/.test(sqlText[andIdx - 1]);
+            const afterIdx = andIdx + 3;
+            const afterOk = afterIdx < sqlText.length && /\s/.test(sqlText[afterIdx]);
+            if (beforeOk && afterOk) {
+                let leftWs = andIdx - 1;
+                while (leftWs > clauseStart && /\s/.test(sqlText[leftWs - 1])) {
+                    leftWs--;
+                }
+                let rightWs = afterIdx + 1;
+                while (rightWs < sqlText.length && /\s/.test(sqlText[rightWs])) {
+                    rightWs++;
+                }
+                parts.push(sqlText.slice(clauseStart, leftWs));
+                clauseStart = rightWs;
+                scan = rightWs;
+            } else {
+                scan = andIdx + 3;
+            }
+        }
+        parts.push(sqlText.slice(clauseStart));
+        return parts;
+    };
+
     // Reject SQL comments, statement separators, @@/@variables, unbracketed niladic session tokens, DDL/DML keywords, and all function calls!
     if (
         /;|--|\/\*|\*\/|@@?[A-Za-z_]/.test(masked) ||
         /\b(DROP|DELETE|UPDATE|INSERT|EXEC|EXECUTE|UNION|SELECT|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|WAITFOR|OPENROWSET|OPENQUERY|OPENDATASOURCE|USER|SYSTEM_USER|CURRENT_USER|SESSION_USER|CURRENT_ROLE|CURRENT_CATALOG|CURRENT_SCHEMA)\b/i.test(
             masked
         ) ||
-        /(?:[A-Za-z_][A-Za-z0-9_]*|__MJ_COL_\d+__)\s*\(/.test(masked)
+        hasSqlFunctionCall(masked)
     ) {
         return {
             Valid: false,
@@ -13387,7 +19310,7 @@ export function ValidateExtraFilter(extraFilter: string): {
         };
     }
 
-    const maskedClauses = masked.split(/\s+\bAND\b\s+/i);
+    const maskedClauses = splitSqlAndClauses(masked);
     const parsedClauses: string[] = [];
     for (const maskedClause of maskedClauses) {
         const simpleCmp =
@@ -13569,36 +19492,97 @@ function matchExcelWildcard(pattern: string, candidate: string): boolean {
     return pi === tokens.length;
 }
 
-function shiftSharedFormulaRelativeRefs(formulaBody: string, dRow: number, dCol: number): string {
-    if (dRow === 0 && dCol === 0) return formulaBody;
-    const strLiterals: string[] = [];
-    let masked = formulaBody.replace(/"(?:""|[^"])*"/g, (m) => {
-        strLiterals.push(m);
-        return `__SF_STR_${strLiterals.length - 1}__`;
-    });
-    const sheetPrefixes: string[] = [];
-    masked = masked.replace(/(?:'(?:''|[^'])*'|[A-Za-z_][A-Za-z0-9_.]*)!/g, (m) => {
-        sheetPrefixes.push(m);
-        return `__SF_SH_${sheetPrefixes.length - 1}__!`;
-    });
+function parseWholeColumnToken(raw: string): { abs: boolean; col: number } | null {
+    const match = /^(\$?)([A-Za-z]{1,3})$/.exec(raw);
+    if (!match) return null;
+    const col = ColumnLetterToIndex(match[2]);
+    if (col < 1 || col > EXCEL_MAX_COLS) return null;
+    return { abs: match[1] === '$', col };
+}
 
-    const shifted = masked.replace(
-        /(?<![A-Za-z0-9_.])(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*)(?![A-Za-z0-9_.(\[])/g,
-        (_full, absC: string, colLet: string, absR: string, rowStr: string) => {
-            const origRow = parseInt(rowStr, 10);
-            const origCol = ColumnLetterToIndex(colLet);
-            const nextRow = absR === '$' ? origRow : origRow + dRow;
-            const nextCol = absC === '$' ? origCol : origCol + dCol;
-            if (nextRow < 1 || nextCol < 1) return '#REF!';
-            return FormatCellAddress(nextRow, nextCol, absR === '$', absC === '$');
+function parseWholeRowToken(raw: string): { abs: boolean; row: number } | null {
+    const match = /^(\$?)([1-9][0-9]*)$/.exec(raw);
+    if (!match) return null;
+    const row = parseInt(match[2], 10);
+    if (!Number.isFinite(row) || row < 1 || row > EXCEL_MAX_ROWS) return null;
+    return { abs: match[1] === '$', row };
+}
+
+function shiftFormulaBodyReferences(formulaBody: string, dRow: number, dCol: number): string {
+    if (!formulaBody || (dRow === 0 && dCol === 0)) return formulaBody;
+    const scanned = scanFormulaTokens(formulaBody);
+    if (!Array.isArray(scanned)) return formulaBody;
+
+    const edits: Array<{ start: number; end: number; text: string }> = [];
+    for (let idx = 0; idx < scanned.length; idx++) {
+        const entry = scanned[idx];
+        const tok = entry.token;
+        const prev = idx > 0 ? scanned[idx - 1].token : null;
+        const next = idx + 1 < scanned.length ? scanned[idx + 1].token : null;
+        const colonSiblingIdx = next?.type === 'Colon' ? idx + 2 : prev?.type === 'Colon' ? idx - 2 : -1;
+        const colonSiblingRaw =
+            colonSiblingIdx >= 0 && colonSiblingIdx < scanned.length
+                ? formulaBody.slice(scanned[colonSiblingIdx].start, scanned[colonSiblingIdx].end)
+                : null;
+
+        if (tok.type === 'Ident') {
+            if (next?.type === 'LParen') {
+                continue; // Function identifier (e.g. LOG10(, ATAN2()
+            }
+            const parsed = ParseCellAddress(tok.value);
+            if (parsed) {
+                const nextRow = parsed.absRow ? parsed.row : parsed.row + dRow;
+                const nextCol = parsed.absCol ? parsed.col : parsed.col + dCol;
+                const text =
+                    nextRow < 1 || nextRow > EXCEL_MAX_ROWS || nextCol < 1 || nextCol > EXCEL_MAX_COLS
+                        ? '#REF!'
+                        : FormatCellAddress(nextRow, nextCol, parsed.absRow, parsed.absCol);
+                edits.push({ start: entry.start, end: entry.end, text });
+                continue;
+            }
+            if (colonSiblingRaw !== null) {
+                const colSpec = parseWholeColumnToken(tok.value);
+                if (colSpec && parseWholeColumnToken(colonSiblingRaw)) {
+                    const nextCol = colSpec.abs ? colSpec.col : colSpec.col + dCol;
+                    const text =
+                        nextCol < 1 || nextCol > EXCEL_MAX_COLS
+                            ? '#REF!'
+                            : `${colSpec.abs ? '$' : ''}${ColumnIndexToLetter(nextCol)}`;
+                    edits.push({ start: entry.start, end: entry.end, text });
+                    continue;
+                }
+                const rowSpec = parseWholeRowToken(tok.value);
+                if (rowSpec && parseWholeRowToken(colonSiblingRaw)) {
+                    const nextRow = rowSpec.abs ? rowSpec.row : rowSpec.row + dRow;
+                    const text =
+                        nextRow < 1 || nextRow > EXCEL_MAX_ROWS ? '#REF!' : `${rowSpec.abs ? '$' : ''}${nextRow}`;
+                    edits.push({ start: entry.start, end: entry.end, text });
+                }
+            }
+        } else if (tok.type === 'Number' && colonSiblingRaw !== null) {
+            const rawSlice = formulaBody.slice(entry.start, entry.end);
+            const rowSpec = parseWholeRowToken(rawSlice);
+            if (rowSpec && parseWholeRowToken(colonSiblingRaw)) {
+                const nextRow = rowSpec.abs ? rowSpec.row : rowSpec.row + dRow;
+                const text = nextRow < 1 || nextRow > EXCEL_MAX_ROWS ? '#REF!' : String(nextRow);
+                edits.push({ start: entry.start, end: entry.end, text });
+            }
         }
-    );
+    }
 
-    const withSheets = shifted.replace(
-        /__SF_SH_(\d+)__!/g,
-        (_m, idx: string) => sheetPrefixes[parseInt(idx, 10)] ?? ''
-    );
-    return withSheets.replace(/__SF_STR_(\d+)__/g, (_m, idx: string) => strLiterals[parseInt(idx, 10)] ?? '');
+    if (edits.length === 0) return formulaBody;
+    const parts: string[] = [];
+    let cursor = 0;
+    for (const edit of edits) {
+        parts.push(formulaBody.slice(cursor, edit.start), edit.text);
+        cursor = edit.end;
+    }
+    parts.push(formulaBody.slice(cursor));
+    return parts.join('');
+}
+
+function shiftSharedFormulaRelativeRefs(formulaBody: string, dRow: number, dCol: number): string {
+    return shiftFormulaBodyReferences(formulaBody, dRow, dCol);
 }
 
 function shiftA1RangeRows(
@@ -13809,6 +19793,140 @@ export function LoadSpreadsheetEngine(): void {
             return dataset;
         }
     );
+    DocumentLiveBlockEngine.Instance.RegisterSpreadsheetChartExtractorAsync(
+        async (content, configuration, sheetId, chartId, sheetRange, options) => {
+            const wb = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(
+                content,
+                configuration,
+                options?.skipEvaluate ? { SkipEvaluate: true } : undefined
+            );
+            const targetSheetId = sheetId || wb.ActiveSheetID;
+            let dataset = chartId
+                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId, undefined, {
+                      SkipEvaluate: true
+                  })
+                : null;
+            if (!dataset && sheetRange) {
+                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, sheetRange, undefined, {
+                    SkipEvaluate: true
+                });
+            }
+            return dataset;
+        }
+    );
+    DocumentLiveBlockEngine.Instance.RegisterSpreadsheetXlsxChartExtractor(
+        (bytes, configuration, sheetId, chartId, sheetRange) => {
+            const wb = SpreadsheetEngine.Instance.ImportFromXlsxBytes(bytes, configuration);
+            const targetSheetId = sheetId || wb.ActiveSheetID;
+            let dataset = chartId
+                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId)
+                : null;
+            if (!dataset && sheetRange) {
+                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, sheetRange);
+            }
+            return dataset;
+        }
+    );
+    DocumentLiveBlockEngine.Instance.RegisterSpreadsheetXlsxWorkbookExtractor((bytes, configuration) => {
+        const wb = SpreadsheetEngine.Instance.ImportFromXlsxBytes(bytes, configuration);
+        return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
+    });
+    DocumentLiveBlockEngine.Instance.RegisterSpreadsheetXlsxChartExtractorAsync(
+        async (bytes, configuration, sheetId, chartId, sheetRange) => {
+            const wb = await SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated(bytes, configuration);
+            const targetSheetId = sheetId || wb.ActiveSheetID;
+            let dataset = chartId
+                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId, undefined, {
+                      SkipEvaluate: true
+                  })
+                : null;
+            if (!dataset && sheetRange) {
+                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, sheetRange, undefined, {
+                    SkipEvaluate: true
+                });
+            }
+            return dataset;
+        }
+    );
+    DocumentLiveBlockEngine.Instance.RegisterSpreadsheetXlsxWorkbookExtractorAsync(async (bytes, configuration) => {
+        const wb = await SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated(bytes, configuration);
+        return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
+    });
+}
+
+function cssColorToOoxmlArgb(color: string | undefined): string | undefined {
+    if (!color) return undefined;
+    const trimmed = color.trim();
+    if (!trimmed) return undefined;
+    const hex3 = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(trimmed);
+    if (hex3) {
+        return `FF${hex3[1]}${hex3[1]}${hex3[2]}${hex3[2]}${hex3[3]}${hex3[3]}`.toUpperCase();
+    }
+    const hex6 = /^#([0-9a-fA-F]{6})$/.exec(trimmed);
+    if (hex6) {
+        return `FF${hex6[1]}`.toUpperCase();
+    }
+    const hex8 = /^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})$/.exec(trimmed);
+    if (hex8) {
+        return `${hex8[2]}${hex8[1]}`.toUpperCase();
+    }
+    const rgbMatch = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*([0-9]*\.?[0-9]+))?\s*\)$/i.exec(trimmed);
+    if (rgbMatch) {
+        const toHex = (n: number): string => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+        const r = toHex(Number(rgbMatch[1]));
+        const g = toHex(Number(rgbMatch[2]));
+        const b = toHex(Number(rgbMatch[3]));
+        const a = rgbMatch[4] !== undefined ? toHex(Number(rgbMatch[4]) * 255) : 'FF';
+        return `${a}${r}${g}${b}`.toUpperCase();
+    }
+    return undefined;
+}
+
+function ooxmlRgbToCssHex(rgb: string | null | undefined): string | undefined {
+    if (!rgb) return undefined;
+    const clean = rgb.trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{8}$/.test(clean)) {
+        const alpha = clean.slice(0, 2).toUpperCase();
+        const hex6 = clean.slice(2).toLowerCase();
+        return alpha === 'FF' ? `#${hex6}` : `#${hex6}${alpha.toLowerCase()}`;
+    }
+    if (/^[0-9a-fA-F]{6}$/.test(clean)) {
+        return `#${clean.toLowerCase()}`;
+    }
+    return undefined;
+}
+
+function parseChartNumericValue(raw: SpreadsheetCellValue | undefined): number | null {
+    if (typeof raw === 'number') {
+        return Number.isFinite(raw) ? raw : null;
+    }
+    if (typeof raw !== 'string') {
+        return null;
+    }
+    const trimmed = raw.trim();
+    if (!trimmed) {
+        return null;
+    }
+    // Strip currency symbols, thousands separators, and optional trailing percent sign
+    const normalized = trimmed.replace(/^[$€£¥+\s]+/, '').replace(/,/g, '').replace(/%$/, '');
+    if (!normalized || normalized === '-' || normalized === '.') {
+        return null;
+    }
+    const num = Number(normalized);
+    return Number.isFinite(num) ? num : null;
+}
+
+function computeStableAiInputHash(input: string): string {
+    let h1 = 0x811c9dc5;
+    let h2 = 0x811c9dc5;
+    for (let i = 0; i < input.length; i++) {
+        const ch = input.charCodeAt(i);
+        h1 ^= ch & 0xff;
+        h1 = Math.imul(h1, 0x01000193);
+        h2 ^= (ch >>> 8) & 0xff;
+        h2 = Math.imul(h2, 0x01000193);
+    }
+    return `ai-${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
 }
 
 LoadSpreadsheetEngine();

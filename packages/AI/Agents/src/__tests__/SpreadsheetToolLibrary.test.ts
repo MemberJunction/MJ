@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { SpreadsheetEngine } from '@memberjunction/core-entities';
+import { describe, it, expect, vi } from 'vitest';
+import type { IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import {
+    ArtifactPermissionEngine,
+    RegisterSpreadsheetWorkerRunner,
+    SetSpreadsheetWorkerIsolationRequired,
+    SpreadsheetEngine
+} from '@memberjunction/core-entities';
 import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
 import { SpreadsheetToolLibrary } from '../artifact-tools/SpreadsheetToolLibrary';
 
@@ -646,6 +652,7 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
     it('R9-4: search_cells recovers from single-cell VM regex timeout and finds matches before and after', async () => {
         const engine = SpreadsheetEngine.Instance;
         const sheetLib = new SpreadsheetToolLibrary();
+        sheetLib.RegexBudgetMs = 750;
         const wb = engine.CreateEmptyWorkbook('TimeoutRecovery', ['Sheet1'], 400, 2);
         for (let r = 1; r <= 400; r++) {
             engine.SetCell(wb, 'Sheet1', `A${r}`, { Value: `Row ${r} text normal` }, false);
@@ -680,6 +687,7 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
 
         // DocumentToolLibrary grep & search_blocks: match on line 10 and line 300 survive a pathological line 50 in the same batch
         const docLib = new DocumentToolLibrary();
+        docLib.RegexBudgetMs = 750;
         const docLines: string[] = [];
         for (let i = 1; i <= 400; i++) {
             if (i === 10) docLines.push('Line 10 TARGET_HIT alpha');
@@ -759,5 +767,332 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         );
         expect(staleRes.success).toBe(false);
         expect(staleRes.errorMessage).toContain('Revision conflict');
+    });
+
+    it('supports non-contiguous comma-separated sourceRange and chart metadata updates in upsert_chart, and resolves short artifact IDs in embed_artifact', async () => {
+        const engine = SpreadsheetEngine.Instance;
+        const sheetLib = new SpreadsheetToolLibrary();
+        const wb = engine.CreateEmptyWorkbook('UnionChartWb', ['Trade'], 10, 6);
+        const ws = wb.Worksheets[0];
+        engine.SetCell(wb, ws.SheetID, 'A1', { Value: 'City' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B1', { Value: 'Region' }, false);
+        engine.SetCell(wb, ws.SheetID, 'C1', { Value: 'Index' }, false);
+        engine.SetCell(wb, ws.SheetID, 'D1', { Value: 'TradeVolume' }, false);
+        engine.SetCell(wb, ws.SheetID, 'A2', { Value: 'Samarkand' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B2', { Value: 'Central Asia' }, false);
+        engine.SetCell(wb, ws.SheetID, 'C2', { Value: 1 }, false);
+        engine.SetCell(wb, ws.SheetID, 'D2', { Value: 950 }, false);
+        engine.SetCell(wb, ws.SheetID, 'A3', { Value: 'Kashgar' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B3', { Value: 'Tarim Basin' }, false);
+        engine.SetCell(wb, ws.SheetID, 'C3', { Value: 2 }, false);
+        engine.SetCell(wb, ws.SheetID, 'D3', { Value: 720 }, true);
+
+        const initialJson = engine.SerializeWorkbook(wb);
+
+        const chartRes = await sheetLib.InvokeTool(
+            'upsert_chart',
+            {
+                sheet: 'Trade',
+                chartId: 'chart-union',
+                title: 'City Trade Volume',
+                chartType: 'bar',
+                sourceRange: 'A1:A3,D1:D3',
+                placement: 'sheet',
+                showDataLabels: true,
+                widthPx: 460
+            },
+            initialJson
+        );
+        expect(chartRes.success).toBe(true);
+        const chartData = chartRes.data as {
+            chart: { Placement?: string; ShowDataLabels?: boolean; WidthPx?: number };
+            dataset: { Categories: string[]; Series: Array<{ Name: string; Values: number[] }> } | null;
+            updatedContent: string;
+        };
+        expect(chartData.chart.Placement).toBe('sheet');
+        expect(chartData.chart.ShowDataLabels).toBe(true);
+        expect(chartData.chart.WidthPx).toBe(460);
+        expect(chartData.dataset?.Categories).toEqual(['Samarkand', 'Kashgar']);
+        expect(chartData.dataset?.Series[0].Values).toEqual([950, 720]);
+
+        // embed_artifact resolves session short IDs ("D" -> artifactId, "E" -> versionId) when context resolvers are provided and rejects unresolved IDs
+        const targetUuid = '5b83b8fc-0c19-4584-bc21-b7dfcdc518dd';
+        const targetVersionUuid = 'ba9af0c9-1b00-40ea-a206-425f38fab36b';
+        const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: targetUuid,
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+            Reason: 'Test'
+        });
+        const mockEmbedProvider = {
+            RunView: async (params: RunViewParams) => ({
+                Success: true,
+                Results:
+                    params.EntityName === 'MJ: Artifact Versions'
+                        ? [{ ID: targetVersionUuid, ArtifactID: targetUuid }]
+                        : [{ ID: targetUuid, TypeID: '' }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            })
+        } as unknown as IMetadataProvider & IRunViewProvider;
+        const ctx = {
+            contextUser: { ID: 'test-user-sheet', Name: 'Test' } as UserInfo,
+            provider: mockEmbedProvider,
+            resolveArtifactId: (id: string) => (id === 'D' ? targetUuid : undefined),
+            resolveVersionId: (id: string) => (id === 'E' ? targetVersionUuid : undefined)
+        };
+        try {
+            const embedResolved = await sheetLib.InvokeTool(
+                'embed_artifact',
+                { sheet: 'Trade', artifactId: 'D', versionId: 'E', title: 'Linked Trade Sheet' },
+                chartData.updatedContent,
+                ctx
+            );
+            expect(embedResolved.success).toBe(true);
+            const embedPayload = embedResolved.data as {
+                embeddedArtifact: { ArtifactID: string; ArtifactVersionID?: string | null };
+            };
+            expect(embedPayload.embeddedArtifact.ArtifactID).toBe(targetUuid);
+            expect(embedPayload.embeddedArtifact.ArtifactVersionID).toBe(targetVersionUuid);
+        } finally {
+            permSpy.mockRestore();
+        }
+
+        const embedInvalid = await sheetLib.InvokeTool(
+            'embed_artifact',
+            { sheet: 'Trade', artifactId: 'Z' },
+            chartData.updatedContent,
+            ctx
+        );
+        expect(embedInvalid.success).toBe(false);
+        expect(embedInvalid.errorMessage).toContain('Unable to resolve artifactId');
+
+        const embedInvalidVersion = await sheetLib.InvokeTool(
+            'embed_artifact',
+            { sheet: 'Trade', artifactId: 'D', versionId: 'Z' },
+            chartData.updatedContent,
+            ctx
+        );
+        expect(embedInvalidVersion.success).toBe(false);
+        expect(embedInvalidVersion.errorMessage).toContain('Unable to resolve versionId');
+    });
+
+    it('write_cells normalizes { r, c, v, f }, { cell, val }, and { address, value, formula } and fails clearly on empty/negative coordinates', async () => {
+        const blankWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('VoiceWorkbook', ['Summary']);
+        const blankJson = SpreadsheetEngine.Instance.SerializeWorkbook(blankWb);
+
+        const res = await sheetLib.InvokeTool(
+            'write_cells',
+            {
+                sheet: 'Summary',
+                cells: [
+                    { r: 0, c: 0, v: 'Region' },
+                    { r: 0, c: 1, v: 'Revenue' },
+                    { cell: 'A2', val: 'North' },
+                    { r: 1, c: 1, f: '=100+250' },
+                    { address: 'B3', value: 500, formula: '=B2*2' },
+                ],
+            },
+            blankJson
+        );
+        expect(res.success).toBe(true);
+        const data = res.data as {
+            updatedCells: Array<{ address: string }>;
+            updatedContent: string;
+        };
+        expect(data.updatedCells).toHaveLength(5);
+        expect(data.updatedCells.map((c) => c.address)).toEqual(['A1', 'B1', 'A2', 'B2', 'B3']);
+
+        const parsed = SpreadsheetEngine.Instance.ParseWorkbook(data.updatedContent);
+        const sheet = parsed.Worksheets[0];
+        expect(sheet.Cells['A1']?.RawValue).toBe('Region');
+        expect(sheet.Cells['B1']?.RawValue).toBe('Revenue');
+        expect(sheet.Cells['A2']?.RawValue).toBe('North');
+        expect(sheet.Cells['B2']?.Formula).toBe('=100+250');
+        expect(sheet.Cells['B3']?.Formula).toBe('=B2*2');
+
+        // Reject missing address & negative 0-based coordinates with actionable example shapes
+        const badEmpty = await sheetLib.InvokeTool(
+            'write_cells',
+            { sheet: 'Summary', cells: [{ v: 'Orphan' }] },
+            blankJson
+        );
+        expect(badEmpty.success).toBe(false);
+        expect(badEmpty.errorMessage).toContain('Invalid cell address');
+        expect(badEmpty.errorMessage).toContain('"address": "A1"');
+
+        const badNegative = await sheetLib.InvokeTool(
+            'write_cells',
+            { sheet: 'Summary', cells: [{ r: -1, c: 0, v: 'BadRow' }] },
+            blankJson
+        );
+        expect(badNegative.success).toBe(false);
+        expect(badNegative.errorMessage).toContain('Invalid cell coordinates');
+        expect(badNegative.errorMessage).toContain('"r": 0');
+    });
+
+    it('R9-3: write_cells returns non-null computedValue when isolated worker runner returns structuredClone worksheets', async () => {
+        const engine = SpreadsheetEngine.Instance;
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c, o) => engine.ImportFromXlsxBytes(b, c, o),
+            PatchXlsxBytes: async (o, w) => engine.PatchXlsxBytes(o, w),
+            EvaluateWorkbook: async (w, ctx) => {
+                const cloned = structuredClone(w);
+                engine.EvaluateWorkbook(cloned, ctx);
+                return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+            }
+        });
+        try {
+            const initialJson = engine.SerializeWorkbook(engine.CreateEmptyWorkbook('R9WriteCells', ['Sheet1'], 5, 5));
+            const res = await sheetLib.InvokeTool(
+                'write_cells',
+                {
+                    sheet: 'Sheet1',
+                    cells: [
+                        { address: 'A1', value: 10 },
+                        { address: 'B1', formula: '=A1*3' }
+                    ]
+                },
+                initialJson
+            );
+            expect(res.success).toBe(true);
+            const payload = res.data as {
+                updatedCells?: Array<{ address: string; computedValue: number | string | boolean | null }>;
+            };
+            const b1 = payload.updatedCells?.find((c) => c.address === 'B1');
+            expect(b1).toBeDefined();
+            expect(b1?.computedValue).toBe(30);
+        } finally {
+            RegisterSpreadsheetWorkerRunner(null);
+        }
+    });
+
+    it('R10-2: executes all mutation tools and charted-workbook export under SetSpreadsheetWorkerIsolationRequired(true) without calling main-thread EvaluateWorkbook', async () => {
+        const engine = SpreadsheetEngine.Instance;
+        let insideWorker = false;
+        let mainThreadEvalCount = 0;
+        const origEval = engine.EvaluateWorkbook.bind(engine);
+        vi.spyOn(engine, 'EvaluateWorkbook').mockImplementation((wbArg, ctxArg) => {
+            if (!insideWorker) {
+                mainThreadEvalCount++;
+            }
+            origEval(wbArg, ctxArg);
+        });
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c, o) => {
+                SetSpreadsheetWorkerIsolationRequired(false);
+                insideWorker = true;
+                try {
+                    return engine.ImportFromXlsxBytes(b, c, o);
+                } finally {
+                    insideWorker = false;
+                    SetSpreadsheetWorkerIsolationRequired(true);
+                }
+            },
+            PatchXlsxBytes: async (o, w) => engine.PatchXlsxBytes(o, w),
+            EvaluateWorkbook: async (w, ctx) => {
+                const cloned = structuredClone(w);
+                SetSpreadsheetWorkerIsolationRequired(false);
+                insideWorker = true;
+                try {
+                    origEval(cloned, ctx);
+                } finally {
+                    insideWorker = false;
+                    SetSpreadsheetWorkerIsolationRequired(true);
+                }
+                return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+            }
+        });
+
+        const seedWb = engine.CreateEmptyWorkbook('R10ToolIsolation', ['Data'], 6, 4);
+        const sheetId = seedWb.Worksheets[0].SheetID;
+        engine.SetCell(seedWb, sheetId, 'A1', { Value: 'Item' }, false);
+        engine.SetCell(seedWb, sheetId, 'B1', { Value: 'Val' }, false);
+        engine.SetCell(seedWb, sheetId, 'A2', { Value: 'Alpha' }, false);
+        engine.SetCell(seedWb, sheetId, 'B2', { Value: 20 }, false);
+        engine.SetCell(seedWb, sheetId, 'A3', { Value: 'Beta' }, false);
+        engine.SetCell(seedWb, sheetId, 'B3', { Value: 10 }, false);
+        engine.SetCell(seedWb, sheetId, 'C2', { Formula: '=SUM(B2:B3)' }, false);
+        let content = engine.SerializeWorkbook(seedWb);
+
+        SetSpreadsheetWorkerIsolationRequired(true);
+        try {
+            const nrSet = await sheetLib.InvokeTool(
+                'upsert_named_range',
+                { name: 'TotalSales', sheet: 'Data', range: 'B2:B3' },
+                content
+            );
+            expect(nrSet.success).toBe(true);
+            content = (nrSet.data as { updatedContent: string }).updatedContent;
+
+            const nrDel = await sheetLib.InvokeTool('delete_named_range', { name: 'TotalSales' }, content);
+            expect(nrDel.success).toBe(true);
+            content = (nrDel.data as { updatedContent: string }).updatedContent;
+
+            const insRow = await sheetLib.InvokeTool('insert_rows', { sheet: 'Data', atRowNumber: 2, count: 1 }, content);
+            expect(insRow.success).toBe(true);
+            content = (insRow.data as { updatedContent: string }).updatedContent;
+
+            const delRow = await sheetLib.InvokeTool('delete_rows', { sheet: 'Data', atRowNumber: 2, count: 1 }, content);
+            expect(delRow.success).toBe(true);
+            content = (delRow.data as { updatedContent: string }).updatedContent;
+
+            const insCol = await sheetLib.InvokeTool('insert_columns', { sheet: 'Data', atColumnNumber: 4, count: 1 }, content);
+            expect(insCol.success).toBe(true);
+            content = (insCol.data as { updatedContent: string }).updatedContent;
+
+            const delCol = await sheetLib.InvokeTool('delete_columns', { sheet: 'Data', atColumnNumber: 4, count: 1 }, content);
+            expect(delCol.success).toBe(true);
+            content = (delCol.data as { updatedContent: string }).updatedContent;
+
+            const sortRes = await sheetLib.InvokeTool(
+                'sort_and_filter',
+                { sheet: 'Data', sortColumn: 'B', sortDirection: 'asc' },
+                content
+            );
+            expect(sortRes.success).toBe(true);
+            content = (sortRes.data as { updatedContent: string }).updatedContent;
+
+            const chartRes = await sheetLib.InvokeTool(
+                'upsert_chart',
+                {
+                    sheet: 'Data',
+                    chartId: 'chart-r10-1',
+                    chartType: 'bar',
+                    title: 'Sales Chart',
+                    sourceRange: 'A1:B3'
+                },
+                content
+            );
+            expect(chartRes.success).toBe(true);
+            const chartPayload = chartRes.data as {
+                updatedContent: string;
+                xlsxBase64?: string;
+                dataset?: { Rows?: Array<Record<string, string | number | boolean | null>> };
+            };
+            expect(chartPayload.dataset?.Rows?.length).toBeGreaterThan(0);
+            expect(typeof chartPayload.xlsxBase64).toBe('string');
+            const xlsxBytes = Buffer.from(chartPayload.xlsxBase64 ?? '', 'base64');
+            expect(xlsxBytes[0]).toBe(0x50);
+            expect(xlsxBytes[1]).toBe(0x4b);
+            content = chartPayload.updatedContent;
+
+            const clrRes = await sheetLib.InvokeTool(
+                'clear_range',
+                { sheet: 'Data', range: 'C2:C2', mode: 'all' },
+                content
+            );
+            expect(clrRes.success).toBe(true);
+            expect(mainThreadEvalCount).toBe(0);
+        } finally {
+            SetSpreadsheetWorkerIsolationRequired(false);
+            RegisterSpreadsheetWorkerRunner(null);
+            vi.restoreAllMocks();
+        }
     });
 });

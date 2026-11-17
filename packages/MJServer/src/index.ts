@@ -35,7 +35,7 @@ import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
-import { ArtifactCollaborationServer, RedisYjsRoomRelay } from './collaboration/index.js';
+import { ArtifactCollaborationServer, RedisTicketReplayStore, RedisYjsRoomRelay } from './collaboration/index.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
 import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
@@ -278,6 +278,22 @@ export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/DocumentCollaborationResolver.js';
+export * from './resolvers/PublicGuestShareResolver.js';
+export { SynthesizeArtifactFromSourcesServerOperation, LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
+export { ArtifactComplianceAuditServerOperation, LoadArtifactComplianceAuditOperation, WriteArtifactComplianceAudit } from './operations/ArtifactComplianceAuditHelper.js';
+export { ArtifactEvaluateAiFormulaServerOperation, LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
+export {
+    CreateGuestShareLinkServerOperation,
+    RevokeGuestShareLinkServerOperation,
+    LoadArtifactGuestShareOperations,
+    ResolveGuestArtifactSnapshotForSession,
+    FindUnfrozenLiveContentReason,
+    SanitizeGuestShareConfiguration,
+    IsGuestShareSupportedArtifactType,
+    SAFE_GUEST_SHARE_DRIVER_CLASSES,
+    type PublicArtifactGuestShareResolution,
+    type PublicGuestShareErrorCode,
+} from './operations/ArtifactGuestShareServerOperations.js';
 export * from './collaboration/index.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
@@ -311,7 +327,22 @@ export * from './multiTenancy/index.js';
 export * from './middleware/index.js';
 
 import { RegisterDataHook } from '@memberjunction/core';
-import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/core-entities-server';
+import { SetRestrictedFieldClassifierDecisionMode } from '@memberjunction/core-entities-server';
+import { SetTagMatchDecisionMode } from '@memberjunction/tag-engine';
+import { RegisterArtifactPostRunViewProtectedEntities } from './generic/RegisterArtifactProtectedEntities.js';
+import { RegisterServerArtifactFileBytesLoader } from './resolvers/ArtifactFileResolver.js';
+export { RegisterArtifactPostRunViewProtectedEntities };
+
+RegisterArtifactPostRunViewProtectedEntities();
+RegisterServerArtifactFileBytesLoader();
+import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
+import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactComplianceAuditHelper.js';
+import { LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
+import { LoadArtifactGuestShareOperations } from './operations/ArtifactGuestShareServerOperations.js';
+LoadSynthesizeArtifactFromSourcesOperation();
+LoadArtifactComplianceAuditOperation();
+LoadArtifactEvaluateAiFormulaOperation();
+LoadArtifactGuestShareOperations();
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
@@ -576,6 +607,7 @@ const setupComplete$ = new ReplaySubject(1);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
     ArtifactCollaborationServer.Instance.SetRoomRelay(new RedisYjsRoomRelay(sharedCache));
+    ArtifactCollaborationServer.Instance.SetTicketReplayStore(new RedisTicketReplayStore(sharedCache));
     const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
     startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
@@ -607,8 +639,11 @@ const setupComplete$ = new ReplaySubject(1);
     testClient.release();
     startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
 
-    // A read-only pool opened with the read-only login, as SQL Server has. Read-only per-request
-    // providers (TestQuerySQL and other caller-supplied SQL) share it instead of the primary pool.
+    // Two distinct read-only pools on the read-only login when configured:
+    // 1. Application read-only pool ('read-only'): sized up to apiMax / connectionPool.readOnlyMax
+    //    so concurrent RunView* traffic is never squeezed through a 10-connection bottleneck.
+    // 2. Bounded ad-hoc read-only pool ('adhoc-read-only'): capped at ADHOC_READ_ONLY_MAX_CONNECTIONS
+    //    for untrusted caller-supplied SQL (ExecuteAdhocQuery, TestQuerySQL, GetDataContextData).
     const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
     if (pgReadOnlyCredentials) {
       // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
@@ -627,7 +662,15 @@ const setupComplete$ = new ReplaySubject(1);
         readOnlyTestClient.release();
       }
       PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
-      startupLog.LogIf('verbose', 'Read-only PostgreSQL pool has been initialized.');
+
+      const adhocReadOnlyPgPool = new pg.default.Pool({
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'adhoc-read-only')),
+        types: MJPostgresTypes,
+      });
+      adhocReadOnlyPgPool.on('error', (err) => console.error('[PostgreSQL adhoc read-only pool] Idle connection error (connection evicted):', err.message));
+      PostgreSQLReadOnlyPool.Instance.AdhocPool = adhocReadOnlyPgPool;
+
+      startupLog.LogIf('verbose', 'Read-only PostgreSQL pools (application & ad-hoc) have been initialized.');
     }
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
@@ -1127,7 +1170,11 @@ const setupComplete$ = new ReplaySubject(1);
       RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
       RegisterDataHook('PreSave', mw.PreSave.bind(mw));
   }
-  EnsureAnchoredConversationReadHookRegistered();
+  RegisterArtifactPostRunViewProtectedEntities();
+  RegisterServerArtifactFileBytesLoader();
+  // The restricted-field check runs in MJCoreEntitiesServer, which reads no config of its own.
+  SetRestrictedFieldClassifierDecisionMode(configInfo.decisions?.restrictedFieldClassifier);
+  SetTagMatchDecisionMode(configInfo.decisions?.tagMatch);
 
   // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
   let allResolvers = resolvers;
