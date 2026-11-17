@@ -81,5 +81,5 @@ function formatConsole(entries: ReadonlyArray<ScriptDriftReportEntry>): string {
 
 /** Escape a value for a markdown table cell. */
 function escapeCell(value: string): string {
-    return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+    return value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }

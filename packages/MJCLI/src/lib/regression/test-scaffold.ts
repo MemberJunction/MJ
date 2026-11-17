@@ -3,7 +3,7 @@
  * in `.regression-suite.json`. Building and writing are separate so callers can preview the result.
  */
 import { randomUUID } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 export const REGRESSION_TESTS_DIR = 'metadata-optional/regression-test/tests/regression';
@@ -300,7 +300,15 @@ export function BuildScaffold(repoRoot: string, options: ScaffoldOptions): Scaff
 /** Writes the test file and the updated suite file. Refuses to overwrite a test file. */
 export function WriteScaffold(repoRoot: string, result: ScaffoldResult): void {
   const testPath = path.join(repoRoot, result.TestFilePath);
-  if (existsSync(testPath)) throw new Error(`${result.TestFilePath} already exists.`);
-  writeFileSync(testPath, result.TestFileContent);
+  try {
+    writeFileSync(testPath, result.TestFileContent, { flag: 'wx' });
+  } catch (error) {
+    if (isAlreadyExistsError(error)) throw new Error(`${result.TestFilePath} already exists.`);
+    throw error;
+  }
   writeFileSync(path.join(repoRoot, REGRESSION_SUITE_FILE), result.SuiteFileContent);
+}
+
+function isAlreadyExistsError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'EEXIST';
 }

@@ -43,6 +43,12 @@ describe('FormatScriptDriftReport', () => {
         expect(md).toContain('- … and 2 more');
     });
 
+    it('escapes a backslash in a table cell, so a "\\|" in a value does not end the cell', () => {
+        const entry: ScriptDriftReportEntry = { ...NEW_SCRIPT, TestName: 'T043 - Path C:\\| Split' };
+        const md = FormatScriptDriftReport([entry], 'markdown');
+        expect(md).toContain('| T043 - Path C:\\\\\\| Split | 0 |');
+    });
+
     it('says so when nothing is pending', () => {
         expect(FormatScriptDriftReport([], 'markdown')).toContain('No pending replay scripts.');
         expect(JSON.parse(FormatScriptDriftReport([], 'json'))).toEqual({ PendingCount: 0, Tests: [] });
