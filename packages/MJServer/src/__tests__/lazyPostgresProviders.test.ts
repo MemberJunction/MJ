@@ -1,7 +1,8 @@
 /**
  * Verifies lazy per-request PostgreSQL provider construction in `context.ts`
  * (`TryBuildLazyPostgresProviders`), including deferred instantiation and separate
- * `Read-Only` vs `Adhoc-Read-Only` provider routing.
+ * `Read-Only` vs `Adhoc-Read-Only` provider routing, and the server settings the Read-Write
+ * provider carries.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
@@ -33,7 +34,8 @@ vi.mock('../config.js', () => ({
 
 import { TryBuildLazyPostgresProviders } from '../context.js';
 import { PostgreSQLReadOnlyPool } from '../postgresqlPoolSettings.js';
-import { GetReadOnlyProvider } from '../util.js';
+import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
+import { configInfo } from '../config.js';
 import { ResolveOriginSessionId } from '../requestSessionContext.js';
 
 describe('TryBuildLazyPostgresProviders', () => {
@@ -107,6 +109,32 @@ describe('TryBuildLazyPostgresProviders', () => {
             else process.env.PG_READ_ONLY_USERNAME = prevRoUser;
             if (prevRoPass === undefined) delete process.env.PG_READ_ONLY_PASSWORD;
             else process.env.PG_READ_ONLY_PASSWORD = prevRoPass;
+        }
+    });
+
+    it('the Read-Write provider carries the server loadQueryMetadata setting', () => {
+        const settings = configInfo.databaseSettings as { loadQueryMetadata?: boolean };
+        const previous = settings.loadQueryMetadata;
+        try {
+            settings.loadQueryMetadata = true;
+            SetProvider({
+                DatabaseConnection: { kind: 'rw' } as unknown as import('pg').Pool,
+                AllMetadata: { AllEntities: [{ ID: 'e1', Name: 'Users' }] },
+                Entities: [{ ID: 'e1', Name: 'Users' }],
+            } as unknown as DatabaseProviderBase);
+
+            const materialized: DatabaseProviderBase[] = [];
+            const providers = TryBuildLazyPostgresProviders('sess-pg-qm', materialized);
+            expect(providers).not.toBeNull();
+
+            const rwProvider = GetReadWriteProvider(providers!);
+            expect(rwProvider.LoadsQueryMetadata).toBe(true);
+
+            for (const p of materialized) {
+                p.DetachInvalidationListeners();
+            }
+        } finally {
+            settings.loadQueryMetadata = previous;
         }
     });
 });
