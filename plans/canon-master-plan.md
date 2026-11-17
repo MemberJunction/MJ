@@ -65,7 +65,7 @@ These touch something Canon reads or will read. Their owners need do nothing unl
 | [MJ 6583](https://github.com/MemberJunction/MJ/pull/6583) | Makes saved-query metadata on `Metadata` opt-in. Canon code must read queries through `QueryEngine`. |
 | [MJ 6505](https://github.com/MemberJunction/MJ/pull/6505) | DBAutoDoc data-quality checks, a possible later source of evidence. |
 | [MJ 6589](https://github.com/MemberJunction/MJ/pull/6589) | Ranks actions and skills to suggest. Skills are Layer 4. |
-| [MJ 6642](https://github.com/MemberJunction/MJ/pull/6642) | Fingerprints query and view definitions. Useful if Canon metrics later drive triggers. |
+| [MJ 6642](https://github.com/MemberJunction/MJ/pull/6642) (merged Nov 16) | Fingerprints query and view definitions. Useful if Canon metrics later drive triggers. |
 | [MJ 6517](https://github.com/MemberJunction/MJ/pull/6517) | Model monitoring jobs, the nearest thing to a metric trigger. |
 | [MJ 6643](https://github.com/MemberJunction/MJ/pull/6643), [6240](https://github.com/MemberJunction/MJ/pull/6240), [6455](https://github.com/MemberJunction/MJ/pull/6455), [3370](https://github.com/MemberJunction/MJ/pull/3370) | MCP hosting and security. These come first if Canon is ever exposed to outside assistants. |
 
@@ -92,6 +92,8 @@ Three designs exist:
 - A graph row carries its own review state. Anything proposed for Layer 2 is a `Proposed` concept or edge, and approval is the `Graph: Approve Edges` gate. No second approval path for graph rows.
 - The learning-cycle proposal tables in MJ 6213 are the one upstream ledger for machine-generated proposals of every kind (notes, skills, workflows, graph rows). A graph proposal that originates there is materialized as a `Proposed` graph row and links back to its proposal.
 - MJ 4155 R4 uses that ledger. No `MJ: AI Agent Improvement Proposals` table.
+
+Today only edges are gated this way; concepts are not. [Workstream 5a](#workstream-5-graph-access-control) closes that gap.
 
 ### 3. One route from a note to Canon
 
@@ -143,6 +145,29 @@ MJ 6586 certifies schema descriptions and wants query history as evidence.
 | 2 | Learning loop and proposal ledger | MJ 6213, MJ 4155 R4 | `arie-glazier-bcc` | 6213 revised per decisions 2 to 5 and merged |
 | 3 | Skip on Canon | Skip client 50, Skip-Brain 677, Skip-Brain 612 | `MS-BC` | All three merged or closed, using core promotion and shipped vocabulary |
 | 4 | Schema knowledge | MJ 6586 | `MS-BC` | Decision 7 written into 6586; merged |
+| 5 | Graph access control | New, see [below](#workstream-5-graph-access-control) | `cmbrock-BC` | 5a merged; 5b to 5d filed as `canon` issues with a design sketch, ready for the December 3 review |
+
+Owner confirmations: `MS-BC` accepted workstreams 3 and 4 and the 6404 split ([comment](https://github.com/MemberJunction/MJ/pull/6675#issuecomment-6930640383)). The non-Canon part of 6404 is now [MJ 6688](https://github.com/MemberJunction/MJ/pull/6688).
+
+### Workstream 5: graph access control
+
+Reading the graph is already checked against the caller: every node is re-read as the user, so entity permissions and row-level security apply; a stored edge is kept only if the user can read it and both of its ends; in a shared room every reader must see a node. What is missing is control over a graph as a whole, and over who may approve what:
+
+- **No permissions on a graph.** Any user can resolve any active graph by name. Search scopes have their own permissions; graphs have no equivalent.
+- **Wide default grants.** The UI role reads every concept and edge in every graph; Developer and Integration have full create, update and delete. No row-level filters ship, so separating tenants depends on someone adding them.
+- **A concept is not tied to its sources.** A concept synthesized from Staff-only content is visible to anyone who can read the concept row. Search hides derived content when the user cannot see the record it came from; the graph has no such gate.
+- **Concept approval is ungated.** Edges need `Graph: Approve Edges`; concepts have no server-side rule, so approving one is a plain update. Decision 2's single approval path currently covers edges only.
+- **Approval is global.** `Graph: Approve Edges` is one authorization across all graphs, so an app such as Betty cannot let an org admin approve only their own org's graph.
+- **By-name lookups are not graph-scoped.** `CanonGraphEngine.ExplainConcept` takes the first concept with that name in any graph.
+
+| Item | What | When |
+|---|---|---|
+| 5a | Concept approval goes through the same gate as edges: a server-side rule on `MJ: Graph Concepts` so that approving, rejecting or deprecating a concept, or editing an approved one, needs `Graph: Approve Edges`. The pipeline's own approved concepts use the same scope its approved edges already use. | Before December 1. A named exception to the freeze. |
+| 5b | Permissions per graph (read, use, approve), modelled on search-scope permissions, including a review of the default grants. Approval is checked per graph. | `canon` issue for December 3 |
+| 5c | A concept is no more visible than its sources, mirroring search's gate on derived content. Until this lands, an app serving members or the public sends no concept text (name, synonyms, description, specification) to its users or its model, only the chunk IDs that pass its own entitlement checks. | `canon` issue for December 3 |
+| 5d | Concept lookups by name take a graph, starting with `ExplainConcept`. | `canon` issue for December 3 |
+
+Betty consumes Canon for many tenants, so its plan depends on 5b and 5c: its training contradictions, synonym retrieval and feedback promotion should wait for them. Betty work that needs only per-source authority ranking can go ahead.
 
 ### Backlog
 
@@ -177,7 +202,7 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 ## How we coordinate until then
 
 - **One thread.** Questions that cross pull requests go on this plan's pull request, not on the individual ones.
-- **No new Canon pull requests** until December 1, other than re-cuts of the ones listed. A new idea is a `canon` issue.
+- **No new Canon pull requests** until December 1, other than re-cuts of the ones listed and these named exceptions: workstream 5a. A new idea is a `canon` issue.
 - **Alignment check each weekday.** Each listed pull request's new commits and comments are compared with this plan. Where one diverges from a decision, or two start to overlap, a comment is posted on that pull request linking the relevant section here. The check is run by an automated Claude session on the sponsor's behalf, and its comments say so.
 - **Disagreeing is fine.** If the plan is wrong, say so on its pull request and it changes. What we are avoiding is silent divergence.
 
@@ -194,3 +219,4 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 | Date | Change |
 |---|---|
 | 2026-11-16 | Plan created. |
+| 2026-11-17 | `MS-BC` accepted decisions 1 to 7 and workstreams 3 and 4; the non-Canon part of MJ 6404 moved to MJ 6688. Watched MJ 6642 merged. Added workstream 5, graph access control, owned by `cmbrock-BC`, with 5a as a named exception to the freeze. |
