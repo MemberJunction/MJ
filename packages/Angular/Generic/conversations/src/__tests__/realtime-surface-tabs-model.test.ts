@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RealtimeSurfaceTabsModel, ShouldRemoveReviewWhiteboardTab } from '../lib/components/realtime/realtime-surface-tabs.model';
+import { RealtimeSurfaceTabsModel, ShouldRemoveReviewChannelTab, ShouldRemoveReviewWhiteboardTab } from '../lib/components/realtime/realtime-surface-tabs.model';
 
 describe('RealtimeSurfaceTabsModel', () => {
   let model: RealtimeSurfaceTabsModel;
@@ -289,5 +289,14 @@ describe('ShouldRemoveReviewWhiteboardTab (review→live continuation edge)', ()
 
   it('never removes when review mode registered no whiteboard tab', () => {
     expect(ShouldRemoveReviewWhiteboardTab(true, false, [])).toBe(false);
+  });
+});
+
+describe('ShouldRemoveReviewChannelTab (generic review→live continuation)', () => {
+  it('removes a review channel tab only when live is active and the channel is missing case-insensitively', () => {
+    expect(ShouldRemoveReviewChannelTab(true, true, 'ArtifactWorkspace', [{ ChannelName: 'Whiteboard' }])).toBe(true);
+    expect(ShouldRemoveReviewChannelTab(true, true, 'Media', [{ ChannelName: ' media ' }])).toBe(false);
+    expect(ShouldRemoveReviewChannelTab(false, true, 'Media', [])).toBe(false);
+    expect(ShouldRemoveReviewChannelTab(true, false, 'ArtifactWorkspace', [])).toBe(false);
   });
 });
