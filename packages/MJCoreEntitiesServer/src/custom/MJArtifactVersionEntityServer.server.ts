@@ -21,6 +21,7 @@ import {
 import {
     ArtifactExtractor,
     ArtifactPermissionEngine,
+    MakePreParsedWorkbookCacheKey,
     MJArtifactEntity,
     MJArtifactTypeEntity,
     MJArtifactVersionAttributeEntity,
@@ -666,23 +667,33 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                 const canQueryDb = typeof (provider as { RunView?: unknown }).RunView === 'function';
                 let isArtifactOwner = perms.Source === 'Owner';
 
-                // Pre-parse any `.xlsx` binary/data-URL payload at most once per Save in the isolated worker (`R9-2`)
-                const preParseIfXlsx = async (raw: string | null | undefined): Promise<string | null> => {
+                // Pre-parse any `.xlsx` `(content, config)` pair once per Save in the isolated worker (`R10-1`).
+                // Never cache or fall back by single string when `(content, config)` pairs can differ.
+                const hasXlsxPayload = (raw: string | null | undefined): boolean => {
                     if (!raw || typeof raw !== 'string') {
-                        return null;
+                        return false;
                     }
                     const trimmed = raw.trim();
-                    if (!(trimmed.startsWith('data:') || trimmed.startsWith('UEsDB'))) {
+                    return trimmed.startsWith('data:') || trimmed.startsWith('UEsDB');
+                };
+                const preParseIfXlsx = async (
+                    rawContent: string | null | undefined,
+                    rawConfig?: string | null
+                ): Promise<string | null> => {
+                    if (!hasXlsxPayload(rawContent) && !hasXlsxPayload(rawConfig)) {
                         return null;
                     }
-                    if (preParsedXlsxCache.has(raw)) {
+                    const cacheKey = MakePreParsedWorkbookCacheKey(rawContent, rawConfig);
+                    if (preParsedXlsxCache.has(cacheKey)) {
                         return null;
                     }
                     try {
-                        const parsed = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(raw, null, {
-                            SkipEvaluate: true
-                        });
-                        preParsedXlsxCache.set(raw, parsed);
+                        const parsed = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(
+                            rawContent ?? null,
+                            rawConfig ?? null,
+                            { SkipEvaluate: true }
+                        );
+                        preParsedXlsxCache.set(cacheKey, parsed);
                         return null;
                     } catch (err) {
                         return err instanceof Error ? err.message : String(err);
@@ -768,7 +779,10 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                     const priorContent = typeof priorRow.Content === 'string' ? priorRow.Content : '';
                                     const priorConfig = typeof priorRow.Configuration === 'string' ? priorRow.Configuration : null;
                                     const priorXlsxErr =
-                                        (await preParseIfXlsx(priorContent)) ?? (await preParseIfXlsx(nextContent));
+                                        (await preParseIfXlsx(priorContent, priorConfig)) ??
+                                        (priorConfig !== null ? await preParseIfXlsx(priorContent, null) : null) ??
+                                        (await preParseIfXlsx(nextContent, nextConfig ?? null)) ??
+                                        (nextConfig != null ? await preParseIfXlsx(nextContent, null) : null);
                                     if (priorXlsxErr) {
                                         return this.recordPermissionFailure(saveType, priorXlsxErr);
                                     }
@@ -871,8 +885,12 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                         );
                                     }
                                     if (wsContent && wsContent !== (priorRow?.Content ?? '')) {
+                                        const wsConfig = priorRow?.Configuration ?? null;
                                         const wsXlsxErr =
-                                            (await preParseIfXlsx(wsContent)) ?? (await preParseIfXlsx(nextContent));
+                                            (await preParseIfXlsx(wsContent, wsConfig)) ??
+                                            (wsConfig !== null ? await preParseIfXlsx(wsContent, null) : null) ??
+                                            (await preParseIfXlsx(nextContent, nextConfig ?? null)) ??
+                                            (nextConfig != null ? await preParseIfXlsx(nextContent, null) : null);
                                         if (wsXlsxErr) {
                                             return this.recordPermissionFailure(saveType, wsXlsxErr);
                                         }
@@ -978,7 +996,10 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                         const nextConfig = this.safeReadStringProp('Configuration');
                         if (!isTrustedCompaction && ((oldContent.length > 0 && oldContent !== nextContent) || (oldConfig && oldConfig !== nextConfig))) {
                             const draftXlsxErr =
-                                (await preParseIfXlsx(oldContent)) ?? (await preParseIfXlsx(nextContent));
+                                (await preParseIfXlsx(oldContent, oldConfig)) ??
+                                (oldConfig !== null ? await preParseIfXlsx(oldContent, null) : null) ??
+                                (await preParseIfXlsx(nextContent, nextConfig ?? null)) ??
+                                (nextConfig != null ? await preParseIfXlsx(nextContent, null) : null);
                             if (draftXlsxErr) {
                                 return this.recordPermissionFailure('update', draftXlsxErr);
                             }
@@ -1025,13 +1046,17 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                     );
                 };
                 if (looksLikeSpreadsheet(effectiveContent) || looksLikeSpreadsheet(effectiveConfig)) {
-                    const alreadyParsedContent =
-                        looksLikeSpreadsheet(effectiveContent) && preParsedXlsxCache.has(effectiveContent);
-                    if (!alreadyParsedContent || looksLikeSpreadsheet(effectiveConfig)) {
+                    const effectiveContentArg = looksLikeSpreadsheet(effectiveContent) ? effectiveContent : null;
+                    const effectiveConfigArg = looksLikeSpreadsheet(effectiveConfig) ? effectiveConfig : null;
+                    const effectivePairKey = MakePreParsedWorkbookCacheKey(
+                        effectiveContentArg,
+                        effectiveConfigArg
+                    );
+                    if (!preParsedXlsxCache.has(effectivePairKey)) {
                         try {
                             await SpreadsheetEngine.Instance.ParseWorkbookIsolated(
-                                looksLikeSpreadsheet(effectiveContent) ? effectiveContent : null,
-                                looksLikeSpreadsheet(effectiveConfig) ? effectiveConfig : null,
+                                effectiveContentArg,
+                                effectiveConfigArg,
                                 { SkipEvaluate: true }
                             );
                         } catch (err) {

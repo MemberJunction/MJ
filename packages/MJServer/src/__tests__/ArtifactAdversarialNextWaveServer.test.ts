@@ -3023,4 +3023,163 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             await relayB.Shutdown();
         }
     }, 15_000);
+
+    it('R10: enforces lock rollback across deferred .xlsx out-of-band reconcile, retry window, and non-owner B2 restore without sync ParseWorkbook', async () => {
+        const artId = 'abababab-abab-4bab-8bab-abababababab';
+        const baseWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('OobRace', ['Sheet1'], 4, 4);
+        SpreadsheetEngine.Instance.SetCell(baseWb, baseWb.Worksheets[0].SheetID, 'A1', { Value: 'base' }, false);
+        const baseJson = SpreadsheetEngine.Instance.SerializeWorkbook(baseWb);
+
+        const incomingWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('OobRace', ['Sheet1'], 4, 4);
+        SpreadsheetEngine.Instance.SetCell(incomingWb, incomingWb.Worksheets[0].SheetID, 'A1', { Value: 'oob-edited' }, false);
+        const incomingXlsxB64 = Buffer.from(
+            SpreadsheetEngine.Instance.ExportToXlsxBytes(incomingWb, false, { SkipEvaluate: true })
+        ).toString('base64');
+
+        class OobTestServer extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+            public ReconcileOob(
+                room: CollaborationRoom,
+                version: Parameters<ArtifactCollaborationServer['reconcileOutOfBandVersionIntoRoom']>[1],
+                options?: Parameters<ArtifactCollaborationServer['reconcileOutOfBandVersionIntoRoom']>[2]
+            ): Promise<void> | void {
+                return this.reconcileOutOfBandVersionIntoRoom(room, version, options);
+            }
+        }
+        const server = new OobTestServer();
+        const runViewFn = vi.fn(async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: Artifacts') {
+                return {
+                    Success: true,
+                    Results: [{ ID: artId, UserID: ownerUser.ID }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Artifact Versions') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'v-oob-1',
+                            VersionNumber: 1,
+                            Content: baseJson,
+                            Configuration: null,
+                            UserID: ownerUser.ID
+                        }
+                    ],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+        });
+        const mockProv: Pick<IMetadataProvider, 'Entities' | 'EntityByName' | 'RunView' | 'RunViews'> = {
+            Entities: [],
+            EntityByName: () => null as never,
+            RunView: runViewFn as IMetadataProvider['RunView'],
+            RunViews: (async (paramsList: RunViewParams[]) =>
+                Promise.all(paramsList.map((p) => runViewFn(p)))) as IMetadataProvider['RunViews']
+        };
+
+        try {
+            const room = await server.GetOrCreateRoom(artId, ownerUser, mockProv as IMetadataProvider);
+            expect(room).toBeTruthy();
+
+            let releaseFirstImport!: () => void;
+            let markFirstImportStarted!: () => void;
+            const firstStarted = new Promise<void>((res) => {
+                markFirstImportStarted = res;
+            });
+            const firstGate = new Promise<void>((res) => {
+                releaseFirstImport = res;
+            });
+            const origIso = SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated.bind(SpreadsheetEngine.Instance);
+            const importSpy = vi
+                .spyOn(SpreadsheetEngine.Instance, 'ImportFromXlsxBytesIsolated')
+                .mockImplementationOnce(async (bytes, cfg, opts) => {
+                    markFirstImportStarted();
+                    await firstGate;
+                    return origIso(bytes, cfg, opts);
+                });
+
+            // 1. Out-of-band reconcile with `.xlsx` pauses in worker while owner adds protected range mid-await ->
+            //    fresh live room state triggers B3 rollback and preserves owner's lock!
+            const pendingOob = server.ReconcileOob(room!, {
+                ID: 'v-oob-2',
+                VersionNumber: 2,
+                Content: incomingXlsxB64,
+                Configuration: null,
+                UserID: editorUser.ID
+            });
+            await firstStarted;
+
+            const lockedLiveWb = JSON.parse(baseJson) as WorkbookSpec;
+            lockedLiveWb.Worksheets[0].ProtectedRanges = [
+                { RangeID: 'r10-oob-lock', Range: 'A1:A5', LockedByUserID: ownerUser.ID }
+            ];
+            const lockedLiveJson = SpreadsheetEngine.Instance.SerializeWorkbook(lockedLiveWb);
+            room!.Doc.transact(() => {
+                const yt = room!.Doc.getText('content');
+                yt.delete(0, yt.length);
+                yt.insert(0, lockedLiveJson);
+                const wsMap = room!.Doc.getMap<string>('worksheetsById');
+                const structSheet = { ...lockedLiveWb.Worksheets[0], Cells: {} };
+                wsMap.set(lockedLiveWb.Worksheets[0].SheetID, JSON.stringify(structSheet));
+            }, 'owner-oob-mid-await');
+
+            releaseFirstImport();
+            await pendingOob;
+            expect(room!.Doc.getText('content').toString()).toContain('r10-oob-lock');
+            importSpy.mockRestore();
+
+            // 2. Non-owner B2 `.xlsx` restore over live locked room uses preParsedWorkbooks (never calls sync ParseWorkbook on `.xlsx`)
+            //    and rejects restore while preserving live locked room content.
+            const liveXlsxWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('LiveLockedXlsx', ['Sheet1'], 4, 4);
+            liveXlsxWb.Worksheets[0].ProtectedRanges = [
+                { RangeID: 'r10-b2-xlsx-lock', Range: 'A1:B2', LockedByUserID: ownerUser.ID }
+            ];
+            const liveXlsxB64 = Buffer.from(
+                SpreadsheetEngine.Instance.ExportToXlsxBytes(liveXlsxWb, true, { SkipEvaluate: true })
+            ).toString('base64');
+            room!.Doc.transact(() => {
+                const wsMap = room!.Doc.getMap<string>('worksheetsById');
+                for (const key of Array.from(wsMap.keys())) {
+                    wsMap.delete(key);
+                }
+                const yt = room!.Doc.getText('content');
+                yt.delete(0, yt.length);
+                yt.insert(0, liveXlsxB64);
+            }, 'owner-xlsx-live-lock');
+
+            const syncParseSpy = vi.spyOn(SpreadsheetEngine.Instance, 'ParseWorkbook');
+            try {
+                await server.ReconcileOob(
+                    room!,
+                    {
+                        ID: 'v-oob-restore-3',
+                        VersionNumber: 3,
+                        Content: incomingXlsxB64,
+                        Configuration: null,
+                        UserID: editorUser.ID
+                    },
+                    { isRestore: true, actorUserId: editorUser.ID }
+                );
+                expect(syncParseSpy).not.toHaveBeenCalled();
+                expect(room!.RejectedOobVersionNumber).toBe(3);
+                expect(room!.Doc.getText('content').toString()).toBe(liveXlsxB64);
+            } finally {
+                syncParseSpy.mockRestore();
+            }
+        } finally {
+            await server.Shutdown();
+            delete server.GetGlobalObjectStore()[server.GlobalKey];
+        }
+    });
 });

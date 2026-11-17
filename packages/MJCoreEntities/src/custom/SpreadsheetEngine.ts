@@ -4472,7 +4472,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheetId: string,
         atRowNumber: number,
         count = 1,
-        editContext?: SpreadsheetCellEditContext
+        editContext?: SpreadsheetCellEditContext,
+        recalculate = true
     ): SpreadsheetRowSpec[] {
         const sheet = this.GetWorksheet(workbook, sheetId);
         if (!sheet) {
@@ -4515,7 +4516,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         this.shiftVirtualAxisIds(workbook, sheet, 'row', 'insert', requestedRow1, numToInsert);
         this.shiftNonCellMetadataForRowEdit(workbook, sheet, 'insert', requestedRow1, numToInsert);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
         return inserted;
     }
 
@@ -4528,7 +4533,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheetId: string,
         atRowNumber: number,
         count = 1,
-        editContext?: SpreadsheetCellEditContext
+        editContext?: SpreadsheetCellEditContext,
+        recalculate = true
     ): void {
         const sheet = this.GetWorksheet(workbook, sheetId);
         if (!sheet) return;
@@ -4575,7 +4581,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         this.shiftVirtualAxisIds(workbook, sheet, 'row', 'delete', requestedStart1, requestedCount);
         this.shiftNonCellMetadataForRowEdit(workbook, sheet, 'delete', requestedStart1, requestedCount);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
     }
 
     /**
@@ -4587,7 +4597,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheetId: string,
         atColumnNumber: number,
         count = 1,
-        editContext?: SpreadsheetCellEditContext
+        editContext?: SpreadsheetCellEditContext,
+        recalculate = true
     ): SpreadsheetColumnSpec[] {
         const sheet = this.GetWorksheet(workbook, sheetId);
         if (!sheet) {
@@ -4631,7 +4642,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         this.shiftVirtualAxisIds(workbook, sheet, 'col', 'insert', requestedCol1, numToInsert);
         this.shiftNonCellMetadataForColEdit(workbook, sheet, 'insert', requestedCol1, numToInsert);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
         return inserted;
     }
 
@@ -4644,7 +4659,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheetId: string,
         atColumnNumber: number,
         count = 1,
-        editContext?: SpreadsheetCellEditContext
+        editContext?: SpreadsheetCellEditContext,
+        recalculate = true
     ): void {
         const sheet = this.GetWorksheet(workbook, sheetId);
         if (!sheet) return;
@@ -4692,7 +4708,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         this.shiftVirtualAxisIds(workbook, sheet, 'col', 'delete', requestedStart1, requestedCount);
         this.shiftNonCellMetadataForColEdit(workbook, sheet, 'delete', requestedStart1, requestedCount);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
     }
 
     private shiftVirtualAxisIds(
@@ -5567,6 +5587,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         recalculate = true,
         editContext?: SpreadsheetCellEditContext
     ): string[] {
+        if (recalculate) {
+            this.assertSynchronousEvaluationAllowed('ClearRange(recalculate=true)');
+        }
         const sheet = this.GetWorksheet(workbook, sheetIdOrName);
         if (!sheet) {
             throw new Error(`Worksheet '${sheetIdOrName}' not found.`);
@@ -6082,6 +6105,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return;
         }
         const res = await runner.EvaluateWorkbook(workbook, editContext);
+        this.workbookVirtualAxisIndex.delete(workbook);
+        this.workbooksWithVirtualAxisIds.delete(workbook);
         const returnedById = new Map(res.Workbook.Worksheets.map((s) => [s.SheetID, s]));
         for (let i = 0; i < workbook.Worksheets.length; i++) {
             const targetSheet = workbook.Worksheets[i];
@@ -6099,6 +6124,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             targetSheet.ConditionalFormats = evalSheet.ConditionalFormats;
             targetSheet.EmbeddedArtifacts = evalSheet.EmbeddedArtifacts;
             this.validationIndexCache.delete(targetSheet);
+            this.indexedSheets.delete(targetSheet);
+            this.sheetsWithVirtualAxisIds.delete(targetSheet);
+            this.sheetUnboundVirtualAxisIndex.delete(targetSheet);
         }
         if (res.Workbook.Worksheets.length > workbook.Worksheets.length) {
             const existingIds = new Set(workbook.Worksheets.map((s) => s.SheetID));
@@ -6161,6 +6189,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         extraDirtyAddrs: readonly string[] = [],
         editContext?: SpreadsheetCellEditContext
     ): void {
+        this.assertSynchronousEvaluationAllowed('recalculateAfterCellEdit');
         const namedSig = JSON.stringify(workbook.NamedRanges);
         const existingDag = this.workbookDagCache.get(workbook);
         if (!existingDag || existingDag.namedRangesSignature !== namedSig) {
@@ -6251,6 +6280,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         sheetIdOrName: string,
         formula: string
     ): SpreadsheetCellValue {
+        this.assertSynchronousEvaluationAllowed('EvaluateFormulaExpression');
         const sheet = this.GetWorksheet(workbook, sheetIdOrName) ?? workbook.Worksheets[0];
         if (!sheet) return '#REF!';
         const trimmed = formula.trim();
@@ -6728,6 +6758,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         dirtyScope: ReadonlySet<string> | null,
         editContext?: SpreadsheetCellEditContext
     ): void {
+        this.assertSynchronousEvaluationAllowed('evaluateCellKeysIteratively');
         // state: 1 = currently on active DFS path (visiting), 2 = evaluated
         const state = new Map<string, 1 | 2>();
         const memo = new Map<string, SpreadsheetCellValue>();
@@ -11765,7 +11796,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     /**
      * Creates or updates a workbook-level named range and recalculates dependent formulas.
      */
-    public SetNamedRange(workbook: WorkbookSpec, spec: SpreadsheetNamedRangeSpec): SpreadsheetNamedRangeSpec {
+    public SetNamedRange(
+        workbook: WorkbookSpec,
+        spec: SpreadsheetNamedRangeSpec,
+        recalculate = true
+    ): SpreadsheetNamedRangeSpec {
         const cleanName = spec.Name.trim();
         if (!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(cleanName)) {
             throw new Error(`Invalid named range identifier '${spec.Name}'.`);
@@ -11795,7 +11830,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             workbook.NamedRanges.push(entry);
         }
         this.ensureAllWorkbookFormulasHaveStableIds(workbook, true);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
         workbook.UpdatedAt = new Date().toISOString();
         return entry;
     }
@@ -11803,12 +11842,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     /**
      * Removes a workbook-level named range by `name`.
      */
-    public RemoveNamedRange(workbook: WorkbookSpec, name: string): boolean {
+    public RemoveNamedRange(workbook: WorkbookSpec, name: string, recalculate = true): boolean {
         const targetLower = name.trim().toLowerCase();
         const before = workbook.NamedRanges.length;
         workbook.NamedRanges = workbook.NamedRanges.filter((nr) => nr.Name.toLowerCase() !== targetLower);
         if (workbook.NamedRanges.length === before) return false;
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
         workbook.UpdatedAt = new Date().toISOString();
         return true;
     }
@@ -13501,7 +13544,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         freezingUser: Pick<UserInfo, 'ID' | 'Name'>,
         acknowledgeSecurityWarning: boolean,
         preSignedSnapshot?: DocumentFrozenSnapshot,
-        hostArtifactId?: string | null
+        hostArtifactId?: string | null,
+        recalculate = true
     ): SpreadsheetLiveTableSpec {
         if (!acknowledgeSecurityWarning) {
             throw new Error(
@@ -13554,7 +13598,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
               }
             : executionResult;
         this.populateSheetCellsFromLiveTable(sheet, table, effectiveResult);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
         workbook.UpdatedAt = new Date().toISOString();
         return table;
     }
@@ -13565,7 +13613,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     public UnfreezeLiveTable(
         workbook: WorkbookSpec,
         sheetIdOrName: string,
-        tableId: string
+        tableId: string,
+        recalculate = true
     ): SpreadsheetLiveTableSpec {
         const sheet = this.GetWorksheet(workbook, sheetIdOrName);
         if (!sheet) {
@@ -13607,7 +13656,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         table.LastRowCount = 0;
         table.LastColumnCount = 0;
         this.workbookDagCache.delete(workbook);
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        }
         workbook.UpdatedAt = new Date().toISOString();
         return table;
     }
@@ -13725,9 +13776,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         sheetIdOrName: string,
         chartIdOrRange: string,
-        overrideSpec?: Partial<SpreadsheetChartSpec>
+        overrideSpec?: Partial<SpreadsheetChartSpec>,
+        options?: { SkipEvaluate?: boolean }
     ): SpreadsheetChartDataset | null {
-        this.EvaluateWorkbook(workbook);
+        if (!options?.SkipEvaluate) {
+            this.EvaluateWorkbook(workbook);
+        }
         const sheet = this.GetWorksheet(workbook, sheetIdOrName) ?? workbook.Worksheets[0];
         if (!sheet) return null;
 
@@ -13943,7 +13997,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         sheetIdOrName: string,
         sortSpec: SpreadsheetSortSpec,
-        editContext?: SpreadsheetCellEditContext
+        editContext?: SpreadsheetCellEditContext,
+        recalculate = true
     ): void {
         const sheet = this.GetWorksheet(workbook, sheetIdOrName);
         if (!sheet) return;
@@ -14056,7 +14111,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 nr.Range = reformatAnchoredRange(anchor, nr.Range);
             }
         });
-        this.EvaluateWorkbook(workbook);
+        if (recalculate) {
+            this.EvaluateWorkbook(workbook);
+        } else {
+            this.workbookDagCache.delete(workbook);
+        }
     }
 
     /**
@@ -14525,7 +14584,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         `<Override PartName="/${chartPath}" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`
                     );
 
-                    const dataset = this.ExtractChartDataset(sanitizedWorkbook, chart.SheetID || ws.SheetID, chart.ChartID);
+                    const dataset = this.ExtractChartDataset(
+                        sanitizedWorkbook,
+                        chart.SheetID || ws.SheetID,
+                        chart.ChartID,
+                        undefined,
+                        { SkipEvaluate: true }
+                    );
                     const chartXml = this.buildSpreadsheetDrawingMlChartXml(chart, safeSheetName, dataset);
                     zipEntries.push({ Name: chartPath, Data: this.encodeUtf8(chartXml) });
 
@@ -19735,10 +19800,14 @@ export function LoadSpreadsheetEngine(): void {
             );
             const targetSheetId = sheetId || wb.ActiveSheetID;
             let dataset = chartId
-                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId)
+                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId, undefined, {
+                      SkipEvaluate: true
+                  })
                 : null;
             if (!dataset && sheetRange) {
-                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, sheetRange);
+                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, sheetRange, undefined, {
+                    SkipEvaluate: true
+                });
             }
             return dataset;
         }
@@ -19765,10 +19834,14 @@ export function LoadSpreadsheetEngine(): void {
             const wb = await SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated(bytes, configuration);
             const targetSheetId = sheetId || wb.ActiveSheetID;
             let dataset = chartId
-                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId)
+                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId, undefined, {
+                      SkipEvaluate: true
+                  })
                 : null;
             if (!dataset && sheetRange) {
-                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, sheetRange);
+                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, sheetRange, undefined, {
+                    SkipEvaluate: true
+                });
             }
             return dataset;
         }

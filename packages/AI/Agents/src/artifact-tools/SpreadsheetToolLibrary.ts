@@ -1596,7 +1596,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (modeRaw === 'all') {
             let clearedAddresses: string[];
             try {
-                clearedAddresses = engine.ClearRange(workbook, sheet.SheetID, range, true, editCtx);
+                clearedAddresses = engine.ClearRange(workbook, sheet.SheetID, range, false, editCtx);
             } catch (err) {
                 return this.errorResult(err instanceof Error ? err.message : String(err));
             }
@@ -1693,7 +1693,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (protErr) {
             return this.errorResult(protErr);
         }
-        const inserted = SpreadsheetEngine.Instance.InsertRows(workbook, sheet.SheetID, atRow, rawCount);
+        const inserted = SpreadsheetEngine.Instance.InsertRows(workbook, sheet.SheetID, atRow, rawCount, undefined, false);
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             insertedRowIds: inserted.map((r) => r.RowID),
@@ -1733,7 +1733,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (protErr) {
             return this.errorResult(protErr);
         }
-        SpreadsheetEngine.Instance.DeleteRows(workbook, sheet.SheetID, atRow, rawCount);
+        SpreadsheetEngine.Instance.DeleteRows(workbook, sheet.SheetID, atRow, rawCount, undefined, false);
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             deletedAtRow: atRow,
@@ -1769,7 +1769,14 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (protErr) {
             return this.errorResult(protErr);
         }
-        const inserted = SpreadsheetEngine.Instance.InsertColumns(workbook, sheet.SheetID, atCol, rawCount);
+        const inserted = SpreadsheetEngine.Instance.InsertColumns(
+            workbook,
+            sheet.SheetID,
+            atCol,
+            rawCount,
+            undefined,
+            false
+        );
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             insertedColumnIds: inserted.map((c) => c.ColumnID),
@@ -1809,7 +1816,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (protErr) {
             return this.errorResult(protErr);
         }
-        SpreadsheetEngine.Instance.DeleteColumns(workbook, sheet.SheetID, atCol, rawCount);
+        SpreadsheetEngine.Instance.DeleteColumns(workbook, sheet.SheetID, atCol, rawCount, undefined, false);
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             deletedAtColumn: atCol,
@@ -2746,17 +2753,24 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             sheet.Charts.push(chartSpec);
         }
 
+        await SpreadsheetEngine.Instance.EvaluateWorkbookIsolated(workbook);
         const dataset = SpreadsheetEngine.Instance.ExtractChartDataset(
             workbook,
             sheet.SheetID,
-            chartId
+            chartId,
+            undefined,
+            { SkipEvaluate: true }
         );
 
-        return this.buildMutationSuccess(workbook, {
-            sheetId: sheet.SheetID,
-            chart: chartSpec,
-            dataset
-        });
+        return this.buildMutationSuccess(
+            workbook,
+            {
+                sheetId: sheet.SheetID,
+                chart: chartSpec,
+                dataset
+            },
+            { skipEvaluate: true }
+        );
     }
 
     private async handleDeleteChart(
@@ -2970,11 +2984,17 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             }
         }
         if (hasSort) {
-            engine.SortWorksheet(workbook, sheet.SheetID, {
-                ColumnLetter: String(input.sortColumn).trim().toUpperCase(),
-                Direction: input.sortDirection === 'desc' ? 'desc' : 'asc',
-                HeaderRows: 1
-            });
+            engine.SortWorksheet(
+                workbook,
+                sheet.SheetID,
+                {
+                    ColumnLetter: String(input.sortColumn).trim().toUpperCase(),
+                    Direction: input.sortDirection === 'desc' ? 'desc' : 'asc',
+                    HeaderRows: 1
+                },
+                undefined,
+                false
+            );
         }
         if (hasFilters) {
             sheet.FilterSpecs = (input.filters as ArtifactJsonValue[])
@@ -3718,7 +3738,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             Range: range,
             Description: typeof input.description === 'string' ? input.description : undefined
         };
-        const saved = SpreadsheetEngine.Instance.SetNamedRange(workbook, spec);
+        const saved = SpreadsheetEngine.Instance.SetNamedRange(workbook, spec, false);
         return this.buildMutationSuccess(workbook, {
             namedRange: saved,
             namedRangeCount: workbook.NamedRanges.length
@@ -3751,7 +3771,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 return this.errorResult(protErr);
             }
         }
-        SpreadsheetEngine.Instance.RemoveNamedRange(workbook, existing.Name);
+        SpreadsheetEngine.Instance.RemoveNamedRange(workbook, existing.Name, false);
         return this.buildMutationSuccess(workbook, {
             deletedName: existing.Name,
             namedRangeCount: workbook.NamedRanges.length

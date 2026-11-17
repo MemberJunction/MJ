@@ -27,7 +27,10 @@ import {
     ValidateExtraFilter,
     XlsxOpenXmlAdapter
 } from '../custom/SpreadsheetEngine';
-import { ValidateArtifactContentMutationAgainstLocks } from '../custom/ArtifactLockValidation';
+import {
+    MakePreParsedWorkbookCacheKey,
+    ValidateArtifactContentMutationAgainstLocks
+} from '../custom/ArtifactLockValidation';
 import { SlideDeckEngine } from '../custom/SlideDeckEngine';
 import {
     ComputeFrozenSnapshotHash,
@@ -4687,5 +4690,104 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(delWb, delWb.Worksheets[0].SheetID, 'A2', { Value: 99 }, false);
         engine.DeleteRows(delWb, delWb.Worksheets[0].SheetID, 2, 1);
         expect(delWb.Worksheets[0].Cells['A2']).toBeUndefined();
+    });
+
+    it('Round 10 (R10-1 & Should-fix): keys preParsedWorkbooks by (content, config) pair, clears virtual axis index on isolated eval, and blocks ClearRange/EvaluateFormulaExpression bypasses', async () => {
+        const ownerId = '11111111-1111-1111-1111-111111111111';
+        const editorId = '22222222-2222-2222-2222-222222222222';
+
+        // 1. R10-1: Caching (xlsxPayload, null) must NOT hijack validation of (xlsxPayload, configWithOwnerLock)
+        const unlockedXlsxWb = engine.CreateEmptyWorkbook('ConfigLockPair', ['Sheet1'], 4, 4);
+        engine.SetCell(unlockedXlsxWb, unlockedXlsxWb.Worksheets[0].SheetID, 'A1', { Value: 'orig' }, false);
+        const unlockedXlsxB64 = Buffer.from(
+            engine.ExportToXlsxBytes(unlockedXlsxWb, true, { SkipEvaluate: true })
+        ).toString('base64');
+
+        const editedXlsxWb = engine.ImportFromXlsxBytes(Buffer.from(unlockedXlsxB64, 'base64'), undefined, {
+            SkipEvaluate: true
+        });
+        engine.SetCell(editedXlsxWb, editedXlsxWb.Worksheets[0].SheetID, 'A1', { Value: 'tampered' }, false);
+        const editedXlsxB64 = Buffer.from(
+            engine.ExportToXlsxBytes(editedXlsxWb, true, { SkipEvaluate: true })
+        ).toString('base64');
+
+        const configLockedWb = engine.CreateEmptyWorkbook('ConfigLockOverlay', ['Sheet1'], 4, 4);
+        configLockedWb.Worksheets[0].SheetID = unlockedXlsxWb.Worksheets[0].SheetID;
+        configLockedWb.Worksheets[0].ProtectedRanges = [
+            { RangeID: 'cfg-lock-1', Range: 'A1:B2', LockedByUserID: ownerId }
+        ];
+        const configLockJson = JSON.stringify(configLockedWb);
+
+        const preParsed = new Map<string, ReturnType<SpreadsheetEngine['CreateEmptyWorkbook']>>();
+        preParsed.set(
+            MakePreParsedWorkbookCacheKey(unlockedXlsxB64, null),
+            engine.ParseWorkbook(unlockedXlsxB64, null, { SkipEvaluate: true })
+        );
+        preParsed.set(
+            MakePreParsedWorkbookCacheKey(unlockedXlsxB64, configLockJson),
+            engine.ParseWorkbook(unlockedXlsxB64, configLockJson, { SkipEvaluate: true })
+        );
+        preParsed.set(
+            MakePreParsedWorkbookCacheKey(editedXlsxB64, null),
+            engine.ParseWorkbook(editedXlsxB64, null, { SkipEvaluate: true })
+        );
+
+        const stripConfigAttempt = ValidateArtifactContentMutationAgainstLocks(
+            unlockedXlsxB64,
+            editedXlsxB64,
+            editorId,
+            false,
+            {
+                currentConfiguration: configLockJson,
+                nextConfiguration: null,
+                preParsedWorkbooks: preParsed
+            }
+        );
+        expect(stripConfigAttempt.Allowed).toBe(false);
+        expect(stripConfigAttempt.Reason).toMatch(/protected range/i);
+
+        // 2. Should-fix: EvaluateWorkbookIsolated clears indexedSheets & workbookVirtualAxisIndex so subsequent
+        //    structural edits still promote/shift live `-vrow-` references inside newly replaced Cell objects.
+        const vrowWb = engine.CreateEmptyWorkbook('VRowMergeTest', ['Sheet1'], 3, 2);
+        const sId = vrowWb.Worksheets[0].SheetID;
+        engine.SetCell(vrowWb, sId, 'A10', { Value: 40 }, false);
+        engine.SetCell(vrowWb, sId, 'B10', { Formula: '=A10+2' }, false);
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c, o) => engine.ImportFromXlsxBytes(b, c, o),
+            PatchXlsxBytes: async (orig, wbArg) => engine.PatchXlsxBytes(orig, wbArg),
+            EvaluateWorkbook: async (wbArg, ctx) => {
+                const cloned = structuredClone(wbArg);
+                engine.EvaluateWorkbook(cloned, ctx);
+                return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+            }
+        });
+        try {
+            await engine.EvaluateWorkbookIsolated(vrowWb);
+            expect(vrowWb.Worksheets[0].Cells['B10']?.ComputedValue).toBe(42);
+            engine.InsertRows(vrowWb, sId, 1, 2);
+            expect(vrowWb.Worksheets[0].Cells['A12']?.RawValue).toBe(40);
+            expect(vrowWb.Worksheets[0].Cells['B12']?.Formula).toBe('=A12+2');
+            expect(vrowWb.Worksheets[0].Cells['B12']?.ComputedValue).toBe(42);
+        } finally {
+            RegisterSpreadsheetWorkerRunner(null);
+        }
+
+        // 3. Should-fix: Even with workbookDagCache pre-armed via SerializeWorkbook, ClearRange(recalc=true) and
+        //    EvaluateFormulaExpression reject under SetSpreadsheetWorkerIsolationRequired(true).
+        const guardWb = engine.CreateEmptyWorkbook('DagBypassGuard', ['Sheet1'], 4, 4);
+        engine.SetCell(guardWb, guardWb.Worksheets[0].SheetID, 'A1', { Value: 5 }, false);
+        engine.SetCell(guardWb, guardWb.Worksheets[0].SheetID, 'B1', { Formula: '=A1*2' }, true);
+        engine.SerializeWorkbook(guardWb); // Arms DAG cache
+        SetSpreadsheetWorkerIsolationRequired(true);
+        try {
+            expect(() => engine.ClearRange(guardWb, guardWb.Worksheets[0].SheetID, 'A1:A1', true)).toThrow(
+                /synchronous main-thread evaluation is prohibited/i
+            );
+            expect(() => engine.EvaluateFormulaExpression(guardWb, guardWb.Worksheets[0].SheetID, '=A1+1')).toThrow(
+                /synchronous main-thread evaluation is prohibited/i
+            );
+        } finally {
+            SetSpreadsheetWorkerIsolationRequired(false);
+        }
     });
 });

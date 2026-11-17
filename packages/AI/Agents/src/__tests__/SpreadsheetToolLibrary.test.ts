@@ -3,6 +3,7 @@ import type { IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo } fro
 import {
     ArtifactPermissionEngine,
     RegisterSpreadsheetWorkerRunner,
+    SetSpreadsheetWorkerIsolationRequired,
     SpreadsheetEngine
 } from '@memberjunction/core-entities';
 import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
@@ -968,6 +969,130 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
             expect(b1?.computedValue).toBe(30);
         } finally {
             RegisterSpreadsheetWorkerRunner(null);
+        }
+    });
+
+    it('R10-2: executes all mutation tools and charted-workbook export under SetSpreadsheetWorkerIsolationRequired(true) without calling main-thread EvaluateWorkbook', async () => {
+        const engine = SpreadsheetEngine.Instance;
+        let insideWorker = false;
+        let mainThreadEvalCount = 0;
+        const origEval = engine.EvaluateWorkbook.bind(engine);
+        vi.spyOn(engine, 'EvaluateWorkbook').mockImplementation((wbArg, ctxArg) => {
+            if (!insideWorker) {
+                mainThreadEvalCount++;
+            }
+            origEval(wbArg, ctxArg);
+        });
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c, o) => {
+                SetSpreadsheetWorkerIsolationRequired(false);
+                insideWorker = true;
+                try {
+                    return engine.ImportFromXlsxBytes(b, c, o);
+                } finally {
+                    insideWorker = false;
+                    SetSpreadsheetWorkerIsolationRequired(true);
+                }
+            },
+            PatchXlsxBytes: async (o, w) => engine.PatchXlsxBytes(o, w),
+            EvaluateWorkbook: async (w, ctx) => {
+                const cloned = structuredClone(w);
+                SetSpreadsheetWorkerIsolationRequired(false);
+                insideWorker = true;
+                try {
+                    origEval(cloned, ctx);
+                } finally {
+                    insideWorker = false;
+                    SetSpreadsheetWorkerIsolationRequired(true);
+                }
+                return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+            }
+        });
+
+        const seedWb = engine.CreateEmptyWorkbook('R10ToolIsolation', ['Data'], 6, 4);
+        const sheetId = seedWb.Worksheets[0].SheetID;
+        engine.SetCell(seedWb, sheetId, 'A1', { Value: 'Item' }, false);
+        engine.SetCell(seedWb, sheetId, 'B1', { Value: 'Val' }, false);
+        engine.SetCell(seedWb, sheetId, 'A2', { Value: 'Alpha' }, false);
+        engine.SetCell(seedWb, sheetId, 'B2', { Value: 20 }, false);
+        engine.SetCell(seedWb, sheetId, 'A3', { Value: 'Beta' }, false);
+        engine.SetCell(seedWb, sheetId, 'B3', { Value: 10 }, false);
+        engine.SetCell(seedWb, sheetId, 'C2', { Formula: '=SUM(B2:B3)' }, false);
+        let content = engine.SerializeWorkbook(seedWb);
+
+        SetSpreadsheetWorkerIsolationRequired(true);
+        try {
+            const nrSet = await sheetLib.InvokeTool(
+                'upsert_named_range',
+                { name: 'TotalSales', sheet: 'Data', range: 'B2:B3' },
+                content
+            );
+            expect(nrSet.success).toBe(true);
+            content = (nrSet.data as { updatedContent: string }).updatedContent;
+
+            const nrDel = await sheetLib.InvokeTool('delete_named_range', { name: 'TotalSales' }, content);
+            expect(nrDel.success).toBe(true);
+            content = (nrDel.data as { updatedContent: string }).updatedContent;
+
+            const insRow = await sheetLib.InvokeTool('insert_rows', { sheet: 'Data', atRowNumber: 2, count: 1 }, content);
+            expect(insRow.success).toBe(true);
+            content = (insRow.data as { updatedContent: string }).updatedContent;
+
+            const delRow = await sheetLib.InvokeTool('delete_rows', { sheet: 'Data', atRowNumber: 2, count: 1 }, content);
+            expect(delRow.success).toBe(true);
+            content = (delRow.data as { updatedContent: string }).updatedContent;
+
+            const insCol = await sheetLib.InvokeTool('insert_columns', { sheet: 'Data', atColumnNumber: 4, count: 1 }, content);
+            expect(insCol.success).toBe(true);
+            content = (insCol.data as { updatedContent: string }).updatedContent;
+
+            const delCol = await sheetLib.InvokeTool('delete_columns', { sheet: 'Data', atColumnNumber: 4, count: 1 }, content);
+            expect(delCol.success).toBe(true);
+            content = (delCol.data as { updatedContent: string }).updatedContent;
+
+            const sortRes = await sheetLib.InvokeTool(
+                'sort_and_filter',
+                { sheet: 'Data', sortColumn: 'B', sortDirection: 'asc' },
+                content
+            );
+            expect(sortRes.success).toBe(true);
+            content = (sortRes.data as { updatedContent: string }).updatedContent;
+
+            const chartRes = await sheetLib.InvokeTool(
+                'upsert_chart',
+                {
+                    sheet: 'Data',
+                    chartId: 'chart-r10-1',
+                    chartType: 'bar',
+                    title: 'Sales Chart',
+                    sourceRange: 'A1:B3'
+                },
+                content
+            );
+            expect(chartRes.success).toBe(true);
+            const chartPayload = chartRes.data as {
+                updatedContent: string;
+                xlsxBase64?: string;
+                dataset?: { Rows?: Array<Record<string, string | number | boolean | null>> };
+            };
+            expect(chartPayload.dataset?.Rows?.length).toBeGreaterThan(0);
+            expect(typeof chartPayload.xlsxBase64).toBe('string');
+            const xlsxBytes = Buffer.from(chartPayload.xlsxBase64 ?? '', 'base64');
+            expect(xlsxBytes[0]).toBe(0x50);
+            expect(xlsxBytes[1]).toBe(0x4b);
+            content = chartPayload.updatedContent;
+
+            const clrRes = await sheetLib.InvokeTool(
+                'clear_range',
+                { sheet: 'Data', range: 'C2:C2', mode: 'all' },
+                content
+            );
+            expect(clrRes.success).toBe(true);
+            expect(mainThreadEvalCount).toBe(0);
+        } finally {
+            SetSpreadsheetWorkerIsolationRequired(false);
+            RegisterSpreadsheetWorkerRunner(null);
+            vi.restoreAllMocks();
         }
     });
 });

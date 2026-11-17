@@ -2698,11 +2698,15 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
                 input.contextUser,
                 true,
                 undefined,
-                input.artifactId
+                input.artifactId,
+                false
               );
               signedFrozenBlocksCount++;
             }
           }
+        }
+        if (signedFrozenBlocksCount > 0) {
+          await engine.EvaluateWorkbookIsolated(wb);
         }
       }
 

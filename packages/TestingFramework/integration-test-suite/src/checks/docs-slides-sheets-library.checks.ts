@@ -949,14 +949,16 @@ async function checkDsl6SpreadsheetEngineAndLiveData(ctx: IntegrationCheckContex
         modelSheet.SheetID,
         'B4',
         { Formula: '=SUM(B2:B3)', Style: { Bold: true, FormatType: 'currency' } },
-        true,
+        false,
     );
-    AssertEqual(sumCell.ComputedValue, 3000, 'Initial =SUM(B2:B3) ComputedValue');
-    Assert(Boolean(sumCell.FormulaStable?.includes('@RANGE(')), 'FormulaStable must encode @RANGE stable IDs');
+    await engine.EvaluateWorkbookIsolated(wb);
+    AssertEqual(modelSheet.Cells['B4']?.ComputedValue, 3000, 'Initial =SUM(B2:B3) ComputedValue');
+    Assert(Boolean((modelSheet.Cells['B4']?.FormulaStable ?? sumCell.FormulaStable)?.includes('@RANGE(')), 'FormulaStable must encode @RANGE stable IDs');
 
     // Insert 1 row at top and 1 column at left -> B4 shifts to C5 with =SUM(C3:C4)
-    engine.InsertRows(wb, modelSheet.SheetID, 1, 1);
-    engine.InsertColumns(wb, modelSheet.SheetID, 1, 1);
+    engine.InsertRows(wb, modelSheet.SheetID, 1, 1, undefined, false);
+    engine.InsertColumns(wb, modelSheet.SheetID, 1, 1, undefined, false);
+    await engine.EvaluateWorkbookIsolated(wb);
     const shifted = modelSheet.Cells['C5'];
     Assert(shifted !== undefined, 'Shifted sum cell must reside at C5');
     AssertEqual(shifted!.Formula, '=SUM(C3:C4)', 'Formula coordinates must shift to =SUM(C3:C4)');
@@ -964,19 +966,21 @@ async function checkDsl6SpreadsheetEngineAndLiveData(ctx: IntegrationCheckContex
 
     // Cycle detection
     engine.SetCell(wb, modelSheet.SheetID, 'F2', { Formula: '=F3 + 1' }, false);
-    engine.SetCell(wb, modelSheet.SheetID, 'F3', { Formula: '=F2 + 1' }, true);
+    engine.SetCell(wb, modelSheet.SheetID, 'F3', { Formula: '=F2 + 1' }, false);
+    await engine.EvaluateWorkbookIsolated(wb);
     AssertEqual(modelSheet.Cells['F2'].ComputedValue, '#CYCLE!', 'Mutual cell cycle must evaluate to #CYCLE!');
 
     // Clear cycle cells before .xlsx export round-trip
     engine.SetCell(wb, modelSheet.SheetID, 'F2', { Value: null }, false);
-    engine.SetCell(wb, modelSheet.SheetID, 'F3', { Value: null }, true);
+    engine.SetCell(wb, modelSheet.SheetID, 'F3', { Value: null }, false);
+    await engine.EvaluateWorkbookIsolated(wb);
 
     // 2. OpenXML .xlsx lossless export + import round-trip
-    const xlsxBytes = engine.ExportToXlsxBytes(wb);
+    const xlsxBytes = engine.ExportToXlsxBytes(wb, true, { SkipEvaluate: true });
     AssertEqual(xlsxBytes[0], 0x50, '.xlsx ZIP header byte 0 ("P")');
     AssertEqual(xlsxBytes[1], 0x4b, '.xlsx ZIP header byte 1 ("K")');
 
-    const reimported = engine.ImportFromXlsxBytes(xlsxBytes);
+    const reimported = await engine.ImportFromXlsxBytesIsolated(xlsxBytes);
     AssertEqual(reimported.Worksheets.length, 2, 'Reimported worksheet count');
     AssertEqual(reimported.Worksheets[0].Cells['C5']?.Formula, '=SUM(C3:C4)', 'Reimported formula at C5');
     AssertEqual(reimported.Worksheets[0].Cells['C5']?.ComputedValue, 3000, 'Reimported ComputedValue at C5');
@@ -1428,12 +1432,12 @@ async function checkDsl9SecurityHardeningAndEngineGuards(ctx: IntegrationCheckCo
     const sheet = wb.Worksheets[0];
     sheetEngine.SetCell(wb, sheet.SheetID, 'A1', { Value: 10 }, false);
     sheetEngine.SetCell(wb, sheet.SheetID, 'Z20', { Value: 32 }, false);
-    sheetEngine.SetCell(wb, sheet.SheetID, 'AA1', { Formula: '=SUM(A1:Z20)' }, true);
-    sheetEngine.EvaluateWorkbook(wb);
+    sheetEngine.SetCell(wb, sheet.SheetID, 'AA1', { Formula: '=SUM(A1:Z20)' }, false);
+    await sheetEngine.EvaluateWorkbookIsolated(wb);
     AssertEqual(sheet.Cells['AA1']?.ComputedValue, 42, 'Initial =SUM(A1:Z20) over 520 cells must evaluate to 42');
 
-    sheetEngine.SetCell(wb, sheet.SheetID, 'Z20', { Value: 108 }, true);
-    sheetEngine.EvaluateWorkbook(wb);
+    sheetEngine.SetCell(wb, sheet.SheetID, 'Z20', { Value: 108 }, false);
+    await sheetEngine.EvaluateWorkbookIsolated(wb);
     AssertEqual(sheet.Cells['AA1']?.ComputedValue, 118, '>256-cell rangeWatchersBySheet must recalculate =SUM(A1:Z20) to 118 when Z20 changes');
 
     // Attach LiveTable, freeze, verify FrozenSnapshot present, then unfreeze and confirm purge
@@ -1456,16 +1460,17 @@ async function checkDsl9SecurityHardeningAndEngineGuards(ctx: IntegrationCheckCo
         Rows: [{ Name: 'Markdown Document' }],
         TotalRowCount: 1,
     };
-    const frozenTable = sheetEngine.FreezeLiveTable(wb, sheet.SheetID, 'lt-it170-purge', fakeExecResult, ctx.User, true);
+    const frozenTable = sheetEngine.FreezeLiveTable(wb, sheet.SheetID, 'lt-it170-purge', fakeExecResult, ctx.User, true, undefined, undefined, false);
     AssertEqual(frozenTable.Mode, 'Frozen', 'FreezeLiveTable must set Mode=Frozen');
     Assert(Boolean(frozenTable.FrozenSnapshot), 'FreezeLiveTable must populate FrozenSnapshot');
-    const unfrozenTable = sheetEngine.UnfreezeLiveTable(wb, sheet.SheetID, 'lt-it170-purge');
+    const unfrozenTable = sheetEngine.UnfreezeLiveTable(wb, sheet.SheetID, 'lt-it170-purge', false);
+    await sheetEngine.EvaluateWorkbookIsolated(wb);
     AssertEqual(unfrozenTable.Mode, 'Live', 'UnfreezeLiveTable must revert Mode=Live');
     AssertEqual(unfrozenTable.FrozenSnapshot, undefined, 'UnfreezeLiveTable must purge FrozenSnapshot');
 
     // 3. __proto__ prototype-pollution guard on workbook JSON parsing
     const pollutedJson = '{"Worksheets":[{"SheetID":"s1","Name":"Sheet1","Cells":{"__proto__":{"Value":"pwned"},"A1":{"Value":7}}}]}';
-    const parsedWb = sheetEngine.ParseWorkbook(pollutedJson);
+    const parsedWb = await sheetEngine.ParseWorkbookIsolated(pollutedJson);
     AssertEqual((Object.prototype as { Value?: string }).Value, undefined, '__proto__ cell payload must never pollute Object.prototype');
     AssertEqual(Object.prototype.hasOwnProperty.call(parsedWb.Worksheets[0].Cells, '__proto__'), false, '__proto__ key must be stripped from worksheet Cells');
 
@@ -1473,7 +1478,9 @@ async function checkDsl9SecurityHardeningAndEngineGuards(ctx: IntegrationCheckCo
     const deepFormula = `=${'('.repeat(145)}42${')'.repeat(145)}`;
     let depthOutcome: string | number | boolean | null = null;
     try {
-        depthOutcome = sheetEngine.EvaluateFormulaExpression(wb, sheet.SheetID, deepFormula);
+        sheetEngine.SetCell(wb, sheet.SheetID, 'AB1', { Formula: deepFormula }, false);
+        await sheetEngine.EvaluateWorkbookIsolated(wb);
+        depthOutcome = sheet.Cells['AB1']?.ComputedValue ?? null;
     } catch (err) {
         depthOutcome = err instanceof Error ? err.message : String(err);
     }
@@ -1511,7 +1518,7 @@ async function checkDsl10SynthesisSanitizationAndFallback(): Promise<void> {
         '```',
     ].join('\n');
 
-    const normalized = synth.NormalizeSynthesizedOutput({
+    const normalized = await synth.NormalizeSynthesizedOutputIsolated({
         TargetKind: 'document',
         RawOutput: hostileMarkdown,
         FallbackTitle: 'Clean Synthesis Doc',
@@ -1535,7 +1542,7 @@ async function checkDsl10SynthesisSanitizationAndFallback(): Promise<void> {
     Assert(normalized.Warnings.length > 0, 'NormalizeSynthesizedOutput must emit warnings when stripping hostile blocks');
 
     const digests = [
-        synth.ExtractSourceDigest({
+        await synth.ExtractSourceDigestIsolated({
             ArtifactID: allowedSourceId,
             Name: 'Q1 Revenue',
             ArtifactType: 'Markdown Document',
@@ -1550,7 +1557,7 @@ async function checkDsl10SynthesisSanitizationAndFallback(): Promise<void> {
     Assert(parsedDeck.Slides.length >= 1, 'Fallback presentation synthesis must parse into a valid SlideDeckSpec');
 
     const sheetFallback = synth.BuildDeterministicFallbackSynthesis(digests, 'spreadsheet', 'Board Model', 'Summarize Q1', false);
-    const parsedWb = SpreadsheetEngine.Instance.ParseWorkbook(sheetFallback.Content);
+    const parsedWb = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(sheetFallback.Content);
     Assert(parsedWb.Worksheets.length >= 1, 'Fallback spreadsheet synthesis must parse into a valid WorkbookSpec');
 }
 

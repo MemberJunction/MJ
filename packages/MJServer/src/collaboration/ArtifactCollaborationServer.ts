@@ -30,6 +30,7 @@ import {
     BuildArtifactVersionConfigurationWithPreview,
     DocumentLiveBlockEngine,
     IsValidThumbnailDataUrl,
+    MakePreParsedWorkbookCacheKey,
     MAX_IMPORT_SHEETS,
     MAX_IMPORT_WORKBOOK_CELLS,
     MJArtifactTypeEntity,
@@ -2437,23 +2438,32 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const existing = this.extractRoomSerializedContent(room.Doc);
             const preParsedMap = new Map<string, WorkbookSpec>();
             if (preparedLiveMutationWb.workbook) {
-                preParsedMap.set(newContent, preparedLiveMutationWb.workbook);
+                preParsedMap.set(MakePreParsedWorkbookCacheKey(newContent, null), preparedLiveMutationWb.workbook);
             }
             if (preparedLiveBaselineWb?.workbook && previousContent) {
-                preParsedMap.set(previousContent, preparedLiveBaselineWb.workbook);
+                preParsedMap.set(
+                    MakePreParsedWorkbookCacheKey(previousContent, null),
+                    preparedLiveBaselineWb.workbook
+                );
             }
-            if (this.isXlsxTextPayload(existing) && !preParsedMap.has(existing)) {
-                const livePre = await this.preparePreparsedWorkbookIfXlsxIsolated(existing, null);
-                if (livePre.workbook) {
-                    preParsedMap.set(existing, livePre.workbook);
+            if (this.isXlsxTextPayload(existing)) {
+                const liveKey = MakePreParsedWorkbookCacheKey(existing, null);
+                if (!preParsedMap.has(liveKey)) {
+                    const livePre = await this.preparePreparsedWorkbookIfXlsxIsolated(existing, null);
+                    if (livePre.workbook) {
+                        preParsedMap.set(liveKey, livePre.workbook);
+                    }
                 }
             }
             const freshExisting = this.extractRoomSerializedContent(room.Doc);
             if (freshExisting !== existing) {
-                if (this.isXlsxTextPayload(freshExisting) && !preParsedMap.has(freshExisting)) {
-                    const retryLivePre = await this.preparePreparsedWorkbookIfXlsxIsolated(freshExisting, null);
-                    if (retryLivePre.workbook) {
-                        preParsedMap.set(freshExisting, retryLivePre.workbook);
+                if (this.isXlsxTextPayload(freshExisting)) {
+                    const freshKey = MakePreParsedWorkbookCacheKey(freshExisting, null);
+                    if (!preParsedMap.has(freshKey)) {
+                        const retryLivePre = await this.preparePreparsedWorkbookIfXlsxIsolated(freshExisting, null);
+                        if (retryLivePre.workbook) {
+                            preParsedMap.set(freshKey, retryLivePre.workbook);
+                        }
                     }
                 }
             }
@@ -4741,16 +4751,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         if (hasXlsxPayload || (room.PendingReconcileCount ?? 0) > 0) {
             return this.enqueueRoomReconcile(room, async () => {
-                const targetPre = await this.preparePreparsedWorkbookIfXlsxIsolated(
-                    targetText,
-                    version.Configuration ?? null
-                );
+                const targetConfig = version.Configuration ?? null;
+                const targetPre = await this.preparePreparsedWorkbookIfXlsxIsolated(targetText, targetConfig);
+                const targetContentOnlyPre =
+                    targetConfig !== null && this.isXlsxTextPayload(targetText)
+                        ? await this.preparePreparsedWorkbookIfXlsxIsolated(targetText, null)
+                        : undefined;
                 const contentTargetPre =
                     (version.Content ?? '') === targetText
                         ? targetPre
                         : await this.preparePreparsedWorkbookIfXlsxIsolated(
                               version.Content ?? '',
-                              version.Configuration ?? null
+                              targetConfig
                           );
                 const freshBaseline = options?.previousContent ?? room.BaseVersionText;
                 const baselinePre = freshBaseline
@@ -4762,6 +4774,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 let freshLiveText = this.extractRoomSerializedContent(room.Doc);
                 let freshBaseConfig = room.BaseConfiguration ?? null;
                 let rollbackPre = await this.preparePreparsedWorkbookIfXlsxIsolated(freshLiveText, freshBaseConfig);
+                let rollbackContentOnlyPre =
+                    freshBaseConfig !== null && this.isXlsxTextPayload(freshLiveText)
+                        ? await this.preparePreparsedWorkbookIfXlsxIsolated(freshLiveText, null)
+                        : undefined;
                 if (this.isXlsxTextPayload(freshLiveText) || this.isXlsxTextPayload(freshBaseConfig)) {
                     const postRollbackLiveText = this.extractRoomSerializedContent(room.Doc);
                     const postRollbackBaseConfig = room.BaseConfiguration ?? null;
@@ -4772,6 +4788,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             freshLiveText,
                             freshBaseConfig
                         );
+                        rollbackContentOnlyPre =
+                            freshBaseConfig !== null && this.isXlsxTextPayload(freshLiveText)
+                                ? await this.preparePreparsedWorkbookIfXlsxIsolated(freshLiveText, null)
+                                : undefined;
                     }
                 }
 
@@ -4781,19 +4801,28 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
                 const preParsedMap = new Map<string, WorkbookSpec>();
                 if (targetPre.workbook) {
-                    preParsedMap.set(targetText, targetPre.workbook);
-                    if (version.Configuration) {
-                        preParsedMap.set(version.Configuration, targetPre.workbook);
-                    }
+                    preParsedMap.set(MakePreParsedWorkbookCacheKey(targetText, targetConfig), targetPre.workbook);
+                }
+                if (targetContentOnlyPre?.workbook) {
+                    preParsedMap.set(MakePreParsedWorkbookCacheKey(targetText, null), targetContentOnlyPre.workbook);
                 }
                 if (contentTargetPre.workbook && version.Content) {
-                    preParsedMap.set(version.Content, contentTargetPre.workbook);
+                    preParsedMap.set(
+                        MakePreParsedWorkbookCacheKey(version.Content, targetConfig),
+                        contentTargetPre.workbook
+                    );
                 }
                 if (rollbackPre.workbook) {
-                    preParsedMap.set(freshLiveText, rollbackPre.workbook);
-                    if (freshBaseConfig) {
-                        preParsedMap.set(freshBaseConfig, rollbackPre.workbook);
-                    }
+                    preParsedMap.set(
+                        MakePreParsedWorkbookCacheKey(freshLiveText, freshBaseConfig),
+                        rollbackPre.workbook
+                    );
+                }
+                if (rollbackContentOnlyPre?.workbook) {
+                    preParsedMap.set(
+                        MakePreParsedWorkbookCacheKey(freshLiveText, null),
+                        rollbackContentOnlyPre.workbook
+                    );
                 }
 
                 const latestLiveText = this.extractRoomSerializedContent(room.Doc);
@@ -4947,7 +4976,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     false,
                     {
                         currentConfiguration: room.BaseConfiguration ?? null,
-                        nextConfiguration: version.Configuration ?? null
+                        nextConfiguration: version.Configuration ?? null,
+                        ...(pre?.preParsedWorkbooks ? { preParsedWorkbooks: pre.preParsedWorkbooks } : {})
                     }
                 );
                 if (!restoreLockCheck.Allowed) {

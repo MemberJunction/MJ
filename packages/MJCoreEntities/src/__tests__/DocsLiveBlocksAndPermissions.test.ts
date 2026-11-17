@@ -22,9 +22,16 @@ import {
   type DocumentBlockSpec,
 } from '../custom/DocumentLiveBlockEngine';
 import { ValidateArtifactContentMutationAgainstLocks } from '../custom/ArtifactLockValidation';
+import {
+  LoadSpreadsheetEngine,
+  RegisterSpreadsheetWorkerRunner,
+  SetSpreadsheetWorkerIsolationRequired,
+  SpreadsheetEngine,
+} from '../custom/SpreadsheetEngine';
 
 LoadArtifactPermissionDelegates();
 LoadDocumentLiveBlocks();
+LoadSpreadsheetEngine();
 DocumentLiveBlockEngine.Instance.SetSigningSecret('test-frozen-block-hmac-secret-at-least-32-bytes!!');
 
 function createMockUser(id: string, name = 'Test User'): UserInfo {
@@ -1655,5 +1662,111 @@ describe('Security & Hardening Regression Coverage (SavedQuery, Component, Artif
       { currentConfiguration: lockedSlidesConfig, nextConfiguration: lockedSlidesConfig },
     );
     expect(res.Allowed).toBe(true);
+  });
+
+  it('R10-2: executes ArtifactDocumentBlock spreadsheet chart slicing under SetSpreadsheetWorkerIsolationRequired(true) without calling main-thread EvaluateWorkbook', async () => {
+    const eng = SpreadsheetEngine.Instance;
+    const wb = eng.CreateEmptyWorkbook('IsolatedChartSlice', ['Revenue'], 5, 3);
+    const sheet = wb.Worksheets[0];
+    eng.SetCell(wb, sheet.SheetID, 'A1', { Value: 'Quarter' }, false);
+    eng.SetCell(wb, sheet.SheetID, 'B1', { Value: 'Amount' }, false);
+    eng.SetCell(wb, sheet.SheetID, 'A2', { Value: 'Q1' }, false);
+    eng.SetCell(wb, sheet.SheetID, 'B2', { Value: 250 }, false);
+    sheet.Charts.push({
+      ChartID: 'chart-iso-1',
+      SheetID: sheet.SheetID,
+      ChartType: 'bar',
+      Title: 'Quarterly Revenue',
+      SourceRange: 'A1:B2',
+      PositionCell: 'D2',
+    });
+    const wbJson = eng.SerializeWorkbook(wb);
+
+    const artifactId = 'bbbb6666-6666-4666-8666-666666666666';
+    const block = new ArtifactDocumentBlock();
+    vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+      ArtifactID: artifactId,
+      CanRead: true,
+      CanEdit: false,
+      CanDelete: false,
+      CanShare: false,
+      Source: 'ArtifactPermission',
+      Reason: 'Allowed for test',
+    });
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunViews: vi.fn(async () => [
+        {
+          Success: true,
+          Results: [{ ID: artifactId, Name: 'Model.xlsx', Type: 'Excel Spreadsheet' }],
+          RowCount: 1,
+          TotalRowCount: 1,
+          UserView: null,
+          ErrorMessage: '',
+          ExecutionTime: 1,
+        },
+        {
+          Success: true,
+          Results: [
+            {
+              ID: 'ver-iso-1',
+              ArtifactID: artifactId,
+              VersionNumber: 1,
+              ContentMode: 'Text',
+              FileID: null,
+              Content: wbJson,
+              Configuration: null,
+            },
+          ],
+          RowCount: 1,
+          TotalRowCount: 1,
+          UserView: null,
+          ErrorMessage: '',
+          ExecutionTime: 1,
+        },
+      ]),
+    } as Pick<RunView, 'RunViews'> as RunView);
+
+    let insideWorker = false;
+    let mainThreadSyncEvalCount = 0;
+    const origEval = eng.EvaluateWorkbook.bind(eng);
+    const syncEvalSpy = vi.spyOn(eng, 'EvaluateWorkbook').mockImplementation((wbArg, ctxArg) => {
+      if (!insideWorker) {
+        mainThreadSyncEvalCount++;
+      }
+      origEval(wbArg, ctxArg);
+    });
+    RegisterSpreadsheetWorkerRunner({
+      ImportFromXlsxBytes: async (b, c, o) => eng.ImportFromXlsxBytes(b, c, o),
+      PatchXlsxBytes: async (orig, wbArg) => eng.PatchXlsxBytes(orig, wbArg),
+      EvaluateWorkbook: async (wbArg, ctx) => {
+        const cloned = structuredClone(wbArg);
+        SetSpreadsheetWorkerIsolationRequired(false);
+        insideWorker = true;
+        try {
+          origEval(cloned, ctx);
+        } finally {
+          insideWorker = false;
+          SetSpreadsheetWorkerIsolationRequired(true);
+        }
+        return { Workbook: cloned, EvaluatedFormulaCount: eng.LastEvaluatedFormulaCount };
+      },
+    });
+    SetSpreadsheetWorkerIsolationRequired(true);
+    try {
+      const provider = { ProviderType: 'Network', Entities: [] } as Partial<IMetadataProvider> as IMetadataProvider;
+      const res = await block.Execute(
+        { BlockID: 'blk-iso', Kind: 'Artifact', Mode: 'Live', ArtifactID: artifactId, SheetChartID: 'chart-iso-1' },
+        provider,
+        actorUser,
+      );
+      expect(res.Success).toBe(true);
+      expect(mainThreadSyncEvalCount).toBe(0);
+      expect(syncEvalSpy.mock.calls.length).toBeGreaterThanOrEqual(0);
+      expect(res.ArtifactContent).toContain('Q1');
+    } finally {
+      SetSpreadsheetWorkerIsolationRequired(false);
+      RegisterSpreadsheetWorkerRunner(null);
+      vi.restoreAllMocks();
+    }
   });
 });

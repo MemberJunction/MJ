@@ -22,14 +22,25 @@ export interface ArtifactLockValidationResult {
     Reason?: string;
 }
 
-/**
- * Optional configuration / context payloads evaluated alongside primary `Content` during lock validation (`B3`).
- */
+/** Optional configuration / context payloads evaluated alongside primary `Content` during lock validation (`B3`). */
 export interface ArtifactLockValidationOptions {
     currentConfiguration?: string | null;
     nextConfiguration?: string | null;
-    /** Optional pre-parsed workbooks (e.g. `.xlsx` decoded off-thread once per save) keyed by exact raw text (`R9-2`). */
+    /** Optional pre-parsed workbooks (e.g. `.xlsx` decoded off-thread once per save) keyed by {@link MakePreParsedWorkbookCacheKey} (`R10-1`). */
     preParsedWorkbooks?: ReadonlyMap<string, WorkbookSpec>;
+}
+
+/**
+ * Builds an unambiguous `(content, configuration)` composite cache key for `preParsedWorkbooks` (`R10-1`).
+ * Never share keys across different `(content, config)` pairs — a JSON `Configuration` overrides `.xlsx` metadata.
+ */
+export function MakePreParsedWorkbookCacheKey(
+    content: string | null | undefined,
+    configuration?: string | null
+): string {
+    const c = typeof content === 'string' ? content : '';
+    const cfg = typeof configuration === 'string' ? configuration : '';
+    return `${c.length}:${c}\0${cfg.length}:${cfg}`;
 }
 
 function parseWorkbookWithCache(
@@ -38,11 +49,9 @@ function parseWorkbookWithCache(
     preParsedWorkbooks?: ReadonlyMap<string, WorkbookSpec>
 ): WorkbookSpec {
     if (preParsedWorkbooks) {
-        if (config && preParsedWorkbooks.has(config)) {
-            return preParsedWorkbooks.get(config)!;
-        }
-        if (content && preParsedWorkbooks.has(content)) {
-            return preParsedWorkbooks.get(content)!;
+        const hit = preParsedWorkbooks.get(MakePreParsedWorkbookCacheKey(content, config));
+        if (hit) {
+            return hit;
         }
     }
     return SpreadsheetEngine.Instance.ParseWorkbook(content, config, { SkipEvaluate: true });
@@ -837,12 +846,22 @@ export function ValidateArtifactContentMutationAgainstLocks(
 
     if (!trimmedCurrent && !(currentConfig ?? '').trim()) {
         if (nextConfig && inspectStructuredJsonKind(nextConfig)) {
-            const emptyConfigCheck = validateNewLocksOnEmptyContent(nextConfig, actorUserId, isOwner);
+            const emptyConfigCheck = validateNewLocksOnEmptyContent(
+                nextConfig,
+                actorUserId,
+                isOwner,
+                options?.preParsedWorkbooks
+            );
             if (emptyConfigCheck !== null && !emptyConfigCheck.Allowed) {
                 return emptyConfigCheck;
             }
         }
-        const emptyContentCheck = validateNewLocksOnEmptyContent(nextContent, actorUserId, isOwner);
+        const emptyContentCheck = validateNewLocksOnEmptyContent(
+            nextContent,
+            actorUserId,
+            isOwner,
+            options?.preParsedWorkbooks
+        );
         if (emptyContentCheck !== null && !emptyContentCheck.Allowed) {
             return emptyContentCheck;
         }

@@ -2216,6 +2216,100 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
                 expect(await nonOwnerXlsxSave.ent.Save()).toBe(true);
                 expect(mainEvalSpy).not.toHaveBeenCalled();
                 expect(parseIsoSpy).toHaveBeenCalledTimes(1);
+
+                // R10-1: Non-owner saving edited `.xlsx` with stripped `Configuration: null` when prior version
+                // held owner `ProtectedRanges` inside `Configuration`, AND File-mode replacement (`FileID` swap)
+                // when `Configuration` holds protected ranges must BOTH be refused despite preParsedXlsxCache.
+                const cfgLockWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('CfgLockSave', ['Sheet1'], 3, 3);
+                cfgLockWb.Worksheets[0].SheetID = xlsxSourceWb.Worksheets[0].SheetID;
+                cfgLockWb.Worksheets[0].ProtectedRanges = [
+                    { RangeID: 'r10-cfg-lock', Range: 'A1:B2', LockedByUserID: ownerId }
+                ];
+                const cfgLockJson = JSON.stringify(cfgLockWb);
+
+                const editedXlsxWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('SaveXlsxEdited', ['Sheet1'], 3, 3);
+                editedXlsxWb.Worksheets[0].SheetID = xlsxSourceWb.Worksheets[0].SheetID;
+                SpreadsheetEngine.Instance.SetCell(editedXlsxWb, editedXlsxWb.Worksheets[0].SheetID, 'A1', { Value: 999 }, false);
+                const editedXlsxDataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${Buffer.from(
+                    SpreadsheetEngine.Instance.ExportToXlsxBytes(editedXlsxWb, false, { SkipEvaluate: true })
+                ).toString('base64')}`;
+
+                const cfgLockProvider: Pick<IMetadataProvider, 'Entities' | 'RunView'> = {
+                    Entities: [],
+                    RunView: vi.fn(async (params: RunViewParams) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return {
+                                Success: true,
+                                Results: [{ ID: artId, TypeID: 't-xlsx', UserID: ownerId }],
+                                RowCount: 1,
+                                TotalRowCount: 1,
+                                ExecutionTime: 1,
+                                ErrorMessage: ''
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Artifact Permissions') {
+                            return {
+                                Success: true,
+                                Results: [{ CanEdit: true }],
+                                RowCount: 1,
+                                TotalRowCount: 1,
+                                ExecutionTime: 1,
+                                ErrorMessage: ''
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Artifact Versions') {
+                            return {
+                                Success: true,
+                                Results: [
+                                    {
+                                        ID: 'ver-cfg-lock-1',
+                                        VersionNumber: 1,
+                                        Content: xlsxDataUrl,
+                                        Configuration: cfgLockJson,
+                                        ContentMode: 'File',
+                                        FileID: 'file-orig-1'
+                                    }
+                                ],
+                                RowCount: 1,
+                                TotalRowCount: 1,
+                                ExecutionTime: 1,
+                                ErrorMessage: ''
+                            };
+                        }
+                        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+                    }) as IMetadataProvider['RunView']
+                };
+
+                const buildCfgSave = () => {
+                    const ent = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+                    const hist: MJArtifactVersionEntityServer['ResultHistory'] = [];
+                    Object.defineProperty(ent, 'ResultHistory', { value: hist, writable: true });
+                    Object.defineProperty(ent, 'IsSaved', { value: false, writable: true });
+                    Object.defineProperty(ent, 'ArtifactID', { value: artId, writable: true });
+                    Object.defineProperty(ent, 'VersionNumber', { value: 2, writable: true });
+                    Object.defineProperty(ent, 'ContextCurrentUser', { value: editor, writable: true });
+                    Object.defineProperty(ent, 'ProviderToUse', { value: cfgLockProvider, configurable: true });
+                    Object.defineProperty(ent, 'GetFieldByName', {
+                        value: () => ({ Dirty: true, OldValue: null }),
+                        configurable: true
+                    });
+                    return { ent, hist };
+                };
+
+                RegisterWorkingStateContentDeserializer(null);
+                const stripConfigSave = buildCfgSave();
+                Object.defineProperty(stripConfigSave.ent, 'Content', { value: editedXlsxDataUrl, writable: true });
+                Object.defineProperty(stripConfigSave.ent, 'Configuration', { value: null, writable: true });
+                expect(await stripConfigSave.ent.Save()).toBe(false);
+                expect(stripConfigSave.hist[0]?.Message).toMatch(/protected range/i);
+
+                const wipeFileSave = buildCfgSave();
+                Object.defineProperty(wipeFileSave.ent, 'ContentMode', { value: 'File', writable: true });
+                Object.defineProperty(wipeFileSave.ent, 'FileID', { value: 'file-swapped-2', writable: true });
+                Object.defineProperty(wipeFileSave.ent, 'Content', { value: '', writable: true });
+                Object.defineProperty(wipeFileSave.ent, 'Configuration', { value: null, writable: true });
+                expect(await wipeFileSave.ent.Save()).toBe(false);
+                expect(wipeFileSave.hist[0]?.Message).toMatch(/File-mode|protected range/i);
             } finally {
                 mainEvalSpy.mockRestore();
                 parseIsoSpy.mockRestore();

@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
     ArtifactPermissionEngine,
+    DocumentLiveBlockEngine,
+    RegisterSpreadsheetWorkerRunner,
+    SetSpreadsheetWorkerIsolationRequired,
     SpreadsheetEngine,
     XlsxOpenXmlAdapter,
     type MJArtifactTypeEntity,
@@ -1036,5 +1039,112 @@ describe('SLICE A governed artifact security, concurrency, discovery & realtime 
             VersionNumber: 3,
             Operation: 'mutated',
         });
+    });
+
+    it('R10-2: freezes live tables and materializes charted .xlsx artifacts under SetSpreadsheetWorkerIsolationRequired(true) without calling main-thread EvaluateWorkbook', async () => {
+        const eng = SpreadsheetEngine.Instance;
+        let insideWorker = false;
+        let mainThreadEvalCount = 0;
+        const origEval = eng.EvaluateWorkbook.bind(eng);
+        vi.spyOn(eng, 'EvaluateWorkbook').mockImplementation((wbArg, ctxArg) => {
+            if (!insideWorker) {
+                mainThreadEvalCount++;
+            }
+            origEval(wbArg, ctxArg);
+        });
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c, o) => {
+                SetSpreadsheetWorkerIsolationRequired(false);
+                insideWorker = true;
+                try {
+                    return eng.ImportFromXlsxBytes(b, c, o);
+                } finally {
+                    insideWorker = false;
+                    SetSpreadsheetWorkerIsolationRequired(true);
+                }
+            },
+            PatchXlsxBytes: async (o, w) => eng.PatchXlsxBytes(o, w),
+            EvaluateWorkbook: async (w, ctx) => {
+                const cloned = structuredClone(w);
+                SetSpreadsheetWorkerIsolationRequired(false);
+                insideWorker = true;
+                try {
+                    origEval(cloned, ctx);
+                } finally {
+                    insideWorker = false;
+                    SetSpreadsheetWorkerIsolationRequired(true);
+                }
+                return { Workbook: cloned, EvaluatedFormulaCount: eng.LastEvaluatedFormulaCount };
+            },
+        });
+
+        const wb = eng.CreateEmptyWorkbook('GovernedIsoFreeze', ['Sheet1'], 5, 4);
+        const ws = wb.Worksheets[0];
+        eng.SetCell(wb, ws.SheetID, 'A1', { Value: 'Label' }, false);
+        eng.SetCell(wb, ws.SheetID, 'B1', { Value: 'Amount' }, false);
+        eng.SetCell(wb, ws.SheetID, 'A2', { Value: 'Q1' }, false);
+        eng.SetCell(wb, ws.SheetID, 'B2', { Value: 500 }, false);
+        ws.Charts.push({
+            ChartID: 'gov-chart-1',
+            SheetID: ws.SheetID,
+            ChartType: 'bar',
+            Title: 'Governed Chart',
+            SourceRange: 'A1:B2',
+            PositionCell: 'D2',
+        });
+        ws.LiveTables.push({
+            TableID: 'gov-lt-1',
+            Title: 'Live Revenue',
+            SourceType: 'SavedQuery',
+            QueryID: 'q-rev-1',
+            Mode: 'Live',
+            AnchorCell: 'D1',
+        });
+        const wbJson = eng.SerializeWorkbook(wb);
+
+        vi.spyOn(eng, 'RefreshLiveTables').mockResolvedValue({
+            'gov-lt-1': {
+                BlockID: 'gov-lt-1',
+                Kind: 'SavedQuery',
+                Mode: 'Live',
+                Success: true,
+                Columns: [{ Name: 'Metric', DisplayName: 'Metric' }],
+                Rows: [{ Metric: 'MRR' }],
+                TotalRowCount: 1,
+            },
+        });
+        vi.spyOn(eng, 'EvaluateMjCustomFunctions').mockResolvedValue({ EvaluatedCount: 0, AccessDeniedCount: 0 });
+
+        const actorUser = { ID: OWNER_ID, Name: 'Owner', Email: 'owner@example.com' } as UserInfo;
+        const mockProv: Pick<IMetadataProvider, 'RunView' | 'GetEntityObject'> = {
+            RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' }),
+            GetEntityObject: async () => ({} as MJArtifactVersionEntity),
+        };
+
+        const prevSigningSecret = DocumentLiveBlockEngine.Instance.GetSigningSecret();
+        DocumentLiveBlockEngine.Instance.SetSigningSecret('test-governed-r10-hmac-secret-at-least-32-bytes!!');
+        SetSpreadsheetWorkerIsolationRequired(true);
+        try {
+            const finalized = await GovernedArtifactService.Instance.RefreshArtifactPayloadInMemory({
+                artifactId: ART_ID,
+                content: wbJson,
+                driverClass: 'SpreadsheetArtifactViewerPlugin',
+                contextUser: actorUser,
+                provider: mockProv as IMetadataProvider,
+                freezeRefreshedBlocks: true,
+                title: 'Model.xlsx',
+            });
+            expect(finalized.signedFrozenBlocksCount).toBe(1);
+            const finalWb = await eng.ParseWorkbookIsolated(finalized.updatedContent, undefined, { SkipEvaluate: true });
+            expect(finalWb.Worksheets[0].LiveTables[0]?.Mode).toBe('Frozen');
+            const chartXlsx = eng.ExportToXlsxBytes(finalWb, true, { SkipEvaluate: true });
+            expect(chartXlsx[0]).toBe(0x50);
+            expect(mainThreadEvalCount).toBe(0);
+        } finally {
+            SetSpreadsheetWorkerIsolationRequired(false);
+            RegisterSpreadsheetWorkerRunner(null);
+            DocumentLiveBlockEngine.Instance.SetSigningSecret(prevSigningSecret);
+            vi.restoreAllMocks();
+        }
     });
 });
