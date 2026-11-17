@@ -136,6 +136,17 @@ graph LR
 - `@memberjunction/*` packages are excluded from Vite prebundling (they are symlinked workspace packages)
 - Source maps configured for full debugging of symlinked packages
 
+## Public Pages
+
+Open Apps can ship pages that visitors open before sign-in, at `/p/<slug>` (see [`@memberjunction/ng-public-host`](../Angular/Explorer/public-host/README.md)). `npm run build` makes two builds:
+
+| Build | Output | What it serves |
+|---|---|---|
+| Explorer (`MJExplorer` project) | `dist/MJExplorer/browser/` | Explorer. Its `main.ts` also shows a public page when it receives a `/p/` address |
+| Public (`MJPublicPages` project, `src-public/`) | `dist/MJExplorer/browser/public-host/` | Only public pages: no Explorer code, no zone.js, no files from other sites |
+
+Deploy the `browser/` folder as one site. To serve public pages from the public build, the web host sends every `/p/*` address to `/public-host/index.html`. `src/staticwebapp.config.json` (Azure Static Web Apps) and `docker/regression/nginx.conf` have this rule. A web host without the rule still works: Explorer's `main.ts` shows the page.
+
 ## Class Registration Manifests
 
 MJExplorer uses dual manifests to prevent tree-shaking of `@RegisterClass`-decorated components:
@@ -155,7 +166,8 @@ packages/MJExplorer/
       demo/                 # Demo/example components
     environments/           # Environment-specific configs
     assets/                 # Static assets
-  angular.json              # Angular build configuration
+  src-public/               # The separate public build (public pages at /p/<slug>)
+  angular.json              # Angular build configuration (projects MJExplorer and MJPublicPages)
   package.json
   tsconfig.json
 ```

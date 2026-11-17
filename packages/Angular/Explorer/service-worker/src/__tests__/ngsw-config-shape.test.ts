@@ -131,6 +131,7 @@ describe('ngsw-config.json shape', () => {
             ['!/auth/**', 'Auth provider callbacks'],
             ['!/**/?msal*', 'MSAL OAuth fragment'],
             ['!/**/*__*', 'Internal MJ routes with double-underscore segments'],
+            ['!/p/**', 'Public pages, which the web host serves from the separate public build'],
         ])('excludes %s (%s)', (pattern) => {
             expect(config.navigationUrls).toContain(pattern);
         });

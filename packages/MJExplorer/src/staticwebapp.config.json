@@ -1,4 +1,10 @@
 {
+  "routes": [
+    {
+      "route": "/p/*",
+      "rewrite": "/public-host/index.html"
+    }
+  ],
   "navigationFallback": {
     "rewrite": "index.html",
     "exclude": ["*.{svg,png,jpg,gif}", "*.{css,scss}", "*.js"]

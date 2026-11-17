@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MemberJunction</title>
+  <base href="/" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!--
+    Dark mode before the first frame. Uses the visitor's saved theme ('mj-theme', the key Explorer
+    writes) or the system setting. Errors from localStorage are ignored, so the page shows light mode.
+  -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('mj-theme');
+        var isDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+      } catch (e) { /* light mode */ }
+    })();
+  </script>
+  <!-- Absolute paths: the favicons are Explorer's files at the site root. -->
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+</body>
+</html>
