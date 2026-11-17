@@ -6455,11 +6455,12 @@ export interface MJAIAgentRubricEntity_IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface MJAIAgentRubricEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -6479,6 +6480,16 @@ export interface MJAIAgentRubricEntity_IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, MJAIAgentRubricEntity_JsonValue>;
 }
@@ -17768,12 +17779,42 @@ export interface MJAIModelTypeEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIModelTypeEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIModelTypeEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIModelTypeEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -17784,6 +17825,11 @@ export interface MJAIModelTypeEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIModelTypeEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -18530,12 +18576,42 @@ export interface MJAIModelVendorEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIModelVendorEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIModelVendorEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIModelVendorEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -18546,6 +18622,11 @@ export interface MJAIModelVendorEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIModelVendorEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -19484,12 +19565,42 @@ export interface MJAIModelEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIModelEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIModelEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIModelEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -19500,6 +19611,11 @@ export interface MJAIModelEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIModelEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -21164,12 +21280,42 @@ export interface MJAIPromptModelEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIPromptModelEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIPromptModelEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIPromptModelEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -21180,6 +21326,11 @@ export interface MJAIPromptModelEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIPromptModelEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -24065,12 +24216,42 @@ export interface MJAIPromptEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIPromptEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIPromptEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIPromptEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -24081,6 +24262,11 @@ export interface MJAIPromptEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIPromptEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -27562,12 +27748,42 @@ export interface MJAIVendorEntity_EmbeddingConfigurationSettings {
 }
 
 /**
- * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
- * model accepts, so an oversized request can be refused with a clear message before the call,
- * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
- * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
- * declared. A decision always needs at least two Choice options or Score levels; that minimum
- * belongs to `BaseDecision`, not to this bag.
+ * One Platt calibration for a decision model's answers to one question of one use, fitted on labelled
+ * data (`ApplyPlattCalibration` applies it). A decision model's raw probabilities are not calibrated,
+ * so a consumer that acts on a threshold looks its fit up here, by the use and question it asked and
+ * the exact model that answered. A fit holds only for the model it was fitted on, so an answer from
+ * any other model has no calibration and the consumer treats it as unsure.
+ *
+ * Set it on the `MJ: AI Models` row of the decision model that answered (`Jev`, `LLM Decision`). An
+ * array replaces, never merges, across the catalog layers, so a row that sets `Calibrations` replaces
+ * the list of the layer below it.
+ */
+export interface MJAIVendorEntity_DecisionCalibrationEntry {
+    /** The decision use the fit is for, such as `conversation-routing` or `agent-discovery`. */
+    Use: string;
+    /** The question key within that use, such as `continues`. For a Choice the fit applies to its confidence. */
+    Question: string;
+    /**
+     * The exact model the driver reported behind the MJ decision model (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model, such as `typesafe/jev-1.13-20260917`, or the chat model for `LLM Decision`.
+     */
+    ResolvedModel: string;
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+    /** What the fit was made on: corpus, date and out-of-fold figures. Documentation only. */
+    FittedOn?: string | null;
+}
+
+/**
+ * Typed-decision settings, read at call time. The limits declare what a decision model accepts: the
+ * decision runner splits a request with more questions than `MaxQuestionsPerCall` into several calls,
+ * and refuses one over the other limits with a clear message before the call, instead of letting the
+ * provider truncate or reject it. Each limit is a property of the model itself: set it on the catalog
+ * layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is declared. A decision always
+ * needs at least two Choice options or Score levels; that minimum belongs to `BaseDecision`, not to this
+ * bag. `Calibrations` holds the model's fitted calibrations ({@link MJAIVendorEntity_DecisionCalibrationEntry}).
  */
 export interface MJAIVendorEntity_DecisionConfigurationSettings {
     /** The most questions one call may carry. */
@@ -27578,6 +27794,11 @@ export interface MJAIVendorEntity_DecisionConfigurationSettings {
     MaxScoreLevels?: number | null;
     /** The largest state the model reads, in tokens. */
     MaxStateTokens?: number | null;
+    /**
+     * Platt calibrations of this model's answers, per decision use and question, each tied to the exact
+     * model it was fitted on. Read through `AIEngineBase.GetDecisionCalibration`.
+     */
+    Calibrations?: MJAIVendorEntity_DecisionCalibrationEntry[] | null;
 }
 
 // =============================================================================
@@ -97328,11 +97549,12 @@ export interface MJRubricCriterionEntity_IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface MJRubricCriterionEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -97352,6 +97574,16 @@ export interface MJRubricCriterionEntity_IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, MJRubricCriterionEntity_JsonValue>;
 }
@@ -98120,11 +98352,12 @@ export interface MJRubricEvaluationScoreEntity_IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface MJRubricEvaluationScoreEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -98144,6 +98377,16 @@ export interface MJRubricEvaluationScoreEntity_IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, MJRubricEvaluationScoreEntity_JsonValue>;
 }
@@ -98753,11 +98996,12 @@ export interface MJRubricEvaluationEntity_IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface MJRubricEvaluationEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -98777,6 +99021,16 @@ export interface MJRubricEvaluationEntity_IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, MJRubricEvaluationEntity_JsonValue>;
 }
@@ -100084,11 +100338,12 @@ export interface MJRubricVersionEntity_IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface MJRubricVersionEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -100108,6 +100363,16 @@ export interface MJRubricVersionEntity_IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, MJRubricVersionEntity_JsonValue>;
 }

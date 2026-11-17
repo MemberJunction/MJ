@@ -16,8 +16,9 @@
  * - GD3: Runner call on Google — `ExecuteDecision` with override naming `Gemini Decision 1` on `Google`
  *   POSTs `{ model: 'gemini-decision-1', input: JSON.stringify(STATE), questions }` (never `state`) with
  *   `x-goog-api-key` and no `Authorization` header, sends nothing to OpenRouter, maps Google's live wire
- *   response (which omits `model`, leaving `ResolvedModel` undefined, and keys 12-level Score probabilities
- *   by `'0'`..`'11'`), and records the `MJ: AI Prompt Runs` row priced at $0.10/1M input tokens.
+ *   response (which omits `model`, falling `ResolvedModel` back to `'gemini-decision-1'`, and keys 12-level
+ *   Score probabilities by `'0'`..`'11'`), and records the `MJ: AI Prompt Runs` row with `ResolvedModel` and
+ *   cost priced at $0.10/1M input tokens.
  * - GD4: Runner call on OpenRouter — the same override on `OpenRouter` POSTs System One `{ model:
  *   'google/gemini-decision-1-20261111', state: STATE, questions }` with `Authorization: Bearer <key>`,
  *   sends nothing to Google, records `ResolvedModel`, and prices the run from the OpenRouter cost row.
@@ -54,6 +55,7 @@ import {
     AssertRunRow,
     AssertSelects,
     DecisionFixtures,
+    type DecisionPromptRunRow,
     DecisionRunnerProbe,
     DescribeCandidate,
     ExpectedSelection,
@@ -247,8 +249,8 @@ function assertMappedAnswers(result: AIDecisionRunResult, label: string): void {
     AssertClose(urgency.Probabilities['11 - critical P0 total checkout outage'], 0.92, `${label}: urgency_12 top level probability`);
 }
 
-async function assertPricedRunRow(ctx: IntegrationCheckContext, result: AIDecisionRunResult, vendorName: string, label: string): Promise<void> {
-    await AssertRunRow(ctx, result, GEMINI_MODEL, vendorName, GEMINI_INPUT_TOKENS, (GEMINI_INPUT_TOKENS * GEMINI_INPUT_PRICE_PER_MILLION) / 1_000_000, label);
+async function assertPricedRunRow(ctx: IntegrationCheckContext, result: AIDecisionRunResult, vendorName: string, label: string): Promise<DecisionPromptRunRow> {
+    return AssertRunRow(ctx, result, GEMINI_MODEL, vendorName, GEMINI_INPUT_TOKENS, (GEMINI_INPUT_TOKENS * GEMINI_INPUT_PRICE_PER_MILLION) / 1_000_000, label);
 }
 
 // ─── GD1: Catalog ────────────────────────────────────────────────────────────────────────────────
@@ -338,8 +340,9 @@ async function checkGeminiRunnerCall(ctx: IntegrationCheckContext): Promise<void
         );
         AssertEqual(OPENROUTER_GUARD.Requests.length - openRouterBefore, 0, 'GD3: OpenRouter requests');
         assertMappedAnswers(result, 'GD3');
-        AssertEqual(result.DecisionResult?.ResolvedModel, undefined, 'GD3: Google omits model so ResolvedModel stays undefined');
-        await assertPricedRunRow(ctx, result, GOOGLE_VENDOR, 'GD3');
+        AssertEqual(result.DecisionResult?.ResolvedModel, GEMINI_API_NAME, 'GD3: Google omits model so ResolvedModel falls back to the requested model');
+        const row = await assertPricedRunRow(ctx, result, GOOGLE_VENDOR, 'GD3');
+        AssertEqual(row.ModelSpecificResponseDetails, JSON.stringify({ ResolvedModel: GEMINI_API_NAME }), 'GD3: Google run row records ResolvedModel');
     } finally {
         await fixtures.Cleanup();
     }
@@ -366,7 +369,8 @@ async function checkOpenRouterRunnerCall(ctx: IntegrationCheckContext): Promise<
         AssertEqual(geminiGuard.Requests.length - geminiBefore, 0, 'GD4: Google requests');
         assertMappedAnswers(result, 'GD4');
         AssertEqual(result.DecisionResult?.ResolvedModel, OPENROUTER_API_NAME, 'GD4: OpenRouter resolved model');
-        await assertPricedRunRow(ctx, result, OPENROUTER_VENDOR, 'GD4');
+        const row = await assertPricedRunRow(ctx, result, OPENROUTER_VENDOR, 'GD4');
+        AssertEqual(row.ModelSpecificResponseDetails, JSON.stringify({ ResolvedModel: OPENROUTER_API_NAME }), 'GD4: OpenRouter run row records ResolvedModel');
     } finally {
         await fixtures.Cleanup();
     }

@@ -156,8 +156,8 @@ in the driver:
 | Gemini | System One | Driver |
 |---|---|---|
 | `x-goog-api-key` header | bearer token | `GetRequestHeaders` |
-| `input` (text or `Content` blocks) | `state` | `BuildRequestBody` sends the state as `input`; an object state as JSON text |
-| `usage.total_input_tokens` / `total_output_tokens` | `usage.input_tokens` / `output_tokens` | `UnwrapResponse` (Google omits `model` and `cost`; `ResolvedModel` stays `undefined`) |
+| `input` (text or `Content` blocks) | `state` | `BuildRequestBody` sends the state as `input` (an object state as JSON text), or a text block plus one `Content` block per `DecisionParams.Media` item |
+| `usage.total_input_tokens` / `total_output_tokens` | `usage.input_tokens` / `output_tokens` | `UnwrapResponse` maps usage; `DoDecide` falls back `ResolvedModel` to the requested model when Google omits `model` |
 | `prompt_feedback.block_reason` (no answers) | — | `UnwrapResponse` fails the call with the reason (`BLOCK_REASON_UNSPECIFIED` ignored), allowing failover |
 | `400 INVALID_ARGUMENT` or `invalid_request` / `403 PERMISSION_DENIED` | — | `GetHTTPErrorType` pins both to a failover-eligible `ModelError`, so a rejected request or a bad key never ends `Default Decision`'s failover loop; `401` stays a fatal `Authentication` error |
 
