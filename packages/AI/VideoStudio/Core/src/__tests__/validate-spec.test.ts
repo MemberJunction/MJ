@@ -829,6 +829,21 @@ describe('One fixture per VideoSpecErrorCode (each proving that code and ONLY th
             spec.Audio.Cues[0].TimestampSeconds = 12;
             return { spec, expectedPath: 'Audio.Cues[0].TimestampSeconds' };
         })(),
+        InvalidNarrationPause: (() => {
+            const spec = makeStoryboardedSpec();
+            spec.Audio.Narration!.Script[1].PauseBeforeSeconds = 4;
+            return { spec, expectedPath: 'Audio.Narration.Script[1].PauseBeforeSeconds' };
+        })(),
+        InvalidMusicSpec: (() => {
+            const spec = makeStoryboardedSpec();
+            spec.Audio.Music = { Synthesized: { Mood: 'Calm', Bpm: 200 } };
+            return { spec, expectedPath: 'Audio.Music.Synthesized.Bpm' };
+        })(),
+        InvalidAudioCue: (() => {
+            const spec = makeStoryboardedSpec();
+            delete spec.Audio.Cues[0].AssetKey;
+            return { spec, expectedPath: 'Audio.Cues[0]' };
+        })(),
         MissingDataSnapshot: (() => {
             const spec = makePreProducedSpec();
             delete spec.DataSnapshot;
