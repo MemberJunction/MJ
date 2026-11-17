@@ -321,7 +321,8 @@ export * from './multiTenancy/index.js';
 export * from './middleware/index.js';
 
 import { RegisterDataHook } from '@memberjunction/core';
-import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/core-entities-server';
+import { EnsureAnchoredConversationReadHookRegistered, SetRestrictedFieldClassifierDecisionMode } from '@memberjunction/core-entities-server';
+import { SetTagMatchDecisionMode } from '@memberjunction/tag-engine';
 import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
 import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactComplianceAuditHelper.js';
 import { LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
@@ -1157,6 +1158,9 @@ const setupComplete$ = new ReplaySubject(1);
       RegisterDataHook('PreSave', mw.PreSave.bind(mw));
   }
   EnsureAnchoredConversationReadHookRegistered();
+  // The restricted-field check runs in MJCoreEntitiesServer, which reads no config of its own.
+  SetRestrictedFieldClassifierDecisionMode(configInfo.decisions?.restrictedFieldClassifier);
+  SetTagMatchDecisionMode(configInfo.decisions?.tagMatch);
 
   // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
   let allResolvers = resolvers;

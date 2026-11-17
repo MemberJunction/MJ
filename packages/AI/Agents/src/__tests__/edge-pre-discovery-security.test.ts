@@ -14,9 +14,12 @@ import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
 import { AgentDecisionService, type AgentDecisionAskParams } from '../AgentDecisionService';
 import {
     BuildDecisionDiscoveryOptionSet,
-    DECISION_DISCOVERY_CALIBRATION,
+    DECISION_DISCOVERY_AGENT_QUESTION,
+    DECISION_DISCOVERY_APPLIES_QUESTION,
+    DECISION_DISCOVERY_USE,
     EvaluateEdgePreDiscoveryHint,
 } from '../decision-discovery';
+import { CalibrationEngineMethods, ShippedAgentCalibrations, ShippedFit } from './helpers/shipped-decision-calibrations';
 import {
     CalibrateEdgeLogitToConfidence,
     EDGE_PRE_DISCOVERY_DATA_KEY,
@@ -241,6 +244,7 @@ class SecurityDiscoveryHarness {
     public get engineInstance(): Record<string, unknown> {
         return {
             Config: async (): Promise<void> => undefined,
+            ...CalibrationEngineMethods(ShippedAgentCalibrations),
             Agents: [this.self, ...this.catalog],
             AgentRelationships: [],
             AgentCategories: [],
@@ -318,10 +322,11 @@ function makeParams(data?: Record<string, unknown>, extraProvider?: Record<strin
 }
 
 function jevAnswerFor(picked: AgentRow, confidence = 0.92, applies = 0.95): (args: AgentDecisionAskParams) => Promise<AIDecisionRunResult> {
-    const cal = DECISION_DISCOVERY_CALIBRATION.find((c) => c.ModelName === 'Jev')!.Calibration;
+    const confidenceFit = ShippedFit('Jev', DECISION_DISCOVERY_USE, DECISION_DISCOVERY_AGENT_QUESTION);
+    const appliesFit = ShippedFit('Jev', DECISION_DISCOVERY_USE, DECISION_DISCOVERY_APPLIES_QUESTION);
     const inv = (p: number, pc: PlattCalibration): number => 1 / (1 + Math.exp(-(Math.log(p / (1 - p)) - pc.B) / pc.A));
-    const rawC = inv(confidence, cal.Confidence);
-    const rawA = inv(applies, cal.AnyApplies);
+    const rawC = inv(confidence, confidenceFit);
+    const rawA = inv(applies, appliesFit);
     return async (args) => {
         const opts = (args.Questions.agent as ChoiceQuestion).Options;
         const probs: Record<string, number> = {};

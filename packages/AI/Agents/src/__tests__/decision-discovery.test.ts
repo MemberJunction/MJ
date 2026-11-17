@@ -3,9 +3,10 @@
  * detection, the options and the option cap, narrowing by search rank, the questions, how answers
  * are judged, and the injected message.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ApplyPlattCalibration, DecisionResult, type ChatMessage, type DecisionAnswer } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import { SHIPPED_AGENT_CALIBRATIONS, ServeDecisionCalibrations, ShippedFit } from './helpers/shipped-decision-calibrations';
 import {
     AgentsWithoutDescription,
     BuildDecisionDiscoveryQuestions,
@@ -14,7 +15,7 @@ import {
     DECISION_DISCOVERY_AGENT_QUESTION,
     DECISION_DISCOVERY_APPLIES_INSTRUCTIONS,
     DECISION_DISCOVERY_APPLIES_QUESTION,
-    DECISION_DISCOVERY_CALIBRATION,
+    DECISION_DISCOVERY_USE,
     DECISION_DISCOVERY_HOST_AGENTS_KEY,
     DECISION_DISCOVERY_MAX_OPTIONS,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
@@ -70,22 +71,18 @@ function answers(value: string, confidence: number, applies: number): Record<str
 /** The judge's tests pin their own threshold, so they test its rule rather than the production value. */
 const JUDGE_THRESHOLD = 0.7;
 
-/** A raw probability as the named model's discovery calibration maps it. */
+/** A raw probability as the named model's shipped discovery calibration maps it. */
 function calibrated(model: string, question: 'Confidence' | 'AnyApplies', p: number): number {
-    return ApplyPlattCalibration(p, calibrationEntry(model).Calibration[question]);
-}
-
-/** The calibration table's entry for a decision model. */
-function calibrationEntry(model: string): (typeof DECISION_DISCOVERY_CALIBRATION)[number] {
-    const entry = DECISION_DISCOVERY_CALIBRATION.find(c => c.ModelName === model);
-    if (!entry) {
-        throw new Error(`no discovery calibration for ${model}`);
-    }
-    return entry;
+    const key = question === 'Confidence' ? DECISION_DISCOVERY_AGENT_QUESTION : DECISION_DISCOVERY_APPLIES_QUESTION;
+    return ApplyPlattCalibration(p, ShippedFit(model, DECISION_DISCOVERY_USE, key));
 }
 
 /** The exact model Jev's calibration was fitted on: its pinned APIName, which it reports back. */
 const JEV_RESOLVED_MODEL = 'typesafe/jev-1.13-20260917';
+
+// Calibrations are read from AIEngineBase.Instance; serve the shipped fits for every spec.
+beforeEach(() => ServeDecisionCalibrations());
+afterEach(() => vi.restoreAllMocks());
 
 describe('the named constants', () => {
     it('start where the brief puts them', () => {
@@ -421,24 +418,34 @@ describe('DecisionDiscoveryFromResult', () => {
     });
 });
 
-describe('DECISION_DISCOVERY_CALIBRATION', () => {
-    it('ties each calibration to the exact model it was fitted on: Jev at its pinned version, LLM Decision through GPT-OSS-120B', () => {
-        expect(DECISION_DISCOVERY_CALIBRATION.map(c => [c.ModelName, c.ResolvedModel])).toEqual([
-            ['Jev', JEV_RESOLVED_MODEL],
-            ['LLM Decision', LLM_DECISION_CHAT_MODEL]
-        ]);
+describe('the discovery calibration keys', () => {
+    it('reads use agent-discovery, questions agent and anyApplies, from the answering model\'s calibrations', () => {
+        expect(DECISION_DISCOVERY_USE).toBe('agent-discovery');
+        expect(DECISION_DISCOVERY_AGENT_QUESTION).toBe('agent');
+        expect(DECISION_DISCOVERY_APPLIES_QUESTION).toBe('anyApplies');
+    });
+
+    it('ties each shipped fit to the exact model it was fitted on: Jev at its pinned version, LLM Decision through GPT-OSS-120B', () => {
+        const discovery = (model: string) => SHIPPED_AGENT_CALIBRATIONS[model].filter(c => c.Use === DECISION_DISCOVERY_USE).map(c => c.ResolvedModel);
+        expect(discovery('Jev')).toEqual([JEV_RESOLVED_MODEL, JEV_RESOLVED_MODEL]);
+        expect(discovery('LLM Decision')).toEqual([LLM_DECISION_CHAT_MODEL, LLM_DECISION_CHAT_MODEL]);
+    });
+
+    it('treats a model with only one of the two fits as uncalibrated', () => {
+        ServeDecisionCalibrations(() => [{ Use: DECISION_DISCOVERY_USE, Question: DECISION_DISCOVERY_AGENT_QUESTION, ResolvedModel: JEV_RESOLVED_MODEL, A: 1, B: 0 }]);
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Jev', ResolvedModel: JEV_RESOLVED_MODEL })).toBeNull();
     });
 });
 
 describe('CalibrateDiscoveryAnswers', () => {
     it('calibrates the Choice confidence and the Likelihood with the model\'s Platt parameters', () => {
-        for (const entry of DECISION_DISCOVERY_CALIBRATION) {
-            const out = CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: entry.ModelName, ResolvedModel: entry.ResolvedModel });
+        for (const [modelName, resolvedModel] of [['Jev', JEV_RESOLVED_MODEL], ['LLM Decision', LLM_DECISION_CHAT_MODEL]]) {
+            const out = CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: modelName, ResolvedModel: resolvedModel });
             const choice = out?.[DECISION_DISCOVERY_AGENT_QUESTION];
             const applies = out?.[DECISION_DISCOVERY_APPLIES_QUESTION];
 
-            expect(choice?.Kind === 'Choice' ? choice.Confidence : null).toBeCloseTo(ApplyPlattCalibration(0.6, entry.Calibration.Confidence), 10);
-            expect(applies?.Kind === 'Likelihood' ? applies.Probability : null).toBeCloseTo(ApplyPlattCalibration(0.3, entry.Calibration.AnyApplies), 10);
+            expect(choice?.Kind === 'Choice' ? choice.Confidence : null).toBeCloseTo(calibrated(modelName, 'Confidence', 0.6), 10);
+            expect(applies?.Kind === 'Likelihood' ? applies.Probability : null).toBeCloseTo(calibrated(modelName, 'AnyApplies', 0.3), 10);
         }
     });
 

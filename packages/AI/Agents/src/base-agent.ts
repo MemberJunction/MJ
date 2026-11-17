@@ -2278,6 +2278,16 @@ export class BaseAgent {
     private _runExecutionScope: AIPromptExecutionScope | undefined;
 
     /**
+     * The current run's {@link AIPromptExecutionScope} (its user, provider, configuration, runtime API
+     * keys and credential scope), set when the run starts, or undefined before one has. A subclass that
+     * asks a decision or runs a prompt outside the agent's own turn passes it on, so the call runs on
+     * the run's keys and configuration rather than the platform's.
+     */
+    protected get RunExecutionScope(): AIPromptExecutionScope | undefined {
+        return this._runExecutionScope;
+    }
+
+    /**
      * Whether the run answers its conversation's opening request ({@link IsOpeningTurn}), read from
      * the messages it started with. Decision discovery asks about no other turn.
      * @private
@@ -5459,8 +5469,8 @@ export class BaseAgent {
         BaseAgent._uncalibratedDiscoveryModelsWarned.add(model);
         LogErrorEx({
             message: `Decision discovery answered by ${model} suggests nothing: the model has no discovery calibration `
-                + '(DECISION_DISCOVERY_CALIBRATION), so its answers are treated as unsure. Fit one with the agent-discovery '
-                + 'Decision Eval, or check that the model was not renamed or moved to another version.',
+                + "(use 'agent-discovery' in its ModelConfiguration.Decision.Calibrations), so its answers are treated as unsure. "
+                + 'Fit one with the fit-decision-calibration rig, or check that the model was not renamed or moved to another version.',
             severity: 'warning',
             category: 'DecisionDiscovery',
         });
