@@ -36,5 +36,5 @@ Return JSON only, with one decision for every criterion above, in this shape:
 
 {% raw %}{"decisions": [{"key": "<criterion key>", "level": "<level label>", "value": null, "notApplicable": false, "rationale": "<why>", "evidence": [{"quote": "<verbatim quote>"}], "confidence": 0.0}]}{% endraw %}
 
-`key` is the criterion's key exactly as written above. `confidence` is your confidence in that level, from 0 to 1.
+`key` is the backticked identifier in parentheses from the criterion heading ({% for criterion in Criteria %}`{{ criterion.Key | safe }}`{% if not loop.last %}, {% endif %}{% endfor %}), never the heading title. `confidence` is your confidence in that level, from 0 to 1.
 {% endif %}
