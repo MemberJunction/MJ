@@ -2543,9 +2543,57 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                 Configuration: null,
                 UserID: ownerUser.ID,
             };
+            let persistedWs: { ID: string; ArtifactID: string; YjsState: string; __mj_UpdatedAt: string } | null = null;
+            const savedCompactions: Array<{ Content?: string; Configuration?: string | null; VersionNumber?: number }> = [];
             const peerProvider = {
                 Entities: [],
                 EntityByName: () => null,
+                GetEntityObject: async (name: string) => {
+                    if (name === 'MJ: Artifact Working States') {
+                        const row = {
+                            ID: persistedWs?.ID ?? 'ws-peer-1',
+                            ArtifactID: artId,
+                            YjsState: persistedWs?.YjsState ?? '',
+                            LastModifiedByUserID: '',
+                            LoadFromData: async (d: { YjsState?: string; LastModifiedByUserID?: string }) => {
+                                if (d.YjsState !== undefined) row.YjsState = d.YjsState;
+                                return true;
+                            },
+                            NewRecord: () => undefined,
+                            Save: async () => {
+                                persistedWs = {
+                                    ID: row.ID,
+                                    ArtifactID: artId,
+                                    YjsState: row.YjsState,
+                                    __mj_UpdatedAt: new Date().toISOString(),
+                                };
+                                return true;
+                            },
+                            Get: (k: string) => (k === '__mj_UpdatedAt' ? persistedWs?.__mj_UpdatedAt : undefined),
+                        };
+                        return row;
+                    }
+                    if (name === 'MJ: Artifact Versions') {
+                        const rec: Record<string, unknown> = {
+                            ID: '',
+                            ArtifactID: artId,
+                            VersionNumber: 0,
+                            Content: '',
+                            Configuration: null,
+                            NewRecord: () => undefined,
+                            Save: async () => {
+                                savedCompactions.push({
+                                    Content: rec.Content as string,
+                                    Configuration: (rec.Configuration as string | null) ?? null,
+                                    VersionNumber: rec.VersionNumber as number,
+                                });
+                                return true;
+                            },
+                        };
+                        return rec;
+                    }
+                    return {};
+                },
                 RunView: async (params: RunViewParams) => {
                     if (params.EntityName === 'MJ: Artifacts') {
                         return {
@@ -2553,6 +2601,16 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                             Results: [{ ID: artId, TypeID: 'type-md', UserID: ownerUser.ID, DelegateEntityID: null, DelegateRecordID: null }],
                             RowCount: 1,
                             TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Working States') {
+                        return {
+                            Success: true,
+                            Results: persistedWs ? [persistedWs] : [],
+                            RowCount: persistedWs ? 1 : 0,
+                            TotalRowCount: persistedWs ? 1 : 0,
                             ExecutionTime: 1,
                             ErrorMessage: '',
                         };
@@ -2570,9 +2628,16 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                     return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
                 },
             } as unknown as IMetadataProvider;
+            const peerRoomKey = (
+                Reflect.get(nodeB, 'getRoomKey') as (
+                    a: string,
+                    p?: IMetadataProvider | null,
+                    u?: UserInfo | null
+                ) => string
+            ).call(nodeB, artId, peerProvider, ownerUser);
             const peerRoom: CollaborationRoom = {
                 ArtifactID: artId,
-                RoomKey: artId,
+                RoomKey: peerRoomKey,
                 ProviderKey: 'default',
                 Provider: peerProvider,
                 ArtifactOwnerUserID: ownerUser.ID,
@@ -2610,7 +2675,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             };
 
             const roomsB = Reflect.get(nodeB, '_rooms') as Map<string, CollaborationRoom>;
-            roomsB.set(artId, peerRoom);
+            roomsB.set(peerRoomKey, peerRoom);
 
             nodeA.SetRoomRelay(relayA);
             nodeB.SetRoomRelay(relayB);
@@ -2650,6 +2715,16 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             const liveCfg = JSON.stringify({ theme: 'locked-cfg' });
             peerRoom.BaseConfiguration = liveCfg;
             const v3Id = '46464646-4646-4464-8464-464646464643';
+            // Simulate peer node A having persisted a newer stripped working state row when v3 was restored
+            const strippedDoc = new Y.Doc();
+            strippedDoc.getText('content').insert(0, unlockedContent);
+            persistedWs = {
+                ID: 'ws-peer-1',
+                ArtifactID: artId,
+                YjsState: BytesToBase64(Y.encodeStateAsUpdate(strippedDoc)),
+                __mj_UpdatedAt: new Date(Date.now() + 60_000).toISOString(),
+            };
+            strippedDoc.destroy();
             currentDbLatest = {
                 ID: v3Id,
                 VersionNumber: 3,
@@ -2670,6 +2745,24 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             expect(peerRoom.Doc.getText('content').toString()).toBe(lockedOnlyInWsOrRoom);
             expect(peerRoom.BaseConfiguration).toBe(liveCfg);
             expect(peerRoom.PreserveLiveConfiguration).toBe(true);
+            expect(peerRoom.RejectedOobVersionNumber).toBe(3);
+
+            // S6-1: FlushWorkingState must succeed after rejected restore (tracking RejectedOobVersionNumber),
+            // and CompactRoomToVersion must persist the protected BaseConfiguration and clear flags.
+            const flushedOk = await nodeB.FlushWorkingState(artId, ownerUser, {
+                guardNewerPersistedVersion: true,
+                provider: peerProvider as unknown as IMetadataProvider,
+            });
+            expect(flushedOk).toBe(true);
+            expect(nodeB.DeserializeWorkingStateBytesToContent(persistedWs?.YjsState ?? '')).toBe(lockedOnlyInWsOrRoom);
+
+            const compactRes = await nodeB.CompactRoomToArtifactVersion(artId, ownerUser, { Provider: peerProvider as unknown as IMetadataProvider });
+            expect(compactRes.Saved).toBe(true);
+            expect(savedCompactions).toHaveLength(1);
+            expect(savedCompactions[0].Content).toBe(lockedOnlyInWsOrRoom);
+            expect(savedCompactions[0].Configuration).toContain('locked-cfg');
+            expect(peerRoom.PreserveLiveConfiguration).toBe(false);
+            expect(peerRoom.RejectedOobVersionNumber).toBeUndefined();
         } finally {
             await nodeA.Shutdown();
             await nodeB.Shutdown();

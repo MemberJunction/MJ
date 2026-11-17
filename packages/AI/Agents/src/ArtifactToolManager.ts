@@ -1168,7 +1168,7 @@ export class ArtifactToolManager {
           } else if (hasUpdatedContentString) {
             try {
               const parsedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(updatedContent);
-              const patchedBytes = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(
+              const patchedBytes = await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(
                 targetEntry.originalXlsxBytes,
                 parsedWorkbook,
               );
@@ -1259,7 +1259,7 @@ export class ArtifactToolManager {
         if (effectiveContent !== updatedContent && previousOriginalXlsxBytes) {
           try {
             const mergedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(effectiveContent);
-            const mergedBytes = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(previousOriginalXlsxBytes, mergedWorkbook);
+            const mergedBytes = await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(previousOriginalXlsxBytes, mergedWorkbook);
             targetEntry.originalXlsxBytes = mergedBytes;
             xlsxBase64 = Buffer.from(mergedBytes).toString('base64');
           } catch (repatchErr) {
@@ -1377,7 +1377,7 @@ export class ArtifactToolManager {
                   if (previousOriginalXlsxBytes) {
                     try {
                       const mergedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(effectiveContent);
-                      const mergedBytes = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(previousOriginalXlsxBytes, mergedWorkbook);
+                      const mergedBytes = await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(previousOriginalXlsxBytes, mergedWorkbook);
                       targetEntry.originalXlsxBytes = mergedBytes;
                       xlsxBase64 = Buffer.from(mergedBytes).toString('base64');
                     } catch (repatchErr) {
@@ -1978,7 +1978,7 @@ export class ArtifactToolManager {
       } else {
         try {
           const workbook = SpreadsheetEngine.Instance.ParseWorkbook(updatedContent);
-          const bytes = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(entry.originalXlsxBytes, workbook);
+          const bytes = await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(entry.originalXlsxBytes, workbook);
           entry.originalXlsxBytes = bytes;
           effectiveXlsxBase64 = Buffer.from(bytes).toString('base64');
         } catch (err) {

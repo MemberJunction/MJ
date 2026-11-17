@@ -387,6 +387,8 @@ export interface CollaborationRoom {
     BaseConfiguration?: string | null;
     /** Preserves live `BaseConfiguration` across compaction when a lock-conflicted OOB/restore version carried a stripped config (`S5-1`). */
     PreserveLiveConfiguration?: boolean;
+    /** Highest out-of-band / restore version rejected for active locks so working-state flush stays permitted (`S6-1`). */
+    RejectedOobVersionNumber?: number;
     /** Trusted DB `__mj_UpdatedAt` epoch millis of the last working-state row hydrated or saved by this room. */
     LastPersistedWorkingStateMs?: number;
     /** In-memory ID of the most recent authoritative restore applied on this node (`R9-2`). */
@@ -909,7 +911,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const shared = ArtifactCollaborationServer.getSharedCollabState();
         shared.ServerVersionWatermarks.set(room.RoomKey, {
             BaseVersionID: room.BaseVersionID ?? null,
-            BaseVersionNumber: room.BaseVersionNumber ?? 0,
+            BaseVersionNumber: Math.max(room.BaseVersionNumber ?? 0, room.RejectedOobVersionNumber ?? 0),
             BaseVersionText: room.BaseVersionText ?? '',
             LastAppliedRestoreVersionID: room.LastAppliedRestoreVersionID ?? null,
             LastAppliedRestoreVersionNumber: room.LastAppliedRestoreVersionNumber ?? 0,
@@ -1718,8 +1720,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     // P0-13: Evaluate version progression exclusively from trusted server watermarks
                     // and DB version/working-state rows — NEVER read watermarks from client-writable Y.Map('meta').
                     const sharedState = ArtifactCollaborationServer.getSharedCollabState();
+                    const effectiveRoomVersion = Math.max(
+                        room.BaseVersionNumber,
+                        room.RejectedOobVersionNumber ?? 0
+                    );
                     const serverWatermark = sharedState.ServerVersionWatermarks.get(room.RoomKey);
-                    if (serverWatermark && serverWatermark.BaseVersionNumber > room.BaseVersionNumber) {
+                    if (serverWatermark && serverWatermark.BaseVersionNumber > effectiveRoomVersion) {
                         return false;
                     }
                     const existingUpdatedRaw = existingRow?.['__mj_UpdatedAt'];
@@ -1751,7 +1757,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             latestVerRes.Success && latestVerRes.Results && latestVerRes.Results.length > 0
                                 ? Number(latestVerRes.Results[0].VersionNumber ?? 0)
                                 : 0;
-                        if (Number.isFinite(latestVerNum) && latestVerNum > room.BaseVersionNumber) {
+                        if (Number.isFinite(latestVerNum) && latestVerNum > effectiveRoomVersion) {
                             return false;
                         }
                     }
@@ -1956,7 +1962,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 latest &&
                 room.BaseVersionID &&
                 !UUIDsEqual(latest.ID, room.BaseVersionID) &&
-                latest.VersionNumber > room.BaseVersionNumber
+                latest.VersionNumber > room.BaseVersionNumber &&
+                !(
+                    (room.LastAppliedRestoreVersionID !== null &&
+                        UUIDsEqual(room.LastAppliedRestoreVersionID, latest.ID)) ||
+                    (room.RejectedOobVersionNumber ?? 0) >= latest.VersionNumber
+                )
             ) {
                 const latestText = latest.Content || latest.Configuration || '';
                 const latestHash = latest.ContentHash || this.computeSha256Hex(latestText);
@@ -1976,7 +1987,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 });
             }
 
-            const currentContent = this.extractRoomSerializedContent(room.Doc);
+            const currentContent = await this.extractRoomSerializedContentIsolated(room.Doc);
             const roomSuggestions = this.readSuggestionsFromDoc(room.Doc);
             const latestSuggestions = latest
                 ? this.readSuggestionsFromVersionConfiguration(latest.Configuration)
@@ -1986,13 +1997,20 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const preMetaStateVectorB64 = BytesToBase64(Y.encodeStateVector(room.Doc));
             const contentHash = createHash('sha256').update(currentContent, 'utf8').digest('hex');
 
-            if (latest && suggestionsUnchanged && (latest.ContentHash === contentHash || latest.Content === currentContent)) {
+            if (
+                latest &&
+                suggestionsUnchanged &&
+                !room.PreserveLiveConfiguration &&
+                (latest.ContentHash === contentHash || latest.Content === currentContent)
+            ) {
                 room.DirtyVersion = false;
                 room.CompactionRetryCount = 0;
                 room.BaseVersionID = latest.ID;
                 room.BaseVersionNumber = latest.VersionNumber;
                 room.BaseVersionText = currentContent;
                 room.BaseConfiguration = latest.Configuration ?? null;
+                room.PreserveLiveConfiguration = false;
+                room.RejectedOobVersionNumber = undefined;
                 this.recordServerWatermark(room);
                 const keepMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${latest.VersionNumber}`;
                 room.Doc.transact(() => {
@@ -2108,6 +2126,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 room.BaseVersionText = currentContent;
                 room.BaseConfiguration = versionEntity.Configuration ?? null;
                 room.PreserveLiveConfiguration = false;
+                room.RejectedOobVersionNumber = undefined;
                 this.recordServerWatermark(room);
                 const versionVectorMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${versionEntity.VersionNumber}`;
                 const preMetaSnapshotB64 = BytesToBase64(Y.encodeSnapshot(Y.snapshot(room.Doc)));
@@ -4704,11 +4723,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     }
                 );
                 if (!restoreLockCheck.Allowed) {
-                    // S5-1: Keep prior BaseConfiguration & BaseVersion baseline intact when a peer
-                    // restore is rejected for locks so compaction persists live Content + protected config.
+                    // S5-1 & S6-1: Keep prior BaseConfiguration & BaseVersion baseline intact when a peer
+                    // restore is rejected for locks so compaction persists live Content + protected config,
+                    // while tracking RejectedOobVersionNumber so FlushWorkingState stays permitted.
                     room.LastAppliedRestoreVersionID = version.ID;
                     room.LastAppliedRestoreVersionNumber = version.VersionNumber;
                     room.PreserveLiveConfiguration = true;
+                    room.RejectedOobVersionNumber = Math.max(
+                        room.RejectedOobVersionNumber ?? 0,
+                        version.VersionNumber
+                    );
                     room.DirtyVersion = true;
                     room.LastCompactedStateVector = null;
                     room.DirtyWorkingState = true;
@@ -5000,8 +5024,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         room.BaseVersionNumber = version.VersionNumber;
         room.BaseVersionText = targetText;
         if (oobLockConflict) {
-            // Preserve live BaseConfiguration across lock-conflicted OOB reconciliations (`S5-1`)
+            // Preserve live BaseConfiguration across lock-conflicted OOB reconciliations (`S5-1`, `S6-1`)
             room.PreserveLiveConfiguration = true;
+            room.RejectedOobVersionNumber = Math.max(
+                room.RejectedOobVersionNumber ?? 0,
+                version.VersionNumber
+            );
         } else {
             room.BaseConfiguration = version.Configuration ?? null;
             room.PreserveLiveConfiguration = false;
@@ -7095,7 +7123,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         }
                     }
 
-                    if (!crdtSynced) {
+                    if (!crdtSynced && !(room.HasActiveLocks && relayPayload.isRestore)) {
                         crdtSynced = await this.tryCatchUpRoomFromPersistedWorkingState(
                             room,
                             relayPayload.savedStateVectorB64,
@@ -9920,82 +9948,112 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
     }
 
-    /**
-     * Reconstructs the canonical string content of a Yjs room.
-     * - If the room contains per-worksheet/per-cell CRDT maps (`worksheetsById` + `sheetCellsByCoord`),
-     *   reconstructs the merged {@link WorkbookSpec}, resolves all stable-ID formulas (`FormulaStable`),
-     *   and recalculates the workbook (`§ 6.2`, `Accept #1`).
-     * - If the room contains per-slide CRDT maps (`slidesById` + `slideOrder`), reconstructs
-     *   the merged {@link SlideDeckSpec} JSON (`§ 5.1`).
-     */
-    private extractRoomSerializedContent(doc: Y.Doc): string {
+    private buildRoomWorkbookFromDoc(doc: Y.Doc): WorkbookSpec | null {
         const worksheetsById = doc.getMap<string>('worksheetsById');
+        if (worksheetsById.size === 0) {
+            return null;
+        }
         const sheetOrder = doc.getArray<string>('sheetOrder');
         const workbookMeta = doc.getMap<string>('workbookMeta');
         const sheetCellsByCoord = doc.getMap<string>('sheetCellsByCoord');
 
+        const orderedSheetIds = sheetOrder.toArray();
+        const placedSheetIds = new Set<string>();
+        const worksheets: WorksheetSpec[] = [];
+
+        const collectSheet = (sheetId: string, rawJson: string): void => {
+            if (placedSheetIds.has(sheetId) || !rawJson) return;
+            placedSheetIds.add(sheetId);
+            const ws = JSON.parse(rawJson) as WorksheetSpec;
+            ws.Cells = ws.Cells ?? {};
+
+            const prefix = `${sheetId}::`;
+            for (const [coordKey, cellJson] of sheetCellsByCoord.entries()) {
+                if (!coordKey.startsWith(prefix) || !cellJson) continue;
+                const cell = JSON.parse(cellJson) as SpreadsheetCellSpec;
+                const tempAddr = cell.Address || `${cell.RowID}:${cell.ColumnID}`;
+                ws.Cells[tempAddr] = cell;
+            }
+            SpreadsheetEngine.Instance.ReindexWorksheetAndResolveFormulas(ws);
+            worksheets.push(ws);
+        };
+
+        for (const sId of orderedSheetIds) {
+            const sJson = worksheetsById.get(sId);
+            if (sJson) collectSheet(sId, sJson);
+        }
+        for (const [sId, sJson] of worksheetsById.entries()) {
+            collectSheet(sId, sJson);
+        }
+
+        if (worksheets.length === 0) {
+            throw new Error('Corrupt collaboration state: worksheetsById has entries but zero valid worksheets.');
+        }
+
+        let namedRanges: SpreadsheetNamedRangeSpec[] = [];
+        const nrRaw = workbookMeta.get('NamedRanges');
+        if (nrRaw) {
+            try {
+                namedRanges = JSON.parse(nrRaw) as SpreadsheetNamedRangeSpec[];
+            } catch {
+                namedRanges = [];
+            }
+        }
+        const createdAt = workbookMeta.get('CreatedAt') || '1970-01-01T00:00:00.000Z';
+        const updatedAt = workbookMeta.get('UpdatedAt') || createdAt;
+        const activeId = workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID;
+        const prefPaneRaw = workbookMeta.get('PreferredObjectsPaneHeightPx');
+        const prefPaneHeight = prefPaneRaw ? Number(prefPaneRaw) : NaN;
+        return SpreadsheetEngine.Instance.NormalizeWorkbook({
+            WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
+            Title: workbookMeta.get('Title') || 'Workbook',
+            ActiveSheetID: activeId,
+            Worksheets: worksheets,
+            NamedRanges: namedRanges,
+            ...(Number.isFinite(prefPaneHeight) && prefPaneHeight > 0
+                ? { PreferredObjectsPaneHeightPx: Math.round(prefPaneHeight) }
+                : {}),
+            CreatedAt: createdAt,
+            UpdatedAt: updatedAt
+        });
+    }
+
+    /**
+     * Async worker-isolated room content extraction used by compaction (`R6-1`).
+     */
+    private async extractRoomSerializedContentIsolated(doc: Y.Doc): Promise<string> {
+        const worksheetsById = doc.getMap<string>('worksheetsById');
         if (worksheetsById.size > 0) {
             try {
-                const orderedSheetIds = sheetOrder.toArray();
-                const placedSheetIds = new Set<string>();
-                const worksheets: WorksheetSpec[] = [];
+                const wb = this.buildRoomWorkbookFromDoc(doc)!;
+                await SpreadsheetEngine.Instance.EvaluateWorkbookIsolated(wb);
+                return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                throw new Error(`Failed to extract collaborative workbook content (fail-closed): ${msg}`);
+            }
+        }
+        return this.extractRoomSerializedContent(doc);
+    }
 
-                const collectSheet = (sheetId: string, rawJson: string): void => {
-                    if (placedSheetIds.has(sheetId) || !rawJson) return;
-                    placedSheetIds.add(sheetId);
-                    const ws = JSON.parse(rawJson) as WorksheetSpec;
-                    ws.Cells = ws.Cells ?? {};
+    /**
+     * Reconstructs the canonical string content of a Yjs room.
+     * - If the room contains per-worksheet/per-cell CRDT maps (`worksheetsById` + `sheetCellsByCoord`),
+     *   reconstructs the merged {@link WorkbookSpec}, resolves all stable-ID formulas (`FormulaStable`),
+     *   and recalculates the workbook (`§ 6.2`, `Accept #1`) unless `skipEvaluate` is true (`S6-2`).
+     * - If the room contains per-slide CRDT maps (`slidesById` + `slideOrder`), reconstructs
+     *   the merged {@link SlideDeckSpec} JSON (`§ 5.1`).
+     */
+    private extractRoomSerializedContent(doc: Y.Doc, options?: { skipEvaluate?: boolean }): string {
+        const worksheetsById = doc.getMap<string>('worksheetsById');
 
-                    const prefix = `${sheetId}::`;
-                    for (const [coordKey, cellJson] of sheetCellsByCoord.entries()) {
-                        if (!coordKey.startsWith(prefix) || !cellJson) continue;
-                        const cell = JSON.parse(cellJson) as SpreadsheetCellSpec;
-                        const tempAddr = cell.Address || `${cell.RowID}:${cell.ColumnID}`;
-                        ws.Cells[tempAddr] = cell;
-                    }
-                    SpreadsheetEngine.Instance.ReindexWorksheetAndResolveFormulas(ws);
-                    worksheets.push(ws);
-                };
-
-                for (const sId of orderedSheetIds) {
-                    const sJson = worksheetsById.get(sId);
-                    if (sJson) collectSheet(sId, sJson);
-                }
-                for (const [sId, sJson] of worksheetsById.entries()) {
-                    collectSheet(sId, sJson);
-                }
-
-                if (worksheets.length > 0) {
-                    let namedRanges: SpreadsheetNamedRangeSpec[] = [];
-                    const nrRaw = workbookMeta.get('NamedRanges');
-                    if (nrRaw) {
-                        try {
-                            namedRanges = JSON.parse(nrRaw) as SpreadsheetNamedRangeSpec[];
-                        } catch {
-                            namedRanges = [];
-                        }
-                    }
-                    const createdAt = workbookMeta.get('CreatedAt') || '1970-01-01T00:00:00.000Z';
-                    const updatedAt = workbookMeta.get('UpdatedAt') || createdAt;
-                    const activeId = workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID;
-                    const prefPaneRaw = workbookMeta.get('PreferredObjectsPaneHeightPx');
-                    const prefPaneHeight = prefPaneRaw ? Number(prefPaneRaw) : NaN;
-                    const wb: WorkbookSpec = SpreadsheetEngine.Instance.NormalizeWorkbook({
-                        WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
-                        Title: workbookMeta.get('Title') || 'Workbook',
-                        ActiveSheetID: activeId,
-                        Worksheets: worksheets,
-                        NamedRanges: namedRanges,
-                        ...(Number.isFinite(prefPaneHeight) && prefPaneHeight > 0
-                            ? { PreferredObjectsPaneHeightPx: Math.round(prefPaneHeight) }
-                            : {}),
-                        CreatedAt: createdAt,
-                        UpdatedAt: updatedAt
-                    });
+        if (worksheetsById.size > 0) {
+            try {
+                const wb = this.buildRoomWorkbookFromDoc(doc)!;
+                if (!options?.skipEvaluate) {
                     SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
-                    return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
                 }
-                throw new Error('Corrupt collaboration state: worksheetsById has entries but zero valid worksheets.');
+                return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 throw new Error(`Failed to extract collaborative workbook content (fail-closed): ${msg}`);
@@ -10096,7 +10154,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const tempDoc = new Y.Doc();
         try {
             Y.applyUpdate(tempDoc, bytes);
-            return this.extractRoomSerializedContent(tempDoc);
+            return this.extractRoomSerializedContent(tempDoc, { skipEvaluate: true });
         } finally {
             tempDoc.destroy();
         }

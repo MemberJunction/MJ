@@ -781,7 +781,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                             }
                         }
 
-                        if (!isTrustedCompaction) {
+                        if (!isTrustedCompaction && !isArtifactOwner) {
                             const wsParams: RunViewParams = {
                                 EntityName: 'MJ: Artifact Working States',
                                 ExtraFilter: `ArtifactID='${EscapeSQLString(authArtifactId)}'`,
@@ -796,7 +796,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                 ID?: string;
                                 YjsState?: string | Uint8Array | null;
                             }>(wsParams, systemActor);
-                            if (!wsRes.Success && provider.ProviderType === 'Database' && !isArtifactOwner) {
+                            if (!wsRes.Success && provider.ProviderType === 'Database') {
                                 return this.recordPermissionFailure(
                                     saveType,
                                     'Permission denied: unable to verify active artifact working state locks before saving version.'
@@ -809,20 +809,33 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                             if (hasWorkingStateBytes) {
                                 const deserializer = GetWorkingStateContentDeserializer();
                                 if (!deserializer) {
-                                    if (provider.ProviderType === 'Database' && !isArtifactOwner) {
+                                    if (provider.ProviderType === 'Database') {
                                         return this.recordPermissionFailure(
                                             saveType,
                                             'Permission denied: unable to decode active working-state locks before saving version.'
                                         );
                                     }
                                 } else {
-                                    const wsContent = deserializer(rawYjsState);
+                                    let wsContent = '';
+                                    try {
+                                        wsContent = deserializer(rawYjsState);
+                                    } catch (err) {
+                                        LogError(
+                                            `MJArtifactVersionEntityServer: failed to decode active working-state locks for artifact '${authArtifactId}': ${
+                                                err instanceof Error ? err.message : String(err)
+                                            }`
+                                        );
+                                        return this.recordPermissionFailure(
+                                            saveType,
+                                            'Permission denied: unable to decode active working-state locks before saving version.'
+                                        );
+                                    }
                                     if (wsContent && wsContent !== (priorRow?.Content ?? '')) {
                                         const wsLockCheck = ValidateArtifactContentMutationAgainstLocks(
                                             wsContent,
                                             nextContent,
                                             actor.ID,
-                                            isArtifactOwner,
+                                            false,
                                             { currentConfiguration: priorRow?.Configuration ?? null, nextConfiguration: nextConfig }
                                         );
                                         if (!wsLockCheck.Allowed) {

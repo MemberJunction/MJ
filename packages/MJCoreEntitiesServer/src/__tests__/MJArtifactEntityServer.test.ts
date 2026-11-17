@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BaseEntityResult, EntityDeleteOptions, EntitySaveOptions, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { BaseEntityResult, EntityDeleteOptions, EntityInfo, EntitySaveOptions, IMetadataProvider, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import {
     ArtifactDelegateContext,
     ArtifactPermissionEngine,
     BaseArtifactPermissionDelegate,
-    DelegatePermissionDecision
+    DelegatePermissionDecision,
+    SpreadsheetEngine
 } from '@memberjunction/core-entities';
 import {
     AppendSqlAndFilter,
@@ -13,14 +14,19 @@ import {
     BuildSqlArtifactReadablePredicateAsync,
     BuildSqlArtifactVersionIdReadablePredicate,
     BuildSqlCollectionReadablePredicate,
+    BuildSqlCollectionReadablePredicateAsync,
     QualifyOuterEntityColumn,
     QualifyOuterEntityColumnAsync,
     ResolveTargetEntityNameAsync
 } from '../custom/ArtifactSecurityHookHelpers';
+import {
+    RunSpreadsheetEvaluateInWorker,
+    RunSpreadsheetImportInWorker,
+    RunSpreadsheetPatchInWorker
+} from '../custom/SpreadsheetWorkerRunner';
 import { ArtifactGuestShareLinkPreRunViewHook } from '../custom/MJArtifactGuestShareLinkEntityServer.server';
 import { CollectionArtifactPreRunViewHook } from '../custom/MJCollectionArtifactEntityServer.server';
 import { ArtifactVersionPostRunViewHook, ArtifactVersionPreRunViewHook } from '../custom/MJArtifactVersionEntityServer.server';
-import { EntityInfo } from '@memberjunction/core';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -1075,27 +1081,34 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             Fields: ['ID', 'Content'],
             ResultType: 'simple'
         };
-        const hookedDbParams = await ArtifactVersionPreRunViewHook(
-            filteredDbParams,
-            sharedEditorUser,
-            dbProvider
-        );
-        expect(String(hookedDbParams.ExtraFilter)).toContain(`ArtifactID = '${readableArtId}'`);
-        const postDbRes = await ArtifactVersionPostRunViewHook(
-            hookedDbParams,
-            {
-                Success: true,
-                Results: [{ ID: 'ver-readable', ArtifactID: readableArtId, Content: 'Shared readable doc' }],
-                RowCount: 1,
-                TotalRowCount: 1,
-                ExecutionTime: 1,
-                ErrorMessage: ''
-            },
-            sharedEditorUser,
-            dbProvider
-        );
-        expect(postDbRes.Success).toBe(true);
-        expect(postDbRes.Results).toEqual([{ ID: 'ver-readable', Content: 'Shared readable doc' }]);
+        const wellKnownSysSpy = vi
+            .spyOn(WellKnownUserSource.Instance, 'GetSystemUser')
+            .mockResolvedValue({ ID: SYSTEM_USER_ID } as UserInfo);
+        try {
+            const hookedDbParams = await ArtifactVersionPreRunViewHook(
+                filteredDbParams,
+                sharedEditorUser,
+                dbProvider
+            );
+            expect(String(hookedDbParams.ExtraFilter)).toContain(`ArtifactID = '${readableArtId}'`);
+            const postDbRes = await ArtifactVersionPostRunViewHook(
+                hookedDbParams,
+                {
+                    Success: true,
+                    Results: [{ ID: 'ver-readable', ArtifactID: readableArtId, Content: 'Shared readable doc' }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                },
+                sharedEditorUser,
+                dbProvider
+            );
+            expect(postDbRes.Success).toBe(true);
+            expect(postDbRes.Results).toEqual([{ ID: 'ver-readable', Content: 'Shared readable doc' }]);
+        } finally {
+            wellKnownSysSpy.mockRestore();
+        }
     });
 
     it('enforces S5-2 cache separation (readable vs shareOrDelete) and R5-4 bounded <260 table counts across collection/artifact matrix', async () => {
@@ -1140,18 +1153,28 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
         expect(sharePred.clause).toContain('22222222-0000-4000-8000-000000000000');
         expect(sharePred.clause).not.toContain('11111111-0000-4000-8000-000000000001');
 
-        // R5-4 matrix: <=500 / >500 collections x <=5000 / >5000 / null artifacts x requireShareOrDelete false/true
+        // R5-4 & R6-3 matrix: <=500 / >500 collections x <=5000 / >5000 / null artifacts x requireShareOrDelete false/true
         const countTables = (sql: string): number => (sql.match(/\[vw[A-Za-z]+\]/g) ?? []).length;
         const cases: Array<{
             cols: Set<string> | null;
             arts: Set<string>;
             expectedExact: boolean;
-            expectedFailClosed: boolean;
+            expectedErrorPattern?: RegExp;
         }> = [
-            { cols: makeUuids(10, 'aaaaaaaa'), arts: makeUuids(5, 'bbbbbbbb'), expectedExact: true, expectedFailClosed: false },
-            { cols: makeUuids(501, 'cccccccc'), arts: makeUuids(20, 'dddddddd'), expectedExact: true, expectedFailClosed: false },
-            { cols: makeUuids(501, 'eeeeeeee'), arts: makeUuids(5001, 'ffffffff'), expectedExact: false, expectedFailClosed: true },
-            { cols: null, arts: makeUuids(5, '99999999'), expectedExact: false, expectedFailClosed: true }
+            { cols: makeUuids(10, 'aaaaaaaa'), arts: makeUuids(5, 'bbbbbbbb'), expectedExact: true },
+            { cols: makeUuids(501, 'cccccccc'), arts: makeUuids(20, 'dddddddd'), expectedExact: true },
+            {
+                cols: makeUuids(501, 'eeeeeeee'),
+                arts: makeUuids(5001, 'ffffffff'),
+                expectedExact: false,
+                expectedErrorPattern: /exceeded SQL readability scope cap/i
+            },
+            {
+                cols: null,
+                arts: makeUuids(5, '99999999'),
+                expectedExact: false,
+                expectedErrorPattern: /unable to resolve readable/i
+            }
         ];
 
         for (const c of cases) {
@@ -1161,35 +1184,86 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
                     .spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet')
                     .mockResolvedValue(c.arts);
 
-                const res = await BuildSqlArtifactReadablePredicateAsync(
-                    '[vwArtifacts].[ID]',
-                    b5Provider as unknown as IMetadataProvider,
-                    sharedEditorUser,
-                    { requireShareOrDelete }
-                );
-                expect(countTables(res.clause)).toBeLessThan(260);
-                expect(res.isExact).toBe(c.expectedExact);
-                if (c.expectedFailClosed) {
-                    expect(res.clause).toBe('1 = 0');
+                if (c.expectedErrorPattern) {
+                    await expect(
+                        BuildSqlArtifactReadablePredicateAsync(
+                            '[vwArtifacts].[ID]',
+                            b5Provider as unknown as IMetadataProvider,
+                            sharedEditorUser,
+                            { requireShareOrDelete }
+                        )
+                    ).rejects.toThrow(c.expectedErrorPattern);
+                    await expect(
+                        ArtifactGuestShareLinkPreRunViewHook(
+                            { EntityName: 'MJ: Artifact Guest Share Links', ResultType: 'simple' },
+                            sharedEditorUser,
+                            b5Provider as unknown as IMetadataProvider
+                        )
+                    ).rejects.toThrow(c.expectedErrorPattern);
+                } else {
+                    const res = await BuildSqlArtifactReadablePredicateAsync(
+                        '[vwArtifacts].[ID]',
+                        b5Provider as unknown as IMetadataProvider,
+                        sharedEditorUser,
+                        { requireShareOrDelete }
+                    );
+                    expect(countTables(res.clause)).toBeLessThan(260);
+                    expect(res.isExact).toBe(c.expectedExact);
+
+                    const guestParams = await ArtifactGuestShareLinkPreRunViewHook(
+                        { EntityName: 'MJ: Artifact Guest Share Links', ResultType: 'simple' },
+                        sharedEditorUser,
+                        b5Provider as unknown as IMetadataProvider
+                    );
+                    expect(countTables(String(guestParams.ExtraFilter ?? ''))).toBeLessThan(260);
+
+                    const colArtParams = await CollectionArtifactPreRunViewHook(
+                        { EntityName: 'MJ: Collection Artifacts', ResultType: 'simple' },
+                        sharedEditorUser,
+                        b5Provider as unknown as IMetadataProvider
+                    );
+                    expect(countTables(String(colArtParams.ExtraFilter ?? ''))).toBeLessThan(260);
                 }
-
-                const guestParams = await ArtifactGuestShareLinkPreRunViewHook(
-                    { EntityName: 'MJ: Artifact Guest Share Links', ResultType: 'simple' },
-                    sharedEditorUser,
-                    b5Provider as unknown as IMetadataProvider
-                );
-                expect(countTables(String(guestParams.ExtraFilter ?? ''))).toBeLessThan(260);
-
-                const colArtParams = await CollectionArtifactPreRunViewHook(
-                    { EntityName: 'MJ: Collection Artifacts', ResultType: 'simple' },
-                    sharedEditorUser,
-                    b5Provider as unknown as IMetadataProvider
-                );
-                expect(countTables(String(colArtParams.ExtraFilter ?? ''))).toBeLessThan(260);
 
                 artSpy.mockRestore();
             }
         }
+
+        // R6-3: > 5,000 collections on collection-scoped reads uses the bounded 17-table SQL predicate (never empty workspace!)
+        tryColsSpy.mockResolvedValue(makeUuids(5001, '77777777'));
+        const largeColPred = await BuildSqlCollectionReadablePredicateAsync(
+            '[vwCollectionArtifacts].[CollectionID]',
+            b5Provider as unknown as IMetadataProvider,
+            sharedEditorUser
+        );
+        expect(largeColPred.isExact).toBe(true);
+        expect(largeColPred.clause).toContain('vwCollections');
+        expect(countTables(largeColPred.clause)).toBeLessThan(25);
         tryColsSpy.mockRestore();
+    });
+
+    it('R6-1: isolates server-side spreadsheet import, evaluation, and patching in bounded worker_threads', async () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('Worker Isolated', ['Sheet1'], 5, 5);
+        const ws = wb.Worksheets[0];
+        ws.Cells['A1'] = { Address: 'A1', RowID: 'wr-1', ColumnID: 'wc-1', RawValue: 21 };
+        ws.Cells['A2'] = { Address: 'A2', RowID: 'wr-2', ColumnID: 'wc-1', RawValue: null, Formula: '=A1*2' };
+
+        const evalRes = await RunSpreadsheetEvaluateInWorker(wb);
+        expect(evalRes.EvaluatedFormulaCount).toBe(1);
+        expect(evalRes.Workbook.Worksheets[0].Cells['A2']?.ComputedValue).toBe(42);
+
+        const xlsxBytes = engine.ExportToXlsxBytes(evalRes.Workbook);
+        const imported = await RunSpreadsheetImportInWorker(xlsxBytes);
+        expect(imported.Worksheets[0].Cells['A2']?.ComputedValue).toBe(42);
+
+        imported.Worksheets[0].Cells['A1'] = { Address: 'A1', RowID: 'wr-1', ColumnID: 'wc-1', RawValue: 50 };
+        const evaluatedPatched = await RunSpreadsheetEvaluateInWorker(imported);
+        const patchedBytes = await RunSpreadsheetPatchInWorker(xlsxBytes, evaluatedPatched.Workbook);
+        const reimported = await RunSpreadsheetImportInWorker(patchedBytes);
+        expect(reimported.Worksheets[0].Cells['A2']?.ComputedValue).toBe(100);
+
+        // Extremely tight wall-clock timeout terminates the worker cleanly rather than hanging
+        await expect(RunSpreadsheetEvaluateInWorker(wb, undefined, { TimeoutMs: 1 })).rejects.toThrow(/timed out/i);
     });
 });

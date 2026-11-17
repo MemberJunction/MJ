@@ -123,10 +123,23 @@ export {
     RegisterWorkingStateContentDeserializer,
     type WorkingStateContentDeserializer
 } from './custom/ArtifactSecurityHookHelpers';
+export {
+    DEFAULT_SPREADSHEET_WORKER_RESOURCE_LIMITS,
+    DEFAULT_SPREADSHEET_WORKER_TIMEOUT_MS,
+    RegisterSpreadsheetServerWorkerRunner,
+    RunSpreadsheetEvaluateInWorker,
+    RunSpreadsheetImportInWorker,
+    RunSpreadsheetPatchInWorker,
+    type SpreadsheetWorkerExecutionOptions
+} from './custom/SpreadsheetWorkerRunner';
 
 import { RegisterArtifactPostRunViewProtectedEntityRegistry } from './custom/ArtifactSecurityHookHelpers';
+import { RegisterSpreadsheetServerWorkerRunner } from './custom/SpreadsheetWorkerRunner';
 
 // Register all 9 artifact/collection PostRunView-protected entities at module load so
 // GenericDatabaseProvider / AgentDataPolicyGuard / ClientClauseScreen enforce fail-closed
 // guards even if MJServer's explicit bootstrap helper has not been called yet.
 RegisterArtifactPostRunViewProtectedEntityRegistry();
+// Isolate server-side .xlsx import/patch and workbook formula evaluation in a heap-bounded,
+// wall-clock-timed worker_threads Worker by default (R6-1).
+RegisterSpreadsheetServerWorkerRunner();

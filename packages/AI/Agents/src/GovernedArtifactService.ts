@@ -887,11 +887,11 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         if (isSpreadsheet && isZip) {
           originalXlsxBytes = new Uint8Array(downloaded);
           if (!liveRoomHydrated) {
-            const imported = SpreadsheetEngine.Instance.ImportFromXlsxBytes(
+            const imported = await SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated(
               originalXlsxBytes,
               ver?.Configuration ?? undefined,
             );
-            SpreadsheetEngine.Instance.EvaluateWorkbook(imported);
+            await SpreadsheetEngine.Instance.EvaluateWorkbookIsolated(imported);
             content = SpreadsheetEngine.Instance.SerializeWorkbook(imported);
           }
         } else if (!liveRoomHydrated) {
@@ -1412,14 +1412,14 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     }
   }
 
-  private materializeXlsxForContent(
+  private async materializeXlsxForContent(
     contentStr: string,
     workingXlsxBytes: Uint8Array | undefined,
-  ): { xlsxBytes?: Uint8Array; xlsxBase64?: string } {
+  ): Promise<{ xlsxBytes?: Uint8Array; xlsxBase64?: string }> {
     try {
       const parsedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(contentStr);
       const patched = workingXlsxBytes
-        ? XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(workingXlsxBytes, parsedWorkbook)
+        ? await XlsxOpenXmlAdapter.Instance.PatchXlsxBytesIsolated(workingXlsxBytes, parsedWorkbook)
         : SpreadsheetEngine.Instance.ExportToXlsxBytes(parsedWorkbook);
       return {
         xlsxBytes: patched,
@@ -1626,7 +1626,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       }
 
       if (workingXlsxBytes || state.contentMode === 'File') {
-        const materialized = this.materializeXlsxForContent(finalContentStr, workingXlsxBytes);
+        const materialized = await this.materializeXlsxForContent(finalContentStr, workingXlsxBytes);
         if (materialized.xlsxBytes) {
           workingXlsxBytes = materialized.xlsxBytes;
           latestXlsxBase64 = materialized.xlsxBase64;
@@ -1894,7 +1894,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         if (typeof hookResult.mergedContent === 'string' && hookResult.mergedContent !== finalContentStr) {
           finalContentStr = hookResult.mergedContent;
           if (workingXlsxBytes || state.contentMode === 'File') {
-            const rematerialized = this.materializeXlsxForContent(finalContentStr, workingXlsxBytes);
+            const rematerialized = await this.materializeXlsxForContent(finalContentStr, workingXlsxBytes);
             if (rematerialized.xlsxBytes) {
               workingXlsxBytes = rematerialized.xlsxBytes;
               latestXlsxBase64 = rematerialized.xlsxBase64;
@@ -2021,7 +2021,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         let updatedFileId = uploadedFileId;
         let updatedSizeBytes = xlsxSizeBytes;
         if (state.contentMode === 'File') {
-          const rematerialized = this.materializeXlsxForContent(finalContentStr, workingXlsxBytes);
+          const rematerialized = await this.materializeXlsxForContent(finalContentStr, workingXlsxBytes);
           if (!rematerialized.xlsxBase64) {
             const savedVersionId = versionEntity.ID;
             await this.safeDeleteVersionEntity(versionEntity);
@@ -2299,7 +2299,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       let workingXlsxBytes = state.originalXlsxBytes;
       let latestXlsxBase64: string | undefined;
       if (workingXlsxBytes || state.contentMode === 'File') {
-        const materialized = this.materializeXlsxForContent(refreshResult.updatedContent, workingXlsxBytes);
+        const materialized = await this.materializeXlsxForContent(refreshResult.updatedContent, workingXlsxBytes);
         if (materialized.xlsxBytes) {
           workingXlsxBytes = materialized.xlsxBytes;
           latestXlsxBase64 = materialized.xlsxBase64;
@@ -2649,7 +2649,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       await engine.EvaluateMjCustomFunctions(wb, input.contextUser, input.provider, {
         BypassCache: true,
       });
-      engine.EvaluateWorkbook(wb);
+      await engine.EvaluateWorkbookIsolated(wb);
 
       let signedFrozenBlocksCount = 0;
       if (input.freezeBlocks) {
@@ -3062,73 +3062,18 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       return { success: true, artifacts: [] };
     }
 
-    // Batch-load versions for all matching artifacts in bounded UUID chunks instead of N+1 or one giant IN(...) (`S5-6`)
-    const versionRows: Array<{
-      ID: string;
-      ArtifactID: string;
-      VersionNumber?: number | null;
-      Name?: string | null;
-      ContentMode?: string | null;
-      Content?: string | null;
-      Configuration?: string | null;
-      MimeType?: string | null;
+    // S6-3: Filter & paginate matching readable artifacts first so we only fetch the latest version
+    // (never historical Content blobs) for the paginated result page, logging any failed chunks.
+    const pageEntries: Array<{
+      art: ArtifactListRow;
+      artName: string;
+      typeName: string;
+      typeEntity?: MJArtifactTypeEntity;
+      canEdit: boolean;
     }> = [];
-    const VER_CHUNK_SIZE = 2_500;
-    for (let i = 0; i < candidateArts.length; i += VER_CHUNK_SIZE) {
-      const chunkIn = candidateArts
-        .slice(i, i + VER_CHUNK_SIZE)
-        .map((a) => `'${EscapeSQLString(a.ID)}'`)
-        .join(',');
-      const batchVerRes = await rv.RunView<{
-        ID: string;
-        ArtifactID: string;
-        VersionNumber?: number | null;
-        Name?: string | null;
-        ContentMode?: string | null;
-        Content?: string | null;
-        Configuration?: string | null;
-        MimeType?: string | null;
-      }>(
-        {
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID IN (${chunkIn})`,
-          OrderBy: 'VersionNumber DESC',
-          Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'ContentMode', 'Content', 'Configuration', 'MimeType'],
-          IgnoreMaxRows: true,
-          SkipTotalRowCount: true,
-          ResultType: 'simple',
-        },
-        params.contextUser,
-      );
-      if (batchVerRes.Success && Array.isArray(batchVerRes.Results)) {
-        versionRows.push(...batchVerRes.Results);
-      }
-    }
-    const latestVersionByArtId = new Map<
-      string,
-      {
-        ID: string;
-        VersionNumber?: number | null;
-        Name?: string | null;
-        ContentMode?: string | null;
-        Content?: string | null;
-        Configuration?: string | null;
-        MimeType?: string | null;
-      }
-    >();
-    for (const v of versionRows) {
-      const normArt = NormalizeUUID(v.ArtifactID);
-      const existing = latestVersionByArtId.get(normArt);
-      if (!existing || (v.VersionNumber ?? 0) > (existing.VersionNumber ?? 0)) {
-        latestVersionByArtId.set(normArt, v);
-      }
-    }
-
-    const items: WorkspaceArtifactListItem[] = [];
     let matchedCount = 0;
-    const liveReader = GetArtifactLiveContentReaderHook();
     for (const art of candidateArts) {
-      if (items.length >= maxResults) break;
+      if (pageEntries.length >= maxResults) break;
 
       const artName = (art.Name ?? 'Untitled Artifact').trim();
       const typeEntity = art.Type
@@ -3148,6 +3093,113 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
 
       matchedCount++;
       if (matchedCount <= offset) continue;
+
+      pageEntries.push({
+        art,
+        artName,
+        typeName,
+        typeEntity: typeEntity ?? undefined,
+        canEdit: perms.CanEdit,
+      });
+    }
+    if (pageEntries.length === 0) {
+      return { success: true, artifacts: [] };
+    }
+
+    // 1. Fetch lightweight version headers (no Content/Configuration blobs) to find each artifact's latest Version ID
+    const latestMetaByArtId = new Map<string, { ID: string; VersionNumber: number }>();
+    const VER_CHUNK_SIZE = 500;
+    for (let i = 0; i < pageEntries.length; i += VER_CHUNK_SIZE) {
+      const chunkIn = pageEntries
+        .slice(i, i + VER_CHUNK_SIZE)
+        .map((e) => `'${EscapeSQLString(e.art.ID)}'`)
+        .join(',');
+      const metaRes = await rv.RunView<{ ID: string; ArtifactID: string; VersionNumber?: number | null }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID IN (${chunkIn})`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'ArtifactID', 'VersionNumber'],
+          IgnoreMaxRows: true,
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        },
+        params.contextUser,
+      );
+      if (!metaRes.Success) {
+        LogError(
+          `GovernedArtifactService.ListWorkspaceArtifacts: failed to load version headers for chunk: ${
+            metaRes.ErrorMessage || 'unknown error'
+          }`,
+        );
+        continue;
+      }
+      for (const row of metaRes.Results ?? []) {
+        const normArt = NormalizeUUID(row.ArtifactID);
+        const verNum = row.VersionNumber ?? 0;
+        const existing = latestMetaByArtId.get(normArt);
+        if (!existing || verNum > existing.VersionNumber) {
+          latestMetaByArtId.set(normArt, { ID: row.ID, VersionNumber: verNum });
+        }
+      }
+    }
+
+    // 2. Fetch full Content/Configuration ONLY for those latest version IDs
+    const latestVersionByArtId = new Map<
+      string,
+      {
+        ID: string;
+        VersionNumber?: number | null;
+        Name?: string | null;
+        ContentMode?: string | null;
+        Content?: string | null;
+        Configuration?: string | null;
+        MimeType?: string | null;
+      }
+    >();
+    const latestVersionIds = Array.from(latestMetaByArtId.values()).map((m) => m.ID);
+    for (let i = 0; i < latestVersionIds.length; i += VER_CHUNK_SIZE) {
+      const idIn = latestVersionIds
+        .slice(i, i + VER_CHUNK_SIZE)
+        .map((id) => `'${EscapeSQLString(id)}'`)
+        .join(',');
+      const batchVerRes = await rv.RunView<{
+        ID: string;
+        ArtifactID: string;
+        VersionNumber?: number | null;
+        Name?: string | null;
+        ContentMode?: string | null;
+        Content?: string | null;
+        Configuration?: string | null;
+        MimeType?: string | null;
+      }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID IN (${idIn})`,
+          Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'ContentMode', 'Content', 'Configuration', 'MimeType'],
+          MaxRows: latestVersionIds.length,
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        },
+        params.contextUser,
+      );
+      if (!batchVerRes.Success) {
+        LogError(
+          `GovernedArtifactService.ListWorkspaceArtifacts: failed to load latest version content for chunk: ${
+            batchVerRes.ErrorMessage || 'unknown error'
+          }`,
+        );
+        continue;
+      }
+      for (const v of batchVerRes.Results ?? []) {
+        latestVersionByArtId.set(NormalizeUUID(v.ArtifactID), v);
+      }
+    }
+
+    const items: WorkspaceArtifactListItem[] = [];
+    const liveReader = GetArtifactLiveContentReaderHook();
+    for (const entry of pageEntries) {
+      const { art, artName, typeName, typeEntity, canEdit } = entry;
 
       const ver = latestVersionByArtId.get(NormalizeUUID(art.ID));
       let contentStr: string | null = ver?.Content ?? null;
@@ -3189,7 +3241,7 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         typeName,
         typeEntity: typeEntity ?? undefined,
         driverClass: typeEntity?.DriverClass ?? undefined,
-        canEdit: perms.CanEdit,
+        canEdit,
         sections: digest.Sections,
         embeddedCharts: digest.EmbeddedCharts,
         summaryPreview: digest.SummaryText.slice(0, 400),

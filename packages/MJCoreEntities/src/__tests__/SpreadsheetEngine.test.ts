@@ -4119,8 +4119,172 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
             { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(r53SharedXml) },
         ]);
-        const r53SharedImported = XlsxOpenXmlAdapter.Instance.ImportXlsx(r53SharedXlsx);
-        expect(r53SharedImported.Worksheets[0].Cells['B1']?.Formula).toBeNull();
-        expect(r53SharedImported.Worksheets[0].Cells['B2']?.Formula).toBeNull();
+        // R6-2: Oversized shared master formula is rejected cleanly rather than silently dropped
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(r53SharedXlsx)).toThrow(/formula|length|8192/i);
+    });
+
+    it('R6-1 & R6-2: rejects adversarial import limits, pre-charges SUMPRODUCT matrices, bounds DAG small/wide edges, and preserves exact running-total recalculation', () => {
+        const enc = new TextEncoder();
+        const buildZipFn = Reflect.get(engine, 'buildZipArchive') as (
+            entries: Array<{ Name: string; Data: Uint8Array }>
+        ) => Uint8Array;
+        const wrapXlsx = (workbookXml: string, relsXml: string, sheets: Array<{ path: string; xml: string }>): Uint8Array =>
+            buildZipFn.call(engine, [
+                {
+                    Name: '[Content_Types].xml',
+                    Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>'),
+                },
+                { Name: 'xl/workbook.xml', Data: enc.encode(workbookXml) },
+                { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode(relsXml) },
+                ...sheets.map((s) => ({ Name: s.path, Data: enc.encode(s.xml) })),
+            ]);
+        const simpleSheetXml =
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>';
+
+        // 1. Duplicate sheet part paths rejected
+        const dupPathXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="S1" sheetId="1" r:id="rId1"/><sheet name="S2" sheetId="2" r:id="rId2"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: simpleSheetXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(dupPathXlsx)).toThrow(/duplicate worksheet part path/i);
+
+        // 2. Excess sheet count (> 128) rejected
+        const manySheets = Array.from({ length: 129 }, (_, i) => `<sheet name="S${i + 1}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('');
+        const manyRels = Array.from({ length: 129 }, (_, i) => `<Relationship Id="rId${i + 1}" Target="worksheets/sheet${i + 1}.xml"/>`).join('');
+        const tooManySheetsXlsx = wrapXlsx(
+            `<workbook><sheets>${manySheets}</sheets></workbook>`,
+            `<Relationships>${manyRels}</Relationships>`,
+            [{ path: 'xl/worksheets/sheet1.xml', xml: simpleSheetXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(tooManySheetsXlsx)).toThrow(/maximum sheet limit/i);
+
+        // 3. Overlapping array anchors and non-top-left array anchors rejected
+        const overlapXml = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>',
+            '<row r="1"><c r="A1"><f t="array" cm="1" ref="A1:D4">SEQUENCE(4,4)</f><v>1</v></c></row>',
+            '<row r="2"><c r="B2"><f t="array" cm="1" ref="B2:E5">SEQUENCE(4,4)</f><v>1</v></c></row>',
+            '</sheetData></worksheet>',
+        ].join('');
+        const overlapXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: overlapXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(overlapXlsx)).toThrow(/overlapping array formula ranges/i);
+        expect(() => XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(overlapXlsx, engine.CreateEmptyWorkbook('Sheet1'))).toThrow(/overlapping array formula ranges/i);
+
+        const nonTopLeftXml = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>',
+            '<row r="2"><c r="B2"><f t="array" ref="A1:C3">SEQUENCE(3,3)</f><v>1</v></c></row>',
+            '</sheetData></worksheet>',
+        ].join('');
+        const nonTopLeftXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: nonTopLeftXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(nonTopLeftXlsx)).toThrow(/not the top-left cell/i);
+
+        // 4. Too many <col> tags (> 25,000) rejected, while redundant full-width <col> entries under limit exit early
+        const manyColsXml =
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>' +
+            '<col min="1" max="16384" width="12"/>'.repeat(25_001) +
+            '</cols><sheetData/></worksheet>';
+        const manyColsXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: manyColsXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(manyColsXlsx)).toThrow(/maximum <col> entry limit/i);
+
+        const safeColsXml =
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>' +
+            '<col min="1" max="16384" width="14" hidden="1"/>'.repeat(5_000) +
+            '</cols><sheetData/></worksheet>';
+        const safeColsXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: safeColsXml }]
+        );
+        const safeColsWb = XlsxOpenXmlAdapter.Instance.ImportXlsx(safeColsXlsx);
+        expect(safeColsWb.Worksheets[0].Columns[0]?.Width).toBe(14);
+        expect(safeColsWb.Worksheets[0].Columns[0]?.Hidden).toBe(true);
+
+        // 5. Validation rules > 5,000 rejected cleanly on import (not silently dropped); tall column rules evaluate via byCol
+        const tooManyDvXml =
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/>' +
+            '<dataValidations count="5001">' +
+            '<dataValidation type="whole" sqref="A1"><formula1>1</formula1><formula2>10</formula2></dataValidation>'.repeat(5_001) +
+            '</dataValidations></worksheet>';
+        const tooManyDvXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: tooManyDvXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(tooManyDvXlsx)).toThrow(/maximum validation rule limit/i);
+
+        const tallValWb = engine.CreateEmptyWorkbook('Tall Validation', ['Sheet1'], 100, 10);
+        const tallWs = tallValWb.Worksheets[0];
+        for (let i = 0; i < 100; i++) {
+            tallWs.ValidationRules.push({ RuleID: `tall-${i}`, Range: 'A1:A1000000', RuleType: 'numberRange', MinValue: 0, MaxValue: 100 });
+        }
+        tallWs.Cells['A5'] = { Address: 'A5', RowID: 'r-5', ColumnID: 'c-1', RawValue: 250 };
+        tallWs.Cells['B5'] = { Address: 'B5', RowID: 'r-5', ColumnID: 'c-2', RawValue: 250 };
+        engine.EvaluateWorkbook(tallValWb);
+        expect(tallWs.Cells['A5']?.ValidationError).toBeTruthy();
+        expect(tallWs.Cells['B5']?.ValidationError).toBeFalsy();
+
+        // 6. Giant SUMPRODUCT pre-charges live-cell matrix budget BEFORE allocating and evaluates cleanly to #CALC!
+        const spWb = engine.CreateEmptyWorkbook('Giant SUMPRODUCT', ['Sheet1'], 10, 5);
+        const spWs = spWb.Worksheets[0];
+        spWs.Cells['A1'] = { Address: 'A1', RowID: 'r-1', ColumnID: 'c-1', RawValue: 2 };
+        const giantArgs = Array.from({ length: 8 }, () => 'A1:A200000').join(', ');
+        spWs.Cells['C1'] = { Address: 'C1', RowID: 'r-1', ColumnID: 'c-3', RawValue: null, Formula: `=SUMPRODUCT(${giantArgs})` };
+        engine.EvaluateWorkbook(spWb);
+        expect(spWs.Cells['C1']?.ComputedValue).toBe('#CALC!');
+
+        // 7. Small-range edge flood (> 1,000,000 edges across small ranges <= 256 cells) rejected cleanly
+        const smallFloodWb = engine.CreateEmptyWorkbook('Small Range Flood', ['Sheet1'], 500, 10);
+        const floodWs = smallFloodWb.Worksheets[0];
+        const blocks = Array.from({ length: 10 }, (_, k) => `A${k * 16 + 1}:P${(k + 1) * 16}`).join(', '); // 10 * 256 = 2,560 edges per formula
+        for (let r = 1; r <= 420; r++) {
+            // 420 * 2,560 = 1,075,200 edges > 1,000,000
+            floodWs.Cells[`Z${r}`] = { Address: `Z${r}`, RowID: `r-${r}`, ColumnID: 'c-26', RawValue: null, Formula: `=SUM(${blocks})` };
+        }
+        expect(() => engine.EvaluateWorkbook(smallFloodWb)).toThrow(/exceeded maximum edge limit/i);
+
+        // 8. R6-2: Wide-range edge truncation (running total =SUM(B$2:B{r}) down 1,100 rows > 250,000 wide edges) still recalculates accurately after edits!
+        const runningWb = engine.CreateEmptyWorkbook('Running Total', ['Sheet1'], 1_200, 5);
+        const runWs = runningWb.Worksheets[0];
+        runWs.Cells['A1'] = { Address: 'A1', RowID: 'rr-1', ColumnID: 'rc-1', RawValue: 10 };
+        for (let r = 2; r <= 1_100; r++) {
+            runWs.Cells[`B${r}`] = {
+                Address: `B${r}`,
+                RowID: `rr-${r}`,
+                ColumnID: 'rc-2',
+                RawValue: null,
+                Formula: r === 1_050 ? '=A1*2' : '=1',
+            };
+            runWs.Cells[`C${r}`] = {
+                Address: `C${r}`,
+                RowID: `rr-${r}`,
+                ColumnID: 'rc-3',
+                RawValue: null,
+                Formula: `=SUM(B$2:B${r})`,
+            };
+        }
+        engine.EvaluateWorkbook(runningWb);
+        // 1..1048 (=1), 1050 (=20), 1051..1100 (=1) -> total for 1099 rows = 1098 + 20 = 1118
+        expect(runWs.Cells['C1100']?.ComputedValue).toBe(1118);
+        // Edit direct precedent B500 (1 -> 11, +10) and indirect precedent A1 (10 -> 100, +180 on B1050)
+        engine.SetCell(runningWb, runWs.SheetID, 'B500', { Value: 11 });
+        expect(runWs.Cells['C1100']?.ComputedValue).toBe(1128);
+        engine.SetCell(runningWb, runWs.SheetID, 'A1', { Value: 100 });
+        expect(runWs.Cells['C1049']?.ComputedValue).toBe(1058);
+        expect(runWs.Cells['C1050']?.ComputedValue).toBe(1258);
+        expect(runWs.Cells['C1100']?.ComputedValue).toBe(1308);
     });
 });

@@ -2148,6 +2148,25 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             const lockedAttempt = makeSave();
             expect(await lockedAttempt.ent.Save()).toBe(false);
             expect(lockedAttempt.hist[0]?.Message).toMatch(/lock/i);
+
+            // 3. S6-2: Corrupt YjsState throwing inside deserializer denies non-owner fail-closed,
+            //    while owner skips working-state query & deserializer completely and succeeds.
+            const corruptDeser = vi.fn(() => {
+                throw new Error('corrupt Yjs binary frame');
+            });
+            RegisterWorkingStateContentDeserializer(corruptDeser);
+            const nonOwnerCorrupt = makeSave();
+            expect(await nonOwnerCorrupt.ent.Save()).toBe(false);
+            expect(corruptDeser).toHaveBeenCalledTimes(1);
+            expect(nonOwnerCorrupt.hist[0]?.Message).toMatch(/unable to decode/i);
+
+            corruptDeser.mockClear();
+            const ownerUser = { ID: ownerId, Email: 'owner@mj.local' } as UserInfo;
+            const ownerSave = makeSave();
+            Object.defineProperty(ownerSave.ent, 'ContextCurrentUser', { value: ownerUser, writable: true });
+            superSaveSpy.mockResolvedValueOnce(true);
+            expect(await ownerSave.ent.Save()).toBe(true);
+            expect(corruptDeser).not.toHaveBeenCalled();
         } finally {
             RegisterWorkingStateContentDeserializer(null);
             superSaveSpy.mockRestore();

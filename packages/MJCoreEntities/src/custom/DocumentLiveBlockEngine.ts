@@ -86,6 +86,14 @@ export type SpreadsheetXlsxChartExtractorFn = (
     sheetRange: string | undefined
 ) => SpreadsheetChartExtractResult | null;
 
+export type SpreadsheetXlsxChartExtractorAsyncFn = (
+    bytes: Uint8Array | ArrayBuffer,
+    configuration: string | null,
+    sheetId: string | undefined,
+    chartId: string | undefined,
+    sheetRange: string | undefined
+) => Promise<SpreadsheetChartExtractResult | null>;
+
 /**
  * Callback registered by `SpreadsheetEngine` to parse binary `.xlsx` file bytes into a serialized
  * `WorkbookSpec` JSON string for `ContentMode = 'File'` artifact execution.
@@ -94,6 +102,11 @@ export type SpreadsheetXlsxWorkbookExtractorFn = (
     bytes: Uint8Array | ArrayBuffer,
     configuration: string | null
 ) => string | null;
+
+export type SpreadsheetXlsxWorkbookExtractorAsyncFn = (
+    bytes: Uint8Array | ArrayBuffer,
+    configuration: string | null
+) => Promise<string | null>;
 
 /**
  * Discriminator for the 5 canonical block types embeddable across MJ Docs, Slides, and Sheets.
@@ -1151,7 +1164,7 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
                 : null;
             if (fileBytes) {
                 if (spec.SheetChartID || spec.SheetRange) {
-                    const dataset = DocumentLiveBlockEngine.Instance.ExtractSpreadsheetXlsxChartDataset(
+                    const dataset = await DocumentLiveBlockEngine.Instance.ExtractSpreadsheetXlsxChartDatasetAsync(
                         fileBytes,
                         versionRow.Configuration ?? null,
                         spec.SheetID,
@@ -1187,7 +1200,7 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
                         CanEditArtifact: perms.CanEdit && !spec.VersionID
                     };
                 }
-                const materializedJson = DocumentLiveBlockEngine.Instance.ExtractSpreadsheetXlsxWorkbookJson(
+                const materializedJson = await DocumentLiveBlockEngine.Instance.ExtractSpreadsheetXlsxWorkbookJsonAsync(
                     fileBytes,
                     versionRow.Configuration ?? null
                 );
@@ -1305,7 +1318,9 @@ export interface ParsedDocumentSegment {
 export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngine> {
     private _spreadsheetChartExtractor: SpreadsheetChartExtractorFn | null = null;
     private _spreadsheetXlsxChartExtractor: SpreadsheetXlsxChartExtractorFn | null = null;
+    private _spreadsheetXlsxChartExtractorAsync: SpreadsheetXlsxChartExtractorAsyncFn | null = null;
     private _spreadsheetXlsxWorkbookExtractor: SpreadsheetXlsxWorkbookExtractorFn | null = null;
+    private _spreadsheetXlsxWorkbookExtractorAsync: SpreadsheetXlsxWorkbookExtractorAsyncFn | null = null;
     private _artifactFileBytesLoader: ArtifactFileBytesLoaderFn | null = null;
     private _signingSecret: string | null = null;
 
@@ -1402,6 +1417,13 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
     }
 
     /**
+     * Registers an async binary `.xlsx` chart/range dataset extractor (`SpreadsheetEngine`).
+     */
+    public RegisterSpreadsheetXlsxChartExtractorAsync(fn: SpreadsheetXlsxChartExtractorAsyncFn | null): void {
+        this._spreadsheetXlsxChartExtractorAsync = fn;
+    }
+
+    /**
      * Extracts a chart or range dataset from `.xlsx` binary bytes using the registered extractor.
      */
     public ExtractSpreadsheetXlsxChartDataset(
@@ -1418,10 +1440,33 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
     }
 
     /**
+     * Async worker-isolated extraction of a chart or range dataset from `.xlsx` bytes (`R6-1`).
+     */
+    public async ExtractSpreadsheetXlsxChartDatasetAsync(
+        bytes: Uint8Array | ArrayBuffer,
+        configuration: string | null,
+        sheetId?: string,
+        chartId?: string,
+        sheetRange?: string
+    ): Promise<SpreadsheetChartExtractResult | null> {
+        if (this._spreadsheetXlsxChartExtractorAsync) {
+            return this._spreadsheetXlsxChartExtractorAsync(bytes, configuration, sheetId, chartId, sheetRange);
+        }
+        return this.ExtractSpreadsheetXlsxChartDataset(bytes, configuration, sheetId, chartId, sheetRange);
+    }
+
+    /**
      * Registers a binary `.xlsx` workbook-JSON extractor (`SpreadsheetEngine`).
      */
     public RegisterSpreadsheetXlsxWorkbookExtractor(fn: SpreadsheetXlsxWorkbookExtractorFn | null): void {
         this._spreadsheetXlsxWorkbookExtractor = fn;
+    }
+
+    /**
+     * Registers an async binary `.xlsx` workbook-JSON extractor (`SpreadsheetEngine`).
+     */
+    public RegisterSpreadsheetXlsxWorkbookExtractorAsync(fn: SpreadsheetXlsxWorkbookExtractorAsyncFn | null): void {
+        this._spreadsheetXlsxWorkbookExtractorAsync = fn;
     }
 
     /**
@@ -1435,6 +1480,19 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             return null;
         }
         return this._spreadsheetXlsxWorkbookExtractor(bytes, configuration);
+    }
+
+    /**
+     * Async worker-isolated materialization of serialized workbook JSON from `.xlsx` bytes (`R6-1`).
+     */
+    public async ExtractSpreadsheetXlsxWorkbookJsonAsync(
+        bytes: Uint8Array | ArrayBuffer,
+        configuration: string | null
+    ): Promise<string | null> {
+        if (this._spreadsheetXlsxWorkbookExtractorAsync) {
+            return this._spreadsheetXlsxWorkbookExtractorAsync(bytes, configuration);
+        }
+        return this.ExtractSpreadsheetXlsxWorkbookJson(bytes, configuration);
     }
 
     /**

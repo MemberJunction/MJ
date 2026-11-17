@@ -956,10 +956,16 @@ export async function BuildSqlCollectionReadablePredicateAsync(
             options?.requireShareOrDelete === true,
             options?.precomputedCollectionCache
         );
-        if (!resolvedCols || resolvedCols.size > MAX_SQL_SCOPED_IN_IDS) {
-            return { clause: '1 = 0', isExact: false };
+        if (!resolvedCols) {
+            const errMsg = `Permission check failed for user '${user.ID}': unable to resolve readable collections.`;
+            LogError(`BuildSqlCollectionReadablePredicateAsync: ${errMsg}`);
+            throw new Error(errMsg);
         }
-        precomputedCollectionIds = resolvedCols;
+        if (resolvedCols.size <= MAX_SQL_SCOPED_IN_IDS) {
+            precomputedCollectionIds = resolvedCols;
+        }
+        // When > MAX_SQL_SCOPED_IN_IDS (5,000), leave precomputedCollectionIds=null so
+        // BuildSqlCollectionReadablePredicate emits its bounded 17-table collection ancestry predicate (`R6-3`).
     }
     return {
         clause: BuildSqlCollectionReadablePredicate(collectionIdExpr, provider, user, {
@@ -1019,9 +1025,10 @@ export async function BuildSqlArtifactReadablePredicateAsync(
             requireShareOrDelete,
             options?.precomputedCollectionCache
         );
-        // R5-4: Never fall back to the unbounded 16-level walk inside 9 delegate hops (>= 260 tables -> SQL 4414).
         if (!resolvedCols) {
-            return { clause: '1 = 0', isExact: false };
+            const errMsg = `Permission check failed for user '${user.ID}': unable to resolve readable artifact collections.`;
+            LogError(`BuildSqlArtifactReadablePredicateAsync: ${errMsg}`);
+            throw new Error(errMsg);
         }
         if (resolvedCols.size <= MAX_SQL_MULTI_HOP_COLLECTION_IN_IDS) {
             precomputedCollectionIds = resolvedCols;
@@ -1039,9 +1046,9 @@ export async function BuildSqlArtifactReadablePredicateAsync(
                     isExact
                 };
             }
-            // Both collections (> 500) and artifacts (> 5000) exceeded bounded SQL IN caps: fail closed cleanly
-            // with 0 tables + isExact=false rather than blowing SQL Server's 260-table limit (`R5-4`).
-            return { clause: '1 = 0', isExact: false };
+            const errMsg = `Artifact query exceeded SQL readability scope cap (${readableArtifacts.size} readable artifacts across ${resolvedCols.size} collections for user '${user.ID}'). Filter by CollectionID or ArtifactID to narrow the query.`;
+            LogError(`BuildSqlArtifactReadablePredicateAsync: ${errMsg}`);
+            throw new Error(errMsg);
         }
     }
     return buildSqlArtifactReadablePredicateWithExactness(artifactIdExpr, provider, user, {
@@ -1754,8 +1761,13 @@ export type WorkingStateContentDeserializer = (rawYjsState: string | Uint8Array 
 
 /**
  * Registers the server-side Yjs working-state binary-to-serialized-content deserializer (`R5-1`),
- * called by `ArtifactCollaborationServer` so `MJArtifactVersionEntityServer` and lock validators
- * can verify locks on `MJ: Artifact Working States.YjsState` without a circular package dependency.
+ * called by `ArtifactCollaborationServer` (in `@memberjunction/server`) so `MJArtifactVersionEntityServer`
+ * and lock validators can verify locks on `MJ: Artifact Working States.YjsState` without a circular dependency.
+ *
+ * Standalone note (`S6-4`): Any Node process loading `@memberjunction/core-entities-server` without
+ * `@memberjunction/server` (and without calling `RegisterWorkingStateContentDeserializer`) has no
+ * Yjs deserializer registered and therefore fails closed on non-owner version saves whenever an active
+ * `MJ: Artifact Working States.YjsState` row exists.
  */
 export function RegisterWorkingStateContentDeserializer(fn: WorkingStateContentDeserializer | null): void {
     const store = GetGlobalObjectStore();

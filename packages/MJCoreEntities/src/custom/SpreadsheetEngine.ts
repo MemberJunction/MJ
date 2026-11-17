@@ -11,7 +11,7 @@ import {
     StripServerOnlyRunQueryParams,
     UserInfo
 } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
 import {
     ArtifactAiFormulaCellRequest,
@@ -2246,9 +2246,110 @@ const MAX_DENSE_COLS = 512;
 const EXCEL_MAX_ROWS = 1_048_576;
 const EXCEL_MAX_COLS = 16_384;
 const MAX_DYNAMIC_ARRAY_CELLS = 200_000;
-const MAX_VALIDATION_RULES_PER_SHEET = 5_000;
-const MAX_IMPORTED_FORMULA_BYTES = 16 * 1024 * 1024;
-const MAX_DAG_EXPANDED_WIDE_EDGES = 2_000_000;
+export const MAX_IMPORT_SHEETS = 128;
+export const MAX_IMPORT_WORKBOOK_CELLS = 250_000;
+export const MAX_IMPORT_WORKBOOK_FORMULAS = 100_000;
+export const MAX_IMPORT_WORKBOOK_ARRAY_ANCHORS = 25_000;
+export const MAX_IMPORT_WORKBOOK_COL_TAGS = 25_000;
+export const MAX_VALIDATION_RULES_PER_SHEET = 5_000;
+export const MAX_IMPORTED_FORMULA_BYTES = 16 * 1024 * 1024;
+export const MAX_DAG_EDGES_PER_WORKBOOK = 1_000_000;
+export const MAX_DAG_EXPANDED_WIDE_EDGES = 250_000;
+export const MAX_DAG_RANGE_WATCHERS = 250_000;
+export const MAX_EVAL_MATRIX_CELLS_PER_FORMULA = 1_000_000;
+export const MAX_EVAL_MATRIX_CELLS_PER_WORKBOOK = 4_000_000;
+
+interface SpreadsheetImportBudget {
+    cells: number;
+    formulas: number;
+    formulaBytes: number;
+    arrayAnchors: number;
+    validationRules: number;
+    colTags: number;
+}
+
+interface ArrayAnchorRect {
+    anchorAddr: string;
+    startRow: number;
+    endRow: number;
+    startCol: number;
+    endCol: number;
+}
+
+/**
+ * Verifies in `O(N log N)` time that no two multi-cell array/spill anchor rectangles overlap (`R6-1`).
+ */
+function assertNoOverlappingArrayAnchors(anchors: readonly ArrayAnchorRect[]): void {
+    if (anchors.length <= 1) {
+        return;
+    }
+    const sorted = [...anchors].sort((a, b) => a.startRow - b.startRow || a.startCol - b.startCol);
+    // Because we reject immediately on any overlap, `active` intervals are always pairwise disjoint by [startCol, endCol].
+    const active: ArrayAnchorRect[] = [];
+    for (const cur of sorted) {
+        if (active.length > 0) {
+            let writeIdx = 0;
+            for (let i = 0; i < active.length; i++) {
+                if (active[i].endRow >= cur.startRow) {
+                    active[writeIdx++] = active[i];
+                }
+            }
+            active.length = writeIdx;
+        }
+        // Binary search first active interval with endCol >= cur.startCol
+        let lo = 0;
+        let hi = active.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (active[mid].endCol < cur.startCol) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        if (lo < active.length && active[lo].startCol <= cur.endCol) {
+            throw new Error(
+                `Spreadsheet rejected: overlapping array formula ranges (${active[lo].anchorAddr} and ${cur.anchorAddr}).`
+            );
+        }
+        // Maintain sorted startCol invariant (first active interval with startCol > cur.startCol is `lo`)
+        active.splice(lo, 0, cur);
+    }
+}
+
+export interface SpreadsheetWorkerIsolationRunner {
+    ImportFromXlsxBytes(bytes: Uint8Array, configurationJson?: string | null): Promise<WorkbookSpec>;
+    PatchXlsxBytes(originalBytes: Uint8Array, workbook: WorkbookSpec): Promise<Uint8Array>;
+    EvaluateWorkbook(
+        workbook: WorkbookSpec,
+        editContext?: SpreadsheetCellEditContext
+    ): Promise<{ Workbook: WorkbookSpec; EvaluatedFormulaCount: number }>;
+}
+
+const SPREADSHEET_WORKER_RUNNER_KEY = '___MJ_SPREADSHEET_WORKER_ISOLATION_RUNNER___';
+
+/**
+ * Registers the server-side `worker_threads` isolation runner used by {@link SpreadsheetEngine}
+ * async `Isolated` entry points (`R6-1`). Keeps `@memberjunction/core-entities` free of Node imports.
+ */
+export function RegisterSpreadsheetWorkerRunner(runner: SpreadsheetWorkerIsolationRunner | null): void {
+    const store = GetGlobalObjectStore();
+    if (runner) {
+        store[SPREADSHEET_WORKER_RUNNER_KEY] = runner;
+    } else {
+        delete store[SPREADSHEET_WORKER_RUNNER_KEY];
+    }
+}
+
+/**
+ * Returns the registered {@link SpreadsheetWorkerIsolationRunner}, or `null` in browser / standalone mode.
+ */
+export function GetSpreadsheetWorkerRunner(): SpreadsheetWorkerIsolationRunner | null {
+    const runner = GetGlobalObjectStore()[SPREADSHEET_WORKER_RUNNER_KEY] as
+        | SpreadsheetWorkerIsolationRunner
+        | undefined;
+    return runner ?? null;
+}
 
 function buildColSortedAddrIndex(addrs: Iterable<string>): Map<number, Array<{ row: number; addr: string }>> {
     const byCol = new Map<number, Array<{ row: number; addr: string }>>();
@@ -2318,11 +2419,13 @@ interface CompiledValidationEntry {
 
 interface CompiledValidationIndex {
     byRow: Map<number, CompiledValidationEntry[]>;
+    byCol: Map<number, CompiledValidationEntry[]>;
     wideRules: CompiledValidationEntry[];
 }
 
 function buildCompiledValidationIndex(rules: readonly SpreadsheetValidationRuleSpec[]): CompiledValidationIndex {
     const byRow = new Map<number, CompiledValidationEntry[]>();
+    const byCol = new Map<number, CompiledValidationEntry[]>();
     const wideRules: CompiledValidationEntry[] = [];
     const limit = Math.min(rules.length, MAX_VALIDATION_RULES_PER_SHEET);
     for (let i = 0; i < limit; i++) {
@@ -2345,11 +2448,20 @@ function buildCompiledValidationIndex(rules: readonly SpreadsheetValidationRuleS
                 }
                 rowList.push(entry);
             }
+        } else if (bounds.endCol - bounds.startCol <= 64) {
+            for (let c = bounds.startCol; c <= bounds.endCol; c++) {
+                let colList = byCol.get(c);
+                if (!colList) {
+                    colList = [];
+                    byCol.set(c, colList);
+                }
+                colList.push(entry);
+            }
         } else {
             wideRules.push(entry);
         }
     }
-    return { byRow, wideRules };
+    return { byRow, byCol, wideRules };
 }
 
 /**
@@ -2464,6 +2576,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private sheetsWithVirtualAxisIds = new WeakSet<WorksheetSpec>();
     private workbooksWithVirtualAxisIds = new WeakSet<WorkbookSpec>();
     private unimplementedResultCells = new WeakSet<SpreadsheetCellSpec>();
+    private validationIndexCache = new WeakMap<
+        WorksheetSpec,
+        { rulesRef: readonly SpreadsheetValidationRuleSpec[]; rulesLen: number; index: CompiledValidationIndex }
+    >();
     private monotonicIdCounter = 0;
     private _lastEvaluatedFormulaCount = 0;
     private activeEvalBudget: {
@@ -2471,6 +2587,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         maxOps: number;
         deadlineMs: number;
         exceeded: boolean;
+        matrixCellsLive: number;
+        totalMatrixCellsAllocated: number;
         sheetColIndex: WeakMap<WorksheetSpec, Map<number, Array<{ row: number; addr: string }>>>;
     } | null = null;
 
@@ -2483,6 +2601,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             maxOps: MAX_EVAL_OPS_PER_WORKBOOK,
             deadlineMs: Date.now() + MAX_EVAL_TIME_MS,
             exceeded: false,
+            matrixCellsLive: 0,
+            totalMatrixCellsAllocated: 0,
             sheetColIndex: new WeakMap<WorksheetSpec, Map<number, Array<{ row: number; addr: string }>>>()
         };
         try {
@@ -2490,6 +2610,46 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         } finally {
             this.activeEvalBudget = null;
         }
+    }
+
+    private chargeMatrixAllocation(cellCount: number): void {
+        if (!Number.isFinite(cellCount) || cellCount < 0) {
+            throw new EvalBudgetExceededError();
+        }
+        const budget = this.activeEvalBudget;
+        if (!budget) {
+            if (cellCount > MAX_DYNAMIC_ARRAY_CELLS) {
+                throw new EvalBudgetExceededError();
+            }
+            return;
+        }
+        if (budget.exceeded) {
+            throw new EvalBudgetExceededError();
+        }
+        if (budget.matrixCellsLive + cellCount > MAX_EVAL_MATRIX_CELLS_PER_FORMULA) {
+            throw new EvalBudgetExceededError();
+        }
+        if (budget.totalMatrixCellsAllocated + cellCount > MAX_EVAL_MATRIX_CELLS_PER_WORKBOOK) {
+            budget.exceeded = true;
+            throw new EvalBudgetExceededError();
+        }
+        this.consumeEvalBudget(Math.max(1, cellCount));
+        budget.matrixCellsLive += cellCount;
+        budget.totalMatrixCellsAllocated += cellCount;
+    }
+
+    private getOrBuildValidationIndex(sheet: WorksheetSpec): CompiledValidationIndex {
+        const cached = this.validationIndexCache.get(sheet);
+        if (cached && cached.rulesRef === sheet.ValidationRules && cached.rulesLen === sheet.ValidationRules.length) {
+            return cached.index;
+        }
+        const index = buildCompiledValidationIndex(sheet.ValidationRules);
+        this.validationIndexCache.set(sheet, {
+            rulesRef: sheet.ValidationRules,
+            rulesLen: sheet.ValidationRules.length,
+            index
+        });
+        return index;
     }
 
     private getOrBuildSheetColIndex(sheet: WorksheetSpec): Map<number, Array<{ row: number; addr: string }>> {
@@ -5549,9 +5709,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         this.workbookDagCache.set(workbook, dag);
 
         const formulaKeys: string[] = [];
+        let validationWideChecksRemaining = 2_000_000;
         for (const sheet of workbook.Worksheets) {
+            this.validationIndexCache.delete(sheet);
             const hasValidation = sheet.ValidationRules.length > 0;
-            const validationIndex = hasValidation ? buildCompiledValidationIndex(sheet.ValidationRules) : null;
+            const validationIndex = hasValidation ? this.getOrBuildValidationIndex(sheet) : null;
             for (const addr of Object.keys(sheet.Cells)) {
                 const cell = sheet.Cells[addr];
                 if (!cell) continue;
@@ -5563,6 +5725,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     cell.ComputedValue = cell.RawValue ?? null;
                     cell.DisplayValue = this.formatCellForDisplay(cell);
                     if (validationIndex) {
+                        if (validationIndex.wideRules.length > 0) {
+                            validationWideChecksRemaining -= validationIndex.wideRules.length;
+                            if (validationWideChecksRemaining < 0) {
+                                throw new Error(
+                                    'Spreadsheet evaluation rejected: global validation rules exceed workbook check budget.'
+                                );
+                            }
+                        }
                         this.validateCellAgainstSheetRules(sheet, cell, parsed, validationIndex);
                     } else if (cell.ErrorMessage) {
                         cell.ErrorMessage = null;
@@ -5579,6 +5749,58 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 this.evaluateCellKeysIteratively(workbook, dag, formulaKeys, null, editContext);
             });
         }
+    }
+
+    /**
+     * Evaluates `workbook` inside the registered server `worker_threads` isolation runner when available (`R6-1`),
+     * applying its mutated worksheets/named ranges back onto `workbook` in place.
+     */
+    public async EvaluateWorkbookIsolated(
+        workbook: WorkbookSpec,
+        editContext?: SpreadsheetCellEditContext
+    ): Promise<void> {
+        const runner = GetSpreadsheetWorkerRunner();
+        if (!runner) {
+            this.EvaluateWorkbook(workbook, editContext);
+            return;
+        }
+        const res = await runner.EvaluateWorkbook(workbook, editContext);
+        workbook.Worksheets = res.Workbook.Worksheets;
+        workbook.NamedRanges = res.Workbook.NamedRanges;
+        workbook.ActiveSheetID = res.Workbook.ActiveSheetID;
+        workbook.UpdatedAt = res.Workbook.UpdatedAt;
+        this._lastEvaluatedFormulaCount = res.EvaluatedFormulaCount;
+        this.bindSheetsToWorkbook(workbook);
+    }
+
+    /**
+     * Imports `.xlsx` bytes inside the registered server `worker_threads` isolation runner when available (`R6-1`).
+     */
+    public async ImportFromXlsxBytesIsolated(
+        bytes: Uint8Array | ArrayBuffer,
+        configurationJson?: string | null
+    ): Promise<WorkbookSpec> {
+        const runner = GetSpreadsheetWorkerRunner();
+        if (!runner) {
+            return this.ImportFromXlsxBytes(bytes, configurationJson);
+        }
+        const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+        return runner.ImportFromXlsxBytes(u8, configurationJson);
+    }
+
+    /**
+     * Patches `.xlsx` bytes inside the registered server `worker_threads` isolation runner when available (`R6-1`).
+     */
+    public async PatchXlsxBytesIsolated(
+        originalBytes: Uint8Array | ArrayBuffer,
+        workbook: WorkbookSpec
+    ): Promise<Uint8Array> {
+        const runner = GetSpreadsheetWorkerRunner();
+        if (!runner) {
+            return this.PatchXlsxBytes(originalBytes, workbook);
+        }
+        const u8 = originalBytes instanceof Uint8Array ? originalBytes : new Uint8Array(originalBytes);
+        return runner.PatchXlsxBytes(u8, workbook);
     }
 
     /**
@@ -5659,11 +5881,35 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         while (head < queue.length) {
             const current = queue[head++];
             const dependents = existingDag.reverseCellDeps.get(current);
-            if (!dependents) continue;
-            for (const depKey of dependents) {
-                if (!dirtySet.has(depKey)) {
-                    dirtySet.add(depKey);
-                    queue.push(depKey);
+            if (dependents) {
+                for (const depKey of dependents) {
+                    if (!dirtySet.has(depKey)) {
+                        dirtySet.add(depKey);
+                        queue.push(depKey);
+                    }
+                }
+            }
+            if (existingDag.hasTruncatedWideEdges) {
+                const cSep = current.indexOf('::');
+                if (cSep > 0) {
+                    const cSheetId = current.slice(0, cSep);
+                    const cPos = parseCellCoordsFast(current.slice(cSep + 2));
+                    const cWatchers = existingDag.rangeWatchersBySheet.get(cSheetId);
+                    if (cPos && cWatchers) {
+                        for (let wIdx = 0; wIdx < cWatchers.length; wIdx++) {
+                            const w = cWatchers[wIdx];
+                            if (
+                                cPos.row >= w.startRow &&
+                                cPos.row <= w.endRow &&
+                                cPos.col >= w.startCol &&
+                                cPos.col <= w.endCol &&
+                                !dirtySet.has(w.watcherKey)
+                            ) {
+                                dirtySet.add(w.watcherKey);
+                                queue.push(w.watcherKey);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -5705,6 +5951,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     private buildWorkbookDependencyGraph(workbook: WorkbookSpec): WorkbookDependencyGraph {
+        const formulaCellsBySheet = new Map<WorksheetSpec, Map<number, Array<{ row: number; key: string }>>>();
         const dag: WorkbookDependencyGraph = {
             namedRangesSignature: JSON.stringify(workbook.NamedRanges),
             astByCellKey: new Map<string, FormulaAstNode | null>(),
@@ -5712,11 +5959,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             directCellDepSets: new Map<string, Set<string>>(),
             reverseCellDeps: new Map<string, Set<string>>(),
             rangeWatchersBySheet: new Map<string, RangeWatcherEntry[]>(),
+            rangeWatchesByCell: new Map<string, Array<{ sheetId: string; startRow: number; endRow: number; startCol: number; endCol: number }>>(),
             watchedSheetsByCell: new Map<string, string[]>(),
+            formulaCellsBySheet,
+            hasTruncatedWideEdges: false,
             spillBlockedKeysBySheet: new Map<string, Set<string>>(),
             sheetById: new Map<string, WorksheetSpec>()
         };
-        const formulaCellsBySheet = new Map<WorksheetSpec, Map<number, Array<{ row: number; key: string }>>>();
         for (const ws of workbook.Worksheets) {
             dag.sheetById.set(ws.SheetID, ws);
             const byCol = new Map<number, Array<{ row: number; key: string }>>();
@@ -5739,7 +5988,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             formulaCellsBySheet.set(ws, byCol);
         }
-        const dagEdgeBudget = { remaining: MAX_DAG_EXPANDED_WIDE_EDGES };
+        const dagEdgeBudget = {
+            totalRemaining: MAX_DAG_EDGES_PER_WORKBOOK,
+            wideRemaining: MAX_DAG_EXPANDED_WIDE_EDGES,
+            watchersRemaining: MAX_DAG_RANGE_WATCHERS,
+            truncatedWide: false
+        };
         for (const ws of workbook.Worksheets) {
             for (const addr of Object.keys(ws.Cells)) {
                 const cell = ws.Cells[addr];
@@ -5752,6 +6006,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 this.updateSingleCellInDag(workbook, ws, canonical, dag, formulaCellsBySheet, dagEdgeBudget);
             }
         }
+        dag.hasTruncatedWideEdges = dagEdgeBudget.truncatedWide;
         return dag;
     }
 
@@ -5761,10 +6016,41 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         canonicalAddr: string,
         dag: WorkbookDependencyGraph,
         formulaCellsBySheet?: ReadonlyMap<WorksheetSpec, ReadonlyMap<number, ReadonlyArray<{ row: number; key: string }>>>,
-        dagEdgeBudget?: { remaining: number }
+        dagEdgeBudget?: {
+            totalRemaining: number;
+            wideRemaining: number;
+            watchersRemaining: number;
+            truncatedWide: boolean;
+        }
     ): void {
         dag.sheetById.set(sheet.SheetID, sheet);
         const cellKey = `${sheet.SheetID}::${canonicalAddr}`;
+
+        // Keep dag.formulaCellsBySheet up to date during incremental cell edits
+        if (!formulaCellsBySheet) {
+            const pos = parseCellCoordsFast(canonicalAddr) ?? ParseCellAddress(canonicalAddr);
+            if (pos) {
+                let byCol = dag.formulaCellsBySheet.get(sheet);
+                if (!byCol) {
+                    byCol = new Map<number, Array<{ row: number; key: string }>>();
+                    dag.formulaCellsBySheet.set(sheet, byCol);
+                }
+                const cellObj = sheet.Cells[canonicalAddr];
+                const isFormulaOrSpill = Boolean(cellObj && (cellObj.Formula || cellObj.SpilledFrom));
+                const colList = byCol.get(pos.col);
+                if (isFormulaOrSpill) {
+                    if (!colList) {
+                        byCol.set(pos.col, [{ row: pos.row, key: cellKey }]);
+                    } else if (!colList.some((e) => e.row === pos.row)) {
+                        colList.push({ row: pos.row, key: cellKey });
+                        if (colList.length > 1) colList.sort((a, b) => a.row - b.row);
+                    }
+                } else if (colList) {
+                    const idx = colList.findIndex((e) => e.row === pos.row);
+                    if (idx >= 0) colList.splice(idx, 1);
+                }
+            }
+        }
 
         // Remove previous dependency edges
         const oldDeps = dag.directCellDeps.get(cellKey);
@@ -5794,6 +6080,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             dag.watchedSheetsByCell.delete(cellKey);
         }
+        dag.rangeWatchesByCell.delete(cellKey);
 
         const cell = sheet.Cells[canonicalAddr];
         if (!cell || !cell.Formula || !cell.Formula.trim().startsWith('=')) {
@@ -5815,7 +6102,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const ast = compileFormulaAstCached(exprBody);
         dag.astByCellKey.set(cellKey, ast);
 
-        const extracted = this.extractAstCellDependencies(ast, workbook, sheet, formulaCellsBySheet, dagEdgeBudget);
+        const extracted = this.extractAstCellDependencies(
+            ast,
+            workbook,
+            sheet,
+            formulaCellsBySheet ?? dag.formulaCellsBySheet,
+            dagEdgeBudget
+        );
+        if (dagEdgeBudget?.truncatedWide) {
+            dag.hasTruncatedWideEdges = true;
+        }
         dag.directCellDeps.set(cellKey, extracted.cellDeps);
         dag.directCellDepSets.set(cellKey, new Set<string>(extracted.cellDeps));
         for (const dep of extracted.cellDeps) {
@@ -5827,6 +6123,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             rev.add(cellKey);
         }
         if (extracted.rangeWatches.length > 0) {
+            dag.rangeWatchesByCell.set(cellKey, extracted.rangeWatches);
             const sheetSet = new Set<string>();
             for (const rw of extracted.rangeWatches) {
                 sheetSet.add(rw.sheetId);
@@ -5852,7 +6149,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         currentSheet: WorksheetSpec,
         formulaCellsBySheet?: ReadonlyMap<WorksheetSpec, ReadonlyMap<number, ReadonlyArray<{ row: number; key: string }>>>,
-        dagEdgeBudget?: { remaining: number }
+        dagEdgeBudget?: {
+            totalRemaining: number;
+            wideRemaining: number;
+            watchersRemaining: number;
+            truncatedWide: boolean;
+        }
     ): {
         cellDeps: string[];
         rangeWatches: Array<{ sheetId: string; startRow: number; endRow: number; startCol: number; endCol: number }>;
@@ -5867,6 +6169,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }> = [];
         const stack: FormulaAstNode[] = [root];
 
+        const addDirectDep = (depKey: string): void => {
+            if (deps.has(depKey)) {
+                return;
+            }
+            if (dagEdgeBudget) {
+                if (--dagEdgeBudget.totalRemaining < 0) {
+                    throw new Error(
+                        `Workbook dependency graph exceeded maximum edge limit (${MAX_DAG_EDGES_PER_WORKBOOK} edges).`
+                    );
+                }
+            }
+            deps.add(depKey);
+        };
+
         const addSparseOrDenseBoxDeps = (
             targetSheet: WorksheetSpec,
             startRow: number,
@@ -5876,12 +6192,26 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         ): void => {
             const area = (endRow - startRow + 1) * (endCol - startCol + 1);
             if (area <= 256) {
+                if (dagEdgeBudget && dagEdgeBudget.totalRemaining < area) {
+                    // Quick check: compute exact new unique edges so shared/overlapping refs count accurately
+                    for (let r = startRow; r <= endRow; r++) {
+                        for (let c = startCol; c <= endCol; c++) {
+                            addDirectDep(`${targetSheet.SheetID}::${FormatCellAddress(r, c)}`);
+                        }
+                    }
+                    return;
+                }
                 for (let r = startRow; r <= endRow; r++) {
                     for (let c = startCol; c <= endCol; c++) {
-                        deps.add(`${targetSheet.SheetID}::${FormatCellAddress(r, c)}`);
+                        addDirectDep(`${targetSheet.SheetID}::${FormatCellAddress(r, c)}`);
                     }
                 }
                 return;
+            }
+            if (dagEdgeBudget && --dagEdgeBudget.watchersRemaining < 0) {
+                throw new Error(
+                    `Workbook dependency graph exceeded maximum range watcher limit (${MAX_DAG_RANGE_WATCHERS}).`
+                );
             }
             rangeWatches.push({
                 sheetId: targetSheet.SheetID,
@@ -5890,8 +6220,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 startCol,
                 endCol
             });
-            if (dagEdgeBudget && dagEdgeBudget.remaining <= 0) {
-                // Range watcher handles dirty propagation without quadratic O(F^2) edge expansion (`R5-3`).
+            if (dagEdgeBudget && (dagEdgeBudget.wideRemaining <= 0 || dagEdgeBudget.totalRemaining <= 0)) {
+                dagEdgeBudget.truncatedWide = true;
                 return;
             }
             const preindexedByCol = formulaCellsBySheet?.get(targetSheet);
@@ -5910,9 +6240,15 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     for (let i = lo; i < colList.length; i++) {
                         const entry = colList[i];
                         if (entry.row > endRow) break;
-                        deps.add(entry.key);
-                        if (dagEdgeBudget && --dagEdgeBudget.remaining <= 0) {
-                            return;
+                        if (!deps.has(entry.key)) {
+                            if (
+                                dagEdgeBudget &&
+                                (--dagEdgeBudget.wideRemaining < 0 || --dagEdgeBudget.totalRemaining < 0)
+                            ) {
+                                dagEdgeBudget.truncatedWide = true;
+                                return;
+                            }
+                            deps.add(entry.key);
                         }
                     }
                 };
@@ -5920,13 +6256,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     for (let c = startCol; c <= endCol; c++) {
                         const colList = preindexedByCol.get(c);
                         if (colList) scanCol(colList);
-                        if (dagEdgeBudget && dagEdgeBudget.remaining <= 0) break;
+                        if (dagEdgeBudget?.truncatedWide) break;
                     }
                 } else {
                     for (const [col, colList] of preindexedByCol.entries()) {
                         if (col < startCol || col > endCol) continue;
                         scanCol(colList);
-                        if (dagEdgeBudget && dagEdgeBudget.remaining <= 0) break;
+                        if (dagEdgeBudget?.truncatedWide) break;
                     }
                 }
                 return;
@@ -5936,7 +6272,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 if (!c || (!c.Formula && !c.SpilledFrom)) continue;
                 const pos = parseCellCoordsFast(addr);
                 if (pos && pos.row >= startRow && pos.row <= endRow && pos.col >= startCol && pos.col <= endCol) {
-                    deps.add(`${targetSheet.SheetID}::${FormatCellAddress(pos.row, pos.col)}`);
+                    const key = `${targetSheet.SheetID}::${FormatCellAddress(pos.row, pos.col)}`;
+                    if (!deps.has(key)) {
+                        if (
+                            dagEdgeBudget &&
+                            (--dagEdgeBudget.wideRemaining < 0 || --dagEdgeBudget.totalRemaining < 0)
+                        ) {
+                            dagEdgeBudget.truncatedWide = true;
+                            return;
+                        }
+                        deps.add(key);
+                    }
                 }
             }
         };
@@ -5977,7 +6323,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             const single = parseCellCoordsFast(rangeStr.trim());
             if (single) {
-                deps.add(`${targetSheet.SheetID}::${FormatCellAddress(single.row, single.col)}`);
+                addDirectDep(`${targetSheet.SheetID}::${FormatCellAddress(single.row, single.col)}`);
             }
         };
 
@@ -5988,7 +6334,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     const ws = node.sheetName ? this.GetWorksheet(workbook, node.sheetName) : currentSheet;
                     const pos = parseCellCoordsFast(node.address.trim());
                     if (ws && pos) {
-                        deps.add(`${ws.SheetID}::${FormatCellAddress(pos.row, pos.col)}`);
+                        addDirectDep(`${ws.SheetID}::${FormatCellAddress(pos.row, pos.col)}`);
                     }
                     break;
                 }
@@ -6210,47 +6556,95 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
                     const deps = dag.directCellDeps.get(top.key) ?? [];
                     const depSet = dag.directCellDepSets.get(top.key);
+                    const scheduleDepKey = (depKey: string): void => {
+                        const depState = state.get(depKey);
+                        if (depState === 1) {
+                            inCycle.add(depKey);
+                            for (let s = workStack.length - 1; s >= 0; s--) {
+                                inCycle.add(workStack[s].key);
+                                if (workStack[s].key === depKey) break;
+                            }
+                        } else if (depState !== 2) {
+                            if (dirtyScope && !dirtyScope.has(depKey)) {
+                                return;
+                            }
+                            if (!dirtyScope) {
+                                const dSep = depKey.indexOf('::');
+                                const dWs = dag.sheetById.get(depKey.slice(0, dSep));
+                                const dCell = dWs?.Cells[depKey.slice(dSep + 2)];
+                                const dFormula = dCell?.Formula;
+                                if (!dCell || !dFormula || (dFormula.charCodeAt(0) !== 61 && !dFormula.trim().startsWith('='))) {
+                                    return;
+                                }
+                            }
+                            workStack.push({ key: depKey, depsScheduled: false });
+                        }
+                    };
                     if (dirtyScope && depSet && dirtyScope.size < deps.length) {
                         // O(|dirtyScope|) fast path for formulas watching large ranges (e.g. SUM(A2:A4000))
                         for (const candKey of dirtyScope) {
                             if (!depSet.has(candKey)) continue;
-                            const depState = state.get(candKey);
-                            if (depState === 1) {
-                                inCycle.add(candKey);
-                                for (let s = workStack.length - 1; s >= 0; s--) {
-                                    inCycle.add(workStack[s].key);
-                                    if (workStack[s].key === candKey) break;
-                                }
-                            } else if (depState !== 2) {
-                                workStack.push({ key: candKey, depsScheduled: false });
-                            }
+                            scheduleDepKey(candKey);
                         }
                     } else {
                         for (let i = deps.length - 1; i >= 0; i--) {
-                            const depKey = deps[i];
-                            const depState = state.get(depKey);
-                            if (depState === 1) {
-                                inCycle.add(depKey);
-                                for (let s = workStack.length - 1; s >= 0; s--) {
-                                    inCycle.add(workStack[s].key);
-                                    if (workStack[s].key === depKey) break;
-                                }
-                            } else if (depState !== 2) {
-                                if (dirtyScope && !dirtyScope.has(depKey)) {
-                                    // Clean cell outside dirtyScope: read lazily on demand in O(1) without copying
+                            scheduleDepKey(deps[i]);
+                        }
+                    }
+                    // R6-2: When wide-range edge expansion was truncated, resolve any watched formula precedents directly so evaluation order stays 100% exact.
+                    if (dag.hasTruncatedWideEdges) {
+                        const watches = dag.rangeWatchesByCell.get(top.key);
+                        if (watches) {
+                            for (let wIdx = watches.length - 1; wIdx >= 0; wIdx--) {
+                                const rw = watches[wIdx];
+                                const targetWs = dag.sheetById.get(rw.sheetId);
+                                const byCol = targetWs ? dag.formulaCellsBySheet.get(targetWs) : undefined;
+                                if (!byCol) continue;
+                                if (dirtyScope && dirtyScope.size < 256) {
+                                    const prefix = `${rw.sheetId}::`;
+                                    for (const candKey of dirtyScope) {
+                                        if (!candKey.startsWith(prefix)) continue;
+                                        const cPos = parseCellCoordsFast(candKey.slice(prefix.length));
+                                        if (
+                                            cPos &&
+                                            cPos.row >= rw.startRow &&
+                                            cPos.row <= rw.endRow &&
+                                            cPos.col >= rw.startCol &&
+                                            cPos.col <= rw.endCol &&
+                                            !depSet?.has(candKey)
+                                        ) {
+                                            scheduleDepKey(candKey);
+                                        }
+                                    }
                                     continue;
                                 }
-                                // Skip pushing scalar non-formula cells during full EvaluateWorkbook since the scalar pass already evaluated them
-                                if (!dirtyScope) {
-                                    const dSep = depKey.indexOf('::');
-                                    const dWs = dag.sheetById.get(depKey.slice(0, dSep));
-                                    const dCell = dWs?.Cells[depKey.slice(dSep + 2)];
-                                    const dFormula = dCell?.Formula;
-                                    if (!dCell || !dFormula || (dFormula.charCodeAt(0) !== 61 && !dFormula.trim().startsWith('='))) {
-                                        continue;
+                                const visitCol = (colList: ReadonlyArray<{ row: number; key: string }>): void => {
+                                    let lo = 0;
+                                    let hi = colList.length;
+                                    while (lo < hi) {
+                                        const mid = (lo + hi) >>> 1;
+                                        if (colList[mid].row < rw.startRow) lo = mid + 1;
+                                        else hi = mid;
+                                    }
+                                    for (let i = lo; i < colList.length; i++) {
+                                        const entry = colList[i];
+                                        if (entry.row > rw.endRow) break;
+                                        if (!depSet?.has(entry.key)) {
+                                            scheduleDepKey(entry.key);
+                                        }
+                                    }
+                                };
+                                if (rw.endCol - rw.startCol + 1 <= byCol.size) {
+                                    for (let c = rw.startCol; c <= rw.endCol; c++) {
+                                        const colList = byCol.get(c);
+                                        if (colList) visitCol(colList);
+                                    }
+                                } else {
+                                    for (const [col, colList] of byCol.entries()) {
+                                        if (col < rw.startCol || col > rw.endCol) continue;
+                                        visitCol(colList);
                                     }
                                 }
-                                workStack.push({ key: depKey, depsScheduled: false });
                             }
                         }
                     }
@@ -6262,6 +6656,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 if (inCycle.has(top.key)) {
                     writeEvaluatedValue(top.key, '#CYCLE!', true);
                     continue;
+                }
+                if (this.activeEvalBudget?.exceeded) {
+                    cell.ErrorMessage = 'Formula evaluation exceeded operation or time budget.';
+                    writeEvaluatedValue(top.key, '#CALC!', true);
+                    continue;
+                }
+                if (this.activeEvalBudget) {
+                    this.activeEvalBudget.matrixCellsLive = 0;
                 }
 
                 const ast = dag.astByCellKey.get(top.key) ?? compileFormulaAstCached(cell.Formula.trim().slice(1).trim());
@@ -6817,6 +7219,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (clampedArea > MAX_DYNAMIC_ARRAY_CELLS || !Number.isFinite(clampedArea)) {
                 return [['#NUM!']];
             }
+            this.chargeMatrixAllocation(clampedArea);
             const byCol = this.getOrBuildSheetColIndex(desc.targetSheet);
             const matrix: SpreadsheetCellValue[][] = Array.from({ length: rowCount }, () =>
                 new Array<SpreadsheetCellValue>(colCount).fill(null)
@@ -7331,9 +7734,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     if (cols === 0) return [['#CALC!']];
                 }
 
-                if (rows * cols > 200_000) {
+                if (rows * cols > MAX_DYNAMIC_ARRAY_CELLS) {
                     return [['#NUM!']];
                 }
+                this.chargeMatrixAllocation(rows * cols);
 
                 let start = 1;
                 if (isProvided(2)) {
@@ -10695,8 +11099,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return false;
         };
 
-        const index = compiledIndex ?? buildCompiledValidationIndex(sheet.ValidationRules);
+        const index = compiledIndex ?? this.getOrBuildValidationIndex(sheet);
         if (evaluateEntries(index.byRow.get(pos.row))) {
+            return;
+        }
+        if (evaluateEntries(index.byCol.get(pos.col))) {
             return;
         }
         evaluateEntries(index.wideRules);
@@ -10964,6 +11371,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         } else {
             sheet.ValidationRules.push(entry);
         }
+        this.validationIndexCache.delete(sheet);
         for (const cell of Object.values(sheet.Cells)) {
             this.validateCellAgainstSheetRules(sheet, cell);
         }
@@ -10991,6 +11399,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
         sheet.ValidationRules = sheet.ValidationRules.filter((r) => r.RuleID !== ruleId);
+        this.validationIndexCache.delete(sheet);
         for (const cell of Object.values(sheet.Cells)) {
             this.validateCellAgainstSheetRules(sheet, cell);
         }
@@ -11796,7 +12205,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     `Target artifact '${targetArtifact.Name}' stores its workbook as a binary file (${versionRow.FileID ?? 'File'}); text workbook content is unavailable for =MJ.IMPORTRANGE.`
                 );
             }
-            targetWorkbook = this.ImportFromXlsxBytes(fileBytes, versionRow.Configuration);
+            targetWorkbook = await this.ImportFromXlsxBytesIsolated(fileBytes, versionRow.Configuration);
         } else {
             targetWorkbook = this.ParseWorkbook(versionRow.Content, versionRow.Configuration);
         }
@@ -11822,7 +12231,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 HostArtifactID: targetArtifact.ID
             });
         } else {
-            this.EvaluateWorkbook(targetWorkbook);
+            await this.EvaluateWorkbookIsolated(targetWorkbook);
         }
 
         const extracted = this.extractWorkbookRangeResult(targetWorkbook, targetArtifact.ID, rangeSpec);
@@ -14337,10 +14746,28 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        // R7-8, R8-8 & R5-3: When a dynamic-array spill anchor or legacy CSE array anchor (`fType === 'array'`
-        // or `cm="..."` with `fRef` spanning a multi-cell range) had a real formula edited, overwritten, or
-        // deleted, clear stale spilled/array values from former non-anchor child cells. Empty-body anchors
-        // (`orig.fBodyRaw === ''`) that still have no formula were never edited and are skipped.
+        // R7-8, R8-8, R5-3 & R6-1: Enforce non-overlapping array anchors up front before clearing stale child cells.
+        const patchArrayAnchorRects: ArrayAnchorRect[] = [];
+        for (const orig of origCellsByAddr.values()) {
+            if (!(orig.fType === 'array' || Boolean(orig.cmAttr)) || !orig.fRef || !orig.fRef.includes(':')) continue;
+            if (!orig.fBodyRaw && !baselineWs?.Cells[orig.addr]?.Formula && !ws.Cells[orig.addr]?.Formula) continue;
+            const spillBounds = ParseRangeAddress(orig.fRef, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (!spillBounds) continue;
+            if (orig.row !== spillBounds.startRow || orig.col !== spillBounds.startCol) {
+                throw new Error(
+                    `Spreadsheet patch rejected: array anchor ${orig.addr} is not the top-left cell of '${orig.fRef}'.`
+                );
+            }
+            patchArrayAnchorRects.push({
+                anchorAddr: orig.addr,
+                startRow: spillBounds.startRow,
+                endRow: spillBounds.endRow,
+                startCol: spillBounds.startCol,
+                endCol: spillBounds.endCol
+            });
+        }
+        assertNoOverlappingArrayAnchors(patchArrayAnchorRects);
+
         let sharedPatchAddrIndex: Map<number, Array<{ row: number; addr: string }>> | null = null;
         for (const orig of origCellsByAddr.values()) {
             if (!(orig.fType === 'array' || Boolean(orig.cmAttr)) || !orig.fRef || !orig.fRef.includes(':')) continue;
@@ -14740,6 +15167,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             hidden: boolean;
         }
         const sheetEntries: SheetEntry[] = [];
+        const seenSheetPaths = new Set<string>();
+        const registerSheetEntry = (entry: SheetEntry): void => {
+            const normPath = entry.path.replace(/^\/+/, '').toLowerCase();
+            if (seenSheetPaths.has(normPath)) {
+                throw new Error(`Spreadsheet import rejected: duplicate worksheet part path '${entry.path}'.`);
+            }
+            seenSheetPaths.add(normPath);
+            sheetEntries.push(entry);
+            if (sheetEntries.length > MAX_IMPORT_SHEETS) {
+                throw new Error(
+                    `Spreadsheet import rejected: workbook exceeds maximum sheet limit (${MAX_IMPORT_SHEETS}).`
+                );
+            }
+        };
         const sheetTagRegex = /<sheet\b[^>]*?>/g;
         let sheetMatch: RegExpExecArray | null;
         while ((sheetMatch = sheetTagRegex.exec(wbXml)) !== null) {
@@ -14748,7 +15189,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const rId = this.extractXmlAttr(tag, 'r:id') || this.extractXmlAttr(tag, 'id') || '';
             const state = this.extractXmlAttr(tag, 'state') || '';
             const path = targetByRelId.get(rId) || `xl/worksheets/sheet${sheetEntries.length + 1}.xml`;
-            sheetEntries.push({
+            registerSheetEntry({
                 name,
                 path,
                 hidden: state === 'hidden' || state === 'veryHidden'
@@ -14758,7 +15199,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (sheetEntries.length === 0) {
             for (const key of Array.from(files.keys()).sort()) {
                 if (/^xl\/worksheets\/sheet\d+\.xml$/.test(key)) {
-                    sheetEntries.push({
+                    registerSheetEntry({
                         name: `Sheet ${sheetEntries.length + 1}`,
                         path: key,
                         hidden: false
@@ -14788,6 +15229,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
+        const importBudget: SpreadsheetImportBudget = {
+            cells: 0,
+            formulas: 0,
+            formulaBytes: 0,
+            arrayAnchors: 0,
+            validationRules: 0,
+            colTags: 0
+        };
         const worksheets: WorksheetSpec[] = [];
         for (let idx = 0; idx < sheetEntries.length; idx++) {
             const entry = sheetEntries[idx];
@@ -14808,7 +15257,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 targetSheetId,
                 entry.name,
                 sharedStrings,
-                styleLookup
+                styleLookup,
+                importBudget
             );
 
             // Resolve per-worksheet relationships (comments, drawings/charts) safely
@@ -15503,8 +15953,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             TextColor?: string;
             BackgroundColor?: string;
             HorizontalAlign?: 'left' | 'center' | 'right';
-        }>
+        }>,
+        importBudget?: SpreadsheetImportBudget
     ): WorksheetSpec {
+        const budget: SpreadsheetImportBudget = importBudget ?? {
+            cells: 0,
+            formulas: 0,
+            formulaBytes: 0,
+            arrayAnchors: 0,
+            validationRules: 0,
+            colTags: 0
+        };
         const ws = this.CreateEmptyWorksheet(sheetId, sheetName);
 
         // Parse frozen panes if present
@@ -15575,11 +16034,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        // Parse column widths & hidden flags
+        // Parse column widths & hidden flags (enforcing workbook-wide <col> limit, R6-1)
         const parsedCols: Array<{ min: number; max: number; width?: number; hidden: boolean }> = [];
         const colRegex = /<col\b([^>]*?)\/?>/g;
         let colMatch: RegExpExecArray | null;
         while ((colMatch = colRegex.exec(wsXml)) !== null) {
+            if (++budget.colTags > MAX_IMPORT_WORKBOOK_COL_TAGS) {
+                throw new Error(
+                    `Spreadsheet import rejected: workbook exceeds maximum <col> entry limit (${MAX_IMPORT_WORKBOOK_COL_TAGS}).`
+                );
+            }
             const attrs = colMatch[1];
             const min = parseInt(this.extractXmlAttr(attrs, 'min') || '0', 10);
             const max = parseInt(this.extractXmlAttr(attrs, 'max') || '0', 10);
@@ -15599,7 +16063,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        // Scan <c> tags once to determine exact max coordinates before materializing cells & formulas
+        // Scan <c> tags once to determine exact max coordinates and enforce workbook cell limit before materializing
         interface RawParsedXmlCell {
             row: number;
             col: number;
@@ -15621,6 +16085,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (inner.length === 0 && attrs.indexOf('s=') === -1 && attrs.indexOf('S=') === -1) {
                 continue;
             }
+            if (++budget.cells > MAX_IMPORT_WORKBOOK_CELLS) {
+                throw new Error(
+                    `Spreadsheet import rejected: workbook exceeds maximum cell limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+                );
+            }
             rawCells.push({
                 row: parsedPos.row,
                 col: parsedPos.col,
@@ -15632,10 +16101,15 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         // Single upfront capacity allocation for the entire worksheet!
         this.ensureSheetCapacity(ws, preMaxRow, preMaxCol);
 
-        // Iterate <col> rules in reverse so each dense column (<= MAX_DENSE_COLS) is written at most once (`S5-7`).
+        // Iterate <col> rules in reverse so each dense column (<= MAX_DENSE_COLS) is written at most once (`S5-7`, `R6-1`).
         const appliedColWidth = new Uint8Array(ws.Columns.length + 1);
         const appliedColHidden = new Uint8Array(ws.Columns.length + 1);
+        let remainingWidthCols = ws.Columns.length;
+        let remainingHiddenCols = ws.Columns.length;
         for (let i = parsedCols.length - 1; i >= 0; i--) {
+            if (remainingWidthCols === 0 && remainingHiddenCols === 0) {
+                break;
+            }
             const cw = parsedCols[i];
             if (cw.min < 1 || cw.min > ws.Columns.length) {
                 continue;
@@ -15646,10 +16120,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 if (roundedWidth !== undefined && appliedColWidth[c] === 0) {
                     ws.Columns[c - 1].Width = roundedWidth;
                     appliedColWidth[c] = 1;
+                    remainingWidthCols--;
                 }
                 if (cw.hidden && appliedColHidden[c] === 0) {
                     ws.Columns[c - 1].Hidden = true;
                     appliedColHidden[c] = 1;
+                    remainingHiddenCols--;
                 }
             }
         }
@@ -15667,9 +16143,34 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
         // Track OOXML shared formula masters (<f t="shared" si="0">...</f>) for follower expansion (E6)
         const sharedFormulaMasters = new Map<string, { masterRow: number; masterCol: number; formulaBody: string }>();
-        // Track array/spill anchor ranges (R8-8: both modern dynamic arrays with `cm` and legacy CSE `t="array"`)
-        const arrayAnchorRanges: Array<{ anchorAddr: string; fRef: string }> = [];
-        let totalImportedFormulaBytes = 0;
+        // Track array/spill anchor ranges (R8-8, R6-1: both modern dynamic arrays with `cm` and legacy CSE `t="array"`)
+        const arrayAnchorRanges: Array<{
+            anchorAddr: string;
+            fRef: string;
+            startRow: number;
+            endRow: number;
+            startCol: number;
+            endCol: number;
+        }> = [];
+        const recordFormulaBudget = (bodyLen: number): string => {
+            if (bodyLen >= MAX_FORMULA_LENGTH) {
+                throw new Error(
+                    `Spreadsheet import rejected: formula exceeds maximum length (${MAX_FORMULA_LENGTH} chars).`
+                );
+            }
+            if (++budget.formulas > MAX_IMPORT_WORKBOOK_FORMULAS) {
+                throw new Error(
+                    `Spreadsheet import rejected: workbook exceeds maximum formula count (${MAX_IMPORT_WORKBOOK_FORMULAS}).`
+                );
+            }
+            if (budget.formulaBytes + bodyLen + 1 > MAX_IMPORTED_FORMULA_BYTES) {
+                throw new Error(
+                    `Spreadsheet import rejected: workbook exceeds maximum formula bytes (${MAX_IMPORTED_FORMULA_BYTES} bytes).`
+                );
+            }
+            budget.formulaBytes += bodyLen + 1;
+            return '=';
+        };
         const fTagRegex = /<f\b([^>]*?)(?:\/>|>([\s\S]*?)<\/f>)/;
 
         for (let idx = 0; idx < rawCells.length; idx++) {
@@ -15752,55 +16253,58 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         const cleanMasterBody = stripOoxmlFormulaPrefixes(
                             fBodyRaw.startsWith('=') ? fBodyRaw.slice(1) : fBodyRaw
                         );
-                        if (cleanMasterBody.length < MAX_FORMULA_LENGTH) {
-                            sharedFormulaMasters.set(sharedIdx, {
-                                masterRow: rc.row,
-                                masterCol: rc.col,
-                                formulaBody: cleanMasterBody
-                            });
-                            if (totalImportedFormulaBytes + cleanMasterBody.length + 1 <= MAX_IMPORTED_FORMULA_BYTES) {
-                                formula = `=${cleanMasterBody}`;
-                                totalImportedFormulaBytes += formula.length;
-                            }
-                        }
+                        recordFormulaBudget(cleanMasterBody.length);
+                        sharedFormulaMasters.set(sharedIdx, {
+                            masterRow: rc.row,
+                            masterCol: rc.col,
+                            formulaBody: cleanMasterBody
+                        });
+                        formula = `=${cleanMasterBody}`;
                     } else {
                         const master = sharedFormulaMasters.get(sharedIdx);
-                        if (master && totalImportedFormulaBytes < MAX_IMPORTED_FORMULA_BYTES) {
+                        if (master) {
                             const shiftedBody = shiftSharedFormulaRelativeRefs(
                                 master.formulaBody,
                                 rc.row - master.masterRow,
                                 rc.col - master.masterCol
                             );
-                            if (
-                                shiftedBody.length < MAX_FORMULA_LENGTH &&
-                                totalImportedFormulaBytes + shiftedBody.length + 1 <= MAX_IMPORTED_FORMULA_BYTES
-                            ) {
-                                formula = `=${shiftedBody}`;
-                                totalImportedFormulaBytes += formula.length;
-                            }
+                            recordFormulaBudget(shiftedBody.length);
+                            formula = `=${shiftedBody}`;
                         }
                     }
                 } else if (fBodyRaw.length > 0) {
                     const cleanBody = stripOoxmlFormulaPrefixes(
                         fBodyRaw.startsWith('=') ? fBodyRaw.slice(1) : fBodyRaw
                     );
-                    if (
-                        cleanBody.length < MAX_FORMULA_LENGTH &&
-                        totalImportedFormulaBytes + cleanBody.length + 1 <= MAX_IMPORTED_FORMULA_BYTES
-                    ) {
-                        formula = `=${cleanBody}`;
-                        totalImportedFormulaBytes += formula.length;
-                    }
+                    recordFormulaBudget(cleanBody.length);
+                    formula = `=${cleanBody}`;
                     if (fType === 'array') {
                         const rawArrayRef = ((fRef || (!cmAttr ? canonicalAddr : '')) || '').toUpperCase();
                         if (rawArrayRef.includes(':')) {
                             const refBounds = ParseRangeAddress(rawArrayRef, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                            if (refBounds && (rc.row !== refBounds.startRow || rc.col !== refBounds.startCol)) {
+                                throw new Error(
+                                    `Spreadsheet import rejected: array anchor ${canonicalAddr} is not the top-left cell of '${rawArrayRef}'.`
+                                );
+                            }
                             const refArea = refBounds
                                 ? (refBounds.endRow - refBounds.startRow + 1) * (refBounds.endCol - refBounds.startCol + 1)
                                 : 0;
-                            if (refArea > 0 && refArea <= MAX_DYNAMIC_ARRAY_CELLS) {
+                            if (refBounds && refArea > 0 && refArea <= MAX_DYNAMIC_ARRAY_CELLS) {
+                                if (++budget.arrayAnchors > MAX_IMPORT_WORKBOOK_ARRAY_ANCHORS) {
+                                    throw new Error(
+                                        `Spreadsheet import rejected: workbook exceeds maximum array anchor limit (${MAX_IMPORT_WORKBOOK_ARRAY_ANCHORS}).`
+                                    );
+                                }
                                 spillRange = rawArrayRef;
-                                arrayAnchorRanges.push({ anchorAddr: canonicalAddr, fRef: rawArrayRef });
+                                arrayAnchorRanges.push({
+                                    anchorAddr: canonicalAddr,
+                                    fRef: rawArrayRef,
+                                    startRow: refBounds.startRow,
+                                    endRow: refBounds.endRow,
+                                    startCol: refBounds.startCol,
+                                    endCol: refBounds.endCol
+                                });
                             }
                         } else if (!cmAttr && rawArrayRef) {
                             spillRange = rawArrayRef;
@@ -15839,6 +16343,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 this.syncCellVirtualAxisIndex(ws, createdCell);
             }
         }
+
+        // Enforce non-overlapping array anchors up front before marking child cells (`R6-1`)
+        assertNoOverlappingArrayAnchors(arrayAnchorRanges);
 
         // Mark non-formula child cells inside multi-cell array/spill ranges using a single column-sorted index (`R5-3`)
         const importedByCol = arrayAnchorRanges.length > 0 ? buildColSortedAddrIndex(Object.keys(ws.Cells)) : null;
@@ -15890,12 +16397,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
-        // Parse native OOXML <dataValidations>
+        // Parse native OOXML <dataValidations> (enforcing workbook-wide limit with explicit rejection, R6-1/R6-2)
         const dvContainerBody = this.extractFirstXmlElementBody(wsXml, 'dataValidations');
         if (dvContainerBody) {
             const dvRegex = /<dataValidation\b([^>]*)>([\s\S]*?)<\/dataValidation>/g;
             let dm: RegExpExecArray | null;
             while ((dm = dvRegex.exec(dvContainerBody)) !== null) {
+                if (++budget.validationRules > MAX_VALIDATION_RULES_PER_SHEET) {
+                    throw new Error(
+                        `Spreadsheet import rejected: workbook exceeds maximum validation rule limit (${MAX_VALIDATION_RULES_PER_SHEET}).`
+                    );
+                }
                 const attrs = dm[1];
                 const body = dm[2];
                 const sqref = this.extractXmlAttr(attrs, 'sqref');
@@ -17064,7 +17576,10 @@ interface WorkbookDependencyGraph {
     directCellDepSets: Map<string, Set<string>>;
     reverseCellDeps: Map<string, Set<string>>;
     rangeWatchersBySheet: Map<string, RangeWatcherEntry[]>;
+    rangeWatchesByCell: Map<string, Array<{ sheetId: string; startRow: number; endRow: number; startCol: number; endCol: number }>>;
     watchedSheetsByCell: Map<string, string[]>;
+    formulaCellsBySheet: Map<WorksheetSpec, Map<number, Array<{ row: number; key: string }>>>;
+    hasTruncatedWideEdges: boolean;
     spillBlockedKeysBySheet: Map<string, Set<string>>;
     sheetById: Map<string, WorksheetSpec>;
 }
@@ -17820,8 +18335,28 @@ export class XlsxOpenXmlAdapter extends BaseSingleton<XlsxOpenXmlAdapter> {
         return SpreadsheetEngine.Instance.ImportFromXlsxBytes(bytes, configurationJson);
     }
 
+    public ImportXlsxIsolated(
+        bytes: Uint8Array | ArrayBuffer,
+        configurationJson?: string | null
+    ): Promise<WorkbookSpec> {
+        if (!GetSpreadsheetWorkerRunner()) {
+            return Promise.resolve(this.ImportXlsx(bytes, configurationJson));
+        }
+        return SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated(bytes, configurationJson);
+    }
+
     public PatchXlsxBytes(originalBytes: Uint8Array | ArrayBuffer, workbook: WorkbookSpec): Uint8Array {
         return SpreadsheetEngine.Instance.PatchXlsxBytes(originalBytes, workbook);
+    }
+
+    public PatchXlsxBytesIsolated(
+        originalBytes: Uint8Array | ArrayBuffer,
+        workbook: WorkbookSpec
+    ): Promise<Uint8Array> {
+        if (!GetSpreadsheetWorkerRunner()) {
+            return Promise.resolve(this.PatchXlsxBytes(originalBytes, workbook));
+        }
+        return SpreadsheetEngine.Instance.PatchXlsxBytesIsolated(originalBytes, workbook);
     }
 }
 
@@ -18844,6 +19379,23 @@ export function LoadSpreadsheetEngine(): void {
     );
     DocumentLiveBlockEngine.Instance.RegisterSpreadsheetXlsxWorkbookExtractor((bytes, configuration) => {
         const wb = SpreadsheetEngine.Instance.ImportFromXlsxBytes(bytes, configuration);
+        return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
+    });
+    DocumentLiveBlockEngine.Instance.RegisterSpreadsheetXlsxChartExtractorAsync(
+        async (bytes, configuration, sheetId, chartId, sheetRange) => {
+            const wb = await SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated(bytes, configuration);
+            const targetSheetId = sheetId || wb.ActiveSheetID;
+            let dataset = chartId
+                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId)
+                : null;
+            if (!dataset && sheetRange) {
+                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, sheetRange);
+            }
+            return dataset;
+        }
+    );
+    DocumentLiveBlockEngine.Instance.RegisterSpreadsheetXlsxWorkbookExtractorAsync(async (bytes, configuration) => {
+        const wb = await SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated(bytes, configuration);
         return SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
     });
 }
