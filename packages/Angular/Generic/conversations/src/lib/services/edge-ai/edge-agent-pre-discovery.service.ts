@@ -13,6 +13,8 @@
  * @module @memberjunction/ng-conversations
  */
 
+import type { PlattCalibration } from '@memberjunction/ai';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseSingleton, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { SimpleVectorService, type VectorInputEntry } from '@memberjunction/ai-vectors-memory';
 import {
@@ -20,6 +22,7 @@ import {
     EDGE_PRE_DISCOVERY_DEFAULT_MODEL_ID,
     EDGE_PRE_DISCOVERY_LOGIT_THRESHOLD,
     EDGE_PRE_DISCOVERY_TOP_K,
+    ResolveEdgePreDiscoveryCalibration,
     type EdgePreDiscoveryHint,
 } from '@memberjunction/ai-core-plus';
 import { EdgeAIWorkerHost } from './edge-ai-worker-host';
@@ -306,8 +309,12 @@ export class EdgeAgentPreDiscoveryService extends BaseSingleton<EdgeAgentPreDisc
         };
 
         if (Number.isFinite(bestLogit) && bestLogit >= logitThreshold) {
+            const calibration: PlattCalibration = ResolveEdgePreDiscoveryCalibration(
+                AIEngineBase.Instance,
+                EDGE_PRE_DISCOVERY_DEFAULT_MODEL_ID
+            );
             hint.SuggestedAgentId = candidateIds[bestIdx];
-            hint.Confidence = CalibrateEdgeLogitToConfidence(bestLogit);
+            hint.Confidence = CalibrateEdgeLogitToConfidence(bestLogit, calibration);
         }
 
         return hint;

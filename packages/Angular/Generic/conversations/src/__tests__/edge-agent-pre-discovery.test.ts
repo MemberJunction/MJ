@@ -5,6 +5,7 @@
  * Uses a deterministic in-memory EdgeWorkerPort fake (zero HuggingFace network calls).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { EdgeAIWorkerHost } from '../lib/services/edge-ai/edge-ai-worker-host';
 import {
     EdgeAgentPreDiscoveryService,
@@ -446,5 +447,23 @@ describe('EdgeAgentPreDiscoveryService & EdgeAIWorkerHost (Stage 6C.1)', () => {
         );
         expect(fallback).toBeNull();
         expect(performance.now() - t0).toBeLessThan(5);
+    });
+
+    it('reads metadata Platt calibration via AIEngineBase.FindDecisionCalibration when available', async () => {
+        const port = new FakeEdgePort();
+        EdgeAIWorkerHost.Instance.SetPortFactoryForTesting(() => port);
+        const calSpy = vi.spyOn(AIEngineBase.Instance, 'FindDecisionCalibration').mockReturnValue({ A: 1.0, B: 5.0 });
+        try {
+            const hint = await EdgeAgentPreDiscoveryService.Instance.PreDiscover(
+                'Write a SQL query for customer revenue',
+                MJ_AGENTS,
+                { UserId: 'cal-user', WaitForColdLoad: true, TimeoutMs: 500 }
+            );
+            expect(calSpy).toHaveBeenCalled();
+            expect(hint?.SuggestedAgentId).toBe('ag-10');
+            expect(hint?.Confidence).toBeGreaterThan(0.95);
+        } finally {
+            calSpy.mockRestore();
+        }
     });
 });

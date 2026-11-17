@@ -1,13 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { ApplyPlattCalibration } from '@memberjunction/ai';
 import {
     CalibrateEdgeLogitToConfidence,
+    EdgeDiscoveryAnsweredBy,
+    EDGE_PRE_DISCOVERY_CALIBRATION_KEY,
+    EDGE_PRE_DISCOVERY_CALIBRATION_MODEL,
+    EDGE_PRE_DISCOVERY_CROSS_ENCODER_RESOLVED_MODEL,
     EDGE_PRE_DISCOVERY_DATA_KEY,
     EDGE_PRE_DISCOVERY_DEFAULT_MODEL_ID,
+    EDGE_PRE_DISCOVERY_DEFAULT_PLATT_CALIBRATION,
     EDGE_PRE_DISCOVERY_LOGIT_THRESHOLD,
     EDGE_PRE_DISCOVERY_MAX_CANDIDATES,
     EDGE_PRE_DISCOVERY_MIN_CONFIDENCE,
     IsEdgePreDiscoveryHintConfident,
     ReadEdgePreDiscoveryHint,
+    ResolveEdgePreDiscoveryCalibration,
     SanitizeEdgePreDiscoveryHint,
     type EdgePreDiscoveryHint,
 } from '../edge-pre-discovery';
@@ -105,5 +112,58 @@ describe('EdgePreDiscoveryHint contract & sanitization', () => {
         const hint = { CandidateAgentIds: [AGENT_A] };
         expect(ReadEdgePreDiscoveryHint({ [EDGE_PRE_DISCOVERY_DATA_KEY]: hint })).toBe(hint);
         expect(ReadEdgePreDiscoveryHint(undefined)).toBeUndefined();
+    });
+
+    it('uses ApplyPlattCalibration via metadata ResolveEdgePreDiscoveryCalibration with PoC fallback', () => {
+        const rawProb = 1 / (1 + Math.exp(-(-2.0)));
+        const expected = Number(
+            ApplyPlattCalibration(rawProb, EDGE_PRE_DISCOVERY_DEFAULT_PLATT_CALIBRATION).toFixed(4)
+        );
+        expect(CalibrateEdgeLogitToConfidence(-2.0)).toBe(expected);
+
+        expect(EdgeDiscoveryAnsweredBy(EDGE_PRE_DISCOVERY_DEFAULT_MODEL_ID)).toEqual({
+            ModelName: EDGE_PRE_DISCOVERY_CALIBRATION_MODEL,
+            ResolvedModel: EDGE_PRE_DISCOVERY_CROSS_ENCODER_RESOLVED_MODEL,
+        });
+
+        const finder = vi.fn().mockReturnValue({ A: 1.5, B: 2.2 });
+        const fit = ResolveEdgePreDiscoveryCalibration(
+            { FindDecisionCalibration: finder },
+            EDGE_PRE_DISCOVERY_DEFAULT_MODEL_ID
+        );
+        expect(fit).toEqual({ A: 1.5, B: 2.2 });
+        expect(finder).toHaveBeenCalledWith(EDGE_PRE_DISCOVERY_CALIBRATION_KEY, {
+            ModelName: EDGE_PRE_DISCOVERY_CALIBRATION_MODEL,
+            ResolvedModel: EDGE_PRE_DISCOVERY_CROSS_ENCODER_RESOLVED_MODEL,
+        });
+
+        // Falls back cleanly when lookup returns null or throws
+        expect(ResolveEdgePreDiscoveryCalibration({ FindDecisionCalibration: () => null })).toEqual(
+            EDGE_PRE_DISCOVERY_DEFAULT_PLATT_CALIBRATION
+        );
+        expect(
+            ResolveEdgePreDiscoveryCalibration({
+                FindDecisionCalibration: () => {
+                    throw new Error('engine not loaded');
+                },
+            })
+        ).toEqual(EDGE_PRE_DISCOVERY_DEFAULT_PLATT_CALIBRATION);
+
+        // Stricter calibration override rejects borderline logit (-2.0) even with forged Confidence
+        const strictFit = { A: 1.0, B: 2.0 };
+        expect(CalibrateEdgeLogitToConfidence(-2.0, strictFit)).toBe(0.5);
+        expect(
+            IsEdgePreDiscoveryHintConfident(
+                {
+                    CandidateAgentIds: [AGENT_A, AGENT_B],
+                    SuggestedAgentId: AGENT_A,
+                    TopLogit: -2.0,
+                    Confidence: 0.99,
+                },
+                EDGE_PRE_DISCOVERY_MIN_CONFIDENCE,
+                EDGE_PRE_DISCOVERY_LOGIT_THRESHOLD,
+                strictFit
+            )
+        ).toBe(false);
     });
 });
