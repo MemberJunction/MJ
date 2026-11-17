@@ -4208,7 +4208,9 @@ export class RealtimeSessionRuntime {
       return;
     }
     try {
-      if (!plugin.RestoreState(state)) {
+      if (plugin.RestoreState(state)) {
+        this.usedChannelNames.add(plugin.ChannelName);
+      } else {
         console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
       }
     } catch (error) {

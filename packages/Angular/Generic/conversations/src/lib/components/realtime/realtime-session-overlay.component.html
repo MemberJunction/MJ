@@ -352,6 +352,37 @@
   </div>
 }
 
+<!-- SESSION REVIEW Docs workspace pane body: the reviewed session's saved ArtifactWorkspace
+     tabs (Docs, Spreadsheets, Slide Decks), rendered READ-ONLY so reviewers see the exact tabbed
+     workspace from the past session rather than only the flat Activity list. -->
+<ng-template #reviewDocsTpl>
+  @if (ReviewWorkspaceEngine; as workspace) {
+    <div class="review-docs-host">
+      <mj-realtime-artifact-workspace-surface
+        [Engine]="workspace"
+        [AgentName]="AgentName"
+        [CurrentUser]="CurrentUser"
+        [EnvironmentID]="EnvironmentID"
+        [Provider]="Provider"
+        [ReadOnly]="true">
+      </mj-realtime-artifact-workspace-surface>
+    </div>
+  }
+</ng-template>
+
+<!-- SESSION REVIEW Media pane body: the reviewed session's saved Media channel items. -->
+<ng-template #reviewMediaTpl>
+  @if (ReviewMedia; as media) {
+    <div class="review-media-host">
+      <mj-realtime-media-surface
+        [State]="media"
+        [AgentName]="AgentName"
+        [Provider]="Provider">
+      </mj-realtime-media-surface>
+    </div>
+  }
+</ng-template>
+
 <!-- SESSION REVIEW whiteboard pane body: the reviewed session's saved board, rehydrated
      locally (WhiteboardState.FromJSON) and rendered READ-ONLY (pan/zoom only). Registered
      as a template-based channel tab ONLY when a parseable Whiteboard state exists. -->
