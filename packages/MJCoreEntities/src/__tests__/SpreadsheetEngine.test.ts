@@ -4768,6 +4768,53 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             expect(vrowWb.Worksheets[0].Cells['A12']?.RawValue).toBe(40);
             expect(vrowWb.Worksheets[0].Cells['B12']?.Formula).toBe('=A12+2');
             expect(vrowWb.Worksheets[0].Cells['B12']?.ComputedValue).toBe(42);
+
+            // Follow-up: EvaluateWorkbookIsolated clears sheetLookupCache & sheetAxisIdSets so replaced Rows/RowIDs
+            // (even at identical Rows.length) resolve cleanly in ResolveFormulaFromStableIds and avoid stale axis-ID sets.
+            const cacheWb = engine.CreateEmptyWorkbook('SheetCacheMergeTest', ['Sheet1'], 3, 2);
+            const cacheSheet = cacheWb.Worksheets[0];
+            // Grow rows to 4 to populate sheetAxisIdSets, then populate sheetLookupCache via ResolveFormulaFromStableIds.
+            engine.SetCell(cacheWb, cacheSheet.SheetID, 'A4', { Value: 7 }, false);
+            expect(
+                engine.ResolveFormulaFromStableIds(
+                    cacheSheet,
+                    `=@CELL(${cacheSheet.Rows[0].RowID},${cacheSheet.Columns[0].ColumnID})`,
+                    cacheWb
+                )
+            ).toBe('=A1');
+
+            RegisterSpreadsheetWorkerRunner({
+                ImportFromXlsxBytes: async (b, c, o) => engine.ImportFromXlsxBytes(b, c, o),
+                PatchXlsxBytes: async (orig, wbArg) => engine.PatchXlsxBytes(orig, wbArg),
+                EvaluateWorkbook: async (wbArg, ctx) => {
+                    const cloned = structuredClone(wbArg);
+                    // Preserve row count (4) while swapping RowIDs on row 1 (which becomes worker-renamed-row-1)
+                    // and seeding a potential row-5 ID on row 2, ensuring cached RowID maps & axis sets would be stale.
+                    cloned.Worksheets[0].Rows[0] = {
+                        ...cloned.Worksheets[0].Rows[0],
+                        RowID: 'worker-renamed-row-1'
+                    };
+                    cloned.Worksheets[0].Rows[1] = {
+                        ...cloned.Worksheets[0].Rows[1],
+                        RowID: `${cacheSheet.SheetID}-row-5`
+                    };
+                    engine.EvaluateWorkbook(cloned, ctx);
+                    return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+                }
+            });
+            await engine.EvaluateWorkbookIsolated(cacheWb);
+            expect(
+                engine.ResolveFormulaFromStableIds(
+                    cacheSheet,
+                    `=@CELL(worker-renamed-row-1,${cacheSheet.Columns[0].ColumnID})`,
+                    cacheWb
+                )
+            ).toBe('=A1');
+            // Growing from 4 to 5 rows must mint a unique non-colliding RowID against the refreshed Rows array
+            // (cannot collide with '${cacheSheet.SheetID}-row-5' returned by the worker).
+            engine.SetCell(cacheWb, cacheSheet.SheetID, 'A5', { Value: 99 }, false);
+            const allRowIds = cacheSheet.Rows.map((r) => r.RowID);
+            expect(new Set(allRowIds).size).toBe(allRowIds.length);
         } finally {
             RegisterSpreadsheetWorkerRunner(null);
         }

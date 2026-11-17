@@ -1476,15 +1476,13 @@ async function checkDsl9SecurityHardeningAndEngineGuards(ctx: IntegrationCheckCo
 
     // 4. AST recursion depth guard (> MAX_AST_DEPTH = 128)
     const deepFormula = `=${'('.repeat(145)}42${')'.repeat(145)}`;
-    let depthOutcome: string | number | boolean | null = null;
-    try {
-        sheetEngine.SetCell(wb, sheet.SheetID, 'AB1', { Formula: deepFormula }, false);
-        await sheetEngine.EvaluateWorkbookIsolated(wb);
-        depthOutcome = sheet.Cells['AB1']?.ComputedValue ?? null;
-    } catch (err) {
-        depthOutcome = err instanceof Error ? err.message : String(err);
-    }
-    Assert(depthOutcome !== 42, 'Deeply nested formula exceeding MAX_AST_DEPTH must not evaluate unchecked');
+    sheetEngine.SetCell(wb, sheet.SheetID, 'AB1', { Formula: deepFormula }, false);
+    await sheetEngine.EvaluateWorkbookIsolated(wb);
+    AssertEqual(
+        sheet.Cells['AB1']?.ComputedValue,
+        '#VALUE!',
+        'Deeply nested formula exceeding MAX_AST_DEPTH must evaluate to #VALUE!'
+    );
 
     // 5. SQL injection filter guard in ValidateExtraFilter
     const badFilter = sheetEngine.ValidateExtraFilter('1=1; DROP TABLE [__mj].[User]');

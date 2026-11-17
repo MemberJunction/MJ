@@ -6124,6 +6124,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             targetSheet.ConditionalFormats = evalSheet.ConditionalFormats;
             targetSheet.EmbeddedArtifacts = evalSheet.EmbeddedArtifacts;
             this.validationIndexCache.delete(targetSheet);
+            this.sheetLookupCache.delete(targetSheet);
+            this.sheetAxisIdSets.delete(targetSheet);
             this.indexedSheets.delete(targetSheet);
             this.sheetsWithVirtualAxisIds.delete(targetSheet);
             this.sheetUnboundVirtualAxisIndex.delete(targetSheet);

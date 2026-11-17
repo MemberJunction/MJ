@@ -43,10 +43,15 @@ import {
     type MJConversationDetailEntity,
     type MJFileEntity,
     MAX_IMPORT_SHEETS,
+    GetSpreadsheetWorkerRunner,
+    RegisterSpreadsheetWorkerRunner,
     type SlideDeckSpec,
     SpreadsheetEngine,
+    type SpreadsheetCellSpec,
     type WorkbookSpec,
+    type WorksheetSpec,
 } from '@memberjunction/core-entities';
+import { RegisterSpreadsheetServerWorkerRunner } from '@memberjunction/core-entities-server';
 import { FileStorageEngine } from '@memberjunction/storage';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { Base64ToBytes, BytesToBase64, MJGlobal, UUIDsEqual } from '@memberjunction/global';
@@ -3178,6 +3183,220 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                 syncParseSpy.mockRestore();
             }
         } finally {
+            await server.Shutdown();
+            delete server.GetGlobalObjectStore()[server.GlobalKey];
+        }
+    });
+
+    it('Follow-up 3: enforces concurrent-row-sync and xlsx-plus-config ApplyServerContentMutation with a worker runner registered', async () => {
+        const previousRunner = GetSpreadsheetWorkerRunner();
+        if (!previousRunner) {
+            RegisterSpreadsheetServerWorkerRunner();
+        }
+        expect(GetSpreadsheetWorkerRunner()).not.toBeNull();
+
+        class FollowUpServer extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        const server = new FollowUpServer();
+        const mainEvalSpy = vi.spyOn(SpreadsheetEngine.Instance, 'EvaluateWorkbook');
+
+        const syncArtId = 'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd';
+        const cfgArtId = 'efefefef-efef-4fef-8fef-efefefefefef';
+
+        const baseSyncWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('ConcurrentRowSyncMutation', ['Sheet1'], 12, 6);
+        const syncWs = baseSyncWb.Worksheets[0];
+        SpreadsheetEngine.Instance.SetCell(baseSyncWb, syncWs.SheetID, 'B2', { Value: 100 }, false);
+        SpreadsheetEngine.Instance.SetCell(baseSyncWb, syncWs.SheetID, 'B3', { Value: 200 }, false);
+        SpreadsheetEngine.Instance.SetCell(baseSyncWb, syncWs.SheetID, 'B4', { Value: 300 }, false);
+        SpreadsheetEngine.Instance.SetCell(baseSyncWb, syncWs.SheetID, 'B5', { Value: 400 }, false);
+        await SpreadsheetEngine.Instance.EvaluateWorkbookIsolated(baseSyncWb);
+        const baseSyncJson = SpreadsheetEngine.Instance.SerializeWorkbook(baseSyncWb);
+
+        const xlsxBaseWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('XlsxPlusCfgApply', ['Sheet1'], 4, 4);
+        SpreadsheetEngine.Instance.SetCell(xlsxBaseWb, xlsxBaseWb.Worksheets[0].SheetID, 'A1', { Value: 50 }, false);
+        SpreadsheetEngine.Instance.SetCell(xlsxBaseWb, xlsxBaseWb.Worksheets[0].SheetID, 'C1', { Value: 10 }, false);
+        const xlsxBaseB64 = Buffer.from(
+            SpreadsheetEngine.Instance.ExportToXlsxBytes(xlsxBaseWb, false, { SkipEvaluate: true })
+        ).toString('base64');
+
+        const cfgLockWb = structuredClone(xlsxBaseWb);
+        cfgLockWb.Worksheets[0].ProtectedRanges = [
+            { RangeID: 'r-followup3-xlsx-cfg-lock', Range: 'A1:B2', LockedByUserID: ownerUser.ID }
+        ];
+        const cfgLockJson = JSON.stringify(cfgLockWb);
+
+        const resolvePermSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
+            .mockImplementation(async (_prov, targetArtId, actor) => ({
+                ArtifactID: targetArtId,
+                CanRead: true,
+                CanEdit: true,
+                CanDelete: UUIDsEqual(actor.ID, ownerUser.ID),
+                CanShare: UUIDsEqual(actor.ID, ownerUser.ID),
+                Source: UUIDsEqual(actor.ID, ownerUser.ID) ? 'Owner' : 'DirectShare',
+                Reason: UUIDsEqual(actor.ID, ownerUser.ID) ? 'Owner' : 'Editor'
+            }));
+
+        const runViewFn = vi.fn(async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: Artifacts') {
+                const isSync = params.ExtraFilter?.includes(syncArtId);
+                return {
+                    Success: true,
+                    Results: [{ ID: isSync ? syncArtId : cfgArtId, UserID: ownerUser.ID }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Artifact Versions') {
+                const isSync = params.ExtraFilter?.includes(syncArtId);
+                return {
+                    Success: true,
+                    Results: [
+                        isSync
+                            ? {
+                                  ID: 'ver-followup3-sync-1',
+                                  VersionNumber: 1,
+                                  Content: baseSyncJson,
+                                  Configuration: null,
+                                  UserID: ownerUser.ID
+                              }
+                            : {
+                                  ID: 'ver-followup3-xlcfg-1',
+                                  VersionNumber: 1,
+                                  Content: xlsxBaseB64,
+                                  Configuration: cfgLockJson,
+                                  UserID: ownerUser.ID
+                              }
+                    ],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+        });
+        const flushSpy = vi.spyOn(server, 'FlushWorkingState').mockResolvedValue(true);
+        const followUpProv: Pick<IMetadataProvider, 'Entities' | 'EntityByName' | 'RunView' | 'RunViews'> = {
+            Entities: [],
+            EntityByName: () => null as never,
+            RunView: runViewFn as IMetadataProvider['RunView'],
+            RunViews: (async (paramsList: RunViewParams[]) =>
+                Promise.all(paramsList.map((p) => runViewFn(p)))) as IMetadataProvider['RunViews']
+        };
+
+        try {
+            // 1. concurrent-row-sync via ApplyServerContentMutation + live room row insertion under worker runner
+            const syncRoom = await server.GetOrCreateRoom(syncArtId, ownerUser, followUpProv as IMetadataProvider);
+            expect(syncRoom).toBeTruthy();
+
+            syncRoom!.Doc.transact(() => {
+                const worksheetsById = syncRoom!.Doc.getMap<string>('worksheetsById');
+                const sheetStruct = JSON.parse(worksheetsById.get(syncWs.SheetID)!) as WorksheetSpec;
+                sheetStruct.Rows.unshift({
+                    RowID: `${syncWs.SheetID}-row-inserted-top`,
+                    Index: 1,
+                    Height: 24,
+                    Hidden: false
+                });
+                sheetStruct.Rows.forEach((r, idx) => {
+                    r.Index = idx + 1;
+                });
+                worksheetsById.set(syncWs.SheetID, JSON.stringify(sheetStruct));
+            }, 'concurrent-row-insert');
+
+            const incomingFormulaWb = JSON.parse(baseSyncJson) as WorkbookSpec;
+            const formulaCell: SpreadsheetCellSpec = {
+                RowID: 'sheet-1-row-6',
+                ColumnID: 'sheet-1-col-B',
+                Address: 'B6',
+                RawValue: null,
+                Formula: '=SUM(B2:B5)',
+                FormulaStable: '=SUM(@RANGE(sheet-1-row-2,sheet-1-col-B,sheet-1-row-5,sheet-1-col-B))'
+            };
+            incomingFormulaWb.Worksheets[0].Cells['B6'] = formulaCell;
+            const incomingFormulaJson = SpreadsheetEngine.Instance.SerializeWorkbook(incomingFormulaWb);
+
+            const applySyncRes = await server.ApplyServerContentMutation(
+                syncArtId,
+                incomingFormulaJson,
+                editorUser,
+                false,
+                baseSyncJson,
+                { provider: followUpProv as IMetadataProvider }
+            );
+            expect(applySyncRes.Success).toBe(true);
+
+            const syncedContent = await server.GetRoomContent(
+                syncArtId,
+                ownerUser,
+                followUpProv as IMetadataProvider
+            );
+            const syncedWb = JSON.parse(syncedContent) as WorkbookSpec;
+            expect(syncedWb.Worksheets[0].Cells['B7']).toBeDefined();
+            expect(syncedWb.Worksheets[0].Cells['B7'].Formula).toBe('=SUM(B3:B6)');
+            expect(syncedWb.Worksheets[0].Cells['B7'].ComputedValue).toBe(1000);
+
+            // 2. xlsx-plus-config ApplyServerContentMutation under worker runner: non-owner cannot overwrite or strip
+            //    Configuration-held ProtectedRanges, while owner mutation succeeds without main-thread EvaluateWorkbook.
+            const cfgRoom = await server.GetOrCreateRoom(cfgArtId, ownerUser, followUpProv as IMetadataProvider);
+            expect(cfgRoom).toBeTruthy();
+
+            const nonOwnerEditedWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('XlsxPlusCfgApply', ['Sheet1'], 4, 4);
+            nonOwnerEditedWb.Worksheets[0].SheetID = xlsxBaseWb.Worksheets[0].SheetID;
+            SpreadsheetEngine.Instance.SetCell(
+                nonOwnerEditedWb,
+                nonOwnerEditedWb.Worksheets[0].SheetID,
+                'A1',
+                { Value: 999 },
+                false
+            );
+            const nonOwnerEditedXlsxB64 = Buffer.from(
+                SpreadsheetEngine.Instance.ExportToXlsxBytes(nonOwnerEditedWb, false, { SkipEvaluate: true })
+            ).toString('base64');
+
+            const nonOwnerRes = await server.ApplyServerContentMutation(
+                cfgArtId,
+                nonOwnerEditedXlsxB64,
+                editorUser,
+                false,
+                undefined,
+                { provider: followUpProv as IMetadataProvider }
+            );
+            expect(nonOwnerRes.Success).toBe(false);
+            expect(nonOwnerRes.ErrorMessage).toMatch(/protected range/i);
+
+            const roomAfterRefusal = await server.GetRoomContent(
+                cfgArtId,
+                ownerUser,
+                followUpProv as IMetadataProvider
+            );
+            expect(roomAfterRefusal).toContain('r-followup3-xlsx-cfg-lock');
+            const parsedAfterRefusal = JSON.parse(roomAfterRefusal) as WorkbookSpec;
+            expect(parsedAfterRefusal.Worksheets[0].Cells['A1']?.RawValue).toBe(50);
+
+            const ownerRes = await server.ApplyServerContentMutation(
+                cfgArtId,
+                nonOwnerEditedXlsxB64,
+                ownerUser,
+                false,
+                undefined,
+                { provider: followUpProv as IMetadataProvider }
+            );
+            expect(ownerRes.Success).toBe(true);
+            expect(mainEvalSpy).not.toHaveBeenCalled();
+        } finally {
+            flushSpy.mockRestore();
+            mainEvalSpy.mockRestore();
+            resolvePermSpy.mockRestore();
+            if (!previousRunner) {
+                RegisterSpreadsheetWorkerRunner(null);
+            }
             await server.Shutdown();
             delete server.GetGlobalObjectStore()[server.GlobalKey];
         }
