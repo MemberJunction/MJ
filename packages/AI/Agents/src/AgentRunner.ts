@@ -3639,94 +3639,114 @@ export class AgentRunner {
                     contextUser,
                 );
 
+                const rawRows: ArtifactVersionRow[] =
+                    versionResult.Success && Array.isArray(versionResult.Results)
+                        ? [...(versionResult.Results as ArtifactVersionRow[])]
+                        : [];
                 if (!versionResult.Success) {
                     LogError(`[AgentRunner] GetArtifactVersionsByID failed: ${versionResult.ErrorMessage}`);
-                } else {
-                    const rawRows = [...(versionResult.Results as ArtifactVersionRow[])];
-                    // S12 companion: if GetArtifactVersionsByID excludes delegate-authorized artifacts
-                    // (which require runtime BaseArtifactPermissionDelegate resolution), fetch missing
-                    // version IDs via RunView('MJ: Artifact Versions', contextUser) so delegate ACLs run cleanly.
-                    if (effectiveProvider) {
-                        const returnedIds = new Set(rawRows.map((r) => NormalizeUUID(r.VersionID)));
-                        const missingIds = versionIds.filter((id) => !returnedIds.has(NormalizeUUID(id)));
-                        if (missingIds.length > 0) {
-                            try {
-                                const rvMissing = RunView.FromMetadataProvider(effectiveProvider);
-                                const inMissing = missingIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-                                const missingRes = await rvMissing.RunView<{
-                                    ID: string;
-                                    ArtifactID: string;
-                                    VersionNumber: number;
-                                    Name: string | null;
-                                    Description: string | null;
-                                    ContentMode: 'File' | 'Text' | null;
-                                    FileID: string | null;
-                                    Content: string | null;
-                                    MimeType: string | null;
-                                    ForceToolsOnly: boolean | null;
-                                }>(
-                                    {
-                                        EntityName: 'MJ: Artifact Versions',
-                                        ExtraFilter: `ID IN (${inMissing})`,
-                                        Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'Description', 'ContentMode', 'FileID', 'Content', 'MimeType', 'ForceToolsOnly'],
-                                        MaxRows: missingIds.length,
-                                        SkipTotalRowCount: true,
-                                        ResultType: 'simple',
-                                    },
-                                    contextUser,
-                                );
-                                if (missingRes.Success && missingRes.Results?.length) {
-                                    const missingArtIds = Array.from(new Set(missingRes.Results.map((v) => v.ArtifactID).filter(Boolean)));
-                                    const artMap = new Map<string, { Name: string; Description: string | null; TypeID: string }>();
-                                    if (missingArtIds.length > 0) {
-                                        const artRes = await rvMissing.RunView<{ ID: string; Name: string; Description: string | null; TypeID: string }>(
-                                            {
-                                                EntityName: 'MJ: Artifacts',
-                                                ExtraFilter: `ID IN (${missingArtIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`,
-                                                Fields: ['ID', 'Name', 'Description', 'TypeID'],
-                                                MaxRows: missingArtIds.length,
-                                                SkipTotalRowCount: true,
-                                                ResultType: 'simple',
-                                            },
-                                            contextUser,
-                                        );
-                                        if (artRes.Success && artRes.Results) {
-                                            for (const a of artRes.Results) {
-                                                artMap.set(NormalizeUUID(a.ID), a);
-                                            }
-                                        }
-                                    }
-                                    await ArtifactMetadataEngine.Instance.Config(false, contextUser, effectiveProvider);
-                                    const artifactTypesById = IndexByUUID(ArtifactMetadataEngine.Instance.ArtifactTypes, (t) => t.ID);
-                                    for (const vr of missingRes.Results) {
-                                        const art = artMap.get(NormalizeUUID(vr.ArtifactID));
-                                        const artType = art?.TypeID
-                                            ? artifactTypesById.Get(art.TypeID)
-                                            : undefined;
-                                        rawRows.push({
-                                            VersionID: vr.ID,
-                                            ArtifactID: vr.ArtifactID,
-                                            VersionNumber: vr.VersionNumber,
-                                            VersionName: vr.Name,
-                                            VersionDescription: vr.Description,
-                                            ContentMode: vr.ContentMode === 'File' ? 'File' : 'Text',
-                                            FileID: vr.FileID,
-                                            Content: vr.Content,
-                                            MimeType: vr.MimeType,
-                                            ForceToolsOnly: vr.ForceToolsOnly,
-                                            ArtifactName: art?.Name ?? 'Artifact',
-                                            ArtifactDescription: art?.Description ?? null,
-                                            TypeName: artType?.Name ?? '',
-                                            ToolLibraryClass: artType?.ToolLibraryClass ?? null,
-                                            DefaultDeliveryMode: artType?.DefaultDeliveryMode === 'ToolsOnly' ? 'ToolsOnly' : artType?.DefaultDeliveryMode === 'Inline' ? 'Inline' : null,
-                                        });
-                                    }
+                }
+
+                // S12 / R2 companion: if GetArtifactVersionsByID failed OR excluded delegate-authorized
+                // artifacts, fall back to RunView('MJ: Artifact Versions', contextUser) so delegate ACLs run cleanly.
+                const hydrateArtifactVersionsViaRunView = async (targetVersionIds: string[]): Promise<ArtifactVersionRow[]> => {
+                    const hydrated: ArtifactVersionRow[] = [];
+                    if (!effectiveProvider || targetVersionIds.length === 0) {
+                        return hydrated;
+                    }
+                    const rvMissing = RunView.FromMetadataProvider(effectiveProvider);
+                    const inMissing = targetVersionIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+                    const missingRes = await rvMissing.RunView<{
+                        ID: string;
+                        ArtifactID: string;
+                        VersionNumber: number;
+                        Name: string | null;
+                        Description: string | null;
+                        ContentMode: 'File' | 'Text' | null;
+                        FileID: string | null;
+                        Content: string | null;
+                        MimeType: string | null;
+                        ForceToolsOnly: boolean | null;
+                    }>(
+                        {
+                            EntityName: 'MJ: Artifact Versions',
+                            ExtraFilter: `ID IN (${inMissing})`,
+                            Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'Description', 'ContentMode', 'FileID', 'Content', 'MimeType', 'ForceToolsOnly'],
+                            MaxRows: targetVersionIds.length,
+                            SkipTotalRowCount: true,
+                            ResultType: 'simple',
+                        },
+                        contextUser,
+                    );
+                    if (missingRes.Success && missingRes.Results?.length) {
+                        const missingArtIds = Array.from(new Set(missingRes.Results.map((v) => v.ArtifactID).filter(Boolean)));
+                        const artMap = new Map<string, { Name: string; Description: string | null; TypeID: string }>();
+                        if (missingArtIds.length > 0) {
+                            const artRes = await rvMissing.RunView<{ ID: string; Name: string; Description: string | null; TypeID: string }>(
+                                {
+                                    EntityName: 'MJ: Artifacts',
+                                    ExtraFilter: `ID IN (${missingArtIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`,
+                                    Fields: ['ID', 'Name', 'Description', 'TypeID'],
+                                    MaxRows: missingArtIds.length,
+                                    SkipTotalRowCount: true,
+                                    ResultType: 'simple',
+                                },
+                                contextUser,
+                            );
+                            if (artRes.Success && artRes.Results) {
+                                for (const a of artRes.Results) {
+                                    artMap.set(NormalizeUUID(a.ID), a);
                                 }
-                            } catch {
-                                // Best-effort delegate fallback; unreadable IDs stay excluded.
                             }
                         }
+                        await ArtifactMetadataEngine.Instance.Config(false, contextUser, effectiveProvider);
+                        const artifactTypesById = IndexByUUID(ArtifactMetadataEngine.Instance.ArtifactTypes, (t) => t.ID);
+                        for (const vr of missingRes.Results) {
+                            const art = artMap.get(NormalizeUUID(vr.ArtifactID));
+                            const artType = art?.TypeID
+                                ? artifactTypesById.Get(art.TypeID)
+                                : undefined;
+                            hydrated.push({
+                                VersionID: vr.ID,
+                                ArtifactID: vr.ArtifactID,
+                                VersionNumber: vr.VersionNumber,
+                                VersionName: vr.Name,
+                                VersionDescription: vr.Description,
+                                ContentMode: vr.ContentMode === 'File' ? 'File' : 'Text',
+                                FileID: vr.FileID,
+                                Content: vr.Content,
+                                MimeType: vr.MimeType,
+                                ForceToolsOnly: vr.ForceToolsOnly,
+                                ArtifactName: art?.Name ?? 'Artifact',
+                                ArtifactDescription: art?.Description ?? null,
+                                TypeName: artType?.Name ?? '',
+                                ToolLibraryClass: artType?.ToolLibraryClass ?? null,
+                                DefaultDeliveryMode: artType?.DefaultDeliveryMode === 'ToolsOnly' ? 'ToolsOnly' : artType?.DefaultDeliveryMode === 'Inline' ? 'Inline' : null,
+                            });
+                        }
+                    } else if (!missingRes.Success) {
+                        LogError(`[AgentRunner] Fallback RunView('MJ: Artifact Versions') failed: ${missingRes.ErrorMessage}`);
                     }
+                    return hydrated;
+                };
+
+                if (effectiveProvider) {
+                    const returnedIds = new Set(rawRows.map((r) => NormalizeUUID(r.VersionID)));
+                    const missingIds = versionIds.filter((id) => !returnedIds.has(NormalizeUUID(id)));
+                    if (missingIds.length > 0) {
+                        try {
+                            const fallbackRows = await hydrateArtifactVersionsViaRunView(missingIds);
+                            rawRows.push(...fallbackRows);
+                        } catch (fallbackErr) {
+                            LogError(
+                                `[AgentRunner] Fallback artifact version hydration failed: ${
+                                    fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+                                }`,
+                            );
+                        }
+                    }
+                }
+                if (rawRows.length > 0) {
                     // Deduplicate by normalized ArtifactID keeping the highest VersionNumber so multiple
                     // conversation messages referencing earlier and newer versions collapse onto the latest one.
                     const latestByArtifactId = new Map<string, ArtifactVersionRow>();
@@ -3829,15 +3849,26 @@ export class AgentRunner {
                                             },
                                             contextUser,
                                         );
-                                        if (refreshedRes.Success && Array.isArray(refreshedRes.Results)) {
-                                            for (const freshRow of refreshedRes.Results as ArtifactVersionRow[]) {
-                                                const freshArtId = (freshRow.ArtifactID ?? '').trim();
-                                                if (!freshArtId) continue;
-                                                const normFresh = NormalizeUUID(freshArtId);
-                                                const prior = latestByArtifactId.get(normFresh);
-                                                if (!prior || (freshRow.VersionNumber ?? 0) > (prior.VersionNumber ?? 0)) {
-                                                    latestByArtifactId.set(normFresh, freshRow);
-                                                }
+                                        const refreshedRows: ArtifactVersionRow[] =
+                                            refreshedRes.Success && Array.isArray(refreshedRes.Results)
+                                                ? [...(refreshedRes.Results as ArtifactVersionRow[])]
+                                                : [];
+                                        if (!refreshedRes.Success) {
+                                            LogError(`[AgentRunner] Refresh GetArtifactVersionsByID failed: ${refreshedRes.ErrorMessage}`);
+                                        }
+                                        const refreshedIds = new Set(refreshedRows.map((r) => NormalizeUUID(r.VersionID)));
+                                        const missingRefreshedIds = newerVersionIds.filter((id) => !refreshedIds.has(NormalizeUUID(id)));
+                                        if (missingRefreshedIds.length > 0) {
+                                            const fallbackLatestRows = await hydrateArtifactVersionsViaRunView(missingRefreshedIds);
+                                            refreshedRows.push(...fallbackLatestRows);
+                                        }
+                                        for (const freshRow of refreshedRows) {
+                                            const freshArtId = (freshRow.ArtifactID ?? '').trim();
+                                            if (!freshArtId) continue;
+                                            const normFresh = NormalizeUUID(freshArtId);
+                                            const prior = latestByArtifactId.get(normFresh);
+                                            if (!prior || (freshRow.VersionNumber ?? 0) > (prior.VersionNumber ?? 0)) {
+                                                latestByArtifactId.set(normFresh, freshRow);
                                             }
                                         }
                                     }

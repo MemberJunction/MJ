@@ -41,7 +41,7 @@ import {
 } from '@memberjunction/global';
 import { createHash } from 'crypto';
 import {
-    BuildSqlArtifactReadablePredicate,
+    BuildSqlArtifactReadablePredicateAsync,
     CascadeDeleteArtifactGuestShareLinks,
     CascadeDeleteArtifactVersionAttributes,
     ConsumePreResolvedIdsForParams,
@@ -326,9 +326,9 @@ export const ArtifactVersionPreRunViewHook: PreRunViewHook = async (
             InternalParams: getGlobalWeakSet(GLOBAL_KEY_INTERNAL_VERSION_PARAMS),
             OriginalFieldsMap: getOriginalVersionFieldsMap(),
             SqlScopedParams: getGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_VERSION_PARAMS),
-            BuildSqlPredicate: (prov, user, entityInfo) =>
-                BuildSqlArtifactReadablePredicate(
-                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactVersions', 'ArtifactID', prov),
+            BuildSqlPredicateAsync: (prov, user, entityInfo, runViewParams) =>
+                BuildSqlArtifactReadablePredicateAsync(
+                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactVersions', 'ArtifactID', prov, runViewParams),
                     prov,
                     user
                 ),

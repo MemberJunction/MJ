@@ -1563,4 +1563,39 @@ describe('Security & Hardening Regression Coverage (SavedQuery, Component, Artif
     expect(colSet.size).toBe(0);
     expect(artSet.size).toBe(0);
   });
+
+  it('R4: ValidateArtifactContentMutationAgainstLocks rejects Markdown Content override when Configuration holds locked slides', () => {
+    const lockedDeckJson = JSON.stringify({
+      DeckID: 'deck-r4',
+      Title: 'Locked Board Deck',
+      Slides: [
+        {
+          SlideID: 'slide-1',
+          Title: 'Protected KPIs',
+          Locked: true,
+          LockedByUserID: actorUser.ID,
+          Regions: [{ RegionID: 'main', Label: 'Main', Markdown: 'Revenue: $10M' }],
+        },
+      ],
+    });
+    const markdownHijack = '# Totally Different Unprotected Deck\n\nHijacked body';
+    const res1 = ValidateArtifactContentMutationAgainstLocks('', markdownHijack, otherUser.ID, false, {
+      currentConfiguration: lockedDeckJson,
+      nextConfiguration: lockedDeckJson,
+    });
+    expect(res1.Allowed).toBe(false);
+
+    const res2 = ValidateArtifactContentMutationAgainstLocks(lockedDeckJson, markdownHijack, otherUser.ID, false, {
+      currentConfiguration: lockedDeckJson,
+      nextConfiguration: lockedDeckJson,
+    });
+    expect(res2.Allowed).toBe(false);
+
+    expect(
+      ValidateArtifactContentMutationAgainstLocks(lockedDeckJson, markdownHijack, actorUser.ID, true, {
+        currentConfiguration: lockedDeckJson,
+        nextConfiguration: lockedDeckJson,
+      }).Allowed,
+    ).toBe(true);
+  });
 });

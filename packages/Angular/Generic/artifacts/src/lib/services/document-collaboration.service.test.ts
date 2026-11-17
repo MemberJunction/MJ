@@ -221,9 +221,12 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     // Format-matching hmac-sha256 string MUST NOT verify without server confirmation (no regex fallback!)
     expect(service.IsFrozenSnapshotVerified(forgedHmacBlock)).toBe(false);
 
+    const testHostArtifactId = '11111111-1111-4111-8111-111111111111';
+    let capturedVariables: Record<string, unknown> | undefined;
     const verifyingServerProvider = mockGqlProvider({
-      ExecuteGQL: async (query: string) => {
+      ExecuteGQL: async (query: string, variables?: Record<string, unknown>) => {
         if (query.includes('VerifyFrozenBlockSnapshot')) {
+          capturedVariables = variables;
           return {
             VerifyFrozenBlockSnapshot: {
               Valid: true,
@@ -235,19 +238,40 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
       },
     });
 
-    const serverVerified = await service.VerifyFrozenSnapshotOnServer(forgedHmacBlock, verifyingServerProvider);
+    // S-b: VerifyFrozenSnapshotOnServer fails closed when hostArtifactId is blank
+    expect(await service.VerifyFrozenSnapshotOnServer(forgedHmacBlock, '', verifyingServerProvider)).toBe(false);
+    expect(capturedVariables).toBeUndefined();
+
+    const serverVerified = await service.VerifyFrozenSnapshotOnServer(
+      forgedHmacBlock,
+      testHostArtifactId,
+      verifyingServerProvider,
+    );
     expect(serverVerified).toBe(true);
-    expect(service.IsFrozenSnapshotVerified(forgedHmacBlock)).toBe(true);
+    expect(capturedVariables?.hostArtifactId).toBe(testHostArtifactId);
+    expect(service.IsFrozenSnapshotVerified(forgedHmacBlock, undefined, testHostArtifactId)).toBe(true);
+    // Verification under host A must NOT auto-verify under a different host B
+    expect(
+      service.IsFrozenSnapshotVerified(
+        forgedHmacBlock,
+        undefined,
+        '22222222-2222-4222-8222-222222222222',
+      ),
+    ).toBe(false);
 
     // Mutating any snapshot field while keeping the same SnapshotContentHash immediately invalidates verification
     expect(
-      service.IsFrozenSnapshotVerified({
-        ...forgedHmacBlock,
-        FrozenSnapshot: {
-          ...forgedHmacBlock.FrozenSnapshot,
-          FrozenByUserName: 'Tampered Attribution',
+      service.IsFrozenSnapshotVerified(
+        {
+          ...forgedHmacBlock,
+          FrozenSnapshot: {
+            ...forgedHmacBlock.FrozenSnapshot,
+            FrozenByUserName: 'Tampered Attribution',
+          },
         },
-      }),
+        undefined,
+        testHostArtifactId,
+      ),
     ).toBe(false);
   });
 
@@ -397,14 +421,19 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     };
 
     // 5 concurrent + 5 sequential calls on the exact same frozen block -> ExecuteGQL invoked ONCE
+    const cacheTestHostId = '33333333-3333-4333-8333-333333333333';
     const concurrentResults = await Promise.all(
       Array.from({ length: 5 }, () =>
-        isolatedService.VerifyFrozenSnapshotOnServer(frozenArtifactBlock, gqlProvider),
+        isolatedService.VerifyFrozenSnapshotOnServer(frozenArtifactBlock, cacheTestHostId, gqlProvider),
       ),
     );
     expect(concurrentResults).toEqual([true, true, true, true, true]);
     for (let i = 0; i < 5; i++) {
-      const seqRes = await isolatedService.VerifyFrozenSnapshotOnServer(frozenArtifactBlock, gqlProvider);
+      const seqRes = await isolatedService.VerifyFrozenSnapshotOnServer(
+        frozenArtifactBlock,
+        cacheTestHostId,
+        gqlProvider,
+      );
       expect(seqRes).toBe(true);
     }
     expect(executeSpy).toHaveBeenCalledTimes(1);
@@ -417,8 +446,8 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
         ArtifactContentSnapshot: '{"pages":[{"id":"p1","items":[{"id":"tampered"}]}]}',
       },
     };
-    expect(isolatedService.IsFrozenSnapshotVerified(modifiedArtifactSnapshotBlock)).toBe(false);
-    await isolatedService.VerifyFrozenSnapshotOnServer(modifiedArtifactSnapshotBlock, gqlProvider);
+    expect(isolatedService.IsFrozenSnapshotVerified(modifiedArtifactSnapshotBlock, undefined, cacheTestHostId)).toBe(false);
+    await isolatedService.VerifyFrozenSnapshotOnServer(modifiedArtifactSnapshotBlock, cacheTestHostId, gqlProvider);
     expect(executeSpy).toHaveBeenCalledTimes(2);
   });
 
@@ -1518,10 +1547,11 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
       },
     };
 
-    expect(await service.VerifyFrozenSnapshotOnServer(block, flakyProvider)).toBe(false);
-    expect(await service.VerifyFrozenSnapshotOnServer(block, flakyProvider)).toBe(true);
+    const transientHostId = '44444444-4444-4444-8444-444444444444';
+    expect(await service.VerifyFrozenSnapshotOnServer(block, transientHostId, flakyProvider)).toBe(false);
+    expect(await service.VerifyFrozenSnapshotOnServer(block, transientHostId, flakyProvider)).toBe(true);
     expect(callCount).toBe(2);
-    expect(service.IsFrozenSnapshotVerified(block)).toBe(true);
+    expect(service.IsFrozenSnapshotVerified(block, undefined, transientHostId)).toBe(true);
   });
 
   it('ApplyRoomReset destroys old Y.Doc and preserves diverged local draft via RoomResetConflict$ without appending EOF', () => {

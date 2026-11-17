@@ -475,5 +475,22 @@ describe('Governed Artifact CoreActions', () => {
         expect(res.Success).toBe(false);
         expect(res.ResultCode).toBe('PERMISSION_DENIED');
         expect(refreshSpy).not.toHaveBeenCalled();
+
+        // S-a: Also reject FreezeRefreshedBlocks when agent attribution is absent (MCP / RuntimeActionBridge)
+        const unattributedParams: RunActionParams = {
+            ContextUser: user,
+            Action: { ID: 'a-3', Name: '__RefreshAndSnapshotArtifact' } as RunActionParams['Action'],
+            Filters: [],
+            Params: [
+                { Name: 'ArtifactID', Type: 'Input', Value: 'art-100' },
+                { Name: 'FreezeRefreshedBlocks', Type: 'Input', Value: true },
+                { Name: 'UserConfirmedFreezeSecurityWarning', Type: 'Input', Value: true },
+            ],
+        };
+        (unattributedParams as { Provider?: IMetadataProvider }).Provider = provider;
+        const unattributedRes = await action.Run(unattributedParams);
+        expect(unattributedRes.Success).toBe(false);
+        expect(unattributedRes.ResultCode).toBe('PERMISSION_DENIED');
+        expect(refreshSpy).not.toHaveBeenCalled();
     });
 });

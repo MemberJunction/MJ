@@ -592,39 +592,58 @@ export function ValidateArtifactContentMutationAgainstLocks(
 
     if (isSlidesInvolved) {
         try {
-            const prevSlidePayload = currentConfigKind === 'slides' ? currentConfig! : currentContent;
-            const nextSlidePayload = nextConfigKind === 'slides' ? nextConfig! : nextContent;
-            if (prevSlidePayload.trim()) {
-                const res = validateSlideDeckLockTransition(
-                    SlideDeckEngine.Instance.ParseDeckSpec(prevSlidePayload),
-                    SlideDeckEngine.Instance.ParseDeckSpec(nextSlidePayload),
-                    actorUserId,
-                    isOwner
-                );
-                if (!res.Allowed) {
-                    return res;
+            const checkSlidePair = (prevPayload: string, nextPayload: string): ArtifactLockValidationResult | null => {
+                if (prevPayload.trim()) {
+                    const res = validateSlideDeckLockTransition(
+                        SlideDeckEngine.Instance.ParseDeckSpec(prevPayload),
+                        SlideDeckEngine.Instance.ParseDeckSpec(nextPayload),
+                        actorUserId,
+                        isOwner
+                    );
+                    if (!res.Allowed) {
+                        return res;
+                    }
+                } else {
+                    const newCheck = validateNewLocksOnEmptyContent(nextPayload, actorUserId, isOwner);
+                    if (newCheck && !newCheck.Allowed) {
+                        return newCheck;
+                    }
                 }
-            } else {
-                const newCheck = validateNewLocksOnEmptyContent(nextSlidePayload, actorUserId, isOwner);
-                if (newCheck && !newCheck.Allowed) {
-                    return newCheck;
+                return null;
+            };
+
+            // R4: SlideDeckArtifactViewerComponent renders `Content` directly (falling back to Configuration only if Content is empty).
+            // Validate the effective rendered deck first so keeping a locked deck in Configuration while overwriting Content with Markdown is rejected,
+            // AND validate Content->Content + Config->Config independently whenever either slot holds slides.
+            const prevRenderedSlide = currentContent.trim()
+                ? currentContent
+                : currentConfigKind === 'slides'
+                  ? currentConfig!
+                  : '';
+            const nextRenderedSlide = nextContent.trim()
+                ? nextContent
+                : nextConfigKind === 'slides'
+                  ? nextConfig!
+                  : '';
+            const renderedCheck = checkSlidePair(prevRenderedSlide, nextRenderedSlide);
+            if (renderedCheck) {
+                return renderedCheck;
+            }
+
+            if (currentContentKind === 'slides' || nextContentKind === 'slides') {
+                const contentCheck = checkSlidePair(currentContent, nextContent);
+                if (contentCheck) {
+                    return contentCheck;
                 }
             }
-            if (
-                currentContentKind === 'slides' &&
-                nextContentKind === 'slides' &&
-                currentContent !== nextContent
-            ) {
-                const res = validateSlideDeckLockTransition(
-                    SlideDeckEngine.Instance.ParseDeckSpec(currentContent),
-                    SlideDeckEngine.Instance.ParseDeckSpec(nextContent),
-                    actorUserId,
-                    isOwner
-                );
-                if (!res.Allowed) {
-                    return res;
+
+            if (currentConfigKind === 'slides' || nextConfigKind === 'slides') {
+                const configCheck = checkSlidePair(currentConfig ?? '', nextConfig ?? '');
+                if (configCheck) {
+                    return configCheck;
                 }
             }
+
             return { Allowed: true };
         } catch {
             return {

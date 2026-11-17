@@ -4,7 +4,7 @@
 import '@angular/compiler';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ChangeDetectorRef } from '@angular/core';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, IRunViewProvider, UserInfo } from '@memberjunction/core';
 import {
     ArtifactMetadataEngine,
     QueryEngine,
@@ -42,9 +42,26 @@ describe('DataArtifactViewerComponent versioning (N4)', () => {
         const createdVersions: MJArtifactVersionEntity[] = [];
 
         const mockUser = stubObj<UserInfo>({ ID: 'user-1', Name: 'Analyst' });
-        const mockProvider = stubObj<IMetadataProvider>({
+        let latestDbVersion = 1;
+        const mockProvider = stubObj<IMetadataProvider & IRunViewProvider>({
             CurrentUser: mockUser,
             Refresh: vi.fn(async () => true),
+            RunView: vi.fn(async () => ({
+                Success: true,
+                Results: [
+                    {
+                        VersionNumber: latestDbVersion,
+                        Name: 'Query Results',
+                        ContentMode: 'Text',
+                        MimeType: 'application/json',
+                        Configuration: '{"viewMode":"grid"}',
+                    },
+                ],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: '',
+            })) as IRunViewProvider['RunView'],
             GetEntityObject: vi.fn(async <T>(entityName: string): Promise<T> => {
                 if (entityName === 'MJ: Artifact Versions') {
                     const rec = stubObj<MJArtifactVersionEntity>({
@@ -88,10 +105,26 @@ describe('DataArtifactViewerComponent versioning (N4)', () => {
         expect(createdSaveCalls).toHaveLength(1);
         expect(createdSaveCalls[0]?.VersionNumber).toBe(2);
         expect(createdSaveCalls[0]?.Content).toContain('"savedQueryId":"q-101"');
+        expect(createdVersions[0]?.Configuration).toBe('{"viewMode":"grid"}');
         expect(viewer.CurrentVersionNumber).toBe(2);
 
-        // When Save() returns false, persistArtifactContent throws instead of silently advancing version
+        // S-h: If DB has advanced past viewer.CurrentVersionNumber (e.g. concurrent v4), uses max(latestDB, local) + 1
+        latestDbVersion = 4;
+        await viewer.OnQuerySaved({
+            queryId: 'q-102',
+            queryName: 'Monthly Sales v2',
+        });
+        expect(createdSaveCalls).toHaveLength(2);
+        expect(createdSaveCalls[1]?.VersionNumber).toBe(5);
+        expect(viewer.CurrentVersionNumber).toBe(5);
+
+        // When Save() returns false, OnQuerySaved surfaces UpdateQueryError and persistArtifactContent throws
         saveShouldSucceed = false;
+        await viewer.OnQuerySaved({
+            queryId: 'q-103',
+            queryName: 'Monthly Sales v3',
+        });
+        expect(viewer.UpdateQueryError).toBe('DB constraint error');
         const persistFn = Reflect.get(viewer, 'persistArtifactContent') as () => Promise<void>;
         await expect(persistFn.call(viewer)).rejects.toThrow('DB constraint error');
     });

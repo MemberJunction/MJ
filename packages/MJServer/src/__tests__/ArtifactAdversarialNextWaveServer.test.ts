@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket as WsClient } from 'ws';
 import * as Y from 'yjs';
 import * as syncProtocol from 'y-protocols/sync';
+import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -143,7 +144,9 @@ import { PublicGuestShareResolver } from '../resolvers/PublicGuestShareResolver.
 import {
     ARTIFACT_COLLABORATION_WS_PATH,
     ArtifactCollaborationServer,
+    type CollaborationClientConnection,
     type CollaborationControlFrame,
+    type CollaborationRoom,
     YJS_MESSAGE_CONTROL,
     YJS_MESSAGE_SYNC,
 } from '../collaboration/ArtifactCollaborationServer.js';
@@ -1204,7 +1207,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             providers: [],
         } as AppContext;
 
-        await expect(resolver.VerifyFrozenBlockSnapshot('{}', unauthorizedCtx)).rejects.toThrow(/artifact:read|scope/i);
+        await expect(resolver.VerifyFrozenBlockSnapshot('{}', '', unauthorizedCtx)).rejects.toThrow(/artifact:read|scope/i);
         expect(scopeSpy).toHaveBeenCalledWith(
             'hash-without-artifact-read',
             'MJAPI',
@@ -1967,11 +1970,66 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                 userPayload: { email: s2User.Email, userRecord: s2User, sessionId: 's-s3' },
                 providers: [{ type: 'Read-Write', provider: mockS2Provider }],
             } as AppContext;
-            const okHostVerify = await docResolver.VerifyFrozenBlockSnapshot(snapJson, verifyCtx, hostArtA);
+            const okHostVerify = await docResolver.VerifyFrozenBlockSnapshot(snapJson, hostArtA, verifyCtx);
             expect(okHostVerify.Valid).toBe(true);
-            const crossHostVerify = await docResolver.VerifyFrozenBlockSnapshot(snapJson, verifyCtx, hostArtB);
+            const crossHostVerify = await docResolver.VerifyFrozenBlockSnapshot(snapJson, hostArtB, verifyCtx);
             expect(crossHostVerify.Valid).toBe(false);
             expect(crossHostVerify.ErrorMessage).toMatch(/different artifact|binding/i);
+            const missingHostVerify = await docResolver.VerifyFrozenBlockSnapshot(snapJson, '', verifyCtx);
+            expect(missingHostVerify.Valid).toBe(false);
+            expect(missingHostVerify.SnapshotVerified).toBe(false);
+
+            // Requested Test #6 (S-b): SourceTargetID kind (Artifact) binds both source target and hostArtifactId
+            const sourceArtifactId = '77772222-3333-4444-8555-666677778888';
+            const sourceSpecBase = {
+                BlockID: 'blk-src-art',
+                Kind: 'Artifact' as const,
+                Mode: 'Frozen' as const,
+                Title: 'Embedded Artifact',
+                ArtifactID: sourceArtifactId,
+            };
+            const sourceBinding = BuildBlockIdentityBinding(sourceSpecBase, hostArtA);
+            const sourceSnap: FrozenBlockSnapshot = {
+                FrozenAt: '2026-11-16T00:00:00.000Z',
+                FrozenByUserID: s2User.ID,
+                FrozenByUserName: 'Reviewer',
+                Columns: [],
+                Rows: [],
+                TotalRowCount: 0,
+                ArtifactContentSnapshot: '{"markdown":"source"}',
+                ArtifactTypeSnapshot: 'Markdown Document',
+                SecurityWarningAcknowledged: true,
+                Binding: sourceBinding,
+            };
+            const sourceSpec = {
+                ...sourceSpecBase,
+                FrozenSnapshot: sourceSnap,
+            };
+            sourceSnap.SnapshotContentHash = ComputeFrozenSnapshotHash(
+                sourceSnap,
+                undefined,
+                sourceBinding,
+            );
+            const signedSourceJson = JSON.stringify(sourceSpec);
+            const okSourceVerify = await docResolver.VerifyFrozenBlockSnapshot(signedSourceJson, hostArtA, verifyCtx);
+            expect(okSourceVerify.Valid).toBe(true);
+            expect(okSourceVerify.SnapshotVerified).toBe(true);
+            const tamperedTargetJson = JSON.stringify({
+                ...sourceSpec,
+                ArtifactID: '88882222-3333-4444-8555-666677778888',
+            });
+            const tamperedTargetVerify = await docResolver.VerifyFrozenBlockSnapshot(
+                tamperedTargetJson,
+                hostArtA,
+                verifyCtx,
+            );
+            expect(tamperedTargetVerify.Valid).toBe(false);
+            const crossHostSourceVerify = await docResolver.VerifyFrozenBlockSnapshot(
+                signedSourceJson,
+                hostArtB,
+                verifyCtx,
+            );
+            expect(crossHostSourceVerify.Valid).toBe(false);
         } finally {
             if (prevFrozenSecret === undefined) {
                 delete process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
@@ -2109,5 +2167,196 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             r?.Doc?.destroy();
             roomsMap.delete(rk);
         }
+    });
+
+    it('R3 & R5: routes delete-set Yjs updates off the fast path and refuses non-owner RestoreArtifactVersion over locked content', async () => {
+        // 1. R3: Plaintext unlocked room fast-path allows pure in-order text insert, refuses delete-sets targeting meta or future clocks
+        class ProbeableCollabServer extends ArtifactCollaborationServer {
+            public CheckClientUpdate(
+                room: CollaborationRoom,
+                conn: CollaborationClientConnection,
+                updateBytes: Uint8Array,
+            ): { Allowed: boolean; Reason?: string } {
+                return this.isIncomingUpdateBlockedByLocks(room, conn, updateBytes);
+            }
+        }
+
+        const server = new ProbeableCollabServer();
+        const doc = new Y.Doc();
+        doc.getMap('meta').set('serverProtectedKey', 'locked-value');
+        const yContent = doc.getText('content');
+        doc.transact(() => {
+            yContent.insert(0, 'Hello unlocked doc');
+        });
+        const baselineUpdate = Y.encodeStateAsUpdate(doc);
+
+        const room: CollaborationRoom = {
+            ArtifactID: '12121212-1212-4121-8121-121212121212',
+            RoomKey: '12121212-1212-4121-8121-121212121212',
+            ProviderKey: 'default',
+            ArtifactName: 'Plain Doc',
+            ArtifactOwnerUserID: ownerUser.ID,
+            DriverClass: 'MarkdownArtifactViewerPlugin',
+            CreatedByUserID: ownerUser.ID,
+            Doc: doc,
+            Awareness: new awarenessProtocol.Awareness(doc),
+            Connections: new Set(),
+            BaseVersionID: 'ver-base-r3',
+            BaseVersionNumber: 1,
+            BaseVersionText: 'Hello unlocked doc',
+            DirtyVersion: false,
+            DirtyWorkingState: false,
+            FlushTimer: null,
+            IdleDisposeTimer: null,
+            WorkingStateID: null,
+            LastCompactedStateVector: null,
+            HasActiveLocks: false,
+            ServerAppliedClientIDs: new Set<number>(),
+        };
+
+        const conn: CollaborationClientConnection = {
+            ConnectionID: 'conn-r3',
+            Socket: {} as CollaborationClientConnection['Socket'],
+            User: editorUser,
+            CanEdit: true,
+            IsOwner: false,
+            HandshakeVersion: 1,
+            ControlledClientIDs: new Set<number>(),
+            Alive: true,
+            MessageTimestamps: [],
+        };
+
+        // 1a. Pure in-order text insert with ds.clients.size === 0 succeeds on fast path
+        const clientA = new Y.Doc();
+        Y.applyUpdate(clientA, baselineUpdate);
+        const beforeA = Y.encodeStateVector(clientA);
+        clientA.getText('content').insert(clientA.getText('content').length, '!');
+        const insertOnlyUpdate = Y.encodeStateAsUpdate(clientA, beforeA);
+        expect(server.CheckClientUpdate(room, conn, insertOnlyUpdate).Allowed).toBe(true);
+        clientA.destroy();
+
+        // 1b. Update deleting `meta` map entry MUST route through slow path and be refused
+        const clientMeta = new Y.Doc();
+        Y.applyUpdate(clientMeta, baselineUpdate);
+        const beforeMeta = Y.encodeStateVector(clientMeta);
+        clientMeta.getMap('meta').delete('serverProtectedKey');
+        const deleteMetaUpdate = Y.encodeStateAsUpdate(clientMeta, beforeMeta);
+        const metaDeleteRes = server.CheckClientUpdate(room, conn, deleteMetaUpdate);
+        expect(metaDeleteRes.Allowed).toBe(false);
+        expect(metaDeleteRes.Reason).toMatch(/metadata/i);
+        clientMeta.destroy();
+
+        // 1c. Out-of-order delete-set (from an unseen future client/clock) MUST route through slow path and be refused
+        const futureAuthor = new Y.Doc();
+        futureAuthor.getText('content').insert(0, 'Unseen future text');
+        const futureBaseline = Y.encodeStateAsUpdate(futureAuthor);
+        const futureClone = new Y.Doc();
+        Y.applyUpdate(futureClone, futureBaseline);
+        const svKnownOnlyByFuture = Y.encodeStateVector(futureClone);
+        futureClone.getText('content').delete(0, 6);
+        const futureDeleteSetUpdate = Y.encodeStateAsUpdate(futureClone, svKnownOnlyByFuture);
+        const futureDeleteRes = server.CheckClientUpdate(room, conn, futureDeleteSetUpdate);
+        expect(futureDeleteRes.Allowed).toBe(false);
+        expect(futureDeleteRes.Reason).toMatch(/incomplete out-of-order/i);
+        futureAuthor.destroy();
+        futureClone.destroy();
+        room.Awareness.destroy();
+        doc.destroy();
+
+        // 2. R5: RestoreArtifactVersion refuses non-owner attempting to restore pre-lock v1 over locked v2, allows owner
+        const restoreArtId = '34343434-3434-4343-8343-343434343434';
+        const preLockVerId = '35353535-3535-4353-8353-353535353531';
+        const preLockContent = '# Title\n\nUnlocked body\n';
+        const lockedLatestContent = `# Title\n\n<!-- mj-lock: owner-only user=${ownerUser.ID} -->\n## Protected\nOwner secret\n`;
+
+        const savedRestores: number[] = [];
+        const restoreProvider = {
+            Entities: [],
+            EntityByName: () => null,
+            GetEntityObject: async (_name: string, actor?: UserInfo) => {
+                if (_name === 'MJ: Artifact Versions') {
+                    let loadedId = '';
+                    return {
+                        ID: preLockVerId,
+                        ArtifactID: restoreArtId,
+                        VersionNumber: 1,
+                        Name: 'Draft',
+                        Content: preLockContent,
+                        Configuration: null,
+                        ContentMode: 'Text',
+                        FileID: null,
+                        MimeType: 'text/markdown',
+                        FileName: null,
+                        ContentSizeBytes: preLockContent.length,
+                        ContentHash: 'h1',
+                        IsSaved: true,
+                        UserID: actor?.ID ?? ownerUser.ID,
+                        NewRecord: () => undefined,
+                        Load: async (id: string) => {
+                            loadedId = id;
+                            return id === preLockVerId;
+                        },
+                        Save: async () => {
+                            savedRestores.push(loadedId === '' ? 3 : 1);
+                            return true;
+                        },
+                        LatestResult: null,
+                    } as unknown as MJArtifactVersionEntity;
+                }
+                return {} as MJArtifactVersionEntity;
+            },
+            RunView: async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: Artifacts') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: restoreArtId, TypeID: 'type-md', UserID: ownerUser.ID, DelegateEntityID: null, DelegateRecordID: null }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ: Artifact Versions') {
+                    return {
+                        Success: true,
+                        Results: [{ VersionNumber: 2, Content: lockedLatestContent, Configuration: null }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+            },
+        } as unknown as IMetadataProvider;
+
+        const restoreResolver = new DocumentCollaborationResolver();
+        vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: restoreArtId,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'ArtifactPermission',
+            Reason: 'Editor',
+        });
+
+        const editorCtx: AppContext = {
+            userPayload: { email: editorUser.Email, userRecord: editorUser, sessionId: 'sess-editor-r5' },
+            providers: [{ type: 'Read-Write', provider: restoreProvider }],
+        };
+        const blockedRestore = await restoreResolver.RestoreArtifactVersion(restoreArtId, preLockVerId, editorCtx);
+        expect(blockedRestore.Success).toBe(false);
+        expect(blockedRestore.ErrorMessage).toMatch(/lock/i);
+        expect(savedRestores).toHaveLength(0);
+
+        const ownerCtx: AppContext = {
+            userPayload: { email: ownerUser.Email, userRecord: ownerUser, sessionId: 'sess-owner-r5' },
+            providers: [{ type: 'Read-Write', provider: restoreProvider }],
+        };
+        const allowedRestore = await restoreResolver.RestoreArtifactVersion(restoreArtId, preLockVerId, ownerCtx);
+        expect(allowedRestore.Success).toBe(true);
+        expect(savedRestores).toHaveLength(1);
     });
 });

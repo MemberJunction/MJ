@@ -1897,6 +1897,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 ContentHash?: string | null;
                 Description?: string | null;
                 Comments?: string | null;
+                UserID?: string | null;
             }>(
                 {
                     EntityName: 'MJ: Artifact Versions',
@@ -1910,7 +1911,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         'Configuration',
                         'ContentHash',
                         'Description',
-                        'Comments'
+                        'Comments',
+                        'UserID'
                     ],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
@@ -1943,7 +1945,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     originServerId: tracked?.OriginServerID,
                     savedStateVectorB64: tracked?.SavedStateVectorB64,
                     savedSnapshotB64: tracked?.SavedSnapshotB64,
-                    savedContentHash: latestHash
+                    savedContentHash: latestHash,
+                    actorUserId: latest.UserID ?? contextUser.ID
                 });
             }
 
@@ -2150,6 +2153,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         ProviderKey: room.ProviderKey,
                         MessageType: 'version-saved',
                         PayloadBase64: versionSavedRelayPayload,
+                        TargetUserID: versionEntity.UserID ?? contextUser.ID,
                         VersionID: versionEntity.ID,
                         VersionNumber: versionEntity.VersionNumber
                     });
@@ -2606,7 +2610,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      */
     public async RestoreToSavedVersion(
         artifactId: string,
-        savedVersion: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null },
+        savedVersion: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null; UserID?: string | null },
         user: UserInfo,
         provider?: IMetadataProvider | null
     ): Promise<void> {
@@ -2628,7 +2632,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     if (this._relay) {
                         await this.requestPeerRoomSyncCatchup(room);
                     }
-                    this.reconcileOutOfBandVersionIntoRoom(room, savedVersion, { isRestore: true });
+                    this.reconcileOutOfBandVersionIntoRoom(room, savedVersion, {
+                        isRestore: true,
+                        actorUserId: savedVersion.UserID ?? user.ID
+                    });
                 }
                 room.HasActiveLocks = this.computeContentHasActiveLocks(this.extractRoomSerializedContent(room.Doc));
                 await this.FlushWorkingState(artifactId, user, { provider: resolvedProvider });
@@ -2665,6 +2672,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     ProviderKey: resolvedProviderKey,
                     MessageType: 'version-saved',
                     PayloadBase64: relayPayload,
+                    TargetUserID: savedVersion.UserID ?? user.ID,
                     VersionID: savedVersion.ID,
                     VersionNumber: savedVersion.VersionNumber
                 });
@@ -4767,6 +4775,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         ProviderKey: room.ProviderKey,
                         MessageType: 'version-saved',
                         PayloadBase64: restoreRelayPayload,
+                        TargetUserID: options?.actorUserId ?? version.UserID ?? undefined,
                         VersionID: version.ID,
                         VersionNumber: version.VersionNumber
                     });
@@ -4877,10 +4886,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             room.LastCompactedStateVector = null;
         }
 
-        // B3: Ensure out-of-band version reconciliation never silently overwrites live room locks
-        // created/held inside the active room when the OOB merge was authored by a non-owner.
+        // B3 / R5: Ensure out-of-band version reconciliation (including restores) never silently
+        // overwrites live room locks created/held inside the active room when authored by a non-owner.
         let oobLockConflict = false;
-        if (!isRestore && this.computeContentHasActiveLocks(liveText)) {
+        if (this.computeContentHasActiveLocks(liveText)) {
             const candidateText = this.extractRoomSerializedContent(room.Doc);
             if (candidateText !== liveText) {
                 const oobActorId = options?.actorUserId ?? version.UserID ?? null;
@@ -4959,6 +4968,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             savedContentHash?: string;
             crdtSynced?: boolean;
             isRestore?: boolean;
+            actorUserId?: string;
         }
     ): Promise<void> {
         const provider = this.activeProvider();
@@ -4975,12 +4985,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 Configuration?: string | null;
                 Description?: string | null;
                 Comments?: string | null;
+                UserID?: string | null;
             }>(
                 {
                     EntityName: 'MJ: Artifact Versions',
                     ExtraFilter: `ArtifactID='${EscapeSQLString(room.ArtifactID)}'`,
                     OrderBy: 'VersionNumber DESC',
-                    Fields: ['ID', 'VersionNumber', 'Content', 'Configuration', 'Description', 'Comments'],
+                    Fields: ['ID', 'VersionNumber', 'Content', 'Configuration', 'Description', 'Comments', 'UserID'],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
@@ -5005,6 +5016,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 const relayMatchesLatest = Boolean(
                     options?.relayVersionId && UUIDsEqual(latest.ID, options.relayVersionId)
                 );
+                const resolvedActorUserId = options?.actorUserId ?? latest.UserID ?? undefined;
                 const reconcileOptions = relayMatchesLatest
                     ? {
                           originServerId: options?.originServerId,
@@ -5012,10 +5024,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                           savedSnapshotB64: options?.savedSnapshotB64,
                           savedContentHash: options?.savedContentHash,
                           crdtSynced: options?.crdtSynced,
-                          isRestore: options?.isRestore
+                          isRestore: options?.isRestore,
+                          actorUserId: resolvedActorUserId
                       }
                     : {
-                          originServerId: options?.originServerId
+                          originServerId: options?.originServerId,
+                          actorUserId: resolvedActorUserId
                       };
                 this.reconcileOutOfBandVersionIntoRoom(room, latest, reconcileOptions);
             }
@@ -6309,7 +6323,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      * Slide Deck locks, and Spreadsheet ProtectedRanges by simulating the update against a cloned doc snapshot.
      * Always evaluates `probeDoc` on every non-empty client write frame (`P0-12`, `P0-13`).
      */
-    private isIncomingUpdateBlockedByLocks(
+    protected isIncomingUpdateBlockedByLocks(
         room: CollaborationRoom,
         conn: CollaborationClientConnection,
         incomingUpdateBytes: Uint8Array
@@ -6339,44 +6353,34 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 };
             }
 
-            // S9b O(update) fast path: when an unlocked plain-text/Markdown document receives
-            // an in-order update targeting only `yText('content')` with no `mj-lock` markers and
-            // no deletes (which would need current lock verification only if locks existed, here !HasActiveLocks),
-            // skip cloning/re-encoding the full room Y.Doc.
-            if (!room.HasActiveLocks && !currentContent.trimStart().startsWith('{')) {
+            // S9b / R3 O(update) fast path: ONLY when an unlocked plain-text/Markdown document
+            // receives an in-order update targeting `yText('content')` with NO delete-set entries
+            // (`ds.clients.size === 0`) and NO `mj-lock` / HTML / JSON structural markers.
+            // Any update containing deletes (`ds.clients.size > 0`) MUST go through the slow path
+            // so lock/metadata/clock-bound checks always run (`R3`).
+            if (decodedUpdate.ds.clients.size === 0 && !room.HasActiveLocks && !currentContent.trimStart().startsWith('{')) {
                 const expectedNextClockByClient = new Map<number, number>(serverStateVector);
-                let safeFastPath = decodedUpdate.ds.clients.size === 0 || decodedUpdate.structs.length > 0;
-                if (decodedUpdate.ds.clients.size > 0) {
-                    // Deletions on an already-unlocked room cannot violate locks, provided no client/clock gap exists
-                    for (const clientId of decodedUpdate.ds.clients.keys()) {
-                        if (!serverStateVector.has(clientId)) {
-                            safeFastPath = false;
-                            break;
-                        }
+                let safeFastPath = true;
+                for (const struct of decodedUpdate.structs) {
+                    if (!(struct instanceof Y.Item)) {
+                        safeFastPath = false;
+                        break;
                     }
-                }
-                if (safeFastPath) {
-                    for (const struct of decodedUpdate.structs) {
-                        if (!(struct instanceof Y.Item)) {
-                            safeFastPath = false;
-                            break;
-                        }
-                        if (readStructParent(struct) !== 'content') {
-                            safeFastPath = false;
-                            break;
-                        }
-                        if (struct.content instanceof Y.ContentString && /[<>{}]|mj-lock|--/i.test(struct.content.str)) {
-                            safeFastPath = false;
-                            break;
-                        }
-                        const expectedClock = expectedNextClockByClient.get(struct.id.client) ?? 0;
-                        if (struct.id.clock > expectedClock) {
-                            safeFastPath = false;
-                            break;
-                        }
-                        if (struct.id.clock + struct.length > expectedClock) {
-                            expectedNextClockByClient.set(struct.id.client, struct.id.clock + struct.length);
-                        }
+                    if (readStructParent(struct) !== 'content') {
+                        safeFastPath = false;
+                        break;
+                    }
+                    if (struct.content instanceof Y.ContentString && /[<>{}]|mj-lock|--/i.test(struct.content.str)) {
+                        safeFastPath = false;
+                        break;
+                    }
+                    const expectedClock = expectedNextClockByClient.get(struct.id.client) ?? 0;
+                    if (struct.id.clock > expectedClock) {
+                        safeFastPath = false;
+                        break;
+                    }
+                    if (struct.id.clock + struct.length > expectedClock) {
+                        expectedNextClockByClient.set(struct.id.client, struct.id.clock + struct.length);
                     }
                 }
                 if (safeFastPath) {
@@ -7035,7 +7039,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     savedSnapshotB64: relayPayload.savedSnapshotB64,
                     savedContentHash: relayPayload.savedContentHash,
                     crdtSynced,
-                    isRestore: relayPayload.isRestore
+                    isRestore: relayPayload.isRestore,
+                    actorUserId: msg.TargetUserID
                 });
             } else {
                 room.DirtyVersion = false;

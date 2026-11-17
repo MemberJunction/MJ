@@ -3,8 +3,10 @@ import {
     BaseEntityResult,
     EntityInfo,
     GetDataHooks,
+    GetEffectiveAlternateBaseViewName,
     IEntityDataProvider,
     IMetadataProvider,
+    IsMaterializedDataSource,
     LogError,
     Metadata,
     PlatformSQL,
@@ -12,6 +14,7 @@ import {
     PreRunViewHook,
     RegisterDataHook,
     RegisterPostRunViewProtectedEntity,
+    ResolveAlternateBaseView,
     RunView,
     RunViewParams,
     RunViewResult,
@@ -20,6 +23,7 @@ import {
 } from '@memberjunction/core';
 import {
     ArtifactPermissionEngine,
+    BaseArtifactPermissionDelegate,
     MJArtifactGuestShareLinkEntity,
     MJArtifactVersionAttributeEntity,
     MJMagicLinkInviteEntity,
@@ -31,6 +35,7 @@ import {
     EscapeSQLString,
     GetGlobalObjectStore,
     IsValidUUID,
+    MJGlobal,
     NormalizeUUID,
     UUIDsEqual
 } from '@memberjunction/global';
@@ -330,6 +335,65 @@ export async function ResolveTargetEntityInfo(
     );
 }
 
+function assertBalancedSqlFilter(filter: string): void {
+    let parenDepth = 0;
+    let inSingleQuote = false;
+    let inLineComment = false;
+    let inBlockComment = false;
+    for (let i = 0; i < filter.length; i++) {
+        const ch = filter[i];
+        const next = filter[i + 1];
+        if (inLineComment) {
+            if (ch === '\n' || ch === '\r') {
+                inLineComment = false;
+            }
+            continue;
+        }
+        if (inBlockComment) {
+            if (ch === '*' && next === '/') {
+                inBlockComment = false;
+                i++;
+            }
+            continue;
+        }
+        if (inSingleQuote) {
+            if (ch === "'") {
+                if (next === "'") {
+                    i++;
+                } else {
+                    inSingleQuote = false;
+                }
+            }
+            continue;
+        }
+        if (ch === '-' && next === '-') {
+            inLineComment = true;
+            i++;
+            continue;
+        }
+        if (ch === '/' && next === '*') {
+            inBlockComment = true;
+            i++;
+            continue;
+        }
+        if (ch === "'") {
+            inSingleQuote = true;
+            continue;
+        }
+        if (ch === '(') {
+            parenDepth++;
+        } else if (ch === ')') {
+            parenDepth--;
+            if (parenDepth < 0) {
+                throw new Error('Invalid ExtraFilter: unbalanced parentheses.');
+            }
+        }
+    }
+    if (inSingleQuote || inBlockComment || parenDepth !== 0) {
+        throw new Error('Invalid ExtraFilter: unbalanced quotes or parentheses.');
+    }
+}
+
 export function AppendSqlAndFilter(
     existingFilter: string | PlatformSQL | undefined,
     clause: string
@@ -337,19 +401,24 @@ export function AppendSqlAndFilter(
     if (!existingFilter) {
         return clause;
     }
+    const wrap = (raw: string | undefined): string => {
+        const trimmed = raw?.trim();
+        if (!trimmed) {
+            return clause;
+        }
+        assertBalancedSqlFilter(trimmed);
+        return `(${trimmed}) AND (${clause})`;
+    };
     if (typeof existingFilter === 'string') {
-        const trimmed = existingFilter.trim();
-        return trimmed ? `(${trimmed}) AND (${clause})` : clause;
+        return wrap(existingFilter);
     }
     return {
-        default: existingFilter.default?.trim()
-            ? `(${existingFilter.default.trim()}) AND (${clause})`
-            : clause,
+        default: wrap(existingFilter.default),
         ...(existingFilter.sqlserver?.trim()
-            ? { sqlserver: `(${existingFilter.sqlserver.trim()}) AND (${clause})` }
+            ? { sqlserver: wrap(existingFilter.sqlserver) }
             : {}),
         ...(existingFilter.postgresql?.trim()
-            ? { postgresql: `(${existingFilter.postgresql.trim()}) AND (${clause})` }
+            ? { postgresql: wrap(existingFilter.postgresql) }
             : {})
     };
 }
@@ -384,8 +453,15 @@ export interface ScopedPreRunViewPredicate {
     BuildSqlPredicate?: (
         provider: IMetadataProvider,
         contextUser: UserInfo,
-        targetEntityInfo: EntityInfo | null
+        targetEntityInfo: EntityInfo | null,
+        runViewParams?: RunViewParams
     ) => string;
+    BuildSqlPredicateAsync?: (
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        targetEntityInfo: EntityInfo | null,
+        runViewParams?: RunViewParams
+    ) => Promise<{ clause: string; isExact: boolean }>;
     CheckSingleIdReadable?: (
         provider: IMetadataProvider,
         id: string,
@@ -407,8 +483,15 @@ export interface ScopedPreRunViewConfig {
     BuildSqlPredicate?: (
         provider: IMetadataProvider,
         contextUser: UserInfo,
-        targetEntityInfo: EntityInfo | null
+        targetEntityInfo: EntityInfo | null,
+        runViewParams?: RunViewParams
     ) => string;
+    BuildSqlPredicateAsync?: (
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        targetEntityInfo: EntityInfo | null,
+        runViewParams?: RunViewParams
+    ) => Promise<{ clause: string; isExact: boolean }>;
     CheckSingleIdReadable?: (
         provider: IMetadataProvider,
         id: string,
@@ -418,6 +501,15 @@ export interface ScopedPreRunViewConfig {
 }
 
 const MAX_SQL_COLLECTION_ANCESTRY_HOPS = 16;
+const MAX_SQL_ARTIFACT_DELEGATE_HOPS = 8;
+
+function resolveCoreSchemaName(provider: IMetadataProvider | null | undefined): string {
+    const configSchema =
+        provider && 'ConfigData' in provider
+            ? (provider as IMetadataProvider & { ConfigData?: { MJCoreSchemaName?: string } }).ConfigData?.MJCoreSchemaName
+            : undefined;
+    return configSchema?.trim() || '__mj';
+}
 
 function sqlPlatformHelpers(provider: IMetadataProvider | null | undefined) {
     const platformKey =
@@ -425,43 +517,100 @@ function sqlPlatformHelpers(provider: IMetadataProvider | null | undefined) {
             ? (provider as IMetadataProvider & { PlatformKey?: string }).PlatformKey
             : undefined;
     const isPg = platformKey === 'postgresql';
+    const coreSchema = resolveCoreSchemaName(provider);
     const q = (ident: string): string => (isPg ? `"${ident}"` : `[${ident}]`);
-    const vw = (viewName: string): string => (isPg ? `__mj."${viewName}"` : `[__mj].[${viewName}]`);
+    const vw = (viewName: string): string => `${q(coreSchema)}.${q(viewName)}`;
     const bTrue = isPg ? 'true' : '1';
-    return { isPg, q, vw, bTrue };
+    return { isPg, coreSchema, q, vw, bTrue };
+}
+
+function resolveCachedUserViewEntity(params: RunViewParams | undefined): MJUserViewEntity | undefined {
+    if (!params) {
+        return undefined;
+    }
+    if (params.ViewEntity) {
+        return params.ViewEntity as MJUserViewEntity;
+    }
+    const cachedViews = UserViewEngine.Instance?.Loaded ? UserViewEngine.Instance.AllViews : undefined;
+    if (!cachedViews) {
+        return undefined;
+    }
+    if (params.ViewID) {
+        return cachedViews.find((v) => UUIDsEqual(v.ID, params.ViewID!));
+    }
+    if (params.ViewName) {
+        const lowerName = params.ViewName.trim().toLowerCase();
+        return cachedViews.find((v) => v.Name?.trim().toLowerCase() === lowerName);
+    }
+    return undefined;
 }
 
 /**
- * Qualifies an outer-query column with its entity schema & base view so correlated `EXISTS`
- * subqueries can never accidentally bind to an inner table's identically named column (e.g. `ID`).
+ * Qualifies an outer-query column with its entity schema & effective view (honoring `AlternateBaseView`,
+ * saved view pins, `DataSource: 'Materialized'`, and custom `MJCoreSchemaName` — `S-f`) so correlated
+ * `EXISTS` subqueries can never accidentally bind to an inner table's identically named column (e.g. `ID`).
  */
 export function QualifyOuterEntityColumn(
     entityInfo: EntityInfo | null | undefined,
     defaultBaseView: string,
     columnName: string,
-    provider: IMetadataProvider | null | undefined
+    provider: IMetadataProvider | null | undefined,
+    params?: RunViewParams
 ): string {
-    const { isPg, q } = sqlPlatformHelpers(provider);
-    const schema = (entityInfo?.SchemaName ?? '').trim() || '__mj';
-    const baseView = (entityInfo?.BaseView ?? '').trim() || defaultBaseView;
-    return isPg
-        ? `"${schema}"."${baseView}".${q(columnName)}`
-        : `${q(schema)}.${q(baseView)}.${q(columnName)}`;
+    const { coreSchema, q } = sqlPlatformHelpers(provider);
+    const schema = (entityInfo?.SchemaName ?? '').trim() || coreSchema;
+    let effectiveBaseView = (entityInfo?.BaseView ?? '').trim() || defaultBaseView;
+
+    if (entityInfo && params) {
+        const viewEntity = resolveCachedUserViewEntity(params);
+        const effectiveAbvName = GetEffectiveAlternateBaseViewName(params, viewEntity);
+        if (effectiveAbvName) {
+            if (IsMaterializedDataSource(params.DataSource)) {
+                throw new Error(
+                    `AlternateBaseView '${effectiveAbvName}' on entity '${entityInfo.Name}' cannot be combined with DataSource: 'Materialized'.`
+                );
+            }
+            effectiveBaseView = ResolveAlternateBaseView({
+                entity: entityInfo,
+                alternateBaseViewName: effectiveAbvName,
+                suppressDeprecationWarning: true,
+                callerName: 'QualifyOuterEntityColumn'
+            }).effectiveViewName;
+        } else if (
+            IsMaterializedDataSource(params.DataSource) &&
+            !entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')
+        ) {
+            effectiveBaseView = `materialized_vw${entityInfo.CodeName}`;
+        }
+    }
+
+    return `${q(schema)}.${q(effectiveBaseView)}.${q(columnName)}`;
 }
 
 /**
  * Builds a dialect-aware SQL `EXISTS` predicate verifying that `collectionIdExpr` is readable
  * (or share/delete-capable when `requireShareOrDelete` is true) by `user` via collection ownership
- * or `MJ: Collection Permissions` across up to 16 ancestor levels (`B2`). Never returns `null`.
+ * or `MJ: Collection Permissions` across up to 17 levels (`0..16`, `B2`/`R1`). Never returns `null`.
  */
 export function BuildSqlCollectionReadablePredicate(
     collectionIdExpr: string,
     provider: IMetadataProvider | null | undefined,
     user: UserInfo | null | undefined,
-    options?: { requireShareOrDelete?: boolean; aliasPrefix?: string }
+    options?: {
+        requireShareOrDelete?: boolean;
+        aliasPrefix?: string;
+        precomputedCollectionIds?: ReadonlySet<string> | null;
+    }
 ): string {
     if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
         return '1 = 0';
+    }
+    if (
+        options?.precomputedCollectionIds &&
+        !options.requireShareOrDelete &&
+        options.precomputedCollectionIds.size <= MAX_SQL_SCOPED_IN_IDS
+    ) {
+        return BuildUuidInScopeClause(collectionIdExpr, options.precomputedCollectionIds) ?? '1 = 0';
     }
     const { q, vw, bTrue } = sqlPlatformHelpers(provider);
     const safeUser = EscapeSQLString(user.ID.trim());
@@ -470,7 +619,7 @@ export function BuildSqlCollectionReadablePredicate(
     const ownerChecks: string[] = [`${q(`${prefix}0`)}.${q('OwnerID')} = '${safeUser}'`];
     const colIds: string[] = [`${q(`${prefix}0`)}.${q('ID')}`];
 
-    for (let hop = 1; hop < MAX_SQL_COLLECTION_ANCESTRY_HOPS; hop++) {
+    for (let hop = 1; hop <= MAX_SQL_COLLECTION_ANCESTRY_HOPS; hop++) {
         const prev = q(`${prefix}${hop - 1}`);
         const cur = q(`${prefix}${hop}`);
         joins.push(`LEFT JOIN ${vw('vwCollections')} ${cur} ON ${prev}.${q('ParentID')} = ${cur}.${q('ID')}`);
@@ -486,64 +635,220 @@ export function BuildSqlCollectionReadablePredicate(
     return `EXISTS (SELECT 1 FROM ${vw('vwCollections')} ${q(`${prefix}0`)} ${joins.join(' ')} WHERE ${q(`${prefix}0`)}.${q('ID')} = ${collectionIdExpr} AND (${ownerChecks.join(' OR ')} OR EXISTS (SELECT 1 FROM ${vw('vwCollectionPermissions')} ${cpAlias} WHERE ${cpAlias}.${q('UserID')} = '${safeUser}' AND ${permMatch} AND ${cpAlias}.${q('CollectionID')} IN (${colIds.join(',')}))))`;
 }
 
+function resolveRegisteredDelegateSqlScope(provider: IMetadataProvider | null | undefined): {
+    artifactsEntityId: string | null;
+    customEntityIds: string[];
+    isExact: boolean;
+} {
+    const artifactsEntityId = provider?.EntityByName?.('MJ: Artifacts')?.ID ??
+        provider?.Entities?.find((e) => e.Name.trim().toLowerCase() === 'mj: artifacts')?.ID ??
+        null;
+    const normArtifactsEntityId = artifactsEntityId && IsValidUUID(artifactsEntityId)
+        ? NormalizeUUID(artifactsEntityId)
+        : null;
+
+    const candidateKeys = new Set<string>(ArtifactPermissionEngine.Instance.GetRegisteredDelegateEntityKeys());
+    try {
+        const classRegs = MJGlobal.Instance.ClassFactory.GetRegistrationsByRootClass(BaseArtifactPermissionDelegate);
+        for (const reg of classRegs) {
+            if (reg.Key) {
+                candidateKeys.add(reg.Key.trim().toLowerCase());
+            }
+        }
+    } catch {
+        // ClassFactory may be uninitialized in isolated unit tests
+    }
+
+    const customEntityIds: string[] = [];
+    const seenIds = new Set<string>();
+    let isExact = true;
+
+    for (const rawKey of candidateKeys) {
+        const key = rawKey.trim().toLowerCase();
+        if (!key || key === 'mj: artifacts' || (normArtifactsEntityId && IsValidUUID(key) && NormalizeUUID(key) === normArtifactsEntityId)) {
+            continue;
+        }
+        isExact = false;
+        let resolvedId: string | undefined;
+        if (IsValidUUID(key)) {
+            resolvedId = key;
+        } else {
+            const ent =
+                provider?.EntityByName?.(key) ??
+                provider?.Entities?.find((e) => e.Name.trim().toLowerCase() === key);
+            if (ent?.ID && IsValidUUID(ent.ID)) {
+                resolvedId = ent.ID;
+            }
+        }
+        if (resolvedId) {
+            const norm = NormalizeUUID(resolvedId);
+            if (!seenIds.has(norm)) {
+                seenIds.add(norm);
+                customEntityIds.push(resolvedId);
+            }
+        }
+    }
+
+    return {
+        artifactsEntityId: artifactsEntityId && IsValidUUID(artifactsEntityId) ? artifactsEntityId : null,
+        customEntityIds,
+        isExact
+    };
+}
+
+function buildSqlArtifactReadablePredicateWithExactness(
+    artifactIdExpr: string,
+    provider: IMetadataProvider | null | undefined,
+    user: UserInfo | null | undefined,
+    options?: {
+        requireShareOrDelete?: boolean;
+        aliasPrefix?: string;
+        precomputedCollectionIds?: ReadonlySet<string> | null;
+    }
+): { clause: string; isExact: boolean } {
+    if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+        return { clause: '1 = 0', isExact: true };
+    }
+    const { isPg, q, vw, bTrue } = sqlPlatformHelpers(provider);
+    const safeUser = EscapeSQLString(user.ID.trim());
+    const prefix = options?.aliasPrefix ?? '_sa';
+    const { artifactsEntityId, customEntityIds, isExact } = resolveRegisteredDelegateSqlScope(provider);
+    const safeArtifactsEntityId = artifactsEntityId ? EscapeSQLString(artifactsEntityId) : null;
+    const customDelegateClauseForAlias = (artAlias: string): string | null => {
+        if (customEntityIds.length === 0) {
+            return null;
+        }
+        const quoted = customEntityIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+        return `(${artAlias}.${q('DelegateEntityID')} IN (${quoted}) AND ${artAlias}.${q('DelegateRecordID')} IS NOT NULL)`;
+    };
+
+    const useEmptyPrecomputedCollections = Boolean(
+        options?.precomputedCollectionIds &&
+        !options.requireShareOrDelete &&
+        options.precomputedCollectionIds.size === 0
+    );
+
+    const buildHopPredicate = (hop: number, innerIdMatchClause: string): string => {
+        const hopPrefix = `${prefix}_h${hop}`;
+        const artAlias = q(`${hopPrefix}_art`);
+        const apAlias = q(`${hopPrefix}_ap`);
+        const caAlias = q(`${hopPrefix}_ca`);
+        const avAlias = q(`${hopPrefix}_av`);
+
+        const apPermCheck = options?.requireShareOrDelete
+            ? `(${apAlias}.${q('CanShare')} = ${bTrue} OR ${apAlias}.${q('CanDelete')} = ${bTrue})`
+            : `(${apAlias}.${q('CanRead')} = ${bTrue} OR ${apAlias}.${q('CanEdit')} = ${bTrue} OR ${apAlias}.${q('CanDelete')} = ${bTrue} OR ${apAlias}.${q('CanShare')} = ${bTrue})`;
+
+        const directBranches: string[] = [
+            `${artAlias}.${q('UserID')} = '${safeUser}'`,
+            `EXISTS (SELECT 1 FROM ${vw('vwArtifactPermissions')} ${apAlias} WHERE ${apAlias}.${q('ArtifactID')} = ${artAlias}.${q('ID')} AND ${apAlias}.${q('UserID')} = '${safeUser}' AND ${apPermCheck})`
+        ];
+
+        if (!useEmptyPrecomputedCollections) {
+            const colClause = BuildSqlCollectionReadablePredicate(
+                `${caAlias}.${q('CollectionID')}`,
+                provider,
+                user,
+                {
+                    requireShareOrDelete: options?.requireShareOrDelete,
+                    aliasPrefix: `${hopPrefix}_c`,
+                    precomputedCollectionIds: options?.precomputedCollectionIds
+                }
+            );
+            directBranches.push(
+                `EXISTS (SELECT 1 FROM ${vw('vwCollectionArtifacts')} ${caAlias} INNER JOIN ${vw('vwArtifactVersions')} ${avAlias} ON ${caAlias}.${q('ArtifactVersionID')} = ${avAlias}.${q('ID')} WHERE ${avAlias}.${q('ArtifactID')} = ${artAlias}.${q('ID')} AND ${colClause})`
+            );
+        }
+
+        const standaloneClause = `((${artAlias}.${q('DelegateEntityID')} IS NULL OR ${artAlias}.${q('DelegateRecordID')} IS NULL) AND (${directBranches.join(' OR ')}))`;
+        const hopBranches: string[] = [standaloneClause];
+
+        const customClause = customDelegateClauseForAlias(artAlias);
+        if (customClause) {
+            hopBranches.push(customClause);
+        }
+
+        if (safeArtifactsEntityId && hop < MAX_SQL_ARTIFACT_DELEGATE_HOPS) {
+            const nextArtAlias = q(`${prefix}_h${hop + 1}_art`);
+            const nextIdCast = isPg
+                ? `LOWER(CAST(${nextArtAlias}.${q('ID')} AS TEXT))`
+                : `LOWER(CAST(${nextArtAlias}.${q('ID')} AS NVARCHAR(36)))`;
+            const nextMatch = `${nextIdCast} = LOWER(${artAlias}.${q('DelegateRecordID')})`;
+            const parentSubquery = buildHopPredicate(hop + 1, nextMatch);
+            hopBranches.push(
+                `(${artAlias}.${q('DelegateEntityID')} = '${safeArtifactsEntityId}' AND ${artAlias}.${q('DelegateRecordID')} IS NOT NULL AND ${parentSubquery})`
+            );
+        }
+
+        return `EXISTS (SELECT 1 FROM ${vw('vwArtifacts')} ${artAlias} WHERE ${innerIdMatchClause} AND (${hopBranches.join(' OR ')}))`;
+    };
+
+    const rootArtAlias = q(`${prefix}_h0_art`);
+    const clause = buildHopPredicate(0, `${rootArtAlias}.${q('ID')} = ${artifactIdExpr}`);
+    return {
+        clause,
+        // Exact whenever all non-'MJ: Artifacts' delegates are registered (currently none) OR precomputed collections fit;
+        // Wait: even when `artifactsEntityId` is absent from mock provider metadata, treat as inexact unless resolved cleanly.
+        isExact: isExact && Boolean(safeArtifactsEntityId)
+    };
+}
+
 /**
  * Builds a dialect-aware SQL `EXISTS` predicate verifying that `artifactIdExpr` is readable (or
  * share/delete-capable when `requireShareOrDelete` is true) by `user` via ownership,
- * `MJ: Artifact Permissions`, `MJ: Collection Artifacts` + collection ancestry, or `DelegateEntityID`
- * (`B2`, fail closed — never returns `null` or drops rows above 5,000).
+ * `MJ: Artifact Permissions`, `MJ: Collection Artifacts` + 17-level collection ancestry, or
+ * `ParentArtifactPermissionDelegate` (`MJ: Artifacts` parent chain up to depth 8, overriding ownership).
+ * Unregistered custom delegates fail closed (`1 = 0`). Never returns `null` (`B2`, `R1`).
  */
 export function BuildSqlArtifactReadablePredicate(
     artifactIdExpr: string,
     provider: IMetadataProvider | null | undefined,
     user: UserInfo | null | undefined,
-    options?: { requireShareOrDelete?: boolean; aliasPrefix?: string }
+    options?: {
+        requireShareOrDelete?: boolean;
+        aliasPrefix?: string;
+        precomputedCollectionIds?: ReadonlySet<string> | null;
+    }
 ): string {
+    return buildSqlArtifactReadablePredicateWithExactness(artifactIdExpr, provider, user, options).clause;
+}
+
+/**
+ * Async variant of {@link BuildSqlArtifactReadablePredicate} that precomputes readable collection IDs
+ * once per `RunView` call (`<= 5,000`) to avoid SQL Server's 256-table view-expansion limit across
+ * 8-hop delegated artifact hierarchies (`R1`), and reports `isExact` for safe `SqlScopedParams` tracking.
+ */
+export async function BuildSqlArtifactReadablePredicateAsync(
+    artifactIdExpr: string,
+    provider: IMetadataProvider | null | undefined,
+    user: UserInfo | null | undefined,
+    options?: { requireShareOrDelete?: boolean; aliasPrefix?: string }
+): Promise<{ clause: string; isExact: boolean }> {
     if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
-        return '1 = 0';
+        return { clause: '1 = 0', isExact: true };
     }
-    const { isPg, q, vw, bTrue } = sqlPlatformHelpers(provider);
-    const safeUser = EscapeSQLString(user.ID.trim());
-    const prefix = options?.aliasPrefix ?? '_sa';
-    const artAlias = q(`${prefix}_art`);
-    const apAlias = q(`${prefix}_ap`);
-    const caAlias = q(`${prefix}_ca`);
-    const avAlias = q(`${prefix}_av`);
-    const convAlias = q(`${prefix}_conv`);
-
-    const apPermCheck = options?.requireShareOrDelete
-        ? `(${apAlias}.${q('CanShare')} = ${bTrue} OR ${apAlias}.${q('CanDelete')} = ${bTrue})`
-        : `(${apAlias}.${q('CanRead')} = ${bTrue} OR ${apAlias}.${q('CanEdit')} = ${bTrue} OR ${apAlias}.${q('CanDelete')} = ${bTrue} OR ${apAlias}.${q('CanShare')} = ${bTrue})`;
-
-    const colClause = BuildSqlCollectionReadablePredicate(
-        `${caAlias}.${q('CollectionID')}`,
-        provider,
-        user,
-        { requireShareOrDelete: options?.requireShareOrDelete, aliasPrefix: `${prefix}_c` }
-    );
-
-    const convEntityId = provider?.EntityByName?.('MJ: Conversations')?.ID;
-    let delegateClause = `${artAlias}.${q('DelegateEntityID')} IS NOT NULL`;
-    if (convEntityId && IsValidUUID(convEntityId)) {
-        const safeConvId = EscapeSQLString(convEntityId);
-        const convIdCast = isPg
-            ? `LOWER(CAST(${convAlias}.${q('ID')} AS TEXT))`
-            : `LOWER(CAST(${convAlias}.${q('ID')} AS NVARCHAR(36)))`;
-        const convMatch = `EXISTS (SELECT 1 FROM ${vw('vwConversations')} ${convAlias} WHERE ${convIdCast} = LOWER(${artAlias}.${q('DelegateRecordID')}) AND (${convAlias}.${q('UserID')} = '${safeUser}' OR ${convAlias}.${q('AnchorType')} IS NOT NULL))`;
-        delegateClause = `((${artAlias}.${q('DelegateEntityID')} = '${safeConvId}' AND ${convMatch}) OR (${artAlias}.${q('DelegateEntityID')} IS NOT NULL AND ${artAlias}.${q('DelegateEntityID')} <> '${safeConvId}'))`;
+    let precomputedCollectionIds: Set<string> | null = null;
+    if (provider && !options?.requireShareOrDelete) {
+        const resolvedCols = await ArtifactPermissionEngine.Instance.TryBuildReadableCollectionIdSet(provider, user);
+        if (resolvedCols && resolvedCols.size <= MAX_SQL_SCOPED_IN_IDS) {
+            precomputedCollectionIds = resolvedCols;
+        }
     }
-
-    return `EXISTS (SELECT 1 FROM ${vw('vwArtifacts')} ${artAlias} WHERE ${artAlias}.${q('ID')} = ${artifactIdExpr} AND (${artAlias}.${q('UserID')} = '${safeUser}' OR EXISTS (SELECT 1 FROM ${vw('vwArtifactPermissions')} ${apAlias} WHERE ${apAlias}.${q('ArtifactID')} = ${artAlias}.${q('ID')} AND ${apAlias}.${q('UserID')} = '${safeUser}' AND ${apPermCheck}) OR EXISTS (SELECT 1 FROM ${vw('vwCollectionArtifacts')} ${caAlias} INNER JOIN ${vw('vwArtifactVersions')} ${avAlias} ON ${caAlias}.${q('ArtifactVersionID')} = ${avAlias}.${q('ID')} WHERE ${avAlias}.${q('ArtifactID')} = ${artAlias}.${q('ID')} AND ${colClause}) OR ${delegateClause}))`;
+    return buildSqlArtifactReadablePredicateWithExactness(artifactIdExpr, provider, user, {
+        ...options,
+        precomputedCollectionIds
+    });
 }
 
 /**
  * Builds a dialect-aware SQL `EXISTS` predicate verifying that an `ArtifactVersionID` expression
- * belongs to an artifact readable by `user` (`B2`).
+ * belongs to an artifact readable by `user` (`B2`, `R1`).
  */
 export function BuildSqlArtifactVersionIdReadablePredicate(
     artifactVersionIdExpr: string,
     provider: IMetadataProvider | null | undefined,
     user: UserInfo | null | undefined,
-    options?: { aliasPrefix?: string }
+    options?: { aliasPrefix?: string; precomputedCollectionIds?: ReadonlySet<string> | null }
 ): string {
     if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
         return '1 = 0';
@@ -552,13 +857,41 @@ export function BuildSqlArtifactVersionIdReadablePredicate(
     const prefix = options?.aliasPrefix ?? '_sv';
     const verAlias = q(`${prefix}_ver`);
     const innerArt = BuildSqlArtifactReadablePredicate(`${verAlias}.${q('ArtifactID')}`, provider, user, {
-        aliasPrefix: `${prefix}_a`
+        aliasPrefix: `${prefix}_a`,
+        precomputedCollectionIds: options?.precomputedCollectionIds
     });
     return `EXISTS (SELECT 1 FROM ${vw('vwArtifactVersions')} ${verAlias} WHERE ${verAlias}.${q('ID')} = ${artifactVersionIdExpr} AND ${innerArt})`;
 }
 
 /**
- * Shared `PreRunView` implementation for protected artifact/collection entities (`B1`, `B2`):
+ * Async variant of {@link BuildSqlArtifactVersionIdReadablePredicate} sharing precomputed collection IDs (`R1`).
+ */
+export async function BuildSqlArtifactVersionIdReadablePredicateAsync(
+    artifactVersionIdExpr: string,
+    provider: IMetadataProvider | null | undefined,
+    user: UserInfo | null | undefined,
+    options?: { aliasPrefix?: string }
+): Promise<{ clause: string; isExact: boolean }> {
+    if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+        return { clause: '1 = 0', isExact: true };
+    }
+    const { q, vw } = sqlPlatformHelpers(provider);
+    const prefix = options?.aliasPrefix ?? '_sv';
+    const verAlias = q(`${prefix}_ver`);
+    const innerArt = await BuildSqlArtifactReadablePredicateAsync(`${verAlias}.${q('ArtifactID')}`, provider, user, {
+        aliasPrefix: `${prefix}_a`
+    });
+    if (innerArt.clause === '1 = 0') {
+        return { clause: '1 = 0', isExact: innerArt.isExact };
+    }
+    return {
+        clause: `EXISTS (SELECT 1 FROM ${vw('vwArtifactVersions')} ${verAlias} WHERE ${verAlias}.${q('ID')} = ${artifactVersionIdExpr} AND ${innerArt.clause})`,
+        isExact: innerArt.isExact
+    };
+}
+
+/**
+ * Shared `PreRunView` implementation for protected artifact/collection entities (`B1`, `B2`, `R1`):
  * - Resolves target entity case-insensitively and across `ViewID`/`ViewName`/`ViewEntity` (rejecting mismatches).
  * - Augments narrow `Fields` with ACL-required columns (shallow-copied, never mutating caller object).
  * - Injects a SQL `EXISTS` (or single-UUID) `ExtraFilter` predicate BEFORE `TOP` / `COUNT(*)` so
@@ -620,6 +953,7 @@ export async function PrepareScopedPreRunView(
                 IdColumnName: config.IdColumnName,
                 ResolveReadableIds: config.ResolveReadableIds,
                 BuildSqlPredicate: config.BuildSqlPredicate,
+                BuildSqlPredicateAsync: config.BuildSqlPredicateAsync,
                 CheckSingleIdReadable: config.CheckSingleIdReadable
             },
             ...(config.ExtraPredicates ?? [])
@@ -645,8 +979,30 @@ export async function PrepareScopedPreRunView(
                 continue;
             }
 
+            if (pred.BuildSqlPredicateAsync) {
+                const asyncPred = await pred.BuildSqlPredicateAsync(
+                    resolvedProvider,
+                    contextUser,
+                    targetEntityInfo,
+                    updatedParams
+                );
+                clauses.push(asyncPred.clause || '1 = 0');
+                if (!asyncPred.isExact) {
+                    allClausesBuilt = false;
+                }
+                if (asyncPred.clause === '1 = 0') {
+                    break;
+                }
+                continue;
+            }
+
             if (pred.BuildSqlPredicate) {
-                const sqlClause = pred.BuildSqlPredicate(resolvedProvider, contextUser, targetEntityInfo);
+                const sqlClause = pred.BuildSqlPredicate(
+                    resolvedProvider,
+                    contextUser,
+                    targetEntityInfo,
+                    updatedParams
+                );
                 clauses.push(sqlClause || '1 = 0');
                 if (sqlClause === '1 = 0') {
                     break;

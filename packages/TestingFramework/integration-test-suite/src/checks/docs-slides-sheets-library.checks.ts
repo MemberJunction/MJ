@@ -24,7 +24,7 @@ import * as http from 'node:http';
 import * as https from 'node:https';
 import { createServer as createNetServer } from 'node:net';
 import { resolve as resolvePath } from 'node:path';
-import { DatabaseProviderBase, IMetadataProvider, Metadata, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, Metadata, RunQuery, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -2919,15 +2919,18 @@ async function checkDslc7CollaborationResolverAndFileDownloadUrl(ctx: Integratio
     const granteeProvider = fx.GranteeProvider!;
     const clientCfg = LoadClientConfig();
 
-    // 1. VerifyFrozenBlockSnapshot requires authentication & rejects tampered snapshot
+    // 1. VerifyFrozenBlockSnapshot requires authentication & hostArtifactId and rejects tampered snapshot
     const unauthVerifyResp = await fetch(clientCfg.Url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            query: `query VerifyFrozen($specJson: String!) {
-                VerifyFrozenBlockSnapshot(specJson: $specJson) { Valid SnapshotVerified ErrorMessage }
+            query: `query VerifyFrozen($specJson: String!, $hostArtifactId: String!) {
+                VerifyFrozenBlockSnapshot(specJson: $specJson, hostArtifactId: $hostArtifactId) { Valid SnapshotVerified ErrorMessage }
             }`,
-            variables: { specJson: JSON.stringify({ BlockID: 'b1', Kind: 'EntityView', Mode: 'Frozen' }) },
+            variables: {
+                specJson: JSON.stringify({ BlockID: 'b1', Kind: 'EntityView', Mode: 'Frozen' }),
+                hostArtifactId: fx.ParentDocID!,
+            },
         }),
     });
     const unauthVerifyJson = (await unauthVerifyResp.json()) as {
@@ -2958,10 +2961,10 @@ async function checkDslc7CollaborationResolverAndFileDownloadUrl(ctx: Integratio
         },
     });
     const authVerifyRes = (await ownerProvider.ExecuteGQL(
-        `query VerifyFrozen($specJson: String!) {
-            VerifyFrozenBlockSnapshot(specJson: $specJson) { Valid SnapshotVerified ErrorMessage }
+        `query VerifyFrozen($specJson: String!, $hostArtifactId: String!) {
+            VerifyFrozenBlockSnapshot(specJson: $specJson, hostArtifactId: $hostArtifactId) { Valid SnapshotVerified ErrorMessage }
         }`,
-        { specJson: tamperedSpec },
+        { specJson: tamperedSpec, hostArtifactId: fx.ParentDocID! },
     )) as { VerifyFrozenBlockSnapshot?: { Valid: boolean; SnapshotVerified: boolean } } | null;
     AssertEqual(authVerifyRes?.VerifyFrozenBlockSnapshot?.Valid, false, 'Tampered FrozenSnapshot must fail VerifyFrozenBlockSnapshot');
     AssertEqual(authVerifyRes?.VerifyFrozenBlockSnapshot?.SnapshotVerified, false, 'Tampered SnapshotVerified must be false');
@@ -3735,15 +3738,29 @@ async function checkDslc13GuestShareDisabledRefusal(_ctx: IntegrationCheckContex
             `Expected B4 errorMessage explanation, got: ${opRes?.errorMessage ?? ''}`,
         );
 
-        const redeemResp = await fetch(`${baseUrl}/magic-link/redeem?format=json`, {
+        const unauthRedeemResp = await fetch(`${baseUrl}/magic-link/redeem?format=json`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token: 'mlt_disabled_check' }),
         });
         AssertEqual(
-            redeemResp.status,
+            unauthRedeemResp.status,
+            401,
+            `Unauthenticated POST ${baseUrl}/magic-link/redeem must be blocked by auth middleware (HTTP 401, not public route); got HTTP ${unauthRedeemResp.status}`,
+        );
+
+        const authedRedeemResp = await fetch(`${baseUrl}/magic-link/redeem?format=json`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-mj-api-key': apiKey,
+            },
+            body: JSON.stringify({ token: 'mlt_disabled_check' }),
+        });
+        AssertEqual(
+            authedRedeemResp.status,
             404,
-            'POST /magic-link/redeem must remain unmounted (HTTP 404) when both magicLink.enabled and artifactGuestSharing.enabled are false',
+            `Authenticated POST ${baseUrl}/magic-link/redeem must remain unmounted (HTTP 404) when both magicLink.enabled and artifactGuestSharing.enabled are false; got HTTP ${authedRedeemResp.status}`,
         );
     } finally {
         if (child.exitCode === null && child.signalCode === null) {
@@ -3760,6 +3777,134 @@ async function checkDslc13GuestShareDisabledRefusal(_ctx: IntegrationCheckContex
                     res();
                 });
             });
+        }
+    }
+}
+
+async function checkDslc14ChildDelegateCountOracleAndStoredQueries(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = requireDslClientFixture();
+    const ownerProvider = fx.OwnerProvider!;
+    const granteeProvider = fx.GranteeProvider!;
+
+    const artEntity = ownerProvider.EntityByName('MJ: Artifacts');
+    Assert(Boolean(artEntity?.ID), 'MJ: Artifacts entity metadata is required for DSLC14');
+    const typesRv = RunView.FromMetadataProvider(ownerProvider);
+    const typeRes = await typesRv.RunView<{ ID: string }>(
+        {
+            EntityName: 'MJ: Artifact Types',
+            ExtraFilter: "Name = 'Markdown Document'",
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        },
+        ctx.User,
+    );
+    Assert(typeRes.Success && typeRes.Results.length === 1, 'Markdown Document artifact type required for DSLC14');
+    const docTypeId = typeRes.Results[0].ID;
+    const secretToken = `DSLC14_SECRET_CHILD_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    let childArtId: string | undefined;
+    let childVerId: string | undefined;
+    try {
+        const childArt = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
+        childArt.NewRecord();
+        childArt.Name = `__IT171_ChildDelegatedSecret_${Date.now()} (mj-integration-test — safe to delete)`;
+        childArt.TypeID = docTypeId;
+        childArt.UserID = ctx.User.ID;
+        childArt.Visibility = 'Always';
+        childArt.DelegateEntityID = artEntity!.ID;
+        childArt.DelegateRecordID = fx.PrivateDocID!;
+        Assert(await childArt.Save(), `Failed saving child delegated artifact: ${childArt.LatestResult?.CompleteMessage ?? ''}`);
+        childArtId = childArt.ID;
+
+        const childVer = await ownerProvider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', ctx.User);
+        childVer.NewRecord();
+        childVer.ArtifactID = childArt.ID;
+        childVer.VersionNumber = 1;
+        childVer.Name = childArt.Name;
+        childVer.UserID = ctx.User.ID;
+        childVer.ContentMode = 'Text';
+        childVer.Content = `# Child Secret\n\nConfidential payload ${secretToken}`;
+        Assert(await childVer.Save(), `Failed saving child delegated version: ${childVer.LatestResult?.CompleteMessage ?? ''}`);
+        childVerId = childVer.ID;
+
+        // 1. R1: Non-grantee User B cannot probe child delegated artifact versions via count_only + LIKE filter
+        const granteeCountRes = await RunView.FromMetadataProvider(granteeProvider).RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `Content LIKE '%${secretToken}%'`,
+                ResultType: 'count_only',
+            },
+            granteeProvider.CurrentUser,
+        );
+        Assert(
+            granteeCountRes.Success,
+            `Grantee count_only on MJ: Artifact Versions must succeed safely without SQL errors: ${granteeCountRes.ErrorMessage}`,
+        );
+        AssertEqual(
+            granteeCountRes.TotalRowCount,
+            0,
+            'Grantee count_only LIKE on private child delegated artifact version must return TotalRowCount=0 (no R1 oracle leak)',
+        );
+        AssertEqual(granteeCountRes.RowCount, 0, 'Grantee count_only RowCount must be 0');
+
+        // 2. Owner still observes exact count 1 for the child delegated artifact version
+        const ownerCountRes = await typesRv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `Content LIKE '%${secretToken}%'`,
+                ResultType: 'count_only',
+            },
+            ctx.User,
+        );
+        Assert(ownerCountRes.Success, `Owner count_only failed: ${ownerCountRes.ErrorMessage}`);
+        AssertEqual(ownerCountRes.TotalRowCount, 1, 'Owner count_only must see 1 matching child delegated version');
+
+        // 3. R2: All 3 shipped stored SQL queries execute cleanly without SQL errors (no invalid ca.ArtifactID)
+        const rq = new RunQuery(ownerProvider);
+        const byIdQueryRes = await rq.RunQuery(
+            {
+                QueryName: 'GetArtifactVersionsByID',
+                CategoryPath: '/MJ/AI/Agents/',
+                Parameters: { versionIds: [fx.ParentVerID!] },
+            },
+            ctx.User,
+        );
+        Assert(byIdQueryRes.Success, `GetArtifactVersionsByID failed: ${byIdQueryRes.ErrorMessage}`);
+        Assert(byIdQueryRes.Results.length >= 1, 'GetArtifactVersionsByID must return readable ParentVerID');
+
+        const dummyConvId = '00000000-0000-4000-8000-000000000000';
+        const convCompleteRes = await rq.RunQuery(
+            {
+                QueryName: 'GetConversationComplete',
+                CategoryPath: 'MJ/Conversations',
+                Parameters: { ConversationID: dummyConvId },
+            },
+            ctx.User,
+        );
+        Assert(convCompleteRes.Success, `GetConversationComplete failed: ${convCompleteRes.ErrorMessage}`);
+
+        const convMapRes = await rq.RunQuery(
+            {
+                QueryName: 'GetConversationArtifactsMap',
+                CategoryPath: 'MJ/Conversations',
+                Parameters: { ConversationID: dummyConvId },
+            },
+            ctx.User,
+        );
+        Assert(convMapRes.Success, `GetConversationArtifactsMap failed: ${convMapRes.ErrorMessage}`);
+    } finally {
+        if (childVerId) {
+            const v = await ownerProvider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', ctx.User);
+            if (await v.Load(childVerId)) {
+                await v.Delete();
+            }
+        }
+        if (childArtId) {
+            const a = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
+            if (await a.Load(childArtId)) {
+                await a.Delete();
+            }
         }
     }
 }
@@ -3829,6 +3974,11 @@ export const DocsSlidesSheetsLibraryClientChecks: NamedCheck[] = [
         Id: 'docs-slides-sheets-library-client.DSLC13',
         Name: 'DSLC13: Default-off magicLink.artifactGuestSharing.enabled refuses CreateGuestShareLink and leaves /magic-link/redeem unmounted (B4)',
         Fn: checkDslc13GuestShareDisabledRefusal,
+    },
+    {
+        Id: 'docs-slides-sheets-library-client.DSLC14',
+        Name: 'DSLC14: Child delegated artifact count_only blocks LIKE oracle for non-owners and all 3 shipped artifact/conversation stored queries execute cleanly (R1, R2)',
+        Fn: checkDslc14ChildDelegateCountOracleAndStoredQueries,
     },
 ];
 

@@ -6524,7 +6524,11 @@ export class SlideDeckArtifactViewerComponent
       const provider = this.getSafeProvider();
       const verified =
         !this.isGuestSnapshotMode && provider && this.collabService.HasCollaborationBackend(provider)
-          ? await this.collabService.VerifyFrozenSnapshotOnServer(block, provider)
+          ? await this.collabService.VerifyFrozenSnapshotOnServer(
+              block,
+              this.artifactVersion?.ArtifactID ?? '',
+              provider,
+            )
           : this.IsSnapshotVerified(block, _region.RegionID, slideId);
       if (this.isComponentDestroyed) {
         return;
@@ -6693,6 +6697,7 @@ export class SlideDeckArtifactViewerComponent
     return this.collabService.IsFrozenSnapshotVerified(
       block,
       this.blockResultsByBlockId.get(block.BlockID),
+      this.artifactVersion?.ArtifactID,
     );
   }
 

@@ -187,8 +187,8 @@ const FREEZE_DOCUMENT_LIVE_BLOCK_MUTATION = `
 `;
 
 const VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY = `
-  query VerifyFrozenBlockSnapshot($specJson: String!) {
-    VerifyFrozenBlockSnapshot(specJson: $specJson) {
+  query VerifyFrozenBlockSnapshot($specJson: String!, $hostArtifactId: String!) {
+    VerifyFrozenBlockSnapshot(specJson: $specJson, hostArtifactId: $hostArtifactId) {
       Valid
       SnapshotVerified
       ErrorMessage
@@ -3474,6 +3474,7 @@ export class DocumentCollaborationService implements OnDestroy {
 
   private computeFrozenVerificationCacheKey(
     block: DocumentBlockSpec & { SourceType?: string; SourceID?: string },
+    hostArtifactId?: string | null,
   ): string {
     const snap = block.FrozenSnapshot;
     if (!snap) {
@@ -3491,6 +3492,7 @@ export class DocumentCollaborationService implements OnDestroy {
       block.QueryName ??
       '';
     const payload = JSON.stringify({
+      HostArtifactID: (hostArtifactId ?? '').trim().toLowerCase(),
       BlockID: block.BlockID,
       SourceType: resolvedSourceType,
       SourceID: resolvedSourceId,
@@ -3521,8 +3523,12 @@ export class DocumentCollaborationService implements OnDestroy {
     return val;
   }
 
-  private recordFrozenSnapshotVerification(block: DocumentBlockSpec, verified: boolean): void {
-    const key = this.computeFrozenVerificationCacheKey(block);
+  private recordFrozenSnapshotVerification(
+    block: DocumentBlockSpec,
+    verified: boolean,
+    hostArtifactId?: string | null,
+  ): void {
+    const key = this.computeFrozenVerificationCacheKey(block, hostArtifactId);
     if (!key) {
       return;
     }
@@ -3548,6 +3554,7 @@ export class DocumentCollaborationService implements OnDestroy {
       FrozenMetadata?: { SnapshotVerified?: boolean };
       FrozenSnapshot?: { SnapshotVerified?: boolean };
     } | null,
+    hostArtifactId?: string | null,
   ): boolean {
     if (!block || block.Mode !== 'Frozen' || !block.FrozenSnapshot) {
       return false;
@@ -3572,20 +3579,25 @@ export class DocumentCollaborationService implements OnDestroy {
     ) {
       return false;
     }
-    const key = this.computeFrozenVerificationCacheKey(block);
+    const key = this.computeFrozenVerificationCacheKey(block, hostArtifactId);
     return key ? this.getCachedFrozenVerification(key) === true : false;
   }
 
   /**
-   * Verifies a frozen snapshot strictly on the server via `VerifyFrozenBlockSnapshot`, returning
-   * cached verification results immediately and deduplicating concurrent in-flight GraphQL requests
-   * for the same `cacheKey` so rapid editor re-parses emit zero redundant network calls (`E3`).
+   * Verifies a frozen snapshot strictly on the server via `VerifyFrozenBlockSnapshot` bound to `hostArtifactId`,
+   * returning cached verification results immediately and deduplicating concurrent in-flight GraphQL requests
+   * for the same `cacheKey` so rapid editor re-parses emit zero redundant network calls (`E3`, `S-b`).
    */
   public async VerifyFrozenSnapshotOnServer(
     block: DocumentBlockSpec,
+    hostArtifactId: string,
     providerOverride?: IMetadataProvider | null,
   ): Promise<boolean> {
     if (!block || block.Mode !== 'Frozen' || !block.FrozenSnapshot) {
+      return false;
+    }
+    const normalizedHostId = (hostArtifactId ?? '').trim();
+    if (!normalizedHostId) {
       return false;
     }
     const snap = block.FrozenSnapshot;
@@ -3594,10 +3606,10 @@ export class DocumentCollaborationService implements OnDestroy {
       typeof snap.SnapshotContentHash !== 'string' ||
       snap.SnapshotContentHash.trim().length === 0
     ) {
-      this.recordFrozenSnapshotVerification(block, false);
+      this.recordFrozenSnapshotVerification(block, false, normalizedHostId);
       return false;
     }
-    const cacheKey = this.computeFrozenVerificationCacheKey(block);
+    const cacheKey = this.computeFrozenVerificationCacheKey(block, normalizedHostId);
     if (cacheKey) {
       const cached = this.getCachedFrozenVerification(cacheKey);
       if (cached !== undefined) {
@@ -3615,10 +3627,11 @@ export class DocumentCollaborationService implements OnDestroy {
         try {
           const gqlRes = await provider.ExecuteGQL(VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY, {
             specJson: JSON.stringify(block),
+            hostArtifactId: normalizedHostId,
           });
           const verifyPayload = gqlRes?.VerifyFrozenBlockSnapshot;
           if (verifyPayload && typeof verifyPayload.SnapshotVerified === 'boolean') {
-            this.recordFrozenSnapshotVerification(block, verifyPayload.SnapshotVerified);
+            this.recordFrozenSnapshotVerification(block, verifyPayload.SnapshotVerified, normalizedHostId);
             return verifyPayload.SnapshotVerified;
           }
         } catch (err) {
@@ -3639,7 +3652,7 @@ export class DocumentCollaborationService implements OnDestroy {
       }
       return promise;
     }
-    return this.IsFrozenSnapshotVerified(block);
+    return this.IsFrozenSnapshotVerified(block, undefined, normalizedHostId);
   }
 
   /**

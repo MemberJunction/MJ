@@ -266,7 +266,9 @@ export class RedisTicketReplayStore implements TicketReplayStore {
             await client.set(key, dataJson, 'PX', safeTtlMs);
             return;
         }
-        await this._redisProvider.SetItem(key, dataJson);
+        await this._redisProvider.SetItem(key, dataJson, undefined, {
+            TTLSeconds: Math.max(1, Math.ceil(safeTtlMs / 1000))
+        });
     }
 
     public async GetAndDeleteTicketData(nonce: string): Promise<string | null> {

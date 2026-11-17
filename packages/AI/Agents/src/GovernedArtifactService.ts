@@ -2863,6 +2863,21 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
 
     const rv = RunView.FromMetadataProvider(params.provider);
     const sqlFilters: string[] = [];
+    const MAX_DIRECT_IN_IDS = 2500;
+    const ID_IN_CHUNK_SIZE = 500;
+    const appendChunkedIdInFilter = (ids: string[]): boolean => {
+      if (ids.length === 0 || ids.length > MAX_DIRECT_IN_IDS) {
+        return false;
+      }
+      const chunks: string[] = [];
+      for (let i = 0; i < ids.length; i += ID_IN_CHUNK_SIZE) {
+        const slice = ids.slice(i, i + ID_IN_CHUNK_SIZE);
+        chunks.push(`ID IN (${slice.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`);
+      }
+      sqlFilters.push(chunks.length === 1 ? chunks[0] : `(${chunks.join(' OR ')})`);
+      return true;
+    };
+    let readableIdsInMemoryFilter: Set<string> | null = null;
 
     if (collectionId) {
       const colCheck = await this.CheckCollectionPermission(params.provider, params.contextUser, collectionId, 'read');
@@ -2912,7 +2927,9 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       if (colArtifactIds.length === 0) {
         return { success: true, artifacts: [] };
       }
-      sqlFilters.push(`ID IN (${colArtifactIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`);
+      if (!appendChunkedIdInFilter(colArtifactIds)) {
+        readableIdsInMemoryFilter = new Set(colArtifactIds.map((id) => NormalizeUUID(id)));
+      }
     } else {
       const readableIds = await ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
         params.provider,
@@ -2921,7 +2938,10 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
       if (readableIds.size === 0) {
         return { success: true, artifacts: [] };
       }
-      sqlFilters.push(`ID IN (${Array.from(readableIds).map((id) => `'${EscapeSQLString(id)}'`).join(',')})`);
+      if (!appendChunkedIdInFilter(Array.from(readableIds))) {
+        // Above MAX_DIRECT_IN_IDS, rely on ArtifactPreRunViewHook SQL EXISTS scoping + in-memory check (`S-g`).
+        readableIdsInMemoryFilter = readableIds;
+      }
     }
 
     if (search) {
@@ -2986,6 +3006,9 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     for (const row of artRes.Success && artRes.Results ? artRes.Results : []) {
       const id = (row.ID ?? '').trim();
       const norm = NormalizeUUID(id);
+      if (readableIdsInMemoryFilter && !readableIdsInMemoryFilter.has(norm)) {
+        continue;
+      }
       if (id && !seen.has(norm)) {
         seen.add(norm);
         candidateArts.push(row);

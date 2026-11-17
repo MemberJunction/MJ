@@ -125,15 +125,15 @@ export class RefreshAndSnapshotArtifactAction extends BaseAction {
 
         const attribution = this.helper.ExtractAgentAttribution(params);
 
-        if (
-            freezeRefreshedBlocks &&
-            (attribution.agentRunId || attribution.agentName)
-        ) {
+        // S-a: Always reject FreezeRefreshedBlocks on the Action surface (even without agent attribution,
+        // such as MCP Server or RuntimeActionBridge callers) because Action invocation cannot prove a
+        // direct interactive human gesture; human freezing goes through GraphQL FreezeDocumentLiveBlock.
+        if (freezeRefreshedBlocks) {
             return {
                 Success: false,
                 ResultCode: 'PERMISSION_DENIED',
                 Message:
-                    'Agents cannot freeze live artifact blocks via RefreshAndSnapshotArtifact. Freezing snapshots requires a direct human action in the UI (FreezeDocumentLiveBlock) so RLS/FLS data cannot be frozen autonomously.',
+                    'Freezing live artifact blocks via RefreshAndSnapshotArtifact is disabled because action invocations (including MCP and RuntimeActionBridge) cannot guarantee a direct interactive human gesture. Use FreezeDocumentLiveBlock in the UI instead.',
                 Params: params.Params,
             };
         }

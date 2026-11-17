@@ -2361,7 +2361,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private unimplementedResultCells = new WeakSet<SpreadsheetCellSpec>();
     private monotonicIdCounter = 0;
     private _lastEvaluatedFormulaCount = 0;
-    private activeEvalBudget: { ops: number; maxOps: number; deadlineMs: number; exceeded: boolean } | null = null;
+    private activeEvalBudget: {
+        ops: number;
+        maxOps: number;
+        deadlineMs: number;
+        exceeded: boolean;
+        sheetColIndex: WeakMap<WorksheetSpec, Map<number, Array<{ row: number; addr: string }>>>;
+    } | null = null;
 
     private runWithEvalBudget<T>(fn: () => T): T {
         if (this.activeEvalBudget) {
@@ -2371,13 +2377,39 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ops: 0,
             maxOps: MAX_EVAL_OPS_PER_WORKBOOK,
             deadlineMs: Date.now() + MAX_EVAL_TIME_MS,
-            exceeded: false
+            exceeded: false,
+            sheetColIndex: new WeakMap<WorksheetSpec, Map<number, Array<{ row: number; addr: string }>>>()
         };
         try {
             return fn();
         } finally {
             this.activeEvalBudget = null;
         }
+    }
+
+    private getOrBuildSheetColIndex(sheet: WorksheetSpec): Map<number, Array<{ row: number; addr: string }>> {
+        const cached = this.activeEvalBudget?.sheetColIndex.get(sheet);
+        if (cached) {
+            return cached;
+        }
+        const byCol = new Map<number, Array<{ row: number; addr: string }>>();
+        for (const addr of Object.keys(sheet.Cells)) {
+            const pos = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
+            if (!pos) continue;
+            let entries = byCol.get(pos.col);
+            if (!entries) {
+                entries = [];
+                byCol.set(pos.col, entries);
+            }
+            entries.push({ row: pos.row, addr });
+        }
+        for (const entries of byCol.values()) {
+            if (entries.length > 1) {
+                entries.sort((a, b) => a.row - b.row);
+            }
+        }
+        this.activeEvalBudget?.sheetColIndex.set(sheet, byCol);
+        return byCol;
     }
 
     private consumeEvalBudget(cost = 1): void {
@@ -3315,6 +3347,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (prevAtCanonical) {
                 this.removeCellFromVirtualAxisIndex(sheet, prevAtCanonical);
             }
+            let sanitizedSpillRange: string | undefined;
+            if (typeof cell.SpillRange === 'string' && formula) {
+                const spillBounds = ParseRangeAddress(cell.SpillRange, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                if (spillBounds) {
+                    const spillArea =
+                        (spillBounds.endRow - spillBounds.startRow + 1) *
+                        (spillBounds.endCol - spillBounds.startCol + 1);
+                    if (spillArea > 0 && spillArea <= MAX_DYNAMIC_ARRAY_CELLS) {
+                        sanitizedSpillRange = cell.SpillRange;
+                    }
+                }
+            }
             const normalizedCell: SpreadsheetCellSpec = {
                 ...cell,
                 RowID: rowId,
@@ -3322,7 +3366,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 Address: canonicalAddr,
                 RawValue: cell.RawValue ?? null,
                 Formula: formula,
-                FormulaStable: formulaStable
+                FormulaStable: formulaStable,
+                SpillRange: sanitizedSpillRange
             };
             copyCellXmlMeta(cell, normalizedCell);
             const xmlMetaMap = getCellXmlMetaMap();
@@ -4940,9 +4985,43 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
         const bounds = ParseRangeAddress(anchor.SpillRange, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
         if (!bounds) {
+            anchor.SpillRange = undefined;
             return [];
         }
+        const area = (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
+        if (area <= 0 || area > MAX_DYNAMIC_ARRAY_CELLS) {
+            anchor.SpillRange = undefined;
+        }
         const cleared: string[] = [];
+
+        if (area > 256 || area <= 0 || area > MAX_DYNAMIC_ARRAY_CELLS) {
+            // Sparse cleanup (`R6`): never iterate billions of empty coordinates on crafted SpillRange values.
+            for (const key of Object.keys(sheet.Cells)) {
+                if (key === canonicalAnchorAddr) continue;
+                const pos = parseCellCoordsFast(key);
+                if (
+                    !pos ||
+                    pos.row < bounds.startRow ||
+                    pos.row > bounds.endRow ||
+                    pos.col < bounds.startCol ||
+                    pos.col > bounds.endCol
+                ) {
+                    continue;
+                }
+                const child = sheet.Cells[key];
+                if (child && (child.ArrayMaster === canonicalAnchorAddr || child.SpilledFrom === canonicalAnchorAddr)) {
+                    this.removeCellFromVirtualAxisIndex(sheet, child);
+                    this.unimplementedResultCells.delete(child);
+                    delete sheet.Cells[key];
+                    addClearedSpillAddr(sheet, key);
+                    cleared.push(key);
+                }
+            }
+            if (cleared.length > 0) {
+                this.activeEvalBudget?.sheetColIndex.delete(sheet);
+            }
+            return cleared;
+        }
 
         for (let r = bounds.startRow; r <= bounds.endRow; r++) {
             for (let c = bounds.startCol; c <= bounds.endCol; c++) {
@@ -4964,6 +5043,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
+        if (cleared.length > 0) {
+            this.activeEvalBudget?.sheetColIndex.delete(sheet);
+        }
         return cleared;
     }
 
@@ -5436,8 +5518,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             spillBlockedKeysBySheet: new Map<string, Set<string>>(),
             sheetById: new Map<string, WorksheetSpec>()
         };
+        const formulaCellsBySheet = new Map<WorksheetSpec, Array<{ row: number; col: number; key: string }>>();
         for (const ws of workbook.Worksheets) {
             dag.sheetById.set(ws.SheetID, ws);
+            const fList: Array<{ row: number; col: number; key: string }> = [];
+            for (const addr of Object.keys(ws.Cells)) {
+                const c = ws.Cells[addr];
+                if (!c || (!c.Formula && !c.SpilledFrom)) continue;
+                const pos = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
+                if (!pos) continue;
+                fList.push({ row: pos.row, col: pos.col, key: `${ws.SheetID}::${FormatCellAddress(pos.row, pos.col)}` });
+            }
+            formulaCellsBySheet.set(ws, fList);
         }
         for (const ws of workbook.Worksheets) {
             for (const addr of Object.keys(ws.Cells)) {
@@ -5448,7 +5540,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const parsed = parseCellCoordsFast(addr) ?? ParseCellAddress(addr);
                 if (!parsed) continue;
                 const canonical = FormatCellAddress(parsed.row, parsed.col);
-                this.updateSingleCellInDag(workbook, ws, canonical, dag);
+                this.updateSingleCellInDag(workbook, ws, canonical, dag, formulaCellsBySheet);
             }
         }
         return dag;
@@ -5458,7 +5550,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         sheet: WorksheetSpec,
         canonicalAddr: string,
-        dag: WorkbookDependencyGraph
+        dag: WorkbookDependencyGraph,
+        formulaCellsBySheet?: ReadonlyMap<WorksheetSpec, ReadonlyArray<{ row: number; col: number; key: string }>>
     ): void {
         dag.sheetById.set(sheet.SheetID, sheet);
         const cellKey = `${sheet.SheetID}::${canonicalAddr}`;
@@ -5512,7 +5605,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const ast = compileFormulaAstCached(exprBody);
         dag.astByCellKey.set(cellKey, ast);
 
-        const extracted = this.extractAstCellDependencies(ast, workbook, sheet);
+        const extracted = this.extractAstCellDependencies(ast, workbook, sheet, formulaCellsBySheet);
         dag.directCellDeps.set(cellKey, extracted.cellDeps);
         dag.directCellDepSets.set(cellKey, new Set<string>(extracted.cellDeps));
         for (const dep of extracted.cellDeps) {
@@ -5547,7 +5640,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private extractAstCellDependencies(
         root: FormulaAstNode,
         workbook: WorkbookSpec,
-        currentSheet: WorksheetSpec
+        currentSheet: WorksheetSpec,
+        formulaCellsBySheet?: ReadonlyMap<WorksheetSpec, ReadonlyArray<{ row: number; col: number; key: string }>>
     ): {
         cellDeps: string[];
         rangeWatches: Array<{ sheetId: string; startRow: number; endRow: number; startCol: number; endCol: number }>;
@@ -5585,7 +5679,19 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 startCol,
                 endCol
             });
+            const preindexed = formulaCellsBySheet?.get(targetSheet);
+            if (preindexed) {
+                for (let i = 0; i < preindexed.length; i++) {
+                    const entry = preindexed[i];
+                    if (entry.row >= startRow && entry.row <= endRow && entry.col >= startCol && entry.col <= endCol) {
+                        deps.add(entry.key);
+                    }
+                }
+                return;
+            }
             for (const addr of Object.keys(targetSheet.Cells)) {
+                const c = targetSheet.Cells[addr];
+                if (!c || (!c.Formula && !c.SpilledFrom)) continue;
                 const pos = parseCellCoordsFast(addr);
                 if (pos && pos.row >= startRow && pos.row <= endRow && pos.col >= startCol && pos.col <= endCol) {
                     deps.add(`${targetSheet.SheetID}::${FormatCellAddress(pos.row, pos.col)}`);
@@ -6202,6 +6308,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 };
                 writtenAddrs.push(targetAddr);
             }
+        }
+        if (writtenAddrs.length > 0) {
+            this.activeEvalBudget?.sheetColIndex.delete(sheet);
         }
         return { anchorValue: matrix[0]?.[0] ?? null, writtenAddrs };
     }
@@ -7295,8 +7404,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (desc === '#REF!') return ['#REF!'];
             if (!desc) return resolveFlattenedRange(arg);
             const area = (desc.endRow - desc.startRow + 1) * (desc.endCol - desc.startCol + 1);
-            if (area <= 4096) {
-                this.consumeEvalBudget(area);
+            if (area <= 256) {
+                this.consumeEvalBudget(1 + Math.ceil(area / 64));
                 const denseVals: SpreadsheetCellValue[] = [];
                 if (desc.startCol === desc.endCol) {
                     const colLetter = ColumnIndexToLetter(desc.startCol);
@@ -7323,30 +7432,50 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
                 return denseVals;
             }
-            const cellKeys = Object.keys(desc.targetSheet.Cells);
-            this.consumeEvalBudget(Math.max(1, cellKeys.length));
+            const byCol = this.getOrBuildSheetColIndex(desc.targetSheet);
+            const colSpan = desc.endCol - desc.startCol + 1;
             const hits: Array<{ row: number; col: number; val: SpreadsheetCellValue }> = [];
             let sawError = false;
-            for (let k = 0; k < cellKeys.length; k++) {
-                const addr = cellKeys[k];
-                const pos = parseCellCoordsFast(addr);
-                if (
-                    pos &&
-                    pos.row >= desc.startRow &&
-                    pos.row <= desc.endRow &&
-                    pos.col >= desc.startCol &&
-                    pos.col <= desc.endCol
-                ) {
-                    const v = getCellVal(desc.targetSheet, FormatCellAddress(pos.row, pos.col));
+            const collectColEntries = (col: number, entries: ReadonlyArray<{ row: number; addr: string }>): void => {
+                // Binary search first entry with row >= desc.startRow
+                let lo = 0;
+                let hi = entries.length;
+                while (lo < hi) {
+                    const mid = (lo + hi) >>> 1;
+                    if (entries[mid].row < desc.startRow) {
+                        lo = mid + 1;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                for (let i = lo; i < entries.length; i++) {
+                    const e = entries[i];
+                    if (e.row > desc.endRow) break;
+                    const v = getCellVal(desc.targetSheet, e.addr);
                     if (v !== null && v !== undefined) {
                         if (!sawError && typeof v === 'string' && v.charCodeAt(0) === 35) {
                             sawError = true;
                         }
-                        hits.push({ row: pos.row, col: pos.col, val: v });
+                        hits.push({ row: e.row, col, val: v });
+                    }
+                }
+            };
+            if (colSpan <= byCol.size * 2) {
+                for (let c = desc.startCol; c <= desc.endCol; c++) {
+                    const entries = byCol.get(c);
+                    if (entries) {
+                        collectColEntries(c, entries);
+                    }
+                }
+            } else {
+                for (const [col, entries] of byCol) {
+                    if (col >= desc.startCol && col <= desc.endCol) {
+                        collectColEntries(col, entries);
                     }
                 }
             }
-            if ((preserveOrder || sawError) && hits.length > 1) {
+            this.consumeEvalBudget(1 + Math.ceil((Math.min(colSpan, byCol.size) + hits.length) / 64));
+            if (colSpan > 1 && (preserveOrder || sawError) && hits.length > 1) {
                 hits.sort((a, b) => a.row - b.row || a.col - b.col);
             }
             const out: SpreadsheetCellValue[] = new Array(hits.length);
@@ -11013,14 +11142,29 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
 
         const tasks: PendingFunctionTask[] = [];
-        for (const sheet of workbook.Worksheets) {
-            for (const cell of Object.values(sheet.Cells)) {
-                if (!cell.Formula) continue;
-                const parsed = this.ParseMjCustomFunctionFormula(cell.Formula, workbook, sheet, cell.Address);
-                if (parsed && parsed.Kind !== 'AI') {
-                    tasks.push({ sheet, cell, parsed });
+        let scanBudgetExceeded = false;
+        try {
+            this.runWithEvalBudget(() => {
+                for (const sheet of workbook.Worksheets) {
+                    for (const cell of Object.values(sheet.Cells)) {
+                        if (!cell.Formula) continue;
+                        this.consumeEvalBudget(1);
+                        const parsed = this.ParseMjCustomFunctionFormula(cell.Formula, workbook, sheet, cell.Address);
+                        if (parsed && parsed.Kind !== 'AI') {
+                            tasks.push({ sheet, cell, parsed });
+                        }
+                    }
                 }
+            });
+        } catch (err) {
+            if (err instanceof EvalBudgetExceededError) {
+                scanBudgetExceeded = true;
+            } else {
+                throw err;
             }
+        }
+        if (scanBudgetExceeded) {
+            return { EvaluatedCount: 0, AccessDeniedCount: 0 };
         }
 
         let evaluatedCount = 0;
@@ -13930,32 +14074,56 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (!curAnchor || !hasCurStandardFormula || curNorm !== baseNorm) {
                 const spillBounds = ParseRangeAddress(orig.fRef, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
                 if (!spillBounds) continue;
-                for (let r = spillBounds.startRow; r <= spillBounds.endRow; r++) {
-                    for (let c = spillBounds.startCol; c <= spillBounds.endCol; c++) {
-                        const childAddr = FormatCellAddress(r, c);
-                        if (childAddr === orig.addr) continue;
-                        const childOrig = origCellsByAddr.get(childAddr);
-                        if (childOrig?.fFullXml && childOrig.fBodyRaw.length > 0) continue;
-                        const curChild = ws.Cells[childAddr];
-                        const baseChild = baselineWs?.Cells[childAddr];
-                        if (curChild) {
-                            const hasNewUserFormula = Boolean(curChild.Formula && curChild.Formula.trim().length > 0);
-                            const userEditedRaw = (curChild.RawValue ?? null) !== (baseChild?.RawValue ?? null);
-                            if (!hasNewUserFormula && !userEditedRaw) {
-                                if (curChild.Style || curChild.Note || childOrig?.sAttr) {
-                                    ws.Cells[childAddr] = {
-                                        ...curChild,
-                                        RawValue: null,
-                                        ComputedValue: null,
-                                        DisplayValue: ''
-                                    };
-                                } else {
-                                    delete ws.Cells[childAddr];
-                                }
-                                dirtyAddrs.add(childAddr);
+                const fRefArea =
+                    (spillBounds.endRow - spillBounds.startRow + 1) *
+                    (spillBounds.endCol - spillBounds.startCol + 1);
+                const clearChildAt = (childAddr: string): void => {
+                    if (childAddr === orig.addr) return;
+                    const childOrig = origCellsByAddr.get(childAddr);
+                    if (childOrig?.fFullXml && childOrig.fBodyRaw.length > 0) return;
+                    const curChild = ws.Cells[childAddr];
+                    const baseChild = baselineWs?.Cells[childAddr];
+                    if (curChild) {
+                        const hasNewUserFormula = Boolean(curChild.Formula && curChild.Formula.trim().length > 0);
+                        const userEditedRaw = (curChild.RawValue ?? null) !== (baseChild?.RawValue ?? null);
+                        if (!hasNewUserFormula && !userEditedRaw) {
+                            if (curChild.Style || curChild.Note || childOrig?.sAttr) {
+                                ws.Cells[childAddr] = {
+                                    ...curChild,
+                                    RawValue: null,
+                                    ComputedValue: null,
+                                    DisplayValue: ''
+                                };
+                            } else {
+                                delete ws.Cells[childAddr];
                             }
-                        } else if (childOrig) {
                             dirtyAddrs.add(childAddr);
+                        }
+                    } else if (childOrig) {
+                        dirtyAddrs.add(childAddr);
+                    }
+                };
+                if (fRefArea > 4096) {
+                    const candidateAddrs = new Set<string>([
+                        ...origCellsByAddr.keys(),
+                        ...Object.keys(ws.Cells),
+                    ]);
+                    for (const childAddr of candidateAddrs) {
+                        const pos = parseCellCoordsFast(childAddr);
+                        if (
+                            pos &&
+                            pos.row >= spillBounds.startRow &&
+                            pos.row <= spillBounds.endRow &&
+                            pos.col >= spillBounds.startCol &&
+                            pos.col <= spillBounds.endCol
+                        ) {
+                            clearChildAt(childAddr);
+                        }
+                    }
+                } else {
+                    for (let r = spillBounds.startRow; r <= spillBounds.endRow; r++) {
+                        for (let c = spillBounds.startCol; c <= spillBounds.endCol; c++) {
+                            clearChildAt(FormatCellAddress(r, c));
                         }
                     }
                 }

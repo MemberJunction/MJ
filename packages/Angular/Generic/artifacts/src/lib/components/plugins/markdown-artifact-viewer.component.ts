@@ -11981,7 +11981,11 @@ export class MarkdownArtifactViewerComponent
     if (preVerified !== null) {
       return preVerified.Verified;
     }
-    return this.collabService.IsFrozenSnapshotVerified(block, this.blockResults.get(block.BlockID));
+    return this.collabService.IsFrozenSnapshotVerified(
+      block,
+      this.blockResults.get(block.BlockID),
+      this.artifactVersion?.ArtifactID,
+    );
   }
 
   /**
@@ -14363,7 +14367,11 @@ export class MarkdownArtifactViewerComponent
     if (!provider || !this.collabService.HasCollaborationBackend(provider)) {
       return;
     }
-    await this.collabService.VerifyFrozenSnapshotOnServer(block, provider);
+    await this.collabService.VerifyFrozenSnapshotOnServer(
+      block,
+      this.artifactVersion?.ArtifactID ?? '',
+      provider,
+    );
     if (!this.isComponentDestroyed) {
       this.cdr.markForCheck();
     }

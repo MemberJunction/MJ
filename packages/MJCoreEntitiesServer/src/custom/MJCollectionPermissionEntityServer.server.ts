@@ -113,9 +113,9 @@ export const CollectionPermissionPreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS),
             OriginalFieldsMap: GetGlobalOriginalFieldsMap(GLOBAL_KEY_ORIGINAL_FIELDS),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_PARAMS),
-            BuildSqlPredicate: (prov, user, entityInfo) =>
+            BuildSqlPredicate: (prov, user, entityInfo, runViewParams) =>
                 BuildSqlCollectionReadablePredicate(
-                    QualifyOuterEntityColumn(entityInfo, 'vwCollectionPermissions', 'CollectionID', prov),
+                    QualifyOuterEntityColumn(entityInfo, 'vwCollectionPermissions', 'CollectionID', prov, runViewParams),
                     prov,
                     user
                 )

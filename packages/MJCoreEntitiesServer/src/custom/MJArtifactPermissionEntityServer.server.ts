@@ -22,7 +22,7 @@ import {
     RegisterClass
 } from '@memberjunction/global';
 import {
-    BuildSqlArtifactReadablePredicate,
+    BuildSqlArtifactReadablePredicateAsync,
     ChunkUuidList,
     EmptyPostRunViewResult,
     EnsureHooksRegistered,
@@ -113,9 +113,9 @@ export const ArtifactPermissionPreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS),
             OriginalFieldsMap: GetGlobalOriginalFieldsMap(GLOBAL_KEY_ORIGINAL_FIELDS),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_PARAMS),
-            BuildSqlPredicate: (prov, user, entityInfo) =>
-                BuildSqlArtifactReadablePredicate(
-                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactPermissions', 'ArtifactID', prov),
+            BuildSqlPredicateAsync: (prov, user, entityInfo, runViewParams) =>
+                BuildSqlArtifactReadablePredicateAsync(
+                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactPermissions', 'ArtifactID', prov, runViewParams),
                     prov,
                     user
                 )

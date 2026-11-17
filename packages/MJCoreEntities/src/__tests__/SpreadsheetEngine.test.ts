@@ -3949,5 +3949,71 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             'E1',
         );
         expect(mjParsed).toBeNull();
+
+        // 6. R6: Crafted SpillRange:'A1:XFD1048576' is sanitized on ParseWorkbook and cleared in bounded time on SetCell
+        const craftedJson = JSON.stringify({
+            WorkbookID: 'wb-r6-spill',
+            Title: 'Crafted Spill',
+            Worksheets: [
+                {
+                    SheetID: 's1',
+                    Name: 'Sheet1',
+                    Rows: [{ RowID: 'r1' }],
+                    Columns: [{ ColumnID: 'c1' }],
+                    Cells: {
+                        A1: {
+                            Address: 'A1',
+                            RowID: 'r1',
+                            ColumnID: 'c1',
+                            Formula: '={1}',
+                            SpillRange: 'A1:XFD1048576',
+                        },
+                        B2: {
+                            Address: 'B2',
+                            RowID: 'r2',
+                            ColumnID: 'c2',
+                            RawValue: 99,
+                            SpilledFrom: 'A1',
+                        },
+                    },
+                    LiveTables: [],
+                },
+            ],
+            NamedRanges: [],
+        });
+        const spillParsedWb = engine.ParseWorkbook(craftedJson);
+        expect(spillParsedWb.Worksheets[0].Cells['A1']?.SpillRange).toBeUndefined();
+        // Inject crafted SpillRange directly after parse and verify SetCell stays bounded
+        spillParsedWb.Worksheets[0].Cells['A1']!.SpillRange = 'A1:XFD1048576';
+        const spillStart = performance.now();
+        engine.SetCell(spillParsedWb, 's1', 'A1', { Value: 42 });
+        expect(performance.now() - spillStart).toBeLessThan(1000);
+        expect(spillParsedWb.Worksheets[0].Cells['B2']).toBeUndefined();
+
+        // 7. S-e: Realistic workbooks (2,000 running sums, 100 whole-column SUMs on 20k cells, A1:Z10000) succeed cleanly
+        const runningWb = engine.CreateEmptyWorkbook('Running Sums', ['Data'], 2005, 4);
+        const runningWs = runningWb.Worksheets[0];
+        for (let r = 2; r <= 2001; r++) {
+            runningWs.Cells[`C${r}`] = { Address: `C${r}`, RowID: `rr-${r}`, ColumnID: 'rc-c', RawValue: 1 };
+            runningWs.Cells[`D${r}`] = { Address: `D${r}`, RowID: `rr-${r}`, ColumnID: 'rc-d', RawValue: null, Formula: `=SUM($C$2:C${r})` };
+        }
+        engine.EvaluateWorkbook(runningWb);
+        expect(runningWs.Cells['D2001']?.ComputedValue).toBe(2000);
+
+        const wideWb = engine.CreateEmptyWorkbook('20k Sheet Whole Col Sums', ['Big'], 5000, 12);
+        const wideWs = wideWb.Worksheets[0];
+        for (let r = 1; r <= 4000; r++) {
+            for (let c = 1; c <= 5; c++) {
+                const colLetter = String.fromCharCode(64 + c);
+                wideWs.Cells[`${colLetter}${r}`] = { Address: `${colLetter}${r}`, RowID: `wr-${r}`, ColumnID: `wc-${c}`, RawValue: 1 };
+            }
+        }
+        for (let i = 1; i <= 100; i++) {
+            wideWs.Cells[`AA${i}`] = { Address: `AA${i}`, RowID: `wr-${i}`, ColumnID: 'wc-27', RawValue: null, Formula: '=SUM(A:A)' };
+        }
+        wideWs.Cells['AA101'] = { Address: 'AA101', RowID: 'wr-101', ColumnID: 'wc-27', RawValue: null, Formula: '=SUM(A1:Z10000)' };
+        engine.EvaluateWorkbook(wideWb);
+        expect(wideWs.Cells['AA100']?.ComputedValue).toBe(4000);
+        expect(wideWs.Cells['AA101']?.ComputedValue).toBe(20000);
     });
 });

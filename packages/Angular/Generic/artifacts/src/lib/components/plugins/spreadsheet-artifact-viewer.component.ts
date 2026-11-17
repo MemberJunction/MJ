@@ -8099,6 +8099,7 @@ export class SpreadsheetArtifactViewerComponent
     return this.collaborationService.IsFrozenSnapshotVerified(
       this.liveTableToBlockSpec(table),
       this.lastTableResults[table.TableID],
+      this.artifactVersion?.ArtifactID,
     );
   }
 
@@ -8111,7 +8112,11 @@ export class SpreadsheetArtifactViewerComponent
       for (const table of sheet.LiveTables ?? []) {
         if (table.Mode === 'Frozen' && table.FrozenSnapshot) {
           void this.collaborationService
-            .VerifyFrozenSnapshotOnServer(this.liveTableToBlockSpec(table), provider)
+            .VerifyFrozenSnapshotOnServer(
+              this.liveTableToBlockSpec(table),
+              this.artifactVersion?.ArtifactID ?? '',
+              provider,
+            )
             .then(() => {
               if (!this.isComponentDestroyed) {
                 this.cdr.markForCheck();

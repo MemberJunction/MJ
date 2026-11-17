@@ -29,7 +29,7 @@ import {
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
-    BuildSqlArtifactReadablePredicate,
+    BuildSqlArtifactReadablePredicateAsync,
     CascadeDeleteArtifactGuestShareLinks,
     ConsumePreResolvedIdsForParams,
     EmptyPostRunViewResult,
@@ -180,9 +180,9 @@ export const ArtifactPreRunViewHook: PreRunViewHook = async (
             InternalParams: getInternalArtifactQueryParamsSet(),
             OriginalFieldsMap: getOriginalArtifactFieldsMap(),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_ARTIFACT_PARAMS),
-            BuildSqlPredicate: (prov, user, entityInfo) =>
-                BuildSqlArtifactReadablePredicate(
-                    QualifyOuterEntityColumn(entityInfo, 'vwArtifacts', 'ID', prov),
+            BuildSqlPredicateAsync: (prov, user, entityInfo, runViewParams) =>
+                BuildSqlArtifactReadablePredicateAsync(
+                    QualifyOuterEntityColumn(entityInfo, 'vwArtifacts', 'ID', prov, runViewParams),
                     prov,
                     user
                 ),

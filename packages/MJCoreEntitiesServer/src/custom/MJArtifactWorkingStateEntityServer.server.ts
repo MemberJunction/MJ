@@ -35,7 +35,7 @@ import {
 } from '@memberjunction/global';
 import { randomUUID } from 'crypto';
 import {
-    BuildSqlArtifactReadablePredicate,
+    BuildSqlArtifactReadablePredicateAsync,
     EmptyPostRunViewResult,
     FinalizePostRunViewResult,
     GetGlobalWeakSet,
@@ -162,9 +162,9 @@ export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_WS_PARAMS),
             OriginalFieldsMap: getOriginalWorkingStateFieldsMap(),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_WS_PARAMS),
-            BuildSqlPredicate: (prov, user, entityInfo) =>
-                BuildSqlArtifactReadablePredicate(
-                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactWorkingStates', 'ArtifactID', prov),
+            BuildSqlPredicateAsync: (prov, user, entityInfo, runViewParams) =>
+                BuildSqlArtifactReadablePredicateAsync(
+                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactWorkingStates', 'ArtifactID', prov, runViewParams),
                     prov,
                     user
                 )

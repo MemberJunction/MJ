@@ -725,7 +725,7 @@ export class ArtifactToolManager {
       '- **create_synthesized_artifact**(title, targetKind, goal?, sourceArtifactIds?, content?, description?, collectionId?, linkChartsAndRanges?) — Creates and persists a new synthesized governed artifact (`targetKind`: `"presentation"` | `"document"` | `"spreadsheet"`) from multiple source artifacts while enforcing permissions and stripping unauthorized references.',
     );
     sections.push(
-      '- **refresh_and_snapshot_artifact**(targetArtifactId, mode?, versionComment?, skipIfUnchanged?, forceRefreshFrozen?) — Refreshes live blocks and `=MJ.*` formulas under Edit permissions (`mode`: `"live_refresh"` | `"freeze_all_blocks"`), reconciles live collaboration state, preserves `.xlsx` File-mode binaries, and persists a new version when changed.',
+      '- **refresh_and_snapshot_artifact**(targetArtifactId, mode?, versionComment?, skipIfUnchanged?, forceRefreshFrozen?) — Refreshes live blocks and `=MJ.*` formulas under Edit permissions (`mode`: `"live_refresh"`; block freezing is disabled for agents and requires a direct human action in the UI), reconciles live collaboration state, preserves `.xlsx` File-mode binaries, and persists a new version when changed.',
     );
     sections.push('');
 

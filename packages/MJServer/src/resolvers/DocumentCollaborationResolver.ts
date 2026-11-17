@@ -11,6 +11,7 @@ import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
     BuildArtifactVersionConfigurationWithPreview,
+    BuildBlockIdentityBinding,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
     IsValidThumbnailDataUrl,
@@ -20,6 +21,7 @@ import {
     MJConversationDetailEntity,
     ParseArtifactVersionConfiguration,
     ResolveArtifactTypeThumbnailPolicy,
+    ValidateArtifactContentMutationAgainstLocks,
     ValidateFrozenBlockSnapshot
 } from '@memberjunction/core-entities';
 import { MarkTrustedServerRestoreSave } from '@memberjunction/core-entities-server';
@@ -312,8 +314,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
     @Query(() => VerifyFrozenBlockSnapshotOutput)
     async VerifyFrozenBlockSnapshot(
         @Arg('specJson') specJson: string,
-        @Ctx() context?: AppContext,
-        @Arg('hostArtifactId', { nullable: true }) hostArtifactId?: string
+        @Arg('hostArtifactId') hostArtifactId: string,
+        @Ctx() context?: AppContext
     ): Promise<VerifyFrozenBlockSnapshotOutput> {
         const user = this.GetUserFromPayload(context?.userPayload);
         if (!user || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
@@ -325,6 +327,13 @@ export class DocumentCollaborationResolver extends ResolverBase {
         }
         const normalizedHostId = (hostArtifactId ?? '').trim();
         await this.CheckAPIKeyScopeAuthorization('artifact:read', normalizedHostId || '*', context?.userPayload);
+        if (!normalizedHostId || !IsValidUUID(normalizedHostId)) {
+            return {
+                Valid: false,
+                SnapshotVerified: false,
+                ErrorMessage: 'A valid hostArtifactId UUID is required to verify a frozen snapshot.'
+            };
+        }
         if (typeof specJson !== 'string' || specJson.length > MAX_FROZEN_SPEC_JSON_CHARS) {
             return {
                 Valid: false,
@@ -332,15 +341,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 ErrorMessage: 'Frozen block specification exceeds maximum allowed size.'
             };
         }
-        if (normalizedHostId && !IsValidUUID(normalizedHostId)) {
-            return {
-                Valid: false,
-                SnapshotVerified: false,
-                ErrorMessage: 'hostArtifactId must be a valid UUID.'
-            };
-        }
         try {
-            if (normalizedHostId && context) {
+            if (context) {
                 const provider = this.resolveProvider(context);
                 const hostPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
                     provider,
@@ -363,10 +365,11 @@ export class DocumentCollaborationResolver extends ResolverBase {
                     ErrorMessage: 'Block is not a frozen snapshot.'
                 };
             }
+            const expectedBinding = BuildBlockIdentityBinding(spec, normalizedHostId);
             const validation = ValidateFrozenBlockSnapshot(
                 spec.FrozenSnapshot,
                 undefined,
-                normalizedHostId ? { ArtifactID: normalizedHostId } : undefined
+                expectedBinding
             );
             return {
                 Valid: validation.Valid,
@@ -1602,24 +1605,36 @@ export class DocumentCollaborationResolver extends ResolverBase {
         const rv = RunView.FromMetadataProvider(provider);
         let restoreTypeEntity: MJArtifactTypeEntity | null = null;
         let allRestoreTypes: ReadonlyArray<MJArtifactTypeEntity> = [];
+        let isArtifactOwner = false;
         try {
             await ArtifactMetadataEngine.Instance.Config(false, user, provider);
             allRestoreTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
-            const artMetaRes = await rv.RunView<{ TypeID?: string | null }>(
+            const artMetaRes = await rv.RunView<{
+                TypeID?: string | null;
+                UserID?: string | null;
+                DelegateEntityID?: string | null;
+                DelegateRecordID?: string | null;
+            }>(
                 {
                     EntityName: 'MJ: Artifacts',
                     ExtraFilter: `ID='${EscapeSQLString(normalizedArtifactId)}'`,
-                    Fields: ['TypeID'],
+                    Fields: ['TypeID', 'UserID', 'DelegateEntityID', 'DelegateRecordID'],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 },
                 user
             );
-            const typeId = artMetaRes.Success ? artMetaRes.Results?.[0]?.TypeID : null;
+            const artMeta = artMetaRes.Success ? artMetaRes.Results?.[0] : undefined;
+            const typeId = artMeta?.TypeID;
             if (typeId) {
                 restoreTypeEntity = allRestoreTypes.find((t) => UUIDsEqual(t.ID, typeId)) ?? null;
             }
+            isArtifactOwner = Boolean(
+                artMeta?.UserID &&
+                UUIDsEqual(artMeta.UserID, user.ID) &&
+                !(artMeta.DelegateEntityID && artMeta.DelegateRecordID)
+            );
         } catch {
             // Fall back safely when unit-test mocks omit artifact type metadata
         }
@@ -1647,6 +1662,46 @@ export class DocumentCollaborationResolver extends ResolverBase {
                     CapturedThumbnailDataUrl: sourceParsedConfig?.thumbnailDataUrl ?? null
                 }
             );
+        }
+
+        // R5: Validate restored content & configuration against any locks/protected ranges in the
+        // latest persisted version so a non-owner cannot restore a pre-lock version to strip locks.
+        const latestForLockRes = await rv.RunView<{
+            VersionNumber: number;
+            Content?: string | null;
+            Configuration?: string | null;
+        }>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${EscapeSQLString(normalizedArtifactId)}'`,
+                Fields: ['VersionNumber', 'Content', 'Configuration'],
+                OrderBy: 'VersionNumber DESC',
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            },
+            user
+        );
+        const latestForLock = latestForLockRes.Success ? latestForLockRes.Results?.[0] : undefined;
+        if (latestForLock) {
+            const lockCheck = ValidateArtifactContentMutationAgainstLocks(
+                latestForLock.Content ?? '',
+                sourceVersion.Content ?? '',
+                user.ID,
+                isArtifactOwner,
+                {
+                    currentConfiguration: latestForLock.Configuration ?? null,
+                    nextConfiguration: enrichedRestoredConfig ?? sourceVersion.Configuration ?? null
+                }
+            );
+            if (!lockCheck.Allowed) {
+                return {
+                    Success: false,
+                    ErrorMessage:
+                        lockCheck.Reason ||
+                        'Permission denied: restoring this version would modify or remove locked content owned by another user.'
+                };
+            }
         }
 
         let restoredVer: MJArtifactVersionEntity | null = null;

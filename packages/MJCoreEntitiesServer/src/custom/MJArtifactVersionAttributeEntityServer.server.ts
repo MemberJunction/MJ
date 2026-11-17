@@ -25,7 +25,7 @@ import {
     UUIDsEqual
 } from '@memberjunction/global';
 import {
-    BuildSqlArtifactVersionIdReadablePredicate,
+    BuildSqlArtifactVersionIdReadablePredicateAsync,
     ChunkUuidList,
     EmptyPostRunViewResult,
     EnsureHooksRegistered,
@@ -164,9 +164,9 @@ export const ArtifactVersionAttributePreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS),
             OriginalFieldsMap: GetGlobalOriginalFieldsMap(GLOBAL_KEY_ORIGINAL_FIELDS),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_PARAMS),
-            BuildSqlPredicate: (prov, user, entityInfo) =>
-                BuildSqlArtifactVersionIdReadablePredicate(
-                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactVersionAttributes', 'ArtifactVersionID', prov),
+            BuildSqlPredicateAsync: (prov, user, entityInfo, runViewParams) =>
+                BuildSqlArtifactVersionIdReadablePredicateAsync(
+                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactVersionAttributes', 'ArtifactVersionID', prov, runViewParams),
                     prov,
                     user
                 )

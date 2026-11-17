@@ -115,8 +115,9 @@ function computeServerAiFormulaInputHash(
  * Server-side Remote Operation implementing `Artifact.EvaluateAiFormula` (`§5.2b`).
  *
  * Enforces `MAX_AI_FORMULA_BATCH_CELLS` (`50`), `CanEdit` permission on a valid `ArtifactID` UUID,
- * per-user rate limiting, prompt/context byte budgets, server-computed SHA-256 deduplication,
- * bounded concurrency (`6`), and governed execution via `AIPromptRunner.ExecutePrompt`.
+ * per-user process-scoped rate-limit quota (`30` requests / `200` cells per `60s` sliding window per
+ * server process), prompt/context byte budgets, non-empty prompt validation, server-computed SHA-256
+ * deduplication, bounded concurrency (`6`), and governed execution via `AIPromptRunner.ExecutePrompt`.
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_EVALUATE_AI_FORMULA_KEY)
 export class ArtifactEvaluateAiFormulaServerOperation extends ArtifactEvaluateAiFormulaOperation {
@@ -174,6 +175,10 @@ export class ArtifactEvaluateAiFormulaServerOperation extends ArtifactEvaluateAi
 
         let totalBytes = 0;
         for (const cell of input.Cells) {
+            const promptText = (cell.Prompt ?? '').trim();
+            if (!promptText) {
+                throw new RemoteOperationError('INVALID_INPUT', 'Each =MJ.AI() cell requires a non-empty Prompt.');
+            }
             const promptBytes = Buffer.byteLength(cell.Prompt ?? '', 'utf8');
             const ctxBytes = Buffer.byteLength(cell.ContextValuesJSON ?? '[]', 'utf8');
             if (promptBytes > MAX_AI_FORMULA_PROMPT_BYTES) {
