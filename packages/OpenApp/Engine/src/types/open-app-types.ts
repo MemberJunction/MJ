@@ -190,6 +190,22 @@ export interface InstallOptions {
      */
     AllowDoubleUnderscoreSchema?: boolean;
     /**
+     * Run only the package step for the app and its dependencies: add the npm packages to the
+     * workspaces, run the package install, and write `mj.config.cjs` and `angular.json`. Opens no
+     * database connection and writes no Open App records, so it can run in a Docker build. Run the
+     * install again with {@link DatabaseOnly} once a database is available. Cannot be combined
+     * with {@link DatabaseOnly}.
+     */
+    PackagesOnly?: boolean;
+    /**
+     * Run only the database step for the app and its dependencies: create the schema, run the
+     * migrations, record the app, and run the post-install hooks and template-user step. Changes
+     * no package.json, lockfile, `mj.config.cjs` or `angular.json` and runs no package install.
+     * Expects the packages to be in place already (see {@link PackagesOnly}). Cannot be combined
+     * with {@link PackagesOnly}.
+     */
+    DatabaseOnly?: boolean;
+    /**
      * @internal Set by the orchestrator when installing the pre-resolved members
      * of a dependency graph in topological order — never set this directly. When
      * true, the engine skips dependency resolution and installs ONLY this app,
@@ -215,7 +231,7 @@ export interface InstallOptions {
  * Adding a field here is the single place to wire passthrough semantics; the
  * orchestrator and any caller pick it up automatically.
  */
-export type PassthroughInstallOptions = Pick<InstallOptions, 'AllowDoubleUnderscoreSchema' | 'Verbose'>;
+export type PassthroughInstallOptions = Pick<InstallOptions, 'AllowDoubleUnderscoreSchema' | 'Verbose' | 'PackagesOnly' | 'DatabaseOnly'>;
 
 /**
  * Options for the upgrade command.

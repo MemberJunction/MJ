@@ -123,13 +123,14 @@ export {
 // Orchestrator (main entry point for CLI)
 export {
     InstallApp,
+    InstallAppPackages,
     UpgradeApp,
     RemoveApp,
     DisableApp,
     EnableApp,
     RemoveAppEntityMetadata
 } from './install/install-orchestrator.js';
-export type { OrchestratorContext } from './install/install-orchestrator.js';
+export type { OrchestratorContext, PackageStepContext } from './install/install-orchestrator.js';
 
 // FK-graph teardown (Solution 1) + migration-declared Application extraction (Solution 2)
 export {

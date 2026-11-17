@@ -17,7 +17,7 @@ import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
 import { GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import { initializeProvider, cleanupProvider } from '@memberjunction/metadata-sync';
 import type { GitHubClientOptions, GitHubTokenSource } from '@memberjunction/open-app-engine';
-import { GetValidatedConfig } from '../config.js';
+import { GetOptionalConfig, GetValidatedConfig } from '../config.js';
 
 type ResolvedConfig = ReturnType<typeof GetValidatedConfig>;
 
@@ -123,22 +123,16 @@ export async function buildContextUser(): Promise<UserInfo> {
  * Builds the full OrchestratorContext for install/upgrade/remove/disable/enable commands.
  */
 export async function BuildOrchestratorContext(
-  command: { log: (msg: string) => void; warn: (msg: string | Error) => void },
+  command: ContextLogger,
   verbose?: boolean,
   interactive: boolean = true,
 ): Promise<OrchestratorContextShape> {
   const config = GetValidatedConfig();
   const provider = await EnsureProviderInitialized();
   const contextUser = getSystemUserInfo();
-  const spinner = verbose ? ora() : undefined;
-  // Only wire interactive prompt callbacks when this run is actually allowed to prompt.
-  // Their ABSENCE signals headless mode to in-process hook modules (e.g. the setup wizard),
-  // which then fall back to env/defaults instead of blocking on @inquirer (which errors in CI).
-  // `interactive` is the per-command opt-out (--non-interactive); isInteractiveRun() is the
-  // global rule: a real terminal unless --no-interactive / CI says otherwise.
-  const wantPrompts = interactive && IsInteractiveRun();
 
   return {
+    ...buildPackageStepFields(config, command, verbose, interactive),
     ContextUser: contextUser,
     DatabaseProvider: provider,
     DatabaseConfig: {
@@ -151,6 +145,33 @@ export async function BuildOrchestratorContext(
       TrustServerCertificate: config.dbTrustServerCertificate,
       RequestTimeout: config.dbRequestTimeout,
     },
+  };
+}
+
+/**
+ * Builds the context for the package step of `mj app install --packages-only`. Reads mj.config.cjs
+ * without requiring database settings and opens no database connection, so it works in a Docker
+ * build where no database exists.
+ */
+export function BuildPackageStepContext(
+  command: ContextLogger,
+  verbose?: boolean,
+  interactive: boolean = true,
+): PackageStepContextShape {
+  return buildPackageStepFields(GetOptionalConfig() ?? {}, command, verbose, interactive);
+}
+
+/** The command methods the context builders report through. */
+type ContextLogger = { log: (msg: string) => void; warn: (msg: string | Error) => void };
+
+/** The context fields that need no database: config paths, GitHub options, MJ version and callbacks. */
+function buildPackageStepFields(
+  config: Partial<ResolvedConfig>,
+  command: ContextLogger,
+  verbose: boolean | undefined,
+  interactive: boolean,
+): PackageStepContextShape {
+  return {
     GitHubOptions: BuildGitHubOptions(config),
     RepoRoot: process.cwd(),
     MJVersion: getMJVersion(),
@@ -162,36 +183,46 @@ export async function BuildOrchestratorContext(
     AdditionalTargets: config.openApps?.additionalTargets as Array<{ Path: string; Role: 'server' | 'client' }> | undefined,
     MJCoreSchema: config.coreSchema ?? '__mj',
     MigrationPlaceholders: config.openApps?.migrationPlaceholders,
-    Callbacks: {
-      OnProgress: (phase: string, message: string) => spinner?.start(`[${phase}] ${message}`),
-      OnSuccess: (phase: string, message: string) => spinner?.succeed(`[${phase}] ${message}`),
-      OnError: (phase: string, message: string) => command.warn(`[${phase}] ${message}`),
-      OnWarn: (phase: string, message: string) => command.warn(`[${phase}] ${message}`),
-      OnLog: (message: string) => command.log(message),
-      // Interactive prompt callbacks for in-process hook modules (e.g. a setup wizard) are
-      // wired ONLY for an interactive TTY; the spinner is paused so the prompt renders cleanly.
-      // When omitted (non-interactive / non-TTY), hook modules take their headless path.
-      ...(wantPrompts
-        ? {
-            OnPromptInput: async (message: string, opts?: { default?: string }) => {
-              spinner?.stop();
-              return await input({ message, default: opts?.default });
-            },
-            OnPromptConfirm: async (message: string, opts?: { default?: boolean }) => {
-              spinner?.stop();
-              return await confirm({ message, default: opts?.default });
-            },
-            OnPromptSelect: async (message: string, choices: Array<{ name: string; value: string }>) => {
-              spinner?.stop();
-              return await select({ message, choices });
-            },
-            OnPromptPassword: async (message: string) => {
-              spinner?.stop();
-              return await password({ message, mask: true });
-            },
-          }
-        : {}),
-    },
+    Callbacks: buildCallbacks(command, verbose, interactive),
+  };
+}
+
+/**
+ * Progress callbacks for the engine. Prompt callbacks are added only when this run may prompt:
+ * their absence tells in-process hook modules (e.g. a setup wizard) to use env/defaults instead
+ * of blocking on @inquirer (which errors in CI). `interactive` is the per-command opt-out
+ * (--non-interactive); IsInteractiveRun() is the global rule.
+ */
+function buildCallbacks(command: ContextLogger, verbose: boolean | undefined, interactive: boolean): PackageStepContextShape['Callbacks'] {
+  const spinner = verbose ? ora() : undefined;
+  const wantPrompts = interactive && IsInteractiveRun();
+  return {
+    OnProgress: (phase: string, message: string) => spinner?.start(`[${phase}] ${message}`),
+    OnSuccess: (phase: string, message: string) => spinner?.succeed(`[${phase}] ${message}`),
+    OnError: (phase: string, message: string) => command.warn(`[${phase}] ${message}`),
+    OnWarn: (phase: string, message: string) => command.warn(`[${phase}] ${message}`),
+    OnLog: (message: string) => command.log(message),
+    // The spinner is paused so a prompt renders cleanly.
+    ...(wantPrompts
+      ? {
+          OnPromptInput: async (message: string, opts?: { default?: string }) => {
+            spinner?.stop();
+            return await input({ message, default: opts?.default });
+          },
+          OnPromptConfirm: async (message: string, opts?: { default?: boolean }) => {
+            spinner?.stop();
+            return await confirm({ message, default: opts?.default });
+          },
+          OnPromptSelect: async (message: string, choices: Array<{ name: string; value: string }>) => {
+            spinner?.stop();
+            return await select({ message, choices });
+          },
+          OnPromptPassword: async (message: string) => {
+            spinner?.stop();
+            return await password({ message, mask: true });
+          },
+        }
+      : {}),
   };
 }
 
@@ -208,7 +239,7 @@ export async function buildOrchestratorContext(
  * Structural type matching OrchestratorContext from the engine.
  * Defined here to avoid a compile-time import of the engine package.
  */
-interface OrchestratorContextShape {
+interface OrchestratorContextShape extends PackageStepContextShape {
   ContextUser: UserInfo;
   DatabaseProvider: DatabaseProviderBase;
   DatabaseConfig: {
@@ -222,6 +253,13 @@ interface OrchestratorContextShape {
     TrustServerCertificate?: boolean;
     RequestTimeout?: number;
   };
+}
+
+/**
+ * Structural type matching PackageStepContext from the engine.
+ * Defined here to avoid a compile-time import of the engine package.
+ */
+interface PackageStepContextShape {
   GitHubOptions: {
     Token?: string;
     TokenMap?: Record<string, string>;
