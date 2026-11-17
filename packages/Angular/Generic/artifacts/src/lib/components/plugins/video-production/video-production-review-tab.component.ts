@@ -111,7 +111,7 @@ export class VideoProductionReviewTabComponent extends BaseAngularComponent impl
 
     const quotedIds = modelIds.map(id => `'${EscapeSQLString(id)}'`).join(', ');
     try {
-      const rv = new RunView(this.RunViewToUse);
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<{ ID: string; Name: string }>({
         EntityName: 'MJ: AI Models',
         ExtraFilter: `ID IN (${quotedIds})`,

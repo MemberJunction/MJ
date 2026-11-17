@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { AsConfigRecord, ClientRealtimeSessionConfig, JSONObject, RenderLateToolResultNote, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
+import { AsConfigRecord, ClientRealtimeSessionConfig, JSONObject, RealtimeContextNoteOptions, RenderLateToolResultNote, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientReconnectContext, RealtimeClientState } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -509,8 +509,8 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * a response is in flight (the platform guarantees it never triggers or disturbs
      * generation), so unlike the Gemini driver no queueing applies.
      */
-    public SendContextNote(text: string): void {
-        this.ConversationMemory.Record({ Kind: 'note', Text: text });
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
+        this.ConversationMemory.Record({ Kind: 'note', Text: text, ...options });
         if (!this.socket || !this.socketOpen) {
             return;
         }

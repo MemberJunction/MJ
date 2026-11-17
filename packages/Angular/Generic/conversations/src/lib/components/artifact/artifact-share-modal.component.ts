@@ -1,10 +1,20 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 import { FormsModule } from '@angular/forms';
 import { MJWindowComponent, MJButtonDirective, MJEmptyStateComponent, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserInfo } from '@memberjunction/core';
-import { MJArtifactEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import {
+    CreateGuestShareLinkOperation,
+    type CreateGuestShareLinkInput,
+    type CreateGuestShareLinkOutput,
+    type MJArtifactEntity,
+    type MJArtifactGuestShareLinkEntityType,
+    RevokeGuestShareLinkOperation,
+    type RevokeGuestShareLinkInput,
+} from '@memberjunction/core-entities';
 import { ArtifactPermissionService, ArtifactPermission, ArtifactPermissionSet } from '../../services/artifact-permission.service';
 import { UserPickerComponent, UserSearchResult } from '../shared/user-picker.component';
 
@@ -12,6 +22,63 @@ interface PermissionDisplay extends ArtifactPermission {
     isEditing: boolean;
     editingPermissions: ArtifactPermissionSet;
 }
+
+export interface GuestShareLinkRow {
+    ID: string;
+    ArtifactID: string;
+    ArtifactVersionID?: string | null;
+    Label?: string | null;
+    ShareMode?: string | null;
+    ExpiresAt?: string | Date | null;
+    RevokedAt?: string | Date | null;
+    __mj_CreatedAt?: string | Date | null;
+    CreatedShareUrl?: string | null;
+}
+
+interface ListGuestLinksGraphQLItem {
+    ID: string;
+    ArtifactID: string;
+    ArtifactVersionID?: string | null;
+    Label?: string | null;
+    ShareMode?: string | null;
+    ExpiresAt?: string | null;
+    RevokedAt?: string | null;
+    CreatedAt?: string | null;
+}
+
+interface ListGuestLinksGraphQLResponse {
+    ListArtifactGuestShareLinks?: {
+        Success: boolean;
+        ErrorMessage?: string | null;
+        Links?: ListGuestLinksGraphQLItem[];
+    };
+}
+
+interface ExecuteGQLProvider {
+    ExecuteGQL?: (
+        query: string,
+        variables: { artifactId: string }
+    ) => Promise<ListGuestLinksGraphQLResponse | null | undefined>;
+}
+
+const LIST_ARTIFACT_GUEST_SHARE_LINKS_GQL = `
+  query ListArtifactGuestShareLinks($artifactId: String!) {
+    ListArtifactGuestShareLinks(artifactId: $artifactId) {
+      Success
+      ErrorMessage
+      Links {
+        ID
+        ArtifactID
+        ArtifactVersionID
+        Label
+        ShareMode
+        ExpiresAt
+        RevokedAt
+        CreatedAt
+      }
+    }
+  }
+`;
 
 @Component({
     selector: 'mj-artifact-share-modal',
@@ -189,6 +256,137 @@ interface PermissionDisplay extends ArtifactPermission {
                             </div>
                         }
                     </div>
+
+                    @if (CanModifyPermissions) {
+                        <!-- External Guest Share Links Section (NW-1) -->
+                        <div class="guest-links-section">
+                            <h3 class="section-title">
+                                <i class="fa-solid fa-link"></i>
+                                External Guest Share Links ({{ GuestLinks.length }})
+                            </h3>
+                            <p class="guest-links-hint">
+                                Create a read-only frozen snapshot link for external guests without MemberJunction accounts.
+                            </p>
+
+                            <div class="guest-link-create-row">
+                                <input
+                                    type="text"
+                                    class="guest-label-input"
+                                    [(ngModel)]="GuestLinkLabel"
+                                    placeholder="Optional label (e.g. Board Review)"
+                                    maxlength="120"
+                                    data-testid="guest-link-label-input"
+                                />
+                                <select
+                                    class="guest-expiry-select"
+                                    [(ngModel)]="GuestLinkExpiryHours"
+                                    aria-label="Link expiration"
+                                    data-testid="guest-link-expiry-select"
+                                >
+                                    <option [ngValue]="24">Expires in 24 hours</option>
+                                    <option [ngValue]="72">Expires in 3 days</option>
+                                    <option [ngValue]="168">Expires in 7 days</option>
+                                    <option [ngValue]="720">Expires in 30 days</option>
+                                </select>
+                                <button
+                                    mjButton
+                                    variant="primary"
+                                    size="sm"
+                                    [disabled]="IsCreatingGuestLink"
+                                    (click)="CreateGuestShareLink()"
+                                    data-testid="create-guest-link-btn"
+                                >
+                                    @if (IsCreatingGuestLink) {
+                                        <i class="fa-solid fa-spinner fa-spin"></i>
+                                        Creating...
+                                    } @else {
+                                        <i class="fa-solid fa-plus"></i>
+                                        Create Guest Link
+                                    }
+                                </button>
+                            </div>
+
+                            @if (NewlyCreatedGuestLinkUrl) {
+                                <div class="guest-link-created-banner" data-testid="guest-link-created-banner">
+                                    <div class="guest-link-created-text">
+                                        <span class="guest-link-created-title">New guest link ready (copy now — token is shown once)</span>
+                                        <code class="guest-link-url">{{ NewlyCreatedGuestLinkUrl }}</code>
+                                    </div>
+                                    <button
+                                        mjButton
+                                        variant="secondary"
+                                        size="sm"
+                                        (click)="CopyGuestShareUrl(NewlyCreatedGuestLinkUrl)"
+                                        data-testid="copy-new-guest-link-btn"
+                                    >
+                                        <i class="fa-solid fa-copy"></i>
+                                        Copy Link
+                                    </button>
+                                </div>
+                            }
+
+                            @if (GuestLinksError) {
+                                <div class="guest-links-error" role="alert">{{ GuestLinksError }}</div>
+                            }
+
+                            @if (IsLoadingGuestLinks) {
+                                <div class="guest-links-loading">
+                                    <i class="fa-solid fa-spinner fa-spin"></i>
+                                    Loading active guest links...
+                                </div>
+                            } @else if (GuestLinks.length === 0) {
+                                <div class="guest-links-empty">No active external guest links.</div>
+                            } @else {
+                                <div class="guest-links-list" data-testid="guest-links-list">
+                                    @for (link of GuestLinks; track link.ID) {
+                                        <div class="guest-link-item" [attr.data-testid]="'guest-link-row-' + link.ID">
+                                            <div class="guest-link-meta">
+                                                <div class="guest-link-name-row">
+                                                    <span class="guest-link-label">{{ link.Label || 'External guest link' }}</span>
+                                                    <span class="permission-badge">
+                                                        <i class="fa-solid fa-snowflake"></i>
+                                                        {{ link.ShareMode || 'Frozen' }}
+                                                    </span>
+                                                </div>
+                                                <div class="guest-link-sub">
+                                                    @if (link.ExpiresAt) {
+                                                        <span>Expires {{ FormatGuestTimestamp(link.ExpiresAt) }}</span>
+                                                    } @else {
+                                                        <span>No expiration</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="guest-link-actions">
+                                                @if (link.CreatedShareUrl) {
+                                                    <button
+                                                        mjButton
+                                                        variant="flat"
+                                                        size="sm"
+                                                        (click)="CopyGuestShareUrl(link.CreatedShareUrl)"
+                                                        title="Copy guest share link"
+                                                        [attr.data-testid]="'copy-guest-link-' + link.ID"
+                                                    >
+                                                        <i class="fa-solid fa-copy"></i>
+                                                    </button>
+                                                }
+                                                <button
+                                                    mjButton
+                                                    variant="danger"
+                                                    size="sm"
+                                                    [disabled]="IsGuestLinkRevoking(link.ID)"
+                                                    (click)="RevokeGuestShareLink(link)"
+                                                    title="Revoke guest link"
+                                                    [attr.data-testid]="'revoke-guest-link-' + link.ID"
+                                                >
+                                                    <i class="fa-solid fa-ban"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
 
                 <div class="modal-actions">
@@ -199,8 +397,23 @@ interface PermissionDisplay extends ArtifactPermission {
     `,
     styleUrls: ['./artifact-share-modal.component.css']
 })
-export class ArtifactShareModalComponent implements OnInit, OnChanges {
-    @Input() IsOpen: boolean = false;
+export class ArtifactShareModalComponent extends BaseAngularComponent implements OnInit {
+    private _isOpen = false;
+    private _artifact: MJArtifactEntity | null = null;
+    private isInitialized = false;
+    private readonly sessionCreatedUrls = new Map<string, string>();
+
+    @Input()
+    public set IsOpen(value: boolean) {
+        const wasOpen = this._isOpen;
+        this._isOpen = Boolean(value);
+        if (this.isInitialized && this._isOpen && !wasOpen && this._artifact) {
+            void this.reloadModalData();
+        }
+    }
+    public get IsOpen(): boolean {
+        return this._isOpen;
+    }
 
     /** @deprecated Use {@link IsOpen}. */
     @Input() set isOpen(value: boolean) {
@@ -210,7 +423,23 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
     get isOpen(): boolean {
         return this.IsOpen;
     }
-    @Input() Artifact: MJArtifactEntity | null = null;
+
+    @Input()
+    public set Artifact(value: MJArtifactEntity | null) {
+        const prevId = this._artifact?.ID ?? null;
+        const nextId = value?.ID ?? null;
+        this._artifact = value;
+        if (prevId !== nextId) {
+            this.NewlyCreatedGuestLinkUrl = null;
+            this.GuestLinksError = null;
+        }
+        if (this.isInitialized && this._artifact && (this._isOpen || prevId !== nextId)) {
+            void this.reloadModalData();
+        }
+    }
+    public get Artifact(): MJArtifactEntity | null {
+        return this._artifact;
+    }
 
     /** @deprecated Use {@link Artifact}. */
     @Input() set artifact(value: MJArtifactEntity | null) {
@@ -299,27 +528,39 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
         this.NewPermissions = value;
     }
 
+    GuestLinkLabel = '';
+    GuestLinkExpiryHours = 168;
+    IsCreatingGuestLink = false;
+    IsLoadingGuestLinks = false;
+    GuestLinks: GuestShareLinkRow[] = [];
+    NewlyCreatedGuestLinkUrl: string | null = null;
+    GuestLinksError: string | null = null;
+    RevokingGuestLinkId: string | null = null;
+
     constructor(
         private permissionService: ArtifactPermissionService,
         private cdr: ChangeDetectorRef,
         private confirmService: MJConfirmService
-    ) {}
+    ) {
+        super();
+    }
 
     async ngOnInit(): Promise<void> {
+        this.isInitialized = true;
         if (this.Artifact) {
-            await this.loadPermissions();
-            await this.updateAvailablePermissions();
+            await this.reloadModalData();
         }
     }
 
-    async ngOnChanges(changes: SimpleChanges): Promise<void> {
-        // Reload permissions when modal opens or artifact changes
-        const modalOpened = changes['isOpen']?.currentValue === true && changes['isOpen']?.previousValue === false;
-        const artifactChanged = changes['artifact'] && !changes['artifact'].isFirstChange();
-
-        if ((modalOpened || artifactChanged) && this.Artifact) {
-            await this.loadPermissions();
-            await this.updateAvailablePermissions();
+    private async reloadModalData(): Promise<void> {
+        if (!this.Artifact) return;
+        await this.loadPermissions();
+        await this.updateAvailablePermissions();
+        if (this.CanModifyPermissions) {
+            await this.LoadGuestShareLinks();
+        } else {
+            this.GuestLinks = [];
+            this.cdr.detectChanges();
         }
     }
 
@@ -566,6 +807,190 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
     /** @deprecated Use {@link OnRevokePermission}. */
     async onRevokePermission(permission: PermissionDisplay): Promise<void> {
         return this.OnRevokePermission(permission);
+    }
+
+    public async LoadGuestShareLinks(): Promise<void> {
+        if (!this.Artifact || !this.CanModifyPermissions) {
+            this.GuestLinks = [];
+            return;
+        }
+        this.IsLoadingGuestLinks = true;
+        this.GuestLinksError = null;
+        this.cdr.detectChanges();
+
+        try {
+            const cache = this.sessionCreatedUrls;
+            const fallbackArtifactId = this.Artifact.ID;
+            const gqlProvider = this.ProviderToUse as ExecuteGQLProvider;
+            if (typeof gqlProvider?.ExecuteGQL !== 'function') {
+                this.GuestLinksError = 'Failed to load guest share links: GraphQL provider is unavailable.';
+                this.GuestLinks = [];
+                return;
+            }
+            const gqlData = await gqlProvider.ExecuteGQL(LIST_ARTIFACT_GUEST_SHARE_LINKS_GQL, {
+                artifactId: fallbackArtifactId,
+            });
+            const payload = gqlData?.ListArtifactGuestShareLinks;
+            if (!payload || !payload.Success) {
+                this.GuestLinksError = payload?.ErrorMessage || 'Failed to load guest share links.';
+                this.GuestLinks = [];
+                return;
+            }
+            this.GuestLinks = (payload.Links ?? [])
+                .filter((row) => typeof row.ID === 'string' && row.ID.length > 0)
+                .map((row) => ({
+                    ID: row.ID,
+                    ArtifactID: row.ArtifactID || fallbackArtifactId,
+                    ArtifactVersionID: row.ArtifactVersionID ?? null,
+                    Label: row.Label ?? null,
+                    ShareMode: row.ShareMode ?? 'Frozen',
+                    ExpiresAt: row.ExpiresAt ?? null,
+                    RevokedAt: row.RevokedAt ?? null,
+                    __mj_CreatedAt: row.CreatedAt ?? null,
+                    CreatedShareUrl: cache.get(row.ID) ?? null,
+                }));
+        } catch (err) {
+            this.GuestLinksError = err instanceof Error ? err.message : 'Failed to load guest share links.';
+            this.GuestLinks = [];
+        } finally {
+            this.IsLoadingGuestLinks = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public async CreateGuestShareLink(): Promise<void> {
+        if (!this.Artifact || this.IsCreatingGuestLink) {
+            return;
+        }
+        this.IsCreatingGuestLink = true;
+        this.GuestLinksError = null;
+        this.cdr.detectChanges();
+
+        try {
+            const input: CreateGuestShareLinkInput = {
+                ArtifactID: this.Artifact.ID,
+                ExpiresInHours: Number(this.GuestLinkExpiryHours) || 168,
+                Label: this.GuestLinkLabel.trim() || undefined,
+            };
+            const op = new CreateGuestShareLinkOperation();
+            const opResult = await op.Execute(input, { provider: this.ProviderToUse });
+            if (!opResult.Success || !opResult.Output) {
+                const msg = opResult.ErrorMessage || 'Failed to create guest share link.';
+                this.GuestLinksError = msg;
+                MJNotificationService.Instance.CreateSimpleNotification(msg, 'error', 5000);
+                return;
+            }
+
+            const fullUrl = this.buildFullGuestShareUrl(opResult.Output.ShareUrlPath, opResult.Output.Token);
+            this.sessionCreatedUrls.set(opResult.Output.LinkID, fullUrl);
+            this.NewlyCreatedGuestLinkUrl = fullUrl;
+            this.GuestLinkLabel = '';
+            MJNotificationService.Instance.CreateSimpleNotification('External guest link created', 'success', 3000);
+            await this.LoadGuestShareLinks();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Failed to create guest share link.';
+            this.GuestLinksError = msg;
+            MJNotificationService.Instance.CreateSimpleNotification(msg, 'error', 5000);
+        } finally {
+            this.IsCreatingGuestLink = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public async CopyGuestShareUrl(url: string | null | undefined): Promise<boolean> {
+        const trimmed = (url ?? '').trim();
+        if (!trimmed) {
+            return false;
+        }
+        try {
+            if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+                throw new Error('Clipboard API unavailable');
+            }
+            await navigator.clipboard.writeText(trimmed);
+            MJNotificationService.Instance.CreateSimpleNotification('Guest link copied to clipboard', 'success', 3000);
+            return true;
+        } catch (err) {
+            console.error('Failed to copy guest link:', err);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to copy link to clipboard. Please copy it manually.',
+                'error',
+                5000
+            );
+            return false;
+        }
+    }
+
+    public async RevokeGuestShareLink(link: GuestShareLinkRow): Promise<void> {
+        if (!this.Artifact || !link?.ID) {
+            return;
+        }
+        const confirmed = await this.confirmService.ConfirmDelete({
+            title: 'Revoke Guest Link',
+            message: `Revoke "${link.Label || 'External guest link'}"? External guests using this link will lose access immediately.`,
+            confirmText: 'Revoke',
+        });
+        if (!confirmed) {
+            return;
+        }
+
+        this.RevokingGuestLinkId = link.ID;
+        this.GuestLinksError = null;
+        this.cdr.detectChanges();
+
+        try {
+            const input: RevokeGuestShareLinkInput = {
+                ArtifactID: this.Artifact.ID,
+                VersionID: link.ArtifactVersionID ?? '',
+                LinkID: link.ID,
+            };
+            const op = new RevokeGuestShareLinkOperation();
+            const opResult = await op.Execute(input, { provider: this.ProviderToUse });
+            if (!opResult.Success) {
+                const msg = opResult.ErrorMessage || 'Failed to revoke guest link.';
+                this.GuestLinksError = msg;
+                MJNotificationService.Instance.CreateSimpleNotification(msg, 'error', 5000);
+                return;
+            }
+
+            this.sessionCreatedUrls.delete(link.ID);
+            if (this.NewlyCreatedGuestLinkUrl && link.CreatedShareUrl === this.NewlyCreatedGuestLinkUrl) {
+                this.NewlyCreatedGuestLinkUrl = null;
+            }
+            this.GuestLinks = this.GuestLinks.filter((item) => !UUIDsEqual(item.ID, link.ID));
+            MJNotificationService.Instance.CreateSimpleNotification('Guest link revoked', 'success', 3000);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Failed to revoke guest link.';
+            this.GuestLinksError = msg;
+            MJNotificationService.Instance.CreateSimpleNotification(msg, 'error', 5000);
+        } finally {
+            this.RevokingGuestLinkId = null;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public IsGuestLinkRevoking(linkId: string): boolean {
+        return Boolean(this.RevokingGuestLinkId && UUIDsEqual(this.RevokingGuestLinkId, linkId));
+    }
+
+    public FormatGuestTimestamp(value: string | Date | null | undefined): string {
+        if (!value) {
+            return '';
+        }
+        const parsed = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return value instanceof Date ? '' : value;
+        }
+        return parsed.toLocaleString();
+    }
+
+    private buildFullGuestShareUrl(shareUrlPath: string, token: string): string {
+        const normalizedPath = shareUrlPath?.trim() || `/magic-link/redeem?token=${encodeURIComponent(token)}`;
+        if (/^https?:\/\//i.test(normalizedPath)) {
+            return normalizedPath;
+        }
+        const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+        const prefixed = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+        return `${origin}${prefixed}`;
     }
 
     onCancel(): void {

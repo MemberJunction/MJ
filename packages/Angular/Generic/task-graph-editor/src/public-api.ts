@@ -17,6 +17,7 @@ export * from './lib/task-graph-debug-toolbar.component';
 export * from './lib/task-graph-debugger.component';
 export * from './lib/task-graph-variables.component';
 export * from './lib/workflow-debug-host';
+export * from './lib/remembered-breakpoints';
 export * from './lib/debug-variables';
 export * from './lib/pane-split';
 export * from './lib/task-graph-run-prefs';

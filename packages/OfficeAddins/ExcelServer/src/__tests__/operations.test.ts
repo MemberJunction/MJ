@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import JSZip from 'jszip';
-import { IMetadataProvider, QueryInfo, RemoteOpServerContext, UserInfo } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, IMetadataProvider, QueryInfo, RemoteOpServerContext, UserInfo } from '@memberjunction/core';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import {
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinEvaluateCustomFunctionServerOperation,
     ExcelAddinGetCatalogServerOperation,
     ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
@@ -101,6 +103,137 @@ describe('ExcelAddin operations, add-in on', () => {
         );
         expect(resolvedResult.Success).toBe(true);
         expect(resolvedResult.Output?.Source.Name).toBe('Renewals: 2026');
+    });
+
+    it('evaluates =MJ.QUERY custom functions and refuses IsServerSet parameters', async () => {
+        const evalProvider = {
+            Queries: [{
+                ID: QUERY_ID,
+                Name: 'Renewals: 2026',
+                UserCanRun: () => true,
+                Fields: [{ Name: 'Total', Sequence: 1, SQLBaseType: 'decimal' }],
+                Parameters: [
+                    { Name: 'Year', Type: 'number', IsRequired: false, IsServerSet: false },
+                    { Name: 'TenantID', Type: 'string', IsRequired: false, IsServerSet: true },
+                ],
+            } as unknown as QueryInfo],
+            RunQuery: async () => ({
+                Success: true,
+                Results: [{ Total: 7500 }],
+                RowCount: 1,
+                TotalRowCount: 1,
+            }),
+        } as unknown as IMetadataProvider;
+        const evalContext: RemoteOpServerContext = { provider: evalProvider, user, emitProgress: vi.fn() };
+
+        const ok = await new ExcelAddinEvaluateCustomFunctionServerOperation().ExecuteServer(
+            { Kind: 'Query', Target: 'Renewals: 2026', PositionalArguments: [2026] },
+            evalContext,
+        );
+        expect(ok.Success).toBe(true);
+        expect(ok.Output?.Matrix).toEqual([[7500]]);
+        expect(ok.Output?.ScalarValue).toBe(7500);
+
+        const refused = await new ExcelAddinEvaluateCustomFunctionServerOperation().ExecuteServer(
+            { Kind: 'Query', Target: 'Renewals: 2026', Parameters: { TenantID: 'override' } },
+            evalContext,
+        );
+        expect(refused.Success).toBe(false);
+        expect(refused.ErrorMessage).toMatch(/set by the server/i);
+    });
+
+    it('evaluates =MJ.VIEW custom functions by view Name with optional Filter and refuses unsafe SQL filters', async () => {
+        const entityId = '8B3C4D5E-2F3A-4B5C-9D0E-1F2A3B4C5D6E';
+        const viewId = '6F1D4A6E-0C5E-4B53-9E0B-6F2C1D8E9A10';
+        const firstNameField = new EntityFieldInfo({ Name: 'FirstName', Type: 'nvarchar', DisplayName: 'First Name', DefaultInView: true, Sequence: 1 });
+        const statusField = new EntityFieldInfo({ Name: 'Status', Type: 'nvarchar', DisplayName: 'Status', DefaultInView: true, Sequence: 2 });
+        const entity = Object.create(EntityInfo.prototype) as EntityInfo;
+        Object.assign(entity, {
+            ID: entityId,
+            Name: 'MJ: Members',
+            DisplayName: 'Members',
+            IncludeInAPI: true,
+            Status: 'Active',
+            GetUserPermisions: () => ({ CanRead: true }),
+            GetDeniedReadFields: () => new Set<string>(),
+        });
+        Object.defineProperty(entity, 'Fields', { get: () => [firstNameField, statusField] });
+
+        const viewObj = {
+            ID: viewId,
+            Name: 'Active Members',
+            EntityID: entityId,
+            Load: vi.fn(async () => true),
+            UserCanView: true,
+            Columns: [],
+            ViewEntityInfo: entity,
+        } as unknown as MJUserViewEntityExtended;
+
+        const runViewCalls: Array<{ EntityName?: string; ViewID?: string; ExtraFilter?: string }> = [];
+        const viewProvider = {
+            Entities: [entity],
+            GetEntityObject: vi.fn(async () => viewObj),
+            RunView: vi.fn(async (params: { EntityName?: string; ViewID?: string; ExtraFilter?: string }) => {
+                runViewCalls.push(params);
+                if (params.EntityName === 'MJ: User Views') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: viewId, Name: 'Active Members', EntityID: entityId, UserID: user.ID, IsShared: true }],
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: [{ FirstName: 'Ada', Status: 'Active' }],
+                    TotalRowCount: 1,
+                };
+            }),
+        } as unknown as IMetadataProvider;
+        const viewContext: RemoteOpServerContext = { provider: viewProvider, user, emitProgress: vi.fn() };
+
+        const ok = await new ExcelAddinEvaluateCustomFunctionServerOperation().ExecuteServer(
+            {
+                Kind: 'View',
+                Target: 'MJ: Members',
+                ViewNameOrId: 'Active Members',
+                Filter: "Status='Active'",
+                IncludeHeaders: true,
+            },
+            viewContext,
+        );
+        expect(ok.Success).toBe(true);
+        expect(ok.Output?.Matrix).toEqual([
+            ['First Name', 'Status'],
+            ['Ada', 'Active'],
+        ]);
+        expect(runViewCalls.some(c => c.ViewID === viewId && c.ExtraFilter === "Status = 'Active'")).toBe(true);
+
+        const quotedAnd = await new ExcelAddinEvaluateCustomFunctionServerOperation().ExecuteServer(
+            {
+                Kind: 'View',
+                Target: 'MJ: Members',
+                ViewNameOrId: 'Active Members',
+                Filter: "FirstName='Ada AND Grace' AND Status='Active'",
+            },
+            viewContext,
+        );
+        expect(quotedAnd.Success).toBe(true);
+        expect(
+            runViewCalls.some(
+                c => c.ViewID === viewId && c.ExtraFilter === "FirstName = 'Ada AND Grace' AND Status = 'Active'",
+            ),
+        ).toBe(true);
+
+        const sqli = await new ExcelAddinEvaluateCustomFunctionServerOperation().ExecuteServer(
+            {
+                Kind: 'View',
+                Target: 'MJ: Members',
+                ViewNameOrId: 'Active Members',
+                Filter: "Status='Active'; DROP TABLE Users--",
+            },
+            viewContext,
+        );
+        expect(sqli.Success).toBe(false);
+        expect(sqli.ErrorMessage).toMatch(/unsafe sql filter/i);
     });
 });
 

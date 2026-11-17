@@ -379,6 +379,16 @@ export class AgentRunStepSaveQueue {
         this.queue.Update(step, applyMutation ? (entity) => applyMutation(entity as MJAIAgentRunStepEntity) : undefined);
     }
 
+    /**
+     * Resolves once every save queued so far for `step` has settled (its INSERT and any UPDATE behind it),
+     * or at once when none is pending. Never rejects: a failed save is already logged. Await it before writing
+     * a row outside this queue that has a foreign key to the step, such as an `MJ: AI Agent Requests` row's
+     * `OriginatingAgentRunStepID`. {@link Insert}'s prerequisites only order writes within this queue.
+     */
+    public Settled(step: MJAIAgentRunStepEntity): Promise<void> {
+        return this.queue.Settled(step);
+    }
+
     /** Awaits every queued save, drains the queue, and returns failure diagnostics. Call at run/goal finalize. */
     public async Flush(): Promise<AgentRunStepFlushResult> {
         const { failures, rejections } = await this.queue.Flush();

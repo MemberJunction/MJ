@@ -14,6 +14,7 @@
  */
 
 import { RealtimeToolDefinition } from './baseRealtime';
+import type { RealtimeContextNoteOptions } from './realtimeConversationMemory';
 import type { RealtimeTrackDescriptor } from './realtimeTracks';
 
 /**
@@ -71,8 +72,9 @@ export interface RealtimeChannelServerContext {
      * before a live session exists. Channels MUST call it null-safely (`this.Context?.SendContextNote?.(…)`).
      *
      * @param text The perception note to surface to the model (plain text; the channel owns any framing).
+     * @param options Optional retention policy (`StateKey`, `Ephemeral`, `MemoryText`) for reconnect memory.
      */
-    SendContextNote?(text: string): void;
+    SendContextNote?(text: string, options?: RealtimeContextNoteOptions): void;
 }
 
 /**

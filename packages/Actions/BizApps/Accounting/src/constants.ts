@@ -75,6 +75,8 @@ export const ACCOUNTING_VERBS = {
     GetGLEntries: 'GetGLEntries',
     GetCustomers: 'GetCustomers',
     GetSalesInvoices: 'GetSalesInvoices',
+    GetBudget: 'GetBudget',
+    GetVendorBills: 'GetVendorBills',
 } as const;
 
 export type AccountingVerb = (typeof ACCOUNTING_VERBS)[keyof typeof ACCOUNTING_VERBS];

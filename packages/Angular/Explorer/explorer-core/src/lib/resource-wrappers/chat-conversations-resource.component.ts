@@ -5,15 +5,17 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
 import { ResolveChatSearchRoute } from './chat-search-routing.js';
+import { BuildExportArtifactLink } from './chat-export-artifact-link.js';
 import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './compose-email-fallback.js';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest } from '@memberjunction/ng-conversations';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest, ExportArtifactLinkTarget } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { ComposeEmailCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
+import type { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { Subject, takeUntil } from 'rxjs';
+import { firstValueFrom, Subject, takeUntil } from 'rxjs';
 /**
  * Chat Conversations Resource - wraps the conversation chat area for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
@@ -88,6 +90,7 @@ import { Subject, takeUntil } from 'rxjs';
               [pendingArtifactId]="pendingArtifactId"
               [pendingArtifactConversationId]="pendingArtifactConversationId"
               [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
+              [ExportArtifactLink]="ExportArtifactLink"
               [showSidebarToggle]="isSidebarCollapsed && isSidebarSettingsLoaded"
               (sidebarToggleClicked)="expandSidebar()"
               (conversationRenamed)="onConversationRenamed($event)"
@@ -502,6 +505,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
 
   private engine = ConversationEngine.Instance;
+
+  /** Deep link written into conversation exports for each artifact; opens it in this resource. */
+  public readonly ExportArtifactLink = (target: ExportArtifactLinkTarget): string | null =>
+    typeof window === 'undefined' ? null : BuildExportArtifactLink(window.location.href, target);
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocompleteService = MentionAutocompleteService.Instance;
@@ -1381,27 +1388,36 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     artifactId?: string;
     versionNumber?: number;
   }): void {
-    // Map the link type to the nav item name
-    const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
-
-    // Build configuration params to pass to the target resource
-    const params: Record<string, unknown> = {};
-    if (event.type === 'conversation') {
-      params['conversationId'] = event.id;
-    } else {
-      params['collectionId'] = event.id;
+    if (event.type === 'collection') {
+      const queryParams: Record<string, string> = { collectionId: event.id };
+      if (event.artifactId) {
+        queryParams['artifactId'] = event.artifactId;
+        if (event.versionNumber) {
+          queryParams['version'] = String(event.versionNumber);
+        }
+      }
+      void this.navigateToDriverClassOrFallback(
+        ['LibraryResource', 'ChatCollectionsResource'],
+        'Library',
+        queryParams,
+        'Collections',
+      );
+      return;
     }
 
-    // Include artifact info so destination can open it
+    // Build configuration params to pass to the Conversations resource
+    const params: Record<string, string | number> = { conversationId: event.id };
+    const queryParams: Record<string, string> = { conversationId: event.id };
     if (event.artifactId) {
       params['artifactId'] = event.artifactId;
+      queryParams['artifactId'] = event.artifactId;
       if (event.versionNumber) {
         params['versionNumber'] = event.versionNumber;
+        queryParams['version'] = String(event.versionNumber);
       }
     }
 
-    // Navigate using the generic nav item method
-    this.navigationService.OpenNavItemByName(navItemName, params);
+    void this.navigationService.OpenNavItemByName('Conversations', params, undefined, { queryParams });
   }
 
   /** @deprecated Use {@link OnArtifactLinkClicked}. */
@@ -1464,15 +1480,128 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         break;
       case 'message':
         this.openMessageResult(route.ConversationId, route.BranchId, route.Sequence)
-          .catch((error: unknown) => console.error('Failed to open the message from search:', error));
+          .catch((error: Error | string) => console.error('Failed to open the message from search:', error));
         break;
       case 'artifact':
         this.navigationService.OpenArtifact(route.ArtifactId, route.Title);
         break;
       case 'nav-item':
-        void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        if (route.NavItemName === 'Library' || route.NavItemName === 'Collections') {
+          void this.navigateToDriverClassOrFallback(
+            ['LibraryResource', 'ChatCollectionsResource'],
+            'Library',
+            route.Configuration,
+            'Collections',
+          );
+        } else if (route.NavItemName === 'Agent Activity') {
+          void this.navigateToDriverClassOrFallback(
+            ['ChatTasksResource'],
+            'Agent Activity',
+            route.Configuration,
+            'Tasks',
+          );
+        } else {
+          void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        }
         break;
     }
+  }
+
+  /**
+   * Resolves a destination application and nav item across `appManager.Applications` (falling back
+   * to `ProviderToUse.Applications`) by `DriverClass` so `Library`, `Collections`, and
+   * `Agent Activity` navigation never depends on hardcoded application names.
+   */
+  private async navigateToDriverClassOrFallback(
+    driverClasses: readonly string[],
+    fallbackNavItemName: string,
+    queryParams: Record<string, string>,
+    legacyFallbackNavItemName?: string,
+  ): Promise<void> {
+    const resolved = await this.resolveNavTargetByDriverClass(driverClasses);
+    if (resolved) {
+      await this.navigationService.SwitchToApp(resolved.AppId, resolved.NavLabel, queryParams);
+      return;
+    }
+
+    const tabId = await this.navigationService.OpenNavItemByName(
+      fallbackNavItemName,
+      queryParams,
+      undefined,
+      { queryParams },
+    );
+    if (!tabId && legacyFallbackNavItemName) {
+      await this.navigationService.OpenNavItemByName(
+        legacyFallbackNavItemName,
+        queryParams,
+        undefined,
+        { queryParams },
+      );
+    }
+  }
+
+  private async resolveNavTargetByDriverClass(
+    driverClasses: readonly string[],
+  ): Promise<{ AppId: string; NavLabel: string } | null> {
+    const manager = this.navigationService?.AppManager;
+
+    if (manager) {
+      const activeApps: BaseApplication[] =
+        typeof manager.GetAllApps === 'function' && manager.GetAllApps().length > 0
+          ? manager.GetAllApps()
+          : manager.Applications
+            ? await firstValueFrom(manager.Applications).catch(() => [])
+            : [];
+
+      if (activeApps.length > 0) {
+        const navLists = await Promise.all(
+          activeApps.map(async (app) => ({
+            app,
+            items: await app.GetNavItems().catch(() => []),
+          })),
+        );
+
+        for (const driverClass of driverClasses) {
+          for (const entry of navLists) {
+            const match = entry.items.find(
+              (item) =>
+                item.DriverClass === driverClass && (item.Status ?? 'Active') === 'Active',
+            );
+            if (match?.Label) {
+              return { AppId: entry.app.ID, NavLabel: match.Label };
+            }
+          }
+        }
+        return null;
+      }
+    }
+
+    // Fallback when appManager is not attached in isolated harnesses
+    const apps = this.ProviderToUse?.Applications ?? [];
+    for (const driverClass of driverClasses) {
+      for (const app of apps) {
+        if ((app.Status ?? 'Active') !== 'Active' || !app.DefaultNavItems) {
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(app.DefaultNavItems) as Array<{
+            Label?: string;
+            DriverClass?: string;
+            Status?: string;
+          }>;
+          const match = parsed.find(
+            (item) =>
+              item.DriverClass === driverClass && (item.Status ?? 'Active') === 'Active',
+          );
+          if (match?.Label) {
+            return { AppId: app.ID, NavLabel: match.Label };
+          }
+        } catch {
+          // Ignore malformed DefaultNavItems JSON
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -1577,7 +1706,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     }
   }
 
-  private toQueryParamsRecord(params?: Record<string, unknown>): Record<string, string> | undefined {
+  private toQueryParamsRecord(params?: OpenResourceCommand['parameters']): Record<string, string> | undefined {
     if (!params || Object.keys(params).length === 0) {
       return undefined;
     }

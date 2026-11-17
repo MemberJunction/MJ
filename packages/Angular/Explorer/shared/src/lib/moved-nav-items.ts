@@ -9,6 +9,8 @@ export interface MovedNavItem {
 /** Nav items that moved. A request for the old place opens the new one, so old Home pins keep working. */
 export const MOVED_NAV_ITEMS: readonly MovedNavItem[] = [
   { FromApplication: 'Data Explorer', FromNavItem: 'Dashboards', ToApplication: 'Dashboards', ToNavItem: 'Library' },
+  { FromApplication: 'Chat', FromNavItem: 'Tasks', ToApplication: 'Chat', ToNavItem: 'Agent Activity' },
+  { FromApplication: 'Chat', FromNavItem: 'Collections', ToApplication: 'Chat', ToNavItem: 'Library' },
 ];
 
 /** True when two names are the same without regard to case or outer spaces. */

@@ -1,5 +1,7 @@
 import { Command, Flags } from '@oclif/core';
-import { MJWorkLogger, SharedProviderSource, WorkQueueEngine, WorkQueueHost } from '@memberjunction/work-queue-engine';
+import { IndependentProviderSource, MJWorkLogger, SharedProviderSource, WorkQueueEngine, WorkQueueHost } from '@memberjunction/work-queue-engine';
+import type { WorkQueueProviderSource } from '@memberjunction/work-queue-engine';
+import type { DatabaseProviderBase } from '@memberjunction/core';
 import type { RunOnceResult } from '@memberjunction/work-queue-engine';
 import { OpenWorkQueueSession } from '../../lib/work-queue/queue-session.js';
 import { RunUntilStopped, WorkerStartFailure } from '../../lib/work-queue/queue-worker.js';
@@ -8,6 +10,26 @@ import '@memberjunction/work-queue-engine/aws';
 
 const DEFAULT_IDLE_EXIT_MS = 5000;
 const DEFAULT_SHUTDOWN_DRAIN_MS = 30000;
+/** Long-running mode: retention and dedup purge, as MJAPI's sweeper does (#6274). */
+export const DEFAULT_SWEEPER_INTERVAL_MS = 300000;
+/** Long-running mode: re-plan subscriptions; MJAPI's default (`workQueue.reconcileIntervalMs`). */
+export const DEFAULT_RECONCILE_INTERVAL_MS = 30000;
+
+/**
+ * The host timers for a run: none for a one-shot container job (it neither sweeps nor re-plans), the flag values for a
+ * long-running worker, which otherwise would never re-plan and, with MJAPI publish-only, leave nothing to purge.
+ */
+export function QueueWorkTimers(once: boolean, sweeperIntervalMs: number, reconcileIntervalMs: number): { SweeperIntervalMs: number; ReconcileIntervalMs: number } {
+  return once ? { SweeperIntervalMs: 0, ReconcileIntervalMs: 0 } : { SweeperIntervalMs: sweeperIntervalMs, ReconcileIntervalMs: reconcileIntervalMs };
+}
+
+/**
+ * One provider for every delivery at concurrency 1; a connection-scoped provider per delivery above that, so parallel
+ * handlers do not share transaction state (#6273).
+ */
+export function QueueWorkProviderSource(provider: DatabaseProviderBase, concurrency: number): WorkQueueProviderSource {
+  return concurrency > 1 ? new IndependentProviderSource(provider) : new SharedProviderSource(provider);
+}
 
 export default class QueueWork extends Command {
   static description = 'Run work-queue subscriptions in this process: once for a container job, or until stopped';
@@ -26,6 +48,8 @@ export default class QueueWork extends Command {
     'max-duration-ms': Flags.integer({ description: "With --once: stop claiming after this long and drain (keep it below the scheduler's job deadline)", min: 1000, dependsOn: ['once'] }),
     concurrency: Flags.integer({ description: 'Handlers in flight per subscription', default: 1, min: 1 }),
     'shutdown-drain-ms': Flags.integer({ description: 'How long in-flight handlers get to finish on exit; the drain can take twice this', default: DEFAULT_SHUTDOWN_DRAIN_MS, min: 0 }),
+    'sweeper-interval-ms': Flags.integer({ description: 'Without --once: how often to run the sweeper (lease expiry, retention, dedup purge); 0 turns it off', default: DEFAULT_SWEEPER_INTERVAL_MS, min: 0 }),
+    'reconcile-interval-ms': Flags.integer({ description: 'Without --once: how often to re-plan subscriptions; 0 turns it off', default: DEFAULT_RECONCILE_INTERVAL_MS, min: 0 }),
   };
 
   async run(): Promise<void> {
@@ -39,10 +63,10 @@ export default class QueueWork extends Command {
           InstanceID: `mj-queue-work-${process.pid}`,
           Subscriptions: [{ Name: flags.subscription, Concurrency: flags.concurrency }],
           IdlePollMinMs: 250, IdlePollMaxMs: 2000, ShutdownDrainMs: flags['shutdown-drain-ms'],
-          SweeperIntervalMs: 0, ReconcileIntervalMs: 0,        // a short-lived job neither sweeps nor re-plans
+          ...QueueWorkTimers(flags.once, flags['sweeper-interval-ms'], flags['reconcile-interval-ms']),
         },
         WorkQueueEngine.Instance, session.User, session.Provider, new MJWorkLogger('[mj queue work]'),
-        { ProviderSource: new SharedProviderSource(session.Provider) },
+        { ProviderSource: QueueWorkProviderSource(session.Provider, flags.concurrency) },
       );
       failure = flags.once ? await this.runOnce(host, flags) : await this.runUntilSignal(host, flags.subscription);
     } catch (error) {

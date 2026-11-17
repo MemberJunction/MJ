@@ -13,10 +13,12 @@ import path from 'node:path';
 import { CompositeKey, LogError, LogStatus } from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine, MJFileEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { IsHttpError } from '@memberjunction/network-utils';
+import { HttpError, IsHttpError } from '@memberjunction/network-utils';
 import { FileStorageEngine, IsSafeStorageObjectKey } from '@memberjunction/storage';
 import {
+    AccessArtifact,
     ArchiveBudget,
+    BasePageRenderer,
     BasePipelineStage,
     ContentBlock,
     DetectByteSignature,
@@ -24,6 +26,7 @@ import {
     FatalStageError,
     FileTypeEvidenceConfidenceKey,
     IsPlausibleText,
+    LocatorBatchFetchResult,
     ObjectKeyResolutionError,
     Outcome,
     ResolveConfidence,
@@ -85,7 +88,9 @@ export class ExtractStage extends BasePipelineStage {
         const source = await this.resolveSource(record, context);
         // Kept bytes are read back, not refetched: an archive member's URL points at the archive.
         const keptFileID = record.GetExtension<string>('Pipeline', 'fileID');
-        const fetched = keptFileID ? await this.readKeptFile(keptFileID, url, context) : await this.fetch(url, source, context);
+        const fetched = keptFileID
+            ? await this.readKeptFile(keptFileID, url, context)
+            : (this.prefetched(record, url) ?? (await this.fetch(url, source, context)));
         const archiveState: ArchiveTreeState = {};
         const read = await this.detectAndRead(record, fetched.Content, fetched.ResolvedURL ?? url, source, context, archiveState, 0);
         switch (read.Kind) {
@@ -98,6 +103,71 @@ export class ExtractStage extends BasePipelineStage {
             case 'Read':
                 return this.applyResult(record, read, url, source, context, archiveState, 0, fetched.Content);
         }
+    }
+
+    /**
+     * Fetch a page of items in one session per source, when the source's driver can (`FetchBatch`). Each record
+     * keeps what came back for it (`Extract.prefetched`), bytes or an error, and `Run` uses that instead of
+     * fetching alone. Items whose bytes are kept, or whose driver cannot batch, are left to fetch alone.
+     */
+    public override async Prepare(records: readonly WorkingRecord[], context: StageContext): Promise<void> {
+        const bySource = new Map<string, WorkingRecord[]>();
+        for (const record of records) {
+            const sourceID = record.GetExtension<string>('Pipeline', 'contentSourceID');
+            if (sourceID && record.Identity.EphemeralID && !record.GetExtension<string>('Pipeline', 'fileID')) {
+                bySource.set(sourceID, [...(bySource.get(sourceID) ?? []), record]);
+            }
+        }
+        for (const [sourceID, group] of bySource) {
+            if (context.Signal.aborted) {
+                return;
+            }
+            try {
+                await this.prefetchGroup(group, sourceID, context);
+            } catch (error) {
+                LogError(`ExtractStage: batch fetch for source '${sourceID}' failed; its items fetch one by one: ${messageOf(error)}`);
+            }
+        }
+    }
+
+    private async prefetchGroup(group: WorkingRecord[], sourceID: string, context: StageContext): Promise<void> {
+        const source = await this.resolveSource(group[0], context);
+        const resolved = source.Resolved;
+        const driver = resolved?.DriverClass ? ResolveSourceDriver(resolved.DriverClass) : null;
+        if (!resolved || !driver?.FetchBatch) {
+            return;
+        }
+        const results = await driver.FetchBatch({
+            URLs: group.map((r) => r.Identity.EphemeralID),
+            ContentSourceID: sourceID,
+            SourceURL: resolved.URL,
+            Parameters: source.Parameters,
+            Configuration: resolved.Configuration,
+            Access: await context.ResolveAccess(sourceID),
+            ContextUser: context.ContextUser,
+            Provider: context.Provider,
+            Signal: context.Signal,
+        });
+        const byURL = new Map(results.map((r) => [r.URL, r]));
+        for (const record of group) {
+            const result = byURL.get(record.Identity.EphemeralID);
+            if (result && (result.Response || result.Error)) {
+                record.SetExtension(EXTRACT_STAGE, 'prefetched', result);
+            }
+        }
+        context.ReportProgress(`fetched ${byURL.size} of ${group.length} item(s) in one batch`);
+    }
+
+    /** What `Prepare` fetched for this record: its bytes, or the error its fetch ended in; undefined when nothing. */
+    private prefetched(record: WorkingRecord, url: string): FetchResponse | undefined {
+        const result = record.GetExtension<LocatorBatchFetchResult>(EXTRACT_STAGE, 'prefetched');
+        if (!result) {
+            return undefined;
+        }
+        if (result.Error) {
+            throw this.classifyFetchError(url, result.Error);
+        }
+        return result.Response;
     }
 
     /** Detect the file type, then route the bytes: multi-modal, an extractor, or no extractor at all. */
@@ -144,6 +214,7 @@ export class ExtractStage extends BasePipelineStage {
             Tuning: tuning,
             Confidence: source.Confidence,
             ArchiveBudget: budget,
+            Options: this.extractorOptions(selected.Key, source, context),
             Signal: context.Signal,
             ReportProgress: (m) => context.ReportProgress(m),
         });
@@ -229,7 +300,7 @@ export class ExtractStage extends BasePipelineStage {
         }
         record.SetExtension(EXTRACT_STAGE, 'isFallback', read.Result.IsFallback === true);
         this.applyExtractExtensions(record, read.Result.Columns, read.Result.Request);
-        if (blocks.length === 1 && !blocks[0].Content) {
+        if (blocks.length === 1 && !blocks[0].Content && !read.Result.IsContainer) {
             this.applyBlock(record, blocks[0], read.Result.IsFallback === true, source.Confidence);
             return Outcome.Complete(`read with ${read.Key}`);
         }
@@ -238,7 +309,7 @@ export class ExtractStage extends BasePipelineStage {
         const memberDepth = read.IsArchive ? archiveDepth + 1 : archiveDepth;
         // The container keeps its own identity; writing the first block onto it would mislabel a member as the whole.
         for (const [index, block] of blocks.entries()) {
-            const child = this.toChild(record, block, `${url}#${block.Key ?? `block-${index}`}`, source.Confidence);
+            const child = this.toChild(record, block, block.URL ?? `${url}#${block.Key ?? `block-${index}`}`, source.Confidence);
             if (block.Content) {
                 // Read now, while the bytes are in hand: the child's URL is the container's.
                 await this.extractMember(child, block.Content, block.Key ?? '', source, context, archiveState, memberDepth);
@@ -274,7 +345,7 @@ export class ExtractStage extends BasePipelineStage {
         }
         this.applyExtractExtensions(child, read.Result.Columns, read.Result.Request);
         const blocks = read.Result.Blocks;
-        if (blocks.length === 1 && !blocks[0].Content) {
+        if (blocks.length === 1 && !blocks[0].Content && !read.Result.IsContainer) {
             if (blocks[0].Text) {
                 this.applyBlock(child, blocks[0], read.Result.IsFallback === true, source.Confidence);
             } else {
@@ -284,7 +355,7 @@ export class ExtractStage extends BasePipelineStage {
             const nextDepth = read.IsArchive ? archiveDepth + 1 : archiveDepth;
             const childUrl = child.Identity.EphemeralID;
             for (const [index, block] of blocks.entries()) {
-                const grandChild = this.toChild(child, block, `${childUrl}#${block.Key ?? `block-${index}`}`, source.Confidence);
+                const grandChild = this.toChild(child, block, block.URL ?? `${childUrl}#${block.Key ?? `block-${index}`}`, source.Confidence);
                 if (block.Content) {
                     await this.extractMember(grandChild, block.Content, block.Key ?? '', source, context, archiveState, nextDepth);
                 }
@@ -381,6 +452,9 @@ export class ExtractStage extends BasePipelineStage {
             const resolved = source.Resolved;
             const access = resolved ? await context.ResolveAccess(source.ContentSourceID) : null;
             const driver = resolved?.DriverClass ? ResolveSourceDriver(resolved.DriverClass) : null;
+            if (source.PageRenderer && !driver?.Fetch && /^https?:/i.test(url)) {
+                return await this.render(url, source, access, context);
+            }
             if (resolved && driver?.Fetch) {
                 return await driver.Fetch({
                     URL: url,
@@ -398,6 +472,24 @@ export class ExtractStage extends BasePipelineStage {
         } catch (error) {
             throw this.classifyFetchError(url, error);
         }
+    }
+
+    /**
+     * Load a web page through the source's page renderer, as a visitor's browser would build it. Its HTML is
+     * then read like any fetched page; a page that answers with an error status fails as an HTTP fetch would.
+     */
+    private async render(url: string, source: ResolvedSource, access: AccessArtifact | null, context: StageContext): Promise<FetchResponse> {
+        const renderer = BasePageRenderer.Resolve(source.PageRenderer!);
+        if (!renderer) {
+            throw new FatalStageError(`PageRenderer '${source.PageRenderer}' is not registered. Check that the package registering it has been loaded.`);
+        }
+        const sourceOrigin = source.Resolved?.URL && /^https?:/i.test(source.Resolved.URL) ? [new URL(source.Resolved.URL).origin] : [];
+        const accessOrigins = access?.Origins?.length ? access.Origins : sourceOrigin;
+        const result = await renderer.Render({ URL: url, Access: access, AccessOrigins: accessOrigins, TimeoutMs: source.RenderTimeoutMs, Signal: context.Signal });
+        if (result.Status >= 400) {
+            throw new HttpError(`Request failed with status code ${result.Status}`, { Status: result.Status, Url: url, Method: 'GET' });
+        }
+        return { Content: new TextEncoder().encode(result.Html), ContentType: 'text/html', ResolvedURL: result.FinalURL };
     }
 
     /** A permanent 4xx (excluding 408/425/429), an unregistered driver or a locator outside its source will never succeed; anything else might. */
@@ -499,8 +591,16 @@ export class ExtractStage extends BasePipelineStage {
             child.Propose('Title', block.Title, block.TitleConfidence ?? confidence.ExtractorTitle, EXTRACT_STAGE);
         }
         const parentDate = parent.Get('Date');
-        if (parentDate) {
+        const ownDate = block.Fields?.some((f) => f.Field === 'Date' && f.Value != null);
+        if (parentDate && !ownDate) {
             child.Propose('Date', parentDate, parent.GetConfidence('Date'), `${EXTRACT_STAGE}.InheritedFromParent`);
+        }
+        for (const field of block.Fields ?? []) {
+            if (field.Value != null) {
+                // Listing metadata competes on confidence against the child's own later Extract pass, so its
+                // stage prefix must stay distinct from Extract.
+                child.Propose(field.Field, field.Value, field.Confidence, 'Listing.Block');
+            }
         }
         if (block.FileType) {
             child.Propose('FileType', block.FileType, confidence.FileTypeExtension, `${EXTRACT_STAGE}.Split`);
@@ -512,6 +612,25 @@ export class ExtractStage extends BasePipelineStage {
         }
         this.applyExtractExtensions(child, block.Columns, block.Request);
         return child;
+    }
+
+    /**
+     * The settings an extractor gets: `ExtractorOptions[<key>]` from the source type's Configuration, then
+     * the source's type-specific settings, then the source's Configuration, then the run's Options, each layer
+     * overriding the last.
+     */
+    private extractorOptions(key: string, source: ResolvedSource, context: StageContext): Record<string, unknown> {
+        const layer = (configuration: Readonly<Record<string, unknown>> | undefined): Record<string, unknown> => {
+            const all = configuration?.ExtractorOptions;
+            const own = all && typeof all === 'object' ? (all as Record<string, unknown>)[key] : undefined;
+            return own && typeof own === 'object' && !Array.isArray(own) ? (own as Record<string, unknown>) : {};
+        };
+        return {
+            ...layer(source.Resolved?.TypeConfiguration),
+            ...layer(source.Resolved?.Settings),
+            ...layer(source.Resolved?.Configuration),
+            ...layer(context.Configuration),
+        };
     }
 
     /** Attach custom columns and downstream pipeline requests returned by an extractor or block. */
@@ -600,7 +719,20 @@ export class ExtractStage extends BasePipelineStage {
             FileStorageAccountID: configured('FileStorageAccountID'),
             ObjectKeyTemplate: configured('ObjectKeyTemplate'),
             ObjectKeyValues: (context.Configuration.ObjectKeyValues as Record<string, string> | undefined) ?? {},
+            PageRenderer: configured('PageRenderer'),
+            RenderTimeoutMs: this.renderTimeout(sourceConfig, context.Configuration),
         };
+    }
+
+    /** `Website.RenderTimeoutMs` from the run, else the source's Configuration. */
+    private renderTimeout(sourceConfig: Readonly<Record<string, unknown>>, runConfig: Readonly<Record<string, unknown>>): number | undefined {
+        for (const config of [runConfig, sourceConfig]) {
+            const ms = (config.Website as Record<string, unknown> | undefined)?.RenderTimeoutMs;
+            if (typeof ms === 'number' && ms > 0) {
+                return ms;
+            }
+        }
+        return undefined;
     }
 
     /** `ContentType.ExtractorKey` for the source's content type, from the cached metadata. */
@@ -651,4 +783,7 @@ interface ResolvedSource {
     ObjectKeyTemplate: string | null;
     /** Values for placeholders the pipeline does not know itself, such as a tenant id. */
     ObjectKeyValues: Readonly<Record<string, string>>;
+    /** The registered page renderer this source's web pages are loaded through (`PageRenderer`); null for a plain GET. */
+    PageRenderer: string | null;
+    RenderTimeoutMs?: number;
 }

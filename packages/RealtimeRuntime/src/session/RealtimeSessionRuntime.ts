@@ -4,7 +4,18 @@ import { UserInfoEngine, type MJAIAgentChannelEntity, type MJAIAgentChannelEntit
 import { AddRealtimeUsageRecord, AIEngineBase, HasRealtimeUsage, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, ParseRealtimeAvatarStatus, ParseRealtimeClientTransport, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
+import {
+  ClientRealtimeSessionConfig,
+  DEFAULT_REALTIME_AUDIO_TRACKS,
+  JSONObject,
+  JSONValue,
+  ParseRealtimeAvatarStatus,
+  ParseRealtimeClientTransport,
+  RealtimeToolDefinition,
+  RealtimeTrackDescriptor,
+  RealtimeTrackDirection,
+  type RealtimeContextNoteOptions,
+} from '@memberjunction/ai';
 import {
   AppContextSnapshot,
   CompareExposure,
@@ -2505,14 +2516,14 @@ export class RealtimeSessionRuntime {
   /**
    * Feeds a background context note into the live model (no spoken reply is requested) — the
    * perception channel interactive surfaces use (e.g. the whiteboard's coalesced scene deltas).
-   * No-op when no session is live.
+   * No-op when no session is live or resuming mid-call.
    */
-  public SendContextNote(text: string): void {
+  public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
     const trimmed = text?.trim() ?? '';
-    if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
+    if (trimmed.length === 0 || !this.client || (!this.isSessionLive() && !this._resuming$.value)) {
       return;
     }
-    this.client.SendContextNote(trimmed);
+    this.client.SendContextNote(trimmed, options);
   }
 
   /**
@@ -3967,7 +3978,7 @@ export class RealtimeSessionRuntime {
     ];
     const note = BuildChannelCatalogNote(entries);
     if (note) {
-      this.SendContextNote(note);
+      this.SendContextNote(note, { StateKey: 'channel-catalog' });
     }
   }
 
@@ -3998,7 +4009,7 @@ export class RealtimeSessionRuntime {
       get Provider(): IMetadataProvider {
         return service.Provider;
       },
-      SendContextNote: (text: string) => this.SendContextNote(text),
+      SendContextNote: (text: string, options?: RealtimeContextNoteOptions) => this.SendContextNote(text, options),
       RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
       SaveAsArtifact: (name: string, contentJson: string) => this.saveChannelArtifact(plugin.ChannelName, name, contentJson),
@@ -5644,7 +5655,7 @@ export class RealtimeSessionRuntime {
     if (!client) {
       return;
     }
-    client.SendContextNote(`[delegated-agent progress] ${progress.Message}`);
+    client.SendContextNote(`[delegated-agent progress] ${progress.Message}`, { Ephemeral: true });
     // Floods of small updates AGGREGATE: each distinct message joins the digest buffer,
     // and ONE spoken update fires per window (first at ~5s into the burst, then every
     // ~8s). The buffer is discarded if the final result lands first.

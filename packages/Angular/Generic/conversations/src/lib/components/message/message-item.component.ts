@@ -10,13 +10,15 @@ import {
   OnChanges,
   SimpleChanges,
   DoCheck,
-  TemplateRef
+  TemplateRef,
+  ViewChild,
+  ElementRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON, UserInfoEngine } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, OpenResourceCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { FormatAgentFailureForDisplay } from '../../utils/agent-failure-display';
@@ -31,7 +33,7 @@ import {
   AfterResponseFormSubmittedEventArgs,
   BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
-import { ExcludeByUUIDs, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { ExcludeByUUIDs, IsValidUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
@@ -124,6 +126,74 @@ export interface MessagePendingArtifactRef {
   artifactId: string;
   artifactName: string;
   visibility: string;
+}
+
+const ARTIFACT_RESOURCE_TYPES = new Set(['artifact', 'file']);
+const FALLBACK_ARTIFACT_RESOURCE_TYPES = new Set(['report', 'dashboard']);
+
+function matchesAttachedArtifactTarget(
+  rawResourceId: string | undefined,
+  artifacts: readonly MessageArtifactRef[],
+  pendingArtifacts: readonly MessagePendingArtifactRef[],
+  suppressNonUuidPlaceholder: boolean
+): boolean {
+  const trimmed = rawResourceId?.trim();
+  if (!trimmed) {
+    return true;
+  }
+  const normalizedName = trimmed.toLowerCase();
+  for (const ref of artifacts) {
+    if (
+      UUIDsEqual(ref.artifact.ID, trimmed) ||
+      UUIDsEqual(ref.version.ID, trimmed) ||
+      ref.artifact.Name?.trim().toLowerCase() === normalizedName ||
+      ref.version.Name?.trim().toLowerCase() === normalizedName
+    ) {
+      return true;
+    }
+  }
+  for (const pending of pendingArtifacts) {
+    if (
+      UUIDsEqual(pending.artifactId, trimmed) ||
+      pending.artifactName?.trim().toLowerCase() === normalizedName
+    ) {
+      return true;
+    }
+  }
+  return suppressNonUuidPlaceholder && !IsValidUUID(trimmed);
+}
+
+/**
+ * Filters out redundant `open:resource` actionable commands when the message already displays
+ * inline artifact card(s), preventing duplicate "Open Document" buttons underneath artifact cards
+ * while keeping valid navigation links to real dashboards, queries, views, records, and external URLs.
+ */
+export function FilterRedundantArtifactCommands(
+  commands: readonly ActionableCommand[],
+  artifacts: readonly MessageArtifactRef[],
+  pendingArtifacts: readonly MessagePendingArtifactRef[] = []
+): ActionableCommand[] {
+  if (commands.length === 0) {
+    return [];
+  }
+  const hasAttachedArtifacts = artifacts.length > 0 || pendingArtifacts.length > 0;
+  if (!hasAttachedArtifacts) {
+    return commands.slice();
+  }
+  return commands.filter((cmd) => {
+    if (cmd.type !== 'open:resource') {
+      return true;
+    }
+    const resourceCmd = cmd as OpenResourceCommand;
+    const rt = (resourceCmd.resourceType ?? '').trim().toLowerCase();
+    if (ARTIFACT_RESOURCE_TYPES.has(rt)) {
+      return !matchesAttachedArtifactTarget(resourceCmd.resourceId, artifacts, pendingArtifacts, true);
+    }
+    if (FALLBACK_ARTIFACT_RESOURCE_TYPES.has(rt)) {
+      return !matchesAttachedArtifactTarget(resourceCmd.resourceId, artifacts, pendingArtifacts, false);
+    }
+    return true;
+  });
 }
 
 /** Shared empty result so the placeholder getter allocates nothing once loading has finished. */
@@ -416,6 +486,39 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public get isLastMessage(): boolean {
     return this.IsLastMessage;
   } // Whether this is the last message in the conversation
+
+  /**
+   * True when this is the most recent message in the timeline (or standalone usage).
+   * Defaults to true so standalone usages never unexpectedly auto-collapse.
+   */
+  @Input() public IsLatestMessage: boolean = true;
+
+  /** Hysteresis threshold (px): only collapse when rendered .message-text exceeds this height. */
+  private static readonly COLLAPSE_TRIGGER_HEIGHT_PX = 220;
+
+  private _isLongMessage = false;
+  private _isTextExpanded = false;
+  private _lastMessageIdForCollapse: string | null = null;
+  private _lastMeasuredDisplayMessage: string | null = null;
+  private _lastMeasuredStatus: string | null = null;
+  private _messageTextElRef?: ElementRef<HTMLElement>;
+  private _messageTextResizeObserver: ResizeObserver | null = null;
+
+  @ViewChild('messageTextEl')
+  private set messageTextEl(ref: ElementRef<HTMLElement> | undefined) {
+    if (this._messageTextElRef === ref) {
+      return;
+    }
+    this._messageTextElRef = ref;
+    this.disconnectMessageTextResizeObserver();
+    if (ref?.nativeElement) {
+      this.measureMessageTextHeight();
+      this.observeMessageTextResize(ref.nativeElement);
+    }
+  }
+  private get messageTextEl(): ElementRef<HTMLElement> | undefined {
+    return this._messageTextElRef;
+  }
   @Input() public Attachments: MessageAttachment[] = [];
 
   /** @deprecated Use {@link Attachments}. */
@@ -1060,6 +1163,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this._stableIsInProgressAIMessage = this.IsAIMessage && currentStatus === 'In-Progress';
     this._stableDisplayMessage = this.computeDisplayMessage();
 
+    const currentMessageId = this.message.ID ?? null;
+    if (currentMessageId !== this._lastMessageIdForCollapse) {
+      this._lastMessageIdForCollapse = currentMessageId;
+      this._isTextExpanded = false;
+      this._isLongMessage = false;
+      this._lastMeasuredDisplayMessage = null;
+      this._lastMeasuredStatus = null;
+    }
+
+    if (
+      this._messageTextElRef?.nativeElement &&
+      (this._lastMeasuredDisplayMessage !== this._stableDisplayMessage ||
+        this._lastMeasuredStatus !== (currentStatus ?? null))
+    ) {
+      this.measureMessageTextHeight();
+    }
+
     // Nothing in flight means nothing to watch — restart the clock so a run that begins later is
     // measured from when it began, not from when this component was created.
     const inFlight = this.isLivenessInFlight();
@@ -1199,15 +1319,78 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       this._loadTime = Date.now();
     }
     this.startElapsedTimeUpdater();
+    this.measureMessageTextHeight();
     this.cdRef.detectChanges();
   }
 
   ngOnDestroy() {
     this.stopElapsedTimeUpdater();
     this.clearStopRetryTimer();
+    this.disconnectMessageTextResizeObserver();
     if (this._taskGraphSub) {
       this._taskGraphSub.unsubscribe();
       this._taskGraphSub = null;
+    }
+  }
+
+  /** True when this settled, non-latest message exceeds the collapse height threshold. */
+  public get CanCollapseText(): boolean {
+    return !this.IsLatestMessage
+      && !this.IsStreaming
+      && this.MessageStatus !== 'In-Progress'
+      && !this.IsHandedOffTargetJoining
+      && !this.isEditing
+      && this._isLongMessage;
+  }
+
+  /** True when the message text is currently clipped to its collapsed max-height. */
+  public get IsTextCollapsed(): boolean {
+    return this.CanCollapseText && !this._isTextExpanded;
+  }
+
+  /** True when the Show more / Show less toggle button should be rendered. */
+  public get ShowCollapseToggle(): boolean {
+    return this.CanCollapseText;
+  }
+
+  /** Toggles between collapsed and expanded presentation for a long non-latest message. */
+  public ToggleTextExpanded(): void {
+    this._isTextExpanded = !this._isTextExpanded;
+    this.cdRef.detectChanges();
+  }
+
+  private measureMessageTextHeight(): boolean {
+    const el = this._messageTextElRef?.nativeElement;
+    if (!el) {
+      return false;
+    }
+    this._lastMeasuredDisplayMessage = this._stableDisplayMessage ?? this.displayMessage;
+    this._lastMeasuredStatus = this.message?.Status ?? null;
+    const nextIsLong = el.scrollHeight > MessageItemComponent.COLLAPSE_TRIGGER_HEIGHT_PX;
+    if (nextIsLong !== this._isLongMessage) {
+      this._isLongMessage = nextIsLong;
+      this.cdRef.markForCheck();
+      return true;
+    }
+    return false;
+  }
+
+  private observeMessageTextResize(el: HTMLElement): void {
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    this._messageTextResizeObserver = new ResizeObserver(() => {
+      if (this.measureMessageTextHeight()) {
+        this.cdRef.detectChanges();
+      }
+    });
+    this._messageTextResizeObserver.observe(el);
+  }
+
+  private disconnectMessageTextResizeObserver(): void {
+    if (this._messageTextResizeObserver) {
+      this._messageTextResizeObserver.disconnect();
+      this._messageTextResizeObserver = null;
     }
   }
 
@@ -3561,18 +3744,30 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Cached against the raw JSON string (see {@link responseForm} for rationale).
    */
   private _actionableCommandsRaw: string | null | undefined = undefined;
+  private _actionableCommandsArtifactSig: string = '';
   private _actionableCommandsCache: ActionableCommand[] = [];
   public get ActionableCommands(): ActionableCommand[] {
-    const rawData = this.message.ActionableCommands ?? null;
-    if (rawData === this._actionableCommandsRaw) return this._actionableCommandsCache;
+    const rawData = this.message?.ActionableCommands ?? null;
+    const artifacts = this.DisplayArtifacts ?? [];
+    const pending = this.PendingArtifacts ?? NO_PENDING_ARTIFACTS;
+    const artifactSig =
+      artifacts.map((a) => `${a.artifact?.ID ?? ''}:${a.version?.ID ?? ''}`).join('|') +
+      '#' +
+      pending.map((p) => p.artifactId).join('|');
+    if (rawData === this._actionableCommandsRaw && artifactSig === this._actionableCommandsArtifactSig) {
+      return this._actionableCommandsCache;
+    }
     this._actionableCommandsRaw = rawData;
+    this._actionableCommandsArtifactSig = artifactSig;
     if (!rawData) {
       this._actionableCommandsCache = [];
       return this._actionableCommandsCache;
     }
     try {
       const commands = JSON.parse(rawData);
-      this._actionableCommandsCache = Array.isArray(commands) ? commands : [];
+      this._actionableCommandsCache = Array.isArray(commands)
+        ? FilterRedundantArtifactCommands(commands as ActionableCommand[], artifacts, pending)
+        : [];
     } catch (error) {
       console.error('Failed to parse actionable commands:', error);
       this._actionableCommandsCache = [];

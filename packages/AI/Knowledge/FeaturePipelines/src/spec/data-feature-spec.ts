@@ -361,6 +361,12 @@ export function ValidateSpec(
                 });
               }
 
+              // Lookup settings on a field that is not a foreign key (#5831)
+              const lookupIssue = ValidateLookupSettingsOnNonFK(out.Target, field, targetField, basePath);
+              if (lookupIssue) {
+                issues.push(lookupIssue);
+              }
+
               // Check FK resolution
               const isFK = Boolean(field.RelatedEntity || field.RelatedEntityID);
               if (isFK && out.Target.LookupMatchField === '') {
@@ -1011,4 +1017,32 @@ export function renderConstraintBlock(
   resolvedConstraints?: Map<string, ResolvedConstraint | null>
 ): string {
   return RenderConstraintBlock(outputs, resolvedConstraints);
+}
+
+/**
+ * #5831 — `LookupMatchField` and `OnLookupMiss` only mean something on a foreign-key target: they say how the model's
+ * answer finds a row of the related entity. On any other field they are ignored at run time, and every record is
+ * written NULL. Returns the error for such a target, or null. Shared by {@link ValidateSpec} and, through it, the
+ * materialization target validator.
+ */
+export function ValidateLookupSettingsOnNonFK(
+  target: { LookupMatchField?: string; OnLookupMiss?: string },
+  field: { RelatedEntity?: string | null; RelatedEntityID?: string | null },
+  fieldName: string,
+  basePath: string,
+): SpecValidationIssue | null {
+  const isFK = Boolean(field.RelatedEntity || field.RelatedEntityID);
+  if (isFK) return null;
+  const set = [
+    target.LookupMatchField !== undefined ? 'LookupMatchField' : null,
+    target.OnLookupMiss !== undefined ? 'OnLookupMiss' : null,
+  ].filter((n): n is string => n !== null);
+  if (set.length === 0) return null;
+  return {
+    Field: fieldName,
+    Path: `${basePath}.Target.${set[0]}`,
+    Message: `Target field '${fieldName}' is not a foreign key, so ${set.join(' and ')} cannot apply; every record would be written NULL.`,
+    FixRecommendation: `Remove ${set.join(' and ')}, or target the foreign-key column that points at the entity to look up.`,
+    Severity: 'error',
+  };
 }

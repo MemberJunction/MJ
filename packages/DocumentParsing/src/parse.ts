@@ -39,9 +39,25 @@ export interface ParsedSheet {
     Rows: unknown[][];
 }
 
+/**
+ * The bytes in the one shape pdf-parse 1.1.4 reads correctly everywhere: a plain `Uint8Array` that
+ * owns its whole `ArrayBuffer`.
+ *
+ * pdf-parse hands its input to pdf.js 1.10, which copies it with `new input.constructor(input)` and
+ * later reads the copy's entire underlying `ArrayBuffer`, ignoring its `byteOffset`. Copying a Node
+ * `Buffer` can land in Node's shared allocation pool at a nonzero offset, so a `Buffer` input
+ * misparses ("bad XRef entry", "Command token too long") depending on the PDF's size and the Node
+ * version. A plain `Uint8Array` copies into its own buffer at offset 0.
+ */
+function toPdfParseInput(bytes: Uint8Array | Buffer): Buffer {
+    const owned = new Uint8Array(bytes.byteLength);
+    owned.set(bytes);
+    return owned as Buffer;
+}
+
 /** Extract the text of a PDF. A scanned PDF returns empty text rather than throwing. */
 export async function ParsePdf(bytes: Uint8Array | Buffer): Promise<ParsedDocument> {
-    const parsed = await pdfParse(toBuffer(bytes));
+    const parsed = await pdfParse(toPdfParseInput(bytes));
     const title = typeof parsed.info?.Title === 'string' ? parsed.info.Title.trim() : '';
     return {
         Text: parsed.text?.trim() ?? '',

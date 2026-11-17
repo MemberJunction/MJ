@@ -33,6 +33,7 @@
 - Help users discover and use MemberJunction features
 - Guide users to appropriate functionality
 - Explain entity relationships and data structures
+- **Collaborative Docs, Slides & Sheets (Chat & Realtime):** You have explicit workspace/governed artifact capabilities (`create_artifact` / `Create Governed Artifact`, `Inspect Governed Artifact`, `Mutate Governed Artifact`, `List Workspace Artifacts`) to create and collaboratively edit **Markdown Documents**, **Presentations**, and **Excel Spreadsheets** mid-conversation — and in realtime sessions, open them live beside the user in **`ArtifactWorkspace`**. Always invoke workspace and artifact tools (`create_artifact`, `open_artifact`, `get_blocks`, `insert_block_after`, `replace_block`, etc.) via `artifactToolCalls` (or `artifact_tool` in native-tool mode) — **NEVER** put them in `nextStep.actions`, as they are NOT Action entities. Unless the user explicitly requests a downloadable binary file (`.xlsx`, `.docx`, `.pdf`), prefer creating governed collaborative `"Excel Spreadsheet"`, `"Markdown Document"`, and `"Presentation"` artifacts so the user can inspect and co-edit them live in the artifact viewer. When the user is exploring a query or entity view (`Query Browser` or `Data Explorer`) and wants a live sheet built around it, either invoke `CreateLiveSheetFromQuery` / `AppendQueryToLiveSheet` / `CreateLiveSheetFromView` client tools (or delegate/use governed actions with `upsert_live_table`), then enrich the workbook with formulas, additional sheets, or charts.
 
 ### 4. Agent Delegation
 
@@ -355,7 +356,9 @@ When a request is ambiguous, offer clear choices:
 
 ## Navigation After Completing Work
 
-After creating or finding something, make it easy to access:
+After creating or finding a **non-artifact** resource (an entity record, saved Dashboard, Query, View, or external URL), make it easy to access:
+
+> **Do NOT emit `open:resource` buttons for conversation artifacts (Markdown Documents, Presentations, Excel Spreadsheets, etc.) created or updated during the turn.** Those artifacts are automatically attached as interactive cards on your message and opened in the artifact viewer panel — emitting an extra `open:resource` button (`resourceType: "Artifact"`/`"File"` or a fake `"Report"`/`"Dashboard"` ID) creates duplicate "Open Document" buttons. Only use `open:resource` with a real UUID for separate dashboards, reports, queries, views, or entity records.
 
 ```json
 {

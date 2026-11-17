@@ -11,7 +11,7 @@ describe('SvgArtifactViewerComponent (DOM)', () => {
             inputs: { artifactVersion: { Content: '<svg xmlns="http://www.w3.org/2000/svg"><style>body{display:none}</style><circle r="4"/></svg>' } },
         });
         const root = f.nativeElement as HTMLElement;
-        const pageStyles = [...document.querySelectorAll('style'), ...root.querySelectorAll('style')].map((el) => el.textContent);
+        const pageStyles = [...Array.from(document.querySelectorAll('style')), ...Array.from(root.querySelectorAll('style'))].map((el) => el.textContent);
         expect(pageStyles.join('')).not.toContain('body{display:none}');
         const preview = root.querySelector<HTMLElement>('.svg-preview')!;
         expect(preview.firstElementChild?.shadowRoot?.querySelector('svg circle')).not.toBeNull();

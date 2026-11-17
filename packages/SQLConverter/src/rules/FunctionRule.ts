@@ -3,6 +3,7 @@ import {
   ConvertIdentifiers, ConvertDateFunctions, ConvertCharIndex,
   ConvertStringConcat, ConvertTopToLimit, ConvertIIF,
   RemoveNPrefix, ConvertCommonFunctions, EmitDropOverloadsBlock,
+  ConvertInRoutineSchema, NeedsHandAuthoring, RoutineSchema,
 } from './ExpressionHelpers.js';
 import { ResolveType } from './TypeResolver.js';
 
@@ -15,7 +16,24 @@ export class FunctionRule implements IConversionRule {
   BypassSqlglot = true;
   BypassJustification = 'T-SQL CREATE FUNCTION (scalar UDFs, table-valued functions, inline TVFs) has substantial syntactic and semantic differences from PG functions: RETURNS TABLE syntax, BEGIN ATOMIC vs LANGUAGE plpgsql, schema binding, deterministic markers, IF/ELSE/WHILE control flow, and type system. sqlglot translation is incomplete and error-prone for this surface.';
 
-  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
+  PostProcess(sql: string, originalSQL: string, context: ConversionContext): string {
+    const normalized = sql.replace(/\bCREATE\s+OR\s+ALTER\s+FUNCTION\b/i, 'CREATE FUNCTION');
+    const schema = RoutineSchema(normalized);
+    // In an Open App schema only CodeGen's hierarchy inline TVFs are converted: their shape and
+    // result columns are fixed. Before, every Open App function passed through as T-SQL because
+    // the patterns below only matched `__mj` (issue #5364 item 6).
+    if (schema && schema.toLowerCase() !== '__mj') {
+      if (!HIERARCHY_TVF_NAME.test(normalized)) {
+        return NeedsHandAuthoring('function', `hand-written function in schema ${schema}`, originalSQL);
+      }
+      const converted = ConvertInRoutineSchema(normalized, (aliased) => this.convertCoreSchemaFunction(aliased, context));
+      return converted ?? NeedsHandAuthoring('function', 'references the core schema by its literal name', originalSQL);
+    }
+    return this.convertCoreSchemaFunction(normalized, context);
+  }
+
+  /** Convert a function created in MJ core's `__mj` schema (the shape every pattern below assumes). */
+  private convertCoreSchemaFunction(sql: string, context: ConversionContext): string {
     const upper = sql.toUpperCase();
 
     // Check for hand-written function replacements
@@ -86,7 +104,10 @@ export class FunctionRule implements IConversionRule {
 
       // Determine return type
       let returnsClause = 'RETURNS SETOF RECORD';
-      if (/GetRootID/i.test(funcName)) {
+      const hierarchyColumns = hierarchyTVFColumns(funcName, params);
+      if (hierarchyColumns) {
+        returnsClause = `RETURNS TABLE(${hierarchyColumns})`;
+      } else if (/GetRootID/i.test(funcName)) {
         returnsClause = 'RETURNS TABLE("RootID" UUID)';
       } else {
         const colDefs = this.extractColumnDefs(query);
@@ -184,6 +205,24 @@ export class FunctionRule implements IConversionRule {
   private mapType(typeStr: string): string {
     return ResolveType(typeStr);
   }
+}
+
+/** CodeGen's hierarchy inline TVFs: `fn<Table><Field>_GetRootID|_GetAncestors|_GetDescendants|_GetHierarchyMeta`. */
+const HIERARCHY_TVF_NAME = /\bCREATE\s+FUNCTION\s+\S+?\.\s*\[?"?fn\w+_(?:GetRootID|GetAncestors|GetDescendants|GetHierarchyMeta)\]?"?\s*\(/i;
+
+/**
+ * Result columns of a CodeGen hierarchy TVF, typed. A T-SQL inline TVF declares no columns, and a
+ * PostgreSQL SQL function's declared columns must match its final SELECT's types, so they cannot
+ * be guessed as TEXT. The column set per kind is fixed by CodeGen (SQLServerCodeGenProvider);
+ * the key type is the first parameter's (the record / root key).
+ */
+function hierarchyTVFColumns(funcName: string, params: string): string | null {
+  const keyType = params.match(/^\s*\w+\s+([\w()]+)/)?.[1] ?? 'UUID';
+  if (/_GetRootID"?$/i.test(funcName)) return `"RootID" ${keyType}`;
+  if (/_GetAncestors"?$/i.test(funcName)) return `"ID" ${keyType}, "LevelUp" INTEGER, "Path" TEXT`;
+  if (/_GetDescendants"?$/i.test(funcName)) return `"ID" ${keyType}, "Depth" INTEGER, "Path" TEXT, "IsLeaf" BOOLEAN, "ChildCount" INTEGER`;
+  if (/_GetHierarchyMeta"?$/i.test(funcName)) return `"RootID" ${keyType}, "Depth" INTEGER, "Path" TEXT, "IsLeaf" BOOLEAN, "ChildCount" INTEGER`;
+  return null;
 }
 
 /** Hand-written PostgreSQL implementations for utility functions.

@@ -46,8 +46,8 @@ export function BuildQueryTemplateContext(ctx: PropertyResolutionContext): Query
     return { Context: Object.freeze(context), ReadValues: () => ({ ...read }) };
 }
 
-/** Template tags: `{{ … }}` output and `{% … %}` statements. Comments (`{# … #}`) never read a value. */
-const TEMPLATE_TAG = /\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}/g;
+/** Template tag delimiters: `{{ … }}` output and `{% … %}` statements. Comments (`{# … #}`) never read a value. */
+const TEMPLATE_TAG_DELIMITERS: ReadonlyArray<readonly [string, string]> = [['{{', '}}'], ['{%', '%}']];
 const CONTEXT_WORD = /\bContext\b/g;
 const CONTEXT_MEMBER = /\bContext\s*\.\s*([A-Za-z_]\w*)/g;
 
@@ -61,7 +61,7 @@ export function FindTemplateContextTokens(sql: string | null | undefined): Conte
     const named = new Set<string>();
     let mentions = 0;
     let namedMentions = 0;
-    for (const tag of (sql ?? '').match(TEMPLATE_TAG) ?? []) {
+    for (const tag of templateTags(sql ?? '')) {
         mentions += (tag.match(CONTEXT_WORD) ?? []).length;
         for (const match of tag.matchAll(CONTEXT_MEMBER)) {
             named.add(match[1]);
@@ -72,6 +72,40 @@ export function FindTemplateContextTokens(sql: string | null | undefined): Conte
         return [...CONTEXT_TOKENS];
     }
     return CONTEXT_TOKENS.filter(token => named.has(memberName(token)));
+}
+
+/**
+ * Every template tag in `sql`, in order: what `/\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}/g` matched, found
+ * by index. That regex rescans to the end from every unclosed `{{`, quadratic on crafted SQL.
+ */
+function templateTags(sql: string): string[] {
+    const tags: string[] = [];
+    const unclosed = new Set<string>();
+    let pos = sql.indexOf('{');
+    while (pos !== -1) {
+        const end = templateTagEndAt(sql, pos, unclosed);
+        if (end === -1) {
+            pos = sql.indexOf('{', pos + 1);
+        } else {
+            tags.push(sql.substring(pos, end));
+            pos = sql.indexOf('{', end);
+        }
+    }
+    return tags;
+}
+
+/**
+ * The end of the tag opening at `pos`, or -1. An opener with no closer after it can have none after
+ * any later opener either, so it is recorded in `unclosed` and never searched for again.
+ */
+function templateTagEndAt(sql: string, pos: number, unclosed: Set<string>): number {
+    for (const [open, close] of TEMPLATE_TAG_DELIMITERS) {
+        if (unclosed.has(open) || !sql.startsWith(open, pos)) continue;
+        const at = sql.indexOf(close, pos + open.length);
+        if (at !== -1) return at + close.length;
+        unclosed.add(open);
+    }
+    return -1;
 }
 
 /**

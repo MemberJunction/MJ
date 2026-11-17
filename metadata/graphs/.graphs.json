@@ -18,11 +18,23 @@
             "Name": "Entity Metadata",
             "Description": "References (foreign keys), Is A (IS-A parents) and Field Of edges projected from loaded entity metadata, with no database queries.",
             "DriverClass": "EntityMetadataEdgeProvider",
-            "Configuration": { "Include": ["References", "IsA", "FieldOf"] },
+            "Configuration": {
+              "Include": [
+                "References",
+                "IsA",
+                "FieldOf"
+              ]
+            },
             "Sequence": 10,
             "IsActive": true
           },
-          "primaryKey": { "ID": "E1A2C0A2-3052-49FB-A6A4-23426D340107" }
+          "primaryKey": {
+            "ID": "E1A2C0A2-3052-49FB-A6A4-23426D340107"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:22.464Z",
+            "checksum": "65a617311eabbcf9977a64089a09f23590c71309b2e7516fc81b90d8c256bb56"
+          }
         },
         {
           "fields": {
@@ -30,11 +42,22 @@
             "Name": "Query Metadata",
             "Description": "Reads (query to entity or alternate base view) and Composes (query to query) edges projected from the cached query catalog, with no database queries.",
             "DriverClass": "QueryMetadataEdgeProvider",
-            "Configuration": { "Include": ["Reads", "Composes"] },
+            "Configuration": {
+              "Include": [
+                "Reads",
+                "Composes"
+              ]
+            },
             "Sequence": 20,
             "IsActive": true
           },
-          "primaryKey": { "ID": "B9E71D8B-09F6-42B3-985F-7AF4200FF753" }
+          "primaryKey": {
+            "ID": "B9E71D8B-09F6-42B3-985F-7AF4200FF753"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:22.486Z",
+            "checksum": "5c8b30aca3edf4f87b9923de3c10da94d405540d9452a024cf78732839b3c737"
+          }
         },
         {
           "fields": {
@@ -46,9 +69,19 @@
             "Sequence": 30,
             "IsActive": true
           },
-          "primaryKey": { "ID": "5853A7F8-B770-46A5-986D-DF47FA9509BF" }
+          "primaryKey": {
+            "ID": "5853A7F8-B770-46A5-986D-DF47FA9509BF"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:22.509Z",
+            "checksum": "492a50e7aa6a0cbe9c9cacb4d68b07fb687ee42275cde8cb99f21e1f70d5d241"
+          }
         }
       ]
+    },
+    "sync": {
+      "lastModified": "2026-11-10T23:41:22.400Z",
+      "checksum": "c4c7629e469272e3dd8e9126a5a0c55740d0b179130596a273e6d4c9153f5e86"
     }
   }
 ]

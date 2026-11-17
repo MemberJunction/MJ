@@ -53,6 +53,7 @@ export const HOST_ONLY_AGENT_RUN_DATA_KEYS: readonly string[] = [
     'targetAgentID',
     'agentSessionId',
     'recording',
+    'EdgePreDiscoveryHint',
 ];
 
 /** Key prefixes that are host-only as a family (see {@link HOST_ONLY_AGENT_RUN_DATA_KEYS}): the realtime session settings. */

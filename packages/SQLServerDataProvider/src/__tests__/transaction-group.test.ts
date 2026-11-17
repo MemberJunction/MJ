@@ -328,6 +328,15 @@ describe('SQLServerTransactionGroup.scopeItemVariables', () => {
     expect(out).not.toMatch(/@(ID|Name|Amount)_h(?!_mjb3)/); // no bare reference survives
   });
 
+  it('continues a declaration list past a long indent in linear time', () => {
+    const sql = `DECLARE @a_h INT,\n${' \t'.repeat(50_000)}@b_h INT\nSET @b_h = 1`;
+    const started = performance.now();
+    const out = SQLServerTransactionGroup.scopeItemVariables(sql, 0);
+    expect(performance.now() - started).toBeLessThan(2500);
+    expect(out).toContain('DECLARE @a_h_mjb0 INT,');
+    expect(out).toContain('SET @b_h_mjb0 = 1');
+  });
+
   it('ends a declaration list at the next statement and leaves table-variable column lists alone', () => {
     const sql = [
       'DECLARE @T TABLE (ID INT, Name NVARCHAR(50))',

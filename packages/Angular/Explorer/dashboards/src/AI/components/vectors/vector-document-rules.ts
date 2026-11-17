@@ -99,6 +99,54 @@ export function TemplateFieldNames(templateText: string | null | undefined): str
     return [...new Set(TemplatePlaceholderNames(templateText))];
 }
 
+function isWordChar(c: string): boolean {
+    return /\w/.test(c);
+}
+
+function skipWhitespace(text: string, from: number): number {
+    let i = from;
+    while (i < text.length && /\s/.test(text[i])) {
+        i++;
+    }
+    return i;
+}
+
+/**
+ * Distinct dotted field paths a template writes as complete `{{ Path }}` placeholders, in order:
+ * `{{`, optional whitespace, word characters joined by single dots, optional whitespace, `}}`. This
+ * is the edit panel's chip list, so unlike {@link TemplateFieldNames} it skips an unclosed or
+ * filtered placeholder. Same result as `/\{\{\s*(\w+(?:\.\w+)*)\s*\}\}/g`, read by index so that
+ * a long run of whitespace inside braces costs linear time (CodeQL js/polynomial-redos).
+ */
+export function SelectedTemplateFieldPaths(templateText: string | null | undefined): string[] {
+    if (!templateText) {
+        return [];
+    }
+    const paths = new Set<string>();
+    let open = templateText.indexOf('{{');
+    while (open !== -1) {
+        const pathStart = skipWhitespace(templateText, open + 2);
+        let pathEnd = pathStart;
+        while (pathEnd < templateText.length && isWordChar(templateText[pathEnd])) {
+            pathEnd++;
+        }
+        while (pathEnd > pathStart && templateText[pathEnd] === '.' && isWordChar(templateText[pathEnd + 1] ?? '')) {
+            pathEnd++;
+            while (pathEnd < templateText.length && isWordChar(templateText[pathEnd])) {
+                pathEnd++;
+            }
+        }
+        const closeAt = skipWhitespace(templateText, pathEnd);
+        if (pathEnd > pathStart && templateText.startsWith('}}', closeAt)) {
+            paths.add(templateText.slice(pathStart, pathEnd));
+            open = templateText.indexOf('{{', closeAt + 2);
+        } else {
+            open = templateText.indexOf('{{', open + 1);
+        }
+    }
+    return [...paths];
+}
+
 /**
  * Truncates a model-supplied field list to the cap.
  *

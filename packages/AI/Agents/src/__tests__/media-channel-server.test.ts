@@ -76,7 +76,7 @@ describe('MediaChannelServer.OnSessionStarted — media-kit override', () => {
 
         expect(buildNoteMock).toHaveBeenCalledTimes(1);
         expect(buildNoteMock).toHaveBeenCalledWith(PROVIDER, USER, 'agent-1', VALID_UUID);
-        expect(sendContextNote).toHaveBeenCalledWith('the-manifest-note');
+        expect(sendContextNote).toHaveBeenCalledWith('the-manifest-note', { StateKey: 'agent-media-kit' });
     });
 
     it('passes a null override when the config carries no mediaCollectionID', async () => {

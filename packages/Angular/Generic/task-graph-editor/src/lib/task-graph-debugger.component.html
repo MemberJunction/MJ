@@ -43,6 +43,9 @@
       (LegendToggled)="LegendToggled.emit($event)"
       (Settled)="OnRunSettled()"
       (BreakpointToggled)="OnRunBreakpointToggled($event)"
+      [RememberedStepIDs]="RememberedStepIDs"
+      [AllowRememberBreakpoints]="AllowRememberBreakpoints"
+      (RememberBreakpointToggled)="RememberBreakpointToggled.emit($event)"
       (EdgeOverrideRequested)="OnRunEdgeOverride($event)">
     </mj-task-graph-run-view>
   </div>

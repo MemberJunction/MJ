@@ -255,13 +255,20 @@ export class AIEmbeddingRunner extends BaseModelRunner {
   }
 
   /**
-   * The prompt the call runs under: `params.PromptID` when given, else the first active Embedding
-   * prompt, else an unsaved stand-in (see {@link createStandInPrompt}).
+   * The prompt the call runs under: `params.PromptID` when given, else the active prompt named
+   * `params.PromptName`, else the default Embedding prompt (see {@link findEmbeddingPrompt}), else an
+   * unsaved stand-in (see {@link createStandInPrompt}).
    */
   private async resolvePrompt(params: EmbeddingRunParams): Promise<ResolvedEmbeddingPrompt | string> {
     if (params.PromptID) {
       const named = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, params.PromptID));
       return named ? { Prompt: named, IsSaved: true } : `Prompt '${params.PromptID}' was not found`;
+    }
+    const named = params.PromptName
+      ? AIEngine.Instance.Prompts.find(p => p.Status === 'Active' && p.Name === params.PromptName)
+      : undefined;
+    if (named) {
+      return { Prompt: named, IsSaved: true };
     }
     const configured = this.findEmbeddingPrompt();
     if (configured) {
@@ -270,15 +277,24 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     return { Prompt: await this.createStandInPrompt(params), IsSaved: false };
   }
 
+  /**
+   * The default prompt for an embedding call that names none: `Content Embedding` when it is
+   * active, else the first active Embedding prompt by name. Ordered by name so the choice does not
+   * depend on the order the engine loaded prompts in.
+   */
   private findEmbeddingPrompt(): MJAIPromptEntityExtended | undefined {
     const requiredTypeId = this.tryRequiredModelTypeID();
-    return AIEngine.Instance.Prompts.find(
-      p => p.Status === 'Active' && (
+    const candidates = AIEngine.Instance.Prompts
+      .filter(p => p.Status === 'Active' && (
         p.Type?.toLowerCase() === 'embedding' ||
         (requiredTypeId !== undefined && UUIDsEqual(p.AIModelTypeID, requiredTypeId))
-      )
-    );
+      ))
+      .sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
+    return candidates.find(p => p.Name === AIEmbeddingRunner.DefaultEmbeddingPromptName) ?? candidates[0];
   }
+
+  /** The prompt an embedding call that names none runs under, when it exists. */
+  public static readonly DefaultEmbeddingPromptName = 'Content Embedding';
 
   /** The Embeddings model type's ID, or undefined when the catalog doesn't have that type yet. */
   private tryRequiredModelTypeID(): string | undefined {
