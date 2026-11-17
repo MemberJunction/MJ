@@ -6,6 +6,7 @@ import {
     DecisionMedia,
     DecisionMediaType,
     DecisionParams,
+    DecisionResult,
     IsSystemOneWireObject,
     NonEmptyString,
     RedactSecret,
@@ -28,9 +29,9 @@ import { RegisterClass } from '@memberjunction/global';
  *   with `DecisionParams.Media` sends a text block followed by one block per item, so the model reads
  *   them as one input.
  * - **Usage** is `total_input_tokens` / `total_output_tokens`, mapped here onto the System One names.
- *   No `model` or `cost` field is returned on Google's `200` wire response (`ResolvedModel` stays
- *   `undefined` unless a proxy or later revision includes `model`); MJ prices the call from the model's
- *   cost rows.
+ *   No `model` or `cost` field is returned on Google's `200` wire response (`ResolvedModel` falls back
+ *   to the requested model unless a proxy or later revision includes `model`, so calibrations and run
+ *   fitting can identify it); MJ prices the call from the model's cost rows.
  *
  * Questions go out as System One questions keyed by name: a Likelihood as `noul`, a Choice's options as
  * `criteria: { value: description }`, a Score's levels as `criteria: [...]`, lowest first. Answers come
@@ -116,6 +117,19 @@ export class GeminiDecision extends BaseHostedSystemOneDecision {
      */
     protected override GetHTTPErrorType(status: number): AIErrorType | undefined {
         return status === 400 || status === 403 ? 'ModelError' : undefined;
+    }
+
+    /**
+     * Google's `200` wire response omits `model`. When the response names none, record the requested
+     * model (`ResolveModel(params)`) so `ModelSpecificResponseDetails`, calibration lookups and
+     * `fit-decision-calibration` identify the answering model.
+     */
+    protected override async DoDecide(params: DecisionParams): Promise<DecisionResult> {
+        const result = await super.DoDecide(params);
+        if (result.success && !NonEmptyString(result.ResolvedModel)) {
+            result.ResolvedModel = this.ResolveModel(params);
+        }
+        return result;
     }
 
     /**
