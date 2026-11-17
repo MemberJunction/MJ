@@ -81,8 +81,9 @@ const pendingSettings: EmbeddingSettings = {};
 const models = new Map<string, Promise<LoadedModel>>();
 
 /**
- * Set to `true`, `1` or `yes` to keep ONNX Runtime's CPU memory arena on. Opt in only on a
- * dedicated inference host that wants the ~4% speed-up and can spare the memory.
+ * Set to `true`, `1` or `yes` to keep ONNX Runtime's CPU memory arena on (the pre-6689 behaviour).
+ * The arena holds its peak for the life of the model, so opt in only on a dedicated inference host
+ * that can spare the memory; it was not faster in the measurements in sessionOptions().
  */
 export const LOCAL_EMBEDDINGS_CPU_ARENA_ENV = 'MJ_LOCAL_EMBEDDINGS_CPU_ARENA';
 
