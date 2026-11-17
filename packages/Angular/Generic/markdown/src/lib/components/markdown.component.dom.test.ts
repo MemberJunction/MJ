@@ -610,11 +610,11 @@ describe('MarkdownComponent (DOM)', () => {
   });
 
   describe('EnableInlineMedia', () => {
-    it('upgrades /media/:fileId?kind=video markdown images into <video> with <track> and lazy transcript drawer', () => {
+    it('upgrades /media/:fileId?kind=video markdown images into <video> with <track> and lazy transcript drawer when enabled', () => {
       const md =
         'Watch the walkthrough:\n\n' +
         '![Renewal Demo](/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2#t=42)';
-      const c = container(render({ data: md }));
+      const c = container(render({ data: md, EnableInlineMedia: true }));
 
       expect(c.querySelector('img')).toBeNull();
       const video = c.querySelector<HTMLVideoElement>('.mj-markdown-video > video.mj-markdown-video__player');
@@ -622,6 +622,7 @@ describe('MarkdownComponent (DOM)', () => {
       expect(video?.getAttribute('title')).toBe('Renewal Demo');
       expect(video?.hasAttribute('controls')).toBe(true);
       expect(video?.getAttribute('preload')).toBe('metadata');
+      expect(video?.getAttribute('crossorigin')).toBe('anonymous');
 
       const track = video?.querySelector<HTMLTrackElement>('track[kind="captions"]');
       expect(track).not.toBeNull();
@@ -636,12 +637,28 @@ describe('MarkdownComponent (DOM)', () => {
       expect(video?.currentTime).toBe(42);
     });
 
-    it('preserves non-root MJAPI_BASE_PATH prefixes (e.g. /api/media/:fileId) for both relative and absolute URLs', () => {
+    it('defaults EnableInlineMedia to false so unmodified hosts keep <img> rendering', () => {
       const md =
-        '![Subpath Clip](https://api.example.test/api/media/11111111-2222-3333-4444-555555555555/demo.mp4?token=tok1&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2)';
+        '![Default Video](/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video)';
       const c = container(render({ data: md }));
+      expect(c.querySelector('video')).toBeNull();
+      expect(c.querySelectorAll('img')).toHaveLength(1);
+    });
 
-      const track = c.querySelector<HTMLTrackElement>('video track[kind="captions"]');
+    it('preserves non-root MJAPI_BASE_PATH prefixes only for relative or explicitly allowlisted origins', () => {
+      const md =
+        '![Subpath Clip](https://api.example.test/api/media/11111111-2222-3333-4444-555555555555/demo.mp4?token=tok1&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2) ' +
+        '![Untrusted Clip](https://evil.example.test/api/media/11111111-2222-3333-4444-555555555555/demo.mp4?token=tok1)';
+      const c = container(render({
+        data: md,
+        EnableInlineMedia: true,
+        InlineMediaAllowedOrigins: ['https://api.example.test'],
+      }));
+
+      const videos = c.querySelectorAll('video');
+      expect(videos).toHaveLength(1);
+      expect(c.querySelectorAll('img')).toHaveLength(1);
+      const track = videos[0]?.querySelector<HTMLTrackElement>('track[kind="captions"]');
       expect(track).not.toBeNull();
       expect(track?.getAttribute('src')).toBe(
         'https://api.example.test/api/media/66666666-7777-8888-9999-000000000000?token=tok2',
@@ -666,7 +683,7 @@ describe('MarkdownComponent (DOM)', () => {
       try {
         const md =
           '![Portal Clip](/api/media/11111111-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=66666666-7777-8888-9999-000000000000&vttToken=tok2)';
-        const c = container(render({ data: md }));
+        const c = container(render({ data: md, EnableInlineMedia: true }));
 
         // Closed drawer must NOT fire fetch on initial render
         expect(fetchSpy).not.toHaveBeenCalled();
@@ -705,28 +722,33 @@ describe('MarkdownComponent (DOM)', () => {
       }
     });
 
-    it('leaves regular images, linked images, and EnableInlineMedia=false images untouched and rejects unsafe vtt ids', async () => {
+    it('leaves regular/linked/tokenless images untouched, rejects upload-stage captions, and omits crossorigin without captions', async () => {
       const md =
         '![Diagram](/media/11111111-2222-3333-4444-555555555555?token=tok1) ' +
         '[![Linked](/media/22222222-2222-3333-4444-555555555555?token=tok1&kind=video)](https://example.test/watch) ' +
+        '![Tokenless](/media/44444444-2222-3333-4444-555555555555?kind=video) ' +
+        '![UploadStage](/media/55555555-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=upload-stage&vttToken=tok2) ' +
         '![BadVtt](/media/33333333-2222-3333-4444-555555555555?token=tok1&kind=video&vtt=../evil&vttToken=tok2)';
-      const f = render({ data: md });
+      const f = render({ data: md, EnableInlineMedia: true });
       const c = container(f);
 
-      // Diagram + Linked stay <img>; BadVtt upgrades to <video> WITHOUT <track> or <details>
-      expect(c.querySelectorAll('img')).toHaveLength(2);
-      const video = c.querySelector('video.mj-markdown-video__player');
-      expect(video).not.toBeNull();
-      expect(video?.querySelector('track')).toBeNull();
+      // Diagram + Linked + Tokenless stay <img>; UploadStage + BadVtt upgrade to <video> WITHOUT <track>, <details>, or crossorigin
+      expect(c.querySelectorAll('img')).toHaveLength(3);
+      const videos = Array.from(c.querySelectorAll<HTMLVideoElement>('video.mj-markdown-video__player'));
+      expect(videos).toHaveLength(2);
+      for (const video of videos) {
+        expect(video.querySelector('track')).toBeNull();
+        expect(video.hasAttribute('crossorigin')).toBe(false);
+      }
       expect(c.querySelector('details.mj-markdown-video__transcript')).toBeNull();
 
-      // Toggling EnableInlineMedia=false restores <img> rendering for all 3 items
+      // Toggling EnableInlineMedia=false restores <img> rendering for all 5 items
       f.componentRef.setInput('EnableInlineMedia', false);
       f.detectChanges();
       await Promise.resolve();
       await Promise.resolve();
       expect(c.querySelector('video')).toBeNull();
-      expect(c.querySelectorAll('img')).toHaveLength(3);
+      expect(c.querySelectorAll('img')).toHaveLength(5);
     });
   });
 

@@ -75,6 +75,15 @@ function parseTimingLine(line: string): { startMs: number; endMs: number } | nul
   return { startMs: Math.round(startSec * 1000), endMs: Math.round(endSec * 1000) };
 }
 
+const HTML_ENTITY_DECODE: Readonly<Record<string, string>> = {
+  '&nbsp;': ' ',
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+};
+
 /** Linear tag stripper with zero backtracking regexes (`js/polynomial-redos` safe). */
 function stripCueTagsAndCollapseWhitespace(input: string): string {
   let out = '';
@@ -95,13 +104,7 @@ function stripCueTagsAndCollapseWhitespace(input: string): string {
     i = gt + 1;
   }
 
-  const decoded = out
-    .replaceAll('&nbsp;', ' ')
-    .replaceAll('&amp;', '&')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&#39;', "'");
+  const decoded = out.replace(/&(?:nbsp|amp|lt|gt|quot|#39);/g, (entity) => HTML_ENTITY_DECODE[entity] ?? entity);
 
   let normalized = '';
   let prevSpace = true;
@@ -253,7 +256,35 @@ interface ParsedMediaRoute {
   filename?: string;
 }
 
-function parseMediaRoute(src: string): ParsedMediaRoute | null {
+function normalizeAllowedOrigins(allowedOrigins?: string | readonly string[]): Set<string> {
+  const out = new Set<string>();
+  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
+    out.add(window.location.origin);
+  }
+  const list = typeof allowedOrigins === 'string'
+    ? [allowedOrigins]
+    : Array.isArray(allowedOrigins)
+      ? allowedOrigins
+      : [];
+  for (const raw of list) {
+    const trimmed = String(raw ?? '').trim();
+    if (!trimmed) continue;
+    try {
+      const origin = new URL(trimmed).origin;
+      if (origin && origin !== 'null') out.add(origin);
+    } catch {
+      /* ignore invalid origin entries */
+    }
+  }
+  return out;
+}
+
+function isAllowedMediaOrigin(route: ParsedMediaRoute, allowedOrigins?: string | readonly string[]): boolean {
+  if (route.isRelativePath) return true;
+  return normalizeAllowedOrigins(allowedOrigins).has(route.url.origin);
+}
+
+function parseMediaRoute(src: string, allowedOrigins?: string | readonly string[]): ParsedMediaRoute | null {
   const trimmed = String(src ?? '').trim();
   if (!trimmed || !trimmed.includes('/media/')) return null;
 
@@ -286,10 +317,12 @@ function parseMediaRoute(src: string): ParsedMediaRoute | null {
 
   const fileId = segments[mediaIdx + 1];
   if (!fileId || fileId === 'upload-stage' || !SAFE_FILE_ID_RE.test(fileId)) return null;
+  if (!(url.searchParams.get('token') ?? '').trim()) return null;
 
   const filename = trailingCount === 2 ? segments[mediaIdx + 2] : undefined;
   const mediaBasePath = '/' + segments.slice(0, mediaIdx + 1).join('/');
-  return { url, isRelativePath, mediaBasePath, fileId, filename };
+  const parsed: ParsedMediaRoute = { url, isRelativePath, mediaBasePath, fileId, filename };
+  return isAllowedMediaOrigin(parsed, allowedOrigins) ? parsed : null;
 }
 
 function hasVideoExtension(filename: string | undefined): boolean {
@@ -306,7 +339,7 @@ function isVideoMediaRoute(route: ParsedMediaRoute): boolean {
 function extractCaptionUrl(route: ParsedMediaRoute): string | null {
   const vttId = (route.url.searchParams.get('vtt') ?? '').trim();
   const vttToken = (route.url.searchParams.get('vttToken') ?? '').trim();
-  if (!vttId || !vttToken || !SAFE_FILE_ID_RE.test(vttId)) return null;
+  if (!vttId || vttId === 'upload-stage' || !vttToken || !SAFE_FILE_ID_RE.test(vttId)) return null;
 
   const prefix = route.isRelativePath ? '' : route.url.origin;
   return `${prefix}${route.mediaBasePath}/${encodeURIComponent(vttId)}?token=${encodeURIComponent(vttToken)}`;
@@ -416,15 +449,19 @@ function buildInteractiveTranscriptDrawer(
  * video filename segment) inside `container` into inline HTML5 `<video>` players with optional
  * WebVTT `<track>` captions and a lazy click-to-seek transcript drawer.
  */
-export function UpgradeInlineMediaElements(container: HTMLElement | null | undefined): void {
+export function UpgradeInlineMediaElements(
+  container: HTMLElement | null | undefined,
+  allowedOrigins?: string | readonly string[],
+): void {
   if (!container || typeof document === 'undefined') return;
   const images = Array.from(container.querySelectorAll<HTMLImageElement>('img[src*="/media/"]'));
   for (const img of images) {
     if (img.closest('a')) continue;
     const src = img.getAttribute('src') ?? '';
-    const route = parseMediaRoute(src);
+    const route = parseMediaRoute(src, allowedOrigins);
     if (!route || !isVideoMediaRoute(route)) continue;
 
+    const captionUrl = extractCaptionUrl(route);
     const doc = img.ownerDocument ?? document;
     const wrapper = doc.createElement('div');
     wrapper.className = 'mj-markdown-video';
@@ -435,7 +472,9 @@ export function UpgradeInlineMediaElements(container: HTMLElement | null | undef
     video.setAttribute('controls', '');
     video.setAttribute('preload', 'metadata');
     video.setAttribute('playsinline', '');
-    video.setAttribute('crossorigin', 'anonymous');
+    if (captionUrl) {
+      video.setAttribute('crossorigin', 'anonymous');
+    }
     const alt = (img.getAttribute('alt') ?? '').trim();
     if (alt) {
       video.setAttribute('title', alt);
@@ -454,7 +493,6 @@ export function UpgradeInlineMediaElements(container: HTMLElement | null | undef
       );
     }
 
-    const captionUrl = extractCaptionUrl(route);
     if (captionUrl) {
       const track = doc.createElement('track');
       track.setAttribute('kind', 'captions');

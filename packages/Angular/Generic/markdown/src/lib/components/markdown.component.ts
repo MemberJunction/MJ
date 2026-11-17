@@ -52,6 +52,7 @@ const RERENDER_INPUTS = new Set([
   'sanitize',
   'openLinksInNewTab',
   'enableInlineMedia',
+  'inlineMediaAllowedOrigins',
 ]);
 
 /**
@@ -378,9 +379,16 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   /**
    * Upgrade `/media/:fileId` video markdown tags (`kind=video` or video filename extension) into
    * inline HTML5 `<video>` players with optional WebVTT captions and a lazy click-to-seek
-   * transcript drawer. Default `true`.
+   * transcript drawer. Default `false` (opt-in until validated across downstream hosts).
    */
-  @Input() EnableInlineMedia: boolean = true;
+  @Input() EnableInlineMedia: boolean = false;
+
+  /**
+   * Optional cross-origin API origin allowlist for `/media/:fileId` video upgrades when the media
+   * route lives on a separate API host. Relative `/media/...` and same-origin URLs are allowed
+   * whenever `EnableInlineMedia` is `true`.
+   */
+  @Input() InlineMediaAllowedOrigins?: string | readonly string[];
 
   /**
    * Emitted when rendering is complete
@@ -933,7 +941,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
 
     // Upgrade /media/:fileId video images into inline HTML5 <video> + synced transcript drawer
     if (this.EnableInlineMedia) {
-      UpgradeInlineMediaElements(container as HTMLElement);
+      UpgradeInlineMediaElements(container as HTMLElement, this.InlineMediaAllowedOrigins);
     }
 
     // Add copy buttons to code blocks
