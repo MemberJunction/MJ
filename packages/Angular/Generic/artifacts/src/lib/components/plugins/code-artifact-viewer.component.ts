@@ -15,7 +15,7 @@ import { CreateCodeSnapshot } from '../../snapshot-helpers';
       <div class="code-toolbar">
         <div class="language-badge">{{ languageLabel }}</div>
         <button class="btn-icon" title="Copy Code" (click)="onCopy()">
-          <i class="fas fa-copy"></i> Copy
+          <i class="fa-solid fa-copy"></i> Copy
         </button>
       </div>
       <div class="code-editor-container">

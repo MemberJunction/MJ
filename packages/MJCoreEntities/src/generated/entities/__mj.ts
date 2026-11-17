@@ -105,6 +105,7 @@ import type {
   MJArchiveConfigurationEntityType,
   MJArchiveRunDetailEntityType,
   MJArchiveRunEntityType,
+  MJArtifactGuestShareLinkEntityType,
   MJArtifactPermissionEntityType,
   MJArtifactTypeEntityType,
   MJArtifactUseEntityType,
@@ -33846,6 +33847,192 @@ export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
 
 
 /**
+ * MJ: Artifact Guest Share Links - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArtifactGuestShareLink
+ * * Base View: vwArtifactGuestShareLinks
+ * * @description Links an anonymous resource-share MagicLinkInvite to an immutable Frozen ArtifactVersion and optional recipient label for external guest sharing.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Artifact Guest Share Links')
+export class MJArtifactGuestShareLinkEntity extends BaseEntity<MJArtifactGuestShareLinkEntityType> {
+    /**
+    * Loads the MJ: Artifact Guest Share Links record from the database
+    * @param ID: string - primary key value to load the MJ: Artifact Guest Share Links record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJArtifactGuestShareLinkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Artifact Guest Share Links - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJArtifactGuestShareLinkEntity
+    * @throws {Error} - Save is not allowed for MJ: Artifact Guest Share Links, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Artifact Guest Share Links, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Artifact Guest Share Links - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJArtifactGuestShareLinkEntity
+    * @throws {Error} - Delete is not allowed for MJ: Artifact Guest Share Links, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Artifact Guest Share Links, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key of the artifact guest share link binding record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MagicLinkInviteID
+    * * Display Name: Magic Link Invite ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+    * * Description: Foreign key to the MagicLinkInvite managing token hashing, expiry, revocation, usage limits, and redemption audit.
+    */
+    get MagicLinkInviteID(): string {
+        return this.Get('MagicLinkInviteID');
+    }
+    set MagicLinkInviteID(value: string) {
+        this.Set('MagicLinkInviteID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactID
+    * * Display Name: Artifact ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+    * * Description: Foreign key to the shared Artifact record. Cascades on artifact deletion.
+    */
+    get ArtifactID(): string {
+        return this.Get('ArtifactID');
+    }
+    set ArtifactID(value: string) {
+        this.Set('ArtifactID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    * * Description: Foreign key to the specific pinned ArtifactVersion snapshot exposed by this guest link.
+    */
+    get ArtifactVersionID(): string {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the User who created this external guest share link.
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Optional human-readable label identifying the external recipient or review purpose.
+    */
+    get Label(): string | null {
+        return this.Get('Label');
+    }
+    set Label(value: string | null) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Artifact
+    * * Display Name: Artifact
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Artifact(): string | null {
+        return this.Get('Artifact');
+    }
+
+    /**
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string | null {
+        return this.Get('CreatedByUser');
+    }
+}
+
+
+/**
  * MJ: Artifact Permissions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ArtifactPermission
@@ -34702,6 +34889,120 @@ export class MJArtifactVersionAttributeEntity extends BaseEntity<MJArtifactVersi
 
 
 /**
+ * Structured preview metadata stored inside `MJ: Artifact Versions.Configuration.previewSnapshot`
+ * so Library cards can render live miniature previews without fetching full `Content` blobs.
+ */
+export type MJArtifactVersionEntity_IArtifactPreviewSnapshot =
+  | {
+      Kind: 'doc';
+      Heading: string;
+      Excerpt: string;
+      Callout?: string;
+    }
+  | {
+      Kind: 'sheet';
+      Headers: string[];
+      Rows: string[][];
+    }
+  | {
+      Kind: 'slides';
+      SlideTitle: string;
+      LeftMetric?: string;
+      RightMetric?: string;
+      ThemeAccent?: string;
+    }
+  | {
+      Kind: 'whiteboard';
+      Nodes: string[];
+    };
+
+/**
+ * Persistent link between an MJ Artifact version and a remote Connected Drive file.
+ * Stored inside `MJ: Artifact Versions.Configuration` without creating redundant `MJ: Files` rows.
+ */
+export type MJArtifactVersionEntity_IConnectedDriveLinkMetadata = {
+  /** Remote file / document identifier (SharePoint/OneDrive ItemID or Google Drive FileID). */
+  ExternalFileID: string;
+  /** Connected provider key (`'OneDrive' | 'SharePoint' | 'GoogleDrive' | string`). */
+  ProviderType: string;
+  /** Optional provider integration ID. */
+  ProviderIntegrationID?: string;
+  /** Optional remote parent folder / library identifier. */
+  FolderID?: string;
+  /** Display filename on the connected drive. */
+  FileName?: string;
+  /** Remote web URL to inspect or edit on the provider. */
+  WebUrl?: string;
+  /** MIME type synced with the connected drive. */
+  MimeType?: string;
+  /** Last observed remote ETag / version tag for optimistic concurrency checks. */
+  ETag?: string;
+  /** Remote last-modified timestamp (ISO 8601) if reported by the provider. */
+  RemoteModifiedAt?: string;
+  /** Artifact `VersionNumber` associated with the latest sync. */
+  SyncedVersionNumber?: number;
+  /** ISO 8601 timestamp of the most recent push or pull sync. */
+  LastSyncedAt: string;
+  /** Direction of the most recent sync operation. */
+  LastSyncDirection: 'push' | 'pull';
+  /** User ID that executed the most recent sync. */
+  LastSyncedByUserID?: string;
+};
+
+/**
+ * Frozen-only expiring read-only external guest share link entry stored inside
+ * `MJ: Artifact Versions.Configuration.guestShareLinks`.
+ */
+export type MJArtifactVersionEntity_IGuestShareLinkRecord = {
+  /** Unique link / token identifier (`jti`). */
+  LinkID: string;
+  /** Target `MJ: Artifacts.ID`. */
+  ArtifactID: string;
+  /** Target pinned `MJ: Artifact Versions.ID`. */
+  VersionID: string;
+  /** Target artifact version number. */
+  VersionNumber: number;
+  /** External guest links strictly permit only `'Frozen'` mode so no live RLS/FLS queries run externally. */
+  ShareMode: 'Frozen';
+  /** ISO 8601 creation timestamp. */
+  CreatedAt: string;
+  /** Creator `UserInfo.ID`. */
+  CreatedByUserID: string;
+  /** Optional human-readable label for audit & management UI. */
+  Label?: string;
+  /** ISO 8601 expiration timestamp. */
+  ExpiresAt: string;
+  /** True when explicitly revoked prior to expiration. */
+  Revoked?: boolean;
+  /** ISO 8601 revocation timestamp. */
+  RevokedAt?: string;
+  /** User ID that revoked this link. */
+  RevokedByUserID?: string;
+};
+
+/**
+ * Typed JSON shape for `MJ: Artifact Versions.Configuration`.
+ * CodeGen emits a typed `ConfigurationObject` accessor on `MJArtifactVersionEntity` returning
+ * `MJArtifactVersionEntity_IArtifactVersionConfiguration | null`.
+ */
+export type MJArtifactVersionEntity_ArtifactVersionConfigurationValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | MJArtifactVersionEntity_ArtifactVersionConfigurationValue[]
+  | { [key: string]: MJArtifactVersionEntity_ArtifactVersionConfigurationValue };
+
+export interface MJArtifactVersionEntity_IArtifactVersionConfiguration {
+  previewSnapshot?: MJArtifactVersionEntity_IArtifactPreviewSnapshot;
+  thumbnailDataUrl?: string;
+  connectedDriveLink?: MJArtifactVersionEntity_IConnectedDriveLinkMetadata;
+  guestShareLinks?: MJArtifactVersionEntity_IGuestShareLinkRecord[];
+  [key: string]: MJArtifactVersionEntity_ArtifactVersionConfigurationValue;
+}
+
+/**
  * MJ: Artifact Versions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ArtifactVersion
@@ -34787,6 +35088,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJArtifactVersionEntity_IArtifactVersionConfiguration
     * * Description: JSON configuration for this version
     */
     get Configuration(): string | null {
@@ -34794,6 +35096,21 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJArtifactVersionEntity_IArtifactVersionConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJArtifactVersionEntity_IArtifactVersionConfiguration | null {
+        return this.GetJSONFieldObject<MJArtifactVersionEntity_IArtifactVersionConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJArtifactVersionEntity_IArtifactVersionConfiguration | null) {
+        this.SetJSONFieldObject<MJArtifactVersionEntity_IArtifactVersionConfiguration>('Configuration', value);
     }
 
     /**
@@ -38287,6 +38604,13 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
 
 
 /**
+ * Single `Conversation.AnchorType` string entry permitted in
+ * `MJ: Comment Types.AllowedAnchorTypes` (for example `'Field'`, `'DocBlock'`,
+ * `'SlideRegion'`, `'SheetRange'`).
+ */
+export type MJCommentTypeEntity_CommentTypeAllowedAnchorType = string;
+
+/**
  * MJ: Comment Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: CommentType
@@ -38411,6 +38735,7 @@ export class MJCommentTypeEntity extends BaseEntity<MJCommentTypeEntityType> {
     * * Field Name: AllowedAnchorTypes
     * * Display Name: Allowed Anchor Types
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType>
     * * Description: Optional JSON array of Conversation.AnchorType values permitted for this comment type (for example ["Field"] for Field Suggestion). NULL allows all anchor types.
     */
     get AllowedAnchorTypes(): string | null {
@@ -38418,6 +38743,21 @@ export class MJCommentTypeEntity extends BaseEntity<MJCommentTypeEntityType> {
     }
     set AllowedAnchorTypes(value: string | null) {
         this.Set('AllowedAnchorTypes', value);
+    }
+
+    /**
+    * Typed accessor for AllowedAnchorTypes — a live view of the parsed JSON as Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying AllowedAnchorTypes field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get AllowedAnchorTypesObject(): Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType> | null {
+        return this.GetJSONFieldObject<Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType>>('AllowedAnchorTypes');
+    }
+    set AllowedAnchorTypesObject(value: Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType> | null) {
+        this.SetJSONFieldObject<Array<MJCommentTypeEntity_CommentTypeAllowedAnchorType>>('AllowedAnchorTypes', value);
     }
 
     /**
@@ -89143,11 +89483,12 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
  * * Schema: __mj
  * * Base Table: PublicLink
  * * Base View: vwPublicLinks
- * * @description Shareable links for external access to artifacts and other resources. Supports password protection and expiration.
+ * * @description DEPRECATED: dormant v2 schema table never wired to server or UI runtime. Use MJ: Magic Link Invites (Kind='resource-share', IdentityMode='anonymous') paired with MJ: Artifact Guest Share Links for Frozen external guest sharing, or MJ: Artifact Permissions / MJ: Collection Permissions / MJ: Access Control Rules for authenticated sharing.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Public Links')
 export class MJPublicLinkEntity extends BaseEntity<MJPublicLinkEntityType> {

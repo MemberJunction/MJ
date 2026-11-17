@@ -418,10 +418,18 @@ export class EdgeAIWorkerHost extends BaseSingleton<EdgeAIWorkerHost> {
             }
             return new BrowserEdgeWorkerPort(custom as BrowserWorkerLike);
         }
-        const worker = new Worker(
-            new URL('./edge-ai.worker.js', import.meta.url),
-            { type: 'module' }
-        );
+        // Resolve the pre-bundled worker asset copied from @memberjunction/ng-explorer-app/dist/assets
+        // relative to the document base URI so consumer apps require zero app-level worker wiring.
+        const baseUri =
+            typeof document !== 'undefined' && document.baseURI
+                ? document.baseURI
+                : typeof globalThis.location !== 'undefined' && globalThis.location.href
+                  ? globalThis.location.href
+                  : undefined;
+        const workerUrl = baseUri
+            ? new URL('assets/edge-ai.worker.js', baseUri)
+            : new URL('./edge-ai.worker.js', import.meta.url);
+        const worker = new Worker(workerUrl, { type: 'module' });
         return new BrowserEdgeWorkerPort(worker as unknown as BrowserWorkerLike);
     }
 

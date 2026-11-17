@@ -8,8 +8,7 @@ import { FormsModule } from '@angular/forms';
 import { getTestBed, TestBed, type ComponentFixture } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import type { EntityFieldInfo, EntityInfo, EntityUserPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { ResolvedArtifactPermissions } from '@memberjunction/core-entities';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
   SpreadsheetEngine,
   type MJArtifactVersionEntity,
@@ -102,13 +101,11 @@ function createProviderWithUser(userId: string, userName: string, ownerId: strin
     Name: 'MJ: Artifacts',
     DisplayNameOrName: 'MJ: Artifacts',
     FieldLevelSecurityApplies: false,
-    GetUserPermisions: () => ({ CanRead: true }) as Partial<EntityUserPermissionInfo> as EntityUserPermissionInfo,
-    Fields: [
-      { Name: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' } as Partial<EntityFieldInfo> as EntityFieldInfo,
-    ],
-  } as Partial<EntityInfo> as EntityInfo;
+    GetUserPermisions: () => ({ CanRead: true }),
+    Fields: [{ Name: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' }],
+  };
   const providerStub: {
-    CurrentUser: UserInfo;
+    CurrentUser: Pick<UserInfo, 'ID' | 'Name' | 'Email' | 'IsActive'>;
     Entities: Array<typeof artifactsEntityMeta>;
     EntityByName: (name: string) => typeof artifactsEntityMeta | undefined;
     RunView: (params: { EntityName: string }) => Promise<{
@@ -117,7 +114,7 @@ function createProviderWithUser(userId: string, userName: string, ownerId: strin
       TotalRowCount: number;
     }>;
   } = {
-    CurrentUser: user as Partial<UserInfo> as UserInfo,
+    CurrentUser: user,
     Entities: [artifactsEntityMeta],
     EntityByName: (name: string) => (name === 'MJ: Artifacts' ? artifactsEntityMeta : undefined),
     RunView: async (params: { EntityName: string }) => {
@@ -131,7 +128,7 @@ function createProviderWithUser(userId: string, userName: string, ownerId: strin
       return { Success: true, Results: [], TotalRowCount: 0 };
     },
   };
-  return providerStub as Partial<IMetadataProvider> as IMetadataProvider;
+  return Object.assign(Object.create(null) as IMetadataProvider, providerStub);
 }
 
 function createArtifactVersionStub(wb: WorkbookSpec): MJArtifactVersionEntity {
@@ -186,7 +183,7 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
       userId?: string;
       userName?: string;
       ownerId?: string;
-      permissionsSource?: ResolvedArtifactPermissions['Source'];
+      permissionsSource?: 'Owner' | 'ArtifactPermission';
     } = {},
   ): Promise<DocumentCollaborationSession> {
     const userId = options.userId ?? OWNER_USER_ID;
@@ -198,10 +195,10 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
       ArtifactID: 'art-r4-1',
       CanRead: true,
       CanEdit: true,
-      CanDelete: source === 'Owner',
       CanShare: source === 'Owner',
+      CanDelete: source === 'Owner',
       Source: source,
-      Reason: `${source} (test)`,
+      Reason: 'test',
     });
 
     component.Provider = createProviderWithUser(userId, userName, ownerId);
@@ -489,6 +486,23 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
 
       SpreadsheetEngine.Instance.SetCell(wb, sheet1.SheetID, 'A1', { Value: 'Open' });
       SpreadsheetEngine.Instance.SetCell(wb, sheet1.SheetID, 'B3', { Value: 'Locked Value' });
+      sheet1.ValidationRules = [
+        {
+          RuleID: 'val-prot-1',
+          Range: 'B3:C4',
+          RuleType: 'list',
+          AllowedValues: ['Approved', 'Pending'],
+        },
+      ];
+      sheet1.ConditionalFormats = [
+        {
+          RuleID: 'cf-prot-1',
+          Range: 'B3:C4',
+          Operator: 'gt',
+          Value1: 0,
+          HighlightTone: 'success',
+        },
+      ];
       SpreadsheetEngine.Instance.AddProtectedRange(wb, sheet1.SheetID, {
         RangeID: 'prot-range-1',
         Range: 'B3:C4',
@@ -568,6 +582,16 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
       expect(liveSheet1.Columns.length).toBe(initialColCount);
       expect(liveSheet1.Cells['B3']?.RawValue).toBe('Locked Value');
 
+      // Non-owner cannot delete ValidationRules or ConditionalFormats overlapping ProtectedRanges
+      component.RemoveValidationRule('val-prot-1');
+      expect(liveSheet1.ValidationRules?.map((r) => r.RuleID)).toEqual(['val-prot-1']);
+      expect(component.StatusBannerMessage).toContain('Finance locked range');
+
+      component.StatusBannerMessage = '';
+      component.RemoveConditionalFormatRule('cf-prot-1');
+      expect(liveSheet1.ConditionalFormats?.map((r) => r.RuleID)).toEqual(['cf-prot-1']);
+      expect(component.StatusBannerMessage).toContain('Finance locked range');
+
       // Deleting unprotected row 1 and unprotected col A (1) succeeds for non-owner
       component.OnContextMenuCommand({ Type: 'delete-rows', StartRowIndex: 1, Count: 1 });
       expect(liveSheet1.Rows.length).toBe(initialRowCount - 1);
@@ -589,10 +613,10 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
         ArtifactID: 'art-r4-1',
         CanRead: true,
         CanEdit: true,
-        CanDelete: true,
         CanShare: true,
+        CanDelete: true,
         Source: 'Owner',
-        Reason: 'Owner (test)',
+        Reason: 'test',
       };
       fixture.detectChanges();
 
@@ -600,6 +624,11 @@ describe('SpreadsheetArtifactViewerComponent — R4 Style Resets, Row/Col Yjs Sy
         `[data-testid="sheet-delete-tab-${liveSheet1.SheetID}"]`,
       ) as HTMLButtonElement;
       expect(ownerTabDeleteBtn1.disabled).toBe(false);
+
+      component.RemoveValidationRule('val-prot-1');
+      component.RemoveConditionalFormatRule('cf-prot-1');
+      expect(liveSheet1.ValidationRules).toEqual([]);
+      expect(liveSheet1.ConditionalFormats).toEqual([]);
 
       component.OnContextMenuCommand({ Type: 'delete-rows', StartRowIndex: 2, Count: 1 });
       expect(liveSheet1.Cells['A2']).toBeUndefined();

@@ -215,7 +215,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
         ['agent-payload-guards', PayloadGuardsChecks, 9],
-        ['agent-artifact-tools', ArtifactToolsChecks, 9],
+        ['agent-artifact-tools', ArtifactToolsChecks, 14],
         ['agent-skills-live', AgentSkillsLiveChecks, 5],
         ['agent-plan-mode', AgentPlanModeChecks, 6],
         ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
@@ -266,7 +266,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['metadata-sync-push', MetadataSyncPushChecks, 12], // MSP1-MSP12 sync push atomicity, in-transaction metadata reload, one row-level security filter, and declared folder overrides, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
-        ['performance-benchmark', PerformanceBenchmarkChecks, 22], // PB1-PB22 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only & Phase 2/Wave 4/Wave 5.2/Wave 5.4/Wave 6A/Wave 6C regression guards + longitudinal baseline gate (IT128)
+        ['performance-benchmark', PerformanceBenchmarkChecks, 23], // PB1-PB23 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only & Phase 2/Wave 4/Wave 5.2/Wave 5.4/Wave 6A/Wave 6B/Wave 6C regression guards + longitudinal baseline gate (IT128)
         ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT116)
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
@@ -295,8 +295,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
         ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
-        ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 7], // DSL1-DSL7 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, and Library/Chat wiring (IT170)
-        ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 4], // DSLC1-DSLC4 Client-transport GraphQL + WebSocket collaboration checks (IT171)
+        ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 10], // DSL1-DSL10 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, NW-2/NW-5 ACL & synthesis, and engine security guards (IT170)
+        ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 14], // DSLC1-DSLC14 Client-transport GraphQL, Remote Ops, Pre-auth Guest Share, Collaboration Resolver, WS meta/lock rejection, API-key scope, ClientClauseScreen, Collection ACL, Realtime IDOR, B4 default-off guest share refusal, and R1/R2 count_only + stored queries (IT171)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
@@ -351,7 +351,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     // the failure message prints a paste-ready copy of the actual registry state.
     const EXPECTED_BUNDLE_COUNTS: Record<string, number> = {
         'actions-pipeline': 6,
-        'agent-artifact-tools': 9,
+        'agent-artifact-tools': 14,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
         'agent-consult': 1,
@@ -406,8 +406,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'conversation-compaction': 23,
         'dataset-cache': 4,
         'diagnostics': 4,
-        'docs-slides-sheets-library': 7,
-        'docs-slides-sheets-library-client': 4,
+        'docs-slides-sheets-library': 10,
+        'docs-slides-sheets-library-client': 14,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -451,7 +451,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'native-tool-loop-live': 3,
         'nested-transactions': 11,
         'open-app-teardown': 2,
-        'performance-benchmark': 22,
+        'performance-benchmark': 23,
         'permission-engine': 15,
         'perplexity-decider': 5,
         'predictive-shadow-drift': 2,
@@ -734,6 +734,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-delete-client.CD2',
         'conversation-delete-client.CD3',
         'docs-slides-sheets-library.DSL3',
+        'docs-slides-sheets-library.DSL8',
         'encrypted-read-client.ER1',
         'encrypted-read-client.ER2',
         'encrypted-read-client.ER3',
@@ -1116,6 +1117,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     // Checks skipped in the deterministic lane unless RUN_AGENT_TESTS=1 arms the weekly live-model lane.
     const EXPECTED_LIVE_MODEL_GATED: string[] = [
         'agent-artifact-tools.AT1',
+        'agent-artifact-tools.AT10',
+        'agent-artifact-tools.AT11',
+        'agent-artifact-tools.AT12',
+        'agent-artifact-tools.AT13',
+        'agent-artifact-tools.AT14',
         'agent-artifact-tools.AT2',
         'agent-artifact-tools.AT3',
         'agent-artifact-tools.AT4',

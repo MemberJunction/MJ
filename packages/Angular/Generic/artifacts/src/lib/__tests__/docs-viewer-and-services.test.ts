@@ -649,6 +649,16 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
       VersionNumber: { value: 1, enumerable: true },
     });
     sheetViewer.artifactVersion = ver;
+    sheetViewer.readonly = false;
+    sheetViewer.Permissions = {
+      ArtifactID: '55555555-5555-4555-8555-555555555555',
+      CanRead: true,
+      CanEdit: true,
+      CanShare: true,
+      CanDelete: true,
+      Source: 'Owner',
+      Reason: 'Owner',
+    };
 
     const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Governed Sheet');
     const liveTable = {
@@ -710,6 +720,7 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     });
 
     const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+    viewer.readonly = false;
     viewer.HasEditPermission = true;
     const paragraph = 'First sentence. Target phrase here. Third sentence.';
     viewer.OnMarkdownChanged(paragraph, true);
@@ -1863,14 +1874,14 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     panel.canEdit = true;
     panel.Scope = scope;
     panel.ViewContext = 'conversation';
-    const artifactEntity = Object.create(MJArtifactEntity.prototype) as MJArtifactEntity;
+    const artifactEntity = Object.create(null) as MJArtifactEntity;
     Object.defineProperties(artifactEntity, {
       ID: { value: artifactId, enumerable: true },
       Name: { value: 'Scoped Test Artifact', enumerable: true },
     });
     panel.Artifact = artifactEntity;
 
-    const v1Initial = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    const v1Initial = Object.create(null) as MJArtifactVersionEntity;
     Object.defineProperties(v1Initial, {
       ID: { value: 'ver-1', enumerable: true },
       ArtifactID: { value: artifactId, enumerable: true },
@@ -1964,13 +1975,14 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     selectionStart = text.length,
     selectionEnd = selectionStart,
   ): HTMLElement {
-    return {
+    const mockEl: Partial<HTMLTextAreaElement> = {
       textContent: text,
       selectionStart,
       selectionEnd,
       focus: () => {},
       contains: () => false,
-    } as unknown as HTMLElement;
+    };
+    return mockEl as HTMLTextAreaElement as HTMLElement;
   }
 
   function makeKeyEvent(
@@ -1979,7 +1991,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     mods: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean } = {},
   ): { event: KeyboardEvent; prevented: () => boolean } {
     let defaultPrevented = false;
-    const event = {
+    const mockEvent: Partial<KeyboardEvent> = {
       key,
       shiftKey: Boolean(mods.shiftKey),
       metaKey: Boolean(mods.metaKey),
@@ -1989,8 +2001,8 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
       preventDefault: () => {
         defaultPrevented = true;
       },
-    } as unknown as KeyboardEvent;
-    return { event, prevented: () => defaultPrevented };
+    };
+    return { event: mockEvent as KeyboardEvent, prevented: () => defaultPrevented };
   }
 
   it('pressing Enter at the end of a heading commits the heading and creates a focused draft paragraph below', () => {
@@ -2046,7 +2058,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     const para0 = viewer.DocumentSegments[0];
     viewer.OnEditableBlockInput(para0, {
       target: makeMockEditableElement('## Key Milestones'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(viewer.DocumentSegments[0].BlockKind).toBe('heading');
     expect(viewer.DocumentSegments[0].HeadingLevel).toBe(2);
     expect(viewer.DocumentSegments[0].HeadingText).toBe('Key Milestones');
@@ -2056,7 +2068,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     expect(viewer.DocumentSegments).toHaveLength(2);
     viewer.OnEditableBlockInput(viewer.DocumentSegments[1], {
       target: makeMockEditableElement('- Ship fluid block flow'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(viewer.DocumentSegments[1].BlockKind).toBe('list');
     expect(viewer.GetParsedListItems(viewer.DocumentSegments[1])).toEqual([
       {
@@ -2071,7 +2083,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     viewer.AppendOrFocusTrailingParagraph();
     viewer.OnEditableBlockInput(viewer.DocumentSegments[2], {
       target: makeMockEditableElement('[] Verify smoke tests'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(viewer.DocumentSegments[2].BlockKind).toBe('list');
     expect(viewer.GetParsedListItems(viewer.DocumentSegments[2])[0].IsTask).toBe(true);
     expect(viewer.GetParsedListItems(viewer.DocumentSegments[2])[0].Text).toBe('Verify smoke tests');
@@ -2080,7 +2092,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     viewer.AppendOrFocusTrailingParagraph();
     viewer.OnEditableBlockInput(viewer.DocumentSegments[3], {
       target: makeMockEditableElement('> Important rollout note'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(viewer.DocumentSegments[3].BlockKind).toBe('callout');
     expect(viewer.GetParsedCallout(viewer.DocumentSegments[3])).toEqual({
       CalloutType: 'NOTE',
@@ -2421,7 +2433,7 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
 
     docViewer.CommitEditableHeading(docViewer.DocumentSegments[0], {
       target: makeMockEditableElement('Heading Renamed'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(docViewer.DocumentSegments.length).toBe(3);
     expect(docViewer.DocumentSegments[0].RawMarkdown).toBe('## Heading Renamed');
     expect(docViewer.DocumentSegments[1].RawMarkdown).toBe('Body paragraph');
@@ -2429,15 +2441,14 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
 
     docViewer.CommitEditableParagraph(docViewer.DocumentSegments[1], {
       target: makeMockEditableElement('Body edited'),
-    } as unknown as Event);
+    } as Partial<Event> as Event);
     expect(docViewer.DocumentSegments.length).toBe(3);
     expect(docViewer.DocumentSegments[1].RawMarkdown).toBe('Body edited');
     expect(docViewer.DocumentSegments[2].RawMarkdown).toBe('');
 
     // 3. Real DOM nodes (instanceof Node) must have stale selectionStart/selectionEnd expandos
     //    stripped on focus so window.getSelection() is never shadowed by a frozen 0 offset.
-    const globalWithNode = globalThis as unknown as { Node?: unknown };
-    const originalNode = globalWithNode.Node;
+    const originalNode: typeof Node | undefined = Reflect.get(globalThis, 'Node');
     class FakeDomNode {
       public textContent = 'Focused bullet';
       public selectionStart: number | undefined = 0;
@@ -2447,35 +2458,27 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
         this.focused = true;
       }
     }
-    const viewerInternal = listViewer as unknown as {
-      hostElement?: {
-        nativeElement?: {
-          querySelector: (selector: string) => HTMLElement | null;
-          querySelectorAll: (selector: string) => HTMLElement[];
-        };
-      };
-    };
-    const originalHostElement = viewerInternal.hostElement;
+    const originalHostElement: object | undefined = Reflect.get(listViewer, 'hostElement');
     try {
-      globalWithNode.Node = FakeDomNode;
+      Reflect.set(globalThis, 'Node', FakeDomNode);
       const domNode = new FakeDomNode();
       const targetSegId = listViewer.DocumentSegments[0].SegmentID;
-      viewerInternal.hostElement = {
+      Reflect.set(listViewer, 'hostElement', {
         nativeElement: {
           querySelector: (selector: string): HTMLElement | null =>
             selector === `[data-testid="list-item-text-${targetSegId}-0"]`
-              ? (domNode as unknown as HTMLElement)
+              ? (domNode as Partial<HTMLElement> as HTMLElement)
               : null,
           querySelectorAll: (): HTMLElement[] => [],
         },
-      };
+      });
       listViewer.FocusEditableSegment(targetSegId, 'start', 0);
       expect(domNode.focused).toBe(true);
       expect('selectionStart' in domNode).toBe(false);
       expect('selectionEnd' in domNode).toBe(false);
     } finally {
-      globalWithNode.Node = originalNode;
-      viewerInternal.hostElement = originalHostElement;
+      Reflect.set(globalThis, 'Node', originalNode);
+      Reflect.set(listViewer, 'hostElement', originalHostElement);
     }
   });
 

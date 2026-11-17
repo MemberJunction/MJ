@@ -1,506 +1,308 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
-    ArtifactPermissionEngine,
-    ArtifactPreviewSnapshot,
-    ArtifactVersionConfiguration,
-    BuildArtifactPreviewSnapshot,
-    DocumentBlockExecutionResult,
-    DocumentLiveBlockEngine,
-    MJArtifactEntity,
-    MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailEntity,
-    ParseArtifactVersionConfiguration,
-    SlideDeckEngine,
-    SpreadsheetEngine,
+    MJConversationEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { GovernedArtifactService } from '@memberjunction/ai-agents';
+import { BaseGovernedArtifactAction } from '../artifacts/base-governed-artifact.action';
 
-interface RefreshDigestSummary {
-    DigestHash: string;
-    PreviewSnapshot: ArtifactPreviewSnapshot | null;
-    HighlightLines: string[];
+export interface RefreshArtifactPayloadOptions {
+    artifactId: string;
+    content: string;
+    configuration?: string;
+    artifactTypeName?: string;
+    driverClass?: string;
+    contextUser: UserInfo;
+    provider: IMetadataProvider;
+    freezeRefreshedBlocks?: boolean;
+    forceRefreshFrozen?: boolean;
+    versionId?: string;
+}
+
+export interface RefreshArtifactPayloadResult {
+    changed: boolean;
+    updatedContent: string;
+    updatedConfiguration: string;
+    diffSummary: string;
+    signedFrozenBlocksCount: number;
+    highlightLines: string[];
 }
 
 /**
- * Scheduled Living Report action (`H3 §5.3`).
+ * Core action that refreshes all live embedded data blocks / live tables inside a governed
+ * Document, Spreadsheet, or Slide Deck artifact, compares against the previous version, persists a new
+ * ArtifactVersion if anything changed (or if `ForceSaveIfUnchanged` is true), and optionally
+ * freezes the refreshed blocks into immutable snapshots (HMAC-signed) or posts a brief summary
+ * into a conversation.
  *
- * Refreshes an artifact's live blocks (`LiveTables`, `=MJ.QUERY`, `=MJ.VIEW`, `=MJ.IMPORTRANGE`,
- * and `:::mj-block` directives) under the triggering user's permissions, compares the refreshed
- * output against the previous version's digest, saves `vN+1` when values changed (or forced),
- * computes a human-readable diff summary, and optionally posts a summary card with linked
- * artifact reference to a target Conversation.
+ * Delegates canonical lock coordination, Yjs live-room reconciliation, File-mode `.xlsx` binary
+ * export/upload, and atomic persistence to {@link GovernedArtifactService.RefreshAndSnapshotArtifact}.
  */
 @RegisterClass(BaseAction, '__RefreshAndSnapshotArtifact')
 export class RefreshAndSnapshotArtifactAction extends BaseAction {
     public static readonly AuthorizesCaller = true;
 
-    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        return this.ExecuteRefreshAction(params);
+    private readonly helper = new (class extends BaseGovernedArtifactAction {
+        protected async InternalRunAction(_params: RunActionParams): Promise<ActionResultSimple> {
+            return { Success: true, ResultCode: 'SUCCESS', Params: [] };
+        }
+        public ResolveProvider(params: RunActionParams): IMetadataProvider {
+            return this.resolveProvider(params);
+        }
+        public ExtractAgentAttribution(params: RunActionParams): { agentRunId?: string; agentName?: string } {
+            return this.extractAgentAttribution(params);
+        }
+        public GetString(params: RunActionParams, name: string): string | undefined {
+            return this.getStringParam(params, name);
+        }
+        public SetOutput(
+            params: RunActionParams,
+            name: string,
+            value: string | number | boolean | null | object | undefined,
+        ): void {
+            this.setOutputParam(params, name, value);
+        }
+    })();
+
+    /** Backwards-compatible public entry point forwarding directly to {@link InternalRunAction}. */
+    public async ExecuteRefreshAction(params: RunActionParams): Promise<ActionResultSimple> {
+        return this.InternalRunAction(params);
     }
 
-    /**
-     * Executes scheduled refresh, diffing, version save, and optional Conversation notification.
-     */
-    public async ExecuteRefreshAction(params: RunActionParams): Promise<ActionResultSimple> {
-        try {
-            const contextUser = params.ContextUser;
-            if (!contextUser?.ID) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_CONTEXT_USER',
-                    Message: 'ContextUser is required to refresh an artifact.',
-                };
-            }
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        if (!params.ContextUser) {
+            return {
+                Success: false,
+                ResultCode: 'MISSING_CONTEXT_USER',
+                Message: 'ContextUser is required to refresh an artifact.',
+                Params: params.Params,
+            };
+        }
 
-            const artifactId = this.getStringParam(params, 'ArtifactID');
-            if (!artifactId) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_ARTIFACT_ID',
-                    Message: 'ArtifactID parameter is required.',
-                };
-            }
+        const artifactId = this.helper.GetString(params, 'ArtifactID');
+        if (!artifactId) {
+            return {
+                Success: false,
+                ResultCode: 'MISSING_PARAMETER',
+                Message: 'ArtifactID parameter is required.',
+                Params: params.Params,
+            };
+        }
 
-            const freezeRefreshedBlocks = this.getBooleanParam(params, 'FreezeRefreshedBlocks', false);
-            const forceSaveIfUnchanged = this.getBooleanParam(params, 'ForceSaveIfUnchanged', false);
-            const conversationId = this.getStringParam(params, 'ConversationID');
-            const versionComments = this.getStringParam(params, 'VersionComments');
+        const freezeRefreshedBlocks = this.getBooleanParam(params, 'FreezeRefreshedBlocks', false);
+        const forceSaveIfUnchanged = this.getBooleanParam(params, 'ForceSaveIfUnchanged', false);
+        const forceRefreshFrozen = this.getBooleanParam(params, 'ForceRefreshFrozen', false);
+        const versionComments = this.helper.GetString(params, 'VersionComments');
+        const conversationId = this.helper.GetString(params, 'ConversationID');
+        const postToConversation = this.getBooleanParam(params, 'PostToConversation', Boolean(conversationId));
 
-            const md = params.Provider ?? new Metadata();
-            const provider = params.Provider ?? Metadata.Provider;
+        const provider = this.helper.ResolveProvider(params);
 
-            const perm = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-                provider,
-                artifactId,
-                contextUser,
-            );
-            if (!perm.CanEdit) {
+        if (postToConversation && !conversationId) {
+            return {
+                Success: false,
+                ResultCode: 'MISSING_PARAMETER',
+                Message: 'ConversationID parameter is required when PostToConversation is true.',
+                Params: params.Params,
+            };
+        }
+
+        if (conversationId) {
+            const owned = await this.verifyConversationOwnership(provider, params.ContextUser, conversationId);
+            if (!owned.allowed) {
                 return {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
-                    Message: `User does not have edit permission on artifact '${artifactId}'.`,
+                    Message: owned.reason,
+                    Params: params.Params,
                 };
             }
+        }
 
-            const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
-            const loaded = await artifact.Load(artifactId);
-            if (!loaded) {
-                return {
-                    Success: false,
-                    ResultCode: 'ARTIFACT_NOT_FOUND',
-                    Message: `Artifact '${artifactId}' was not found.`,
-                };
-            }
+        const attribution = this.helper.ExtractAgentAttribution(params);
 
-            const rv = RunView.FromMetadataProvider(provider);
-            const safeArtifactId = EscapeSQLString(artifactId);
-            const versionRes = await rv.RunView<{
-                ID: string;
-                VersionNumber: number;
-                Content: string | null;
-                Configuration: string | null;
-            }>(
-                {
-                    EntityName: 'MJ: Artifact Versions',
-                    ExtraFilter: `ArtifactID='${safeArtifactId}'`,
-                    OrderBy: 'VersionNumber DESC',
-                    Fields: ['ID', 'VersionNumber', 'Content', 'Configuration'],
-                    MaxRows: 1,
-                    ResultType: 'simple',
-                },
-                contextUser,
-            );
+        // S-a: Always reject FreezeRefreshedBlocks on the Action surface (even without agent attribution,
+        // such as MCP Server or RuntimeActionBridge callers) because Action invocation cannot prove a
+        // direct interactive human gesture; human freezing goes through GraphQL FreezeDocumentLiveBlock.
+        if (freezeRefreshedBlocks) {
+            return {
+                Success: false,
+                ResultCode: 'PERMISSION_DENIED',
+                Message:
+                    'Freezing live artifact blocks via RefreshAndSnapshotArtifact is disabled because action invocations (including MCP and RuntimeActionBridge) cannot guarantee a direct interactive human gesture. Use FreezeDocumentLiveBlock in the UI instead.',
+                Params: params.Params,
+            };
+        }
 
-            if (!versionRes.Success || !versionRes.Results || versionRes.Results.length === 0) {
-                return {
-                    Success: false,
-                    ResultCode: 'VERSION_NOT_FOUND',
-                    Message: `No artifact versions exist for artifact '${artifactId}'.`,
-                };
-            }
-
-            const prevVersion = versionRes.Results[0];
-            const prevConfig = ParseArtifactVersionConfiguration(prevVersion.Configuration) ?? {};
-            const driverClass = await this.resolveDriverClass(artifact.TypeID, provider);
-            const refreshed = await this.RefreshArtifactPayload(
-                prevVersion.Content ?? '',
-                prevVersion.Configuration ?? null,
-                driverClass,
-                artifact.Name,
-                freezeRefreshedBlocks,
-                contextUser,
+        try {
+            const outcome = await GovernedArtifactService.Instance.RefreshAndSnapshotArtifact({
                 provider,
-            );
+                contextUser: params.ContextUser,
+                artifactId,
+                freezeRefreshedBlocks,
+                forceSaveIfUnchanged,
+                forceRefreshFrozen,
+                versionComments,
+                agentRunId: attribution.agentRunId,
+                agentName: attribution.agentName,
+            });
 
-            const prevDigestHash =
-                typeof prevConfig['livingReportDigest'] === 'string'
-                    ? prevConfig['livingReportDigest']
-                    : hashStringFNV1a(prevVersion.Content ?? '');
-            const changed = refreshed.Digest.DigestHash !== prevDigestHash;
+            if (!outcome.success) {
+                return {
+                    Success: false,
+                    ResultCode: outcome.resultCode || 'FAILED',
+                    Message: outcome.errorMessage || outcome.message,
+                    Params: params.Params,
+                };
+            }
 
-            if (!changed && !forceSaveIfUnchanged) {
-                this.setOutputParam(params, 'Changed', false);
-                this.setOutputParam(params, 'ArtifactID', artifactId);
-                this.setOutputParam(params, 'PreviousVersionID', prevVersion.ID);
-                this.setOutputParam(params, 'PreviousVersionNumber', prevVersion.VersionNumber);
-                this.setOutputParam(params, 'NewVersionID', prevVersion.ID);
-                this.setOutputParam(params, 'NewVersionNumber', prevVersion.VersionNumber);
-                this.setOutputParam(params, 'DiffSummary', 'No changes detected.');
-                this.setOutputParam(params, 'PostedConversationDetailID', null);
+            this.helper.SetOutput(params, 'ArtifactID', outcome.artifactId);
+            this.helper.SetOutput(params, 'VersionID', outcome.versionId ?? null);
+            this.helper.SetOutput(params, 'VersionNumber', outcome.versionNumber ?? outcome.previousVersionNumber ?? null);
+            this.helper.SetOutput(params, 'ArtifactName', outcome.artifactName ?? null);
+            this.helper.SetOutput(params, 'ArtifactTypeName', outcome.artifactTypeName ?? null);
+            this.helper.SetOutput(params, 'DriverClass', outcome.driverClass ?? null);
+            this.helper.SetOutput(params, 'PreviousVersionID', outcome.previousVersionId ?? null);
+            this.helper.SetOutput(params, 'PreviousVersionNumber', outcome.previousVersionNumber ?? null);
+            this.helper.SetOutput(params, 'NewVersionID', outcome.newVersionId ?? null);
+            this.helper.SetOutput(params, 'NewVersionNumber', outcome.newVersionNumber ?? null);
+            this.helper.SetOutput(params, 'Changed', outcome.changed);
+            this.helper.SetOutput(params, 'DiffSummary', outcome.diffSummary ?? outcome.message);
+
+            if (outcome.resultCode === 'NO_CHANGES') {
                 return {
                     Success: true,
                     ResultCode: 'NO_CHANGES',
-                    Message: `No changes detected for '${artifact.Name}' (v${prevVersion.VersionNumber}).`,
-                };
-            }
-
-            const prevLines = this.extractPreviousHighlightLines(prevConfig);
-            const diffSummary = this.computeDiffSummary(
-                artifact.Name,
-                prevVersion.VersionNumber,
-                prevVersion.VersionNumber + 1,
-                prevLines,
-                refreshed.Digest.HighlightLines,
-            );
-
-            const nextConfig: ArtifactVersionConfiguration = {
-                ...prevConfig,
-                ...(refreshed.Digest.PreviewSnapshot
-                    ? { previewSnapshot: refreshed.Digest.PreviewSnapshot }
-                    : {}),
-                livingReportDigest: refreshed.Digest.DigestHash,
-                livingReportHighlightLines: refreshed.Digest.HighlightLines,
-                livingReportRefreshedAt: new Date().toISOString(),
-            };
-
-            const nextVersion = await md.GetEntityObject<MJArtifactVersionEntity>(
-                'MJ: Artifact Versions',
-                contextUser,
-            );
-            nextVersion.NewRecord();
-            nextVersion.ArtifactID = artifactId;
-            nextVersion.VersionNumber = prevVersion.VersionNumber + 1;
-            nextVersion.UserID = contextUser.ID;
-            nextVersion.Content = refreshed.UpdatedContent;
-            nextVersion.Configuration = JSON.stringify(nextConfig);
-            nextVersion.Comments =
-                versionComments || `Scheduled refresh from v${prevVersion.VersionNumber}: ${diffSummary}`;
-
-            const savedVersion = await nextVersion.Save();
-            if (!savedVersion) {
-                return {
-                    Success: false,
-                    ResultCode: 'SAVE_VERSION_FAILED',
-                    Message: `Failed to save refreshed artifact version v${prevVersion.VersionNumber + 1}.`,
+                    Message: outcome.message,
+                    Params: params.Params,
                 };
             }
 
             let postedDetailId: string | null = null;
-            if (conversationId) {
+            if (postToConversation && conversationId && outcome.versionId) {
                 postedDetailId = await this.postSummaryToConversation(
-                    md,
-                    contextUser,
+                    provider,
+                    params.ContextUser,
                     conversationId,
-                    artifact.Name,
-                    nextVersion.ID,
-                    nextVersion.VersionNumber,
-                    diffSummary,
+                    outcome.artifactName ?? 'Untitled Artifact',
+                    outcome.versionNumber ?? 1,
+                    outcome.versionId,
+                    outcome.diffSummary ?? outcome.message,
                 );
             }
-
-            this.setOutputParam(params, 'Changed', changed);
-            this.setOutputParam(params, 'ArtifactID', artifactId);
-            this.setOutputParam(params, 'PreviousVersionID', prevVersion.ID);
-            this.setOutputParam(params, 'PreviousVersionNumber', prevVersion.VersionNumber);
-            this.setOutputParam(params, 'NewVersionID', nextVersion.ID);
-            this.setOutputParam(params, 'NewVersionNumber', nextVersion.VersionNumber);
-            this.setOutputParam(params, 'DiffSummary', diffSummary);
-            this.setOutputParam(params, 'PostedConversationDetailID', postedDetailId);
+            this.helper.SetOutput(params, 'PostedConversationDetailID', postedDetailId);
 
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: `Refreshed '${artifact.Name}' to v${nextVersion.VersionNumber}: ${diffSummary}`,
+                Message: outcome.message,
+                Params: params.Params,
             };
         } catch (err) {
             return {
                 Success: false,
                 ResultCode: 'FAILED',
                 Message: `RefreshAndSnapshotArtifactAction error: ${err instanceof Error ? err.message : String(err)}`,
+                Params: params.Params,
             };
         }
     }
 
     /**
-     * Refreshes an artifact's live blocks/formulas based on driver type and computes a deterministic digest.
+     * Refreshes an already-loaded text payload in memory via {@link GovernedArtifactService.RefreshArtifactPayloadInMemory}.
      */
-    public async RefreshArtifactPayload(
-        rawContent: string,
-        rawConfiguration: string | null,
-        driverClass: string,
-        title: string,
-        freezeBlocks: boolean,
-        contextUser: UserInfo,
+    public async RefreshArtifactPayload(options: RefreshArtifactPayloadOptions): Promise<RefreshArtifactPayloadResult> {
+        return GovernedArtifactService.Instance.RefreshArtifactPayloadInMemory({
+            artifactId: options.artifactId,
+            content: options.content,
+            configuration: options.configuration,
+            artifactTypeName: options.artifactTypeName,
+            driverClass: options.driverClass,
+            contextUser: options.contextUser,
+            provider: options.provider,
+            freezeRefreshedBlocks: options.freezeRefreshedBlocks,
+            forceRefreshFrozen: options.forceRefreshFrozen,
+        });
+    }
+
+    private async verifyConversationOwnership(
         provider: IMetadataProvider,
-    ): Promise<{ UpdatedContent: string; Digest: RefreshDigestSummary }> {
-        const isSheet =
-            driverClass === 'SpreadsheetArtifactViewerPlugin' ||
-            (rawContent.trim().startsWith('{') && rawContent.includes('"Worksheets"'));
-        if (isSheet) {
-            const engine = SpreadsheetEngine.Instance;
-            const wb = engine.ParseWorkbook(rawContent, rawConfiguration);
-            await engine.RefreshLiveTables(wb, contextUser, provider, {
-                ForceRefreshFrozen: freezeBlocks,
-            });
-            await engine.EvaluateMjCustomFunctions(wb, contextUser, provider, {
-                BypassCache: true,
-            });
-            engine.EvaluateWorkbook(wb);
-
-            const highlightLines: string[] = [];
-            for (const ws of wb.Worksheets) {
-                const populated = Object.values(ws.Cells)
-                    .sort((a, b) => a.Address.localeCompare(b.Address))
-                    .slice(0, 40)
-                    .map((c) => `${ws.Name}!${c.Address}=${String(c.ComputedValue ?? c.RawValue ?? '')}`);
-                highlightLines.push(...populated);
-            }
-
-            if (freezeBlocks) {
-                for (const ws of wb.Worksheets) {
-                    for (const tbl of ws.LiveTables) {
-                        tbl.Mode = 'Frozen';
-                    }
-                }
-            }
-
-            const digestInput = JSON.stringify(highlightLines);
-            const updatedContent = engine.SerializeWorkbook(wb);
-            const snapshot = BuildArtifactPreviewSnapshot(updatedContent, driverClass, title);
-            return {
-                UpdatedContent: updatedContent,
-                Digest: {
-                    DigestHash: hashStringFNV1a(digestInput),
-                    PreviewSnapshot: snapshot,
-                    HighlightLines: highlightLines,
-                },
-            };
+        contextUser: UserInfo,
+        conversationId: string,
+    ): Promise<{ allowed: boolean; reason: string }> {
+        if (!IsValidUUID(conversationId)) {
+            return { allowed: false, reason: 'ConversationID must be a valid UUID.' };
         }
-
-        const isDeck =
-            driverClass === 'SlideDeckArtifactViewerPlugin' ||
-            (rawContent.trim().startsWith('{') && rawContent.includes('"Slides"'));
-        if (isDeck) {
-            const slideEngine = SlideDeckEngine.Instance;
-            let deck = slideEngine.ParseDeckSpec(rawContent, title);
-            const liveResults = await slideEngine.ExecuteDeckLiveBlocks(deck, provider, contextUser);
-            if (freezeBlocks) {
-                const resultsMap = new Map<string, DocumentBlockExecutionResult>(Object.entries(liveResults));
-                deck = slideEngine.FreezeDeckLiveBlocksForPresentation(deck, resultsMap, contextUser);
-            }
-            const highlightLines = this.summarizeDeckDigest(deck.Slides, liveResults);
-            const updatedContent = slideEngine.SerializeDeckSpec(deck);
-            const snapshot = BuildArtifactPreviewSnapshot(updatedContent, driverClass, title);
-            return {
-                UpdatedContent: updatedContent,
-                Digest: {
-                    DigestHash: hashStringFNV1a(JSON.stringify(highlightLines)),
-                    PreviewSnapshot: snapshot,
-                    HighlightLines: highlightLines,
-                },
-            };
-        }
-
-        // Markdown Document with :::mj-block directives
-        const docEngine = DocumentLiveBlockEngine.Instance;
-        const segments = docEngine.ParseMarkdownDirectives(rawContent);
-        const rebuiltParts: string[] = [];
-        const highlightLines: string[] = [];
-        const liveResults: Record<string, DocumentBlockExecutionResult> = {};
-
-        for (const seg of segments) {
-            if (seg.Type === 'markdown') {
-                rebuiltParts.push(seg.RawText);
-                const textSample = seg.RawText.split('\n')
-                    .map((l) => l.trim())
-                    .filter(Boolean)
-                    .slice(0, 10);
-                highlightLines.push(...textSample);
-                continue;
-            }
-            if (seg.BlockSpec) {
-                const res = await docEngine.ExecuteBlock(seg.BlockSpec, contextUser, provider);
-                liveResults[seg.BlockSpec.BlockID] = res;
-                highlightLines.push(
-                    `Block[${seg.BlockSpec.Title || seg.BlockSpec.BlockID}]: rows=${res.TotalRowCount}, top=${JSON.stringify(res.Rows[0] ?? {})}`,
-                );
-                if (freezeBlocks && seg.BlockSpec.Mode !== 'Frozen') {
-                    const frozen = await docEngine.FreezeBlock(seg.BlockSpec, contextUser, true, provider);
-                    if (frozen.Success && frozen.UpdatedSpec) {
-                        rebuiltParts.push(docEngine.SerializeBlockToMarkdownDirective(frozen.UpdatedSpec));
-                        continue;
-                    }
-                }
-            }
-            rebuiltParts.push(seg.RawText);
-        }
-
-        const updatedContent = freezeBlocks ? rebuiltParts.join('\n') : rawContent;
-        const snapshot = BuildArtifactPreviewSnapshot(updatedContent, driverClass, title);
-        return {
-            UpdatedContent: updatedContent,
-            Digest: {
-                DigestHash: hashStringFNV1a(JSON.stringify({ updatedContent, highlightLines })),
-                PreviewSnapshot: snapshot,
-                HighlightLines: highlightLines,
-            },
-        };
-    }
-
-    private summarizeDeckDigest(
-        slides: Array<{ SlideID: string; Title: string; Regions: Array<{ RegionID: string; MarkdownContent: string }> }>,
-        liveResults: Record<string, DocumentBlockExecutionResult>,
-    ): string[] {
-        const lines: string[] = [];
-        for (const s of slides) {
-            lines.push(`Slide[${s.Title}]: ${s.Regions.map((r) => r.MarkdownContent.slice(0, 80)).join(' | ')}`);
-        }
-        for (const [blockId, res] of Object.entries(liveResults)) {
-            lines.push(`Block[${blockId}]: rows=${res.TotalRowCount}, top=${JSON.stringify(res.Rows[0] ?? {})}`);
-        }
-        return lines;
-    }
-
-    private extractPreviousHighlightLines(prevConfig: ArtifactVersionConfiguration): string[] {
-        const stored = prevConfig['livingReportHighlightLines'];
-        if (Array.isArray(stored)) {
-            return stored.filter((v): v is string => typeof v === 'string');
-        }
-        const snap = prevConfig.previewSnapshot;
-        if (snap && snap.Kind === 'doc') {
-            return [snap.Heading, snap.Excerpt].filter(Boolean);
-        }
-        return [];
-    }
-
-    private computeDiffSummary(
-        artifactName: string,
-        prevVersionNumber: number,
-        nextVersionNumber: number,
-        prevLines: string[],
-        nextLines: string[],
-    ): string {
-        const prevSet = new Set(prevLines);
-        const added = nextLines.filter((l) => !prevSet.has(l));
-        const nextSet = new Set(nextLines);
-        const removed = prevLines.filter((l) => !nextSet.has(l));
-
-        if (added.length === 0 && removed.length === 0) {
-            return `Saved '${artifactName}' v${nextVersionNumber} (from v${prevVersionNumber}).`;
-        }
-        const highlights = added.slice(0, 3).map((l) => `- ${l}`).join('\n');
-        return `Updated '${artifactName}' from v${prevVersionNumber} to v${nextVersionNumber} (${added.length} added/changed, ${removed.length} removed)${highlights ? `:\n${highlights}` : '.'}`;
-    }
-
-    private async resolveDriverClass(typeId: string | null | undefined, provider: IMetadataProvider): Promise<string> {
-        if (!typeId) return '';
         const rv = RunView.FromMetadataProvider(provider);
-        const safeId = EscapeSQLString(typeId);
-        const res = await rv.RunView<{ DriverClass: string | null }>(
+        const convRes = await rv.RunView<MJConversationEntity>(
             {
-                EntityName: 'MJ: Artifact Types',
-                ExtraFilter: `ID='${safeId}'`,
-                Fields: ['DriverClass'],
+                EntityName: 'MJ: Conversations',
+                ExtraFilter: `ID = '${EscapeSQLString(conversationId.trim())}'`,
                 MaxRows: 1,
-                ResultType: 'simple',
+                SkipTotalRowCount: true,
+                ResultType: 'entity_object',
             },
+            contextUser,
         );
-        return res.Success && res.Results?.[0]?.DriverClass ? res.Results[0].DriverClass : '';
+        if (!convRes.Success || !convRes.Results?.length) {
+            return { allowed: false, reason: `Conversation '${conversationId}' was not found or is not accessible.` };
+        }
+        if (!UUIDsEqual(convRes.Results[0].UserID, contextUser.ID)) {
+            return { allowed: false, reason: `Access denied: you do not own conversation '${conversationId}'.` };
+        }
+        return { allowed: true, reason: '' };
     }
 
     private async postSummaryToConversation(
-        md: IMetadataProvider | Metadata,
+        provider: IMetadataProvider,
         contextUser: UserInfo,
         conversationId: string,
         artifactName: string,
-        versionId: string,
         versionNumber: number,
+        versionId: string,
         diffSummary: string,
     ): Promise<string | null> {
-        const detail = await md.GetEntityObject<MJConversationDetailEntity>(
-            'MJ: Conversation Details',
-            contextUser,
-        );
-        detail.NewRecord();
-        detail.ConversationID = conversationId;
-        detail.Role = 'AI';
-        detail.HiddenToUser = false;
-        detail.Message = `### Scheduled Living Report Update\n\n**${artifactName}** refreshed to **v${versionNumber}**.\n\n${diffSummary}`;
-        if (!(await detail.Save())) {
+        try {
+            const owned = await this.verifyConversationOwnership(provider, contextUser, conversationId);
+            if (!owned.allowed) {
+                LogError(`RefreshAndSnapshotArtifactAction refused conversation summary insert: ${owned.reason}`);
+                return null;
+            }
+
+            const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            detail.ConversationID = conversationId;
+            detail.Role = 'AI';
+            detail.Message = `Scheduled refresh updated **${artifactName}** to v${versionNumber}: ${diffSummary}`;
+            detail.UserID = contextUser.ID;
+            if (!(await detail.Save())) {
+                return null;
+            }
+
+            if (versionId) {
+                const junction = await provider.GetEntityObject<MJConversationDetailArtifactEntity>('MJ: Conversation Detail Artifacts', contextUser);
+                junction.ConversationDetailID = detail.ID;
+                junction.ArtifactVersionID = versionId;
+                junction.Direction = 'Output';
+                await junction.Save();
+            }
+            return detail.ID;
+        } catch (err) {
+            LogError(`RefreshAndSnapshotArtifactAction postSummaryToConversation warning: ${err instanceof Error ? err.message : String(err)}`);
             return null;
         }
-
-        const link = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
-            'MJ: Conversation Detail Artifacts',
-            contextUser,
-        );
-        link.NewRecord();
-        link.ConversationDetailID = detail.ID;
-        link.ArtifactVersionID = versionId;
-        link.Direction = 'Output';
-        await link.Save();
-        return detail.ID;
     }
 
-    private getStringParam(params: RunActionParams, name: string): string {
-        const paramsList = params.Params ?? [];
-        const match = paramsList.find((p) => p.Name.toLowerCase() === name.toLowerCase() && p.Type !== 'Output');
-        return match?.Value != null ? String(match.Value).trim() : '';
+    private getBooleanParam(params: RunActionParams, name: string, fallback: boolean): boolean {
+        const param = params.Params?.find((p) => p.Name?.trim().toLowerCase() === name.toLowerCase());
+        if (param?.Value === undefined || param?.Value === null) return fallback;
+        if (typeof param.Value === 'boolean') return param.Value;
+        const s = String(param.Value).trim().toLowerCase();
+        if (s === 'true' || s === '1' || s === 'yes') return true;
+        if (s === 'false' || s === '0' || s === 'no') return false;
+        return fallback;
     }
-
-    private getBooleanParam(params: RunActionParams, name: string, defaultVal: boolean): boolean {
-        const paramsList = params.Params ?? [];
-        const match = paramsList.find((p) => p.Name.toLowerCase() === name.toLowerCase() && p.Type !== 'Output');
-        if (match?.Value == null) return defaultVal;
-        if (typeof match.Value === 'boolean') return match.Value;
-        const normalized = String(match.Value).trim().toLowerCase();
-        if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true;
-        if (normalized === 'false' || normalized === '0' || normalized === 'no') return false;
-        return defaultVal;
-    }
-
-    private setOutputParam(params: RunActionParams, name: string, value: string | number | boolean | null): void {
-        if (!params.Params) {
-            params.Params = [];
-        }
-        const paramsList = params.Params;
-        const existing = paramsList.find((p) => p.Name.toLowerCase() === name.toLowerCase());
-        if (existing) {
-            existing.Value = value;
-            const existingType = existing.Type?.trim().toLowerCase();
-            existing.Type = existingType === 'input' || existingType === 'both' ? 'Both' : 'Output';
-        } else {
-            paramsList.push({
-                Name: name,
-                Type: 'Output',
-                Value: value,
-            });
-        }
-    }
-}
-
-function hashStringFNV1a(input: string): string {
-    let h1 = 0x811c9dc5;
-    let h2 = 0x811c9dc5;
-    for (let i = 0; i < input.length; i++) {
-        const ch = input.charCodeAt(i);
-        h1 ^= ch & 0xff;
-        h1 = Math.imul(h1, 0x01000193);
-        h2 ^= (ch >>> 8) & 0xff;
-        h2 = Math.imul(h2, 0x01000193);
-    }
-    return `lr-${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
 }

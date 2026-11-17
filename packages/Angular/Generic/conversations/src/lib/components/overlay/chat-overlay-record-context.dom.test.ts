@@ -1,10 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EventEmitter } from '@angular/core';
-import { IMetadataProvider } from '@memberjunction/core';
-import { MJConversationEntity } from '@memberjunction/core-entities';
-import { ChatAgentsOverlayComponent, OverlayConversationSwitchedEvent } from './chat-overlay.component';
+import { EntityInfo, IMetadataProvider } from '@memberjunction/core';
+import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import {
+    ChatAgentsOverlayComponent,
+    type OverlayAppContext,
+    type OverlayConversationSwitchedEvent,
+} from './chat-overlay.component';
 
-function createOverlayWithContext(appContext: Record<string, unknown> | null): ChatAgentsOverlayComponent {
+function createOverlayWithContext(appContext: OverlayAppContext | null): ChatAgentsOverlayComponent {
     const instance = Object.create(ChatAgentsOverlayComponent.prototype) as ChatAgentsOverlayComponent;
     instance.AppContext = appContext;
     return instance;
@@ -68,8 +72,8 @@ describe('ChatAgentsOverlayComponent.ActiveRecordContext', () => {
             }),
             {
                 Provider: {
-                    Entities: [{ ID: 'E-CONTRACTS-1', Name: 'Contracts' }]
-                } as unknown as IMetadataProvider,
+                    Entities: [{ ID: 'E-CONTRACTS-1', Name: 'Contracts' }] as EntityInfo[],
+                } as Partial<IMetadataProvider> as IMetadataProvider,
                 RecordConversations: [] as MJConversationEntity[],
                 ConversationSwitched: new EventEmitter<OverlayConversationSwitchedEvent>(),
                 bridge: {
@@ -86,7 +90,7 @@ describe('ChatAgentsOverlayComponent.ActiveRecordContext', () => {
             Name: 'Contract Review',
             LinkedEntityID: 'E-CONTRACTS-1',
             LinkedRecordID: 'C-101'
-        } as unknown as MJConversationEntity;
+        } as Partial<MJConversationEntity> as MJConversationEntity;
 
         overlay.OnConversationCreated({
             conversation: recordConvo,
@@ -97,5 +101,57 @@ describe('ChatAgentsOverlayComponent.ActiveRecordContext', () => {
         expect(overlay.RecordConversations).toHaveLength(1);
         // Record-bound chats must NOT be published to the global workspace bridge
         expect(setActiveSpy).toHaveBeenCalledWith(null);
+    });
+
+    it('pins ArtifactAiConversationId to the active artifact chat conversation and ignores replies from other conversations (P1-11)', () => {
+        const overlay = Object.create(ChatAgentsOverlayComponent.prototype) as ChatAgentsOverlayComponent;
+        Object.assign(overlay as object, {
+            State: 'collapsed',
+            UnreadCount: 0,
+            VisibilityChanged: new EventEmitter(),
+            RecordConversations: [] as MJConversationEntity[],
+            ConversationSwitched: new EventEmitter<OverlayConversationSwitchedEvent>(),
+            bridge: { SetActiveFromOverlay: vi.fn() },
+            cdr: { detectChanges: vi.fn(), markForCheck: vi.fn() },
+            Expand: () => {
+                overlay.State = 'expanded';
+            },
+        });
+
+        overlay.HandleArtifactAiRequest({
+            ArtifactID: 'art-pin-1',
+            ArtifactTitle: 'Pinned Spec',
+            ArtifactKind: 'doc',
+            ContextLabel: 'Intro',
+            SelectedContent: 'Old intro',
+            InitialPrompt: 'Refine intro',
+            SuggestingModeDefault: true,
+            ApplySuggestion: vi.fn(),
+        });
+
+        // Bind to CONV-PINNED-1 when conversation is created
+        overlay.OnConversationCreated({
+            conversation: { ID: 'CONV-PINNED-1', Name: 'Artifact AI' } as MJConversationEntity,
+            pendingMessage: 'Refine intro',
+        });
+        expect(overlay.ArtifactAiConversationId).toBe('CONV-PINNED-1');
+
+        // Unrelated background conversation reply must NOT overwrite ArtifactAiLatestProposal
+        overlay.OnAgentMessageReceived({
+            message: {
+                ConversationID: 'CONV-OTHER-999',
+                Message: 'Wrong thread message!',
+            } as Partial<MJConversationDetailEntity> as MJConversationDetailEntity,
+        });
+        expect(overlay.ArtifactAiLatestProposal).toBe('');
+
+        // Matching conversation reply updates proposal
+        overlay.OnAgentMessageReceived({
+            message: {
+                ConversationID: 'CONV-PINNED-1',
+                Message: 'Clean refined intro.',
+            } as Partial<MJConversationDetailEntity> as MJConversationDetailEntity,
+        });
+        expect(overlay.ArtifactAiLatestProposal).toBe('Clean refined intro.');
     });
 });

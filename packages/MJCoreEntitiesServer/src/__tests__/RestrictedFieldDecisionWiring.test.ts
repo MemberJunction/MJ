@@ -24,6 +24,15 @@ const engine = vi.hoisted(() => ({
 const promptRun = vi.hoisted(() => ({ ExecutePrompt: vi.fn() }));
 
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: engine } }));
+vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-engine-base')>();
+    return {
+        ...actual,
+        AIEngineBase: Object.assign(actual.AIEngineBase, {
+            GetProviderInstance: vi.fn(() => engine)
+        })
+    };
+});
 vi.mock('@memberjunction/ai-prompts', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/ai-prompts')>();
     return { ...actual, AIPromptRunner: vi.fn().mockImplementation(function () { return promptRun; }) };

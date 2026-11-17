@@ -1,7 +1,9 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef, HostListener, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, HostListener, inject, Type } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UserInfo, Metadata, RunView, RunViewParams, RunViewResult, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
+import { UserInfo, RunView, RunViewParams, RunViewResult, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { PrintHtmlInSandboxedIframe } from '../utils/html-sandbox.util';
 import { EscapeSQLString, ParseJSONRecursive, ParseJSONOptions, UUIDsEqual } from '@memberjunction/global';
 import {
   ArtifactMetadataEngine,
@@ -39,7 +41,15 @@ import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
-import { ArtifactViewerTab, IArtifactVersionDiffViewer, NavigationRequest } from './base-artifact-viewer.component';
+import {
+  ArtifactNavigationAnchor,
+  ArtifactSelectionAnchor,
+  ArtifactViewerTab,
+  ArtifactViewerViewMode,
+  IArtifactVersionDiffViewer,
+  NavigationRequest,
+  PreVerifiedFrozenSnapshotMap,
+} from './base-artifact-viewer.component';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { ArtifactFileService } from '../services/artifact-file.service';
 import { DocumentCollaborationService } from '../services/document-collaboration.service';
@@ -81,8 +91,11 @@ type CollectionArtifactRow = Pick<MJCollectionArtifactEntity, 'ID' | 'Collection
 /** A row of the conversation link read keyed by version. */
 type ConversationLinkRow = Pick<MJConversationDetailArtifactEntity, 'ID' | 'ConversationDetailID' | 'ArtifactVersionID'>;
 
+/** Summary row for `MJ: Collections`. */
+type CollectionRow = Pick<MJCollectionEntity, 'ID' | 'Name' | 'OwnerID' | 'Description'>;
+
 /** A pre-fetched batch result handed to the collection and links processors. */
-type ChildRowsResult = { Success: boolean; Results: Record<string, unknown>[] };
+type ChildRowsResult<T extends object = CollectionArtifactRow | ConversationLinkRow> = { Success: boolean; Results: T[] };
 
 /**
  * `ArtifactVersionID IN ('…','…')` over version IDs the client already holds, or null when there
@@ -124,8 +137,26 @@ function buildScopedVersionLabels(versionNumbers: readonly number[]): Map<number
   templateUrl: './artifact-viewer-panel.component.html',
   styleUrls: ['./artifact-viewer-panel.component.css']
 })
-export class ArtifactViewerPanelComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy  {
-  @Input() artifactId!: string;
+export class ArtifactViewerPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+  private _artifactId!: string;
+  private _versionNumber?: number;
+  private initialized = false;
+  private pendingInputSyncScheduled = false;
+  private pendingArtifactReload = false;
+  private pendingVersionSwitch: number | undefined = undefined;
+
+  @Input() set artifactId(value: string) {
+    const changed = this._artifactId !== value;
+    this._artifactId = value;
+    if (this.initialized && changed) {
+      this.pendingArtifactReload = true;
+      this.scheduleInputSync();
+    }
+  }
+  get artifactId(): string {
+    return this._artifactId;
+  }
+
   @Input() CurrentUser!: UserInfo;
 
   /** @deprecated Use {@link CurrentUser}. */
@@ -146,7 +177,18 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   get environmentId(): string {
     return this.EnvironmentId;
   }
-  @Input() VersionNumber?: number;
+
+  @Input() set VersionNumber(value: number | undefined) {
+    const changed = this._versionNumber !== value;
+    this._versionNumber = value;
+    if (this.initialized && changed && value != null) {
+      this.pendingVersionSwitch = value;
+      this.scheduleInputSync();
+    }
+  }
+  get VersionNumber(): number | undefined {
+    return this._versionNumber;
+  }
 
   /** @deprecated Use {@link VersionNumber}. */
   @Input() set versionNumber(value: number | undefined) {
@@ -247,6 +289,56 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   @Input() canEdit = false; // Default read-only unless explicitly granted edit permission
   @Input() IsMaximized: boolean = false;
   @Input() HasConnectedDriveLink = false;
+  private _driverClass?: string;
+  /** Optional explicit plugin DriverClass override (for anonymous/guest share rendering without metadata lookup). */
+  @Input()
+  set DriverClass(value: string | undefined) {
+    this._driverClass = value;
+    if (value?.trim()) {
+      this.artifactTypeDriverClass = value.trim();
+    }
+  }
+  get DriverClass(): string | undefined {
+    return this._driverClass;
+  }
+  /** CamelCase alias for {@link DriverClass}. */
+  @Input() set driverClass(value: string | undefined) {
+    this.DriverClass = value;
+  }
+  get driverClass(): string | undefined {
+    return this.DriverClass;
+  }
+
+  /** Optional server-verified frozen snapshot provenance map forwarded to plugin viewers (`NW-1`). */
+  @Input() PreVerifiedFrozenSnapshots: PreVerifiedFrozenSnapshotMap | null = null;
+  /** @deprecated Use {@link PreVerifiedFrozenSnapshots}. */
+  @Input() set preVerifiedFrozenSnapshots(value: PreVerifiedFrozenSnapshotMap | null | undefined) {
+    this.PreVerifiedFrozenSnapshots = value ?? null;
+  }
+  /** @deprecated Use {@link PreVerifiedFrozenSnapshots}. */
+  get preVerifiedFrozenSnapshots(): PreVerifiedFrozenSnapshotMap | null {
+    return this.PreVerifiedFrozenSnapshots;
+  }
+
+  /** Optional synchronized mode (`'edit' | 'suggest' | 'diff' | 'present'`) forwarded to plugin viewers (`NW-6`). */
+  @Input('ViewMode') SyncViewMode?: ArtifactViewerViewMode;
+  /** CamelCase alias for {@link SyncViewMode}. */
+  @Input('viewMode') set syncViewMode(value: ArtifactViewerViewMode | undefined) {
+    this.SyncViewMode = value;
+  }
+  get syncViewMode(): ArtifactViewerViewMode | undefined {
+    return this.SyncViewMode;
+  }
+
+  /** Optional target heading/block/sheet/slide anchor forwarded to plugin viewers (`NW-6`). */
+  @Input() NavigationAnchor: ArtifactNavigationAnchor | null = null;
+  /** CamelCase alias for {@link NavigationAnchor}. */
+  @Input() set navigationAnchor(value: ArtifactNavigationAnchor | null | undefined) {
+    this.NavigationAnchor = value ?? null;
+  }
+  get navigationAnchor(): ArtifactNavigationAnchor | null {
+    return this.NavigationAnchor;
+  }
 
   /** @deprecated Use {@link IsMaximized}. */
   @Input() set isMaximized(value: boolean) {
@@ -297,6 +389,10 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   @Output() shareRequested = this.ShareRequested; // Emits artifactId when share is clicked
   @Output() VersionSaved = new EventEmitter<ArtifactVersionSavedEvent>();
+  /** Emitted when the active plugin's selection (heading, block, cell range, or slide) changes (`NW-6`). */
+  @Output() SelectionChanged = new EventEmitter<ArtifactSelectionAnchor>();
+  /** CamelCase alias for {@link SelectionChanged}. */
+  @Output() selectionChanged = this.SelectionChanged;
   @Output() ConnectedDriveSyncRequested = new EventEmitter<{
     artifactId: string;
     versionId?: string;
@@ -338,7 +434,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * branch. Carries the spec + entity. Consumer (chat message card, etc.)
    * confirms and invokes the Create-or-Modify Interactive Form action.
    */
-  @Output() ApplyFormRequested = new EventEmitter<{ spec: unknown; entityName: string }>();
+  @Output() ApplyFormRequested = new EventEmitter<{ spec: ComponentSpec; entityName: string }>();
 
   /**
    * @deprecated Use {@link ApplyFormRequested}.
@@ -442,24 +538,24 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   public MessageLinkedVersionIds: Set<string> = new Set<string>();
   private fullVersionCache = new Map<string, MJArtifactVersionEntity>();
   private compareLoadToken = 0;
-  public ArtifactCollections: MJCollectionArtifactEntity[] = [];
+  public ArtifactCollections: CollectionArtifactRow[] = [];
 
   /** @deprecated Use {@link ArtifactCollections}. */
-  public get artifactCollections(): MJCollectionArtifactEntity[] {
+  public get artifactCollections(): CollectionArtifactRow[] {
     return this.ArtifactCollections;
   }
   /** @deprecated Use {@link ArtifactCollections}. */
-  public set artifactCollections(value: MJCollectionArtifactEntity[]) {
+  public set artifactCollections(value: CollectionArtifactRow[]) {
     this.ArtifactCollections = value;
   } // All collections for ALL versions
-  public CurrentVersionCollections: MJCollectionArtifactEntity[] = [];
+  public CurrentVersionCollections: CollectionArtifactRow[] = [];
 
   /** @deprecated Use {@link CurrentVersionCollections}. */
-  public get currentVersionCollections(): MJCollectionArtifactEntity[] {
+  public get currentVersionCollections(): CollectionArtifactRow[] {
     return this.CurrentVersionCollections;
   }
   /** @deprecated Use {@link CurrentVersionCollections}. */
-  public set currentVersionCollections(value: MJCollectionArtifactEntity[]) {
+  public set currentVersionCollections(value: CollectionArtifactRow[]) {
     this.CurrentVersionCollections = value;
   } // Collections containing CURRENT version only
   public PrimaryCollection: MJCollectionEntity | null = null;
@@ -568,14 +664,14 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   public set originConversation(value: MJConversationEntity | null) {
     this.OriginConversation = value;
   }
-  public AllCollections: MJCollectionEntity[] = [];
+  public AllCollections: CollectionRow[] = [];
 
   /** @deprecated Use {@link AllCollections}. */
-  public get allCollections(): MJCollectionEntity[] {
+  public get allCollections(): CollectionRow[] {
     return this.AllCollections;
   }
   /** @deprecated Use {@link AllCollections}. */
-  public set allCollections(value: MJCollectionEntity[]) {
+  public set allCollections(value: CollectionRow[]) {
     this.AllCollections = value;
   }
   public HasAccessToOriginConversation: boolean = false;
@@ -708,7 +804,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Get the component type for a component tab.
    * Returns null if the tab is not a component tab (used for template type safety).
    */
-  public GetComponentTabType(tabName: string): Type<any> | null {
+  public GetComponentTabType(tabName: string): Type<object> | null {
     const tabDef = this.GetTabDefinition(tabName);
     if (tabDef?.contentType === 'component' && tabDef.component) {
       return tabDef.component;
@@ -719,7 +815,9 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   /**
    * Get the component inputs for a component tab
    */
-  public GetComponentInputs(tabName: string): Record<string, any> {
+  public GetComponentInputs(
+    tabName: string,
+  ): Record<string, string | number | boolean | object | null | undefined> {
     const tabDef = this.GetTabDefinition(tabName);
     if (!tabDef || tabDef.contentType !== 'component') {
       return {};
@@ -744,6 +842,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   }
 
   async ngOnInit() {
+    this.initialized = true;
     // Subscribe to refresh trigger for dynamic version changes
     if (this.RefreshTrigger) {
       this.RefreshTrigger.pipe(takeUntil(this.destroy$)).subscribe(async (data) => {
@@ -775,50 +874,53 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }, 0);
   }
 
-  async ngOnChanges(changes: SimpleChanges) {
-    // Reload artifact when artifactId changes
-    if (changes['artifactId'] && !changes['artifactId'].firstChange) {
-      await this.loadArtifact(this.VersionNumber);
-      // `loadArtifact` already honored the (possibly also-changed) versionNumber, so the branch
-      // below has nothing left to do. Angular delivers both inputs in ONE SimpleChanges when a
-      // caller switches artifact and version together, and these are two independent `if`s: the
-      // version branch used to find the version `loadArtifact` had just loaded sitting in the
-      // freshly populated `allVersions` and load its content, attributes, collections and links a
-      // second time — roughly six redundant round trips per open, including a second full content
-      // download, none of them cancellable by a later load.
+  private scheduleInputSync(): void {
+    if (this.pendingInputSyncScheduled) {
       return;
     }
+    this.pendingInputSyncScheduled = true;
+    void Promise.resolve().then(async () => {
+      this.pendingInputSyncScheduled = false;
+      const reloadArtifact = this.pendingArtifactReload;
+      const targetVersion = this.pendingVersionSwitch;
+      this.pendingArtifactReload = false;
+      this.pendingVersionSwitch = undefined;
 
-    // Switch to new version when versionNumber changes (but artifactId stays the same)
-    if (changes['versionNumber'] && !changes['versionNumber'].firstChange) {
-      const newVersionNumber = changes['versionNumber'].currentValue;
-      if (newVersionNumber != null) {
-        // Check if we have metadata for this version (allVersions has lightweight metadata)
-        const targetVersion = this.AllVersions.find(v => v.VersionNumber === newVersionNumber);
-        if (targetVersion) {
-          this.SelectedVersionNumber = (targetVersion.VersionNumber as number) || 1;
-          this.ScopeNotice = null;
-
-          // Load full content for the selected version
-          const fullVersion = await this.loadVersionContent(targetVersion.ID);
-          if (fullVersion) {
-            this.artifactVersion = fullVersion;
-            this.JsonContent = this.formatJSON(fullVersion.Content || '{}');
-          }
-
-          // Load attributes and collection data in parallel
-          await Promise.all([
-            this.loadVersionAttributes(),
-            this.loadCollectionAssociations(),
-            this.loadLinksData()
-          ]);
-
-          this.cdr.detectChanges();
-        } else {
-          // Need to reload to get this version (shouldn't normally happen)
-          await this.loadArtifact(newVersionNumber);
-        }
+      if (reloadArtifact) {
+        await this.loadArtifact(this.VersionNumber);
+        return;
       }
+      if (targetVersion != null) {
+        await this.switchToVersionNumber(targetVersion);
+      }
+    });
+  }
+
+  private async switchToVersionNumber(newVersionNumber: number): Promise<void> {
+    // Check if we have metadata for this version (AllVersions has lightweight metadata)
+    const targetVersion = this.AllVersions.find(v => v.VersionNumber === newVersionNumber);
+    if (targetVersion) {
+      this.SelectedVersionNumber = (targetVersion.VersionNumber as number) || 1;
+      this.ScopeNotice = null;
+
+      // Load full content for the selected version
+      const fullVersion = await this.loadVersionContent(targetVersion.ID);
+      if (fullVersion) {
+        this.artifactVersion = fullVersion;
+        this.JsonContent = this.formatJSON(fullVersion.Content || '{}');
+      }
+
+      // Load attributes and collection data in parallel
+      await Promise.all([
+        this.loadVersionAttributes(),
+        this.loadCollectionAssociations(),
+        this.loadLinksData()
+      ]);
+
+      this.cdr.detectChanges();
+    } else {
+      // Need to reload to get this version (shouldn't normally happen)
+      await this.loadArtifact(newVersionNumber);
     }
   }
 
@@ -879,7 +981,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     // conversation-scope: collection and direct open show every version
     return {
       EntityName: 'MJ: Artifact Versions',
-      ExtraFilter: `ArtifactID='${artifactId}'`,
+      ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
       OrderBy: 'VersionNumber DESC',
       Fields: VERSION_LIST_FIELDS,
       ResultType: 'simple'
@@ -919,7 +1021,9 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Batch-loads the collection rows and the conversation link of the given versions. A batch that
    * fails resolves to no results, so each processor reads its own rows and the artifact still opens.
    */
-  private async loadVersionChildRows(versionIds: readonly string[]): Promise<[ChildRowsResult | undefined, ChildRowsResult | undefined]> {
+  private async loadVersionChildRows(
+    versionIds: readonly string[],
+  ): Promise<[ChildRowsResult<CollectionArtifactRow> | undefined, ChildRowsResult<ConversationLinkRow> | undefined]> {
     const collectionsQuery = this.buildCollectionArtifactsQuery(versionIds);
     const linkQuery = this.buildConversationLinkQuery(versionIds);
     if (!collectionsQuery || !linkQuery) {
@@ -928,7 +1032,10 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const [collectionsResult, linkResult] = await rv.RunViews<CollectionArtifactRow | ConversationLinkRow>([collectionsQuery, linkQuery], this.CurrentUser);
-      return [collectionsResult, linkResult];
+      return [
+        collectionsResult as ChildRowsResult<CollectionArtifactRow>,
+        linkResult as ChildRowsResult<ConversationLinkRow>,
+      ];
     } catch (err) {
       console.error('Error loading artifact collection and link rows:', err);
       return [undefined, undefined];
@@ -1141,20 +1248,31 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
   private async loadArtifactType(artifactTypeName: string | null | undefined = this.Artifact?.Type, artifactId: string = this.artifactId, loadToken: number = this.artifactLoadToken): Promise<void> {
     const isCurrentLoad = () => this.isCurrentArtifactLoad(artifactId, loadToken);
-    this.artifactTypeDriverClass = null;
+    const explicitDriverClass = this._driverClass?.trim() || null;
+    this.artifactTypeDriverClass = explicitDriverClass;
     this.artifactContentCategory = null;
+
+    if (explicitDriverClass) {
+      return;
+    }
 
     if (!artifactTypeName) {
       return;
     }
 
     try {
-      await ArtifactMetadataEngine.Instance.Config(false, this.CurrentUser);
+      const mdEngine = this.Provider
+        ? (ArtifactMetadataEngine.GetProviderInstance(
+            this.Provider,
+            ArtifactMetadataEngine,
+          ) as ArtifactMetadataEngine)
+        : ArtifactMetadataEngine.Instance;
+      await mdEngine.Config(false, this.CurrentUser);
       if (!isCurrentLoad()) {
         return;
       }
 
-      const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(artifactTypeName);
+      const artifactType = mdEngine.FindArtifactType(artifactTypeName);
       if (artifactType) {
         // Resolve DriverClass by traversing parent hierarchy if needed
         const driverClass = await this.resolveDriverClassForType(artifactType);
@@ -1307,7 +1425,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     try {
       let text: string | null = null;
       if (version.ContentMode === 'File') {
-        const url = await this.artifactFileService.getDownloadUrl(version.ID);
+        const url = await this.artifactFileService.GetDownloadUrl(version.ID, false, this.ProviderToUse);
         const res = await fetch(url);
         if (res.ok) text = await res.text();
       } else if (version.Content?.startsWith('data:')) {
@@ -1335,7 +1453,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     try {
       let objectUrl: string | null = null;
       if (version.ContentMode === 'File') {
-        const url = await this.artifactFileService.getDownloadUrl(version.ID);
+        const url = await this.artifactFileService.GetDownloadUrl(version.ID, false, this.ProviderToUse);
         try {
           const res = await fetch(url);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1376,9 +1494,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   }
 
   get HasPlugin(): boolean {
-    // Check if the artifact type has a DriverClass configured
-    // If DriverClass is set, we have a plugin available
-    return !!this.artifactTypeDriverClass;
+    // Check explicit DriverClass override (guest share) or resolved artifact type DriverClass
+    return !!(this._driverClass?.trim() || this.artifactTypeDriverClass);
   }
 
   /** @deprecated Use {@link HasPlugin}. */
@@ -1529,13 +1646,23 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         if ((newestInDb.VersionNumber || 0) > currentMaxVersion) {
           this.AllVersions = latestCheck.Results;
           this.applyVersionScope(this.activeScope);
-          this.SelectedVersionNumber = newestInDb.VersionNumber || dbMaxVersion;
+          const fullNewest = newestInDb.ID ? await this.loadVersionContent(newestInDb.ID) : null;
+          const activeVer = fullNewest ?? newestInDb;
+          if (!activeVer.Content && serializedContent) {
+            activeVer.Content = serializedContent;
+          }
+          if (activeVer.ID) {
+            this.fullVersionCache.set(String(activeVer.ID).toLowerCase(), activeVer);
+          }
+          this.artifactVersion = activeVer;
+          this.SelectedVersionNumber = activeVer.VersionNumber || dbMaxVersion;
           this.JsonContent = this.formatJSON(serializedContent);
+          await this.loadVersionAttributes();
           this.emitVersionSavedEvent(
-            newestInDb.ID,
-            newestInDb.VersionNumber || dbMaxVersion,
+            activeVer.ID,
+            activeVer.VersionNumber || dbMaxVersion,
             serializedContent,
-            newestInDb.Configuration,
+            activeVer.Configuration,
           );
           this.cdr.detectChanges();
           return;
@@ -1607,12 +1734,18 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     AllTypes: ReadonlyArray<MJArtifactTypeEntity>;
     Policy: ArtifactTypeThumbnailPolicy;
   } {
-    const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+    const mdEngine = this.Provider
+      ? (ArtifactMetadataEngine.GetProviderInstance(
+          this.Provider,
+          ArtifactMetadataEngine,
+        ) as ArtifactMetadataEngine)
+      : ArtifactMetadataEngine.Instance;
+    const allTypes = mdEngine.ArtifactTypes ?? [];
     const typeEntity =
       (this.Artifact?.TypeID
         ? allTypes.find((t) => UUIDsEqual(t.ID, this.Artifact?.TypeID))
         : undefined) ??
-      (this.Artifact?.Type ? ArtifactMetadataEngine.Instance.FindArtifactType(this.Artifact.Type) : undefined) ??
+      (this.Artifact?.Type ? mdEngine.FindArtifactType(this.Artifact.Type) : undefined) ??
       null;
     const policy = ResolveArtifactTypeThumbnailPolicy(
       typeEntity ?? this.Artifact?.Type ?? null,
@@ -1715,7 +1848,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Accepts the batch result from loadArtifact() to avoid duplicate queries.
    */
   private async processCollectionAssociations(
-    collectionsResult?: ChildRowsResult,
+    collectionsResult?: ChildRowsResult<CollectionArtifactRow>,
     artifactId: string = this.artifactId,
     loadToken: number = this.artifactLoadToken
   ): Promise<void> {
@@ -1724,7 +1857,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
     try {
       // If no pre-fetched data, fetch it (used by selectVersion/saveToCollections reload)
-      let collectionRows: Record<string, unknown>[] = [];
+      let collectionRows: CollectionArtifactRow[] = [];
       if (collectionsResult?.Success && collectionsResult.Results) {
         collectionRows = collectionsResult.Results;
       } else {
@@ -1740,24 +1873,23 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       }
 
       // Store as simple objects — these are read-only display data
-      this.ArtifactCollections = collectionRows as unknown as MJCollectionArtifactEntity[];
+      this.ArtifactCollections = collectionRows;
 
       // Filter to get only collections containing the CURRENT version
       const currentVersionId = this.artifactVersion?.ID;
       if (currentVersionId) {
         const currentIdStr = String(currentVersionId).toLowerCase();
         this.CurrentVersionCollections = collectionRows.filter(ca => {
-          const versionIdStr = String(ca['ArtifactVersionID'] || ca.ArtifactVersionID || '').toLowerCase();
+          const versionIdStr = String(ca.ArtifactVersionID || '').toLowerCase();
           return versionIdStr && currentIdStr && versionIdStr === currentIdStr;
-        }) as unknown as MJCollectionArtifactEntity[];
+        });
       } else {
         this.CurrentVersionCollections = [];
       }
 
       // Load the primary collection details if exists
       if (this.ArtifactCollections.length > 0) {
-        const collectionId = (collectionRows[0] as Record<string, unknown>).CollectionID as string ||
-                             (this.ArtifactCollections[0] as unknown as Record<string, unknown>).CollectionID as string;
+        const collectionId = this.ArtifactCollections[0].CollectionID;
         if (collectionId) {
           const md = this.ProviderToUse;
           const primaryCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
@@ -1844,46 +1976,29 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
   OnPrintDisplayContent(): void {
     // Try to delegate to the plugin viewer's print method
-    if (this.PluginViewer?.pluginInstance) {
-      const plugin = this.PluginViewer.pluginInstance as any;
-      if (typeof plugin.printHtml === 'function') {
-        plugin.printHtml();
+    const pluginInstance = this.PluginViewer?.PluginInstance as
+      | (typeof this.PluginViewer extends undefined ? never : { PrintHtml?: () => void; printHtml?: () => void })
+      | null
+      | undefined;
+    if (pluginInstance) {
+      if (typeof pluginInstance.PrintHtml === 'function') {
+        pluginInstance.PrintHtml();
+        return;
+      }
+      if (typeof pluginInstance.printHtml === 'function') {
+        pluginInstance.printHtml();
         return;
       }
     }
 
-    // Fallback: create a temporary print window with displayHtml or displayMarkdown
+    // Fallback: isolate extracted HTML or Markdown inside a sandboxed print iframe
+    // (sandbox="allow-modals", never allow-same-origin) without document.write()
     const content = this.DisplayHtml || this.DisplayMarkdown;
     if (content) {
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        if (this.DisplayHtml) {
-          printWindow.document.write(content);
-        } else if (this.DisplayMarkdown) {
-          // Wrap markdown in basic HTML for printing
-          printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>Print</title>
-              <style>
-                body { font-family: sans-serif; padding: 20px; }
-                pre { background: #f5f5f5; padding: 10px; border-radius: 4px; }
-              </style>
-            </head>
-            <body>
-              <pre>${content}</pre>
-            </body>
-            </html>
-          `);
-        }
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-        }, 250);
-      }
+      PrintHtmlInSandboxedIframe(content, {
+        Title: this.Artifact?.Name || 'Print',
+        AlreadyPlainText: !this.DisplayHtml,
+      });
     }
   }
 
@@ -2151,6 +2266,13 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
                 this.SelectedVersionNumber = restoredVersionNum;
                 this.JsonContent = this.formatJSON(matched.Content || '{}');
                 this.IsCompareMode = false;
+                await this.loadVersionAttributes();
+                this.emitVersionSavedEvent(
+                  matched.ID,
+                  restoredVersionNum,
+                  matched.Content,
+                  matched.Configuration,
+                );
                 this.notificationService.CreateSimpleNotification(
                   `Restored v${versionNumber} as new version v${restoredVersionNum}`,
                   'success',
@@ -2179,6 +2301,13 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
             this.applyVersionScope(this.activeScope);
             this.JsonContent = this.formatJSON(restoredVer.Content || '{}');
             this.IsCompareMode = false;
+            await this.loadVersionAttributes();
+            this.emitVersionSavedEvent(
+              restoredVer.ID,
+              restoredVersionNum,
+              restoredVer.Content,
+              restoredVer.Configuration,
+            );
             this.notificationService.CreateSimpleNotification(
               `Restored v${versionNumber} as new version v${restoredVersionNum}`,
               'success',
@@ -2406,8 +2535,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Reuses collection data from the same batch to avoid duplicate queries.
    */
   private async processLinksData(
-    collectionsResult?: ChildRowsResult,
-    convDetailResult?: ChildRowsResult,
+    collectionsResult?: ChildRowsResult<CollectionArtifactRow>,
+    convDetailResult?: ChildRowsResult<ConversationLinkRow>,
     artifactId: string = this.artifactId,
     loadToken: number = this.artifactLoadToken
   ): Promise<void> {
@@ -2422,7 +2551,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Use pre-fetched collection data or fetch if not provided
-      let collectionRows: Record<string, unknown>[] = [];
+      let collectionRows: CollectionArtifactRow[] = [];
       if (collectionsResult?.Success && collectionsResult.Results) {
         collectionRows = collectionsResult.Results;
       } else {
@@ -2438,15 +2567,15 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
       // Get unique collection IDs and load collection details
       const collectionIds = [...new Set(
-        collectionRows.map(ca => (ca['CollectionID'] || ca.CollectionID) as string)
+        collectionRows.map(ca => ca.CollectionID)
       )].filter(Boolean);
 
       if (collectionIds.length > 0) {
-        const collectionsFilter = collectionIds.map(id => `ID='${id}'`).join(' OR ');
-        const collectionsEntityResult = await rv.RunView<MJCollectionEntity>({
+        const collectionsFilter = collectionIds.map(id => `ID='${EscapeSQLString(id)}'`).join(' OR ');
+        const collectionsEntityResult = await rv.RunView<CollectionRow>({
           EntityName: 'MJ: Collections',
           ExtraFilter: collectionsFilter,
-          Fields: ['ID', 'Name', 'UserID', 'Description'],
+          Fields: ['ID', 'Name', 'OwnerID', 'Description'],
           ResultType: 'simple'
         }, this.CurrentUser);
         if (!isCurrentLoad()) {
@@ -2454,12 +2583,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         }
 
         if (collectionsEntityResult.Success && collectionsEntityResult.Results) {
-          this.AllCollections = collectionsEntityResult.Results as unknown as MJCollectionEntity[];
+          this.AllCollections = collectionsEntityResult.Results;
         }
       }
 
       // Use pre-fetched conversation detail artifact data or fetch if not provided
-      let convDetailRows: Record<string, unknown>[] = [];
+      let convDetailRows: ConversationLinkRow[] = [];
       if (convDetailResult?.Success && convDetailResult.Results) {
         convDetailRows = convDetailResult.Results;
       } else {
@@ -2475,8 +2604,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
       // Load origin conversation if we have a link
       if (convDetailRows.length > 0) {
-        const conversationDetailId = (convDetailRows[0]['ConversationDetailID'] || convDetailRows[0].ConversationDetailID) as string;
-        const artifactVersionId = (convDetailRows[0]['ArtifactVersionID'] || convDetailRows[0].ArtifactVersionID) as string;
+        const conversationDetailId = convDetailRows[0].ConversationDetailID;
+        const artifactVersionId = convDetailRows[0].ArtifactVersionID;
 
         if (!isCurrentLoad()) {
           return;
@@ -2656,7 +2785,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.cdr.detectChanges();
     try {
       await this.pluginViewer?.ExportPDF(orientation);
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('[ArtifactViewerPanel] PDF export failed:', error);
       this.notificationService.CreateSimpleNotification('Could not create the PDF. See the browser console for details.', 'error', 5000);
     } finally {
@@ -2785,11 +2914,11 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   public GetTabIcon(tabName: string): string | null {
     // Base tabs
     const baseIcons: Record<string, string> = {
-      'Display': 'fas fa-eye',
-      'Code': 'fas fa-code',
-      'JSON': 'fas fa-file-code',
-      'Details': 'fas fa-info-circle',
-      'Links': 'fas fa-link'
+      'Display': 'fa-solid fa-eye',
+      'Code': 'fa-solid fa-code',
+      'JSON': 'fa-solid fa-file-code',
+      'Details': 'fa-solid fa-info-circle',
+      'Links': 'fa-solid fa-link'
     };
 
     if (baseIcons[tabName]) {
@@ -2801,7 +2930,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     if (plugin?.GetAdditionalTabs) {
       const pluginTab = plugin.GetAdditionalTabs().find((t: ArtifactViewerTab) => t.label === tabName);
       if (pluginTab?.icon) {
-        return 'fas ' + pluginTab.icon; // Ensure full Font Awesome class
+        return 'fa-solid ' + pluginTab.icon; // Ensure full Font Awesome class
       }
     }
 
@@ -2986,7 +3115,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         );
       }
       this.GuestShareLabel = '';
-      this.CopyGuestShareUrl(this.LatestCreatedGuestShareUrl);
+      await this.CopyGuestShareUrl(this.LatestCreatedGuestShareUrl);
     } catch (err) {
       this.GuestShareError =
         err instanceof Error ? err.message : 'Failed to create guest share link.';
@@ -3039,14 +3168,28 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
   }
 
-  public CopyGuestShareUrl(url: string): void {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText && url) {
-      void navigator.clipboard.writeText(url).catch(() => undefined);
+  public async CopyGuestShareUrl(url: string): Promise<void> {
+    if (!url || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      this.notificationService.CreateSimpleNotification(
+        'Clipboard access is unavailable in this browser. Copy the share link manually.',
+        'warning',
+        3500,
+      );
+      return;
     }
-    this.notificationService.CreateSimpleNotification(
-      'Frozen guest share link copied to clipboard.',
-      'success',
-      2500,
-    );
+    try {
+      await navigator.clipboard.writeText(url);
+      this.notificationService.CreateSimpleNotification(
+        'Frozen guest share link copied to clipboard.',
+        'success',
+        2500,
+      );
+    } catch {
+      this.notificationService.CreateSimpleNotification(
+        'Could not copy to clipboard (permission denied). Copy the share link manually.',
+        'error',
+        3500,
+      );
+    }
   }
 }

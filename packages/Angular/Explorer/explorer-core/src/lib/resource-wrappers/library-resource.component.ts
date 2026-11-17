@@ -38,6 +38,7 @@ import {
     @if (CurrentUser) {
       <mj-library-workspace
         #workspace
+        [Provider]="ProviderToUse"
         [CurrentUser]="CurrentUser"
         [EnvironmentId]="EnvironmentId"
         [InitialMode]="DefaultSurfaceMode"
@@ -154,7 +155,6 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
       version: params['version'] ?? params['versionNumber'] ?? null,
       canvas: params['canvas'] ?? null,
       q: params['q'] ?? '',
-      guestToken: params['guestToken'] ?? null,
     };
 
     if (!this.Workspace) {
@@ -209,7 +209,6 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
       version: initialVersion,
       canvas: pickStr('canvas'),
       q: pickStr('q'),
-      guestToken: pickStr('guestToken'),
     };
 
     const hasAnyParam = Object.values(mapped).some((v) => v !== null && v !== undefined && v !== '');
@@ -232,7 +231,7 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
           ? state.NavigatorSection
           : null,
       collectionId:
-        state.Mode === 'navigator' && state.NavigatorSection === 'collection' && state.CollectionId
+        (state.Mode === 'hub' || state.NavigatorSection === 'collection') && state.CollectionId
           ? state.CollectionId
           : null,
       driveId: state.DriveId || null,
@@ -244,7 +243,6 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
           : null,
       canvas: state.ActiveArtifactId && state.IsFullCanvasOpen ? '1' : null,
       q: state.SearchQuery.trim() ? state.SearchQuery.trim() : null,
-      guestToken: this.Workspace?.ActiveGuestToken || null,
     };
 
     this.UpdateQueryParams(nextParams);
@@ -336,6 +334,7 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
     @if (CurrentUser) {
       <mj-library-workspace
         #workspace
+        [Provider]="ProviderToUse"
         [CurrentUser]="CurrentUser"
         [EnvironmentId]="EnvironmentId"
         [InitialDriveMode]="true"

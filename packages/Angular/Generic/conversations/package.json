@@ -10,7 +10,7 @@
   "scripts": {
     "test": "vitest run",
     "test:types": "tsc --noEmit -p tsconfig.spec.json",
-    "build": "ngc",
+    "build": "ngc && node scripts/build-edge-worker.mjs",
     "test:watch": "vitest"
   },
   "keywords": [],
@@ -21,6 +21,7 @@
     "@angular/compiler-cli": "21.2.22",
     "@fortawesome/fontawesome-free": "6.7.2",
     "@memberjunction/ng-test-utils": "6.3.0-edge.0",
+    "esbuild": "0.28.1",
     "sass": "^1.97.3",
     "vitest": "^4.0.18"
   },

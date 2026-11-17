@@ -6793,6 +6793,9 @@ importers:
       docx:
         specifier: ^9.5.1
         version: 9.6.1
+      dompurify:
+        specifier: ^3.3.0
+        version: 3.3.1
       html-to-image:
         specifier: ^1.11.11
         version: 1.11.13
@@ -7501,6 +7504,9 @@ importers:
       '@memberjunction/ng-test-utils':
         specifier: 6.3.0-edge.0
         version: link:../test-utils
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
       sass:
         specifier: ^1.97.3
         version: 1.97.3
@@ -13464,9 +13470,6 @@ importers:
       '@memberjunction/ng-container-directives':
         specifier: 6.3.0-edge.0
         version: link:../Angular/Generic/container-directives
-      '@memberjunction/ng-conversations':
-        specifier: 6.3.0-edge.0
-        version: link:../Angular/Generic/conversations
       '@memberjunction/ng-core-entity-forms':
         specifier: 6.3.0-edge.0
         version: link:../Angular/Explorer/core-entity-forms

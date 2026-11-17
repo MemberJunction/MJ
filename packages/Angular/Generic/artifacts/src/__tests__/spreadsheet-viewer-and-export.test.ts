@@ -4,7 +4,7 @@
 import '@angular/compiler';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Injector, runInInjectionContext, ChangeDetectorRef } from '@angular/core';
-import type { IMetadataProvider } from '@memberjunction/core';
+import type { EntityInfo, EntityUserPermissionInfo, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import {
   SpreadsheetEngine,
@@ -22,11 +22,34 @@ describe('Wave 3 Sheets: SpreadsheetArtifactViewerComponent & Collaborative Work
     collabService = new DocumentCollaborationService();
   });
 
+  interface SavedRecordStub {
+    ID: string;
+    Role?: string;
+    ArtifactID?: string;
+    ArtifactVersionID?: string;
+    VersionNumber?: number;
+    Name?: string;
+    Content?: string;
+    NewRecord: () => void;
+    Load: () => Promise<boolean>;
+    Save: () => Promise<boolean>;
+  }
+
+  function stubEntity<T extends object>(fields: Partial<T>): T {
+    return Object.assign(Object.create(null) as T, fields);
+  }
+
+  const SHEET_ARTIFACT_ID = '11111111-1111-4111-8111-111111111111';
+  const SHEET_VERSION_ID = '22222222-2222-4222-8222-222222222222';
+  const SHEET_ENV_ID = '33333333-3333-4333-8333-333333333333';
+  const WB_TYPE_ID = '44444444-4444-4444-8444-444444444444';
+  const EXISTING_VER_3_ID = '55555555-5555-4555-8555-555555555555';
+
   function createMockSheetsProvider(ownerId = '11111111-2222-4333-8444-555555555555') {
-    const savedConversations: Array<Record<string, unknown>> = [];
-    const savedDetails: Array<Record<string, unknown>> = [];
-    const savedArtifacts: Array<Record<string, unknown>> = [];
-    const savedVersions: Array<Record<string, unknown>> = [];
+    const savedConversations: SavedRecordStub[] = [];
+    const savedDetails: SavedRecordStub[] = [];
+    const savedArtifacts: SavedRecordStub[] = [];
+    const savedVersions: SavedRecordStub[] = [];
     let seq = 0;
 
     const user = {
@@ -36,46 +59,71 @@ describe('Wave 3 Sheets: SpreadsheetArtifactViewerComponent & Collaborative Work
       IsActive: true,
     };
 
-    const provider = {
-      CurrentUser: user,
+    const provider = stubEntity<IMetadataProvider & IRunViewProvider>({
+      CurrentUser: stubEntity<IMetadataProvider['CurrentUser']>(user),
       Entities: [
-        {
-          ID: 'ent-artifacts-id',
+        stubEntity<IMetadataProvider['Entities'][number]>({
+          ID: '66666666-6666-4666-8666-666666666666',
           Name: 'MJ: Artifacts',
           DisplayNameOrName: 'MJ: Artifacts',
           FieldLevelSecurityApplies: false,
-          GetUserPermisions: () => ({ CanRead: true }),
-          Fields: [{ Name: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' }],
-        },
+          GetUserPermisions: () => stubEntity<EntityUserPermissionInfo>({ CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false }),
+          Fields: [],
+        }),
       ],
       EntityByName: (name: string) =>
-        name === 'MJ: Artifacts' ? { ID: 'ent-artifacts-id', Name: 'MJ: Artifacts' } : undefined,
-      RunView: async (params: { EntityName: string }) => {
+        name === 'MJ: Artifacts'
+          ? stubEntity<EntityInfo>({
+              ID: '66666666-6666-4666-8666-666666666666',
+              Name: 'MJ: Artifacts',
+            })
+          : undefined,
+      RunView: async <T>(params: { EntityName: string }) => {
         if (params.EntityName === 'MJ: Artifacts') {
           return {
             Success: true,
-            Results: [{ ID: 'art-sheet-1', UserID: ownerId, EnvironmentID: 'env-sheet-1' }],
+            Results: [Object.assign(Object.create(null), { ID: SHEET_ARTIFACT_ID, UserID: ownerId, EnvironmentID: SHEET_ENV_ID })] as T[],
             TotalRowCount: 1,
+            RowCount: 1,
+            UserViewRunID: '',
+            ExecutionTime: 1,
+            ErrorMessage: '',
           };
         }
         if (params.EntityName === 'MJ: Artifact Types') {
           return {
             Success: true,
-            Results: [{ ID: 'type-wb-id', Name: 'Whiteboard' }],
+            Results: [Object.assign(Object.create(null), { ID: WB_TYPE_ID, Name: 'Whiteboard' })] as T[],
             TotalRowCount: 1,
+            RowCount: 1,
+            UserViewRunID: '',
+            ExecutionTime: 1,
+            ErrorMessage: '',
           };
         }
         if (params.EntityName === 'MJ: Artifact Versions') {
           return {
             Success: true,
-            Results: [{ ID: 'ver-existing-3', VersionNumber: 3 }],
+            Results: [Object.assign(Object.create(null), { ID: EXISTING_VER_3_ID, VersionNumber: 3 })] as T[],
             TotalRowCount: 1,
+            RowCount: 1,
+            UserViewRunID: '',
+            ExecutionTime: 1,
+            ErrorMessage: '',
           };
         }
-        return { Success: true, Results: [], TotalRowCount: 0 };
+        return {
+          Success: true,
+          Results: [] as T[],
+          TotalRowCount: 0,
+          RowCount: 0,
+          UserViewRunID: '',
+          ExecutionTime: 1,
+          ErrorMessage: '',
+        };
       },
       GetEntityObject: async (entityName: string) => {
-        const rec: Record<string, unknown> = {
+        const rec: SavedRecordStub = {
           ID: `77777777-0000-4000-8000-${String(++seq).padStart(12, '0')}`,
           NewRecord: () => undefined,
           Load: async () => true,
@@ -89,7 +137,7 @@ describe('Wave 3 Sheets: SpreadsheetArtifactViewerComponent & Collaborative Work
         };
         return rec;
       },
-    } as unknown as IMetadataProvider;
+    });
 
     return { provider, savedConversations, savedDetails, savedArtifacts, savedVersions };
   }
@@ -113,13 +161,13 @@ describe('Wave 3 Sheets: SpreadsheetArtifactViewerComponent & Collaborative Work
     });
     const component = runInInjectionContext(injector, () => new SpreadsheetArtifactViewerComponent());
     const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Protected Sheet');
-    component.artifactVersion = {
+    component.artifactVersion = stubEntity<MJArtifactVersionEntity>({
       ID: 'ver-protected-1',
       ArtifactID: 'art-protected-1',
       VersionNumber: 1,
       Name: 'Protected Sheet',
       Content: SpreadsheetEngine.Instance.SerializeWorkbook(wb),
-    } as unknown as MJArtifactVersionEntity;
+    });
     component.readonly = false;
 
     await component.ngOnInit();
@@ -167,13 +215,13 @@ describe('Wave 3 Sheets: SpreadsheetArtifactViewerComponent & Collaborative Work
       Style: { FormatType: 'currency' },
     });
 
-    component.artifactVersion = {
-      ID: 'ver-sheet-1',
-      ArtifactID: 'art-sheet-1',
+    component.artifactVersion = stubEntity<MJArtifactVersionEntity>({
+      ID: SHEET_VERSION_ID,
+      ArtifactID: SHEET_ARTIFACT_ID,
       VersionNumber: 1,
       Name: 'FY27 Revenue Model',
       Content: SpreadsheetEngine.Instance.SerializeWorkbook(wb),
-    } as unknown as MJArtifactVersionEntity;
+    });
     component.readonly = false;
 
     await component.ngOnInit();
@@ -244,13 +292,15 @@ describe('Wave 3 Sheets: SpreadsheetArtifactViewerComponent & Collaborative Work
 
     // 8. Binary .xlsx read-only fallback when ImportFromXlsxBytes throws on invalid third-party archive (E6)
     const invalidXlsxBytes = new Uint8Array([0x00, 0x01, 0x02, 0x03]);
-    const badFile = {
-      name: 'third-party-complex.xlsx',
-      arrayBuffer: async () => invalidXlsxBytes.buffer,
-    } as unknown as File;
-    await component.OnImportFileSelected({
-      target: { files: [badFile], value: 'third-party-complex.xlsx' },
-    } as unknown as Event);
+    const badFile = new File([], 'third-party-complex.xlsx');
+    Object.defineProperty(badFile, 'arrayBuffer', {
+      value: async () => invalidXlsxBytes.buffer,
+    });
+    const fileInputEvent = new Event('change');
+    Object.defineProperty(fileInputEvent, 'target', {
+      value: { files: [badFile], value: 'third-party-complex.xlsx' },
+    });
+    await component.OnImportFileSelected(fileInputEvent);
     expect(component.FallbackXlsxBytes).toBe(invalidXlsxBytes.buffer);
     expect(component.StatusBannerMessage).toContain('Showing read-only Excel preview');
     expect(component.CanEdit).toBe(false);
