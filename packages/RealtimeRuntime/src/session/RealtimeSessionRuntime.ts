@@ -4196,23 +4196,48 @@ export class RealtimeSessionRuntime {
       console.warn('[RealtimeSession] PriorChannelStatesJson was malformed — starting channels fresh');
       return;
     }
+    let restoredAnyActive = false;
     for (const plugin of this._activeChannels$.value) {
-      this.restorePriorChannelState(plugin);
+      if (this.restorePriorChannelState(plugin)) {
+        restoredAnyActive = true;
+      }
+    }
+    // Mount any advertised ('on-demand') channels that carry saved prior-session state so
+    // Workspace / Browser / etc. resume visibly right where the prior session left off.
+    let mountedAdvertised = false;
+    for (const prepared of [...this.advertisedChannels]) {
+      const state = this.priorChannelStates[prepared.Plugin.ChannelName];
+      if (typeof state !== 'string' || state.length === 0) {
+        continue;
+      }
+      mountedAdvertised = true;
+      this.mountAdvertisedChannel(prepared.Plugin).catch((error) => {
+        console.warn(`[RealtimeSession] Failed to mount advertised channel '${prepared.Plugin.ChannelName}' on resume:`, error);
+      });
+    }
+    // Re-publish ActiveChannels$ when already-mounted channels restored prior state without
+    // an advertised mount emitting afterward, so listeners see updated HasChannelBeenUsed().
+    if (restoredAnyActive && !mountedAdvertised) {
+      this._activeChannels$.next([...this._activeChannels$.value]);
     }
   }
 
   /** Offers one plugin its prior-session state, if there is one. Rejections and throws are logged, never fatal. */
-  private restorePriorChannelState(plugin: BaseRealtimeChannelClient): void {
+  private restorePriorChannelState(plugin: BaseRealtimeChannelClient): boolean {
     const state = this.priorChannelStates[plugin.ChannelName];
     if (typeof state !== 'string' || state.length === 0) {
-      return;
+      return false;
     }
     try {
-      if (!plugin.RestoreState(state)) {
-        console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
+      if (plugin.RestoreState(state)) {
+        this.usedChannelNames.add(plugin.ChannelName);
+        return true;
       }
+      console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
+      return false;
     } catch (error) {
       console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' restore threw — starting fresh`, error);
+      return false;
     }
   }
 
@@ -5064,9 +5089,9 @@ export class RealtimeSessionRuntime {
           await this.mountAdvertisedChannel(plugin);
         }
         await plugin.OnDelegationArtifacts(artifacts);
-        if (!isOpen) {
-          this.noteChannelActivity(plugin); // the channel was mounted for this: reveal its tab
-        }
+        // Always reveal/mark the channel active when it took delegated artifacts, even for `open-on-start` channels
+        // (e.g. ArtifactWorkspace) whose surface tab stays hidden until first activity.
+        this.noteChannelActivity(plugin);
       } catch (error) {
         console.error(`[RealtimeSession] Channel '${plugin.ChannelName}' failed to take a delegated run's artifacts:`, error);
       }
