@@ -134,6 +134,18 @@
     ]
   },
 
+  // ── Public pages (OPTIONAL) ─────────────────────────────────────────────────
+  // Pages the host serves before sign-in, at /p/<slug>. Each page is a named export of a
+  // package declared above in client[] or shared[] that runs in the browser.
+  //   "slug"    REQUIRED — lowercase letters/digits, words joined by single hyphens, max 64.
+  //             Unique within the app; the install fails if another installed app owns it.
+  //   "package" REQUIRED — npm package that exports the page component
+  //   "export"  REQUIRED — the named export (a single JavaScript identifier)
+  //   "title"   OPTIONAL — display title
+  "publicPages": [
+    { "slug": "crm-signup", "package": "@acme/mj-crm-ng", "export": "CrmSignupPageComponent", "title": "Join Acme CRM" }
+  ],
+
   // ── Dependencies (OPTIONAL) ─────────────────────────────────────────────────
   // Other Open Apps this one needs. Resolved transitively and installed leaf-first.
   // Value is a semver range string, or an object (for a dep in another / multi-app repo).

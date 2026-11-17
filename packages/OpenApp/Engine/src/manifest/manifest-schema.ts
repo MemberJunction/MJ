@@ -212,6 +212,22 @@ const templateUserSchema = z.object({
     newUsers: z.enum(['offer', 'always', 'never']).optional(),
 });
 
+// ── Public Pages ──────────────────────────────────────────
+
+/** Public page slug: lowercase alphanumeric words joined by single hyphens. */
+const publicPageSlugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * A page the app serves before sign-in, at `/p/<slug>` in the host.
+ * `package` must be a browser-capable package the app declares in `packages.client` or `packages.shared`.
+ */
+const publicPageSchema = z.object({
+    slug: z.string().max(64).regex(publicPageSlugRegex, 'slug must be lowercase letters and digits, words joined by single hyphens'),
+    package: z.string().max(214).regex(npmPackageNameRegex, 'package must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)'),
+    export: z.string().regex(jsIdentifierRegex, 'export must be a single JavaScript identifier'),
+    title: z.string().optional(),
+});
+
 // ── Full Manifest ─────────────────────────────────────────
 
 /**
@@ -298,10 +314,39 @@ export const MjAppManifestSchema = z.object({
     // Template user the app ships, offered to the installer after install
     templateUser: templateUserSchema.optional(),
 
+    // Pages served before sign-in
+    publicPages: z.array(publicPageSchema).optional(),
+
     // Discovery (MJ Central)
     categories: z.array(z.string()).max(5).optional(),
     tags: z.array(z.string().regex(tagRegex, 'Tags must be lowercase alphanumeric + hyphens, max 50 chars')).max(20).optional(),
-});
+}).superRefine(ValidatePublicPages);
+
+/** Rejects duplicate public page slugs and pages whose package does not run in the browser. */
+function ValidatePublicPages(
+    manifest: { packages?: z.infer<typeof packagesSchema>; publicPages?: z.infer<typeof publicPageSchema>[] },
+    ctx: z.RefinementCtx
+): void {
+    const browserPackages = new Set(
+        [...(manifest.packages?.client ?? []), ...(manifest.packages?.shared ?? [])]
+            .filter((pkg) => ResolvePackagePlatform(pkg) !== 'node')
+            .map((pkg) => pkg.name)
+    );
+    const seenSlugs = new Set<string>();
+    for (const [index, page] of (manifest.publicPages ?? []).entries()) {
+        if (seenSlugs.has(page.slug)) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['publicPages', index, 'slug'], message: `Duplicate public page slug "${page.slug}".` });
+        }
+        seenSlugs.add(page.slug);
+        if (!browserPackages.has(page.package)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['publicPages', index, 'package'],
+                message: `Public page "${page.slug}" uses package "${page.package}", which must be declared in packages.client or packages.shared with a platform that runs in the browser.`,
+            });
+        }
+    }
+}
 
 /** @deprecated Use {@link MjAppManifestSchema}. */
 export const mjAppManifestSchema = MjAppManifestSchema;
@@ -316,6 +361,11 @@ export type MJAppManifest = z.infer<typeof MjAppManifestSchema>;
  * Type for a single package entry within the manifest.
  */
 export type ManifestPackageEntry = z.infer<typeof packageEntrySchema>;
+
+/**
+ * Type for a single public page entry within the manifest.
+ */
+export type ManifestPublicPage = z.infer<typeof publicPageSchema>;
 
 /**
  * Valid package roles.

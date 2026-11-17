@@ -8,7 +8,7 @@
 
 // Manifest schema and validation
 export { MjAppManifestSchema, mjAppManifestSchema } from './manifest/manifest-schema.js';
-export type { MJAppManifest, ManifestPackageEntry, PackageRole } from './manifest/manifest-schema.js';
+export type { MJAppManifest, ManifestPackageEntry, ManifestPublicPage, PackageRole } from './manifest/manifest-schema.js';
 export { LoadManifestFromFile, ParseAndValidateManifest, ValidateManifestObject } from './manifest/manifest-loader.js';
 export type { ManifestLoadResult } from './manifest/manifest-loader.js';
 export { ResolvePackagePlatform, PackageRunsOnTier } from './manifest/package-platform.js';
@@ -99,10 +99,12 @@ export type { PackageManagerOptions, PackageOperationResult, PackageManagerType,
 export {
     AddServerDynamicPackages,
     AddClientDynamicPackages,
+    AddPublicPages,
+    CheckPublicPageSlugConflicts,
     RemoveServerDynamicPackages,
     PruneDynamicPackagesNotInManifest,
     ToggleServerDynamicPackages, SetNewUserTemplate } from './install/config-manager.js';
-export type { DynamicPackageEntry, ConfigOperationResult } from './install/config-manager.js';
+export type { DynamicPackageEntry, PublicPageConfigEntry, ConfigOperationResult } from './install/config-manager.js';
 export { OfferTemplateUser, NamesFromEmail, TEMPLATE_USER_ENV, type TemplateUserContext } from './install/template-user.js';
 
 export { AngularConfigManager, DerivePrebundleExcludePatterns } from './install/angular-config-manager.js';

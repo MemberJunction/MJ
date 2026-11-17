@@ -407,6 +407,65 @@ describe('packages[].platform (#4428)', () => {
     });
 });
 
+describe('publicPages', () => {
+    /** A manifest with one browser-capable client package and the given public pages. */
+    function withPublicPages(publicPages: unknown, packages?: unknown): Record<string, unknown> {
+        return {
+            ...minimalManifest(),
+            packages: packages ?? { client: [{ name: '@acme/lumen-public', role: 'components' }] },
+            publicPages,
+        };
+    }
+
+    const lumenPage = { slug: 'lumen', package: '@acme/lumen-public', export: 'LumenLandingPageComponent', title: 'Lumen' };
+
+    it('accepts a page whose package is a client package', () => {
+        const r = ValidateManifestObject(withPublicPages([lumenPage]));
+        expect(r.Success, r.Errors?.join(' ')).toBe(true);
+        expect(r.Manifest?.publicPages?.[0].slug).toBe('lumen');
+    });
+
+    it('accepts a page whose package is a shared package that runs in the browser', () => {
+        const r = ValidateManifestObject(withPublicPages([lumenPage], { shared: [{ name: '@acme/lumen-public', role: 'library' }] }));
+        expect(r.Success, r.Errors?.join(' ')).toBe(true);
+    });
+
+    it('rejects a slug that is not lowercase kebab-case', () => {
+        for (const slug of ['Lumen', 'lumen-', '-lumen', 'lu--men', 'lu men', 'lu/men', '']) {
+            const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, slug }]));
+            expect(r.Success, slug).toBe(false);
+        }
+    });
+
+    it('rejects a slug longer than 64 characters', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, slug: 'a'.repeat(65) }]));
+        expect(r.Success).toBe(false);
+    });
+
+    it('rejects duplicate slugs, naming the slug', () => {
+        const r = ValidateManifestObject(withPublicPages([lumenPage, { ...lumenPage, export: 'Other' }]));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('lumen');
+    });
+
+    it('rejects an export that is not a single JavaScript identifier', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, export: 'a.b' }]));
+        expect(r.Success).toBe(false);
+    });
+
+    it('rejects a page whose package is not declared in packages.client or packages.shared', () => {
+        const r = ValidateManifestObject(withPublicPages([lumenPage], { server: [{ name: '@acme/lumen-public', role: 'library' }] }));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('@acme/lumen-public');
+    });
+
+    it('rejects a page whose package is a shared package that runs only in Node', () => {
+        const r = ValidateManifestObject(withPublicPages([lumenPage], { shared: [{ name: '@acme/lumen-public', role: 'library', platform: 'node' }] }));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('@acme/lumen-public');
+    });
+});
+
 /**
  * String-aware JSONC comment stripper: removes `//` line and `/* *\/` block comments
  * while preserving comment-like sequences (e.g. `https://`) inside quoted strings.

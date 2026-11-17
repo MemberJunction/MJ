@@ -1,11 +1,20 @@
 import { Command, Flags } from '@oclif/core';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { GetOptionalConfig } from '../../config.js';
 
 /** A client dynamic-package entry as read from mj.config `dynamicPackages.client`. */
 export interface OpenAppClientEntry {
     PackageName: string;
+    Enabled?: boolean;
+}
+
+/** A public page entry as read from mj.config `publicPages`. */
+export interface OpenAppPublicPageEntry {
+    AppName: string;
+    Slug: string;
+    PackageName: string;
+    ExportName: string;
     Enabled?: boolean;
 }
 
@@ -97,6 +106,77 @@ export function ApplyOpenAppClientBootstrapBlock(content: string, clientEntries:
         result = `${result.replace(/\n+$/, '')}\n\n${OPEN_APP_BOOTSTRAP_BEGIN}\n${lines.join('\n')}\n${OPEN_APP_BOOTSTRAP_END}\n`;
     }
     return result;
+}
+
+/** Quotes a value as a single-quoted TypeScript string literal. */
+function quoteTs(value: string): string {
+    const escaped = value
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n');
+    return `'${escaped}'`;
+}
+
+/** Property access for a named export: `m.Name`, or `m['...']` when it is not an identifier. */
+function exportAccess(exportName: string): string {
+    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(exportName) ? `m.${exportName}` : `m[${quoteTs(exportName)}]`;
+}
+
+/** One array line for a public page: a lazy-loaded element, or a comment when disabled. */
+function publicPageLine(entry: OpenAppPublicPageEntry): string {
+    if (entry.Enabled === false) {
+        return `    // ${quoteTs(entry.Slug)} from ${quoteTs(entry.AppName)} disabled by \`mj app disable\``;
+    }
+    return `    { Slug: ${quoteTs(entry.Slug)}, AppName: ${quoteTs(entry.AppName)}, ` +
+        `Load: () => import(${quoteTs(entry.PackageName)}).then((m) => ${exportAccess(entry.ExportName)}) },`;
+}
+
+/**
+ * Builds the TypeScript source of the host's public pages file from mj.config `publicPages`.
+ * Each enabled page becomes a `PUBLIC_PAGES` element that lazy-loads its component; each
+ * disabled page becomes a comment line. No entries gives an empty list.
+ */
+export function BuildPublicPagesFile(entries: OpenAppPublicPageEntry[]): string {
+    const header = [
+        '/**',
+        ' * Public pages from installed Open Apps.',
+        ' * Written by `mj codegen manifest --public-pages`. Do not edit.',
+        ' */',
+        "import type { PublicPageEntry } from '@memberjunction/ng-public-host/bootstrap';",
+        '',
+    ];
+    if (entries.length === 0) {
+        return [...header, 'export const PUBLIC_PAGES: PublicPageEntry[] = [];', ''].join('\n');
+    }
+    return [
+        ...header,
+        'export const PUBLIC_PAGES: PublicPageEntry[] = [',
+        ...entries.map(publicPageLine),
+        '];',
+        '',
+    ].join('\n');
+}
+
+/**
+ * Writes the public pages file at `filePath`, creating its folder when missing.
+ * Leaves the file untouched when its content is already current.
+ *
+ * @returns true when the file was written
+ */
+export function WritePublicPagesFile(filePath: string, entries: OpenAppPublicPageEntry[]): boolean {
+    const content = BuildPublicPagesFile(entries);
+    if (existsSync(filePath) && readFileSync(filePath, 'utf-8') === content) {
+        return false;
+    }
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, content, 'utf-8');
+    return true;
+}
+
+/** True when a config entry carries every field a public page needs. */
+function isCompletePublicPage(entry: Partial<OpenAppPublicPageEntry>): entry is OpenAppPublicPageEntry {
+    return !!entry.AppName && !!entry.Slug && !!entry.PackageName && !!entry.ExportName;
 }
 
 /** @deprecated Use {@link ApplyOpenAppClientBootstrapBlock}. */
@@ -201,6 +281,10 @@ generate a supplemental manifest covering only your own application classes.`;
                 'classes register when the client bundle loads. Used by MJExplorer\'s prebuild; requires --output.',
             default: false,
         }),
+        'public-pages': Flags.string({
+            description: 'Output path for the public pages file. Written from mj.config `publicPages` (the pages installed ' +
+                'Open Apps serve before sign-in); an empty list when there are none. Used by MJExplorer\'s prebuild.',
+        }),
     };
 
     async run(): Promise<void> {
@@ -254,6 +338,19 @@ generate a supplemental manifest covering only your own application classes.`;
                 this.error('--open-app-client-bootstrap requires --output (the manifest file to append the client bootstrap block to).');
             }
             this.appendOpenAppClientBootstrap(flags.output, flags.quiet);
+        }
+
+        if (flags['public-pages']) {
+            this.writePublicPages(flags['public-pages'], flags.quiet);
+        }
+    }
+
+    /** Writes the public pages file from mj.config `publicPages`. */
+    private writePublicPages(outputPath: string, quiet: boolean): void {
+        const entries = (GetOptionalConfig()?.publicPages ?? []).filter(isCompletePublicPage);
+        const changed = WritePublicPagesFile(resolve(process.cwd(), outputPath), entries);
+        if (!quiet) {
+            this.log(`[class-manifest] Public pages: ${entries.length} ${entries.length === 1 ? 'page' : 'pages'} ${changed ? 'written' : 'unchanged'}`);
         }
     }
 
