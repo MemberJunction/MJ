@@ -11495,6 +11495,9 @@ importers:
       jszip:
         specifier: ^3.10.1
         version: 3.10.1
+      playwright:
+        specifier: '>=1.48.0'
+        version: 1.58.1
     devDependencies:
       '@types/node':
         specifier: 24.10.11
