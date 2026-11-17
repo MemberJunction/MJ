@@ -20,13 +20,15 @@ import {
 import { IMetadataProvider, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import type {
-    MJGraphTypeEntity,
-    MJGraphConceptTypeEntity,
-    MJGraphAuthorityTierEntity,
-    MJGraphEntity,
-    MJGraphConceptEntity,
-    MJGraphEdgeEntity,
+import {
+    CanUserApproveGraph,
+    GRAPH_APPROVE_EDGES_AUTHORIZATION,
+    type MJGraphTypeEntity,
+    type MJGraphConceptTypeEntity,
+    type MJGraphAuthorityTierEntity,
+    type MJGraphEntity,
+    type MJGraphConceptEntity,
+    type MJGraphEdgeEntity,
 } from '@memberjunction/core-entities';
 import {
     DEFAULT_GRAPH_CATEGORIES,
@@ -177,6 +179,11 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
         return this.GraphOptions.find(g => UUIDsEqual(g.ID, this.SelectedGraphID));
     }
 
+    /** True for local sample previews or when the current user holds `Graph: Approve Edges`. */
+    public get CanApproveSelectedGraph(): boolean {
+        return Boolean(this.SelectedGraph?.IsSample) || CanUserApproveGraph(this.ProviderToUse?.CurrentUser, this.ProviderToUse?.Authorizations);
+    }
+
     public async SelectGraph(graphId: string): Promise<void> {
         if (UUIDsEqual(this.SelectedGraphID, graphId)) {
             return;
@@ -257,8 +264,13 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 this.cdr.detectChanges();
                 return;
             }
+            const provider = this.ProviderToUse;
+            if (!CanUserApproveGraph(provider?.CurrentUser, provider?.Authorizations)) {
+                this.ActionError = `Approving a concept into Canon requires the "${GRAPH_APPROVE_EDGES_AUTHORIZATION}" authorization.`;
+                this.cdr.detectChanges();
+                return;
+            }
             try {
-                const provider = this.ProviderToUse;
                 const conceptEntity = await provider.GetEntityObject<MJGraphConceptEntity>(
                     'MJ: Graph Concepts',
                     provider.CurrentUser,

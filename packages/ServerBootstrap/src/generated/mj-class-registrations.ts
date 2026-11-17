@@ -1498,7 +1498,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (91 classes)
+// @memberjunction/core-entities-server (92 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1549,6 +1549,7 @@ import {
     MJEntityFormOverrideEntityServer,
     MJFieldSuggestionEntityServer,
     MJFileEntityServer,
+    MJGraphConceptEntityServer,
     MJGraphEdgeEntityServer,
     MJGraphEdgeProviderEntityServer,
     MJGraphEdgeTypeEntityServer,
@@ -3029,6 +3030,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJEntityFormOverrideEntityServer,
     MJFieldSuggestionEntityServer,
     MJFileEntityServer,
+    MJGraphConceptEntityServer,
     MJGraphEdgeEntityServer,
     MJGraphEdgeProviderEntityServer,
     MJGraphEdgeTypeEntityServer,
@@ -3156,11 +3158,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DeleteDirectoryAction,
     DeleteObjectAction,
     DeleteRecordAction,
-    DirectoryExistsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    DirectoryExistsAction,
     DownloadSignedDocumentAction,
     ExcelReaderAction,
     ExecuteAIPromptAction,
@@ -3367,7 +3369,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1389;
+export const CLASS_REGISTRATIONS_COUNT = 1390;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
