@@ -210,8 +210,9 @@ export class LocalEmbedding extends BaseEmbeddings {
      */
     private static clearLoadedModels(): void {
         ClearEmbeddingPipelines().catch(error => console.warn('[LocalEmbedding] Releasing in-process models failed:', error));
+        // Run would start a worker if none is running, only to clear its empty cache.
         const host = EmbeddingWorkerHost.Instance;
-        if (host.IsAvailable) {
+        if (host.IsRunning) {
             host.Run({ Kind: 'clear' }).catch(error => console.warn(`[LocalEmbedding] Clearing the worker's models failed: ${error}`));
         }
     }

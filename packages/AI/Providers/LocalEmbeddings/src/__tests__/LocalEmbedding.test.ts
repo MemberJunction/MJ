@@ -48,11 +48,11 @@ vi.mock('@memberjunction/ai', () => {
   };
 });
 
-const host = vi.hoisted(() => ({ available: true, run: vi.fn() }));
+const host = vi.hoisted(() => ({ available: true, running: false, run: vi.fn() }));
 vi.mock('../worker/EmbeddingWorkerHost.js', () => ({
   EmbeddingWorkerHost: {
     get Instance() {
-      return { get IsAvailable() { return host.available; }, Run: host.run };
+      return { get IsAvailable() { return host.available; }, get IsRunning() { return host.running; }, Run: host.run };
     },
   },
 }));
@@ -84,6 +84,7 @@ describe('LocalEmbedding', () => {
     vi.clearAllMocks();
     vi.spyOn(console, 'log').mockImplementation(() => {});
     host.available = true;
+    host.running = false;
     host.run.mockResolvedValue({ Vectors: [], Tokens: 0 });
     // Clear static caches between tests
     LocalEmbedding.clearSharedCache();
@@ -124,6 +125,7 @@ describe('LocalEmbedding', () => {
 
   /* ---- EmbedTexts ---- */
   describe('EmbedTexts', () => {
+
     it('should throw error when model name is missing', async () => {
       await expect(embedding.EmbedTexts({ texts: ['hello'] } as never))
         .rejects.toThrow('Model name is required for LocalEmbedding provider');
@@ -152,6 +154,20 @@ describe('LocalEmbedding', () => {
       runtime.clear.mockRejectedValueOnce(new Error('release failed for model-x'));
       expect(() => LocalEmbedding.clearSharedCache()).not.toThrow();
       await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(expect.stringContaining('Releasing in-process models failed'), expect.any(Error)));
+    });
+
+    it("clears the running worker's models", () => {
+      host.running = true;
+      LocalEmbedding.ClearSharedCache();
+      expect(host.run).toHaveBeenCalledWith({ Kind: 'clear' });
+    });
+
+    it('does not start a worker thread just to clear it', () => {
+      host.run.mockClear();
+      LocalEmbedding.ClearSharedCache();
+      new LocalEmbedding().ClearCache();
+      expect(host.run).not.toHaveBeenCalled();
+      expect(runtime.clear).toHaveBeenCalled();
     });
 
     it('should clear shared static cache without errors', () => {
