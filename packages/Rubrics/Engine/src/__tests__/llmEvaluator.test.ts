@@ -202,6 +202,35 @@ describe('LLMRubricEvaluator', () => {
         expect(output.answers).toHaveLength(0);
         expect(output.droppedUnknownKeys).toBe(1);
     });
+
+    it('accepts backticked keys and rendered heading keys when SinglePass has one deferred criterion, while still dropping mismatched keys', async () => {
+        const tree = version();
+        tree.nodes[0].key = 'security';
+        tree.nodes[0].name = 'ContextUser & FLS Safety';
+        const headingRunner = {
+            async run() {
+                return JSON.stringify({
+                    decisions: [
+                        { key: 'ContextUser & FLS Safety (`security`)', level: 'High', rationale: 'Passes contextUser.', evidence: [{ quote: 'Easy' }] },
+                        { key: 'Wrong Title (`security`)', level: 'High', rationale: 'Mismatched title.', evidence: [] },
+                    ],
+                });
+            },
+        };
+        const headingOutput = await new LLMRubricEvaluator(headingRunner, 'SinglePass').EvaluateSamples(tree, { text: 'Easy to read.' }, 1);
+        expect(headingOutput.answers).toHaveLength(1);
+        expect(headingOutput.answers[0].criterionId).toBe('a');
+        expect(headingOutput.droppedUnknownKeys).toBe(1);
+
+        const backtickRunner = {
+            async run() {
+                return JSON.stringify({ decisions: [{ key: '`security`', level: 'High', rationale: 'Safe.', evidence: [] }] });
+            },
+        };
+        const backtickOutput = await new LLMRubricEvaluator(backtickRunner, 'SinglePass').EvaluateContent(tree, { text: 'Easy to read.' });
+        expect(backtickOutput.answers).toHaveLength(1);
+        expect(backtickOutput.droppedUnknownKeys).toBe(0);
+    });
 });
 
 describe('LLMRubricEvaluator as a registered evaluator', () => {

@@ -18,7 +18,7 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--mj-shadow-lg, 0 4px 16px color-mix(in srgb, var(--mj-text-primary) 20%, transparent));
     z-index: 2147483647;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     animation: overlayBubbleIn 0.3s ease;
@@ -71,7 +71,7 @@
 
 .chat-overlay-bubble:hover {
     transform: scale(1.08);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--mj-shadow-xl, 0 6px 24px color-mix(in srgb, var(--mj-text-primary) 30%, transparent));
 }
 
 /* Immediate press feedback — fires on mousedown before the drag threshold is crossed,
@@ -81,7 +81,7 @@
     transform: scale(0.94);
     transition: transform 0.08s ease;
     box-shadow:
-        0 2px 6px rgba(0, 0, 0, 0.25),
+        var(--mj-shadow-sm),
         0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
 }
 
@@ -91,7 +91,7 @@
     transform: scale(1.04);
     transition: none;
     box-shadow:
-        0 8px 28px rgba(0, 0, 0, 0.35),
+        var(--mj-shadow-xl, 0 8px 28px color-mix(in srgb, var(--mj-text-primary) 35%, transparent)),
         0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
@@ -151,7 +151,7 @@
     align-items: center;
     justify-content: center;
     font-size: 0.65rem;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--mj-shadow-sm);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
@@ -199,7 +199,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--mj-shadow-lg, 0 4px 12px color-mix(in srgb, var(--mj-text-primary) 30%, transparent));
     z-index: 2147483647;
     transition: width 0.18s ease, background 0.15s ease;
     animation: overlayBubbleIn 0.25s ease;
@@ -234,9 +234,7 @@
     border-radius: 12px;
     background: var(--mj-bg-surface);
     border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 50%, var(--mj-border-strong));
-    box-shadow:
-        0 8px 32px rgba(0, 0, 0, 0.3),
-        0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--mj-shadow-xl, 0 8px 32px color-mix(in srgb, var(--mj-text-primary) 30%, transparent));
     z-index: 2147483647;
     display: flex;
     flex-direction: column;

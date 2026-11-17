@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ComputeTypedQuerySignature } from '@memberjunction/core';
+import { ComputeTypedQuerySignature, type MJQueryEntityExtended } from '@memberjunction/core-entities';
 import {
     FilterEligibleTypedQueries,
     GenerateTypedQueriesFileContent,
     MapSQLBaseTypeToTSType,
     ResolveTypedQuerySchema,
     ToQueryIdentifier,
+    TypedQueryCodeGenQueriesFromEngine,
+    TypedQueryDefinerModule,
     type TypedQueryCodeGenEntity,
     type TypedQueryCodeGenQuery,
 } from '../Misc/typed_query_codegen';
@@ -372,5 +374,59 @@ describe('typed_query_codegen', () => {
         );
         expect(forward).toBe(reversed);
         expect(forward.indexOf('entityName: string;')).toBeLessThan(forward.indexOf('tagName: string;'));
+    });
+});
+
+describe('typed_query_codegen — QueryEngine input and the DefineTypedQuery import', () => {
+    const approved: TypedQueryCodeGenQuery = {
+        ID: 'dddddddd-0000-0000-0000-000000000001',
+        Name: 'Order Totals',
+        Status: 'Approved',
+        Reusable: true,
+        CategoryPath: '/Sales/',
+        SQL: 'SELECT Total FROM Orders',
+        Fields: [{ Name: 'Total', SQLBaseType: 'decimal', InAllBranchVariants: true }],
+    };
+
+    it('imports DefineTypedQuery from @memberjunction/core-entities by default', () => {
+        const code = GenerateTypedQueriesFileContent([approved], sampleEntities, { platform: 'sqlserver' });
+        expect(TypedQueryDefinerModule).toBe('@memberjunction/core-entities');
+        expect(code).toContain("import { DefineTypedQuery } from '@memberjunction/core-entities';");
+        expect(code).not.toContain("from '@memberjunction/core';");
+    });
+
+    it('imports DefineTypedQuery from the module it is given, for output inside core-entities itself', () => {
+        const code = GenerateTypedQueriesFileContent([approved], sampleEntities, { platform: 'sqlserver', definerModule: '../../custom/typedQuery.js' });
+        expect(code).toContain("import { DefineTypedQuery } from '../../custom/typedQuery.js';");
+    });
+
+    it('reads a QueryEngine query through its QueryParameters, QueryFields and QueryEntities', () => {
+        const parameters = [{ Name: 'region', Type: 'string', IsRequired: true, DefaultValue: null, IsServerSet: false }];
+        const fields = [{ Name: 'Total', SQLBaseType: 'decimal', InAllBranchVariants: true, Sequence: 1 }];
+        const entities = [{ EntityID: 'ent-orders', Entity: 'Orders' }];
+        const engineQuery = {
+            ID: 'dddddddd-0000-0000-0000-000000000002',
+            Name: 'Orders By Region',
+            Description: null,
+            SQL: 'SELECT Total FROM Orders WHERE Region = {{ region | sqlString }}',
+            Status: 'Approved',
+            Reusable: true,
+            CategoryPath: '/Sales/',
+            Category: 'Sales',
+            QueryParameters: parameters,
+            QueryFields: fields,
+            QueryEntities: entities,
+        } as unknown as MJQueryEntityExtended;
+
+        const [adapted] = TypedQueryCodeGenQueriesFromEngine([engineQuery]);
+
+        expect(adapted).toMatchObject({ ID: engineQuery.ID, Name: 'Orders By Region', CategoryPath: '/Sales/', Category: 'Sales', Status: 'Approved', Reusable: true });
+        expect(adapted.Parameters).toBe(parameters);
+        expect(adapted.Fields).toBe(fields);
+        expect(adapted.Entities).toBe(entities);
+        // The emitted signature is the one the runtime drift check computes from the same query.
+        const code = GenerateTypedQueriesFileContent([adapted], sampleEntities, { platform: 'sqlserver' });
+        const emitted = /Signature:\s*"([^"]+)"/.exec(code)?.[1];
+        expect(emitted).toBe(ComputeTypedQuerySignature({ Parameters: parameters, Fields: fields }));
     });
 });

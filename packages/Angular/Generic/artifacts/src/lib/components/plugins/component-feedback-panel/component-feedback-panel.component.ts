@@ -3,6 +3,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
+import { GraphQLComponentRegistryClient } from '@memberjunction/graphql-dataprovider';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
@@ -160,9 +161,6 @@ export class ComponentFeedbackPanelComponent extends BaseAngularComponent implem
     this.cdr.detectChanges();
 
     try {
-      // Dynamic import to avoid adding graphql-dataprovider as a package dependency.
-      // At runtime in the browser, this.ProviderToUse is always a GraphQLDataProvider.
-      const { GraphQLComponentRegistryClient } = await import('@memberjunction/graphql-dataprovider');
       const provider = this.ProviderToUse;
       const client = new GraphQLComponentRegistryClient(provider as ConstructorParameters<typeof GraphQLComponentRegistryClient>[0]);
 
