@@ -188,6 +188,11 @@ export class DiscoverStage extends BasePipelineStage {
      * so the next run carries on from there. Nothing that marks the walk done is written: `LastDiscoveredAt`
      * stays (so the next part keeps this walk's `Since`) and `ForceDiscovery` stays set (so the source is
      * selected again).
+     *
+     * The new state is a completion column: it is saved only when every item this part found commits. A part
+     * that could not save its items keeps the old state, so the next run walks that part again (child commits
+     * are idempotent) instead of resuming past items that were never saved, and the removals the driver
+     * reported in it are reported again.
      */
     private continueLater(
         record: WorkingRecord,
@@ -199,8 +204,8 @@ export class DiscoverStage extends BasePipelineStage {
         removed: string,
     ): StageOutcome {
         const state: DiscoverState = { ResumeToken: walk.ResumeToken!, WalkStartedAt: walkStartedAt.toISOString(), Mode: mode, ItemsFound: itemsFound };
-        record.SetExtension('Pipeline', 'columns', {
-            ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+        record.SetExtension('Pipeline', 'completionColumns', {
+            ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'completionColumns') ?? {}),
             DiscoverState: JSON.stringify(state),
         });
         record.SetExtension(DISCOVER_STAGE, 'incomplete', true);

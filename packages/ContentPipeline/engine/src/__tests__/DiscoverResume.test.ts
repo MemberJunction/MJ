@@ -98,10 +98,12 @@ describe('a walk in parts', () => {
 
         expect(outcome.Status).toBe('Complete');
         expect(record.Children).toHaveLength(2);
-        const state = ParseDiscoverState(record.GetExtension<Record<string, string>>('Pipeline', 'columns')?.DiscoverState);
-        expect(state).toMatchObject({ ResumeToken: '1', Mode: 'Discover', ItemsFound: 2 });
+        // Saved only if every item found commits (see 'a part whose items fail to commit' below).
+        const completion = record.GetExtension<Record<string, string>>('Pipeline', 'completionColumns');
+        expect(ParseDiscoverState(completion?.DiscoverState)).toMatchObject({ ResumeToken: '1', Mode: 'Discover', ItemsFound: 2 });
         // Nothing that says the walk is done: ForceDiscovery stays set and LastDiscoveredAt stays put.
-        expect(record.GetExtension('Pipeline', 'completionColumns')).toBeUndefined();
+        expect(Object.keys(completion ?? {})).toEqual(['DiscoverState']);
+        expect(record.GetExtension('Pipeline', 'columns')?.DiscoverState).toBeUndefined();
         expect(record.GetExtension('Discover', 'incomplete')).toBe(true);
     });
 
@@ -154,8 +156,17 @@ describe('removals a driver reports', () => {
 
 // ─── through the processor ────────────────────────────────────────────────────────────────────────────
 
-/** Runs Discover over the source; returns which items were marked for deletion and the source's saved columns. */
-async function runDiscover(state: string | null, configuration: Record<string, unknown> = {}, live: { ID: string; URL: string }[] = []) {
+/**
+ * Runs Discover over the source; returns which items were marked for deletion and the source's saved columns.
+ * Like the real committer, the source's completion columns are saved only when the commit succeeded. A child
+ * whose URL is in `failChildren` fails to commit.
+ */
+async function runDiscover(
+    state: string | null,
+    configuration: Record<string, unknown> = {},
+    live: { ID: string; URL: string }[] = [],
+    failChildren: string[] = [],
+) {
     // These sources need no session; the access layer has its own tests.
     vi.spyOn(AccessResolver.prototype, 'Artifact').mockResolvedValue(null);
     const marked: string[] = [];
@@ -193,14 +204,19 @@ async function runDiscover(state: string | null, configuration: Record<string, u
         Hydrator: () => ({ Hydrate: async () => source(state) }) as unknown as WorkingRecordHydrator,
         Committer: () =>
             ({
-                Commit: async (record: WorkingRecord) => {
+                Commit: async (record: WorkingRecord, _field: string | null, _status: string | null, succeeded = true) => {
                     sourceColumns = {
                         ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
-                        ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'completionColumns') ?? {}),
+                        ...(succeeded ? (record.GetExtension<Record<string, unknown>>('Pipeline', 'completionColumns') ?? {}) : {}),
                     };
                     return { RecordID: 'SRC-1', ColumnsWritten: [], Created: false };
                 },
-                CommitChild: async () => ({ RecordID: 'C', ColumnsWritten: [], Created: true }),
+                CommitChild: async (child: WorkingRecord) => {
+                    if (failChildren.includes(child.Identity.EphemeralID ?? '')) {
+                        throw new Error(`could not save ${child.Identity.EphemeralID}`);
+                    }
+                    return { RecordID: 'C', ColumnsWritten: [], Created: true };
+                },
             }) as unknown as WorkingRecordCommitter,
     };
     const processor = new PipelineProcessor({ Stages: ['Discover'], IsTest: false, Configuration: configuration }, storage);
@@ -225,6 +241,32 @@ describe('Discover through the processor', () => {
     it('stores the walk state on the source when the walk is not finished', async () => {
         const { sourceColumns } = await runDiscover(null);
         expect(ParseDiscoverState(sourceColumns.DiscoverState as string)?.ResumeToken).toBe('1');
+    });
+});
+
+describe('a part whose items fail to commit', () => {
+    it('keeps the walk where it was, so the next run walks that part again', async () => {
+        const { result, sourceColumns } = await runDiscover(null, {}, [], ['https://x.test/2']);
+
+        expect(result.Status).toBe('Failed');
+        // The token pointing past this part is not saved: the next run starts this part again.
+        expect(sourceColumns.DiscoverState).toBeUndefined();
+    });
+
+    it('keeps the saved state of a resumed walk, and the removals it reported are reported again', async () => {
+        const saved = JSON.stringify({ ResumeToken: '1', WalkStartedAt: '2026-02-01T10:00:00.000Z', Mode: 'Discover', ItemsFound: 2 });
+
+        const failed = await runDiscover(saved, {}, [], ['https://x.test/3']);
+        expect(failed.result.Status).toBe('Failed');
+        expect(failed.marked).toEqual([]);
+        // The walk is not finished: nothing clears the state or moves LastDiscoveredAt.
+        expect(failed.sourceColumns).toEqual({});
+
+        seen.length = 0;
+        const retried = await runDiscover(saved);
+        expect(seen[0].ResumeToken).toBe('1');
+        expect(retried.result.Status).toBe('Succeeded');
+        expect(retried.marked).toContain('ITEM-OLD');
     });
 });
 

@@ -11,10 +11,25 @@
  * private and non-web addresses (MJ's SSRF guard) and adds the source's session headers only for the
  * session's own origins, so a third-party script host never sees them.
  *
+ * Redirects are checked hop by hop. A route sees only the first request of a redirect: the browser follows the
+ * rest itself (Playwright: "The handler will only be called for the first url if the response is a redirect").
+ * So the route fetches every request itself without following redirects ({@link HeadlessPageRenderer.RouteRequest}):
+ * - the page's own navigation stops at a redirect; {@link HeadlessPageRenderer.Render} checks where it points
+ *   and navigates there, a new navigation that goes through the route again (and keeps the page's URL right);
+ * - anything else (scripts, images, frames, the page's own fetches) has its redirects followed by the route,
+ *   each hop checked, and the browser is handed the last answer.
+ *
+ * WebSockets do not go through the route at all, so the page may open none: reading a page never needs a live
+ * connection.
+ *
+ * Not covered: the address is checked by name before each new origin is fetched, so a DNS server that answers
+ * differently between the check and the fetch could still reach a private address. Closing that needs every
+ * connection made to an address checked at connect time (a proxy of our own).
+ *
  * @module @memberjunction/content-pipeline
  */
 
-import type { Browser, Route } from 'playwright';
+import type { APIRequestContext, APIResponse, Browser, Page, Route } from 'playwright';
 import { LogError } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { AssertPublicUrl } from '@memberjunction/network-utils';
@@ -27,6 +42,20 @@ export const HEADLESS_PAGE_RENDERER = 'Headless';
 const DEFAULT_TIMEOUT_MS = 30_000;
 /** How long the shared browser stays open with nothing to render. */
 const IDLE_CLOSE_MS = 60_000;
+/** The most redirects one request may take (Chromium's own limit). */
+const MAX_REDIRECTS = 20;
+
+/** What one render's route knows: the page whose navigation it watches, and what it has decided. */
+export interface HeadlessRenderState {
+    /** The page being rendered; its main frame's navigations stop at a redirect (see `Render`). */
+    Page: Page | null;
+    /** Where the page's navigation was last redirected; `Render` checks it and navigates there. */
+    RedirectTo: string | null;
+    /** Each origin's check, made once per render. */
+    AllowedOrigins: Map<string, boolean>;
+    /** Fetches a redirect's later hops, with the context's cookies. */
+    Requests: APIRequestContext;
+}
 
 @RegisterClass(BasePageRenderer, HEADLESS_PAGE_RENDERER)
 export class HeadlessPageRenderer extends BasePageRenderer {
@@ -50,13 +79,12 @@ export class HeadlessPageRenderer extends BasePageRenderer {
                 throw new Error('Render aborted before navigation');
             }
             context = await browser.newContext({ serviceWorkers: 'block' });
-            const allowedHosts = new Map<string, boolean>();
-            await context.route('**/*', (route) => this.route(route, request, allowedHosts));
+            const state: HeadlessRenderState = { Page: null, RedirectTo: null, AllowedOrigins: new Map(), Requests: context.request };
+            await context.route('**/*', (route) => this.RouteRequest(route, request, state));
+            await context.routeWebSocket(/.*/, (socket) => socket.close({ code: 1008, reason: 'WebSockets are not allowed when rendering a page' }));
             const page = await context.newPage();
-            const response = await page.goto(this.withAccessQuery(request), {
-                waitUntil: 'networkidle',
-                timeout: request.TimeoutMs ?? DEFAULT_TIMEOUT_MS,
-            });
+            state.Page = page;
+            const response = await this.navigate(page, this.withAccessQuery(request), request, state);
             const finalUrl = page.url();
             if (/^https?:/i.test(finalUrl)) {
                 await this.AssertAllowed(finalUrl);
@@ -66,6 +94,27 @@ export class HeadlessPageRenderer extends BasePageRenderer {
             request.Signal.removeEventListener('abort', abort);
             await context?.close().catch(() => undefined);
             HeadlessPageRenderer.release();
+        }
+    }
+
+    /**
+     * Load the page, following its redirects one navigation at a time: the route stops the page's navigation at
+     * a redirect and says where it points, and each hop is checked here before the page goes there.
+     */
+    private async navigate(page: Page, url: string, request: PageRenderRequest, state: HeadlessRenderState) {
+        const deadline = Date.now() + (request.TimeoutMs ?? DEFAULT_TIMEOUT_MS);
+        for (let hops = 0; ; hops++) {
+            state.RedirectTo = null;
+            const response = await page.goto(url, { waitUntil: 'networkidle', timeout: Math.max(1, deadline - Date.now()) });
+            const next = state.RedirectTo as string | null;
+            if (!next) {
+                return response;
+            }
+            if (hops >= MAX_REDIRECTS) {
+                throw new Error(`'${request.URL}' redirected more than ${MAX_REDIRECTS} times`);
+            }
+            await this.AssertAllowed(next);
+            url = next;
         }
     }
 
@@ -88,26 +137,104 @@ export class HeadlessPageRenderer extends BasePageRenderer {
         await AssertPublicUrl(url);
     }
 
-    /** One request the page makes: refused, or sent on with the session's headers when its origin may have them. */
-    private async route(route: Route, request: PageRenderRequest, allowedHosts: Map<string, boolean>): Promise<void> {
-        const target = route.request().url();
+    /**
+     * One request the page makes. It is refused when its address may not be loaded; otherwise it is fetched
+     * here, never letting the browser follow a redirect unchecked:
+     * - the page's own navigation that is redirected is answered with an empty page, and `RedirectTo` says where
+     *   it points
+     *   ({@link HeadlessPageRenderer.navigate} checks it and goes there);
+     * - any other request has its redirects followed here, each hop checked, and the browser gets the last answer.
+     * The session's headers go only to the session's own origins, hop by hop.
+     */
+    protected async RouteRequest(route: Route, request: PageRenderRequest, state: HeadlessRenderState): Promise<void> {
+        const sent = route.request();
+        const target = sent.url();
         if (target.startsWith('data:') || target.startsWith('blob:')) {
             return route.continue();
         }
+        if (!(await this.allowed(target, state))) {
+            return route.abort('blockedbyclient');
+        }
+        const pageNavigation = sent.isNavigationRequest() && state.Page !== null && this.frameOf(route) === state.Page.mainFrame();
+        let response: APIResponse;
+        try {
+            response = await route.fetch({ maxRedirects: 0, headers: this.headersFor(target, sent.headers(), request) });
+            let url = target;
+            let method = sent.method();
+            let hops = 0;
+            for (let next = this.redirectOf(response, url); next; next = this.redirectOf(response, url)) {
+                if (pageNavigation) {
+                    // An empty page, not an abort: an abort sends the browser to its error page, which races
+                    // the navigation to the next hop.
+                    state.RedirectTo = next;
+                    return route.fulfill({ status: 200, contentType: 'text/html', body: '' });
+                }
+                if (++hops > MAX_REDIRECTS || !(await this.allowed(next, state))) {
+                    return route.abort('blockedbyclient');
+                }
+                // A 303, and a 301/302 answering a POST, go on as a GET without the body (as browsers do).
+                const status = response.status();
+                const keepsBody = status === 307 || status === 308 || (method !== 'POST' && status !== 303);
+                method = keepsBody ? method : 'GET';
+                url = next;
+                response = await state.Requests.fetch(url, {
+                    method,
+                    headers: this.headersFor(url, sent.headers(), request),
+                    ...(keepsBody && sent.postDataBuffer() ? { data: sent.postDataBuffer()! } : {}),
+                    maxRedirects: 0,
+                });
+            }
+        } catch {
+            return route.abort('failed');
+        }
+        return route.fulfill({ response });
+    }
+
+    /** Whether an address may be loaded; an origin is checked once per render. */
+    private async allowed(url: string, state: HeadlessRenderState): Promise<boolean> {
         let origin: string;
         try {
-            origin = new URL(target).origin;
+            origin = new URL(url).origin;
         } catch {
-            return route.abort('blockedbyclient');
+            return false;
         }
-        if (!allowedHosts.has(origin)) {
-            allowedHosts.set(origin, await this.AssertAllowed(target).then(() => true, () => false));
+        if (!state.AllowedOrigins.has(origin)) {
+            state.AllowedOrigins.set(origin, await this.AssertAllowed(url).then(() => true, () => false));
         }
-        if (!allowedHosts.get(origin)) {
-            return route.abort('blockedbyclient');
+        return state.AllowedOrigins.get(origin) === true;
+    }
+
+    /** Where a redirect answer points (absolute), or null when it is not a redirect. */
+    private redirectOf(response: APIResponse, url: string): string | null {
+        const location = response.headers()['location'];
+        if (response.status() < 300 || response.status() > 399 || !location) {
+            return null;
         }
-        const headers = request.Access?.Headers && this.isAccessOrigin(origin, request) ? { ...route.request().headers(), ...request.Access.Headers } : undefined;
-        return route.continue(headers ? { headers } : undefined);
+        try {
+            return new URL(location, url).href;
+        } catch {
+            return null;
+        }
+    }
+
+    /** The request's headers, with the session's added when the address is one of the session's own origins. */
+    private headersFor(url: string, headers: Record<string, string>, request: PageRenderRequest): Record<string, string> {
+        let origin: string;
+        try {
+            origin = new URL(url).origin;
+        } catch {
+            return headers;
+        }
+        return request.Access?.Headers && this.isAccessOrigin(origin, request) ? { ...headers, ...request.Access.Headers } : headers;
+    }
+
+    /** The frame a request came from; a request with none (a service worker's) is never the page's. */
+    private frameOf(route: Route) {
+        try {
+            return route.request().frame();
+        } catch {
+            return null;
+        }
     }
 
     /** The page's URL with the session's query parameters, when the page's own origin may have them. */
