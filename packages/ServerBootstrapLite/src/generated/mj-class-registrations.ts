@@ -224,7 +224,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (504 classes)
+// @memberjunction/core-entities (500 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -348,6 +348,7 @@ import {
     MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
     MJArtifactEntity,
+    MJArtifactGuestShareLinkEntity,
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
@@ -552,12 +553,8 @@ import {
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
-    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
-    MJMLMonitoringResultEntity,
-    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
-    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -722,7 +719,6 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
-    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -1051,11 +1047,12 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/rubrics (11 classes)
+// @memberjunction/rubrics (12 classes)
 import {
     AgentRubricEvaluator,
     CreateRubricDraftAction,
     DecisionRubricEvaluator,
+    DecisionThenLLMRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -1066,11 +1063,12 @@ import {
     SubmitHumanRubricAction,
 } from '@memberjunction/rubrics';
 
-// @memberjunction/search-engine (16 classes)
+// @memberjunction/search-engine (17 classes)
 import {
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
+    DecisionReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
@@ -1160,14 +1158,13 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/predictive-studio (20 classes)
+// @memberjunction/predictive-studio (18 classes)
 import {
     EvaluateFeatureAndPredictionDriftAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
@@ -1178,7 +1175,6 @@ import {
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioSignOffModelServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
@@ -1219,7 +1215,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (86 classes)
+// @memberjunction/core-entities-server (91 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1244,9 +1240,15 @@ import {
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactEntityServer,
+    MJArtifactGuestShareLinkEntityServer,
+    MJArtifactPermissionEntityServer,
+    MJArtifactVersionAttributeEntityServer,
     MJArtifactVersionEntityServer,
     MJArtifactWorkingStateEntityServer,
     MJBrandKitEntityServer,
+    MJCollectionArtifactEntityServer,
+    MJCollectionEntityServer,
+    MJCollectionPermissionEntityServer,
     MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
@@ -1271,8 +1273,6 @@ import {
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLEvaluationProtocolEntityServer,
-    MJMLModelPublishRecordEntityServer,
-    MJMLOutputBindingEntityServer,
     MJMLPredictionUnitEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMLTrainingSnapshotEntityServer,
@@ -1293,6 +1293,7 @@ import {
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScheduledJobEntityServer,
     MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -1765,6 +1766,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
     MJArtifactEntity,
+    MJArtifactGuestShareLinkEntity,
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
@@ -1777,11 +1779,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJBrandKitAssetEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJBrandKitAssetEntity,
     MJBrandKitEntity,
     MJCalendarEventLinkEntity,
     MJCalendarSyncStateEntity,
@@ -1973,22 +1975,18 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
-    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
-    MJMLMonitoringResultEntity,
-    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
-    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
+    MJMagicLinkInviteAllowedDomainEntity,
+    MJMagicLinkInviteAllowedPathEntity,
+    MJMagicLinkInviteApplicationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
-    MJMagicLinkInviteAllowedDomainEntity,
-    MJMagicLinkInviteAllowedPathEntity,
-    MJMagicLinkInviteApplicationEntity,
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
@@ -2147,7 +2145,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
-    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -2186,14 +2183,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ApolloGetListAccountsAction,
     ApolloGetListContactsAction,
     ApolloGetListsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     ApolloMoveListAccountsAction,
     ApolloMoveListContactsAction,
     ApolloSearchPeopleAction,
     CreateBusinessCentralJournalEntryAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
     GetAccountBalancesAction,
@@ -2369,6 +2366,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AgentRubricEvaluator,
     CreateRubricDraftAction,
     DecisionRubricEvaluator,
+    DecisionThenLLMRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -2380,6 +2378,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
+    DecisionReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
@@ -2390,12 +2389,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
+    TypesenseSearchProvider,
+    VectorSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
-    TypesenseSearchProvider,
-    VectorSearchProvider,
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -2456,7 +2455,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
@@ -2467,7 +2465,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioSignOffModelServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
@@ -2521,9 +2518,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactEntityServer,
+    MJArtifactGuestShareLinkEntityServer,
+    MJArtifactPermissionEntityServer,
+    MJArtifactVersionAttributeEntityServer,
     MJArtifactVersionEntityServer,
     MJArtifactWorkingStateEntityServer,
     MJBrandKitEntityServer,
+    MJCollectionArtifactEntityServer,
+    MJCollectionEntityServer,
+    MJCollectionPermissionEntityServer,
     MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
@@ -2548,8 +2551,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLEvaluationProtocolEntityServer,
-    MJMLModelPublishRecordEntityServer,
-    MJMLOutputBindingEntityServer,
     MJMLPredictionUnitEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMLTrainingSnapshotEntityServer,
@@ -2570,6 +2571,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScheduledJobEntityServer,
     MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -2593,11 +2595,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
-    BraveSearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -2797,11 +2799,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DockerRenderDriver,
     LocalWorkerRenderDriver,
     ProduceVideoAction,
-    RemoteRenderDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    RemoteRenderDriver,
     VideoStudioAgent,
     VideoStudioArtDirectorAgent,
     VideoStudioCriticAgent,
@@ -2841,7 +2843,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1222;
+export const CLASS_REGISTRATIONS_COUNT = 1223;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

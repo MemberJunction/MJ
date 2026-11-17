@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { EntityInfo, RunViewParams, UserInfo } from '@memberjunction/core';
-import { ConversationEngine } from '@memberjunction/core-entities';
+import { ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { CreateFakeProvider } from '@memberjunction/ng-test-utils';
 import { SearchService } from '../lib/services/search.service';
 import { ArtifactPermissionService } from '../lib/services/artifact-permission.service';
@@ -168,7 +168,8 @@ describe('SearchService visibility scope', () => {
   let rows: Record<string, object[]>;
 
   beforeEach(() => {
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
     queries = [];
     rows = {};
     vi.spyOn(ConversationEngine.Instance, 'GetVisibleConversationsFilter').mockResolvedValue(VISIBLE_CONVERSATIONS);
@@ -336,7 +337,8 @@ describe('SearchService overlapping searches', () => {
   let service: SearchService;
 
   beforeEach(() => {
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
     const artifactPermissions = new ArtifactPermissionService(new CollectionPermissionService());
     service = new SearchService(artifactPermissions);
     // Each conversation row echoes the query that found it, so results show which search won.
@@ -414,7 +416,8 @@ describe('SearchService artifact collections', () => {
   let rows: Record<string, object[]>;
 
   beforeEach(() => {
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
     queries = [];
     rows = {
       'MJ: Artifacts': [
@@ -485,5 +488,25 @@ describe('SearchService artifact collections', () => {
 
     expect(queries.filter((q) => q.EntityName === 'MJ: Collection Artifacts')).toHaveLength(0);
     expect(results.artifacts).toHaveLength(3);
+  });
+
+  it('persists recent searches via UserInfoEngine instead of localStorage', async () => {
+    vi.useFakeTimers();
+    try {
+      const artifactPermissions = new ArtifactPermissionService(new CollectionPermissionService());
+      vi.spyOn(artifactPermissions, 'GetReadableArtifactsFilter').mockResolvedValue("(UserID='user-1')");
+      const timedService = new SearchService(artifactPermissions);
+      timedService.Provider = service.Provider;
+      const setSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced');
+
+      await timedService.Search('poem', 'env-1', USER);
+      vi.advanceTimersByTime(350);
+      expect(setSpy).toHaveBeenCalledWith('mj-recent-searches', JSON.stringify(['poem']));
+
+      timedService.ClearRecentSearches();
+      expect(setSpy).toHaveBeenCalledWith('mj-recent-searches', JSON.stringify([]));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

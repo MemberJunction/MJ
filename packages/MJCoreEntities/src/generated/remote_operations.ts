@@ -46,6 +46,189 @@ export interface AISkillImportMarkdownOutput {
     warnings: string[];
 }
 
+/** Input payload for `Artifact.CreateGuestShareLink`. */
+export interface CreateGuestShareLinkInput {
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Optional specific `MJ: Artifact Versions.ID` (defaults to latest version when omitted). */
+    VersionID?: string | null;
+    /** Lifetime in hours (`1` to `720`). */
+    ExpiresInHours: number;
+    /** Optional label identifying the external recipient or review purpose. */
+    Label?: string | null;
+}
+
+/** Output payload returned by `Artifact.CreateGuestShareLink`. */
+export interface CreateGuestShareLinkOutput {
+    /** Unique share link ID (`MJ: Artifact Guest Share Links.ID`). */
+    LinkID: string;
+    /** Backing `MJ: Magic Link Invites.ID` that governs redemption, expiration, revocation, and audit. */
+    MagicLinkInviteID?: string;
+    /** Raw opaque Magic Link token (high-entropy secret redeemed once at `/magic-link/redeem?token=...`). */
+    Token: string;
+    /** Full or relative Magic Link redemption URL (e.g. `'/magic-link/redeem?token=...'` or `'https://api.../magic-link/redeem?token=...'`). */
+    ShareUrlPath: string;
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Target `MJ: Artifact Versions.ID`. */
+    VersionID: string;
+    /** Target `MJ: Artifact Versions.VersionNumber`. */
+    VersionNumber: number;
+    /** Always `'Frozen'` — live data queries never execute externally. */
+    ShareMode: 'Frozen';
+    /** ISO 8601 UTC expiration timestamp. */
+    ExpiresAt: string;
+    /** Optional recipient label. */
+    Label?: string;
+}
+
+/** Single `=MJ.AI(...)` cell evaluation request entry. */
+export interface ArtifactAiFormulaCellRequest {
+    /** Worksheet identifier. */
+    SheetID: string;
+    /** Canonical A1 cell coordinate (e.g. `'C4'`). */
+    Address: string;
+    /** Prompt string extracted from `=MJ.AI(prompt, ...)`. */
+    Prompt: string;
+    /** Serialized resolved values of referenced cells/ranges. */
+    ContextValuesJSON: string;
+    /** Deterministic SHA/FNV input hash for cache deduplication. */
+    InputHash: string;
+}
+
+/** Input payload for `Artifact.EvaluateAiFormula`. */
+export interface ArtifactEvaluateAiFormulaInput {
+    /** Hosting `MJ: Artifacts` ID for mandatory permission & audit attribution. */
+    ArtifactID: string;
+    /** Batch of up to 50 `=MJ.AI(...)` cells explicitly triggered for evaluation. */
+    Cells: ArtifactAiFormulaCellRequest[];
+    /** Optional explicit AI model override name. */
+    ModelOverride?: string | null;
+}
+
+/** Result for a single evaluated `=MJ.AI(...)` cell. */
+export interface ArtifactAiFormulaCellResult {
+    /** Worksheet identifier. */
+    SheetID: string;
+    /** Canonical A1 coordinate. */
+    Address: string;
+    /** Input hash corresponding to this evaluated output. */
+    InputHash: string;
+    /** Evaluated text/scalar value from the LLM. */
+    Value: string;
+    /** Non-fatal cell-level error message if evaluation failed. */
+    ErrorMessage?: string | null;
+    /** True when permission or quota check refused execution. */
+    AccessDenied?: boolean;
+}
+
+/** Output payload for `Artifact.EvaluateAiFormula`. */
+export interface ArtifactEvaluateAiFormulaOutput {
+    /** Evaluated cell results matching requested `Cells`. */
+    Results: ArtifactAiFormulaCellResult[];
+}
+
+export type ArtifactComplianceAuditDetailPrimitive = string | number | boolean | null | undefined;
+
+export type ArtifactComplianceAuditDetails = Record<
+    string,
+    ArtifactComplianceAuditDetailPrimitive | ArtifactComplianceAuditDetailPrimitive[] | Record<string, ArtifactComplianceAuditDetailPrimitive>
+>;
+
+/** Canonical artifact compliance audit event names aligned with `metadata/audit-log-types/`. */
+export type ArtifactComplianceAuditEventName =
+    | 'Artifact Block Frozen'
+    | 'Artifact Connected Drive Sync'
+    | 'Artifact Exported'
+    | 'Artifact Permission Changed'
+    | 'Artifact Guest Share Link';
+
+/** Input payload for `Artifact.LogComplianceAudit`. */
+export interface ArtifactComplianceAuditInput {
+    /** Canonical audit log type name (`MJ: Audit Log Types.Name`). */
+    AuditLogTypeName: ArtifactComplianceAuditEventName | string;
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Optional `MJ: Artifact Versions.ID`. */
+    ArtifactVersionID?: string | null;
+    /** Concise human-readable description stored in `Description`. */
+    Summary: string;
+    /** Optional structured details serialized to `Details` JSON. */
+    Details?: ArtifactComplianceAuditDetails;
+}
+
+/** Output payload returned by `Artifact.LogComplianceAudit`. */
+export interface ArtifactComplianceAuditOutput {
+    /** True when the audit row persisted (false only if DB/metadata is unavailable). */
+    Recorded: boolean;
+    /** Persisted `MJ: Audit Logs.ID` when recorded. */
+    AuditLogID?: string | null;
+}
+
+/** Input payload for `Artifact.RevokeGuestShareLink`. */
+export interface RevokeGuestShareLinkInput {
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Target `MJ: Artifact Versions.ID`. */
+    VersionID: string;
+    /** `LinkID` (`jti`) to revoke. */
+    LinkID: string;
+}
+
+/** Output payload returned by `Artifact.RevokeGuestShareLink`. */
+export interface RevokeGuestShareLinkOutput {
+    /** True when the link was found and marked revoked. */
+    Revoked: boolean;
+    /** Revoked link ID. */
+    LinkID: string;
+    /** ISO 8601 revocation timestamp. */
+    RevokedAt?: string;
+}
+
+/** Input payload for `Artifact.SynthesizeFromSources`. */
+export interface SynthesizeArtifactFromSourcesInput {
+    /** Output artifact format (`'presentation'`, `'document'`, `'spreadsheet'`). */
+    TargetKind: 'presentation' | 'document' | 'spreadsheet' | (string & {});
+    /** Synthesis prompt / goal describing how sources should be combined. */
+    Goal: string;
+    /** Explicit source artifact IDs to read (`CanRead` required on each). */
+    SourceArtifactIds?: string[];
+    /** Optional collection to save the synthesized artifact into (`CanEdit` required). */
+    CollectionId?: string | null;
+    /** Optional title override for the newly created artifact. */
+    Title?: string | null;
+    /** Optional `@handle` of an active MJ AI Agent to author the synthesis. */
+    AgentHandle?: string | null;
+    /** When true (default), preserves live `Artifact` chart/range embeds from Spreadsheet sources. */
+    LinkChartsAndRanges?: boolean;
+}
+
+/** Output payload returned on successful execution of `Artifact.SynthesizeFromSources`. */
+export interface SynthesizeArtifactFromSourcesOutput {
+    /** Created `MJ: Artifacts` ID. */
+    ArtifactID: string;
+    /** Created initial `MJ: Artifact Versions` ID (`v1`). */
+    VersionID: string;
+    /** Version number created (`1`). */
+    VersionNumber: number;
+    /** Final resolved artifact title. */
+    Title: string;
+    /** Resolved `MJ: Artifact Types` name (`Presentation`, `Markdown Document`, or `Excel Spreadsheet`). */
+    ArtifactTypeName: string;
+    /** Count of verified live chart/range embeds included in the synthesized artifact. */
+    LinkedChartCount: number;
+    /** Number of source artifacts combined. */
+    SourceCount: number;
+    /** Non-fatal synthesis/sanitization warnings. */
+    Warnings: string[];
+    /** True when deterministic fallback synthesis was used instead of a structured LLM response. */
+    UsedFallback: boolean;
+    /** `MJ: AIAgentRuns` ID when authored via a named agent handle. */
+    AgentRunID?: string | null;
+    /** Agent name when authored via a named agent handle. */
+    AgentName?: string | null;
+}
+
 /** Input for `Authorization.Check`. */
 export interface AuthorizationCheckInput {
     /**
@@ -1921,6 +2104,91 @@ export class AISkillImportMarkdownOperation extends BaseRemotableOperation<AISki
     public readonly RequiredScope = "aiskill:manage";
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_7b52950236da4223";
+}
+
+// ============================================================
+// Artifact.CreateGuestShareLink — Create Artifact Guest Share Link
+// ============================================================
+/**
+ * Create Artifact Guest Share Link
+ * Issues a Frozen-only expiring read-only external guest share link for a governed artifact version and persists its hashed token record. Implemented by CreateGuestShareLinkServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.CreateGuestShareLink'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactCreateGuestShareLinkOperation extends BaseRemotableOperation<CreateGuestShareLinkInput, CreateGuestShareLinkOutput> {
+    public readonly OperationKey = "Artifact.CreateGuestShareLink";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:share";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_01caf3b2c1223715";
+}
+
+// ============================================================
+// Artifact.EvaluateAiFormula — Evaluate Spreadsheet AI Formulas
+// ============================================================
+/**
+ * Evaluate Spreadsheet AI Formulas
+ * Explicitly evaluates a bounded batch (up to 50 cells) of opt-in =MJ.AI(...) spreadsheet formulas for an authorized editable artifact. Implemented by ArtifactEvaluateAiFormulaServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.EvaluateAiFormula'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactEvaluateAiFormulaOperation extends BaseRemotableOperation<ArtifactEvaluateAiFormulaInput, ArtifactEvaluateAiFormulaOutput> {
+    public readonly OperationKey = "Artifact.EvaluateAiFormula";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:edit";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_cfa9c74da80db2e2";
+}
+
+// ============================================================
+// Artifact.LogComplianceAudit — Log Artifact Compliance Audit
+// ============================================================
+/**
+ * Log Artifact Compliance Audit
+ * Writes a structured compliance audit log entry (MJ: Audit Logs) for block freeze, connected drive sync, export, permission changes, and guest share link events. Implemented by ArtifactComplianceAuditServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.LogComplianceAudit'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactLogComplianceAuditOperation extends BaseRemotableOperation<ArtifactComplianceAuditInput, ArtifactComplianceAuditOutput> {
+    public readonly OperationKey = "Artifact.LogComplianceAudit";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:read";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_c53ebfd4d44baffa";
+}
+
+// ============================================================
+// Artifact.RevokeGuestShareLink — Revoke Artifact Guest Share Link
+// ============================================================
+/**
+ * Revoke Artifact Guest Share Link
+ * Revokes an active Frozen-only external guest share link by LinkID so subsequent resolution requests are rejected immediately. Implemented by RevokeGuestShareLinkServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.RevokeGuestShareLink'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactRevokeGuestShareLinkOperation extends BaseRemotableOperation<RevokeGuestShareLinkInput, RevokeGuestShareLinkOutput> {
+    public readonly OperationKey = "Artifact.RevokeGuestShareLink";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:share";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_5b54645435f81738";
+}
+
+// ============================================================
+// Artifact.SynthesizeFromSources — Synthesize Artifact From Sources
+// ============================================================
+/**
+ * Synthesize Artifact From Sources
+ * Synthesizes a new governed collaborative artifact (Presentation, Markdown Document, or Excel Spreadsheet) from one or more authorized source artifacts, preserving live chart and range embeds. Implemented by SynthesizeArtifactFromSourcesServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.SynthesizeFromSources'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactSynthesizeFromSourcesOperation extends BaseRemotableOperation<SynthesizeArtifactFromSourcesInput, SynthesizeArtifactFromSourcesOutput> {
+    public readonly OperationKey = "Artifact.SynthesizeFromSources";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "artifact:edit";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_f742777b8e08370e";
 }
 
 // ============================================================

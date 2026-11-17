@@ -6,14 +6,17 @@ import {
     DatabaseProviderBase,
     EntityInfo,
     IMetadataProvider,
+    IsPostRunViewProtectedEntity,
+    LogError,
     Metadata,
-    QueryInfo,
     RunView,
     UserInfo,
 } from '@memberjunction/core';
 import {
     MJAIAgentUserPolicyEntity,
     MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule,
+    MJQueryEntityExtended,
+    QueryEngine,
 } from '@memberjunction/core-entities';
 import {
     AgentEntityCrudOperation,
@@ -21,7 +24,7 @@ import {
     EntityAccessEvaluationResult,
 } from '@memberjunction/ai-core-plus';
 import { ClientClauseScreen, RenderPipeline } from '@memberjunction/generic-database-provider';
-import { EscapeSQLString, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 
 type ScalarFieldValue = string | number | boolean | null | undefined;
 type ScalarRecord = Record<string, ScalarFieldValue>;
@@ -622,7 +625,11 @@ export class AgentDataPolicyGuard {
         }
 
         const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
-        const queryInfo = AgentDataPolicyGuard.findStoredQueryInfo(md, queryId, queryName);
+        const lookup = await AgentDataPolicyGuard.findStoredQuery(params, md, queryId, queryName);
+        if ('Blocked' in lookup) {
+            return lookup;
+        }
+        const queryInfo = lookup.Query;
         if (!queryInfo) {
             if (AgentDataPolicyGuard.policyNarrowsEntityReads(policy)) {
                 return {
@@ -928,6 +935,16 @@ export class AgentDataPolicyGuard {
     ): QueryPolicyGuardOutcome {
         const deniedPatterns = new Set<string>();
         for (const entity of entities) {
+            if (IsPostRunViewProtectedEntity(entity.Name)) {
+                return {
+                    Blocked: {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message: `Cannot execute ${ queryLabel }: entity "${ entity.Name }" enforces PostRunView row-level security that raw/stored SQL cannot bypass. Read "${ entity.Name }" with Get Records instead.`,
+                        Params: params.Params,
+                    },
+                };
+            }
             const evalResult = AgentUserPolicyEngine.Instance.EvaluateEntityAccess({
                 policy,
                 contextUser,
@@ -975,28 +992,46 @@ export class AgentDataPolicyGuard {
         };
     }
 
-    private static findStoredQueryInfo(
-        md: IMetadataProvider | undefined,
+    /**
+     * Finds the stored query a `Run Stored Query` call names, from the `QueryEngine` bound to the
+     * caller's provider (`md`): by ID first, then by name (trimmed, case-insensitive). The engine is
+     * loaded on first use. A load failure blocks the query (fail-closed), because the policy cannot
+     * be verified against metadata that could not be read.
+     *
+     * @returns The query, `{ Query: undefined }` when no query matches, or a block on load failure
+     */
+    private static async findStoredQuery(
+        params: RunActionParams,
+        md: IMetadataProvider,
         queryId: string | undefined,
         queryName: string | undefined
-    ): QueryInfo | undefined {
-        const queries = md?.Queries ?? [];
-        if (queryId) {
-            const byId = queries.find((q) => UUIDsEqual(q.ID, queryId));
-            if (byId) {
-                return byId;
-            }
+    ): Promise<{ Query: MJQueryEntityExtended | undefined } | { Blocked: ActionResultSimple }> {
+        const engine = QueryEngine.GetProviderInstance(md, QueryEngine) as QueryEngine;
+        try {
+            await engine.Config(false, params.ContextUser, md);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`AgentDataPolicyGuard: loading query metadata failed: ${msg}`);
+            return {
+                Blocked: {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    // The cause is logged above, not returned: it can carry database detail.
+                    Message: 'Stored query metadata could not be loaded to verify agent data-access policy; refusing stored query (fail-closed).',
+                    Params: params.Params,
+                },
+            };
         }
-        if (queryName) {
-            const target = queryName.trim().toLowerCase();
-            return queries.find((q) => q.Name?.trim().toLowerCase() === target);
+        const byId = queryId ? engine.FindQueryByID(queryId) : undefined;
+        if (byId) {
+            return { Query: byId };
         }
-        return undefined;
+        return { Query: queryName ? engine.FindQueryByName(queryName) : undefined };
     }
 
     private static renderStoredQuerySql(
         md: IMetadataProvider | undefined,
-        queryInfo: QueryInfo,
+        queryInfo: MJQueryEntityExtended,
         contextUser: UserInfo,
         queryParameters?: Record<string, string>
     ): { renderedSql: string | null } | { blockedMessage: string } {
@@ -1020,7 +1055,7 @@ export class AgentDataPolicyGuard {
                 QueryInfo: {
                     SQL: rawSql,
                     UsesTemplate: Boolean(queryInfo.UsesTemplate),
-                    Parameters: queryInfo.Parameters,
+                    Parameters: queryInfo.QueryParameters,
                 },
             });
             return { renderedSql: rendered.Trace.AfterTemplates };
@@ -1034,14 +1069,14 @@ export class AgentDataPolicyGuard {
 
     private static resolveStoredQueryEntities(
         md: IMetadataProvider | undefined,
-        queryInfo: QueryInfo,
+        queryInfo: MJQueryEntityExtended,
         renderedSql: string | null,
         policyNarrowsReads: boolean
     ): EntityInfo[] | null {
         const entities = md?.Entities ?? [];
         const entityById = IndexByUUID(entities);
         const resolved = new Map<string, EntityInfo>();
-        for (const qe of queryInfo.Entities ?? []) {
+        for (const qe of queryInfo.QueryEntities ?? []) {
             const match =
                 (qe.EntityID ? entityById.Get(qe.EntityID) : undefined) ??
                 (qe.Entity ? entities.find((e) => e.Name.trim().toLowerCase() === qe.Entity.trim().toLowerCase()) : undefined);

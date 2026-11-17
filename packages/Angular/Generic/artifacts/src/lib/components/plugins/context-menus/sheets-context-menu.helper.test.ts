@@ -618,4 +618,75 @@ describe('BuildSheetsContextMenu', () => {
       expect(findAction(rowItems, 'sheets-row-hide')?.Disabled).toBe(true);
     });
   });
+
+  describe('NW-4 & Lock Governance Actions', () => {
+    it('adds merge/unmerge, validation, conditional format, named range, lock, and suggestion items on cell menus', () => {
+      const multiCellItems = BuildSheetsContextMenu({
+        CanEdit: true,
+        CanComment: true,
+        CanManageDocumentLocks: true,
+        HasClipboardData: false,
+        ClipboardSourceRangeA1: null,
+        Target: makeCellTarget({
+          StartRow: 1,
+          EndRow: 2,
+          StartCol: 1,
+          EndCol: 3,
+          RangeA1: 'A1:C2',
+          HasMergedCells: true,
+          IsRangeProtected: true,
+          CanUnlockRange: false,
+        }),
+      });
+
+      expect(findAction(multiCellItems, 'sheets-merge-cells')?.Command).toEqual({
+        Type: 'merge-cells',
+        RangeA1: 'A1:C2',
+      });
+      expect(findAction(multiCellItems, 'sheets-unmerge-cells')?.Command).toEqual({
+        Type: 'unmerge-cells',
+        RangeA1: 'A1:C2',
+      });
+      expect(findAction(multiCellItems, 'sheets-data-validation')?.Command).toEqual({
+        Type: 'open-validation-drawer',
+        RangeA1: 'A1:C2',
+      });
+      expect(findAction(multiCellItems, 'sheets-conditional-format')?.Command).toEqual({
+        Type: 'open-conditional-format-drawer',
+        RangeA1: 'A1:C2',
+      });
+      expect(findAction(multiCellItems, 'sheets-define-named-range')?.Command).toEqual({
+        Type: 'open-named-range-modal',
+        RangeA1: 'A1:C2',
+      });
+      expect(findAction(multiCellItems, 'sheets-propose-suggestion')?.Disabled).toBeFalsy();
+      expect(findAction(multiCellItems, 'sheets-toggle-range-protection')?.Label).toContain('Unprotect');
+      expect(findAction(multiCellItems, 'sheets-toggle-range-protection')?.Disabled).toBe(true);
+    });
+
+    it('disables live-table mutation and freeze toggle actions when protected or lacking lock permissions', () => {
+      const items = BuildSheetsContextMenu({
+        CanEdit: true,
+        CanComment: false,
+        CanManageDocumentLocks: false,
+        HasClipboardData: false,
+        ClipboardSourceRangeA1: null,
+        Target: {
+          Kind: 'live-table',
+          SheetID: 'sheet-1',
+          TableID: 'tbl-1',
+          Title: 'Protected View',
+          Mode: 'Live',
+          RangeA1: 'A1:C5',
+          ProtectedReason: 'Range A1:C5 is locked',
+        },
+      });
+
+      expect(findAction(items, 'sheets-live-table-refresh')?.Disabled).toBe(true);
+      expect(findAction(items, 'sheets-live-table-toggle-mode')?.Disabled).toBe(true);
+      expect(findAction(items, 'sheets-live-table-edit')?.Disabled).toBe(true);
+      expect(findAction(items, 'sheets-live-table-delete')?.Disabled).toBe(true);
+      expect(findAction(items, 'sheets-live-table-select-range')?.Disabled).toBeFalsy();
+    });
+  });
 });

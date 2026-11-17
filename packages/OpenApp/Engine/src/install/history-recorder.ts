@@ -26,6 +26,8 @@ import type { MJAppManifest } from '../manifest/manifest-schema.js';
  * @param callbacks - Progress callbacks
  * @param transactionGroup - Optional TransactionGroup for atomic batching
  * @param initialStatus - Status to set on the record (default: 'Active')
+ * @param subpath - The app's folder in a multi-app repository
+ * @param repositoryUrl - The source locator to store as RepositoryURL (default: `manifest.repository`)
  * @returns The OpenApp record ID (pre-generated for new, existing for reinstall)
  */
 export async function RecordAppInstallation(
@@ -36,6 +38,7 @@ export async function RecordAppInstallation(
   initialStatus: AppStatus = 'Active',
   provider?: IMetadataProvider,
   subpath?: string,
+  repositoryUrl?: string,
 ): Promise<string> {
   callbacks?.OnProgress?.('Record', 'Recording app installation...');
 
@@ -51,7 +54,7 @@ export async function RecordAppInstallation(
     entity.NewRecord();
   }
 
-  SetAppFields(entity, manifest, contextUser, initialStatus, subpath);
+  SetAppFields(entity, manifest, contextUser, initialStatus, subpath, repositoryUrl);
 
   if (transactionGroup) {
     entity.TransactionGroup = transactionGroup;
@@ -76,6 +79,7 @@ function SetAppFields(
   contextUser: UserInfo,
   status: AppStatus = 'Active',
   subpath?: string,
+  repositoryUrl?: string,
 ): void {
   entity.Name = manifest.name;
   entity.DisplayName = manifest.displayName;
@@ -84,7 +88,8 @@ function SetAppFields(
   entity.Publisher = manifest.publisher.name;
   entity.PublisherEmail = manifest.publisher.email ?? null;
   entity.PublisherURL = manifest.publisher.url ?? null;
-  entity.RepositoryURL = manifest.repository;
+  // Where upgrade and remove find the app again: the source locator, else the manifest's repository.
+  entity.RepositoryURL = repositoryUrl ?? manifest.repository;
   // Subpath persists which in-repo directory a multi-app repo installed from, so
   // upgrade/remove re-fetch the right manifest. null = manifest at the repo root.
   entity.Subpath = subpath ?? null;

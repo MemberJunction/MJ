@@ -24,7 +24,7 @@ import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation, AgentPayloadChangeRequest,
          FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec,
-    ConfigOf, AgentResponseForm, AgentFinishIf, type AgentHandoffRequest } from '@memberjunction/ai-core-plus';
+    ConfigOf, AgentResponseForm, AgentFinishIf, type AgentHandoffRequest, type ArtifactDirective, type ArtifactJsonValue } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended, type AgentToolCallRequest } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse, LOOP_NEXT_STEP_TYPES } from './loop-agent-response-type';
@@ -691,12 +691,46 @@ export class LoopAgentType extends BaseAgentType {
             return this.createRetryStep('complete_task.payloadChangeRequest must be an object (newElements / updateElements / replaceElements / removeElements), or be omitted.'
                 + ` Problem: ${decoded.error}`);
         }
+        const directiveDecoded = this.decodeArtifactDirectiveArgument(
+            complete.call.arguments?.artifactDirective as ArtifactJsonValue | ArtifactDirective | undefined
+        );
+        if ('error' in directiveDecoded) {
+            return this.createRetryStep('complete_task.artifactDirective must be an object ({ behavior, targetArtifactId?, name?, description? }), or be omitted.'
+                + ` Problem: ${directiveDecoded.error}`);
+        }
         const payloadChangeRequest = decoded.payloadChangeRequest;
         return this.createSuccessStep({
             ...(message ? { message } : {}),
             payloadChangeRequest,
+            ...(directiveDecoded.artifactDirective ? { artifactDirective: directiveDecoded.artifactDirective } : {}),
             payloadToolCallId: complete.call.id
         });
+    }
+
+    /**
+     * Reads `complete_task.artifactDirective`: undefined when absent, or validated `ArtifactDirective`.
+     */
+    private decodeArtifactDirectiveArgument(
+        value: ArtifactJsonValue | ArtifactDirective | undefined
+    ): { artifactDirective?: ArtifactDirective } | { error: string } {
+        if (value === undefined || value === null) {
+            return {};
+        }
+        if (typeof value === 'string' && (value.trim() === '' || value.trim() === 'null')) {
+            return {};
+        }
+        let candidate: ArtifactJsonValue | ArtifactDirective | undefined = value;
+        if (typeof value === 'string') {
+            const decoded = DecodeJSONArgument(value);
+            if ('Error' in decoded) {
+                return { error: decoded.Error };
+            }
+            candidate = decoded.Value as ArtifactJsonValue;
+        }
+        if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
+            return { error: 'the value is not a JSON object' };
+        }
+        return { artifactDirective: candidate as ArtifactDirective };
     }
 
     /**

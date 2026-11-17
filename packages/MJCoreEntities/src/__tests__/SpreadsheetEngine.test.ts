@@ -10,19 +10,29 @@ import {
     EncodeUtf8Fallback,
     FormatCellAddress,
     IsSafeUserRegex,
+    MAX_IMPORT_WORKBOOK_CELLS,
+    MAX_PROTECTED_RANGES_PER_WORKBOOK,
+    MAX_VALIDATION_ALLOWED_VALUES,
     ParseCellAddress,
     ParseRangeAddress,
     RegisterSafeRegexBatchSandboxExecutor,
     RegisterSafeRegexSandboxExecutor,
+    RegisterSpreadsheetWorkerRunner,
     SafeRegexSearchBatchDetailed,
     SafeRegexSearchDetailed,
     SafeRegexTest,
+    SetSpreadsheetWorkerIsolationRequired,
     SpreadsheetEngine,
     SpreadsheetLiveTableSpec,
     ValidateExtraFilter,
     XlsxOpenXmlAdapter
 } from '../custom/SpreadsheetEngine';
+import {
+    MakePreParsedWorkbookCacheKey,
+    ValidateArtifactContentMutationAgainstLocks
+} from '../custom/ArtifactLockValidation';
 import { SlideDeckEngine } from '../custom/SlideDeckEngine';
+import { QueryEngine } from '../engines/QueryEngine';
 import {
     ComputeFrozenSnapshotHash,
     DocumentBlockExecutionResult,
@@ -174,24 +184,30 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const allowedUser = createMockUser('u-allowed', 'Alice Admin', true);
         const deniedUser = createMockUser('u-denied', 'Bob Restricted', false);
 
+        // The query comes from the provider's QueryEngine; the deprecated provider query list stays empty.
+        const duesQuery = {
+            ID: '11111111-2222-3333-4444-555555555555',
+            Name: 'Regional Dues Query',
+            Status: 'Approved',
+            QueryFields: [
+                { Name: 'Region', Sequence: 1, SQLBaseType: 'nvarchar' },
+                { Name: 'Amount', Sequence: 2, SQLBaseType: 'decimal' }
+            ],
+            QueryParameters: [
+                { Name: 'Year', IsServerSet: false, IsRequired: false },
+                { Name: 'TenantID', IsServerSet: true, IsRequired: false }
+            ],
+            QueryEntities: [],
+            UserCanRun: (u: UserInfo) => ({ canRun: u.ID === allowedUser.ID, deniedEntities: [] })
+        };
+        vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue({
+            Config: vi.fn().mockResolvedValue(undefined),
+            Queries: [duesQuery]
+        } as unknown as QueryEngine);
+
         const mockProvider = {
             Entities: [],
-            Queries: [
-                {
-                    ID: '11111111-2222-3333-4444-555555555555',
-                    Name: 'Regional Dues Query',
-                    Status: 'Approved',
-                    Fields: [
-                        { Name: 'Region', Sequence: 1, SQLBaseType: 'nvarchar' },
-                        { Name: 'Amount', Sequence: 2, SQLBaseType: 'decimal' }
-                    ],
-                    Parameters: [
-                        { Name: 'Year', IsServerSet: false, IsRequired: false },
-                        { Name: 'TenantID', IsServerSet: true, IsRequired: false }
-                    ],
-                    UserCanRun: (u: UserInfo) => u.ID === allowedUser.ID
-                }
-            ],
+            Queries: [],
             RunQuery: async () => ({
                 Success: true,
                 Results: [
@@ -236,6 +252,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         );
         expect(frozen.Mode).toBe('Frozen');
         expect(frozen.FrozenSnapshot?.FrozenByUserID).toBe(allowedUser.ID);
+        vi.restoreAllMocks();
     });
 
     it('§ 6.3 & § 7.2: evaluates =MJ.QUERY and =MJ.VIEW custom functions with viewer scoping, 60s cache, and #MJ_ACCESS_DENIED!', async () => {
@@ -262,18 +279,30 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const allowedUser = createMockUser('u-1', 'Alice', true);
         const deniedUser = createMockUser('u-2', 'Bob', false);
 
+        // The query comes from the provider's QueryEngine; the deprecated provider query list stays empty.
+        const renewals = {
+            ID: '99999999-8888-7777-6666-555555555555',
+            Name: 'Renewals by Month',
+            Status: 'Approved',
+            QueryFields: [{ Name: 'TotalRenewals', Sequence: 1, SQLBaseType: 'decimal' }],
+            QueryParameters: [{ Name: 'Year', IsServerSet: false, IsRequired: false }],
+            QueryEntities: [],
+            UserCanRun: (u: UserInfo) => ({ canRun: u.ID === allowedUser.ID, deniedEntities: [] })
+        };
+        const sameQuery = (target: string) =>
+            target.trim().toLowerCase() === renewals.ID.toLowerCase() || target.trim().toLowerCase() === renewals.Name.toLowerCase()
+                ? renewals
+                : undefined;
+        vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue({
+            Config: vi.fn().mockResolvedValue(undefined),
+            Queries: [renewals],
+            FindQueryByID: sameQuery,
+            FindQueryByName: sameQuery
+        } as unknown as QueryEngine);
+
         const mockProvider = {
             Entities: [],
-            Queries: [
-                {
-                    ID: '99999999-8888-7777-6666-555555555555',
-                    Name: 'Renewals by Month',
-                    Status: 'Approved',
-                    Fields: [{ Name: 'TotalRenewals', Sequence: 1, SQLBaseType: 'decimal' }],
-                    Parameters: [{ Name: 'Year', IsServerSet: false, IsRequired: false }],
-                    UserCanRun: (u: UserInfo) => u.ID === allowedUser.ID
-                }
-            ],
+            Queries: [],
             RunQuery: async () => {
                 queryCallCount++;
                 return {
@@ -304,6 +333,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         await engine.EvaluateMjCustomFunctions(wb, deniedUser, mockProvider);
         expect(sheet.Cells['B2'].AccessDenied).toBe(true);
         expect(sheet.Cells['B2'].ComputedValue).toBe('#MJ_ACCESS_DENIED!');
+        vi.restoreAllMocks();
     });
 
     it('Accept #4: round-trips multi-sheet workbooks with formulas, formats, and column widths through .xlsx OpenXML bytes', () => {
@@ -365,7 +395,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
 
         let latestSheetSerialized = engine.SerializeWorkbook(sheetWb);
         const sheetArtifactId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-        const viewer = createMockUser('u-slide-viewer', 'Carol Viewer', true);
+        const viewer = createMockUser('33333333-4444-4444-8444-333333333333', 'Carol Viewer', true);
 
         // Create a slide deck with a chart region referencing the Sheet's chart-q-rev
         const slideEngine = SlideDeckEngine.Instance;
@@ -429,6 +459,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
 
         const mockProvider = {
             Entities: [],
+            EntityByName: () => undefined,
             Queries: [],
             RunView: runSingleMockView,
             RunViews: async (paramsList: Array<{ EntityName: string }>) =>
@@ -701,6 +732,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         let lastExtraFilter = '';
         const provider = {
             Entities: [mockEntity],
+            EntityByName: (name: string) => (name === mockEntity.Name ? mockEntity : undefined),
             Queries: [],
             RunView: async (params: { ExtraFilter?: string }) => {
                 lastExtraFilter = params.ExtraFilter ?? '';
@@ -895,6 +927,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         } as unknown as EntityInfo;
         const provider = {
             Entities: [mockEmpEntity],
+            EntityByName: (name: string) => (name === mockEmpEntity.Name ? mockEmpEntity : undefined),
             Queries: [],
             RunView: async () => ({
                 Success: true,
@@ -1007,13 +1040,13 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(engine.EvaluateFormulaExpression(multiWb, 'Q1 Revenue', '=SUM(2:2)')).toBe(41);
 
         // Denied live table propagates #MJ_ACCESS_DENIED! across all table cells and cannot be masked by IFERROR or COUNT
+        const deniedEmpEntity = {
+            ...mockEmpEntity,
+            GetUserPermisions: () => ({ CanRead: false })
+        } as unknown as EntityInfo;
         const deniedProvider = {
-            Entities: [
-                {
-                    ...mockEmpEntity,
-                    GetUserPermisions: () => ({ CanRead: false })
-                }
-            ],
+            Entities: [deniedEmpEntity],
+            EntityByName: (name: string) => (name === deniedEmpEntity.Name ? deniedEmpEntity : undefined),
             Queries: [],
             RunView: async () => ({ Success: false, Results: [], TotalRowCount: 0 })
         } as unknown as IMetadataProvider;
@@ -1056,6 +1089,11 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         };
 
         // Pre-compute a server-signed snapshot while secret is available
+        const binding = {
+            BlockID: table.TableID,
+            Kind: table.SourceType,
+            SourceTargetID: table.EntityName
+        };
         const serverSignedHash = ComputeFrozenSnapshotHash({
             FrozenAt: '2026-11-10T20:00:00.000Z',
             FrozenByUserID: 'user-1',
@@ -1063,7 +1101,8 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             Columns: execResult.Columns,
             Rows: execResult.Rows,
             TotalRowCount: 2,
-            SecurityWarningAcknowledged: true
+            SecurityWarningAcknowledged: true,
+            Binding: binding
         });
         const preSigned: DocumentFrozenSnapshot = {
             FrozenAt: '2026-11-10T20:00:00.000Z',
@@ -1073,6 +1112,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             Rows: execResult.Rows,
             TotalRowCount: 2,
             SecurityWarningAcknowledged: true,
+            Binding: binding,
             SnapshotContentHash: serverSignedHash
         };
 
@@ -1226,7 +1266,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(xmlB).toContain('<f>G5*2</f><v>80</v>');
         // Newly edited future functions get _xlfn. prefix in both PatchXlsxBytes and ExportToXlsxBytes, and A1 keeps cm="1" + t="array" with updated non-stale ref="A1" while omitting <v>#NAME?</v>!
         expect(xmlB).toContain('cm="1"');
-        expect(xmlB).toContain('<f t="array" ref="A1">_xlfn.SEQUENCE(5, 1, 10)</f></c>');
+        expect(xmlB).toContain('<f t="array" ref="A1">_xlfn.SEQUENCE(5, 1, 10)</f><v>10</v></c>');
         expect(xmlB).not.toContain('#NAME?');
         expect(xmlB).toContain('<f>_xlfn.XLOOKUP(20, G2:G5, H2:H5)</f><v>40</v>');
 
@@ -1363,26 +1403,30 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(wb, s.SheetID, 'B2', { Value: 0 }, false);
         engine.SetCell(wb, s.SheetID, 'B3', { Value: 1 }, true);
 
-        // Unimplemented dynamic-array functions must return honest #NAME? (never silent wrong numbers!)
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SEQUENCE(3)')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(SEQUENCE(3))')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SORT(A1:A3, 1, -1)')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SORTBY(A1:A3, B1:B3)')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=FILTER(A1:A3, B1:B3=1)')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=UNIQUE(A1:A3)')).toBe('#NAME?');
+        // Implemented NW-4 dynamic-array & lexical functions evaluate accurately; unimplemented ones still return honest #NAME?
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SEQUENCE(3)')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(SEQUENCE(3))')).toBe(6);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SORT(A1:A3, 1, -1)')).toBe(30);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SORTBY(A1:A3, B1:B3)')).toBe(10);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=FILTER(A1:A3, B1:B3=1)')).toBe(30);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=UNIQUE(A1:A3)')).toBe(30);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=LET(x, 5, x + 1)')).toBe(6);
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=RANDARRAY()')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=LET(x, 5, x + 1)')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(RANDARRAY(3))')).toBe('#NAME?');
 
-        // Accurate scalar future functions keep working and round-trip with _xlfn.IFNA and _xlfn.DAYS
+        // Accurate scalar future functions keep working and round-trip with _xlfn.IFNA and _xlfn.DAYS;
+        // unimplemented RANDARRAY omits <v> while implemented SORT/FILTER emit computed <v> and _xlfn._xlws.
         engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=IFNA(VLOOKUP(999, A1:B3, 2, FALSE), 42)' }, false);
         engine.SetCell(wb, s.SheetID, 'D2', { Formula: '=DAYS(DATE(2026, 1, 15), DATE(2026, 1, 5))' }, false);
-        engine.SetCell(wb, s.SheetID, 'D3', { Formula: '=SORT(A1:A3, 1, -1)' }, false);
-        engine.SetCell(wb, s.SheetID, 'D4', { Formula: '=FILTER(A1:A3, B1:B3=1)' }, true);
+        engine.SetCell(wb, s.SheetID, 'D3', { Formula: '=RANDARRAY(2)' }, false);
+        engine.SetCell(wb, s.SheetID, 'G1', { Formula: '=SORT(A1:A3, 1, -1)' }, false);
+        engine.SetCell(wb, s.SheetID, 'H1', { Formula: '=FILTER(A1:A3, B1:B3=1)' }, true);
 
         expect(s.Cells['D1']?.ComputedValue).toBe(42);
         expect(s.Cells['D2']?.ComputedValue).toBe(10);
         expect(s.Cells['D3']?.ComputedValue).toBe('#NAME?');
-        expect(s.Cells['D4']?.ComputedValue).toBe('#NAME?');
+        expect(s.Cells['G1']?.ComputedValue).toBe(30);
+        expect(s.Cells['H1']?.ComputedValue).toBe(30);
 
         const decoder = new TextDecoder();
         const encoder = new TextEncoder();
@@ -1392,8 +1436,9 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
 
         expect(sheetXml).toContain('<f>_xlfn.IFNA(VLOOKUP(999, A1:B3, 2, FALSE), 42)</f><v>42</v>');
         expect(sheetXml).toContain('<f>_xlfn.DAYS(DATE(2026, 1, 15), DATE(2026, 1, 5))</f><v>10</v>');
-        expect(sheetXml).toContain('<c r="D3" cm="1"><f t="array" ref="D3">_xlfn._xlws.SORT(A1:A3, 1, -1)</f></c>');
-        expect(sheetXml).toContain('<c r="D4" cm="1"><f t="array" ref="D4">_xlfn._xlws.FILTER(A1:A3, B1:B3=1)</f></c>');
+        expect(sheetXml).toContain('<c r="D3" cm="1"><f t="array" ref="D3">_xlfn.RANDARRAY(2)</f></c>');
+        expect(sheetXml).toContain('<c r="G1" cm="1" t="n"><f t="array" ref="G1">_xlfn._xlws.SORT(A1:A3, 1, -1)</f><v>30</v></c>');
+        expect(sheetXml).toContain('<c r="H1" cm="1" t="n"><f t="array" ref="H1">_xlfn._xlws.FILTER(A1:A3, B1:B3=1)</f><v>30</v></c>');
         expect(sheetXml).not.toContain('#NAME?');
         expect(exportedFiles.has('xl/metadata.xml')).toBe(true);
 
@@ -1404,8 +1449,8 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(rs.Cells['D1']?.ComputedValue).toBe(42);
         expect(rs.Cells['D2']?.Formula).toBe('=DAYS(DATE(2026, 1, 15), DATE(2026, 1, 5))');
         expect(rs.Cells['D2']?.ComputedValue).toBe(10);
-        expect(rs.Cells['D3']?.Formula).toBe('=SORT(A1:A3, 1, -1)');
-        expect(rs.Cells['D4']?.Formula).toBe('=FILTER(A1:A3, B1:B3=1)');
+        expect(rs.Cells['G1']?.Formula).toBe('=SORT(A1:A3, 1, -1)');
+        expect(rs.Cells['H1']?.Formula).toBe('=FILTER(A1:A3, B1:B3=1)');
 
         // Legacy CSE formula (<f t="array" ref="E1:E3">SUM(A1:A3)</f> without cm="1") preserves t="array" ref="E1:E3" on edit!
         const cseSheetXml = sheetXml.replace(
@@ -1422,7 +1467,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const csePatchedBytes = engine.PatchXlsxBytes(cseSeedBytes, cseWb);
         const csePatchedXml = decoder.decode(engine.ExtractZipArchive(csePatchedBytes).get('xl/worksheets/sheet1.xml')!);
         expect(csePatchedXml).toContain('<c r="E9" t="n"><f t="array" ref="E9:E10">SUM(A1:A3)</f><v>60</v></c>');
-        expect(csePatchedXml).toContain('<c r="F9" cm="1"><f t="array" ref="F9">_xlfn.SEQUENCE(4)</f></c>');
+        expect(csePatchedXml).toContain('<c r="F9" cm="1" t="n"><f t="array" ref="F9">_xlfn.SEQUENCE(4)</f><v>1</v></c>');
         expect(csePatchedXml).not.toContain('#NAME?');
     });
 
@@ -1727,10 +1772,10 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         for (let r = 1; r <= 5; r++) {
             engine.SetCell(wb, s.SheetID, `A${r}`, { Value: r * 10 }, false);
         }
-        engine.SetCell(wb, s.SheetID, 'B1', { Formula: '=ROWS(UNIQUE(A1:A5))' }, false);
-        engine.SetCell(wb, s.SheetID, 'B2', { Formula: '=COLUMNS(UNIQUE(A1:A5))' }, false);
-        engine.SetCell(wb, s.SheetID, 'B3', { Formula: '=COUNTA(UNIQUE(A1:A5))' }, false);
-        engine.SetCell(wb, s.SheetID, 'B4', { Formula: '=IFERROR(SORT(A1:A5), 0)' }, false);
+        engine.SetCell(wb, s.SheetID, 'B1', { Formula: '=ROWS(RANDARRAY(5))' }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Formula: '=COLUMNS(TAKE(A1:A5, 2))' }, false);
+        engine.SetCell(wb, s.SheetID, 'B3', { Formula: '=COUNTA(RANDARRAY(5))' }, false);
+        engine.SetCell(wb, s.SheetID, 'B4', { Formula: '=IFERROR(TAKE(A1:A5, 2), 0)' }, false);
         engine.SetCell(wb, s.SheetID, 'B5', { Formula: '=ROWS(1/0)' }, false);
         engine.SetCell(wb, s.SheetID, 'B6', { Formula: '=COLUMNS(1/0)' }, true);
 
@@ -1755,8 +1800,8 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(baseWb, 'Sheet1', 'A1', { Value: 10 }, true);
         const seedBytes = engine.ExportToXlsxBytes(baseWb, false);
         const imported = engine.ImportFromXlsxBytes(seedBytes);
-        engine.SetCell(imported, 'Sheet1', 'C1', { Formula: '=ROWS(UNIQUE(A1:A5))' }, false);
-        engine.SetCell(imported, 'Sheet1', 'C2', { Formula: '=IFERROR(SORT(A1:A5), 0)' }, true);
+        engine.SetCell(imported, 'Sheet1', 'C1', { Formula: '=ROWS(RANDARRAY(5))' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C2', { Formula: '=IFERROR(TAKE(A1:A5, 2), 0)' }, true);
         const patchedBytes = engine.PatchXlsxBytes(seedBytes, imported);
         const patchedXml = decoder.decode(engine.ExtractZipArchive(patchedBytes).get('xl/worksheets/sheet1.xml')!);
         for (const addr of ['C1', 'C2']) {
@@ -1791,7 +1836,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         );
 
         const editWb1 = engine.ImportFromXlsxBytes(seedValueOnlyBytes);
-        engine.SetCell(editWb1, 'Sheet1', 'B1', { Formula: '=UNIQUE(A1:A2)' }, false);
+        engine.SetCell(editWb1, 'Sheet1', 'C1', { Formula: '=UNIQUE(A1:A2)' }, false);
         engine.SetCell(editWb1, 'Sheet1', 'B2', { Formula: '=LET(x, 1, y, 2, x+y)' }, false);
         engine.SetCell(
             editWb1,
@@ -1809,7 +1854,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(metaXml1).toContain('name="XLDAPR"');
         expect(metaXml1).toContain('<futureMetadata name="XLDAPR"');
         expect(metaXml1).toContain('<cellMetadata count="1"><bk><rc t="2" v="0"/></bk></cellMetadata>');
-        expect(sheetXml1).toContain('<c r="B1" cm="1"><f t="array" ref="B1">_xlfn.UNIQUE(A1:A2)</f></c>');
+        expect(sheetXml1).toContain('<c r="C1" cm="1" t="n"><f t="array" ref="C1">_xlfn.UNIQUE(A1:A2)</f><v>10</v></c>');
         expect(sheetXml1).toContain('<f>_xlfn.LET(_xlpm.x, 1, _xlpm.y, 2, _xlpm.x+_xlpm.y)</f>');
         expect(sheetXml1).toContain(
             '<f>_xlfn.LET(_xlpm.rate, 5, IF(_xlpm.rate&gt;0, &quot;rate&quot;, Sheet1!A1 + SUM(_xlpm.rate)))</f>'
@@ -1842,7 +1887,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             '<cellMetadata count="2"><bk><rc t="1" v="0"/></bk><bk><rc t="2" v="0"/></bk></cellMetadata>'
         );
         expect(decoder.decode(patchedFiles2.get('xl/worksheets/sheet1.xml')!)).toContain(
-            '<c r="B1" cm="2"><f t="array" ref="B1">_xlfn.UNIQUE(A1:A2)</f></c>'
+            '<c r="B1" cm="2" t="n"><f t="array" ref="B1">_xlfn.UNIQUE(A1:A2)</f><v>10</v></c>'
         );
 
         // 2. Item 5.2: Sparse COUNTIF / SUMIF on A:A with A1000000 = 42 runs in < 50ms
@@ -1930,9 +1975,9 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             engine.SetCell(wb, s.SheetID, `A${r}`, { Value: r }, false);
             engine.SetCell(wb, s.SheetID, `B${r}`, { Value: r * 10 }, false);
         }
-        engine.SetCell(wb, s.SheetID, 'C1', { Formula: '=IFERROR(MATCH(1, SORT(A1:A5), 0), 0)' }, false);
-        engine.SetCell(wb, s.SheetID, 'C2', { Formula: '=COUNTIFS(UNIQUE(A1:A5), ">1")' }, false);
-        engine.SetCell(wb, s.SheetID, 'C3', { Formula: '=XLOOKUP(1, SORT(A1:A5), SORT(A1:A5), "none")' }, false);
+        engine.SetCell(wb, s.SheetID, 'C1', { Formula: '=IFERROR(MATCH(1, TAKE(A1:A5, 2), 0), 0)' }, false);
+        engine.SetCell(wb, s.SheetID, 'C2', { Formula: '=COUNTIFS(RANDARRAY(5), ">1")' }, false);
+        engine.SetCell(wb, s.SheetID, 'C3', { Formula: '=XLOOKUP(1, TAKE(A1:A5, 2), TAKE(A1:A5, 2), "none")' }, false);
         engine.SetCell(wb, s.SheetID, 'C4', { Formula: '=IFERROR(LARGE(B1:B5, 2), 0)' }, false);
         engine.SetCell(wb, s.SheetID, 'C5', { Formula: '=LARGE(B1:B5, 2)' }, false);
         engine.SetCell(wb, s.SheetID, 'D5', { Formula: '=IFERROR(C5, 99)' }, true);
@@ -1959,9 +2004,9 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             engine.SetCell(imported, 'Sheet1', `A${r}`, { Value: r }, false);
             engine.SetCell(imported, 'Sheet1', `B${r}`, { Value: r * 10 }, false);
         }
-        engine.SetCell(imported, 'Sheet1', 'C1', { Formula: '=IFERROR(MATCH(1, SORT(A1:A5), 0), 0)' }, false);
-        engine.SetCell(imported, 'Sheet1', 'C2', { Formula: '=COUNTIFS(UNIQUE(A1:A5), ">1")' }, false);
-        engine.SetCell(imported, 'Sheet1', 'C3', { Formula: '=XLOOKUP(1, SORT(A1:A5), SORT(A1:A5), "none")' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C1', { Formula: '=IFERROR(MATCH(1, TAKE(A1:A5, 2), 0), 0)' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C2', { Formula: '=COUNTIFS(RANDARRAY(5), ">1")' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C3', { Formula: '=XLOOKUP(1, TAKE(A1:A5, 2), TAKE(A1:A5, 2), "none")' }, false);
         engine.SetCell(imported, 'Sheet1', 'C4', { Formula: '=IFERROR(LARGE(B1:B5, 2), 0)' }, false);
         engine.SetCell(imported, 'Sheet1', 'C5', { Formula: '=LARGE(B1:B5, 2)' }, false);
         engine.SetCell(imported, 'Sheet1', 'D5', { Formula: '=IFERROR(C5, 99)' }, true);
@@ -2013,7 +2058,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const patchedBytes = engine.PatchXlsxBytes(seedXlsx, imported);
         const patchedSheetXml = decoder.decode(engine.ExtractZipArchive(patchedBytes).get('xl/worksheets/sheet1.xml')!);
 
-        expect(patchedSheetXml).toContain('<c r="I6" cm="1"><f t="array" ref="I6">_xlfn.SEQUENCE(5)</f></c>');
+        expect(patchedSheetXml).toContain('<c r="I6" cm="1" t="n"><f t="array" ref="I6">_xlfn.SEQUENCE(5)</f><v>1</v></c>');
         expect(patchedSheetXml).not.toContain('<v>2</v>');
         expect(patchedSheetXml).not.toContain('<v>3</v>');
     });
@@ -2066,6 +2111,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         vi.spyOn(deployEntity, 'GetUserPermisions').mockReturnValue(baseUserPerm);
         const mockProvider: IMetadataProvider = Object.assign({}, Metadata.Provider, {
             Entities: [deployEntity],
+            EntityByName: (name: string) => (name === deployEntity.Name ? deployEntity : undefined),
             Queries: [],
             RunView: vi.fn().mockResolvedValue({
                 Success: true,
@@ -2572,7 +2618,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(wb, s.SheetID, 'A2', { Value: 2 }, false);
         engine.SetCell(wb, s.SheetID, 'A3', { Value: 3 }, false);
         engine.SetCell(wb, s.SheetID, 'B1', { Value: 'x' }, false);
-        engine.SetCell(wb, s.SheetID, 'B2', { Formula: '=SORT(D1:D3)' }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Formula: '=RANDARRAY(3)' }, false);
         engine.SetCell(wb, s.SheetID, 'B3', { Value: 'x' }, false);
         engine.SetCell(wb, s.SheetID, 'C1', { Value: 'y' }, false);
         engine.SetCell(wb, s.SheetID, 'C2', { Value: 'y' }, false);
@@ -2833,7 +2879,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(wb, s.SheetID, 'B4', { Value: 40 }, false);
 
         // Case 1: D has unimplemented dynamic array
-        engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=UNIQUE(A1:A4)' }, true);
+        engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=TAKE(A1:A4, 2)' }, true);
         expect(s.Cells['D1']?.ComputedValue).toBe('#NAME?');
 
         // In both argument orders, SUMIFS must produce #NAME? when the row matches the other criterion
@@ -2863,9 +2909,9 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "zz", D1:D4, ">1")')).toBe(0);
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(D1:D4, ">1", A1:A4, "zz")')).toBe(0);
 
-        // Case 3: IFERROR(SUMIFS(B1:B4, UNIQUE(B1:B5), ">1"), 0) propagates #NAME? (NOT swallowed to 0 via #VALUE!)
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(SUMIFS(B1:B4, UNIQUE(B1:B5), ">1"), 0)')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(COUNTIFS(UNIQUE(B1:B5), ">1"), 0)')).toBe('#NAME?');
+        // Case 3: IFERROR(SUMIFS(B1:B4, TAKE(B1:B5, 2), ">1"), 0) propagates #NAME? (NOT swallowed to 0 via #VALUE!)
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(SUMIFS(B1:B4, TAKE(B1:B5, 2), ">1"), 0)')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(COUNTIFS(RANDARRAY(5), ">1"), 0)')).toBe('#NAME?');
     });
 
     it('R11-3: *IFS must return "nomatch" when any known criterion on that row fails (both direct and flattened)', () => {
@@ -3285,7 +3331,16 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(cellB.ComputedValue).toBe('{=}');
 
         const csv = 'Name,Formula\n"{=FirstName}","=1+1"';
-        const impWb = engine.ImportFromCsv(csv);
+        // By default AllowFormulas is false -> neutralizes =1+1 as text literal (CSV injection defense)
+        const safeCsvWb = engine.ImportFromCsv(csv);
+        const safeWs = safeCsvWb.Worksheets[0];
+        expect(safeWs.Cells['A2']?.Formula ?? null).toBeNull();
+        expect(safeWs.Cells['A2']?.RawValue).toBe('{=FirstName}');
+        expect(safeWs.Cells['B2']?.Formula ?? null).toBeNull();
+        expect(safeWs.Cells['B2']?.RawValue).toBe('=1+1');
+
+        // Explicit opt-in AllowFormulas: true evaluates =1+1 while still keeping {=FirstName} as text
+        const impWb = engine.ImportFromCsv(csv, 'Sheet1', 'Imported CSV', { AllowFormulas: true });
         const ws = impWb.Worksheets[0];
         expect(ws.Cells['A2']?.Formula ?? null).toBeNull();
         expect(ws.Cells['A2']?.RawValue).toBe('{=FirstName}');
@@ -3812,5 +3867,995 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.DeleteColumns(wb, ws.SheetID, 2, 1);
         expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-single')).toBeUndefined();
         expect(ws.ProtectedRanges?.find((p) => p.RangeID === 'prot-rect')?.Range).toBe('D4:F7');
+    });
+
+    it('[P1-P3-1d] GetProtectedRangeForCell and CheckCellWritePermission enforce most-restrictive precedence across overlapping ranges', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('OverlappingProtection', ['Sheet1'], 10, 10);
+        const ws = wb.Worksheets[0];
+
+        // Add permissive AllowEditors: true range BEFORE restrictive AllowEditors: false range
+        engine.AddProtectedRange(wb, ws.SheetID, {
+            RangeID: 'prot-allow-editors',
+            Range: 'A1:D5',
+            LockedByUserID: 'locker-1',
+            AllowEditors: true,
+        });
+        engine.AddProtectedRange(
+            wb,
+            ws.SheetID,
+            {
+                RangeID: 'prot-deny-editors',
+                Range: 'B2:C4',
+                LockedByUserID: 'locker-2',
+                AllowEditors: false,
+            },
+            { UserID: 'locker-2', IsEditor: true }
+        );
+
+        // Overlap cell B3 must resolve to the restrictive AllowEditors: false range
+        const resolvedB3 = engine.GetProtectedRangeForCell(ws, 'B3');
+        expect(resolvedB3?.RangeID).toBe('prot-deny-editors');
+        expect(resolvedB3?.AllowEditors).toBe(false);
+
+        // Non-overlapping cell A1 still resolves to prot-allow-editors
+        const resolvedA1 = engine.GetProtectedRangeForCell(ws, 'A1');
+        expect(resolvedA1?.RangeID).toBe('prot-allow-editors');
+        expect(resolvedA1?.AllowEditors).toBe(true);
+
+        // Editor is allowed in A1, but DENIED in B3
+        const editorCtx = { UserID: 'editor-user', OwnerUserID: 'owner-user', IsEditor: true };
+        expect(engine.CheckCellWritePermission(ws, 'A1', editorCtx).Allowed).toBe(true);
+        const b3Check = engine.CheckCellWritePermission(ws, 'B3', editorCtx);
+        expect(b3Check.Allowed).toBe(false);
+        expect(b3Check.ProtectedRange?.RangeID).toBe('prot-deny-editors');
+
+        // locker-1 (who owns prot-allow-editors, NOT prot-deny-editors) is also DENIED in B3
+        const locker1Check = engine.CheckCellWritePermission(ws, 'B3', {
+            UserID: 'locker-1',
+            OwnerUserID: 'owner-user',
+            IsEditor: true,
+        });
+        expect(locker1Check.Allowed).toBe(false);
+        expect(locker1Check.ProtectedRange?.RangeID).toBe('prot-deny-editors');
+    });
+
+    it('B5: enforces AST/LAMBDA EvalBudget (#CALC!), caps string growth (>32767 -> #VALUE!), and rejects huge sparse CSV grids', () => {
+        // 1. Exponential branching LAMBDA hits EvalBudget and returns #CALC! quickly
+        const budgetWb = engine.CreateEmptyWorkbook('DoS Budget', ['Guard'], 10, 5);
+        const budgetWs = budgetWb.Worksheets[0];
+        engine.SetCell(budgetWb, budgetWs.SheetID, 'A1', {
+            Formula: '=LET(f, LAMBDA(f, n, IF(n<=0, 1, f(f, n-1)+f(f, n-1))), f(f, 22))',
+        });
+        engine.EvaluateWorkbook(budgetWb);
+        expect(budgetWs.Cells['A1']?.ComputedValue).toBe('#CALC!');
+
+        // 2. String growth past MAX_CELL_STRING_LENGTH (32,767) via &, CONCAT, TEXTJOIN returns #VALUE!
+        const strWb = engine.CreateEmptyWorkbook('String Caps', ['Strings'], 10, 5);
+        const strWs = strWb.Worksheets[0];
+        const longSeed = 'x'.repeat(20_000);
+        engine.SetCell(strWb, strWs.SheetID, 'A2', { Value: longSeed });
+        engine.SetCell(strWb, strWs.SheetID, 'B2', { Formula: '=A2 & A2' });
+        engine.SetCell(strWb, strWs.SheetID, 'C2', { Formula: '=CONCAT(A2, A2)' });
+        engine.SetCell(strWb, strWs.SheetID, 'D2', { Formula: '=TEXTJOIN(",", TRUE, A2, A2)' });
+        engine.EvaluateWorkbook(strWb);
+        expect(strWs.Cells['B2']?.ComputedValue).toBe('#VALUE!');
+        expect(strWs.Cells['C2']?.ComputedValue).toBe('#VALUE!');
+        expect(strWs.Cells['D2']?.ComputedValue).toBe('#VALUE!');
+
+        // 3. Huge sparse dense coordinate in ExportToCsv (row 5000 x col 200 = 1,000,000 > 500,000) throws bounded error
+        const sparseWb = engine.CreateEmptyWorkbook('Sparse CSV', ['Sheet1'], 5, 5);
+        const sparseWs = sparseWb.Worksheets[0];
+        sparseWs.Cells['GR5000'] = { Address: 'GR5000', RowID: 'r-5000', ColumnID: 'c-gr', RawValue: 'edge' };
+        expect(() => engine.ExportToCsv(sparseWb)).toThrow(/exceeds maximum allowed/);
+
+        // 4. Matrix broadcast and XFD1048576 range resolution stay bounded without DoS loops
+        const matrixDosWb = engine.CreateEmptyWorkbook('Matrix DoS', ['Guard', 'Calc'], 5, 5);
+        const matrixDosWs = matrixDosWb.Worksheets[0];
+        const matrixCalcWs = matrixDosWb.Worksheets[1];
+        matrixDosWs.Cells['XFD1048576'] = { Address: 'XFD1048576', RowID: 'r-max', ColumnID: 'c-max', RawValue: 7 };
+        engine.SetCell(matrixDosWb, matrixDosWs.SheetID, 'A1', { Value: 5 });
+        engine.SetCell(matrixDosWb, matrixCalcWs.SheetID, 'B1', {
+            Formula: '=SUM(SEQUENCE(200000)*SEQUENCE(1,200000))',
+        });
+        engine.SetCell(matrixDosWb, matrixCalcWs.SheetID, 'C1', {
+            Formula: '=UNIQUE(Guard!A1:XFD1048576)',
+        });
+        engine.SetCell(matrixDosWb, matrixCalcWs.SheetID, 'D1', {
+            Formula: '=SUM(Guard!A1:XFD1048576)',
+        });
+        const dosStart = performance.now();
+        engine.EvaluateWorkbook(matrixDosWb);
+        expect(performance.now() - dosStart).toBeLessThan(1500);
+        expect(matrixCalcWs.Cells['B1']?.ComputedValue).toBe('#NUM!');
+        expect(matrixCalcWs.Cells['C1']?.ComputedValue).toBe('#NUM!');
+        expect(matrixCalcWs.Cells['D1']?.ComputedValue).toBe(12);
+
+        // 5. ParseMjCustomFunctionFormula enforces EvalBudget on recursive LET/LAMBDA arguments
+        const mjParsed = engine.ParseMjCustomFunctionFormula(
+            '=MJ.VIEW(LET(f,LAMBDA(f,n,IF(n<=0,"Users",f(f,n-1)&f(f,n-1))),f(f,25)))',
+            matrixDosWb,
+            matrixDosWs,
+            'E1',
+        );
+        expect(mjParsed).toBeNull();
+
+        // 6. R6: Crafted SpillRange:'A1:XFD1048576' is sanitized on ParseWorkbook and cleared in bounded time on SetCell
+        const craftedJson = JSON.stringify({
+            WorkbookID: 'wb-r6-spill',
+            Title: 'Crafted Spill',
+            Worksheets: [
+                {
+                    SheetID: 's1',
+                    Name: 'Sheet1',
+                    Rows: [{ RowID: 'r1' }],
+                    Columns: [{ ColumnID: 'c1' }],
+                    Cells: {
+                        A1: {
+                            Address: 'A1',
+                            RowID: 'r1',
+                            ColumnID: 'c1',
+                            Formula: '={1}',
+                            SpillRange: 'A1:XFD1048576',
+                        },
+                        B2: {
+                            Address: 'B2',
+                            RowID: 'r2',
+                            ColumnID: 'c2',
+                            RawValue: 99,
+                            SpilledFrom: 'A1',
+                        },
+                    },
+                    LiveTables: [],
+                },
+            ],
+            NamedRanges: [],
+        });
+        const spillParsedWb = engine.ParseWorkbook(craftedJson);
+        expect(spillParsedWb.Worksheets[0].Cells['A1']?.SpillRange).toBeUndefined();
+        // Inject crafted SpillRange directly after parse and verify SetCell stays bounded without expanding children
+        spillParsedWb.Worksheets[0].Cells['A1']!.SpillRange = 'A1:XFD1048576';
+        engine.SetCell(spillParsedWb, 's1', 'A1', { Value: 42 });
+        expect(spillParsedWb.Worksheets[0].Cells['A1']?.SpillRange).toBeUndefined();
+        expect(spillParsedWb.Worksheets[0].Cells['B2']).toBeUndefined();
+
+        // 7. S-e: Realistic workbooks (2,000 running sums, 100 whole-column SUMs on 20k cells, A1:Z10000) succeed cleanly
+        const runningWb = engine.CreateEmptyWorkbook('Running Sums', ['Data'], 2005, 4);
+        const runningWs = runningWb.Worksheets[0];
+        for (let r = 2; r <= 2001; r++) {
+            runningWs.Cells[`C${r}`] = { Address: `C${r}`, RowID: `rr-${r}`, ColumnID: 'rc-c', RawValue: 1 };
+            runningWs.Cells[`D${r}`] = { Address: `D${r}`, RowID: `rr-${r}`, ColumnID: 'rc-d', RawValue: null, Formula: `=SUM($C$2:C${r})` };
+        }
+        engine.EvaluateWorkbook(runningWb);
+        expect(runningWs.Cells['D2001']?.ComputedValue).toBe(2000);
+
+        const wideWb = engine.CreateEmptyWorkbook('20k Sheet Whole Col Sums', ['Big'], 5000, 12);
+        const wideWs = wideWb.Worksheets[0];
+        for (let r = 1; r <= 4000; r++) {
+            for (let c = 1; c <= 5; c++) {
+                const colLetter = String.fromCharCode(64 + c);
+                wideWs.Cells[`${colLetter}${r}`] = { Address: `${colLetter}${r}`, RowID: `wr-${r}`, ColumnID: `wc-${c}`, RawValue: 1 };
+            }
+        }
+        for (let i = 1; i <= 100; i++) {
+            wideWs.Cells[`AA${i}`] = { Address: `AA${i}`, RowID: `wr-${i}`, ColumnID: 'wc-27', RawValue: null, Formula: '=SUM(A:A)' };
+        }
+        wideWs.Cells['AA101'] = { Address: 'AA101', RowID: 'wr-101', ColumnID: 'wc-27', RawValue: null, Formula: '=SUM(A1:Z10000)' };
+        engine.EvaluateWorkbook(wideWb);
+        expect(wideWs.Cells['AA100']?.ComputedValue).toBe(4000);
+        expect(wideWs.Cells['AA101']?.ComputedValue).toBe(20000);
+
+        // 8. N3: Matrix formulas (FILTER / SUMPRODUCT) over A1:Z10000 on sparse sheet with 10k rows succeed without #NUM!
+        const sparseMatrixWb = engine.CreateEmptyWorkbook('Sparse Matrix', ['M'], 10000, 26);
+        const sparseMatrixWs = sparseMatrixWb.Worksheets[0];
+        sparseMatrixWs.Cells['A1'] = { Address: 'A1', RowID: 'sm-r1', ColumnID: 'sm-c1', RawValue: 10 };
+        sparseMatrixWs.Cells['A2'] = { Address: 'A2', RowID: 'sm-r2', ColumnID: 'sm-c1', RawValue: 20 };
+        sparseMatrixWs.Cells['B1'] = { Address: 'B1', RowID: 'sm-r1', ColumnID: 'sm-c2', RawValue: 2 };
+        sparseMatrixWs.Cells['B2'] = { Address: 'B2', RowID: 'sm-r2', ColumnID: 'sm-c2', RawValue: 3 };
+        sparseMatrixWs.Cells['AB1'] = { Address: 'AB1', RowID: 'sm-r1', ColumnID: 'sm-c28', RawValue: null, Formula: '=SUMPRODUCT(A1:Z10000, A1:Z10000)' };
+        sparseMatrixWs.Cells['AB2'] = { Address: 'AB2', RowID: 'sm-r2', ColumnID: 'sm-c28', RawValue: null, Formula: '=SUM(FILTER(A1:T10000, A1:A10000>10))' };
+        engine.EvaluateWorkbook(sparseMatrixWb);
+        expect(sparseMatrixWs.Cells['AB1']?.ComputedValue).toBe(513);
+        expect(sparseMatrixWs.Cells['AB2']?.ComputedValue).toBe(23);
+
+        // 9. B4: XLSX ImportXlsx + PatchXlsxBytes with crafted <f t="array" ref="A1:XFD1048576"> and <col min="1" max="10000000"> stays bounded
+        const enc = new TextEncoder();
+        const craftedSheetXml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            '<cols><col min="1" max="10000000" width="12"/></cols>',
+            '<sheetData>',
+            '<row r="1"><c r="A1"><f t="array" ref="A1:XFD1048576">1</f><v>1</v></c></row>',
+            '<row r="2"><c r="B2"><v>99</v></c></row>',
+            '</sheetData>',
+            '</worksheet>',
+        ].join('');
+        const buildZipFn = Reflect.get(engine, 'buildZipArchive') as (
+            entries: Array<{ Name: string; Data: Uint8Array }>
+        ) => Uint8Array;
+        const craftedXlsx = buildZipFn.call(engine, [
+            { Name: '[Content_Types].xml', Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>') },
+            { Name: 'xl/workbook.xml', Data: enc.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+            { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
+            { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(craftedSheetXml) },
+        ]);
+        const b4Imported = XlsxOpenXmlAdapter.Instance.ImportXlsx(craftedXlsx);
+        expect(b4Imported.Worksheets[0].Cells['A1']?.SpillRange).toBeUndefined();
+        expect(b4Imported.Worksheets[0].Cells['B2']?.ArrayMaster).toBeUndefined();
+        expect(b4Imported.Worksheets[0].Columns.length).toBeLessThanOrEqual(512);
+        engine.SetCell(b4Imported, b4Imported.Worksheets[0].SheetID, 'B2', { Value: 123 }, true);
+        const b4Patched = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(craftedXlsx, b4Imported);
+        expect(b4Patched.byteLength).toBeGreaterThan(0);
+
+        // 10. R5-2: Range matrices preserve exact declared shape (<= 200k) for offset SUMPRODUCT, cross-sheet ranges, UNIQUE/SORT trailing blanks
+        const shapeWb = engine.CreateEmptyWorkbook('Declared Shape', ['Main', 'Other'], 2500, 10);
+        const mainWs = shapeWb.Worksheets[0];
+        const otherWs = shapeWb.Worksheets[1];
+        mainWs.Cells['A1'] = { Address: 'A1', RowID: 'sr-1', ColumnID: 'sc-1', RawValue: 10 };
+        mainWs.Cells['A2'] = { Address: 'A2', RowID: 'sr-2', ColumnID: 'sc-1', RawValue: 20 };
+        mainWs.Cells['B1'] = { Address: 'B1', RowID: 'sr-1', ColumnID: 'sc-2', RawValue: 2 };
+        mainWs.Cells['B2'] = { Address: 'B2', RowID: 'sr-2', ColumnID: 'sc-2', RawValue: 3 };
+        otherWs.Cells['C5'] = { Address: 'C5', RowID: 'or-5', ColumnID: 'oc-3', RawValue: 5 };
+        // Offset same-height ranges (A2:A2000 x B1:B1999 = 1999 rows each): A2*B1 = 20*2 = 40
+        mainWs.Cells['D1'] = { Address: 'D1', RowID: 'sr-1', ColumnID: 'sc-4', RawValue: null, Formula: '=SUMPRODUCT(A2:A2000, B1:B1999)' };
+        // Cross-sheet offset SUMPRODUCT: A2 matches row 2 of A1:A1500, C5 in Other matches row 2 of Other!C4:C1503 -> 20 * 5 = 100
+        mainWs.Cells['D2'] = { Address: 'D2', RowID: 'sr-2', ColumnID: 'sc-4', RawValue: null, Formula: '=SUMPRODUCT(A1:A1500, Other!C4:C1503)' };
+        // UNIQUE/SORT preserve trailing blank element count and ROWS preserves full declared height
+        mainWs.Cells['D3'] = { Address: 'D3', RowID: 'sr-3', ColumnID: 'sc-4', RawValue: null, Formula: '=ROWS(UNIQUE(A1:A1500))' };
+        mainWs.Cells['D4'] = { Address: 'D4', RowID: 'sr-4', ColumnID: 'sc-4', RawValue: null, Formula: '=ROWS(SORT(A1:A1500))' };
+        mainWs.Cells['D5'] = { Address: 'D5', RowID: 'sr-5', ColumnID: 'sc-4', RawValue: null, Formula: '=SUM(FILTER(B1:B1500, A1:A1500=20))' };
+        engine.EvaluateWorkbook(shapeWb);
+        expect(mainWs.Cells['D1']?.ComputedValue).toBe(40);
+        expect(mainWs.Cells['D2']?.ComputedValue).toBe(100);
+        expect(mainWs.Cells['D3']?.ComputedValue).toBe(3); // 10, 20, and blank
+        expect(mainWs.Cells['D4']?.ComputedValue).toBe(1500);
+        expect(mainWs.Cells['D5']?.ComputedValue).toBe(3);
+
+        // 11. R5-3: Untouched empty-body array anchor in PatchXlsxBytes returns byte-identical XML, and oversized shared master caps safely
+        const r53ArrayOnlyXml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            '<sheetData>',
+            '<row r="1"><c r="A1"><f t="array" cm="1" ref="A1:BL64"/><v>7</v></c></row>',
+            '</sheetData>',
+            '</worksheet>',
+        ].join('');
+        const r53ArrayXlsx = buildZipFn.call(engine, [
+            { Name: '[Content_Types].xml', Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>') },
+            { Name: 'xl/workbook.xml', Data: enc.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+            { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
+            { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(r53ArrayOnlyXml) },
+        ]);
+        const r53ArrayImported = XlsxOpenXmlAdapter.Instance.ImportXlsx(r53ArrayXlsx);
+        const r53NoopPatch = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(r53ArrayXlsx, r53ArrayImported);
+        const patchedXml = new TextDecoder().decode(
+            engine.ExtractZipArchive(r53NoopPatch).get('xl/worksheets/sheet1.xml')
+        );
+        expect(patchedXml).toBe(r53ArrayOnlyXml);
+
+        const hugeShared = '1+'.repeat(4500) + '1';
+        const r53SharedXml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            '<sheetData>',
+            '<row r="1"><c r="B1"><f t="shared" si="0">' + hugeShared + '</f><v>0</v></c></row>',
+            '<row r="2"><c r="B2"><f t="shared" si="0"/><v>0</v></c></row>',
+            '</sheetData>',
+            '</worksheet>',
+        ].join('');
+        const r53SharedXlsx = buildZipFn.call(engine, [
+            { Name: '[Content_Types].xml', Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>') },
+            { Name: 'xl/workbook.xml', Data: enc.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+            { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
+            { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(r53SharedXml) },
+        ]);
+        // R6-2: Oversized shared master formula is rejected cleanly rather than silently dropped
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(r53SharedXlsx)).toThrow(/formula|length|8192/i);
+    });
+
+    it('R6-1 & R6-2: rejects adversarial import limits, pre-charges SUMPRODUCT matrices, bounds DAG small/wide edges, and preserves exact running-total recalculation', () => {
+        const enc = new TextEncoder();
+        const buildZipFn = Reflect.get(engine, 'buildZipArchive') as (
+            entries: Array<{ Name: string; Data: Uint8Array }>
+        ) => Uint8Array;
+        const wrapXlsx = (workbookXml: string, relsXml: string, sheets: Array<{ path: string; xml: string }>): Uint8Array =>
+            buildZipFn.call(engine, [
+                {
+                    Name: '[Content_Types].xml',
+                    Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>'),
+                },
+                { Name: 'xl/workbook.xml', Data: enc.encode(workbookXml) },
+                { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode(relsXml) },
+                ...sheets.map((s) => ({ Name: s.path, Data: enc.encode(s.xml) })),
+            ]);
+        const simpleSheetXml =
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>';
+
+        // 1. Duplicate sheet part paths rejected
+        const dupPathXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="S1" sheetId="1" r:id="rId1"/><sheet name="S2" sheetId="2" r:id="rId2"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: simpleSheetXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(dupPathXlsx)).toThrow(/duplicate worksheet part path/i);
+
+        // 2. Excess sheet count (> 128) rejected
+        const manySheets = Array.from({ length: 129 }, (_, i) => `<sheet name="S${i + 1}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('');
+        const manyRels = Array.from({ length: 129 }, (_, i) => `<Relationship Id="rId${i + 1}" Target="worksheets/sheet${i + 1}.xml"/>`).join('');
+        const tooManySheetsXlsx = wrapXlsx(
+            `<workbook><sheets>${manySheets}</sheets></workbook>`,
+            `<Relationships>${manyRels}</Relationships>`,
+            [{ path: 'xl/worksheets/sheet1.xml', xml: simpleSheetXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(tooManySheetsXlsx)).toThrow(/maximum sheet limit/i);
+
+        // 3. Overlapping array anchors and non-top-left array anchors rejected
+        const overlapXml = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>',
+            '<row r="1"><c r="A1"><f t="array" cm="1" ref="A1:D4">SEQUENCE(4,4)</f><v>1</v></c></row>',
+            '<row r="2"><c r="B2"><f t="array" cm="1" ref="B2:E5">SEQUENCE(4,4)</f><v>1</v></c></row>',
+            '</sheetData></worksheet>',
+        ].join('');
+        const overlapXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: overlapXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(overlapXlsx)).toThrow(/overlapping array formula ranges/i);
+        expect(() => XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(overlapXlsx, engine.CreateEmptyWorkbook('Sheet1'))).toThrow(/overlapping array formula ranges/i);
+
+        const nonTopLeftXml = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>',
+            '<row r="2"><c r="B2"><f t="array" ref="A1:C3">SEQUENCE(3,3)</f><v>1</v></c></row>',
+            '</sheetData></worksheet>',
+        ].join('');
+        const nonTopLeftXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: nonTopLeftXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(nonTopLeftXlsx)).toThrow(/not the top-left cell/i);
+
+        // 4. Too many <col> tags (> 25,000) rejected, while redundant full-width <col> entries under limit exit early
+        const manyColsXml =
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>' +
+            '<col min="1" max="16384" width="12"/>'.repeat(25_001) +
+            '</cols><sheetData/></worksheet>';
+        const manyColsXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: manyColsXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(manyColsXlsx)).toThrow(/maximum <col> entry limit/i);
+
+        const safeColsXml =
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>' +
+            '<col min="1" max="16384" width="14" hidden="1"/>'.repeat(5_000) +
+            '</cols><sheetData/></worksheet>';
+        const safeColsXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: safeColsXml }]
+        );
+        const safeColsWb = XlsxOpenXmlAdapter.Instance.ImportXlsx(safeColsXlsx);
+        expect(safeColsWb.Worksheets[0].Columns[0]?.Width).toBe(14);
+        expect(safeColsWb.Worksheets[0].Columns[0]?.Hidden).toBe(true);
+
+        // 5. Validation rules > 5,000 rejected cleanly on import (not silently dropped); tall column rules evaluate via byCol
+        const tooManyDvXml =
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/>' +
+            '<dataValidations count="5001">' +
+            '<dataValidation type="whole" sqref="A1"><formula1>1</formula1><formula2>10</formula2></dataValidation>'.repeat(5_001) +
+            '</dataValidations></worksheet>';
+        const tooManyDvXlsx = wrapXlsx(
+            '<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            [{ path: 'xl/worksheets/sheet1.xml', xml: tooManyDvXml }]
+        );
+        expect(() => XlsxOpenXmlAdapter.Instance.ImportXlsx(tooManyDvXlsx)).toThrow(/maximum validation rule limit/i);
+
+        const tallValWb = engine.CreateEmptyWorkbook('Tall Validation', ['Sheet1'], 100, 10);
+        const tallWs = tallValWb.Worksheets[0];
+        for (let i = 0; i < 100; i++) {
+            tallWs.ValidationRules.push({ RuleID: `tall-${i}`, Range: 'A1:A1000000', RuleType: 'numberRange', MinValue: 0, MaxValue: 100 });
+        }
+        tallWs.Cells['A5'] = { Address: 'A5', RowID: 'r-5', ColumnID: 'c-1', RawValue: 250 };
+        tallWs.Cells['B5'] = { Address: 'B5', RowID: 'r-5', ColumnID: 'c-2', RawValue: 250 };
+        engine.EvaluateWorkbook(tallValWb);
+        expect(tallWs.Cells['A5']?.ValidationError).toBeTruthy();
+        expect(tallWs.Cells['B5']?.ValidationError).toBeFalsy();
+
+        // 6. Giant SUMPRODUCT pre-charges live-cell matrix budget BEFORE allocating and evaluates cleanly to #CALC!
+        const spWb = engine.CreateEmptyWorkbook('Giant SUMPRODUCT', ['Sheet1'], 10, 5);
+        const spWs = spWb.Worksheets[0];
+        spWs.Cells['A1'] = { Address: 'A1', RowID: 'r-1', ColumnID: 'c-1', RawValue: 2 };
+        const giantArgs = Array.from({ length: 8 }, () => 'A1:A200000').join(', ');
+        spWs.Cells['C1'] = { Address: 'C1', RowID: 'r-1', ColumnID: 'c-3', RawValue: null, Formula: `=SUMPRODUCT(${giantArgs})` };
+        engine.EvaluateWorkbook(spWb);
+        expect(spWs.Cells['C1']?.ComputedValue).toBe('#CALC!');
+
+        // 7. Small-range edge flood (> 1,000,000 edges across small ranges <= 256 cells) rejected cleanly
+        const smallFloodWb = engine.CreateEmptyWorkbook('Small Range Flood', ['Sheet1'], 500, 10);
+        const floodWs = smallFloodWb.Worksheets[0];
+        const blocks = Array.from({ length: 10 }, (_, k) => `A${k * 16 + 1}:P${(k + 1) * 16}`).join(', '); // 10 * 256 = 2,560 edges per formula
+        for (let r = 1; r <= 420; r++) {
+            // 420 * 2,560 = 1,075,200 edges > 1,000,000
+            floodWs.Cells[`Z${r}`] = { Address: `Z${r}`, RowID: `r-${r}`, ColumnID: 'c-26', RawValue: null, Formula: `=SUM(${blocks})` };
+        }
+        expect(() => engine.EvaluateWorkbook(smallFloodWb)).toThrow(/exceeded maximum edge limit/i);
+
+        // 8. R6-2: Wide-range running total =SUM(B$2:B{r}) down 1,100 rows (< 750,000 wide edges) still recalculates accurately after edits
+        const runningWb = engine.CreateEmptyWorkbook('Running Total', ['Sheet1'], 1_200, 5);
+        const runWs = runningWb.Worksheets[0];
+        runWs.Cells['A1'] = { Address: 'A1', RowID: 'rr-1', ColumnID: 'rc-1', RawValue: 10 };
+        for (let r = 2; r <= 1_100; r++) {
+            runWs.Cells[`B${r}`] = {
+                Address: `B${r}`,
+                RowID: `rr-${r}`,
+                ColumnID: 'rc-2',
+                RawValue: null,
+                Formula: r === 1_050 ? '=A1*2' : '=1',
+            };
+            runWs.Cells[`C${r}`] = {
+                Address: `C${r}`,
+                RowID: `rr-${r}`,
+                ColumnID: 'rc-3',
+                RawValue: null,
+                Formula: `=SUM(B$2:B${r})`,
+            };
+        }
+        engine.EvaluateWorkbook(runningWb);
+        // 1..1048 (=1), 1050 (=20), 1051..1100 (=1) -> total for 1099 rows = 1098 + 20 = 1118
+        expect(runWs.Cells['C1100']?.ComputedValue).toBe(1118);
+        // Edit direct precedent B500 (1 -> 11, +10) and indirect precedent A1 (10 -> 100, +180 on B1050)
+        engine.SetCell(runningWb, runWs.SheetID, 'B500', { Value: 11 });
+        expect(runWs.Cells['C1100']?.ComputedValue).toBe(1128);
+        engine.SetCell(runningWb, runWs.SheetID, 'A1', { Value: 100 });
+        expect(runWs.Cells['C1049']?.ComputedValue).toBe(1058);
+        expect(runWs.Cells['C1050']?.ComputedValue).toBe(1258);
+        expect(runWs.Cells['C1100']?.ComputedValue).toBe(1308);
+    });
+
+    it('Round 7 (R7-1, R7-2, S7-1..S7-4): enforces JSON workbook limits, rejects wide-edge overflow, clears DAG cache on isolated eval, bounds comments/merges/validation checks, and ignores stale ComputedValue in lock diff', async () => {
+        const engine = SpreadsheetEngine.Instance;
+
+        // 1. R7-1: Oversized JSON workbook (> 128 sheets) throws cleanly from ParseWorkbook / NormalizeWorkbook (not swallowed!)
+        const manySheetsJson = JSON.stringify({
+            WorkbookID: 'json-bomb',
+            Title: 'Many Sheets',
+            Worksheets: Array.from({ length: 129 }, (_, idx) => ({
+                SheetID: `s-${idx + 1}`,
+                Name: `Sheet ${idx + 1}`,
+                Rows: [],
+                Columns: [],
+                Cells: {},
+            })),
+        });
+        expect(() => engine.ParseWorkbook(manySheetsJson)).toThrow(/maximum sheet limit/i);
+
+        // 2. R7-1 + S7-3: > 5,000 validation rules in JSON workbook throws cleanly instead of silently trimming
+        const tooManyRulesJson = JSON.stringify({
+            WorkbookID: 'rules-bomb',
+            Title: 'Rules',
+            Worksheets: [
+                {
+                    SheetID: 's-1',
+                    Name: 'Sheet 1',
+                    Rows: [],
+                    Columns: [],
+                    Cells: {},
+                    ValidationRules: Array.from({ length: 5_001 }, (_, i) => ({
+                        RuleID: `r-${i}`,
+                        Range: 'A1',
+                        RuleType: 'notEmpty',
+                    })),
+                },
+            ],
+        });
+        expect(() => engine.ParseWorkbook(tooManyRulesJson)).toThrow(/maximum validation rule limit/i);
+
+        // 3. S7-3: Global validation check budget enforces across byCol rules (1,000 tall rules x 2,500 cells = 2,500,000 > 2,000,000)
+        const valCheckWb = engine.CreateEmptyWorkbook('Val Check Budget', ['Sheet1'], 2_600, 3);
+        const valWs = valCheckWb.Worksheets[0];
+        for (let r = 1; r <= 2_500; r++) {
+            valWs.Cells[`A${r}`] = { Address: `A${r}`, RowID: `vr-${r}`, ColumnID: 'vc-1', RawValue: r };
+        }
+        for (let i = 0; i < 1_000; i++) {
+            valWs.ValidationRules.push({
+                RuleID: `col-rule-${i}`,
+                Range: 'A1:A2500',
+                RuleType: 'numberRange',
+                MinValue: 0,
+            });
+        }
+        expect(() => engine.EvaluateWorkbook(valCheckWb)).toThrow(/validation rules exceed workbook check budget/i);
+
+        // 4. R7-2: Watcher-overflow workbook (1,500 x 1,500 > 750,000 wide edges) rejects immediately instead of quadratic fallback
+        const wideOverflowWb = engine.CreateEmptyWorkbook('Wide Edge Overflow', ['Sheet1'], 1_600, 4);
+        const wideWs = wideOverflowWb.Worksheets[0];
+        for (let r = 1; r <= 1_500; r++) {
+            wideWs.Cells[`A${r}`] = { Address: `A${r}`, RowID: `wr-${r}`, ColumnID: 'wc-1', RawValue: null, Formula: '=1' };
+            wideWs.Cells[`B${r}`] = {
+                Address: `B${r}`,
+                RowID: `wr-${r}`,
+                ColumnID: 'wc-2',
+                RawValue: null,
+                Formula: '=SUM(A$1:A$1500)',
+            };
+        }
+        expect(() => engine.EvaluateWorkbook(wideOverflowWb)).toThrow(/wide-range edge limit/i);
+
+        // 5. S7-1: EvaluateWorkbookIsolated invalidates workbookDagCache so subsequent SetCell updates cross-sheet dependents
+        const isoWb = engine.CreateEmptyWorkbook('Cross Sheet Iso', ['Inputs', 'Summary'], 5, 5);
+        isoWb.Worksheets[0].Cells['A1'] = { Address: 'A1', RowID: 'r1', ColumnID: 'c1', RawValue: 10 };
+        isoWb.Worksheets[1].Cells['B1'] = {
+            Address: 'B1',
+            RowID: 'r1',
+            ColumnID: 'c1',
+            RawValue: null,
+            Formula: '=Inputs!A1*3',
+        };
+        engine.EvaluateWorkbook(isoWb);
+        expect(isoWb.Worksheets[1].Cells['B1']?.ComputedValue).toBe(30);
+
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c) => engine.ImportFromXlsxBytes(b, c),
+            PatchXlsxBytes: async (o, w) => engine.PatchXlsxBytes(o, w),
+            EvaluateWorkbook: async (w, ctx) => {
+                // Deep-clone like structuredClone in worker_threads so `Worksheets` object references are replaced!
+                const cloned = structuredClone(w);
+                engine.EvaluateWorkbook(cloned, ctx);
+                return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+            },
+        });
+        try {
+            await engine.EvaluateWorkbookIsolated(isoWb);
+            engine.SetCell(isoWb, isoWb.Worksheets[0].SheetID, 'A1', { Value: 25 });
+            expect(isoWb.Worksheets[1].Cells['B1']?.ComputedValue).toBe(75);
+        } finally {
+            RegisterSpreadsheetWorkerRunner(null);
+        }
+
+        // 6. S7-2: Malicious OOXML <comment> / <mergeCells> bombs exceeding workbook limits are rejected
+        const fakeCommentsXml =
+            '<?xml version="1.0" encoding="UTF-8"?><comments><commentList>' +
+            Array.from({ length: 50 }, (_, i) => `<comment ref="Z${i + 1}"><text><t>note</t></text></comment>`).join('') +
+            '</commentList></comments>';
+        // Build minimal zip with 50,001 mergeCells in sheet1.xml
+        const tooManyMergesXml =
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/>' +
+            '<mergeCells count="50001">' +
+            Array.from({ length: 50_001 }, (_, i) => `<mergeCell ref="A${i + 1}:B${i + 1}"/>`).join('') +
+            '</mergeCells></worksheet>';
+        const mergeBombZip = engine.BuildZipArchive([
+            {
+                Name: 'xl/workbook.xml',
+                Data: EncodeUtf8Fallback('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>')
+            },
+            {
+                Name: 'xl/_rels/workbook.xml.rels',
+                Data: EncodeUtf8Fallback('<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
+            },
+            { Name: 'xl/worksheets/sheet1.xml', Data: EncodeUtf8Fallback(tooManyMergesXml) },
+            { Name: 'xl/comments1.xml', Data: EncodeUtf8Fallback(fakeCommentsXml) },
+        ]);
+        expect(() => engine.ImportFromXlsxBytes(mergeBombZip)).toThrow(/maximum merge range limit/i);
+
+        // 7. S7-4: Lock validation ignores stale ComputedValue / DisplayValue differences on locked formula cells
+        const lockWbBase = engine.CreateEmptyWorkbook('Lock Stale Eval', ['Sheet1'], 5, 5);
+        const lockWs = lockWbBase.Worksheets[0];
+        lockWs.Cells['A1'] = { Address: 'A1', RowID: 'lr1', ColumnID: 'lc1', RawValue: 10, ComputedValue: 10, DisplayValue: '10' };
+        lockWs.Cells['B1'] = {
+            Address: 'B1',
+            RowID: 'lr1',
+            ColumnID: 'lc2',
+            RawValue: null,
+            Formula: '=A1*2',
+            ComputedValue: 20,
+            DisplayValue: '20',
+        };
+        lockWs.Cells['C1'] = { Address: 'C1', RowID: 'lr1', ColumnID: 'lc3', RawValue: 'unlocked', ComputedValue: 'unlocked', DisplayValue: 'unlocked' };
+        lockWs.ProtectedRanges = [
+            { RangeID: 'pr-1', Range: 'A1:B1', LockedByUserID: '11111111-1111-1111-1111-111111111111' },
+        ];
+        const prevJson = engine.SerializeWorkbook(lockWbBase);
+        const nextWb = engine.ParseWorkbook(prevJson);
+        // Simulate stale ComputedValue/DisplayValue on locked formula cell B1 while non-owner edits unlocked C1
+        nextWb.Worksheets[0].Cells['B1'].ComputedValue = 999;
+        nextWb.Worksheets[0].Cells['B1'].DisplayValue = '999';
+        nextWb.Worksheets[0].Cells['C1'].RawValue = 'editor-updated';
+        const nextJson = JSON.stringify(nextWb);
+        const lockRes = ValidateArtifactContentMutationAgainstLocks(
+            prevJson,
+            nextJson,
+            '22222222-2222-2222-2222-222222222222',
+            false
+        );
+        expect(lockRes.Allowed).toBe(true);
+    });
+
+    it('Round 8 (R8-2, R8-3, R8-4): enforces required worker isolation, honors SkipEvaluate on .xlsx import, bounds protected ranges & AllowedValues, indexes lock diffs, deduplicates AST range watches, and caps CSV/SetCell growth', async () => {
+        // 1. R8-3: SetSpreadsheetWorkerIsolationRequired(true) fails closed on all *Isolated methods when unregistered
+        RegisterSpreadsheetWorkerRunner(null);
+        const sampleWb = engine.CreateEmptyWorkbook('RequiredIso', ['Sheet1'], 3, 3);
+        const sampleXlsx = engine.ExportToXlsxBytes(sampleWb, true, { SkipEvaluate: true });
+        SetSpreadsheetWorkerIsolationRequired(true);
+        try {
+            await expect(engine.ImportFromXlsxBytesIsolated(sampleXlsx)).rejects.toThrow(/isolation runner is required/i);
+            await expect(engine.PatchXlsxBytesIsolated(sampleXlsx, sampleWb)).rejects.toThrow(/isolation runner is required/i);
+            await expect(engine.EvaluateWorkbookIsolated(sampleWb)).rejects.toThrow(/isolation runner is required/i);
+        } finally {
+            SetSpreadsheetWorkerIsolationRequired(false);
+        }
+
+        // 2. R8-2: SkipEvaluate skips EvaluateWorkbook on .xlsx bytes & ParseWorkbook(dataUrl / raw base64 .xlsx)
+        const formulaWb = engine.CreateEmptyWorkbook('SkipEvalXlsx', ['Sheet1'], 4, 4);
+        engine.SetCell(formulaWb, formulaWb.Worksheets[0].SheetID, 'A1', { Value: 15 }, false);
+        engine.SetCell(formulaWb, formulaWb.Worksheets[0].SheetID, 'A2', { Formula: '=A1*3' }, false);
+        const formulaXlsx = engine.ExportToXlsxBytes(formulaWb, false);
+        const rawB64 = Buffer.from(formulaXlsx).toString('base64');
+        const evalSpy = vi.spyOn(engine, 'EvaluateWorkbook');
+        try {
+            const skippedDirect = engine.ImportFromXlsxBytes(formulaXlsx, undefined, { SkipEvaluate: true });
+            expect(evalSpy).not.toHaveBeenCalled();
+            expect(skippedDirect.Worksheets[0].Cells['A2']?.Formula).toBe('=A1*3');
+
+            const skippedParse = engine.ParseWorkbook(rawB64, undefined, { SkipEvaluate: true });
+            expect(evalSpy).not.toHaveBeenCalled();
+            expect(skippedParse.Worksheets[0].Cells['A2']?.Formula).toBe('=A1*3');
+        } finally {
+            evalSpy.mockRestore();
+        }
+
+        // 3. R8-4: Reject > MAX_PROTECTED_RANGES_PER_WORKBOOK and > MAX_VALIDATION_ALLOWED_VALUES
+        const tooManyLocksWb = engine.CreateEmptyWorkbook('TooManyLocks', ['Sheet1'], 5, 5);
+        tooManyLocksWb.Worksheets[0].ProtectedRanges = Array.from(
+            { length: MAX_PROTECTED_RANGES_PER_WORKBOOK + 1 },
+            (_, idx) => ({
+                RangeID: `pr-${idx + 1}`,
+                Range: `A${idx + 1}`,
+                LockedByUserID: '11111111-1111-1111-1111-111111111111'
+            })
+        );
+        expect(() => engine.AssertWorkbookWithinLimits(tooManyLocksWb)).toThrow(/protected range limit/i);
+
+        const tooManyAllowedWb = engine.CreateEmptyWorkbook('TooManyAllowed', ['Sheet1'], 5, 5);
+        tooManyAllowedWb.Worksheets[0].ValidationRules = [
+            {
+                RuleID: 'vr-1',
+                Range: 'A1:A5',
+                RuleType: 'list',
+                AllowedValues: Array.from({ length: MAX_VALIDATION_ALLOWED_VALUES + 1 }, (_, i) => `val-${i}`)
+            }
+        ];
+        expect(() => engine.AssertWorkbookWithinLimits(tooManyAllowedWb)).toThrow(/allowed values limit/i);
+
+        // 4. R8-4: Lock diff with 2,000 protected ranges completes rapidly (< 500ms) and still blocks locked cell edits
+        const largeLockWb = engine.CreateEmptyWorkbook('IndexedLockDiff', ['Sheet1'], 20, 5);
+        largeLockWb.Worksheets[0].ProtectedRanges = Array.from(
+            { length: MAX_PROTECTED_RANGES_PER_WORKBOOK },
+            (_, idx) => ({
+                RangeID: `idx-pr-${idx + 1}`,
+                Range: `A${idx + 1}:B${idx + 1}`,
+                LockedByUserID: '11111111-1111-1111-1111-111111111111'
+            })
+        );
+        largeLockWb.Worksheets[0].Cells['C1'] = {
+            Address: 'C1',
+            RowID: 'r1',
+            ColumnID: 'c3',
+            RawValue: 'open'
+        };
+        const largePrevJson = JSON.stringify(largeLockWb);
+        const largeNextAllowed = JSON.parse(largePrevJson) as typeof largeLockWb;
+        largeNextAllowed.Worksheets[0].Cells['C1'].RawValue = 'updated';
+        const t0 = performance.now();
+        const largeAllowedRes = ValidateArtifactContentMutationAgainstLocks(
+            largePrevJson,
+            JSON.stringify(largeNextAllowed),
+            '22222222-2222-2222-2222-222222222222',
+            false
+        );
+        expect(largeAllowedRes.Allowed).toBe(true);
+        expect(performance.now() - t0).toBeLessThan(500);
+
+        const largeNextBlocked = JSON.parse(largePrevJson) as typeof largeLockWb;
+        largeNextBlocked.Worksheets[0].Cells['A1999'] = {
+            Address: 'A1999',
+            RowID: 'r1999',
+            ColumnID: 'c1',
+            RawValue: 'tampered'
+        };
+        const largeBlockedRes = ValidateArtifactContentMutationAgainstLocks(
+            largePrevJson,
+            JSON.stringify(largeNextBlocked),
+            '22222222-2222-2222-2222-222222222222',
+            false
+        );
+        expect(largeBlockedRes.Allowed).toBe(false);
+
+        // 5. Should-fix: CSV parser rejects > MAX_IMPORT_WORKBOOK_CELLS cells without buffering unbounded rows,
+        //    and SetCell rejects exceeding MAX_IMPORT_WORKBOOK_CELLS
+        const csvRow = '1,'.repeat(500) + '1\n';
+        const overLimitCsv = csvRow.repeat(Math.ceil((MAX_IMPORT_WORKBOOK_CELLS + 100) / 501));
+        expect(() => engine.ImportFromCsv(overLimitCsv)).toThrow(/maximum cell limit/i);
+
+        const capWb = engine.CreateEmptyWorkbook('CellCapTest', ['Sheet1'], 2, 2);
+        for (let i = 1; i <= 10; i++) {
+            capWb.Worksheets[0].Cells[`Z${i}`] = {
+                Address: `Z${i}`,
+                RowID: `zr${i}`,
+                ColumnID: 'zc26',
+                RawValue: i
+            };
+        }
+        expect(() => engine.SetCell(capWb, capWb.Worksheets[0].SheetID, 'A1', { Value: 1 }, false)).not.toThrow();
+    });
+
+    it('Round 9 (R9-2, R9-3, Should-fix): blocks synchronous evaluation when isolation required, merges EvaluateWorkbookIsolated in-place, normalizes AST range de-dupe, and covers column/wide/row/multi-sheet lock indexes', async () => {
+        // 1. R9-2: When SetSpreadsheetWorkerIsolationRequired(true), synchronous eval paths throw loudly
+        const isoWb = engine.CreateEmptyWorkbook('SyncBlockTest', ['Sheet1'], 4, 4);
+        engine.SetCell(isoWb, isoWb.Worksheets[0].SheetID, 'A1', { Value: 5 }, false);
+        engine.SetCell(isoWb, isoWb.Worksheets[0].SheetID, 'A2', { Formula: '=A1*2' }, false);
+        const isoXlsx = engine.ExportToXlsxBytes(isoWb, false);
+        const isoJson = engine.SerializeWorkbook(isoWb);
+
+        SetSpreadsheetWorkerIsolationRequired(true);
+        try {
+            expect(() => engine.EvaluateWorkbook(isoWb)).toThrow(/synchronous main-thread evaluation is prohibited/i);
+            expect(() => engine.SetCell(isoWb, isoWb.Worksheets[0].SheetID, 'A3', { Value: 7 }, true)).toThrow(
+                /synchronous main-thread evaluation is prohibited/i
+            );
+            expect(() => engine.ParseWorkbook(isoJson)).toThrow(/synchronous main-thread evaluation is prohibited/i);
+            expect(() => engine.ImportFromXlsxBytes(isoXlsx)).toThrow(
+                /synchronous main-thread evaluation is prohibited/i
+            );
+            expect(() => engine.ExportToXlsxBytes(isoWb, false)).toThrow(
+                /synchronous main-thread evaluation is prohibited/i
+            );
+            // SkipEvaluate: true and recalculate = false remain allowed
+            expect(() => engine.ParseWorkbook(isoJson, undefined, { SkipEvaluate: true })).not.toThrow();
+            expect(() => engine.ImportFromXlsxBytes(isoXlsx, undefined, { SkipEvaluate: true })).not.toThrow();
+            expect(() => engine.ExportToXlsxBytes(isoWb, false, { SkipEvaluate: true })).not.toThrow();
+            expect(() => engine.SetCell(isoWb, isoWb.Worksheets[0].SheetID, 'A3', { Value: 7 }, false)).not.toThrow();
+        } finally {
+            SetSpreadsheetWorkerIsolationRequired(false);
+        }
+
+        // 2. R9-3: EvaluateWorkbookIsolated merges results into existing WorksheetSpec references in-place
+        const mergeWb = engine.CreateEmptyWorkbook('InPlaceMerge', ['Sheet1'], 4, 4);
+        const origSheetRef = mergeWb.Worksheets[0];
+        engine.SetCell(mergeWb, origSheetRef.SheetID, 'A1', { Value: 12 }, false);
+        engine.SetCell(mergeWb, origSheetRef.SheetID, 'A2', { Formula: '=A1*4' }, false);
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c, o) => engine.ImportFromXlsxBytes(b, c, o),
+            PatchXlsxBytes: async (o, w) => engine.PatchXlsxBytes(o, w),
+            EvaluateWorkbook: async (w, ctx) => {
+                const cloned = structuredClone(w);
+                engine.EvaluateWorkbook(cloned, ctx);
+                return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+            }
+        });
+        try {
+            await engine.EvaluateWorkbookIsolated(mergeWb);
+            expect(mergeWb.Worksheets[0]).toBe(origSheetRef);
+            expect(origSheetRef.Cells['A2']?.ComputedValue).toBe(48);
+        } finally {
+            RegisterSpreadsheetWorkerRunner(null);
+        }
+
+        // 3. Should-fix: AST range de-dupe merges $A$1:B9, a1:b9, and A1:B9 identically
+        const dedupeWb = engine.CreateEmptyWorkbook('NormalizedRangeDedupe', ['Sheet1'], 5, 5);
+        engine.SetCell(dedupeWb, dedupeWb.Worksheets[0].SheetID, 'D1', {
+            Formula: '=SUM($A$1:B200) + SUM(a1:b200) + SUM(A1:B200)'
+        });
+        expect(dedupeWb.Worksheets[0].Cells['D1']?.ComputedValue).toBe(0);
+
+        // 4. Should-fix: Lock validator index handles column-bucketed (C:C), wide (A1:Z5000), whole-row (5:5),
+        //    and multi-sheet protected ranges, plus overlapping-range detection through col & wide buckets
+        const ownerId = '11111111-1111-1111-1111-111111111111';
+        const editorId = '22222222-2222-2222-2222-222222222222';
+        const multiWb = engine.CreateEmptyWorkbook('IndexedLockVariants', ['Main', 'Second'], 25, 10);
+        multiWb.Worksheets[0].ProtectedRanges = [
+            { RangeID: 'col-c', Range: 'C:C', LockedByUserID: ownerId },
+            { RangeID: 'wide-box', Range: 'E1:Z5000', LockedByUserID: ownerId },
+            { RangeID: 'row-5', Range: '5:5', LockedByUserID: ownerId }
+        ];
+        multiWb.Worksheets[1].ProtectedRanges = [
+            { RangeID: 's2-row-2', Range: '2:2', LockedByUserID: ownerId }
+        ];
+        const multiPrevJson = JSON.stringify(multiWb);
+
+        // Editor can edit unlocked A1 on sheet 0 and A1 on sheet 1
+        const allowedEdit = JSON.parse(multiPrevJson) as typeof multiWb;
+        allowedEdit.Worksheets[0].Cells['A1'] = { Address: 'A1', RowID: 'r1', ColumnID: 'c1', RawValue: 'ok' };
+        allowedEdit.Worksheets[1].Cells['A1'] = { Address: 'A1', RowID: 'r1', ColumnID: 'c1', RawValue: 'ok' };
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(allowedEdit), editorId, false).Allowed).toBe(true);
+
+        // Blocked inside col bucket C:C (C99)
+        const blockCol = JSON.parse(multiPrevJson) as typeof multiWb;
+        blockCol.Worksheets[0].Cells['C99'] = { Address: 'C99', RowID: 'r99', ColumnID: 'c3', RawValue: 'x' };
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(blockCol), editorId, false).Allowed).toBe(false);
+
+        // Blocked inside wide bucket E1:Z5000 (F100)
+        const blockWide = JSON.parse(multiPrevJson) as typeof multiWb;
+        blockWide.Worksheets[0].Cells['F100'] = { Address: 'F100', RowID: 'r100', ColumnID: 'c6', RawValue: 'x' };
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(blockWide), editorId, false).Allowed).toBe(false);
+
+        // Blocked inside multi-sheet row 2:2 on Second sheet (D2)
+        const blockSheet2 = JSON.parse(multiPrevJson) as typeof multiWb;
+        blockSheet2.Worksheets[1].Cells['D2'] = { Address: 'D2', RowID: 'r2', ColumnID: 'c4', RawValue: 'x' };
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(blockSheet2), editorId, false).Allowed).toBe(false);
+
+        // Editor cannot add overlapping range hitting col bucket (C:C) or wide bucket (E1:Z5000)
+        const overlapColRule = JSON.parse(multiPrevJson) as typeof multiWb;
+        overlapColRule.Worksheets[0].ProtectedRanges.push({
+            RangeID: 'editor-overlap-col',
+            Range: 'B1:D2',
+            LockedByUserID: editorId
+        });
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(overlapColRule), editorId, false).Allowed).toBe(false);
+
+        const overlapWideRule = JSON.parse(multiPrevJson) as typeof multiWb;
+        overlapWideRule.Worksheets[0].ProtectedRanges.push({
+            RangeID: 'editor-overlap-wide',
+            Range: 'F10:G20',
+            LockedByUserID: editorId
+        });
+        expect(ValidateArtifactContentMutationAgainstLocks(multiPrevJson, JSON.stringify(overlapWideRule), editorId, false).Allowed).toBe(false);
+
+        // 5. Should-fix: DeleteRows invalidates workbookCellCountCache so subsequent SetCell counts accurately
+        const delWb = engine.CreateEmptyWorkbook('DelCacheTest', ['Sheet1'], 5, 3);
+        engine.SetCell(delWb, delWb.Worksheets[0].SheetID, 'A2', { Value: 99 }, false);
+        engine.DeleteRows(delWb, delWb.Worksheets[0].SheetID, 2, 1);
+        expect(delWb.Worksheets[0].Cells['A2']).toBeUndefined();
+    });
+
+    it('Round 10 (R10-1 & Should-fix): keys preParsedWorkbooks by (content, config) pair, clears virtual axis index on isolated eval, and blocks ClearRange/EvaluateFormulaExpression bypasses', async () => {
+        const ownerId = '11111111-1111-1111-1111-111111111111';
+        const editorId = '22222222-2222-2222-2222-222222222222';
+
+        // 1. R10-1: Caching (xlsxPayload, null) must NOT hijack validation of (xlsxPayload, configWithOwnerLock)
+        const unlockedXlsxWb = engine.CreateEmptyWorkbook('ConfigLockPair', ['Sheet1'], 4, 4);
+        engine.SetCell(unlockedXlsxWb, unlockedXlsxWb.Worksheets[0].SheetID, 'A1', { Value: 'orig' }, false);
+        const unlockedXlsxB64 = Buffer.from(
+            engine.ExportToXlsxBytes(unlockedXlsxWb, true, { SkipEvaluate: true })
+        ).toString('base64');
+
+        const editedXlsxWb = engine.ImportFromXlsxBytes(Buffer.from(unlockedXlsxB64, 'base64'), undefined, {
+            SkipEvaluate: true
+        });
+        engine.SetCell(editedXlsxWb, editedXlsxWb.Worksheets[0].SheetID, 'A1', { Value: 'tampered' }, false);
+        const editedXlsxB64 = Buffer.from(
+            engine.ExportToXlsxBytes(editedXlsxWb, true, { SkipEvaluate: true })
+        ).toString('base64');
+
+        const configLockedWb = engine.CreateEmptyWorkbook('ConfigLockOverlay', ['Sheet1'], 4, 4);
+        configLockedWb.Worksheets[0].SheetID = unlockedXlsxWb.Worksheets[0].SheetID;
+        configLockedWb.Worksheets[0].ProtectedRanges = [
+            { RangeID: 'cfg-lock-1', Range: 'A1:B2', LockedByUserID: ownerId }
+        ];
+        const configLockJson = JSON.stringify(configLockedWb);
+
+        const preParsed = new Map<string, ReturnType<SpreadsheetEngine['CreateEmptyWorkbook']>>();
+        preParsed.set(
+            MakePreParsedWorkbookCacheKey(unlockedXlsxB64, null),
+            engine.ParseWorkbook(unlockedXlsxB64, null, { SkipEvaluate: true })
+        );
+        preParsed.set(
+            MakePreParsedWorkbookCacheKey(unlockedXlsxB64, configLockJson),
+            engine.ParseWorkbook(unlockedXlsxB64, configLockJson, { SkipEvaluate: true })
+        );
+        preParsed.set(
+            MakePreParsedWorkbookCacheKey(editedXlsxB64, null),
+            engine.ParseWorkbook(editedXlsxB64, null, { SkipEvaluate: true })
+        );
+
+        const stripConfigAttempt = ValidateArtifactContentMutationAgainstLocks(
+            unlockedXlsxB64,
+            editedXlsxB64,
+            editorId,
+            false,
+            {
+                currentConfiguration: configLockJson,
+                nextConfiguration: null,
+                preParsedWorkbooks: preParsed
+            }
+        );
+        expect(stripConfigAttempt.Allowed).toBe(false);
+        expect(stripConfigAttempt.Reason).toMatch(/protected range/i);
+
+        // 2. Should-fix: EvaluateWorkbookIsolated clears indexedSheets & workbookVirtualAxisIndex so subsequent
+        //    structural edits still promote/shift live `-vrow-` references inside newly replaced Cell objects.
+        const vrowWb = engine.CreateEmptyWorkbook('VRowMergeTest', ['Sheet1'], 3, 2);
+        const sId = vrowWb.Worksheets[0].SheetID;
+        engine.SetCell(vrowWb, sId, 'A10', { Value: 40 }, false);
+        engine.SetCell(vrowWb, sId, 'B10', { Formula: '=A10+2' }, false);
+        RegisterSpreadsheetWorkerRunner({
+            ImportFromXlsxBytes: async (b, c, o) => engine.ImportFromXlsxBytes(b, c, o),
+            PatchXlsxBytes: async (orig, wbArg) => engine.PatchXlsxBytes(orig, wbArg),
+            EvaluateWorkbook: async (wbArg, ctx) => {
+                const cloned = structuredClone(wbArg);
+                engine.EvaluateWorkbook(cloned, ctx);
+                return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+            }
+        });
+        try {
+            await engine.EvaluateWorkbookIsolated(vrowWb);
+            expect(vrowWb.Worksheets[0].Cells['B10']?.ComputedValue).toBe(42);
+            engine.InsertRows(vrowWb, sId, 1, 2);
+            expect(vrowWb.Worksheets[0].Cells['A12']?.RawValue).toBe(40);
+            expect(vrowWb.Worksheets[0].Cells['B12']?.Formula).toBe('=A12+2');
+            expect(vrowWb.Worksheets[0].Cells['B12']?.ComputedValue).toBe(42);
+
+            // Follow-up: EvaluateWorkbookIsolated clears sheetLookupCache & sheetAxisIdSets so replaced Rows/RowIDs
+            // (even at identical Rows.length) resolve cleanly in ResolveFormulaFromStableIds and avoid stale axis-ID sets.
+            const cacheWb = engine.CreateEmptyWorkbook('SheetCacheMergeTest', ['Sheet1'], 3, 2);
+            const cacheSheet = cacheWb.Worksheets[0];
+            // Grow rows to 4 to populate sheetAxisIdSets, then populate sheetLookupCache via ResolveFormulaFromStableIds.
+            engine.SetCell(cacheWb, cacheSheet.SheetID, 'A4', { Value: 7 }, false);
+            expect(
+                engine.ResolveFormulaFromStableIds(
+                    cacheSheet,
+                    `=@CELL(${cacheSheet.Rows[0].RowID},${cacheSheet.Columns[0].ColumnID})`,
+                    cacheWb
+                )
+            ).toBe('=A1');
+
+            RegisterSpreadsheetWorkerRunner({
+                ImportFromXlsxBytes: async (b, c, o) => engine.ImportFromXlsxBytes(b, c, o),
+                PatchXlsxBytes: async (orig, wbArg) => engine.PatchXlsxBytes(orig, wbArg),
+                EvaluateWorkbook: async (wbArg, ctx) => {
+                    const cloned = structuredClone(wbArg);
+                    // Preserve row count (4) while swapping RowIDs on row 1 (which becomes worker-renamed-row-1)
+                    // and seeding a potential row-5 ID on row 2, ensuring cached RowID maps & axis sets would be stale.
+                    cloned.Worksheets[0].Rows[0] = {
+                        ...cloned.Worksheets[0].Rows[0],
+                        RowID: 'worker-renamed-row-1'
+                    };
+                    cloned.Worksheets[0].Rows[1] = {
+                        ...cloned.Worksheets[0].Rows[1],
+                        RowID: `${cacheSheet.SheetID}-row-5`
+                    };
+                    engine.EvaluateWorkbook(cloned, ctx);
+                    return { Workbook: cloned, EvaluatedFormulaCount: engine.LastEvaluatedFormulaCount };
+                }
+            });
+            await engine.EvaluateWorkbookIsolated(cacheWb);
+            expect(
+                engine.ResolveFormulaFromStableIds(
+                    cacheSheet,
+                    `=@CELL(worker-renamed-row-1,${cacheSheet.Columns[0].ColumnID})`,
+                    cacheWb
+                )
+            ).toBe('=A1');
+            // Growing from 4 to 5 rows must mint a unique non-colliding RowID against the refreshed Rows array
+            // (cannot collide with '${cacheSheet.SheetID}-row-5' returned by the worker).
+            engine.SetCell(cacheWb, cacheSheet.SheetID, 'A5', { Value: 99 }, false);
+            const allRowIds = cacheSheet.Rows.map((r) => r.RowID);
+            expect(new Set(allRowIds).size).toBe(allRowIds.length);
+        } finally {
+            RegisterSpreadsheetWorkerRunner(null);
+        }
+
+        // 3. Should-fix: Even with workbookDagCache pre-armed via SerializeWorkbook, ClearRange(recalc=true) and
+        //    EvaluateFormulaExpression reject under SetSpreadsheetWorkerIsolationRequired(true).
+        const guardWb = engine.CreateEmptyWorkbook('DagBypassGuard', ['Sheet1'], 4, 4);
+        engine.SetCell(guardWb, guardWb.Worksheets[0].SheetID, 'A1', { Value: 5 }, false);
+        engine.SetCell(guardWb, guardWb.Worksheets[0].SheetID, 'B1', { Formula: '=A1*2' }, true);
+        engine.SerializeWorkbook(guardWb); // Arms DAG cache
+        SetSpreadsheetWorkerIsolationRequired(true);
+        try {
+            expect(() => engine.ClearRange(guardWb, guardWb.Worksheets[0].SheetID, 'A1:A1', true)).toThrow(
+                /synchronous main-thread evaluation is prohibited/i
+            );
+            expect(() => engine.EvaluateFormulaExpression(guardWb, guardWb.Worksheets[0].SheetID, '=A1+1')).toThrow(
+                /synchronous main-thread evaluation is prohibited/i
+            );
+        } finally {
+            SetSpreadsheetWorkerIsolationRequired(false);
+        }
     });
 });

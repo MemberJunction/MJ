@@ -5,7 +5,12 @@ import { CHANNEL_INBOUND_VIDEO_TRACK, JSONValue, RealtimeToolDefinition, Realtim
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
 import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
 import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
-import { RemoteBrowserHumanInputEvent, RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
+import {
+  RemoteBrowserHumanInputEvent,
+  RemoteBrowserSnapshotView,
+  RemoteBrowserSurfaceComponent,
+  RemoteBrowserViewportSize,
+} from './remote-browser-surface.component';
 import {
   MapToolToAction,
   REMOTE_BROWSER_TOOL_DEFINITIONS,
@@ -181,6 +186,16 @@ const RELAY_HUMAN_INPUT_MUTATION = `
 `;
 
 /**
+ * VIEWPORT-RESIZE mutation — resizes the already-open remote browser page in place to match the usable
+ * drawer area below the toolbar, then pushes a fresh screencast frame without navigating or reloading.
+ */
+const RESIZE_VIEWPORT_MUTATION = `
+  mutation ResizeRemoteBrowserViewport($agentSessionID: String!, $width: Int!, $height: Int!) {
+    ResizeRemoteBrowserViewport(agentSessionID: $agentSessionID, width: $width, height: $height)
+  }
+`;
+
+/**
  * COPY-OUT query — reads the remote page's current text selection so the surface can write it to the LOCAL
  * clipboard on a `copy` / Cmd+C (the mirror of the `'text'` paste-in path). Returns `''` when nothing is
  * selected, no live browser exists, or the backend lacks `HumanTakeover`.
@@ -332,6 +347,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
   /** Subscription to the bound surface's `HumanInput` output, torn down on unbind/dispose. */
   private humanInputSub: Subscription | null = null;
+
+  /** Subscription to the bound surface's `ViewportResize` output, torn down on unbind/dispose. */
+  private viewportResizeSub: Subscription | null = null;
 
   /**
    * Whether the server confirmed it is PUSHING screencast frames for this session (`ScreenStreaming`
@@ -515,6 +533,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     instance.Interactive = true;
     this.ensureVideoBridge();
     this.humanInputSub = instance.HumanInput.subscribe((input) => this.relayHumanInput(input));
+    this.viewportResizeSub = instance.ViewportResize?.subscribe((size) => this.relayViewportResize(size)) ?? null;
     this.audioMutedSub = instance.AudioMutedChange.subscribe((muted) => this.audioPlayer?.SetMuted(muted));
     void this.startScreencast(instance);
     void this.startAudioStream(instance);
@@ -530,6 +549,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   public override UnbindSurface(): void {
     this.humanInputSub?.unsubscribe();
     this.humanInputSub = null;
+    this.viewportResizeSub?.unsubscribe();
+    this.viewportResizeSub = null;
     this.audioMutedSub?.unsubscribe();
     this.audioMutedSub = null;
     void this.stopScreencast();
@@ -544,6 +565,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     this.videoBridge = null;
     this.humanInputSub?.unsubscribe();
     this.humanInputSub = null;
+    this.viewportResizeSub?.unsubscribe();
+    this.viewportResizeSub = null;
     this.audioMutedSub?.unsubscribe();
     this.audioMutedSub = null;
     void this.stopScreencast();
@@ -785,6 +808,25 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       deltaY: input.deltaY ?? null,
       // Server expects a comma-separated modifier list (e.g. "Shift,Control"); null when none held.
       modifiers: input.modifiers && input.modifiers.length > 0 ? input.modifiers.join(',') : null,
+    });
+  }
+
+  /**
+   * Relays the surface's measured usable viewport size (`{ Width, Height }`) to the server's
+   * {@link RESIZE_VIEWPORT_MUTATION}, which resizes the already-open Playwright page in place and pushes a
+   * fresh screencast frame without navigating or reloading. Best-effort and fire-and-forget.
+   *
+   * @param size The usable drawer viewport dimensions in CSS pixels.
+   */
+  private relayViewportResize(size: RemoteBrowserViewportSize): void {
+    const sessionId = this.Context?.AgentSessionID;
+    if (!sessionId || size.Width <= 0 || size.Height <= 0) {
+      return;
+    }
+    void this.Context?.ExecuteServerAction(RESIZE_VIEWPORT_MUTATION, {
+      agentSessionID: sessionId,
+      width: Math.floor(size.Width),
+      height: Math.floor(size.Height),
     });
   }
 

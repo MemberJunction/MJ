@@ -175,12 +175,34 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT175 - List Refresh From Source",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "079BA540-54B1-4F76-8EBC-22F9E90A741E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT21 - Open-App Metadata Teardown",
             "Sequence": 15,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "C772274A-3A0C-424E-B74B-F40235B5F063"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT178 - Open App Install From a Local Folder",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AE89BD61-438C-4D5B-AE9A-62E6BF8DA7BC"
           }
         },
         {
@@ -1341,6 +1363,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT156 - Widget Guest Row Isolation",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "51AEF347-7646-43D5-95BD-CA000E453594"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT133 - FLS Close-out (server)",
             "Sequence": 49,
             "Status": "Active"
@@ -1666,6 +1699,28 @@
           },
           "primaryKey": {
             "ID": "78E3D9A1-2C4B-4F6A-9E15-3B8D4C5E6F70"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT177 - Saved-Query Metadata Not Loaded Into Metadata",
+            "Sequence": 85,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6C75CCCD-9D4A-46BD-8E44-C995007B32A0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT176 - Metadata Dataset Rows Reach Clients Once",
+            "Sequence": 86,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9C325FFD-F122-4114-88C6-4FCD88758AF7"
           }
         },
         {

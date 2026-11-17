@@ -5633,6 +5633,9 @@ importers:
       '@memberjunction/ai-engine-base':
         specifier: 6.3.0-edge.0
         version: link:../../../AI/BaseAIEngine
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.3.0-edge.0
+        version: link:../../../AI/Vectors/Memory
       '@memberjunction/communication-types':
         specifier: 6.3.0-edge.0
         version: link:../../../Communication/base-types
@@ -6796,6 +6799,9 @@ importers:
       docx:
         specifier: ^9.5.1
         version: 9.6.1
+      dompurify:
+        specifier: ^3.3.0
+        version: 3.3.1
       html-to-image:
         specifier: ^1.11.11
         version: 1.11.13
@@ -7392,6 +7398,9 @@ importers:
       '@memberjunction/ai-realtime-client':
         specifier: 6.3.0-edge.0
         version: link:../../../AI/RealtimeClient
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.3.0-edge.0
+        version: link:../../../AI/Vectors/Memory
       '@memberjunction/conversations-runtime':
         specifier: 6.3.0-edge.0
         version: link:../../../ConversationsRuntime
@@ -7501,12 +7510,19 @@ importers:
       '@memberjunction/ng-test-utils':
         specifier: 6.3.0-edge.0
         version: link:../test-utils
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
       sass:
         specifier: ^1.97.3
         version: 1.97.3
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+    optionalDependencies:
+      '@huggingface/transformers':
+        specifier: ^4.3.1
+        version: 4.3.1(@types/node@24.10.11)
 
   packages/Angular/Generic/credentials:
     dependencies:
@@ -8745,6 +8761,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.3.0-edge.0
         version: link:../ui-components
+      diff:
+        specifier: 8.0.3
+        version: 8.0.3
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -10821,6 +10840,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/ai-engine-base':
+        specifier: 6.3.0-edge.0
+        version: link:../AI/BaseAIEngine
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -11479,6 +11501,9 @@ importers:
       jszip:
         specifier: ^3.10.1
         version: 3.10.1
+      playwright:
+        specifier: '>=1.48.0'
+        version: 1.58.1
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -13217,6 +13242,9 @@ importers:
       '@memberjunction/integration-pk-classifier':
         specifier: 6.3.0-edge.0
         version: link:../Integration/pk-classifier
+      '@memberjunction/lists':
+        specifier: 6.3.0-edge.0
+        version: link:../Lists/server
       '@memberjunction/predictive-studio-core':
         specifier: 6.3.0-edge.0
         version: link:../AI/PredictiveStudio/Core
@@ -15529,6 +15557,9 @@ importers:
       '@memberjunction/ai-core-plus':
         specifier: 6.3.0-edge.0
         version: link:../../AI/CorePlus
+      '@memberjunction/ai-engine-base':
+        specifier: 6.3.0-edge.0
+        version: link:../../AI/BaseAIEngine
       '@memberjunction/ai-prompts':
         specifier: 6.3.0-edge.0
         version: link:../../AI/Prompts
@@ -16994,6 +17025,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/ai-engine-base':
+        specifier: 6.3.0-edge.0
+        version: link:../../AI/BaseAIEngine
       '@types/debug':
         specifier: ^4.1.12
         version: 4.1.12
@@ -17097,6 +17131,9 @@ importers:
       '@memberjunction/ai-vectordb':
         specifier: 6.3.0-edge.0
         version: link:../../AI/Vectors/Database
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.3.0-edge.0
+        version: link:../../AI/Vectors/Memory
       '@memberjunction/aiengine':
         specifier: 6.3.0-edge.0
         version: link:../../AI/Engine
@@ -17187,6 +17224,9 @@ importers:
       '@memberjunction/integration-schema-builder':
         specifier: 6.3.0-edge.0
         version: link:../../Integration/schema-builder
+      '@memberjunction/lists':
+        specifier: 6.3.0-edge.0
+        version: link:../../Lists/server
       '@memberjunction/livekit-room-server':
         specifier: 6.3.0-edge.0
         version: link:../../LiveKitRoomServer

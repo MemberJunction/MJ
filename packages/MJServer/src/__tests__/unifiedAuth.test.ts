@@ -71,10 +71,14 @@ vi.mock('../auth/index.js', () => ({
     get extractUserInfoFromPayload() { return this.ExtractUserInfoFromPayload; },
 }));
 
-vi.mock('../cache.js', () => {
+vi.mock('../cache.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../cache.js')>();
   const map = new Map<string, boolean>();
-  return { AuthCache: map,
-    get authCache() { return this.AuthCache; } };
+  return {
+    AuthCache: map,
+    get authCache() { return this.AuthCache; },
+    HashAuthToken: actual.HashAuthToken,
+  };
 });
 
 vi.mock('../config.js', () => ({

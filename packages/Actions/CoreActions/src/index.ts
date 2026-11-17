@@ -106,9 +106,6 @@ export * from './custom/esignature/void-signature-request.action';
 // Security Actions
 export * from './custom/security/password-strength.action';
 
-// Code Execution Actions
-export * from './custom/code-execution/execute-code.action';
-
 // Workflow Control Actions
 export * from './custom/workflow/conditional.action';
 export * from './custom/workflow/loop.action';
