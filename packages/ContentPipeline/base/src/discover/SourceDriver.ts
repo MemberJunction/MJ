@@ -40,6 +40,22 @@ export interface DiscoveredItem {
     Complete?: boolean;
     /** Anything a later stage in the same run should see, namespaced by the driver. */
     Extensions?: Record<string, unknown>;
+    /**
+     * The driver knows this locator is gone (the source reported a deletion, or a page now answers 404).
+     * The source's top-level item at {@link URL} moves to `DeleteStatus = 'Pending'` without waiting for a
+     * Sync, and the Delete stage removes it and its vectors. Only {@link URL} is read from a removed item.
+     */
+    Removed?: boolean;
+}
+
+/**
+ * What a driver's `Discover` may return when it ends: a token saying where to carry on, when the walk is not
+ * finished (it ran out of time, or reached a page limit). MJ keeps the token on the Content Source and hands
+ * it back as {@link DiscoverRequest.ResumeToken} on the next walk. Returning nothing, or no token, means the
+ * walk is finished.
+ */
+export interface DiscoverWalkEnd {
+    ResumeToken?: string | null;
 }
 
 /** What a driver is told when walking a source. */
@@ -62,6 +78,17 @@ export interface DiscoverRequest {
     Since?: Date | null;
     /** The resolved confidence scale for this source and run. */
     Confidence?: ResolvedConfidenceScale;
+    /**
+     * Where the previous walk of this source stopped: the token its `Discover` returned. `null` or absent on
+     * a fresh walk. A resumed walk keeps the {@link Since} of the walk it continues.
+     */
+    ResumeToken?: string | null;
+    /**
+     * When the driver should stop and return a resume token (`Options.Tuning.DiscoverWalkBudgetMs` after the
+     * walk started). Absent when no budget is set. A driver that cannot resume ignores it and runs to the end
+     * or until {@link Signal} fires.
+     */
+    Deadline?: Date | null;
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
     /** Fires when the run is asked to stop; a driver checks it between pages and returns. */
@@ -82,6 +109,20 @@ export interface LocatorFetchRequest {
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
     Signal: AbortSignal;
+}
+
+/** What a driver is asked to read back in one go: several locators it produced, for one session. */
+export interface LocatorBatchFetchRequest extends Omit<LocatorFetchRequest, 'URL'> {
+    /** The locators, as the driver yielded them. */
+    URLs: readonly string[];
+}
+
+/** One locator's result from a batch fetch: its bytes, or why it could not be read. */
+export interface LocatorBatchFetchResult {
+    URL: string;
+    Response?: LocatorFetchResponse;
+    /** Why this locator could not be read. Its item fails or retries alone, as a single fetch's error would. */
+    Error?: Error;
 }
 
 /** The bytes behind a locator. */
