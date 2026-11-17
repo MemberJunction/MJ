@@ -54,7 +54,8 @@ beforeEach(async () => {
   }));
   fake.configFromPretrained.mockImplementation(async () => fake.config);
   fake.lengthOf = () => fake.tokensPerText;
-  Object.assign(fake.tokenizer, { encode: (text: string) => new Array(fake.lengthOf(text)).fill(0) });
+  // A real tokenizer reports Infinity when its config sets no model_max_length.
+  Object.assign(fake.tokenizer, { encode: (text: string) => new Array(fake.lengthOf(text)).fill(0), model_max_length: Infinity });
   fake.tokenizerFromPretrained.mockImplementation(async () => fake.tokenizer);
   fake.modelFromPretrained.mockImplementation(async () => fakeModel());
 });
@@ -147,6 +148,32 @@ describe('EmbedTextsWithModel', () => {
     const { Vectors } = await EmbedTextsWithModel(MODEL, ['a']);
     expect(Vectors).toHaveLength(1);
     expect(fake.modelFromPretrained).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps each text's length in the batch budget at the tokenizer's model_max_length", async () => {
+    Object.assign(fake.tokenizer, { model_max_length: 512 });
+    fake.lengthOf = () => 1500;
+    await EmbedTextsWithModel(MODEL, Array.from({ length: 16 }, (_, i) => String(i)));
+    // The tokenizer truncates each text to 512 tokens, so 16 x 512 = 8192 fits one call.
+    expect(fake.tokenizer.mock.calls.map((c) => c[0].length)).toEqual([16]);
+  });
+
+  it('releases the ONNX model when the tokenizer beside it fails to load', async () => {
+    const orphan = fakeModel();
+    fake.tokenizerFromPretrained.mockRejectedValueOnce(new Error('tokenizer.json is corrupt'));
+    fake.modelFromPretrained.mockImplementationOnce(async () => orphan);
+    await expect(EmbedTextsWithModel(MODEL, ['a'])).rejects.toThrow('Failed to load local embedding model');
+    await vi.waitFor(() => expect(orphan.dispose).toHaveBeenCalledOnce());
+  });
+
+  it('reports the load failure, not the release failure, when releasing the orphaned model also fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const orphan = fakeModel(async () => { throw new Error('session busy'); });
+    fake.tokenizerFromPretrained.mockRejectedValueOnce(new Error('tokenizer.json is corrupt'));
+    fake.modelFromPretrained.mockImplementationOnce(async () => orphan);
+    await expect(EmbedTextsWithModel(MODEL, ['a'])).rejects.toThrow('Failed to load local embedding model');
+    expect(orphan.dispose).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(MODEL), expect.any(Error));
   });
 
   it("caps each text's length in the batch budget at maxInputTokens", async () => {

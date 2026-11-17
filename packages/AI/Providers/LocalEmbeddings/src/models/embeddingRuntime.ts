@@ -146,7 +146,11 @@ async function embedBatches({ tokenizer, model }: LoadedModel, texts: string[], 
   const vectors: Float32Array[] = [];
   let tokens = 0;
 
-  const lengths = texts.map((t) => Math.min(tokenizer.encode(t).length, maxInputTokens ?? Infinity));
+  // The tokenizer truncates each text to the smaller of maxInputTokens and its model_max_length,
+  // so the budget counts a text at the length the model actually sees.
+  const modelMaxLength: number = tokenizer.model_max_length;
+  const cap = Math.min(maxInputTokens ?? Infinity, modelMaxLength);
+  const lengths = texts.map((t) => Math.min(tokenizer.encode(t).length, cap));
   for (let start = 0, end = 0; start < texts.length; start = end) {
     end = batchEnd(lengths, start);
     const inputs = tokenizer(texts.slice(start, end), { padding: true, truncation: true, max_length: maxInputTokens });
@@ -315,7 +319,7 @@ function getModel(modelName: string): Promise<LoadedModel> {
  * downloading models from the Hugging Face Hub on first startup.
  */
 async function loadModel(modelId: string): Promise<LoadedModel> {
-  const { AutoConfig, AutoModel, AutoTokenizer } = await loadTransformers();
+  const { AutoConfig } = await loadTransformers();
   let lastError: unknown = null;
   for (let attempt = 0; attempt < DEFAULT_MAX_RETRIES; attempt++) {
     try {
@@ -328,10 +332,7 @@ async function loadModel(modelId: string): Promise<LoadedModel> {
         await delay(calculateBackoffDelay(attempt - 1, DEFAULT_INITIAL_DELAY_MS, DEFAULT_MAX_DELAY_MS));
       }
       const config = textOnly(await AutoConfig.from_pretrained(modelId));
-      const [tokenizer, model] = await Promise.all([
-        AutoTokenizer.from_pretrained(modelId),
-        AutoModel.from_pretrained(modelId, { config, dtype: DTYPE, device: 'cpu', session_options: sessionOptions() }),
-      ]);
+      const { tokenizer, model } = await loadTokenizerAndModel(modelId, config);
       if (attempt > 0) {
         // Recovered after a retry — worth surfacing regardless of verbosity
         console.log(`Successfully loaded model ${modelId} on attempt ${attempt + 1}`);
@@ -352,6 +353,30 @@ async function loadModel(modelId: string): Promise<LoadedModel> {
   const errorInfo = ErrorAnalyzer.analyzeError(lastError, 'LocalEmbedding');
   const errorMessage = typeof errorInfo === 'string' ? errorInfo : (errorInfo as { message?: string }).message || 'Unknown error';
   throw new Error(`Failed to load local embedding model ${modelId}: ${errorMessage}`);
+}
+
+/**
+ * Loads the tokenizer and the ONNX model side by side. When the tokenizer fails, a model that did
+ * load is released: nothing else holds it, so its native sessions would leak on every retry.
+ */
+async function loadTokenizerAndModel(modelId: string, config: PretrainedConfig): Promise<Pick<LoadedModel, 'tokenizer' | 'model'>> {
+  const { AutoModel, AutoTokenizer } = await loadTransformers();
+  const [tokenizer, model] = await Promise.allSettled([
+    AutoTokenizer.from_pretrained(modelId),
+    AutoModel.from_pretrained(modelId, { config, dtype: DTYPE, device: 'cpu', session_options: sessionOptions() }),
+  ]);
+  if (tokenizer.status === 'rejected') {
+    if (model.status === 'fulfilled') {
+      await model.value.dispose().catch((error: unknown) => {
+        console.warn(`[LocalEmbedding] Could not release ${modelId} after its tokenizer failed to load:`, error);
+      });
+    }
+    throw tokenizer.reason;
+  }
+  if (model.status === 'rejected') {
+    throw model.reason;
+  }
+  return { tokenizer: tokenizer.value, model: model.value };
 }
 
 /** True for a network error worth retrying a model download for. */
