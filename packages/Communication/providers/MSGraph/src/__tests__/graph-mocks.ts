@@ -15,6 +15,7 @@ export type GraphCall = {
     path: string;
     query?: Record<string, string>;
     filter?: string;
+    expand?: string;
     orderby?: string;
     top?: number;
     headers: Record<string, string>;
@@ -63,6 +64,10 @@ export function createGraphApiMock(): GraphApiMock {
             },
             orderby(o: string) {
                 call.orderby = o;
+                return chain;
+            },
+            expand(e: string) {
+                call.expand = e;
                 return chain;
             },
             header(name: string, value: string) {
