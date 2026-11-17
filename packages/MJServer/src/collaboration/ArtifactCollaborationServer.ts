@@ -1980,7 +1980,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     latestHash,
                     room.ProviderKey
                 );
-                this.reconcileOutOfBandVersionIntoRoom(room, latest, {
+                await this.reconcileOutOfBandVersionIntoRoom(room, latest, {
                     originServerId: tracked?.OriginServerID,
                     savedStateVectorB64: tracked?.SavedStateVectorB64,
                     savedSnapshotB64: tracked?.SavedSnapshotB64,
@@ -2338,6 +2338,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 let mutationMergeResult: ConcurrentDocumentMergeResult | null = null;
                 let isStructuredSlideOrSheet = false;
 
+                const preparedMutationWb =
+                    options?.isRestore === true
+                        ? await this.preparePreparsedWorkbookIfXlsxIsolated(newContent, null)
+                        : await this.preparePreparsedWorkbookIfXlsxIsolated(newContent, null);
+                const preparedMutationBaseline =
+                    options?.isRestore !== true && previousContent
+                        ? await this.preparePreparsedWorkbookIfXlsxIsolated(previousContent, null)
+                        : undefined;
+
                 tempDoc.transact(() => {
                     if (options?.isRestore === true) {
                         if (tempYText.length > 0) {
@@ -2347,7 +2356,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             tempYText.insert(0, newContent);
                         }
                         this.syncSlideDeckStructuresIfPresent(tempDoc, newContent);
-                        this.syncSpreadsheetStructuresIfPresent(tempDoc, newContent, null);
+                        this.syncSpreadsheetStructuresIfPresent(tempDoc, newContent, null, {
+                            preparsedWorkbook: preparedMutationWb.workbook,
+                            xlsxHandled: preparedMutationWb.xlsxHandled
+                        });
                     } else {
                         mutationMergeResult = this.applyMinimalTextDiff(
                             tempYText,
@@ -2361,7 +2373,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         });
                         this.syncSpreadsheetStructuresIfPresent(tempDoc, newContent, null, {
                             preserveConcurrentAdditions: true,
-                            baselineContent: previousContent
+                            baselineContent: previousContent,
+                            preparsedWorkbook: preparedMutationWb.workbook,
+                            xlsxHandled: preparedMutationWb.xlsxHandled,
+                            preparsedBaselineWorkbook: preparedMutationBaseline?.workbook,
+                            baselineXlsxHandled: preparedMutationBaseline?.xlsxHandled
                         });
                         isStructuredSlideOrSheet =
                             tempDoc.getMap('slidesById').size > 0 ||
@@ -2430,6 +2446,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 mutationMergeResult = room.LastReconciledOobMergeResult;
             }
         } else if (isRestore || existing !== newContent) {
+            const preparedLiveMutationWb = await this.preparePreparsedWorkbookIfXlsxIsolated(newContent, null);
+            const preparedLiveBaselineWb =
+                !isRestore && previousContent
+                    ? await this.preparePreparsedWorkbookIfXlsxIsolated(previousContent, null)
+                    : undefined;
             room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
             const nextEpoch = `epoch-${isRestore ? 'restore-' : ''}${Date.now()}-${randomBytes(4).toString('hex')}`;
             room.RoomEpoch = nextEpoch;
@@ -2451,7 +2472,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 );
                 room.Doc.transact(() => {
                     this.syncSlideDeckStructuresIfPresent(room.Doc, newContent);
-                    this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent);
+                    this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent, null, {
+                        preparsedWorkbook: preparedLiveMutationWb.workbook,
+                        xlsxHandled: preparedLiveMutationWb.xlsxHandled
+                    });
                 }, 'server-restore');
             } else {
                 room.Doc.transact(() => {
@@ -2469,7 +2493,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     });
                     this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent, null, {
                         preserveConcurrentAdditions: true,
-                        baselineContent: previousContent
+                        baselineContent: previousContent,
+                        preparsedWorkbook: preparedLiveMutationWb.workbook,
+                        xlsxHandled: preparedLiveMutationWb.xlsxHandled,
+                        preparsedBaselineWorkbook: preparedLiveBaselineWb?.workbook,
+                        baselineXlsxHandled: preparedLiveBaselineWb?.xlsxHandled
                     });
                     isStructuredSlideOrSheet =
                         room.Doc.getMap('slidesById').size > 0 ||
@@ -2682,7 +2710,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     if (this._relay) {
                         await this.requestPeerRoomSyncCatchup(room);
                     }
-                    this.reconcileOutOfBandVersionIntoRoom(room, savedVersion, {
+                    await this.reconcileOutOfBandVersionIntoRoom(room, savedVersion, {
                         isRestore: true,
                         actorUserId: savedVersion.UserID ?? user.ID
                     });
@@ -4544,7 +4572,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 expectedHash,
                                 room.ProviderKey
                             );
-                            this.reconcileOutOfBandVersionIntoRoom(
+                            void this.reconcileOutOfBandVersionIntoRoom(
                                 room,
                                 {
                                     ID: eventVersionId,
@@ -4586,6 +4614,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         });
     }
 
+    private isXlsxTextPayload(raw: string | null | undefined): boolean {
+        const trimmed = (raw ?? '').trim();
+        return trimmed.startsWith('data:') || trimmed.startsWith('UEsDB');
+    }
+
     protected reconcileOutOfBandVersionIntoRoom(
         room: CollaborationRoom,
         version: {
@@ -4607,7 +4640,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             isRestore?: boolean;
             actorUserId?: string;
         }
-    ): void {
+    ): Promise<void> | void {
         const isRestore = this.isAuthoritativeRestoreVersion(version, options?.isRestore);
         if (isRestore) {
             const alreadyApplied =
@@ -4631,9 +4664,97 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
         const targetText = version.Content || version.Configuration || '';
         const targetContentHash = this.computeSha256Hex(targetText);
-        const yText = room.Doc.getText('content');
         const liveText = this.extractRoomSerializedContent(room.Doc);
         const baselineText = options?.previousContent ?? room.BaseVersionText;
+        const hasXlsxPayload =
+            this.isXlsxTextPayload(targetText) ||
+            this.isXlsxTextPayload(version.Configuration) ||
+            this.isXlsxTextPayload(liveText) ||
+            this.isXlsxTextPayload(baselineText) ||
+            this.isXlsxTextPayload(room.BaseConfiguration);
+
+        if (hasXlsxPayload) {
+            return (async () => {
+                const targetPre = await this.preparePreparsedWorkbookIfXlsxIsolated(
+                    targetText,
+                    version.Configuration ?? null
+                );
+                const contentTargetPre =
+                    (version.Content ?? '') === targetText
+                        ? targetPre
+                        : await this.preparePreparsedWorkbookIfXlsxIsolated(
+                              version.Content ?? '',
+                              version.Configuration ?? null
+                          );
+                const baselinePre = baselineText
+                    ? await this.preparePreparsedWorkbookIfXlsxIsolated(baselineText, null)
+                    : undefined;
+                const rollbackPre = await this.preparePreparsedWorkbookIfXlsxIsolated(
+                    liveText,
+                    room.BaseConfiguration ?? null
+                );
+                this.applyOutOfBandVersionReconcile(
+                    room,
+                    version,
+                    options,
+                    isRestore,
+                    targetText,
+                    targetContentHash,
+                    liveText,
+                    baselineText,
+                    { targetPre, contentTargetPre, baselinePre, rollbackPre }
+                );
+            })();
+        }
+
+        this.applyOutOfBandVersionReconcile(
+            room,
+            version,
+            options,
+            isRestore,
+            targetText,
+            targetContentHash,
+            liveText,
+            baselineText
+        );
+    }
+
+    private applyOutOfBandVersionReconcile(
+        room: CollaborationRoom,
+        version: {
+            ID: string;
+            VersionNumber: number;
+            Content?: string | null;
+            Configuration?: string | null;
+            Description?: string | null;
+            Comments?: string | null;
+            UserID?: string;
+        },
+        options:
+            | {
+                  previousContent?: string;
+                  originServerId?: string;
+                  savedStateVectorB64?: string;
+                  savedSnapshotB64?: string;
+                  savedContentHash?: string;
+                  crdtSynced?: boolean;
+                  isRestore?: boolean;
+                  actorUserId?: string;
+              }
+            | undefined,
+        isRestore: boolean,
+        targetText: string,
+        targetContentHash: string,
+        liveText: string,
+        baselineText: string,
+        pre?: {
+            targetPre: { workbook?: WorkbookSpec; xlsxHandled: boolean };
+            contentTargetPre: { workbook?: WorkbookSpec; xlsxHandled: boolean };
+            baselinePre?: { workbook?: WorkbookSpec; xlsxHandled: boolean };
+            rollbackPre: { workbook?: WorkbookSpec; xlsxHandled: boolean };
+        }
+    ): void {
+        const yText = room.Doc.getText('content');
         const nextEpoch = `epoch-${isRestore ? 'restore-' : ''}${version.ID}-${version.VersionNumber}`;
         room.RoomEpoch = nextEpoch;
 
@@ -4802,7 +4923,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             );
             room.Doc.transact(() => {
                 this.syncSlideDeckStructuresIfPresent(room.Doc, targetText);
-                this.syncSpreadsheetStructuresIfPresent(room.Doc, targetText, version.Configuration ?? null);
+                this.syncSpreadsheetStructuresIfPresent(room.Doc, targetText, version.Configuration ?? null, {
+                    preparsedWorkbook: pre?.targetPre.workbook,
+                    xlsxHandled: pre?.targetPre.xlsxHandled
+                });
                 const restoreSuggestions = this.readSuggestionsFromVersionConfiguration(version.Configuration);
                 if (restoreSuggestions.length > 0 || room.Doc.getMap('suggestions').size > 0) {
                     this.syncSuggestionsIntoDoc(
@@ -4929,7 +5053,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 this.syncSpreadsheetStructuresIfPresent(
                     room.Doc,
                     version.Content ?? '',
-                    version.Configuration ?? null
+                    version.Configuration ?? null,
+                    {
+                        preparsedWorkbook: pre?.contentTargetPre.workbook,
+                        xlsxHandled: pre?.contentTargetPre.xlsxHandled
+                    }
                 );
                 setBaseMeta();
             }, 'server-oob-version');
@@ -4954,7 +5082,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     version.Configuration ?? null,
                     {
                         preserveConcurrentAdditions: true,
-                        baselineContent: baselineText
+                        baselineContent: baselineText,
+                        preparsedWorkbook: pre?.contentTargetPre.workbook,
+                        xlsxHandled: pre?.contentTargetPre.xlsxHandled,
+                        preparsedBaselineWorkbook: pre?.baselinePre?.workbook,
+                        baselineXlsxHandled: pre?.baselinePre?.xlsxHandled
                     }
                 );
                 const oobSuggestions = this.readSuggestionsFromVersionConfiguration(version.Configuration);
@@ -5012,7 +5144,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         this.syncSpreadsheetStructuresIfPresent(
                             room.Doc,
                             liveText,
-                            room.BaseConfiguration ?? null
+                            room.BaseConfiguration ?? null,
+                            {
+                                preparsedWorkbook: pre?.rollbackPre.workbook,
+                                xlsxHandled: pre?.rollbackPre.xlsxHandled
+                            }
                         );
                     }, 'server-oob-version');
                     room.DirtyVersion = true;
@@ -5141,7 +5277,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                           originServerId: options?.originServerId,
                           actorUserId: resolvedActorUserId
                       };
-                this.reconcileOutOfBandVersionIntoRoom(room, latest, reconcileOptions);
+                await this.reconcileOutOfBandVersionIntoRoom(room, latest, reconcileOptions);
             }
         } catch (err) {
             LogError(
@@ -5904,6 +6040,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             let seededOrUpdatedWorkingState = sanitizedLegacyMeta;
 
             if (!appliedWorkingState && yText.length === 0 && (versionTargetText || versionSuggestions.length > 0)) {
+                const preparedHydrateSeedWb = await this.preparePreparsedWorkbookIfXlsxIsolated(
+                    versionRow?.Content ?? '',
+                    versionRow?.Configuration ?? null
+                );
                 // Seed inside a deterministic-clientID Y.Doc derived from versionRow.ID (or room.ArtifactID)
                 // so multi-instance cold opens produce identical Yjs CRDT item IDs (clientID, clock)
                 // and merge without duplicating text (Blocker 2, Path 2).
@@ -5920,7 +6060,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         this.syncSpreadsheetStructuresIfPresent(
                             seedDoc,
                             versionRow?.Content ?? '',
-                            versionRow?.Configuration ?? null
+                            versionRow?.Configuration ?? null,
+                            {
+                                preparsedWorkbook: preparedHydrateSeedWb.workbook,
+                                xlsxHandled: preparedHydrateSeedWb.xlsxHandled
+                            }
                         );
                         if (versionSuggestions.length > 0) {
                             this.syncSuggestionsIntoDoc(
@@ -6043,6 +6187,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 let isStructuredSlideOrSheet = false;
                 const keepHydrateMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${versionRow.VersionNumber}`;
                 if (isHydrateRestore) {
+                    const preparedHydrateRestoreWb = await this.preparePreparsedWorkbookIfXlsxIsolated(
+                        versionTargetText,
+                        versionRow.Configuration ?? null
+                    );
                     room.Doc.transact(() => {
                         const meta = room.Doc.getMap('meta');
                         meta.set('roomEpoch', nextEpoch);
@@ -6060,7 +6208,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         this.syncSpreadsheetStructuresIfPresent(
                             room.Doc,
                             versionTargetText,
-                            versionRow.Configuration ?? null
+                            versionRow.Configuration ?? null,
+                            {
+                                preparsedWorkbook: preparedHydrateRestoreWb.workbook,
+                                xlsxHandled: preparedHydrateRestoreWb.xlsxHandled
+                            }
                         );
                         if (versionSuggestions.length > 0 || room.Doc.getMap('suggestions').size > 0) {
                             this.syncSuggestionsIntoDoc(
@@ -6071,6 +6223,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         }
                     }, 'hydrate');
                 } else {
+                    const preparedHydrateMergeWb =
+                        !alreadyContainsVersionOps && currentSerialized !== versionTargetText
+                            ? await this.preparePreparsedWorkbookIfXlsxIsolated(
+                                  versionRow.Content ?? '',
+                                  versionRow.Configuration ?? null
+                              )
+                            : undefined;
+                    const preparedHydrateBaselineWb =
+                        !alreadyContainsVersionOps && currentSerialized !== versionTargetText && baseVersionText
+                            ? await this.preparePreparsedWorkbookIfXlsxIsolated(baseVersionText, null)
+                            : undefined;
                     room.Doc.transact(() => {
                         const meta = room.Doc.getMap('meta');
                         meta.set('roomEpoch', nextEpoch);
@@ -6083,8 +6246,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             );
                             const mergeOpts =
                                 baseVersionText !== undefined
-                                    ? { preserveConcurrentAdditions: true, baselineContent: baseVersionText }
-                                    : undefined;
+                                    ? {
+                                          preserveConcurrentAdditions: true,
+                                          baselineContent: baseVersionText,
+                                          preparsedWorkbook: preparedHydrateMergeWb?.workbook,
+                                          xlsxHandled: preparedHydrateMergeWb?.xlsxHandled,
+                                          preparsedBaselineWorkbook: preparedHydrateBaselineWb?.workbook,
+                                          baselineXlsxHandled: preparedHydrateBaselineWb?.xlsxHandled
+                                      }
+                                    : {
+                                          preparsedWorkbook: preparedHydrateMergeWb?.workbook,
+                                          xlsxHandled: preparedHydrateMergeWb?.xlsxHandled
+                                      };
                             this.syncSlideDeckStructuresIfPresent(room.Doc, versionTargetText, mergeOpts);
                             this.syncSpreadsheetStructuresIfPresent(
                                 room.Doc,
@@ -6438,7 +6611,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      */
     protected isIncomingUpdateBlockedByLocks(
         room: CollaborationRoom,
-        conn: CollaborationClientConnection,
+        conn: Pick<CollaborationClientConnection, 'User' | 'IsOwner'>,
         incomingUpdateBytes: Uint8Array
     ): { Allowed: boolean; Reason?: string } {
         if (incomingUpdateBytes.byteLength === 0) {
@@ -6542,6 +6715,20 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 return {
                     Allowed: false,
                     Reason: 'Forbidden: clients cannot mutate server collaboration metadata.'
+                };
+            }
+            const clientSheetCount = probeDoc.getMap('worksheetsById').size;
+            if (clientSheetCount > MAX_IMPORT_SHEETS) {
+                return {
+                    Allowed: false,
+                    Reason: `Spreadsheet rejected: workbook exceeds maximum sheet limit (${MAX_IMPORT_SHEETS}).`
+                };
+            }
+            const clientCellCount = probeDoc.getMap('sheetCellsByCoord').size;
+            if (clientCellCount > MAX_IMPORT_WORKBOOK_CELLS) {
+                return {
+                    Allowed: false,
+                    Reason: `Spreadsheet rejected: workbook exceeds maximum cell limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
                 };
             }
             const nextContent = this.extractRoomSerializedContent(probeDoc);
@@ -9444,11 +9631,54 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      * and `doc.getMap('sheetCellsByCoord')` (keyed by `<SheetID>::<RowID>::<ColumnID>`) so concurrent
      * cell edits, row/column insertions, and formula edits merge without conflicts (`§ 6.2`, `Accept #1`).
      */
+    /**
+     * Parses `.xlsx` binary/data-URL content/configuration inside the isolated spreadsheet worker
+     * (`SkipEvaluate: true`) ahead of synchronous `Y.Doc.transact(...)` calls so `.xlsx` ZIP/XML parsing
+     * never runs unsandboxed on the main Node event loop (`R8-2`).
+     */
+    private async preparePreparsedWorkbookIfXlsxIsolated(
+        rawContent: string | null | undefined,
+        rawConfiguration?: string | null
+    ): Promise<{ workbook?: WorkbookSpec; xlsxHandled: boolean }> {
+        const trimmedContent = (rawContent ?? '').trim();
+        const trimmedConfig = (rawConfiguration ?? '').trim();
+        const looksLikeXlsx =
+            trimmedContent.startsWith('data:') ||
+            trimmedContent.startsWith('UEsDB') ||
+            trimmedConfig.startsWith('data:') ||
+            trimmedConfig.startsWith('UEsDB');
+        if (!looksLikeXlsx) {
+            return { xlsxHandled: false };
+        }
+        try {
+            const workbook = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(
+                rawContent ?? '',
+                rawConfiguration ?? null,
+                { SkipEvaluate: true }
+            );
+            return { workbook, xlsxHandled: true };
+        } catch (err) {
+            LogError(
+                `ArtifactCollaborationServer: isolated .xlsx workbook parse failed: ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
+            return { xlsxHandled: true };
+        }
+    }
+
     private syncSpreadsheetStructuresIfPresent(
         doc: Y.Doc,
         rawContent: string,
         rawConfiguration?: string | null,
-        options?: { preserveConcurrentAdditions?: boolean; baselineContent?: string; preparsedWorkbook?: WorkbookSpec }
+        options?: {
+            preserveConcurrentAdditions?: boolean;
+            baselineContent?: string;
+            preparsedWorkbook?: WorkbookSpec;
+            xlsxHandled?: boolean;
+            preparsedBaselineWorkbook?: WorkbookSpec;
+            baselineXlsxHandled?: boolean;
+        }
     ): void {
         const trimmedContent = (rawContent ?? '').trim();
         const trimmedConfig = (rawConfiguration ?? '').trim();
@@ -9461,6 +9691,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             trimmedContent.startsWith('UEsDB') ||
             trimmedConfig.startsWith('data:') ||
             trimmedConfig.startsWith('UEsDB');
+        if (!options?.preparsedWorkbook && options?.xlsxHandled) {
+            return;
+        }
         if (!options?.preparsedWorkbook && !looksLikeJsonWorkbook && !looksLikeXlsx) {
             return;
         }
@@ -9475,9 +9708,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const sheetOrder = doc.getArray<string>('sheetOrder');
             // On a merge, a value the incoming version left as it was in the baseline is not written,
             // so a concurrent live edit to that cell, sheet or field survives the reconcile.
-            const baselineEntries = options?.preserveConcurrentAdditions && options.baselineContent
-                ? this.parseWorkbookStructureEntries(options.baselineContent)
-                : null;
+            const baselineEntries =
+                options?.preserveConcurrentAdditions && options.baselineContent
+                    ? options.preparsedBaselineWorkbook
+                        ? this.buildWorkbookStructureEntriesFromWorkbook(options.preparsedBaselineWorkbook)
+                        : options.baselineXlsxHandled
+                          ? null
+                          : this.parseWorkbookStructureEntries(options.baselineContent)
+                    : null;
             const setWorkbookMeta = (key: string, value: string): void => {
                 if (workbookMeta.get(key) !== value && !this.isUnchangedByIncoming(baselineEntries?.Meta, key, value)) {
                     workbookMeta.set(key, value);
@@ -9492,9 +9730,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const baselineColIdsBySheet = new Map<string, Set<string>>();
             if (options?.baselineContent && options.baselineContent.trim().length > 0) {
                 try {
-                    const baseWb = SpreadsheetEngine.Instance.ParseWorkbook(options.baselineContent, undefined, {
-                        SkipEvaluate: true
-                    });
+                    const baseWb =
+                        options.preparsedBaselineWorkbook ??
+                        (options.baselineXlsxHandled
+                            ? null
+                            : SpreadsheetEngine.Instance.ParseWorkbook(options.baselineContent, undefined, {
+                                  SkipEvaluate: true
+                              }));
                     if (baseWb && Array.isArray(baseWb.Worksheets)) {
                         baselineSheetIds = new Set<string>();
                         baselineCoordKeys = new Set<string>();
@@ -9923,42 +10165,46 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
         try {
             const wb = SpreadsheetEngine.Instance.ParseWorkbook(content, undefined, { SkipEvaluate: true });
-            if (!wb || !Array.isArray(wb.Worksheets) || wb.Worksheets.length === 0) {
-                return null;
-            }
-            const createdAtIso =
-                typeof wb.CreatedAt === 'string' && wb.CreatedAt.trim().length > 0
-                    ? wb.CreatedAt.trim()
-                    : '1970-01-01T00:00:00.000Z';
-            const updatedAtIso =
-                typeof wb.UpdatedAt === 'string' && wb.UpdatedAt.trim().length > 0
-                    ? wb.UpdatedAt.trim()
-                    : createdAtIso;
-            const meta = new Map<string, string>([
-                ['WorkbookID', wb.WorkbookID],
-                ['Title', wb.Title],
-                ['ActiveSheetID', wb.ActiveSheetID],
-                ['NamedRanges', JSON.stringify(wb.NamedRanges ?? [])],
-                ['CreatedAt', createdAtIso],
-                ['UpdatedAt', updatedAtIso]
-            ]);
-            if (typeof wb.PreferredObjectsPaneHeightPx === 'number' && Number.isFinite(wb.PreferredObjectsPaneHeightPx)) {
-                meta.set('PreferredObjectsPaneHeightPx', String(Math.round(wb.PreferredObjectsPaneHeightPx)));
-            }
-            const items = new Map<string, string>();
-            const cells = new Map<string, string>();
-            for (const ws of wb.Worksheets) {
-                const sheetStruct: WorksheetSpec = { ...ws, Rows: ws.Rows, Columns: ws.Columns, Cells: {} };
-                items.set(ws.SheetID, JSON.stringify(sheetStruct));
-                for (const cell of Object.values(ws.Cells)) {
-                    cells.set(`${ws.SheetID}::${cell.RowID}::${cell.ColumnID}`, JSON.stringify(cell));
-                }
-            }
-            return { Meta: meta, Items: items, Cells: cells, Order: wb.Worksheets.map((w) => w.SheetID) };
+            return this.buildWorkbookStructureEntriesFromWorkbook(wb);
         } catch (err) {
             LogError(`ArtifactCollaborationServer: could not parse workbook structures: ${err instanceof Error ? err.message : String(err)}`);
             return null;
         }
+    }
+
+    private buildWorkbookStructureEntriesFromWorkbook(wb: WorkbookSpec | null | undefined): WorkbookStructureEntries | null {
+        if (!wb || !Array.isArray(wb.Worksheets) || wb.Worksheets.length === 0) {
+            return null;
+        }
+        const createdAtIso =
+            typeof wb.CreatedAt === 'string' && wb.CreatedAt.trim().length > 0
+                ? wb.CreatedAt.trim()
+                : '1970-01-01T00:00:00.000Z';
+        const updatedAtIso =
+            typeof wb.UpdatedAt === 'string' && wb.UpdatedAt.trim().length > 0
+                ? wb.UpdatedAt.trim()
+                : createdAtIso;
+        const meta = new Map<string, string>([
+            ['WorkbookID', wb.WorkbookID],
+            ['Title', wb.Title],
+            ['ActiveSheetID', wb.ActiveSheetID],
+            ['NamedRanges', JSON.stringify(wb.NamedRanges ?? [])],
+            ['CreatedAt', createdAtIso],
+            ['UpdatedAt', updatedAtIso]
+        ]);
+        if (typeof wb.PreferredObjectsPaneHeightPx === 'number' && Number.isFinite(wb.PreferredObjectsPaneHeightPx)) {
+            meta.set('PreferredObjectsPaneHeightPx', String(Math.round(wb.PreferredObjectsPaneHeightPx)));
+        }
+        const items = new Map<string, string>();
+        const cells = new Map<string, string>();
+        for (const ws of wb.Worksheets) {
+            const sheetStruct: WorksheetSpec = { ...ws, Rows: ws.Rows, Columns: ws.Columns, Cells: {} };
+            items.set(ws.SheetID, JSON.stringify(sheetStruct));
+            for (const cell of Object.values(ws.Cells)) {
+                cells.set(`${ws.SheetID}::${cell.RowID}::${cell.ColumnID}`, JSON.stringify(cell));
+            }
+        }
+        return { Meta: meta, Items: items, Cells: cells, Order: wb.Worksheets.map((w) => w.SheetID) };
     }
 
     private buildRoomWorkbookFromDoc(doc: Y.Doc): WorkbookSpec | null {

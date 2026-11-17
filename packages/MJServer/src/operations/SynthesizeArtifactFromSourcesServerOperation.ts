@@ -155,7 +155,9 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
             );
         }
 
-        const digests = Sources.map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigest(s));
+        const digests = await Promise.all(
+            Sources.map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigestIsolated(s))
+        );
         const allowedSourceIds = digests.map((d) => d.ArtifactID);
         const availableCharts = digests.flatMap((d) => d.EmbeddedCharts);
         const linkCharts = input.LinkChartsAndRanges !== false;

@@ -8,6 +8,8 @@ import {
     ArtifactPermissionEngine,
     BaseArtifactPermissionDelegate,
     DelegatePermissionDecision,
+    RegisterSpreadsheetWorkerRunner,
+    SetSpreadsheetWorkerIsolationRequired,
     SpreadsheetEngine
 } from '@memberjunction/core-entities';
 import {
@@ -18,17 +20,24 @@ import {
     BuildSqlArtifactVersionIdReadablePredicate,
     BuildSqlCollectionReadablePredicate,
     BuildSqlCollectionReadablePredicateAsync,
+    ExtractSingleUuidFieldFromFilter,
     QualifyOuterEntityColumn,
     QualifyOuterEntityColumnAsync,
     ResolveTargetEntityNameAsync
 } from '../custom/ArtifactSecurityHookHelpers';
 import {
+    RegisterSpreadsheetServerWorkerRunner,
     RunSpreadsheetEvaluateInWorker,
     RunSpreadsheetImportInWorker,
     RunSpreadsheetPatchInWorker
 } from '../custom/SpreadsheetWorkerRunner';
+import { ArtifactPreRunViewHook } from '../custom/MJArtifactEntityServer.server';
+import { ArtifactPermissionPreRunViewHook } from '../custom/MJArtifactPermissionEntityServer.server';
+import { ArtifactVersionAttributePreRunViewHook } from '../custom/MJArtifactVersionAttributeEntityServer.server';
 import { ArtifactGuestShareLinkPreRunViewHook } from '../custom/MJArtifactGuestShareLinkEntityServer.server';
 import { CollectionArtifactPreRunViewHook } from '../custom/MJCollectionArtifactEntityServer.server';
+import { CollectionPreRunViewHook } from '../custom/MJCollectionEntityServer.server';
+import { CollectionPermissionPreRunViewHook } from '../custom/MJCollectionPermissionEntityServer.server';
 import { ArtifactVersionPostRunViewHook, ArtifactVersionPreRunViewHook } from '../custom/MJArtifactVersionEntityServer.server';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -1325,7 +1334,7 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             const oomScript = join(tmpDir, 'oom.mjs');
             writeFileSync(
                 oomScript,
-                "const a = []; while (true) { a.push(Buffer.alloc(1024 * 1024, 1)); }\n",
+                "const a = []; while (true) { a.push(new Array(10_000).fill('x')); }\n",
                 'utf8'
             );
             await expect(
@@ -1356,8 +1365,171 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             const [r1, r2] = await Promise.all([p1, p2]);
             expect(r1.EvaluatedFormulaCount).toBe(1);
             expect(r2.EvaluatedFormulaCount).toBe(1);
+
+            // R8-2 & R8-3: RunSpreadsheetImportInWorker honors SkipEvaluate: true, QueueWaitTimeoutMs rejects slow wait,
+            // and RegisterSpreadsheetServerWorkerRunner turns on mandatory worker isolation
+            const unevaluatedSheetXml =
+                '<?xml version="1.0" encoding="UTF-8"?>' +
+                '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' +
+                '<row r="1"><c r="A1"><v>10</v></c></row>' +
+                '<row r="2"><c r="A2"><f>A1*5</f></c></row>' +
+                '</sheetData></worksheet>';
+            const encUtf8 = new TextEncoder();
+            const skipXlsx = engine.BuildZipArchive([
+                {
+                    Name: 'xl/workbook.xml',
+                    Data: encUtf8.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>')
+                },
+                {
+                    Name: 'xl/_rels/workbook.xml.rels',
+                    Data: encUtf8.encode('<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
+                },
+                { Name: 'xl/worksheets/sheet1.xml', Data: encUtf8.encode(unevaluatedSheetXml) }
+            ]);
+            const importedSkip = await RunSpreadsheetImportInWorker(skipXlsx, null, { SkipEvaluate: true });
+            expect(importedSkip.Worksheets[0].Cells['A2']?.Formula).toBe('=A1*5');
+            expect(importedSkip.Worksheets[0].Cells['A2']?.ComputedValue).toBeNull();
+            const importedEval = await RunSpreadsheetImportInWorker(skipXlsx, null, { SkipEvaluate: false });
+            expect(importedEval.Worksheets[0].Cells['A2']?.ComputedValue).toBe(50);
+
+            const waitHold = RunSpreadsheetEvaluateInWorker(wb, undefined, {
+                WorkerEntryPath: slowOkScript,
+                MaxConcurrentWorkers: 1,
+                MaxQueuedWorkers: 2,
+                TimeoutMs: 5000,
+                QueueWaitTimeoutMs: 5000
+            });
+            const timedOutQueued = RunSpreadsheetEvaluateInWorker(wb, undefined, {
+                WorkerEntryPath: slowOkScript,
+                MaxConcurrentWorkers: 1,
+                MaxQueuedWorkers: 2,
+                TimeoutMs: 5000,
+                QueueWaitTimeoutMs: 10
+            });
+            await expect(timedOutQueued).rejects.toThrow(/queue wait timed out/i);
+            await waitHold;
+
+            RegisterSpreadsheetServerWorkerRunner();
+            try {
+                RegisterSpreadsheetWorkerRunner(null);
+                await expect(engine.ImportFromXlsxBytesIsolated(skipXlsx)).rejects.toThrow(/isolation runner is required/i);
+            } finally {
+                SetSpreadsheetWorkerIsolationRequired(false);
+                RegisterSpreadsheetWorkerRunner(null);
+            }
         } finally {
             rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('Round 8 Part 1: ExtractSingleUuidFieldFromFilter rejects all delimiter/quoting oracle bypass payloads across all 5 count_only PreRunView hooks', async () => {
+        const targetId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        const bypassFilters = [
+            `CollectionID='${targetId}' OR 1=1`,
+            `ID='${targetId}'x'OR'1'='1`,
+            `ID='${targetId}']OR 1=1`,
+            `ID='${targetId}'"OR 1=1`,
+            `(ID='${targetId}')NOT 1=0`,
+            `ID='${targetId}'x'NOT'1'='1`,
+            `E'\\''; CollectionID='${targetId}'`,
+            `[a'] AND CollectionID='${targetId}'`
+        ];
+        for (const filter of bypassFilters) {
+            expect(ExtractSingleUuidFieldFromFilter(filter, 'ID')).toBeNull();
+            expect(ExtractSingleUuidFieldFromFilter(filter, 'CollectionID')).toBeNull();
+            expect(ExtractSingleUuidFieldFromFilter(filter, 'ArtifactID')).toBeNull();
+            expect(ExtractSingleUuidFieldFromFilter(filter, 'ArtifactVersionID')).toBeNull();
+        }
+        // Legitimate whole-filter equality (with balanced outer parens) still extracts cleanly
+        expect(ExtractSingleUuidFieldFromFilter(`(([CollectionID] = N'${targetId}'))`, 'CollectionID')).toBe(targetId);
+
+        const deniedUser = new UserInfo(null, {
+            ID: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            Name: 'Denied Actor',
+            Email: 'denied@mj.local',
+            IsActive: true,
+            Type: 'User',
+            UserRoles: []
+        });
+        const provider = {
+            ProviderType: 'Database',
+            DatabasePlatform: 'SQLServer',
+            Entities: [],
+            RunView: async () => ({ Success: true, Results: [] })
+        } as unknown as IMetadataProvider;
+
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableArtifactIdSet').mockResolvedValue(new Set());
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'TryBuildReadableCollectionIdSet').mockResolvedValue(new Set());
+        const resolvePermsSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: targetId,
+            CanRead: false,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Denied',
+            Reason: 'Denied'
+        });
+        const resolveColPermsSpy = vi
+            .spyOn(ArtifactPermissionEngine.Instance, 'ResolveCollectionAncestryPermissions')
+            .mockResolvedValue({
+                CollectionID: targetId,
+                CanRead: false,
+                CanEdit: false,
+                CanDelete: false,
+                CanShare: false,
+                Source: 'Denied',
+                Reason: 'Denied'
+            });
+
+        const hooksToCheck: Array<{
+            entityName: string;
+            hook: typeof ArtifactPreRunViewHook;
+            colName: string;
+        }> = [
+            { entityName: 'MJ: Collection Artifacts', hook: CollectionArtifactPreRunViewHook, colName: 'CollectionID' },
+            { entityName: 'MJ: Collections', hook: CollectionPreRunViewHook, colName: 'ID' },
+            { entityName: 'MJ: Collection Permissions', hook: CollectionPermissionPreRunViewHook, colName: 'CollectionID' },
+            { entityName: 'MJ: Artifact Version Attributes', hook: ArtifactVersionAttributePreRunViewHook, colName: 'ArtifactVersionID' },
+            { entityName: 'MJ: Artifact Permissions', hook: ArtifactPermissionPreRunViewHook, colName: 'ArtifactID' }
+        ];
+
+        const balancedOracleFilters = [
+            `CollectionID='${targetId}' OR 1=1`,
+            `ID='${targetId}' AND 'a'='a'`,
+            `(ID='${targetId}') OR (1=1)`,
+            `ID='${targetId}' /* comment */ OR 1=1`
+        ];
+        try {
+            for (const { entityName, hook, colName } of hooksToCheck) {
+                for (const rawFilter of balancedOracleFilters) {
+                    const adversarialFilter = rawFilter.replace(/CollectionID|ID/g, colName);
+                    const params: RunViewParams = {
+                        EntityName: entityName,
+                        ExtraFilter: adversarialFilter,
+                        ResultType: 'count_only'
+                    };
+                    const out = await hook(params, deniedUser, provider);
+                    expect(String(out.ExtraFilter)).toMatch(/1 = 0|EXISTS \(/);
+                }
+                for (const rawFilter of bypassFilters) {
+                    const adversarialFilter = rawFilter.replace(/CollectionID|ID/g, colName);
+                    const params: RunViewParams = {
+                        EntityName: entityName,
+                        ExtraFilter: adversarialFilter,
+                        ResultType: 'count_only'
+                    };
+                    try {
+                        const out = await hook(params, deniedUser, provider);
+                        expect(String(out.ExtraFilter)).toMatch(/1 = 0|EXISTS \(/);
+                    } catch (err) {
+                        expect(err instanceof Error ? err.message : String(err)).toMatch(/Invalid ExtraFilter/i);
+                    }
+                }
+            }
+            expect(resolvePermsSpy).not.toHaveBeenCalled();
+            expect(resolveColPermsSpy).not.toHaveBeenCalled();
+        } finally {
+            vi.restoreAllMocks();
         }
     });
 });

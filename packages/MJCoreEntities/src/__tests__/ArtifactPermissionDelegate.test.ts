@@ -552,4 +552,54 @@ describe('ArtifactPermissionEngine Defer Fallback, >500 Items, Collection Ancest
         );
         expect(result).toBeNull();
     });
+
+    it('TryBuildReadableArtifactIdSet fails closed (returns null) when ResolvePermissions sub-query fails (R8-1)', async () => {
+        const actorId = '11111111-1111-4111-8111-111111111111';
+        const candidateArtId = '22222222-2222-4222-8222-222222222222';
+        const user: UserInfo = {
+            ID: actorId,
+            Name: 'Actor',
+            Email: 'actor@example.com'
+        } as UserInfo;
+
+        let artQueryCount = 0;
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: Artifacts') {
+                    artQueryCount++;
+                    // 1st query is step 1 (owned artifacts); 2nd query is step 4 ResolvePermissions loadArtifactRow
+                    if (artQueryCount === 1) {
+                        return {
+                            Success: true,
+                            Results: [{ ID: candidateArtId }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: ''
+                        };
+                    }
+                    return {
+                        Success: false,
+                        Results: [],
+                        RowCount: 0,
+                        TotalRowCount: 0,
+                        ExecutionTime: 1,
+                        ErrorMessage: 'Transient DB failure inside ResolvePermissions'
+                    };
+                }
+                return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+            })
+        } as Pick<RunView, 'RunView'> as RunView);
+
+        const provider: Partial<IMetadataProvider> = {
+            ProviderType: 'Network',
+            Entities: []
+        };
+
+        const result = await ArtifactPermissionEngine.Instance.TryBuildReadableArtifactIdSet(
+            provider as IMetadataProvider,
+            user
+        );
+        expect(result).toBeNull();
+    });
 });

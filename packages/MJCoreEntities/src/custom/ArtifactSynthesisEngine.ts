@@ -172,10 +172,42 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
     /**
      * Extracts a compact, structured digest from any supported source artifact without leaking
      * raw internal fence JSON (`mj-block`) or exceeding `maxChars`.
+     * Always passes `{ SkipEvaluate: true }` so untrusted formulas are never evaluated on the main thread (`R8-3`).
      */
     public ExtractSourceDigest(
         source: ArtifactSynthesisSourceInput,
         maxChars = 6000,
+    ): ArtifactSynthesisSourceDigest {
+        return this.extractSourceDigestInternal(source, maxChars);
+    }
+
+    /**
+     * Isolated async counterpart to {@link ExtractSourceDigest}: for spreadsheets, parses and evaluates
+     * via {@link SpreadsheetEngine.ParseWorkbookIsolated} (using server `worker_threads` isolation when
+     * registered) so computed formula values appear safely in the digest (`R8-3`).
+     */
+    public async ExtractSourceDigestIsolated(
+        source: ArtifactSynthesisSourceInput,
+        maxChars = 6000,
+    ): Promise<ArtifactSynthesisSourceDigest> {
+        const normType = (source.ArtifactType ?? '').trim().toLowerCase();
+        const raw = typeof source.Content === 'string' ? source.Content : '';
+        const isBinaryPlaceholder = source.ContentMode === 'File' || (!raw.trim() && Boolean(source.Description));
+        let preparsedWorkbook: ReturnType<SpreadsheetEngine['ParseWorkbook']> | undefined;
+        if (!isBinaryPlaceholder && (normType.includes('spreadsheet') || normType === 'excel')) {
+            try {
+                preparsedWorkbook = await SpreadsheetEngine.Instance.ParseWorkbookIsolated(raw, source.Configuration);
+            } catch {
+                preparsedWorkbook = undefined;
+            }
+        }
+        return this.extractSourceDigestInternal(source, maxChars, preparsedWorkbook);
+    }
+
+    private extractSourceDigestInternal(
+        source: ArtifactSynthesisSourceInput,
+        maxChars = 6000,
+        preparsedWorkbook?: ReturnType<SpreadsheetEngine['ParseWorkbook']>,
     ): ArtifactSynthesisSourceDigest {
         const normType = (source.ArtifactType ?? '').trim().toLowerCase();
         const raw = typeof source.Content === 'string' ? source.Content : '';
@@ -190,7 +222,7 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
                 }`,
             );
         } else if (normType.includes('spreadsheet') || normType === 'excel') {
-            this.digestSpreadsheet(source, raw, summaryParts, sections, embeddedCharts);
+            this.digestSpreadsheet(source, raw, summaryParts, sections, embeddedCharts, preparsedWorkbook);
         } else if (normType.includes('presentation') || normType.includes('slide')) {
             this.digestPresentation(source, raw, summaryParts, sections);
         } else if (normType.includes('whiteboard')) {
@@ -533,9 +565,12 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
         summaryParts: string[],
         sections: string[],
         embeddedCharts: ArtifactSynthesisChartRef[],
+        preparsedWorkbook?: ReturnType<SpreadsheetEngine['ParseWorkbook']>,
     ): void {
         try {
-            const wb = SpreadsheetEngine.Instance.ParseWorkbook(raw, source.Configuration);
+            const wb =
+                preparsedWorkbook ??
+                SpreadsheetEngine.Instance.ParseWorkbook(raw, source.Configuration, { SkipEvaluate: true });
             const maxSheets = 12;
             for (const sheet of wb.Worksheets.slice(0, maxSheets)) {
                 sections.push(sheet.Name);

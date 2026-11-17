@@ -42,6 +42,7 @@ import {
     type MJArtifactVersionEntity,
     type MJConversationDetailEntity,
     type MJFileEntity,
+    MAX_IMPORT_SHEETS,
     type SlideDeckSpec,
     SpreadsheetEngine,
     type WorkbookSpec,
@@ -2527,6 +2528,13 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             public constructor() {
                 super();
             }
+            public CheckIncomingUpdate(
+                room: Parameters<ArtifactCollaborationServer['isIncomingUpdateBlockedByLocks']>[0],
+                conn: Parameters<ArtifactCollaborationServer['isIncomingUpdateBlockedByLocks']>[1],
+                updateBytes: Uint8Array
+            ): { Allowed: boolean; Reason?: string } {
+                return this.isIncomingUpdateBlockedByLocks(room, conn, updateBytes);
+            }
         }
         const bus = new InMemoryYjsRelayBus();
         const relayA = new InMemoryYjsRoomRelay(bus, 'node-a');
@@ -2814,6 +2822,73 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             await expect(
                 nodeB.GetOrCreateRoom(oversizedArtId, ownerUser, oversizedProvider as unknown as IMetadataProvider),
             ).rejects.toThrow(/maximum sheet limit/i);
+
+            // R8-2: Hydrating a room whose latest version is base64 .xlsx uses isolated parse + SkipEvaluate: true
+            // without running EvaluateWorkbook on the main thread, AND rejects Yjs CRDT sheet-count bombs
+            const xlsxArtId = '78787878-7878-4787-8787-787878787878';
+            const xlsxSrcWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('HydrateXlsxRoom', ['Sheet1'], 3, 3);
+            SpreadsheetEngine.Instance.SetCell(xlsxSrcWb, xlsxSrcWb.Worksheets[0].SheetID, 'A1', { Value: 7 }, false);
+            SpreadsheetEngine.Instance.SetCell(xlsxSrcWb, xlsxSrcWb.Worksheets[0].SheetID, 'A2', { Formula: '=A1*10' }, false);
+            const hydrateXlsxB64 = Buffer.from(SpreadsheetEngine.Instance.ExportToXlsxBytes(xlsxSrcWb, false)).toString('base64');
+            const xlsxProvider = {
+                ProviderType: 'Database',
+                RunView: vi.fn(async (params: RunViewParams) => {
+                    if (params.EntityName === 'MJ: Artifact Working States') {
+                        return { Success: true, Results: [] };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: '89898989-8989-4898-8898-898989898989',
+                                    VersionNumber: 1,
+                                    Content: hydrateXlsxB64,
+                                    Configuration: null,
+                                    UserID: ownerUser.ID,
+                                },
+                            ],
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return { Success: true, Results: [{ ID: xlsxArtId, UserID: ownerUser.ID }] };
+                    }
+                    return { Success: true, Results: [] };
+                }),
+                RunViews: vi.fn(async (paramsList: RunViewParams[]) =>
+                    Promise.all(
+                        paramsList.map((p) =>
+                            (xlsxProvider.RunView as (arg: RunViewParams) => Promise<{ Success: boolean; Results: unknown[] }>)(p),
+                        ),
+                    ),
+                ),
+            };
+            const mainThreadEvalSpy = vi.spyOn(SpreadsheetEngine.Instance, 'EvaluateWorkbook');
+            try {
+                const xlsxRoom = await nodeB.GetOrCreateRoom(xlsxArtId, ownerUser, xlsxProvider as unknown as IMetadataProvider);
+                expect(xlsxRoom).toBeTruthy();
+                expect(mainThreadEvalSpy).not.toHaveBeenCalled();
+
+                // Client Yjs CRDT update trying to push > MAX_IMPORT_SHEETS entries into worksheetsById must be rejected
+                const attackerDoc = new Y.Doc();
+                attackerDoc.transact(() => {
+                    const wsMap = attackerDoc.getMap<string>('worksheetsById');
+                    for (let i = 0; i <= MAX_IMPORT_SHEETS; i++) {
+                        wsMap.set(`sheet-bomb-${i}`, JSON.stringify({ SheetID: `sheet-bomb-${i}`, Name: `S${i}`, Rows: [], Columns: [], Cells: {} }));
+                    }
+                });
+                const bombUpdate = Y.encodeStateAsUpdate(attackerDoc);
+                attackerDoc.destroy();
+                const lockReject = nodeB.CheckIncomingUpdate(
+                    xlsxRoom!,
+                    { User: ownerUser, IsOwner: true },
+                    bombUpdate
+                );
+                expect(lockReject.Allowed).toBe(false);
+                expect(lockReject.Reason).toMatch(/maximum sheet limit/i);
+            } finally {
+                mainThreadEvalSpy.mockRestore();
+            }
         } finally {
             await nodeA.Shutdown();
             await nodeB.Shutdown();

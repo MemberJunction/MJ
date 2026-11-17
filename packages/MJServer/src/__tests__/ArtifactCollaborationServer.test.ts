@@ -6700,22 +6700,22 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             public static Create(): R11NodeA {
                 return new this();
             }
-            public ReconcileOob(
+            public async ReconcileOob(
                 room: CollaborationRoom,
                 version: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
-            ): void {
-                this.reconcileOutOfBandVersionIntoRoom(room, version, { isRestore: true });
+            ): Promise<void> {
+                await this.reconcileOutOfBandVersionIntoRoom(room, version, { isRestore: true });
             }
         }
         class R11NodeB extends ArtifactCollaborationServer {
             public static Create(): R11NodeB {
                 return new this();
             }
-            public ReconcileOob(
+            public async ReconcileOob(
                 room: CollaborationRoom,
                 version: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
-            ): void {
-                this.reconcileOutOfBandVersionIntoRoom(room, version, { isRestore: true });
+            ): Promise<void> {
+                await this.reconcileOutOfBandVersionIntoRoom(room, version, { isRestore: true });
             }
         }
 
@@ -6778,8 +6778,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             versions.push(v3Restore);
 
             // Node A and Node B independently execute reconcileOutOfBandVersionIntoRoom with isRestore: true
-            nodeA.ReconcileOob(roomA!, v3Restore);
-            nodeB.ReconcileOob(roomB!, v3Restore);
+            await nodeA.ReconcileOob(roomA!, v3Restore);
+            await nodeB.ReconcileOob(roomB!, v3Restore);
 
             // Now simulate nodes syncing their Y.Docs directly
             const updateFromB = Y.encodeStateAsUpdate(roomB!.Doc);

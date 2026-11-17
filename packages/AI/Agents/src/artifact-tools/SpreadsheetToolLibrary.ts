@@ -1157,7 +1157,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         const engine = SpreadsheetEngine.Instance;
         const workbook = Buffer.isBuffer(content)
             ? content.length > 4 && content[0] === 0x50 && content[1] === 0x4b
-                ? engine.ImportFromXlsxBytes(new Uint8Array(content))
+                ? engine.ImportFromXlsxBytes(new Uint8Array(content), undefined, { SkipEvaluate: true })
                 : engine.ParseWorkbook(content.toString('utf-8'), undefined, { SkipEvaluate: true })
             : engine.ParseWorkbook(content, undefined, { SkipEvaluate: true });
         return engine.ComputeRevisionHash(workbook);
@@ -1379,6 +1379,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         const rawCells = Array.isArray(input.cells) ? input.cells : [];
         if (rawCells.length === 0) {
             return this.errorResult('Parameter "cells" must be a non-empty array of cell updates.');
+        }
+        if (rawCells.length > 10_000) {
+            return this.errorResult(
+                `Parameter "cells" exceeds maximum per-call batch limit of 10000 updates (got ${rawCells.length}).`
+            );
         }
 
         const editCtx = this.extractCellEditContext(context);

@@ -2244,8 +2244,8 @@ export function ParseRangeAddress(
 
 const MAX_DENSE_ROWS = 10_000;
 const MAX_DENSE_COLS = 512;
-const EXCEL_MAX_ROWS = 1_048_576;
-const EXCEL_MAX_COLS = 16_384;
+export const EXCEL_MAX_ROWS = 1_048_576;
+export const EXCEL_MAX_COLS = 16_384;
 const MAX_DYNAMIC_ARRAY_CELLS = 200_000;
 export const MAX_IMPORT_SHEETS = 128;
 export const MAX_IMPORT_WORKBOOK_CELLS = 250_000;
@@ -2253,6 +2253,8 @@ export const MAX_IMPORT_WORKBOOK_FORMULAS = 100_000;
 export const MAX_IMPORT_WORKBOOK_ARRAY_ANCHORS = 25_000;
 export const MAX_IMPORT_WORKBOOK_COL_TAGS = 25_000;
 export const MAX_VALIDATION_RULES_PER_SHEET = 5_000;
+export const MAX_PROTECTED_RANGES_PER_WORKBOOK = 2_000;
+export const MAX_VALIDATION_ALLOWED_VALUES = 1_000;
 export const MAX_VALIDATION_CHECKS_PER_WORKBOOK = 2_000_000;
 export const MAX_IMPORT_WORKBOOK_MERGE_RANGES = 50_000;
 export const MAX_IMPORT_WORKBOOK_CHARTS = 2_000;
@@ -2329,7 +2331,11 @@ function assertNoOverlappingArrayAnchors(anchors: readonly ArrayAnchorRect[]): v
 }
 
 export interface SpreadsheetWorkerIsolationRunner {
-    ImportFromXlsxBytes(bytes: Uint8Array, configurationJson?: string | null): Promise<WorkbookSpec>;
+    ImportFromXlsxBytes(
+        bytes: Uint8Array,
+        configurationJson?: string | null,
+        options?: { SkipEvaluate?: boolean }
+    ): Promise<WorkbookSpec>;
     PatchXlsxBytes(originalBytes: Uint8Array, workbook: WorkbookSpec): Promise<Uint8Array>;
     EvaluateWorkbook(
         workbook: WorkbookSpec,
@@ -2460,6 +2466,7 @@ interface CompiledValidationEntry {
     endRow: number;
     startCol: number;
     endCol: number;
+    allowedValuesLowerSet?: Set<string>;
 }
 
 interface CompiledValidationIndex {
@@ -2479,14 +2486,24 @@ function buildCompiledValidationIndex(rules: readonly SpreadsheetValidationRuleS
     const wideRules: CompiledValidationEntry[] = [];
     for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
+        if (Array.isArray(rule.AllowedValues) && rule.AllowedValues.length > MAX_VALIDATION_ALLOWED_VALUES) {
+            throw new Error(
+                `Spreadsheet rejected: validation rule '${rule.Range}' exceeds maximum allowed values limit (${MAX_VALIDATION_ALLOWED_VALUES}).`
+            );
+        }
         const bounds = ParseRangeAddress(rule.Range);
         if (!bounds) continue;
+        const allowedValuesLowerSet =
+            rule.RuleType === 'list' && Array.isArray(rule.AllowedValues)
+                ? new Set(rule.AllowedValues.map((a) => String(a).toLowerCase()))
+                : undefined;
         const entry: CompiledValidationEntry = {
             rule,
             startRow: bounds.startRow,
             endRow: bounds.endRow,
             startCol: bounds.startCol,
-            endCol: bounds.endCol
+            endCol: bounds.endCol,
+            allowedValuesLowerSet
         };
         if (bounds.endRow - bounds.startRow <= 64) {
             for (let r = bounds.startRow; r <= bounds.endRow; r++) {
@@ -2610,6 +2627,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private viewerCache = new Map<string, ViewerFunctionCacheEntry>();
     private sheetToWorkbook = new WeakMap<WorksheetSpec, WorkbookSpec>();
     private workbookDagCache = new WeakMap<WorkbookSpec, WorkbookDependencyGraph>();
+    private workbookCellCountCache = new WeakMap<WorkbookSpec, number>();
     private sheetLookupCache = new WeakMap<
         WorksheetSpec,
         { rowLen: number; colLen: number; rowIndexById: Map<string, number>; colIndexById: Map<string, number> }
@@ -2989,7 +3007,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (trimmed.startsWith('data:') || trimmed.startsWith('UEsDB')) {
                 const bytes = this.decodeBase64OrDataUrl(trimmed);
                 if (bytes && bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
-                    const imported = this.ImportFromXlsxBytes(bytes, configuration);
+                    const imported = this.ImportFromXlsxBytes(bytes, configuration, options);
                     return imported;
                 }
             }
@@ -3036,7 +3054,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (trimmed.startsWith('data:') || trimmed.startsWith('UEsDB')) {
                 const bytes = this.decodeBase64OrDataUrl(trimmed);
                 if (bytes && bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
-                    return await this.ImportFromXlsxBytesIsolated(bytes, configuration);
+                    return await this.ImportFromXlsxBytesIsolated(bytes, configuration, options);
                 }
             }
             if (trimmed.length > 0 && !trimmed.startsWith('{') && !trimmed.startsWith('data:')) {
@@ -3644,16 +3662,35 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         let totalCondFormats = 0;
         let totalLiveTables = 0;
         let totalEmbedded = 0;
+        let totalProtectedRanges = 0;
 
         for (const ws of sheets) {
             if (!ws || typeof ws !== 'object') {
                 continue;
+            }
+            const protectedRanges = Array.isArray(ws.ProtectedRanges) ? ws.ProtectedRanges : [];
+            totalProtectedRanges += protectedRanges.length;
+            if (totalProtectedRanges > MAX_PROTECTED_RANGES_PER_WORKBOOK) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum protected range limit (${MAX_PROTECTED_RANGES_PER_WORKBOOK}).`
+                );
             }
             const validationRules = Array.isArray(ws.ValidationRules) ? ws.ValidationRules : [];
             if (validationRules.length > MAX_VALIDATION_RULES_PER_SHEET) {
                 throw new Error(
                     `Spreadsheet rejected: worksheet exceeds maximum validation rule limit (${MAX_VALIDATION_RULES_PER_SHEET}).`
                 );
+            }
+            for (const vRule of validationRules) {
+                if (
+                    vRule &&
+                    Array.isArray(vRule.AllowedValues) &&
+                    vRule.AllowedValues.length > MAX_VALIDATION_ALLOWED_VALUES
+                ) {
+                    throw new Error(
+                        `Spreadsheet rejected: validation rule '${vRule.Range}' exceeds maximum allowed values limit (${MAX_VALIDATION_ALLOWED_VALUES}).`
+                    );
+                }
             }
 
             totalDenseRows += Array.isArray(ws.Rows) ? ws.Rows.length : 0;
@@ -5317,6 +5354,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const rowId = this.getStableRowIdForIndex(sheet, parsed.row);
         const colId = this.getStableColIdForIndex(sheet, parsed.col);
         const existing = sheet.Cells[canonicalAddr];
+        let knownTotalCells: number | undefined;
+        if (!existing) {
+            knownTotalCells = this.workbookCellCountCache.get(workbook);
+            if (knownTotalCells === undefined) {
+                let sum = 0;
+                for (const ws of workbook.Worksheets) {
+                    sum += Object.keys(ws.Cells ?? {}).length;
+                }
+                knownTotalCells = sum;
+                this.workbookCellCountCache.set(workbook, knownTotalCells);
+            }
+            if (knownTotalCells + 1 > MAX_IMPORT_WORKBOOK_CELLS) {
+                throw new Error(
+                    `Spreadsheet rejected: workbook exceeds maximum cell limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+                );
+            }
+        }
         const isMetadataOnlyEdit =
             input.Value === undefined && input.Formula === undefined && input.FormulaStable === undefined;
 
@@ -5458,6 +5512,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
 
         sheet.Cells[canonicalAddr] = cell;
+        if (!existing && knownTotalCells !== undefined) {
+            this.workbookCellCountCache.set(workbook, knownTotalCells + 1);
+        }
         this.syncCellVirtualAxisIndex(sheet, cell);
 
         if (!isMetadataOnlyEdit && (rawValue !== null || Boolean(formula))) {
@@ -5563,6 +5620,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
         const affected = Array.from(affectedSet);
         if (affected.length > 0) {
+            this.workbookCellCountCache.delete(workbook);
             if (recalculate) {
                 this.recalculateAfterCellEdit(workbook, sheet, affected[0], affected.slice(1), editContext);
             } else {
@@ -6020,15 +6078,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      */
     public async ImportFromXlsxBytesIsolated(
         bytes: Uint8Array | ArrayBuffer,
-        configurationJson?: string | null
+        configurationJson?: string | null,
+        options?: { SkipEvaluate?: boolean }
     ): Promise<WorkbookSpec> {
         const runner = GetSpreadsheetWorkerRunner();
         if (!runner) {
             handleMissingWorkerRunner('ImportFromXlsxBytesIsolated');
-            return this.ImportFromXlsxBytes(bytes, configurationJson);
+            return this.ImportFromXlsxBytes(bytes, configurationJson, options);
         }
         const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-        return runner.ImportFromXlsxBytes(u8, configurationJson);
+        return runner.ImportFromXlsxBytes(u8, configurationJson, options);
     }
 
     /**
@@ -6373,6 +6432,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         rangeWatches: Array<{ sheetId: string; startRow: number; endRow: number; startCol: number; endCol: number }>;
     } {
         const deps = new Set<string>();
+        const seenRangeKeys = new Set<string>();
         const rangeWatches: Array<{
             sheetId: string;
             startRow: number;
@@ -6389,7 +6449,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (dagEdgeBudget) {
                 if (--dagEdgeBudget.totalRemaining < 0) {
                     throw new Error(
-                        `Workbook dependency graph exceeded maximum edge limit (${MAX_DAG_EDGES_PER_WORKBOOK} edges).`
+                        `Spreadsheet rejected: workbook dependency graph exceeded maximum edge limit (${MAX_DAG_EDGES_PER_WORKBOOK} edges).`
                     );
                 }
             }
@@ -6423,7 +6483,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             if (dagEdgeBudget && --dagEdgeBudget.watchersRemaining < 0) {
                 throw new Error(
-                    `Workbook dependency graph exceeded maximum range watcher limit (${MAX_DAG_RANGE_WATCHERS}).`
+                    `Spreadsheet rejected: workbook dependency graph exceeded maximum range watcher limit (${MAX_DAG_RANGE_WATCHERS}).`
                 );
             }
             rangeWatches.push({
@@ -6458,7 +6518,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                 }
                                 if (--dagEdgeBudget.totalRemaining < 0) {
                                     throw new Error(
-                                        `Workbook dependency graph exceeded maximum edge limit (${MAX_DAG_EDGES_PER_WORKBOOK} edges).`
+                                        `Spreadsheet rejected: workbook dependency graph exceeded maximum edge limit (${MAX_DAG_EDGES_PER_WORKBOOK} edges).`
                                     );
                                 }
                             }
@@ -6494,7 +6554,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                             }
                             if (--dagEdgeBudget.totalRemaining < 0) {
                                 throw new Error(
-                                    `Workbook dependency graph exceeded maximum edge limit (${MAX_DAG_EDGES_PER_WORKBOOK} edges).`
+                                    `Spreadsheet rejected: workbook dependency graph exceeded maximum edge limit (${MAX_DAG_EDGES_PER_WORKBOOK} edges).`
                                 );
                             }
                         }
@@ -6505,7 +6565,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         };
 
         const addRangeDeps = (targetSheet: WorksheetSpec, rangeStr: string): void => {
-            const parts = rangeStr.trim().split(':');
+            const trimmedRange = rangeStr.trim();
+            const dedupeKey = `${targetSheet.SheetID}::${trimmedRange}`;
+            if (seenRangeKeys.has(dedupeKey)) {
+                return;
+            }
+            seenRangeKeys.add(dedupeKey);
+            const parts = trimmedRange.split(':');
             if (parts.length === 2) {
                 const p0 = parts[0].trim();
                 const p1 = parts[1].trim();
@@ -11237,12 +11303,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     }
                 } else if (rule.RuleType === 'list' && Array.isArray(rule.AllowedValues)) {
                     if (effectiveVal !== null && effectiveVal !== undefined && String(effectiveVal) !== '') {
-                        const allowed = rule.AllowedValues.some(
-                            (a) => a.toLowerCase() === String(effectiveVal).toLowerCase()
-                        );
+                        const valLower = String(effectiveVal).toLowerCase();
+                        const allowed = entry.allowedValuesLowerSet
+                            ? entry.allowedValuesLowerSet.has(valLower)
+                            : rule.AllowedValues.some((a) => a.toLowerCase() === valLower);
                         if (!allowed) {
                             cell.ValidationError =
-                                rule.ErrorMessage || `Value must be one of: ${rule.AllowedValues.join(', ')}.`;
+                                rule.ErrorMessage || `Value must be one of: ${rule.AllowedValues.slice(0, 20).join(', ')}.`;
                             return true;
                         }
                     }
@@ -14103,6 +14170,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         let currentRow: string[] = [];
         let currentField = '';
         let inQuotes = false;
+        let fieldCount = 0;
+
+        const pushField = (): void => {
+            if (++fieldCount > MAX_IMPORT_WORKBOOK_CELLS) {
+                throw new Error(
+                    `Spreadsheet rejected: CSV exceeds maximum cell limit (${MAX_IMPORT_WORKBOOK_CELLS}).`
+                );
+            }
+            currentRow.push(currentField);
+            currentField = '';
+        };
 
         for (let i = 0; i < csvText.length; i++) {
             const ch = csvText[i];
@@ -14121,26 +14199,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 if (ch === '"') {
                     inQuotes = true;
                 } else if (ch === ',') {
-                    currentRow.push(currentField);
-                    currentField = '';
+                    pushField();
                 } else if (ch === '\r') {
                     if (csvText[i + 1] === '\n') i++;
-                    currentRow.push(currentField);
+                    pushField();
                     rows.push(currentRow);
                     currentRow = [];
-                    currentField = '';
                 } else if (ch === '\n') {
-                    currentRow.push(currentField);
+                    pushField();
                     rows.push(currentRow);
                     currentRow = [];
-                    currentField = '';
                 } else {
                     currentField += ch;
                 }
             }
         }
         if (currentField.length > 0 || currentRow.length > 0) {
-            currentRow.push(currentField);
+            pushField();
             rows.push(currentRow);
         }
         return rows;
@@ -15288,7 +15363,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      */
     public ImportFromXlsxBytes(
         bytes: Uint8Array | ArrayBuffer,
-        configurationJson?: string | null
+        configurationJson?: string | null,
+        options?: { SkipEvaluate?: boolean }
     ): WorkbookSpec {
         const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
         const files = this.extractZipArchive(u8);
@@ -15755,7 +15831,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
         this.bindSheetsToWorkbook(wb);
         this.AssertWorkbookWithinLimits(wb);
-        this.EvaluateWorkbook(wb);
+        if (!options?.SkipEvaluate) {
+            this.EvaluateWorkbook(wb);
+        }
         return wb;
     }
 
@@ -18533,18 +18611,23 @@ export class XlsxOpenXmlAdapter extends BaseSingleton<XlsxOpenXmlAdapter> {
         return SpreadsheetEngine.Instance.ExportToXlsxBytes(workbook, includeMjMetadataSheet);
     }
 
-    public ImportXlsx(bytes: Uint8Array | ArrayBuffer, configurationJson?: string | null): WorkbookSpec {
-        return SpreadsheetEngine.Instance.ImportFromXlsxBytes(bytes, configurationJson);
+    public ImportXlsx(
+        bytes: Uint8Array | ArrayBuffer,
+        configurationJson?: string | null,
+        options?: { SkipEvaluate?: boolean }
+    ): WorkbookSpec {
+        return SpreadsheetEngine.Instance.ImportFromXlsxBytes(bytes, configurationJson, options);
     }
 
     public ImportXlsxIsolated(
         bytes: Uint8Array | ArrayBuffer,
-        configurationJson?: string | null
+        configurationJson?: string | null,
+        options?: { SkipEvaluate?: boolean }
     ): Promise<WorkbookSpec> {
         if (!GetSpreadsheetWorkerRunner()) {
-            return Promise.resolve(this.ImportXlsx(bytes, configurationJson));
+            return Promise.resolve(this.ImportXlsx(bytes, configurationJson, options));
         }
-        return SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated(bytes, configurationJson);
+        return SpreadsheetEngine.Instance.ImportFromXlsxBytesIsolated(bytes, configurationJson, options);
     }
 
     public PatchXlsxBytes(originalBytes: Uint8Array | ArrayBuffer, workbook: WorkbookSpec): Uint8Array {

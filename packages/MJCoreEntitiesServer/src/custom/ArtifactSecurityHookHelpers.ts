@@ -750,7 +750,7 @@ export function BuildSqlCollectionReadablePredicate(
         options?.precomputedCollectionIds &&
         options.precomputedCollectionIds.size <= MAX_SQL_SCOPED_IN_IDS
     ) {
-        return BuildUuidInScopeClause(collectionIdExpr, options.precomputedCollectionIds) ?? '1 = 0';
+        return BuildUuidInScopeClause(collectionIdExpr, options.precomputedCollectionIds, provider) ?? '1 = 0';
     }
     const { q, vw, bTrue } = sqlPlatformHelpers(provider);
     const safeUser = EscapeSQLString(user.ID.trim());
@@ -1232,6 +1232,9 @@ export async function PrepareScopedPreRunView(
                     clauses.push('1 = 0');
                     break;
                 }
+                if (!isStrictSingleUuidEqualityFilter(updatedParams.ExtraFilter, pred.IdColumnName)) {
+                    allClausesBuilt = false;
+                }
                 continue;
             }
 
@@ -1274,7 +1277,7 @@ export async function PrepareScopedPreRunView(
                     clauses.push('1 = 0');
                     break;
                 }
-                const scopeClause = BuildUuidInScopeClause(pred.IdColumnName, readableIds);
+                const scopeClause = BuildUuidInScopeClause(pred.IdColumnName, readableIds, resolvedProvider);
                 if (scopeClause) {
                     clauses.push(scopeClause);
                     if (scopeClause === '1 = 0') {
@@ -1519,6 +1522,13 @@ export async function CascadeDeleteArtifactVersionAttributes(
     return { Success: true };
 }
 
+function isStrictSingleUuidEqualityFilter(
+    extraFilter: string | PlatformSQL | undefined,
+    columnName: string
+): boolean {
+    return ExtractSingleUuidFieldFromFilter(extraFilter, columnName) !== null;
+}
+
 export function ExtractSingleUuidFieldFromFilter(
     extraFilter: string | PlatformSQL | undefined,
     columnName: string
@@ -1526,92 +1536,47 @@ export function ExtractSingleUuidFieldFromFilter(
     if (typeof extraFilter !== 'string' || !extraFilter.trim()) {
         return null;
     }
-    const stripOuterParens = (input: string): string => {
-        let cur = input.trim();
-        while (cur.startsWith('(') && cur.endsWith(')')) {
-            let depth = 0;
-            let inQuote = false;
-            let wrapsAll = true;
-            for (let i = 0; i < cur.length; i++) {
-                const ch = cur[i];
-                if (ch === "'") {
-                    if (inQuote && cur[i + 1] === "'") {
-                        i++;
-                        continue;
-                    }
-                    inQuote = !inQuote;
+    let cur = extraFilter.trim();
+    while (cur.startsWith('(') && cur.endsWith(')')) {
+        let depth = 0;
+        let inQuote = false;
+        let wrapsAll = true;
+        for (let i = 0; i < cur.length; i++) {
+            const ch = cur[i];
+            if (ch === "'") {
+                if (inQuote && cur[i + 1] === "'") {
+                    i++;
                     continue;
                 }
-                if (inQuote) continue;
-                if (ch === '(') depth++;
-                else if (ch === ')') {
-                    depth--;
-                    if (depth === 0 && i < cur.length - 1) {
-                        wrapsAll = false;
-                        break;
-                    }
-                }
-            }
-            if (!wrapsAll || depth !== 0) break;
-            cur = cur.slice(1, -1).trim();
-        }
-        return cur;
-    };
-
-    const trimmed = stripOuterParens(extraFilter);
-    // Split strictly on top-level AND outside string literals/parens; refuse any top-level OR/NOT
-    const parts: string[] = [];
-    let start = 0;
-    let depth = 0;
-    let inQuote = false;
-    for (let i = 0; i < trimmed.length; i++) {
-        const ch = trimmed[i];
-        if (ch === "'") {
-            if (inQuote && trimmed[i + 1] === "'") {
-                i++;
+                inQuote = !inQuote;
                 continue;
             }
-            inQuote = !inQuote;
-            continue;
-        }
-        if (inQuote) continue;
-        if (ch === '(') {
-            depth++;
-            continue;
-        }
-        if (ch === ')') {
-            depth--;
-            continue;
-        }
-        if (depth === 0) {
-            const rest = trimmed.slice(i);
-            const orNotMatch = /^(?:OR|NOT)(?=\s|\()/i.exec(rest);
-            if (orNotMatch && (i === 0 || /[\s)]/.test(trimmed[i - 1]))) {
-                return null;
-            }
-            const andMatch = /^AND(?=\s|\()/i.exec(rest);
-            if (andMatch && i > 0 && /[\s)]/.test(trimmed[i - 1])) {
-                parts.push(trimmed.slice(start, i).trim());
-                i += 2; // advance past 'AND' (-1 for loop i++)
-                start = i + 1;
+            if (inQuote) continue;
+            if (ch === '(') depth++;
+            else if (ch === ')') {
+                depth--;
+                if (depth === 0 && i < cur.length - 1) {
+                    wrapsAll = false;
+                    break;
+                }
             }
         }
+        if (!wrapsAll || depth !== 0) {
+            break;
+        }
+        cur = cur.slice(1, -1).trim();
     }
-    parts.push(trimmed.slice(start).trim());
-
     const escapedCol = columnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`^(?:\\[?${escapedCol}\\]?)\\s*=\\s*N?'([^']+)'$`, 'i');
-    for (const part of parts) {
-        const unwrapped = stripOuterParens(part);
-        const match = pattern.exec(unwrapped);
-        if (match && match[1]) {
-            const candidate = match[1].trim();
-            if (IsValidUUID(candidate)) {
-                return candidate;
-            }
-        }
+    const pattern = new RegExp(
+        `^(?:\\[${escapedCol}\\]|"${escapedCol}"|${escapedCol})\\s*=\\s*N?'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'$`,
+        'i'
+    );
+    const match = pattern.exec(cur);
+    if (!match || !match[1]) {
+        return null;
     }
-    return null;
+    const candidate = match[1].trim();
+    return IsValidUUID(candidate) ? candidate : null;
 }
 
 export function ChunkUuidList(values: readonly string[], size: number): string[][] {

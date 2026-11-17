@@ -19,7 +19,7 @@ import {
     UserInfo,
     WellKnownUserSource
 } from '@memberjunction/core';
-import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
+import { ArtifactPermissionEngine, SpreadsheetEngine } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { GetGlobalObjectStore, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -2185,6 +2185,25 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             Object.defineProperty(oversizedWorkbookSave.ent, 'Content', { value: oversizedJson, writable: true });
             expect(await oversizedWorkbookSave.ent.Save()).toBe(false);
             expect(oversizedWorkbookSave.hist[0]?.Message).toMatch(/maximum sheet limit/i);
+
+            // 5. R8-2: Saving a base64 .xlsx payload does NOT run EvaluateWorkbook synchronously on the main thread
+            const xlsxSourceWb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('SaveXlsxNoMainEval', ['Sheet1'], 3, 3);
+            SpreadsheetEngine.Instance.SetCell(xlsxSourceWb, xlsxSourceWb.Worksheets[0].SheetID, 'A1', { Value: 5 }, false);
+            SpreadsheetEngine.Instance.SetCell(xlsxSourceWb, xlsxSourceWb.Worksheets[0].SheetID, 'A2', { Formula: '=A1*4' }, false);
+            const xlsxBytes = SpreadsheetEngine.Instance.ExportToXlsxBytes(xlsxSourceWb, false);
+            const xlsxDataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${Buffer.from(xlsxBytes).toString('base64')}`;
+
+            const mainEvalSpy = vi.spyOn(SpreadsheetEngine.Instance, 'EvaluateWorkbook');
+            try {
+                const xlsxOwnerSave = makeSave();
+                Object.defineProperty(xlsxOwnerSave.ent, 'ContextCurrentUser', { value: ownerUser, writable: true });
+                Object.defineProperty(xlsxOwnerSave.ent, 'Content', { value: xlsxDataUrl, writable: true });
+                superSaveSpy.mockResolvedValueOnce(true);
+                expect(await xlsxOwnerSave.ent.Save()).toBe(true);
+                expect(mainEvalSpy).not.toHaveBeenCalled();
+            } finally {
+                mainEvalSpy.mockRestore();
+            }
         } finally {
             RegisterWorkingStateContentDeserializer(null);
             superSaveSpy.mockRestore();

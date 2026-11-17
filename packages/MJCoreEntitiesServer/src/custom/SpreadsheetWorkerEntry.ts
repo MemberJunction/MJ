@@ -10,6 +10,7 @@ export type SpreadsheetWorkerRequest =
           Op: 'import';
           Bytes: Uint8Array;
           ConfigurationJson?: string | null;
+          SkipEvaluate?: boolean;
       }
     | {
           Op: 'patch';
@@ -39,7 +40,11 @@ function runWorkerRequest(req: SpreadsheetWorkerRequest): SpreadsheetWorkerReply
         const engine = SpreadsheetEngine.Instance;
         switch (req.Op) {
             case 'import': {
-                const workbook = engine.ImportFromXlsxBytes(req.Bytes, req.ConfigurationJson);
+                const workbook = engine.ImportFromXlsxBytes(
+                    req.Bytes,
+                    req.ConfigurationJson,
+                    req.SkipEvaluate !== undefined ? { SkipEvaluate: req.SkipEvaluate } : undefined
+                );
                 return { Ok: true, Workbook: workbook };
             }
             case 'patch': {

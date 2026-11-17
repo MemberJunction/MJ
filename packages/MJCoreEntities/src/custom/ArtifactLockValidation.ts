@@ -1,10 +1,14 @@
-import { NormalizeUUID } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { DocumentLiveBlockEngine } from './DocumentLiveBlockEngine';
 import { SlideDeckEngine, SlideDeckSpec } from './SlideDeckEngine';
 import {
+    EXCEL_MAX_COLS,
+    EXCEL_MAX_ROWS,
     FormatCellAddress,
+    ParseCellAddress,
     ParseRangeAddress,
     SpreadsheetEngine,
+    SpreadsheetProtectedRangeSpec,
     WorkbookSpec,
     WorksheetSpec
 } from './SpreadsheetEngine';
@@ -59,23 +63,248 @@ function doParsedRangesOverlap(
     return a.startRow <= b.endRow && b.startRow <= a.endRow && a.startCol <= b.endCol && b.startCol <= a.endCol;
 }
 
-function checkSheetCellMostRestrictive(
-    sheet: WorksheetSpec,
+interface CompiledProtectedRangeEntry {
+    rule: SpreadsheetProtectedRangeSpec;
+    startRow: number;
+    endRow: number;
+    startCol: number;
+    endCol: number;
+}
+
+interface CompiledProtectedRangeIndex {
+    byRow: Map<number, CompiledProtectedRangeEntry[]>;
+    byCol: Map<number, CompiledProtectedRangeEntry[]>;
+    wideRules: CompiledProtectedRangeEntry[];
+}
+
+const INDEXED_BUCKET_SPAN = 64;
+
+function buildCompiledProtectedRangeIndex(
+    rules: readonly SpreadsheetProtectedRangeSpec[],
+    maxRows: number,
+    maxCols: number,
+    predicate?: (rule: SpreadsheetProtectedRangeSpec) => boolean
+): {
+    index: CompiledProtectedRangeIndex;
+    allEntries: CompiledProtectedRangeEntry[];
+    unparsedRules: SpreadsheetProtectedRangeSpec[];
+} {
+    const byRow = new Map<number, CompiledProtectedRangeEntry[]>();
+    const byCol = new Map<number, CompiledProtectedRangeEntry[]>();
+    const wideRules: CompiledProtectedRangeEntry[] = [];
+    const allEntries: CompiledProtectedRangeEntry[] = [];
+    const unparsedRules: SpreadsheetProtectedRangeSpec[] = [];
+
+    for (const rule of rules) {
+        if (predicate && !predicate(rule)) {
+            continue;
+        }
+        const bounds = ParseRangeAddress(rule.Range, maxRows, maxCols);
+        if (!bounds) {
+            unparsedRules.push(rule);
+            continue;
+        }
+        const entry: CompiledProtectedRangeEntry = {
+            rule,
+            startRow: bounds.startRow,
+            endRow: bounds.endRow,
+            startCol: bounds.startCol,
+            endCol: bounds.endCol
+        };
+        allEntries.push(entry);
+        if (bounds.endRow - bounds.startRow <= INDEXED_BUCKET_SPAN) {
+            for (let r = bounds.startRow; r <= bounds.endRow; r++) {
+                let list = byRow.get(r);
+                if (!list) {
+                    list = [];
+                    byRow.set(r, list);
+                }
+                list.push(entry);
+            }
+        } else if (bounds.endCol - bounds.startCol <= INDEXED_BUCKET_SPAN) {
+            for (let c = bounds.startCol; c <= bounds.endCol; c++) {
+                let list = byCol.get(c);
+                if (!list) {
+                    list = [];
+                    byCol.set(c, list);
+                }
+                list.push(entry);
+            }
+        } else {
+            wideRules.push(entry);
+        }
+    }
+
+    return { index: { byRow, byCol, wideRules }, allEntries, unparsedRules };
+}
+
+function isActorAllowedForLockRule(
+    rule: SpreadsheetProtectedRangeSpec,
+    editCtx: { UserID?: string; OwnerUserID: string; IsEditor: boolean }
+): boolean {
+    const actor = (editCtx.UserID ?? '').trim();
+    if (actor && editCtx.OwnerUserID && UUIDsEqual(actor, editCtx.OwnerUserID)) {
+        return true;
+    }
+    if (actor && rule.LockedByUserID && UUIDsEqual(actor, rule.LockedByUserID)) {
+        return true;
+    }
+    if (rule.AllowEditors && editCtx.IsEditor) {
+        return true;
+    }
+    return false;
+}
+
+function checkSheetCellWithIndex(
+    index: CompiledProtectedRangeIndex,
     cellAddress: string,
     editCtx: { UserID?: string; OwnerUserID: string; IsEditor: boolean }
 ): ArtifactLockValidationResult {
-    const rules = sheet.ProtectedRanges ?? [];
-    for (const rule of rules) {
-        const singleRuleRes = SpreadsheetEngine.Instance.CheckCellWritePermission(
-            { ...sheet, ProtectedRanges: [rule] },
-            cellAddress,
-            editCtx
-        );
-        if (!singleRuleRes.Allowed) {
-            return singleRuleRes;
+    const pos = ParseCellAddress(cellAddress);
+    if (!pos) {
+        return { Allowed: true };
+    }
+    const candidates: Array<readonly CompiledProtectedRangeEntry[] | undefined> = [
+        index.byRow.get(pos.row),
+        index.byCol.get(pos.col),
+        index.wideRules
+    ];
+    for (const bucket of candidates) {
+        if (!bucket) {
+            continue;
+        }
+        for (const entry of bucket) {
+            if (
+                pos.row >= entry.startRow &&
+                pos.row <= entry.endRow &&
+                pos.col >= entry.startCol &&
+                pos.col <= entry.endCol &&
+                !isActorAllowedForLockRule(entry.rule, editCtx)
+            ) {
+                return {
+                    Allowed: false,
+                    Reason: `Cell '${cellAddress}' falls inside protected range '${entry.rule.Range}' (locked by ${entry.rule.LockedByUserID}).`
+                };
+            }
         }
     }
     return { Allowed: true };
+}
+
+function findOverlappingIndexedProtectedRule(
+    nextBounds: { startRow: number; endRow: number; startCol: number; endCol: number },
+    compiled: {
+        index: CompiledProtectedRangeIndex;
+        allEntries: CompiledProtectedRangeEntry[];
+    }
+): SpreadsheetProtectedRangeSpec | null {
+    const seen = new Set<CompiledProtectedRangeEntry>();
+    if (nextBounds.endRow - nextBounds.startRow <= INDEXED_BUCKET_SPAN) {
+        for (let r = nextBounds.startRow; r <= nextBounds.endRow; r++) {
+            const list = compiled.index.byRow.get(r);
+            if (!list) continue;
+            for (const entry of list) {
+                if (seen.has(entry)) continue;
+                seen.add(entry);
+                if (doParsedRangesOverlap(nextBounds, entry)) {
+                    return entry.rule;
+                }
+            }
+        }
+        for (const entry of compiled.index.wideRules) {
+            if (doParsedRangesOverlap(nextBounds, entry)) {
+                return entry.rule;
+            }
+        }
+        // Row-narrow incoming range could also intersect col-bucketed rules covering that column
+        for (let c = nextBounds.startCol; c <= nextBounds.endCol && c - nextBounds.startCol <= INDEXED_BUCKET_SPAN; c++) {
+            const list = compiled.index.byCol.get(c);
+            if (!list) continue;
+            for (const entry of list) {
+                if (seen.has(entry)) continue;
+                seen.add(entry);
+                if (doParsedRangesOverlap(nextBounds, entry)) {
+                    return entry.rule;
+                }
+            }
+        }
+        if (nextBounds.endCol - nextBounds.startCol > INDEXED_BUCKET_SPAN) {
+            for (const colEntries of compiled.index.byCol.values()) {
+                for (const entry of colEntries) {
+                    if (seen.has(entry)) continue;
+                    seen.add(entry);
+                    if (doParsedRangesOverlap(nextBounds, entry)) {
+                        return entry.rule;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    if (nextBounds.endCol - nextBounds.startCol <= INDEXED_BUCKET_SPAN) {
+        for (let c = nextBounds.startCol; c <= nextBounds.endCol; c++) {
+            const list = compiled.index.byCol.get(c);
+            if (!list) continue;
+            for (const entry of list) {
+                if (seen.has(entry)) continue;
+                seen.add(entry);
+                if (doParsedRangesOverlap(nextBounds, entry)) {
+                    return entry.rule;
+                }
+            }
+        }
+        for (const entry of compiled.index.wideRules) {
+            if (doParsedRangesOverlap(nextBounds, entry)) {
+                return entry.rule;
+            }
+        }
+        for (const rowEntries of compiled.index.byRow.values()) {
+            for (const entry of rowEntries) {
+                if (seen.has(entry)) continue;
+                seen.add(entry);
+                if (doParsedRangesOverlap(nextBounds, entry)) {
+                    return entry.rule;
+                }
+            }
+        }
+        return null;
+    }
+    for (const entry of compiled.allEntries) {
+        if (doParsedRangesOverlap(nextBounds, entry)) {
+            return entry.rule;
+        }
+    }
+    return null;
+}
+
+function findFirstRowIdMismatchIndex(
+    prevRows: ReadonlyArray<{ RowID: string }> | undefined,
+    nextRows: ReadonlyArray<{ RowID: string }> | undefined
+): number {
+    const prev = prevRows ?? [];
+    const next = nextRows ?? [];
+    const shared = Math.min(prev.length, next.length);
+    for (let i = 0; i < shared; i++) {
+        if (prev[i].RowID !== next[i].RowID) {
+            return i;
+        }
+    }
+    return shared;
+}
+
+function findFirstColIdMismatchIndex(
+    prevCols: ReadonlyArray<{ ColumnID: string }> | undefined,
+    nextCols: ReadonlyArray<{ ColumnID: string }> | undefined
+): number {
+    const prev = prevCols ?? [];
+    const next = nextCols ?? [];
+    const shared = Math.min(prev.length, next.length);
+    for (let i = 0; i < shared; i++) {
+        if (prev[i].ColumnID !== next[i].ColumnID) {
+            return i;
+        }
+    }
+    return shared;
 }
 
 function inspectStructuredJsonKind(raw: string | null | undefined): 'slides' | 'workbook' | null {
@@ -396,7 +625,44 @@ function validateWorkbookLockTransition(
         }
         const maxRows = Math.max(prevSheet.Rows?.length ?? 0, nextSheet.Rows?.length ?? 0, 1000);
         const maxCols = Math.max(prevSheet.Columns?.length ?? 0, nextSheet.Columns?.length ?? 0, 260);
-        if (!isOwner) {
+        if (!isOwner && rules.length > 0) {
+            const newRulesToCheck = (nextSheet.ProtectedRanges ?? []).filter((nr) => !prevRulesById.has(nr.RangeID));
+            if (newRulesToCheck.length > 0) {
+                const disallowedPrev = buildCompiledProtectedRangeIndex(rules, maxRows, maxCols, (prevRule) => {
+                    const isPrevRuleCreator =
+                        normActor !== '' && NormalizeUUID(prevRule.LockedByUserID) === normActor;
+                    return !isPrevRuleCreator && !prevRule.AllowEditors;
+                });
+                for (const nextRule of newRulesToCheck) {
+                    if (!normActor || NormalizeUUID(nextRule.LockedByUserID) !== normActor) {
+                        return {
+                            Allowed: false,
+                            Reason: `Cannot create protected range '${nextRule.Range}' with spoofed LockedByUserID.`
+                        };
+                    }
+                    const nextParsed = ParseRangeAddress(nextRule.Range, maxRows, maxCols);
+                    if (!nextParsed) {
+                        return {
+                            Allowed: false,
+                            Reason: `Invalid protected range address '${nextRule.Range}'.`
+                        };
+                    }
+                    if (disallowedPrev.unparsedRules.length > 0) {
+                        return {
+                            Allowed: false,
+                            Reason: `Cannot add protected range '${nextRule.Range}' overlapping locked range '${disallowedPrev.unparsedRules[0].Range}'.`
+                        };
+                    }
+                    const overlapping = findOverlappingIndexedProtectedRule(nextParsed, disallowedPrev);
+                    if (overlapping) {
+                        return {
+                            Allowed: false,
+                            Reason: `Cannot add protected range '${nextRule.Range}' overlapping locked range '${overlapping.Range}'.`
+                        };
+                    }
+                }
+            }
+        } else if (!isOwner) {
             for (const nextRule of nextSheet.ProtectedRanges ?? []) {
                 if (!prevRulesById.has(nextRule.RangeID)) {
                     if (!normActor || NormalizeUUID(nextRule.LockedByUserID) !== normActor) {
@@ -412,20 +678,6 @@ function validateWorkbookLockTransition(
                             Reason: `Invalid protected range address '${nextRule.Range}'.`
                         };
                     }
-                    for (const prevRule of rules) {
-                        const isPrevRuleCreator =
-                            normActor !== '' && NormalizeUUID(prevRule.LockedByUserID) === normActor;
-                        if (isPrevRuleCreator || prevRule.AllowEditors) {
-                            continue;
-                        }
-                        const prevParsed = ParseRangeAddress(prevRule.Range, maxRows, maxCols);
-                        if (!prevParsed || doParsedRangesOverlap(nextParsed, prevParsed)) {
-                            return {
-                                Allowed: false,
-                                Reason: `Cannot add protected range '${nextRule.Range}' overlapping locked range '${prevRule.Range}'.`
-                            };
-                        }
-                    }
                 }
             }
         }
@@ -433,6 +685,17 @@ function validateWorkbookLockTransition(
         if (rules.length === 0) {
             continue;
         }
+
+        const prevRowsLen = prevSheet.Rows?.length ?? 0;
+        const nextRowsLen = nextSheet.Rows?.length ?? 0;
+        const firstRowMismatchIdx = findFirstRowIdMismatchIndex(prevSheet.Rows, nextSheet.Rows);
+        const prevColsLen = prevSheet.Columns?.length ?? 0;
+        const nextColsLen = nextSheet.Columns?.length ?? 0;
+        const firstColMismatchIdx = findFirstColIdMismatchIndex(prevSheet.Columns, nextSheet.Columns);
+        const sortSpecChanged =
+            JSON.stringify(prevSheet.SortSpec ?? null) !== JSON.stringify(nextSheet.SortSpec ?? null);
+        const mergeRangesChanged =
+            JSON.stringify(prevSheet.MergeRanges ?? []) !== JSON.stringify(nextSheet.MergeRanges ?? []);
 
         for (const rule of rules) {
             const parsedRange = ParseRangeAddress(rule.Range, maxRows, maxCols);
@@ -445,65 +708,37 @@ function validateWorkbookLockTransition(
                 }
                 continue;
             }
-            const sampleAddr = FormatCellAddress(parsedRange.startRow, parsedRange.startCol);
-            const samplePerm = SpreadsheetEngine.Instance.CheckCellWritePermission(
-                { ...prevSheet, ProtectedRanges: [rule] },
-                sampleAddr,
-                editCtx
-            );
-            if (samplePerm.Allowed) {
+            if (isActorAllowedForLockRule(rule, editCtx)) {
                 continue;
             }
+            const sampleAddr = FormatCellAddress(parsedRange.startRow, parsedRange.startCol);
+            const sampleDeniedReason = `Cell '${sampleAddr}' falls inside protected range '${rule.Range}' (locked by ${rule.LockedByUserID}).`;
 
-            const prevRowsPrefix = (prevSheet.Rows ?? [])
-                .slice(0, parsedRange.endRow)
-                .map((r) => r.RowID);
-            const nextRowsPrefix = (nextSheet.Rows ?? [])
-                .slice(0, parsedRange.endRow)
-                .map((r) => r.RowID);
-            if (
-                prevRowsPrefix.length !== nextRowsPrefix.length ||
-                prevRowsPrefix.some((id, idx) => id !== nextRowsPrefix[idx])
-            ) {
+            const prevRowPrefixLen = Math.min(prevRowsLen, parsedRange.endRow);
+            const nextRowPrefixLen = Math.min(nextRowsLen, parsedRange.endRow);
+            if (prevRowPrefixLen !== nextRowPrefixLen || firstRowMismatchIdx < prevRowPrefixLen) {
                 return {
                     Allowed: false,
-                    Reason:
-                        samplePerm.Reason ??
-                        `Cannot insert, delete, or reorder rows intersecting protected range '${rule.Range}'.`
+                    Reason: sampleDeniedReason
                 };
             }
 
-            const prevColsPrefix = (prevSheet.Columns ?? [])
-                .slice(0, parsedRange.endCol)
-                .map((c) => c.ColumnID);
-            const nextColsPrefix = (nextSheet.Columns ?? [])
-                .slice(0, parsedRange.endCol)
-                .map((c) => c.ColumnID);
-            if (
-                prevColsPrefix.length !== nextColsPrefix.length ||
-                prevColsPrefix.some((id, idx) => id !== nextColsPrefix[idx])
-            ) {
+            const prevColPrefixLen = Math.min(prevColsLen, parsedRange.endCol);
+            const nextColPrefixLen = Math.min(nextColsLen, parsedRange.endCol);
+            if (prevColPrefixLen !== nextColPrefixLen || firstColMismatchIdx < prevColPrefixLen) {
                 return {
                     Allowed: false,
-                    Reason:
-                        samplePerm.Reason ??
-                        `Cannot insert, delete, or reorder columns intersecting protected range '${rule.Range}'.`
+                    Reason: sampleDeniedReason
                 };
             }
 
-            if (
-                JSON.stringify(prevSheet.SortSpec ?? null) !==
-                JSON.stringify(nextSheet.SortSpec ?? null)
-            ) {
+            if (sortSpecChanged) {
                 return {
                     Allowed: false,
                     Reason: `Cannot alter sort specification on worksheet with protected range '${rule.Range}'.`
                 };
             }
-            if (
-                JSON.stringify(prevSheet.MergeRanges ?? []) !==
-                JSON.stringify(nextSheet.MergeRanges ?? [])
-            ) {
+            if (mergeRangesChanged) {
                 return {
                     Allowed: false,
                     Reason: `Cannot alter merged ranges on worksheet with protected range '${rule.Range}'.`
@@ -511,6 +746,11 @@ function validateWorkbookLockTransition(
             }
         }
 
+        const compiledPrevCellIndex = buildCompiledProtectedRangeIndex(
+            rules,
+            EXCEL_MAX_ROWS,
+            EXCEL_MAX_COLS
+        ).index;
         const allAddresses = new Set<string>([
             ...Object.keys(prevSheet.Cells ?? {}),
             ...Object.keys(nextSheet.Cells ?? {})
@@ -521,7 +761,7 @@ function validateWorkbookLockTransition(
             if (serializeSheetCellForLockDiff(prevCell) === serializeSheetCellForLockDiff(nextCell)) {
                 continue;
             }
-            const perm = checkSheetCellMostRestrictive(prevSheet, addr, editCtx);
+            const perm = checkSheetCellWithIndex(compiledPrevCellIndex, addr, editCtx);
             if (!perm.Allowed) {
                 return { Allowed: false, Reason: perm.Reason };
             }

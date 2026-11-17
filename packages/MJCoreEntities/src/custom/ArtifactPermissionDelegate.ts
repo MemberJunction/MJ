@@ -491,7 +491,28 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         user: UserInfo | null | undefined,
         depth: number = 0,
         visitedArtifactIds?: ReadonlySet<string>,
-        memo?: Map<string, Promise<ResolvedArtifactPermissions>>
+        memo?: Map<string, Promise<ResolvedArtifactPermissions>>,
+        strictThrowOnQueryError: boolean = false
+    ): Promise<ResolvedArtifactPermissions> {
+        return this.resolvePermissionsCore(
+            provider,
+            artifactId,
+            user,
+            depth,
+            visitedArtifactIds,
+            memo,
+            strictThrowOnQueryError
+        );
+    }
+
+    private async resolvePermissionsCore(
+        provider: IMetadataProvider | null | undefined,
+        artifactId: string | null | undefined,
+        user: UserInfo | null | undefined,
+        depth: number,
+        visitedArtifactIds: ReadonlySet<string> | undefined,
+        memo: Map<string, Promise<ResolvedArtifactPermissions>> | undefined,
+        strictThrowOnQueryError: boolean
     ): Promise<ResolvedArtifactPermissions> {
         const normalizedArtifactId = (artifactId ?? '').trim();
         if (!normalizedArtifactId || !user) {
@@ -523,9 +544,11 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         const normUserId = NormalizeUUID(user.ID ?? '');
         const activeMemo = memo ?? new Map<string, Promise<ResolvedArtifactPermissions>>();
         const memoKey = `${normArtifactId}::${normUserId}`;
-        const cachedPromise = activeMemo.get(memoKey);
-        if (cachedPromise) {
-            return cachedPromise;
+        if (!strictThrowOnQueryError) {
+            const cachedPromise = activeMemo.get(memoKey);
+            if (cachedPromise) {
+                return cachedPromise;
+            }
         }
 
         const resolutionPromise = this.resolvePermissionsInternal(
@@ -534,9 +557,12 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             user,
             depth,
             visited,
-            activeMemo
+            activeMemo,
+            strictThrowOnQueryError
         );
-        activeMemo.set(memoKey, resolutionPromise);
+        if (!strictThrowOnQueryError) {
+            activeMemo.set(memoKey, resolutionPromise);
+        }
         return resolutionPromise;
     }
 
@@ -546,9 +572,10 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         user: UserInfo,
         depth: number,
         visited: ReadonlySet<string>,
-        memo: Map<string, Promise<ResolvedArtifactPermissions>>
+        memo: Map<string, Promise<ResolvedArtifactPermissions>>,
+        strictThrowOnQueryError = false
     ): Promise<ResolvedArtifactPermissions> {
-        const artifact = await this.loadArtifactRow(activeProvider, normalizedArtifactId, user);
+        const artifact = await this.loadArtifactRow(activeProvider, normalizedArtifactId, user, strictThrowOnQueryError);
         if (!artifact) {
             return this.buildDenied(normalizedArtifactId, `Artifact '${normalizedArtifactId}' was not found.`);
         }
@@ -586,8 +613,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         // 3 & 4. Union direct MJ: Artifact Permissions rows AND cascaded MJ: Collection Permissions
         // rows so a direct read-only share never masks higher grants inherited from a collection.
         const [directRows, collectionPerms] = await Promise.all([
-            this.loadDirectPermissionRows(activeProvider, artifact.ID, user),
-            this.loadCollectionPermissionRows(activeProvider, artifact.ID, user),
+            this.loadDirectPermissionRows(activeProvider, artifact.ID, user, strictThrowOnQueryError),
+            this.loadCollectionPermissionRows(activeProvider, artifact.ID, user, strictThrowOnQueryError),
         ]);
         const directCanEdit = directRows.some((r) => Boolean(r.CanEdit));
         const directCanDelete = directRows.some((r) => Boolean(r.CanDelete));
@@ -783,7 +810,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     private async loadArtifactRow(
         provider: IMetadataProvider,
         artifactId: string,
-        user: UserInfo
+        user: UserInfo,
+        strictThrowOnQueryError = false
     ): Promise<ArtifactRowProjection | null> {
         if (!IsValidUUID(artifactId)) {
             return null;
@@ -801,12 +829,21 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             };
             ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(artifactParams);
             const result = await rv.RunView<ArtifactRowProjection>(artifactParams, user);
-            if (!result.Success || !result.Results || result.Results.length === 0) {
+            if (!result.Success) {
+                if (strictThrowOnQueryError) {
+                    throw new Error(result.ErrorMessage || `Failed loading artifact row '${artifactId}'.`);
+                }
+                return null;
+            }
+            if (!result.Results || result.Results.length === 0) {
                 return null;
             }
             return result.Results[0];
         } catch (err) {
             LogError(`ArtifactPermissionEngine.loadArtifactRow error: ${err instanceof Error ? err.message : String(err)}`);
+            if (strictThrowOnQueryError) {
+                throw err;
+            }
             return null;
         }
     }
@@ -814,7 +851,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     private async loadDirectPermissionRows(
         provider: IMetadataProvider,
         artifactId: string,
-        user: UserInfo
+        user: UserInfo,
+        strictThrowOnQueryError = false
     ): Promise<ArtifactPermissionRowProjection[]> {
         if (!IsValidUUID(artifactId) || !IsValidUUID(user.ID)) {
             return [];
@@ -832,11 +870,20 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             };
             ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(directParams);
             const result = await rv.RunView<ArtifactPermissionRowProjection>(directParams, user);
-            return result.Success ? result.Results ?? [] : [];
+            if (!result.Success) {
+                if (strictThrowOnQueryError) {
+                    throw new Error(result.ErrorMessage || `Failed loading direct permissions for artifact '${artifactId}'.`);
+                }
+                return [];
+            }
+            return result.Results ?? [];
         } catch (err) {
             LogError(
                 `ArtifactPermissionEngine.loadDirectPermissionRows error: ${err instanceof Error ? err.message : String(err)}`
             );
+            if (strictThrowOnQueryError) {
+                throw err;
+            }
             return [];
         }
     }
@@ -1415,7 +1462,15 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 const resolvedBatch = await Promise.all(
                     batch.map(async ([normId, rawId]) => ({
                         normId,
-                        perms: await this.ResolvePermissions(provider, rawId, user, 0, undefined, resolveMemo)
+                        perms: await this.ResolvePermissions(
+                            provider,
+                            rawId,
+                            user,
+                            0,
+                            undefined,
+                            resolveMemo,
+                            throwOnQueryFailure
+                        )
                     }))
                 );
                 for (const entry of resolvedBatch) {
@@ -1458,7 +1513,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     private async loadCollectionPermissionRows(
         provider: IMetadataProvider,
         artifactId: string,
-        user: UserInfo
+        user: UserInfo,
+        strictThrowOnQueryError = false
     ): Promise<CollectionPermissionRowProjection[]> {
         try {
             // On Database providers, run the version/collection membership lookup strictly as the system
@@ -1469,6 +1525,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             // concurrent parallel resolutions for the same artifact/user).
             const queryActor = await this.resolvePermissionQueryActor(provider, user, `artifact '${artifactId}'`);
             if (!queryActor) {
+                if (strictThrowOnQueryError) {
+                    throw new Error(`System user is unavailable for collection lookup on artifact '${artifactId}'.`);
+                }
                 return [];
             }
 
@@ -1485,8 +1544,14 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             };
             ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(versionsParams);
             const versionsResult = await rv.RunView<{ ID: string }>(versionsParams, queryActor);
+            if (!versionsResult.Success) {
+                if (strictThrowOnQueryError) {
+                    throw new Error(versionsResult.ErrorMessage || `Failed loading versions for artifact '${artifactId}'.`);
+                }
+                return [];
+            }
             const versionIds = Array.from(
-                new Set((versionsResult.Success ? versionsResult.Results ?? [] : []).map((v) => v.ID).filter(Boolean))
+                new Set((versionsResult.Results ?? []).map((v) => v.ID).filter(Boolean))
             );
             if (versionIds.length === 0) {
                 return [];
@@ -1505,7 +1570,13 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 };
                 ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(colParams);
                 const colResult = await rv.RunView<CollectionArtifactRowProjection>(colParams, queryActor);
-                for (const row of colResult.Success ? colResult.Results ?? [] : []) {
+                if (!colResult.Success) {
+                    if (strictThrowOnQueryError) {
+                        throw new Error(colResult.ErrorMessage || `Failed loading collection links for artifact '${artifactId}'.`);
+                    }
+                    continue;
+                }
+                for (const row of colResult.Results ?? []) {
                     if (row.CollectionID) {
                         const norm = NormalizeUUID(row.CollectionID);
                         if (!seenCollectionIds.has(norm)) {
@@ -1537,6 +1608,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     };
                     ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(colMetaParams);
                     const colMetaRes = await rv.RunView<CollectionRowProjection>(colMetaParams, queryActor);
+                    if (!colMetaRes.Success && strictThrowOnQueryError) {
+                        throw new Error(colMetaRes.ErrorMessage || `Failed loading collections for artifact '${artifactId}'.`);
+                    }
                     if (colMetaRes.Success && colMetaRes.Results) {
                         for (const col of colMetaRes.Results) {
                             if (col.OwnerID && UUIDsEqual(col.OwnerID, user.ID)) {
@@ -1577,6 +1651,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 };
                 ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(permParams);
                 const permResult = await rv.RunView<CollectionPermissionRowProjection>(permParams, queryActor);
+                if (!permResult.Success && strictThrowOnQueryError) {
+                    throw new Error(permResult.ErrorMessage || `Failed loading collection permissions for artifact '${artifactId}'.`);
+                }
                 if (permResult.Success && permResult.Results) {
                     rows.push(...permResult.Results);
                 }
@@ -1588,6 +1665,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     err instanceof Error ? err.message : String(err)
                 }`
             );
+            if (strictThrowOnQueryError) {
+                throw err;
+            }
             return [];
         }
     }

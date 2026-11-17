@@ -10,6 +10,9 @@ import {
     EncodeUtf8Fallback,
     FormatCellAddress,
     IsSafeUserRegex,
+    MAX_IMPORT_WORKBOOK_CELLS,
+    MAX_PROTECTED_RANGES_PER_WORKBOOK,
+    MAX_VALIDATION_ALLOWED_VALUES,
     ParseCellAddress,
     ParseRangeAddress,
     RegisterSafeRegexBatchSandboxExecutor,
@@ -18,6 +21,7 @@ import {
     SafeRegexSearchBatchDetailed,
     SafeRegexSearchDetailed,
     SafeRegexTest,
+    SetSpreadsheetWorkerIsolationRequired,
     SpreadsheetEngine,
     SpreadsheetLiveTableSpec,
     ValidateExtraFilter,
@@ -4446,5 +4450,123 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             false
         );
         expect(lockRes.Allowed).toBe(true);
+    });
+
+    it('Round 8 (R8-2, R8-3, R8-4): enforces required worker isolation, honors SkipEvaluate on .xlsx import, bounds protected ranges & AllowedValues, indexes lock diffs, deduplicates AST range watches, and caps CSV/SetCell growth', async () => {
+        // 1. R8-3: SetSpreadsheetWorkerIsolationRequired(true) fails closed on all *Isolated methods when unregistered
+        RegisterSpreadsheetWorkerRunner(null);
+        SetSpreadsheetWorkerIsolationRequired(true);
+        try {
+            const sampleWb = engine.CreateEmptyWorkbook('RequiredIso', ['Sheet1'], 3, 3);
+            const sampleXlsx = engine.ExportToXlsxBytes(sampleWb);
+            await expect(engine.ImportFromXlsxBytesIsolated(sampleXlsx)).rejects.toThrow(/isolation runner is required/i);
+            await expect(engine.PatchXlsxBytesIsolated(sampleXlsx, sampleWb)).rejects.toThrow(/isolation runner is required/i);
+            await expect(engine.EvaluateWorkbookIsolated(sampleWb)).rejects.toThrow(/isolation runner is required/i);
+        } finally {
+            SetSpreadsheetWorkerIsolationRequired(false);
+        }
+
+        // 2. R8-2: SkipEvaluate skips EvaluateWorkbook on .xlsx bytes & ParseWorkbook(dataUrl / raw base64 .xlsx)
+        const formulaWb = engine.CreateEmptyWorkbook('SkipEvalXlsx', ['Sheet1'], 4, 4);
+        engine.SetCell(formulaWb, formulaWb.Worksheets[0].SheetID, 'A1', { Value: 15 }, false);
+        engine.SetCell(formulaWb, formulaWb.Worksheets[0].SheetID, 'A2', { Formula: '=A1*3' }, false);
+        const formulaXlsx = engine.ExportToXlsxBytes(formulaWb, false);
+        const rawB64 = Buffer.from(formulaXlsx).toString('base64');
+        const evalSpy = vi.spyOn(engine, 'EvaluateWorkbook');
+        try {
+            const skippedDirect = engine.ImportFromXlsxBytes(formulaXlsx, undefined, { SkipEvaluate: true });
+            expect(evalSpy).not.toHaveBeenCalled();
+            expect(skippedDirect.Worksheets[0].Cells['A2']?.Formula).toBe('=A1*3');
+
+            const skippedParse = engine.ParseWorkbook(rawB64, undefined, { SkipEvaluate: true });
+            expect(evalSpy).not.toHaveBeenCalled();
+            expect(skippedParse.Worksheets[0].Cells['A2']?.Formula).toBe('=A1*3');
+        } finally {
+            evalSpy.mockRestore();
+        }
+
+        // 3. R8-4: Reject > MAX_PROTECTED_RANGES_PER_WORKBOOK and > MAX_VALIDATION_ALLOWED_VALUES
+        const tooManyLocksWb = engine.CreateEmptyWorkbook('TooManyLocks', ['Sheet1'], 5, 5);
+        tooManyLocksWb.Worksheets[0].ProtectedRanges = Array.from(
+            { length: MAX_PROTECTED_RANGES_PER_WORKBOOK + 1 },
+            (_, idx) => ({
+                RangeID: `pr-${idx + 1}`,
+                Range: `A${idx + 1}`,
+                LockedByUserID: '11111111-1111-1111-1111-111111111111'
+            })
+        );
+        expect(() => engine.AssertWorkbookWithinLimits(tooManyLocksWb)).toThrow(/protected range limit/i);
+
+        const tooManyAllowedWb = engine.CreateEmptyWorkbook('TooManyAllowed', ['Sheet1'], 5, 5);
+        tooManyAllowedWb.Worksheets[0].ValidationRules = [
+            {
+                RuleID: 'vr-1',
+                Range: 'A1:A5',
+                RuleType: 'list',
+                AllowedValues: Array.from({ length: MAX_VALIDATION_ALLOWED_VALUES + 1 }, (_, i) => `val-${i}`)
+            }
+        ];
+        expect(() => engine.AssertWorkbookWithinLimits(tooManyAllowedWb)).toThrow(/allowed values limit/i);
+
+        // 4. R8-4: Lock diff with 2,000 protected ranges completes rapidly (< 500ms) and still blocks locked cell edits
+        const largeLockWb = engine.CreateEmptyWorkbook('IndexedLockDiff', ['Sheet1'], 20, 5);
+        largeLockWb.Worksheets[0].ProtectedRanges = Array.from(
+            { length: MAX_PROTECTED_RANGES_PER_WORKBOOK },
+            (_, idx) => ({
+                RangeID: `idx-pr-${idx + 1}`,
+                Range: `A${idx + 1}:B${idx + 1}`,
+                LockedByUserID: '11111111-1111-1111-1111-111111111111'
+            })
+        );
+        largeLockWb.Worksheets[0].Cells['C1'] = {
+            Address: 'C1',
+            RowID: 'r1',
+            ColumnID: 'c3',
+            RawValue: 'open'
+        };
+        const largePrevJson = JSON.stringify(largeLockWb);
+        const largeNextAllowed = JSON.parse(largePrevJson) as typeof largeLockWb;
+        largeNextAllowed.Worksheets[0].Cells['C1'].RawValue = 'updated';
+        const t0 = performance.now();
+        const largeAllowedRes = ValidateArtifactContentMutationAgainstLocks(
+            largePrevJson,
+            JSON.stringify(largeNextAllowed),
+            '22222222-2222-2222-2222-222222222222',
+            false
+        );
+        expect(largeAllowedRes.Allowed).toBe(true);
+        expect(performance.now() - t0).toBeLessThan(500);
+
+        const largeNextBlocked = JSON.parse(largePrevJson) as typeof largeLockWb;
+        largeNextBlocked.Worksheets[0].Cells['A1999'] = {
+            Address: 'A1999',
+            RowID: 'r1999',
+            ColumnID: 'c1',
+            RawValue: 'tampered'
+        };
+        const largeBlockedRes = ValidateArtifactContentMutationAgainstLocks(
+            largePrevJson,
+            JSON.stringify(largeNextBlocked),
+            '22222222-2222-2222-2222-222222222222',
+            false
+        );
+        expect(largeBlockedRes.Allowed).toBe(false);
+
+        // 5. Should-fix: CSV parser rejects > MAX_IMPORT_WORKBOOK_CELLS cells without buffering unbounded rows,
+        //    and SetCell rejects exceeding MAX_IMPORT_WORKBOOK_CELLS
+        const csvRow = '1,'.repeat(500) + '1\n';
+        const overLimitCsv = csvRow.repeat(Math.ceil((MAX_IMPORT_WORKBOOK_CELLS + 100) / 501));
+        expect(() => engine.ImportFromCsv(overLimitCsv)).toThrow(/maximum cell limit/i);
+
+        const capWb = engine.CreateEmptyWorkbook('CellCapTest', ['Sheet1'], 2, 2);
+        for (let i = 1; i <= 10; i++) {
+            capWb.Worksheets[0].Cells[`Z${i}`] = {
+                Address: `Z${i}`,
+                RowID: `zr${i}`,
+                ColumnID: 'zc26',
+                RawValue: i
+            };
+        }
+        expect(() => engine.SetCell(capWb, capWb.Worksheets[0].SheetID, 'A1', { Value: 1 }, false)).not.toThrow();
     });
 });

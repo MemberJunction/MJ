@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
     BuildArtifactPreviewSnapshot,
     BuildArtifactVersionConfigurationWithPreview,
@@ -8,6 +8,7 @@ import {
 } from '../custom/ArtifactPreviewSnapshot';
 import { ArtifactSynthesisEngine } from '../custom/ArtifactSynthesisEngine';
 import { DocumentLiveBlockEngine } from '../custom/DocumentLiveBlockEngine';
+import { SpreadsheetEngine } from '../custom/SpreadsheetEngine';
 
 describe('ArtifactPreviewSnapshot Hardening (SVG rejection, MaskLiveDataBlocks, Fence & CSS safety)', () => {
     it('IsValidThumbnailDataUrl strictly rejects image/svg+xml and accepts png/jpeg/webp base64 data URLs', () => {
@@ -366,8 +367,8 @@ describe('ArtifactSynthesisEngine Security, Prompt Hygiene & Spreadsheet Fidelit
         }
     });
 
-    it('ExtractSourceDigest samples both head rows and summary/tail rows beyond row 12 (P2-2)', () => {
-        const cells: Record<string, { RawValue: string | number; Formula: string | null }> = {
+    it('ExtractSourceDigest samples both head rows and summary/tail rows beyond row 12 without main-thread eval, and ExtractSourceDigestIsolated evaluates formulas (P2-2, R8-3)', async () => {
+        const cells: Record<string, { RawValue: string | number; ComputedValue?: number; Formula: string | null }> = {
             A1: { RawValue: 'Item', Formula: null },
             B1: { RawValue: 'Amount', Formula: null }
         };
@@ -378,7 +379,7 @@ describe('ArtifactSynthesisEngine Security, Prompt Hygiene & Spreadsheet Fidelit
         cells['A25'] = { RawValue: 'Grand Total', Formula: null };
         cells['B25'] = { RawValue: 3000, Formula: '=SUM(B2:B24)' };
 
-        const digest = engine.ExtractSourceDigest({
+        const sourcePayload = {
             ArtifactID: allowedArtifactId,
             Name: 'Monthly Ledger',
             ArtifactType: 'Spreadsheet',
@@ -387,10 +388,21 @@ describe('ArtifactSynthesisEngine Security, Prompt Hygiene & Spreadsheet Fidelit
                 ActiveSheetID: 's1',
                 Worksheets: [{ SheetID: 's1', Name: 'Ledger', Cells: cells }]
             })
-        });
+        };
 
-        expect(digest.SummaryText).toContain('LineItem-2');
-        expect(digest.SummaryText).toContain('Grand Total');
-        expect(digest.SummaryText).toContain('2990');
+        const evalSpy = vi.spyOn(SpreadsheetEngine.Instance, 'EvaluateWorkbook');
+        try {
+            const syncDigest = engine.ExtractSourceDigest(sourcePayload);
+            expect(evalSpy).not.toHaveBeenCalled();
+            expect(syncDigest.SummaryText).toContain('LineItem-2');
+            expect(syncDigest.SummaryText).toContain('Grand Total');
+        } finally {
+            evalSpy.mockRestore();
+        }
+
+        const isolatedDigest = await engine.ExtractSourceDigestIsolated(sourcePayload);
+        expect(isolatedDigest.SummaryText).toContain('LineItem-2');
+        expect(isolatedDigest.SummaryText).toContain('Grand Total');
+        expect(isolatedDigest.SummaryText).toContain('2990');
     });
 });
