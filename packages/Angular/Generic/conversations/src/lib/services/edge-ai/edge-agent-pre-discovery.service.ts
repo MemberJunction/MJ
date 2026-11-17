@@ -13,7 +13,7 @@
  * @module @memberjunction/ng-conversations
  */
 
-import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { SimpleVectorService, type VectorInputEntry } from '@memberjunction/ai-vectors-memory';
 import {
     CalibrateEdgeLogitToConfidence,
@@ -88,7 +88,7 @@ export function FilterDiscoverableEdgeAgents<T extends EdgeDiscoveryAgentDescrip
     agents: ReadonlyArray<T>,
     options?: Pick<EdgePreDiscoveryOptions, 'AllowedAgentIDs' | 'ExcludedAgentID'>
 ): T[] {
-    const allowed = options?.AllowedAgentIDs ?? null;
+    const allowedSet = options?.AllowedAgentIDs ? new UUIDSet(options.AllowedAgentIDs) : null;
     const excludedId = options?.ExcludedAgentID ?? null;
     return agents.filter((a) => {
         if (excludedId && UUIDsEqual(a.ID, excludedId)) {
@@ -106,7 +106,7 @@ export function FilterDiscoverableEdgeAgents<T extends EdgeDiscoveryAgentDescrip
         if (!(a.Description ?? '').trim()) {
             return false;
         }
-        if (allowed && !allowed.some((id) => UUIDsEqual(id, a.ID))) {
+        if (allowedSet && !allowedSet.Has(a.ID)) {
             return false;
         }
         return true;
