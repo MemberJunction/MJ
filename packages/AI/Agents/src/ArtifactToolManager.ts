@@ -59,6 +59,15 @@ export { SetArtifactLiveMutationHook, GetArtifactLiveMutationHook };
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 /**
+ * Active external-data taint metadata reported by the owning agent run so newly created or
+ * synthesized workspace artifacts inherit the run's trust boundary.
+ */
+export interface ActiveRunTaint {
+  trustLevel: Exclude<ActionOutputTrustLevel, 'Trusted'>;
+  sourceName: string;
+}
+
+/**
  * Optional persistence and execution context passed to {@link ArtifactToolManager.Initialize} (`A4`).
  */
 export interface ArtifactToolManagerOptions {
@@ -74,6 +83,8 @@ export interface ArtifactToolManagerOptions {
   agentName?: string;
   /** Whether always-on artifact workspace tools are exposed even when no artifacts are attached yet. */
   workspaceEnabled?: boolean;
+  /** Returns the owning run's active external-data taint boundary, if any. */
+  getRunTaint?: () => ActiveRunTaint | undefined;
 }
 
 /**
@@ -190,6 +201,7 @@ export class ArtifactToolManager {
   private contextUser?: UserInfo;
   private provider?: IMetadataProvider;
   private getAgentRun?: () => { ID?: string; Agent?: string | null } | null | undefined;
+  private getRunTaint?: () => ActiveRunTaint | undefined;
   private agentRunId?: string;
   private agentName?: string;
   private workspaceEnabled = false;
@@ -210,12 +222,20 @@ export class ArtifactToolManager {
     }
   }
 
+  /** Sets or updates the run-level external-data taint provider for newly created artifacts. */
+  SetRunTaintProvider(provider?: () => ActiveRunTaint | undefined): void {
+    this.getRunTaint = provider;
+  }
+
   /** Initialize with input artifacts, assigning alpha IDs and optional persistence context (`A4`) */
   Initialize(inputArtifacts: InputArtifact[], options?: ArtifactToolManagerOptions): void {
     this.Clear();
     this.contextUser = options?.contextUser;
     this.provider = options?.provider;
     this.getAgentRun = options?.getAgentRun;
+    if (options?.getRunTaint !== undefined) {
+      this.getRunTaint = options.getRunTaint;
+    }
     this.agentRunId = options?.agentRunId;
     this.agentName = options?.agentName;
     this.workspaceEnabled = options?.workspaceEnabled ?? Boolean(options?.contextUser || inputArtifacts.length > 0);
@@ -329,6 +349,7 @@ export class ArtifactToolManager {
     this.contextUser = undefined;
     this.provider = undefined;
     this.getAgentRun = undefined;
+    this.getRunTaint = undefined;
     this.agentRunId = undefined;
     this.agentName = undefined;
     this.workspaceEnabled = false;
@@ -389,6 +410,8 @@ export class ArtifactToolManager {
         annotation: entry.annotation,
         deliveryMode: entry.deliveryMode,
         forceToolsOnly: entry.forceToolsOnly,
+        ...(entry.trustLevel ? { trustLevel: entry.trustLevel } : {}),
+        ...(entry.sourceName ? { sourceName: entry.sourceName } : {}),
       });
     }
     if (seed?.length) {
@@ -2448,6 +2471,7 @@ export class ArtifactToolManager {
 
     const activeRunId = this.agentRunId ?? this.getAgentRun?.()?.ID;
     const activeAgentName = this.agentName ?? this.getAgentRun?.()?.Agent ?? undefined;
+    const inheritedTrust = this.resolveCreationTrust();
 
     if (this.provider && this.contextUser) {
       const outcome = await GovernedArtifactService.Instance.CreateGovernedArtifact({
@@ -2480,6 +2504,7 @@ export class ArtifactToolManager {
         mimeType: outcome.mimeType,
         toolLibraryClass: outcome.toolLibraryClass,
         content: outcome.content ?? '',
+        ...inheritedTrust,
       });
       const registeredEntry = this.artifacts.get(alphaId);
       if (registeredEntry) {
@@ -2501,20 +2526,25 @@ export class ArtifactToolManager {
       this.enteredPresenceArtifactIds.add(outcome.artifactId);
 
       const availableTools = registeredEntry?.library.GetToolList().map((t) => t.name) ?? [];
-      return this.recordToolResult(call, startedAt, {
-        success: true,
-        data: {
-          alphaId,
-          artifactId: outcome.artifactId,
-          versionId: outcome.versionId,
-          versionNumber: outcome.versionNumber ?? 1,
-          title: outcome.name ?? title,
-          artifactTypeName: outcome.typeName ?? normalizedTypeName,
-          driverClass: outcome.driverClass,
-          persisted: true,
-          availableTools,
+      return this.recordToolResult(
+        call,
+        startedAt,
+        {
+          success: true,
+          data: {
+            alphaId,
+            artifactId: outcome.artifactId,
+            versionId: outcome.versionId,
+            versionNumber: outcome.versionNumber ?? 1,
+            title: outcome.name ?? title,
+            artifactTypeName: outcome.typeName ?? normalizedTypeName,
+            driverClass: outcome.driverClass,
+            persisted: true,
+            availableTools,
+          },
         },
-      });
+        inheritedTrust,
+      );
     }
 
     // In-memory test fallback when no database provider/user is bound
@@ -2531,21 +2561,27 @@ export class ArtifactToolManager {
       description,
       mimeType: built.mimeType,
       content: built.content,
+      ...inheritedTrust,
     });
     const registeredEntry = this.artifacts.get(alphaId);
     const availableTools = registeredEntry?.library.GetToolList().map((t) => t.name) ?? [];
-    return this.recordToolResult(call, startedAt, {
-      success: true,
-      data: {
-        alphaId,
-        artifactId: alphaId,
-        versionNumber: 1,
-        title,
-        artifactTypeName: normalizedTypeName,
-        persisted: false,
-        availableTools,
+    return this.recordToolResult(
+      call,
+      startedAt,
+      {
+        success: true,
+        data: {
+          alphaId,
+          artifactId: alphaId,
+          versionNumber: 1,
+          title,
+          artifactTypeName: normalizedTypeName,
+          persisted: false,
+          availableTools,
+        },
       },
-    });
+      inheritedTrust,
+    );
   }
 
   private async handleOpenArtifactTool(
@@ -2986,7 +3022,7 @@ export class ArtifactToolManager {
       }
     }
 
-    const inheritedTrust = this.mergeEntriesTrust(includedEntries);
+    const inheritedTrust = this.resolveCreationTrust(includedEntries);
     const digests = sourceInputs.map((s) => ArtifactSynthesisEngine.Instance.ExtractSourceDigest(s));
     const allowedIds = digests.map((d) => d.ArtifactID);
     const availableCharts = digests.flatMap((d) => d.EmbeddedCharts);
@@ -3240,6 +3276,23 @@ export class ArtifactToolManager {
       trustLevel: highest,
       ...(sourceName ? { sourceName } : {}),
     };
+  }
+
+  private resolveCreationTrust(sourceEntries?: Iterable<ArtifactEntry>): {
+    trustLevel?: ArtifactEntry['trustLevel'];
+    sourceName?: string;
+  } {
+    const fromEntries = sourceEntries ? this.mergeEntriesTrust(sourceEntries) : {};
+    const runTaint = this.getRunTaint?.();
+    if (!runTaint || fromEntries.trustLevel === 'Untrusted') {
+      return fromEntries;
+    }
+    if (runTaint.trustLevel === 'Untrusted') {
+      return { trustLevel: 'Untrusted', sourceName: runTaint.sourceName };
+    }
+    return fromEntries.trustLevel === 'SemiTrusted'
+      ? fromEntries
+      : { trustLevel: 'SemiTrusted', sourceName: runTaint.sourceName };
   }
 
   private withEntryTrust(

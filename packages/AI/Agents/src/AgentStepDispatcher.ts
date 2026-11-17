@@ -149,12 +149,6 @@ export class AgentStepDispatcher {
                     }
                 }
 
-                if (a.artifactIds && a.artifactIds.length > 0) {
-                    lines.push(
-                        `**Artifact Handle(s):** ${a.artifactIds.map((id) => `\`${id}\``).join(', ')} — full output is retained in memory for the run and remains queryable via artifact tools (e.g. \`get_rows\`, \`search_rows\`, \`filter\`, \`aggregate\`, \`grep\`, \`get_lines\`, \`json_path\`, \`json_iterate\`, \`get_full\`) even after this message is compacted or expires.`,
-                    );
-                }
-
                 const formatted = lines.join('\n');
                 if (a.trustLevel === 'Untrusted' || a.trustLevel === 'SemiTrusted') {
                     return WrapUntrustedExternalData(formatted, `action:${a.actionName}`, a.trustLevel);
