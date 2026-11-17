@@ -15,6 +15,10 @@ export interface OpenAppPublicPageEntry {
     Slug: string;
     PackageName: string;
     ExportName: string;
+    /** Page title for the page's HTML and link preview */
+    Title?: string;
+    /** Link preview text */
+    Description?: string;
     Enabled?: boolean;
 }
 
@@ -177,6 +181,11 @@ export function WritePublicPagesFile(filePath: string, entries: OpenAppPublicPag
 /** True when a config entry carries every field a public page needs. */
 function isCompletePublicPage(entry: Partial<OpenAppPublicPageEntry>): entry is OpenAppPublicPageEntry {
     return !!entry.AppName && !!entry.Slug && !!entry.PackageName && !!entry.ExportName;
+}
+
+/** The public pages from mj.config `publicPages` that carry every required field. */
+export function ReadConfiguredPublicPages(): OpenAppPublicPageEntry[] {
+    return (GetOptionalConfig()?.publicPages ?? []).filter(isCompletePublicPage);
 }
 
 /** @deprecated Use {@link ApplyOpenAppClientBootstrapBlock}. */
@@ -347,7 +356,7 @@ generate a supplemental manifest covering only your own application classes.`;
 
     /** Writes the public pages file from mj.config `publicPages`. */
     private writePublicPages(outputPath: string, quiet: boolean): void {
-        const entries = (GetOptionalConfig()?.publicPages ?? []).filter(isCompletePublicPage);
+        const entries = ReadConfiguredPublicPages();
         const changed = WritePublicPagesFile(resolve(process.cwd(), outputPath), entries);
         if (!quiet) {
             this.log(`[class-manifest] Public pages: ${entries.length} ${entries.length === 1 ? 'page' : 'pages'} ${changed ? 'written' : 'unchanged'}`);

@@ -464,6 +464,22 @@ describe('publicPages', () => {
         expect(r.Success).toBe(false);
         expect(r.Errors?.join(' ')).toContain('@acme/lumen-public');
     });
+
+    it('keeps a page description for the link preview', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, description: 'Lighting plans for every room.' }]));
+        expect(r.Success, r.Errors?.join(' ')).toBe(true);
+        expect(r.Manifest?.publicPages?.[0].description).toBe('Lighting plans for every room.');
+    });
+
+    it('rejects a title longer than 120 characters', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, title: 'a'.repeat(121) }]));
+        expect(r.Success).toBe(false);
+    });
+
+    it('rejects a description longer than 300 characters', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, description: 'a'.repeat(301) }]));
+        expect(r.Success).toBe(false);
+    });
 });
 
 /**

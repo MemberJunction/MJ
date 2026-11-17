@@ -225,7 +225,10 @@ const publicPageSchema = z.object({
     slug: z.string().max(64).regex(publicPageSlugRegex, 'slug must be lowercase letters and digits, words joined by single hyphens'),
     package: z.string().max(214).regex(npmPackageNameRegex, 'package must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)'),
     export: z.string().regex(jsIdentifierRegex, 'export must be a single JavaScript identifier'),
-    title: z.string().optional(),
+    /** The page title, and the title of its link preview. */
+    title: z.string().max(120).optional(),
+    /** The text of the page's link preview and search result. */
+    description: z.string().max(300).optional(),
 });
 
 // ── Full Manifest ─────────────────────────────────────────

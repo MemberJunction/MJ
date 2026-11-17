@@ -33,6 +33,8 @@ interface PublicPageConfigEntry {
     Slug: string;
     PackageName: string;
     ExportName: string;
+    Title?: string;
+    Description?: string;
     Enabled: boolean;
 }
 
@@ -53,11 +55,11 @@ function evaluatedPublicPages(content: string): PublicPageConfigEntry[] {
     return sandbox.module.exports.publicPages ?? [];
 }
 
-function makeManifest(appName: string, pages: { slug: string; export: string; package?: string }[]): MJAppManifest {
+function makeManifest(appName: string, pages: { slug: string; export: string; package?: string; title?: string; description?: string }[]): MJAppManifest {
     return {
         name: appName,
         packages: { client: [{ name: '@acme/lumen-public', role: 'components' }] },
-        publicPages: pages.map((p) => ({ slug: p.slug, package: p.package ?? '@acme/lumen-public', export: p.export })),
+        publicPages: pages.map((p) => ({ slug: p.slug, package: p.package ?? '@acme/lumen-public', export: p.export, title: p.title, description: p.description })),
     } as MJAppManifest;
 }
 
@@ -107,6 +109,45 @@ describe('AddPublicPages', () => {
 
         expect(result.Success, result.ErrorMessage).toBe(true);
         expect(evaluatedPublicPages(writtenContent())).toEqual([{ ...LUMEN, Enabled: false }]);
+    });
+
+    it('writes the page title and description for the link preview', () => {
+        setupConfigFile(configWithPages([OTHER]));
+
+        const result = AddPublicPages(REPO_ROOT, makeManifest('acme-lumen', [
+            { slug: 'lumen', export: 'LumenLandingPageComponent', title: 'Lumen', description: 'Lighting plans for every room.' },
+        ]));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(evaluatedPublicPages(writtenContent())).toEqual([OTHER, { ...LUMEN, Title: 'Lumen', Description: 'Lighting plans for every room.' }]);
+    });
+
+    it('updates the title and description of an existing page, and removes a field the manifest drops', () => {
+        const existing = configWithPages([LUMEN]).replace(
+            `ExportName: '${LUMEN.ExportName}',`,
+            `ExportName: '${LUMEN.ExportName}',\n      Title: 'Old title',\n      Description: "Old description",`,
+        );
+        setupConfigFile(existing);
+
+        const result = AddPublicPages(REPO_ROOT, makeManifest('acme-lumen', [{ slug: 'lumen', export: 'LumenLandingPageComponent', title: 'New title' }]));
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(evaluatedPublicPages(writtenContent())).toEqual([{ ...LUMEN, Title: 'New title' }]);
+    });
+
+    it('writes a title with braces, quotes and slashes so the entry can still be removed', () => {
+        const title = `Acme's {beta} "pricing" // compare /* plans */`;
+        setupConfigFile(configWithPages([OTHER]));
+        AddPublicPages(REPO_ROOT, makeManifest('acme-lumen', [{ slug: 'lumen', export: 'LumenLandingPageComponent', title }]));
+        const withPage = writtenContent();
+        expect(evaluatedPublicPages(withPage)).toEqual([OTHER, { ...LUMEN, Title: title }]);
+
+        vi.resetAllMocks();
+        setupConfigFile(withPage);
+        const result = RemoveServerDynamicPackages(REPO_ROOT, 'acme-lumen');
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(evaluatedPublicPages(writtenContent())).toEqual([OTHER]);
     });
 
     it('fails, naming both apps, when another app owns the slug', () => {

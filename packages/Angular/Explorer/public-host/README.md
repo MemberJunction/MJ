@@ -31,23 +31,41 @@ async function initAndBootstrap() {
 
 MJ Explorer's build also writes a small public build to `dist/MJExplorer/browser/public-host/` (the `MJPublicPages` project in its `angular.json`). Its `main.ts` calls `StartPublicHost` directly. It has its own `index.html` with no files from other sites, only the MJ design tokens as global styles, and no zone.js.
 
-To use it, add one rule to the web host: send every `/p/*` address to `/public-host/index.html`.
+### Page title and link preview
 
-Azure Static Web Apps (`staticwebapp.config.json`, already in MJ Explorer):
+Link previews (in chat apps and social sites) and search engines read a page's HTML. They do not run its JavaScript. So the build writes one HTML file for each page: `public-host/pages/<slug>.html`. Each file is a copy of the public build's `index.html` with:
+
+- `<title>` set to the page's `title` from `mj-app.json`
+- `<meta name="description">` and the `og:title`, `og:description`, `og:type` and `twitter:card` tags, from the page's `title` and `description`
+
+`mj codegen public-page-html` writes these files after `ng build MJPublicPages`. It reads the pages from `publicPages` in `mj.config.cjs`, where `mj app install` puts them. A page with no title and no description gets a copy of `index.html` with no changes.
+
+### Web host rules
+
+The web host serves `public-host/pages/<slug>.html` for a page that has a file, and `public-host/index.html` for every other `/p/` address.
+
+Azure Static Web Apps: MJ Explorer's `src/staticwebapp.config.json` has the `/p/*` rule. The build adds the rules for each page to the copy in `dist/` (the `--static-web-app-config` option):
 
 ```json
-"routes": [{ "route": "/p/*", "rewrite": "/public-host/index.html" }]
+"routes": [
+  { "route": "/p/pricing", "rewrite": "/public-host/pages/pricing.html" },
+  { "route": "/p/pricing/*", "rewrite": "/public-host/pages/pricing.html" },
+  { "route": "/p/*", "rewrite": "/public-host/index.html" }
+]
 ```
 
-nginx:
+nginx (as in `docker/regression/nginx.conf`):
 
 ```nginx
+location ~ ^/p/([a-z0-9-]+)(/|$) {
+    try_files /public-host/pages/$1.html /public-host/index.html =404;
+}
 location /p/ {
     try_files /public-host/index.html =404;
 }
 ```
 
-- Without the rule, Explorer's `index.html` answers `/p/` addresses and the hook in `main.ts` shows the page. Pages do not change between the two.
+- Without a rule, Explorer's `index.html` answers `/p/` addresses and the hook in `main.ts` shows the page. The page works the same, but its HTML has Explorer's title and no link preview.
 - Explorer's service worker does not answer `/p/` addresses, so the web host receives them also from a visitor who used Explorer before.
 - `pnpm start` serves only Explorer, so in development public pages start through the hook.
 
@@ -84,12 +102,15 @@ Rules for a public page:
 - Export the page from a package entry that does not import the app's Explorer code, so the page chunk stays small.
 - Use MJ design tokens for colours. The host runs without zone-based change detection, so use signals for state.
 - Bring the page's own styles and icons. The separate public build loads only the MJ design tokens: not Explorer's global styles and not Font Awesome.
-- Set the document title yourself (`inject(Title)`).
+- Give the page a `title` and `description` in `mj-app.json`. The build writes them into the page's HTML (see [Page title and link preview](#page-title-and-link-preview)). To change the title while the page runs, use `inject(Title)`.
 
 Declare the page in the Open App's `mj-app.json`:
 
 ```json
 "publicPages": [
-  { "slug": "pricing", "package": "@acme/app-public", "export": "PricingPageComponent", "title": "Pricing" }
+  {
+    "slug": "pricing", "package": "@acme/app-public", "export": "PricingPageComponent",
+    "title": "Pricing", "description": "Plans for every team."
+  }
 ]
 ```

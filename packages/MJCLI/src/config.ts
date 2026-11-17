@@ -77,12 +77,14 @@ const dynamicPackageEntrySchema = z.object({
 });
 
 // Schema for top-level `publicPages` entries managed by `mj app install/remove/enable/disable`.
-// Read by `mj codegen manifest --public-pages`.
-const publicPageEntrySchema = z.object({
+// Read by `mj codegen manifest --public-pages` and `mj codegen public-page-html`.
+export const PublicPageEntrySchema = z.object({
   AppName: z.string(),
   Slug: z.string(),
   PackageName: z.string(),
   ExportName: z.string(),
+  Title: z.string().optional(),
+  Description: z.string().optional(),
   Enabled: z.boolean().default(true),
 });
 
@@ -175,7 +177,7 @@ const mjConfigSchema = z.object({
   }).passthrough().optional(),
   openApps: openAppsConfigSchema,
   dynamicPackages: DynamicPackagesSchema,
-  publicPages: z.array(publicPageEntrySchema).optional(),
+  publicPages: z.array(PublicPageEntrySchema).optional(),
 });
 
 // Schema for non-database commands (all fields optional)
@@ -211,7 +213,7 @@ const mjConfigSchemaOptional = z.object({
   }).passthrough().optional(),
   openApps: openAppsConfigSchema,
   dynamicPackages: DynamicPackagesSchema,
-  publicPages: z.array(publicPageEntrySchema).optional(),
+  publicPages: z.array(PublicPageEntrySchema).optional(),
 });
 
 // Don't validate at module load - let commands decide when they need validated config

@@ -141,9 +141,14 @@
   //             Unique within the app; the install fails if another installed app owns it.
   //   "package" REQUIRED — npm package that exports the page component
   //   "export"  REQUIRED — the named export (a single JavaScript identifier)
-  //   "title"   OPTIONAL — display title
+  //   "title"       OPTIONAL — page title, max 120 characters. The host's build writes it into
+  //                 the page's HTML, for the browser tab and link previews.
+  //   "description" OPTIONAL — link preview and search result text, max 300 characters
   "publicPages": [
-    { "slug": "crm-signup", "package": "@acme/mj-crm-ng", "export": "CrmSignupPageComponent", "title": "Join Acme CRM" }
+    {
+      "slug": "crm-signup", "package": "@acme/mj-crm-ng", "export": "CrmSignupPageComponent",
+      "title": "Join Acme CRM", "description": "Create your Acme CRM account in two minutes."
+    }
   ],
 
   // ── Dependencies (OPTIONAL) ─────────────────────────────────────────────────

@@ -145,7 +145,9 @@ Open Apps can ship pages that visitors open before sign-in, at `/p/<slug>` (see 
 | Explorer (`MJExplorer` project) | `dist/MJExplorer/browser/` | Explorer. Its `main.ts` also shows a public page when it receives a `/p/` address |
 | Public (`MJPublicPages` project, `src-public/`) | `dist/MJExplorer/browser/public-host/` | Only public pages: no Explorer code, no zone.js, no files from other sites |
 
-Deploy the `browser/` folder as one site. To serve public pages from the public build, the web host sends every `/p/*` address to `/public-host/index.html`. `src/staticwebapp.config.json` (Azure Static Web Apps) and `docker/regression/nginx.conf` have this rule. A web host without the rule still works: Explorer's `main.ts` shows the page.
+After the two builds, `mj codegen public-page-html` writes `public-host/pages/<slug>.html` for each page in `publicPages` of `mj.config.cjs`. Each file has the page's title and link preview tags, from `title` and `description` in the app's `mj-app.json`.
+
+Deploy the `browser/` folder as one site. To serve public pages from the public build, the web host sends `/p/<slug>` to `/public-host/pages/<slug>.html` when that file exists, and every other `/p/*` address to `/public-host/index.html`. `src/staticwebapp.config.json` (Azure Static Web Apps) has the `/p/*` rule, and the build adds a rule for each page to its copy in `dist/`. `docker/regression/nginx.conf` has both rules. A web host without the rules still works: Explorer's `main.ts` shows the page, but with Explorer's title and no link preview.
 
 ## Class Registration Manifests
 

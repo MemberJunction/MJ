@@ -51,6 +51,10 @@ export interface PublicPageConfigEntry {
     PackageName: string;
     /** Named export of the page component */
     ExportName: string;
+    /** Page title, used in the page's HTML and link preview */
+    Title?: string;
+    /** Link preview text */
+    Description?: string;
     /** Whether the host serves this page */
     Enabled: boolean;
 }
@@ -717,8 +721,42 @@ function GetPublicPagesFromManifest(manifest: MJAppManifest): PublicPageConfigEn
         Slug: page.slug,
         PackageName: page.package,
         ExportName: page.export,
+        Title: page.title,
+        Description: page.description,
         Enabled: true,
     }));
+}
+
+/**
+ * Quotes free text as a string literal for mj.config.cjs. Braces, quotes and slashes become
+ * escapes, so the entry-block patterns (`[^{}]*`, quoted values) and comment masking still work.
+ */
+function QuoteConfigText(value: string): string {
+    return JSON.stringify(value).replace(/[{}'/]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
+/** Lines for the optional text keys of a page entry, each ending with a comma. */
+function OptionalPageTextLines(page: PublicPageConfigEntry): string {
+    return (['Title', 'Description'] as const)
+        .filter((key) => page[key] !== undefined)
+        .map((key) => `\n      ${key}: ${QuoteConfigText(page[key] ?? '')},`)
+        .join('');
+}
+
+/**
+ * Sets an optional text key in an entry block: replaces its value, adds it before `Enabled`,
+ * or removes the key when the value is undefined.
+ */
+function SetOptionalEntryText(block: string, key: 'Title' | 'Description', value: string | undefined): string {
+    const quoted = `(["'])(?:(?!\\1)[^\\\\]|\\\\.)*\\1`;
+    const existing = new RegExp(`\\n?[ \\t]*\\b${key}:\\s*${quoted},?`);
+    if (value === undefined) {
+        return block.replace(existing, '');
+    }
+    if (existing.test(block)) {
+        return block.replace(existing, (match) => match.replace(new RegExp(quoted), () => QuoteConfigText(value)));
+    }
+    return block.replace(/(\n[ \t]*)Enabled:/, (match, indent: string) => `${indent}${key}: ${QuoteConfigText(value)},${match}`);
 }
 
 /** Locates the first `publicPages: [` array outside comments, or null when there is none. */
@@ -799,7 +837,8 @@ function UpsertPublicPage(content: string, page: PublicPageConfigEntry): string 
     const updated = ReplaceInRange(content, location.OpenBracketPos, location.ClosePos, pattern, (block) => {
         if (ReadEntryValue(block, 'Slug') !== page.Slug) return block;
         found = true;
-        return SetEntryValue(SetEntryValue(block, 'PackageName', page.PackageName), 'ExportName', page.ExportName);
+        const withCode = SetEntryValue(SetEntryValue(block, 'PackageName', page.PackageName), 'ExportName', page.ExportName);
+        return SetOptionalEntryText(SetOptionalEntryText(withCode, 'Title', page.Title), 'Description', page.Description);
     });
     if (found) {
         return updated;
@@ -808,7 +847,7 @@ function UpsertPublicPage(content: string, page: PublicPageConfigEntry): string 
     // JSON.stringify every value so a manifest value cannot break out of its string literal.
     const entryStr = `\n    {\n      AppName: ${JSON.stringify(page.AppName)},\n      Slug: ${JSON.stringify(page.Slug)},` +
         `\n      PackageName: ${JSON.stringify(page.PackageName)},\n      ExportName: ${JSON.stringify(page.ExportName)},` +
-        `\n      Enabled: ${page.Enabled}\n    },`;
+        `${OptionalPageTextLines(page)}\n      Enabled: ${page.Enabled}\n    },`;
     const before = EnsureTrailingComma(content.slice(0, location.ClosePos), location.OpenBracketPos).trimEnd();
     return before + entryStr + '\n  ' + content.slice(location.ClosePos);
 }
