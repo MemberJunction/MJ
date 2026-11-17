@@ -296,11 +296,11 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
         expect(pgProvider.calls.some((c) => c.sql.startsWith('INSERT INTO'))).toBe(true);
         expect(pgProvider.calls.some((c) => c.sql.startsWith('UPDATE'))).toBe(true);
 
-        // Delete path on PostgreSQL
+        // Delete path on PostgreSQL uses AND (never OR across two different rows)
         pgProvider.calls.length = 0;
         expect(await pgEntity.Delete()).toBe(true);
         expect(pgProvider.calls[0]?.sql).toBe(
-            'DELETE FROM "__mj"."ArtifactWorkingState" WHERE "ID" = $1 OR "ArtifactID" = $2'
+            'DELETE FROM "__mj"."ArtifactWorkingState" WHERE "ID" = $1 AND "ArtifactID" = $2'
         );
 
         // 2. SQL Server dialect: reads vwArtifactWorkingStates and executes generated CRUD sprocs
@@ -414,11 +414,10 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
             ResultType: 'simple'
         };
         const hooked = await ArtifactWorkingStatePreRunViewHook(params, devUser);
-        expect(hooked).toBe(params);
-        expect(params.Fields).toEqual(['ID', 'ArtifactID']);
+        expect(hooked.Fields).toEqual(['ID', 'ArtifactID']);
 
         const postRes = await ArtifactWorkingStatePostRunViewHook(
-            params,
+            hooked,
             {
                 Success: true,
                 Results: [
@@ -551,11 +550,15 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
             Fields: ['ID'],
             ResultType: 'simple'
         };
-        ArtifactWorkingStatePreRunViewHook(dbParams, undefined, databaseProviderPartial as IMetadataProvider);
-        expect(dbParams.Fields).toEqual(['ID', 'ArtifactID']);
+        const hookedDbParams = await ArtifactWorkingStatePreRunViewHook(
+            dbParams,
+            undefined,
+            databaseProviderPartial as IMetadataProvider
+        );
+        expect(hookedDbParams.Fields).toEqual(['ID', 'ArtifactID']);
 
         const dbRes = await ArtifactWorkingStatePostRunViewHook(
-            dbParams,
+            hookedDbParams,
             sampleWorkingStateResults,
             undefined,
             databaseProviderPartial as IMetadataProvider
@@ -572,11 +575,15 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
             Fields: ['ID'],
             ResultType: 'simple'
         };
-        ArtifactWorkingStatePreRunViewHook(netParams, undefined, networkProviderPartial as IMetadataProvider);
-        expect(netParams.Fields).toEqual(['ID']);
+        const hookedNetParams = await ArtifactWorkingStatePreRunViewHook(
+            netParams,
+            undefined,
+            networkProviderPartial as IMetadataProvider
+        );
+        expect(hookedNetParams.Fields).toEqual(['ID']);
 
         const netRes = await ArtifactWorkingStatePostRunViewHook(
-            netParams,
+            hookedNetParams,
             sampleWorkingStateResults,
             undefined,
             networkProviderPartial as IMetadataProvider
@@ -596,8 +603,8 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
         ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(internalParams);
         const clonedParams: RunViewParams = { ...internalParams };
 
-        ArtifactWorkingStatePreRunViewHook(clonedParams, devUser);
-        expect(clonedParams.Fields).toEqual(['ID']);
+        const hookedCloned = await ArtifactWorkingStatePreRunViewHook(clonedParams, devUser);
+        expect(hookedCloned.Fields).toEqual(['ID']);
 
         const rawResults: RunViewResult = {
             Success: true,
@@ -607,7 +614,7 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
             ExecutionTime: 1,
             ErrorMessage: ''
         };
-        const postRes = await ArtifactWorkingStatePostRunViewHook(clonedParams, rawResults, devUser);
+        const postRes = await ArtifactWorkingStatePostRunViewHook(hookedCloned, rawResults, devUser);
         expect(postRes.Results).toHaveLength(1);
         expect(resolveSpy).not.toHaveBeenCalled();
     });

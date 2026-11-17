@@ -19,6 +19,7 @@ import { LibraryResource } from './library-resource.component';
     @if (CurrentUser) {
       <mj-library-workspace
         #workspace
+        [Provider]="ProviderToUse"
         [CurrentUser]="CurrentUser"
         [EnvironmentId]="EnvironmentId"
         [InitialMode]="DefaultSurfaceMode"

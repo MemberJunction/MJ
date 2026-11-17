@@ -6790,6 +6790,9 @@ importers:
       docx:
         specifier: ^9.5.1
         version: 9.6.1
+      dompurify:
+        specifier: ^3.3.0
+        version: 3.3.1
       html-to-image:
         specifier: ^1.11.11
         version: 1.11.13

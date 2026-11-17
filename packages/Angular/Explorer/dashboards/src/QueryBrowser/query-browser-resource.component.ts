@@ -499,6 +499,10 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                         Parameters: { type: 'object', description: 'Optional query parameter values' },
                         MaxRows: { type: 'number', description: 'Optional max rows cap' },
                         anchorCell: { type: 'string', description: 'Optional top-left cell (defaults to A1)' },
+                        existingArtifactId: {
+                            type: 'string',
+                            description: 'Optional existing Excel Spreadsheet artifact ID to populate instead of creating a new artifact',
+                        },
                     },
                     required: ['query'],
                 },

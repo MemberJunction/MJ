@@ -1,0 +1,16 @@
+[
+  {
+    "_comments": [
+      "Artifact guest share links bind Frozen ArtifactVersions to MagicLinkInvites and are managed exclusively via server GraphQL / Remote Operations; general UI roles may not read or mutate them directly"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.Entity=MJ: Artifact Guest Share Links&RoleName=UI"
+    },
+    "fields": {
+      "CanRead": false,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    }
+  }
+]

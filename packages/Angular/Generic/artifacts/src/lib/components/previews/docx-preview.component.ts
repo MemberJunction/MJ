@@ -2,6 +2,18 @@ import { Component, ChangeDetectorRef, EventEmitter, Input, Output, SecurityCont
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ConvertDocxToHtml, FetchArrayBuffer, type MammothModuleShim } from './office-preview.logic';
 
+type MammothModule = typeof import('mammoth');
+let mammothModulePromise: Promise<MammothModule> | null = null;
+
+function loadMammothModule(): Promise<MammothModule> {
+  if (!mammothModulePromise) {
+    // Genuine bundle-size deferral (AGENTS.md §8 #3): mammoth is heavy and only needed when
+    // a Word (.docx) document preview is rendered.
+    mammothModulePromise = import('mammoth');
+  }
+  return mammothModulePromise;
+}
+
 /**
  * Renders a Word document (.docx) inline: fetches the bytes from `Url` (or takes them from `ArrayBuffer`), converts
  * them to HTML with mammoth and shows the sanitized result. Explorer's one Word renderer: the artifact viewer wraps it
@@ -16,12 +28,12 @@ import { ConvertDocxToHtml, FetchArrayBuffer, type MammothModuleShim } from './o
     <div class="docx-preview">
       @if (IsLoading) {
         <div class="docx-preview__state">
-          <i class="fas fa-spinner fa-spin"></i>
+          <i class="fa-solid fa-spinner fa-spin"></i>
           <span>Loading document…</span>
         </div>
       } @else if (ErrorMessage) {
         <div class="docx-preview__state docx-preview__state--error">
-          <i class="fas fa-exclamation-triangle"></i>
+          <i class="fa-solid fa-exclamation-triangle"></i>
           <span>{{ ErrorMessage }}</span>
         </div>
       } @else {
@@ -149,7 +161,7 @@ export class DocxPreviewComponent {
         this.showError('No document to show.');
         return;
       }
-      const mammoth = (await import('mammoth')) as unknown as MammothModuleShim;
+      const mammoth = (await loadMammothModule()) as MammothModuleShim;
       const html = await ConvertDocxToHtml(bytes, mammoth);
       if (token !== this.loadToken) return; // a newer input won
       this.RawHtml = html;
