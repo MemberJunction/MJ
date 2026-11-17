@@ -34,8 +34,11 @@ export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
   authenticatedRouter: Router;
   service: MagicLinkService;
 } {
-  // Initialize the signing keypair once.
-  MagicLinkKeyManager.Instance.Initialize(config.rsaPrivateKey);
+  // Initialize the signing keypair once. Production deployments with magicLink or
+  // artifactGuestSharing enabled must configure an explicit RS256 private key.
+  MagicLinkKeyManager.Instance.Initialize(config.rsaPrivateKey, process.env, {
+    requireExplicitKeyInProduction: Boolean(config.enabled || config.artifactGuestSharing?.enabled),
+  });
 
   const service = new MagicLinkService(publicUrl, config);
 

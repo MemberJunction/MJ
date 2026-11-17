@@ -10,7 +10,7 @@ import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import type { NavItem } from '@memberjunction/ng-base-application';
-import { CHAT_TASKS_ROUTE, DATA_EXPLORER_DASHBOARDS_ROUTE } from './moved-nav-item-redirect';
+import { CHAT_COLLECTIONS_ROUTE, CHAT_TASKS_ROUTE, DATA_EXPLORER_DASHBOARDS_ROUTE } from './moved-nav-item-redirect';
 
 /** The page of the app navigation route. */
 @Component({ standalone: true, selector: 'mj-app-page-stub', template: '' })
@@ -29,8 +29,10 @@ const application = (ID: string, Name: string, labels: string[]): BaseApplicatio
 const DATA_EXPLORER = application('A0000000-0000-4000-8000-0000000000DE', 'Data Explorer', ['Data', 'Queries']);
 const DASHBOARDS = application('A0000000-0000-4000-8000-00000000000D', 'Dashboards', ['Library', 'Categories']);
 const CHAT = application('A0000000-0000-4000-8000-00000000000C', 'Chat', ['Conversations', 'Collections', 'Agent Activity']);
+const CHAT_LIBRARY_ONLY = application('A0000000-0000-4000-8000-00000000000C', 'Chat', ['Conversations', 'Library', 'Agent Activity']);
 const OLD_LINK = '/app/data-explorer/Dashboards?lib=favorites';
 const OLD_CHAT_TASKS_LINK = '/app/chat/Tasks?taskId=task-123';
+const OLD_CHAT_COLLECTIONS_LINK = '/app/chat/Collections?collectionId=col-9&artifactId=art-4';
 
 /** An application manager whose app list is ready and holds `apps`. */
 const readyApps = (apps: BaseApplication[]): AppManagerDouble => ({ WhenReady: async () => undefined, GetAllApps: () => apps });
@@ -45,6 +47,7 @@ async function navigate(url: string, appManager: AppManagerDouble): Promise<stri
       provideRouter([
         DATA_EXPLORER_DASHBOARDS_ROUTE,
         CHAT_TASKS_ROUTE,
+        CHAT_COLLECTIONS_ROUTE,
         { path: 'app/:appName/:navItemName', component: AppPageStub },
       ]),
       { provide: ApplicationManager, useValue: appManager },
@@ -93,5 +96,15 @@ describe('DATA_EXPLORER_DASHBOARDS_ROUTE', () => {
 
   it("redirects legacy /app/chat/Tasks?taskId=... deep links to /app/chat/Agent%20Activity keeping query params", async () => {
     expect(await navigate(OLD_CHAT_TASKS_LINK, readyApps([CHAT]))).toBe('/app/chat/Agent%20Activity?taskId=task-123');
+  });
+
+  it("redirects legacy /app/chat/Collections?collectionId=... deep links to /app/chat/Library when Chat no longer lists Collections", async () => {
+    expect(await navigate(OLD_CHAT_COLLECTIONS_LINK, readyApps([CHAT_LIBRARY_ONLY]))).toBe(
+      '/app/chat/Library?collectionId=col-9&artifactId=art-4',
+    );
+  });
+
+  it("keeps /app/chat/Collections when Chat still has a Collections nav item", async () => {
+    expect(await navigate(OLD_CHAT_COLLECTIONS_LINK, readyApps([CHAT]))).toBe(OLD_CHAT_COLLECTIONS_LINK);
   });
 });

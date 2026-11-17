@@ -3,7 +3,7 @@
  */
 import '@angular/compiler';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Injector, runInInjectionContext, ChangeDetectorRef, SimpleChange } from '@angular/core';
+import { Injector, runInInjectionContext, ChangeDetectorRef } from '@angular/core';
 import {
   SpreadsheetEngine,
   type WorkbookSpec,
@@ -393,7 +393,7 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
       expect(component.SyntheticAgentPresence).not.toBeNull();
       expect(component.SyntheticAgentPresence?.IsAgent).toBe(true);
       expect(component.SyntheticAgentPresence?.Name).toBe('Sheets AI Agent');
-      expect(component.SyntheticAgentPresence?.Color).toBe('#8b5cf6');
+      expect(component.SyntheticAgentPresence?.Color).toBe('var(--mj-brand-primary)');
       expect(component.SyntheticAgentPresence?.ClientID).toBe(-999);
 
       // Appears in remote collaborators
@@ -401,7 +401,7 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
       expect(remotes.some((r) => r.ClientID === -999)).toBe(true);
 
       // Appears at top-left cell B2 (2, 2)
-      expect(component.GetCellCollaboratorBorderColor(2, 2)).toBe('#8b5cf6');
+      expect(component.GetCellCollaboratorBorderColor(2, 2)).toBe('var(--mj-brand-primary)');
       const badge = component.GetCellPrimaryCollaboratorBadge(2, 2);
       expect(badge?.IsAgent).toBe(true);
       expect(badge?.Name).toBe('Sheets AI Agent');
@@ -566,11 +566,8 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
       component.ConnectionStatus = 'readonly';
       expect(component.CanEdit).toBe(false);
 
-      // Host finishes loading permissions and sets [readonly] = false
+      // Host finishes loading permissions and sets [readonly] = false (reactive setter, no ngOnChanges needed)
       component.readonly = false;
-      component.ngOnChanges({
-        readonly: new SimpleChange(true, false, false),
-      });
 
       expect(component.ConnectionStatus).toBe('local');
       expect(component.CanEdit).toBe(true);

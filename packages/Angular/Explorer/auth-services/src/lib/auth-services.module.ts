@@ -24,6 +24,12 @@ export { RedirectComponent };
  */
 export const MJ_AUTH_PROVIDER_RESOLUTION = new InjectionToken<AuthProviderResolution>('MJ_AUTH_PROVIDER_RESOLUTION');
 
+/**
+ * Injection token providing the configured base MJAPI URL (derived from `MJAPI_URI` or
+ * `GRAPHQL_URI`) so pre-auth standalone routes can call MJServer endpoints before login.
+ */
+export const MJ_PUBLIC_API_BASE_URL = new InjectionToken<string | null>('MJ_PUBLIC_API_BASE_URL');
+
 /** The resolution used when no catalog is supplied — i.e. the pre-existing single-provider path. */
 const NO_CATALOG_RESOLUTION: AuthProviderResolution = { active: null, choices: [], showPicker: false, autoLogin: false };
 
@@ -75,6 +81,13 @@ export class AuthServicesModule {
     // magic-link session, which is a property of THIS page load rather than a configured choice.
     const resolution = resolvedCatalog.length ? AuthProviderCatalog.Resolve(resolvedCatalog) : NO_CATALOG_RESOLUTION;
     providers.push({ provide: MJ_AUTH_PROVIDER_RESOLUTION, useValue: resolution });
+    providers.push({
+      provide: MJ_PUBLIC_API_BASE_URL,
+      useValue: AuthProviderCatalog.BuildApiBaseUrl(
+        typeof env['GRAPHQL_URI'] === 'string' ? env['GRAPHQL_URI'] : '',
+        typeof env['MJAPI_URI'] === 'string' ? env['MJAPI_URI'] : undefined,
+      ) || null,
+    });
 
     const catalogType = resolution.active?.driverClass?.toLowerCase();
     const authType = magicLinkActive ? MAGIC_LINK_PROVIDER_TYPE : (catalogType ?? configuredType);

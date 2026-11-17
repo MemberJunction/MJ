@@ -1042,14 +1042,18 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(component.LoadMoreError).toBe('Transient paging failure');
     expect(notifySpy).toHaveBeenCalledWith('Transient paging failure', 'error', 4000);
 
-    // Verify per-artifact latest version query uses ROW_NUMBER() OVER (PARTITION BY [ArtifactID] ...) = 1 and IgnoreMaxRows
+    // Verify per-artifact version summary query uses portable OrderBy + IgnoreMaxRows (zero vendor SQL)
     const allQueries = runViewsCalls.flat();
     const latestVerQueries = allQueries.filter(
       (q) =>
         q.EntityName === 'MJ: Artifact Versions' &&
-        extraFilterAsString(q.ExtraFilter).includes('ROW_NUMBER() OVER'),
+        q.OrderBy === 'ArtifactID ASC, VersionNumber DESC' &&
+        q.IgnoreMaxRows === true,
     );
     expect(latestVerQueries.length).toBeGreaterThan(0);
+    for (const q of latestVerQueries) {
+      expect(extraFilterAsString(q.ExtraFilter)).not.toContain('ROW_NUMBER()');
+    }
 
     // Verify failed initial/full ReloadWorkspaceData sets LoadError instead of silently returning []
     mockRunViews.mockImplementationOnce(async () => [
@@ -1258,7 +1262,8 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     const view = Object.create(TasksFullViewComponent.prototype) as TasksFullViewComponent;
     const emittedSelections: Array<string | null> = [];
     Object.assign(view as object, {
-      ActiveTaskId: undefined,
+      inputsInitialized: true,
+      _activeTaskId: 'task-1',
       InspectedGroup: { RootTaskId: 'task-1' },
       InspectedStep: { StepNumber: 1 },
       SelectedTask: { ID: 'task-1' },
@@ -1268,14 +1273,7 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       TaskSelected: { emit: (id: string | null) => emittedSelections.push(id) },
     });
 
-    view.ngOnChanges({
-      activeTaskId: {
-        previousValue: 'task-1',
-        currentValue: undefined,
-        firstChange: false,
-        isFirstChange: () => false,
-      },
-    });
+    view.ActiveTaskId = undefined;
 
     expect(view.InspectedGroup).toBeNull();
     expect(view.SelectedTask).toBeNull();

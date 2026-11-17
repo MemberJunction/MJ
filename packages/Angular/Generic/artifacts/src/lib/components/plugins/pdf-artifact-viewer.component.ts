@@ -4,6 +4,18 @@ import { DataSnapshot } from '@memberjunction/core';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 
+type PdfJsModule = typeof import('pdfjs-dist');
+let pdfJsModulePromise: Promise<PdfJsModule> | null = null;
+
+function loadPdfJsModule(): Promise<PdfJsModule> {
+  if (!pdfJsModulePromise) {
+    // Genuine bundle-size deferral (AGENTS.md §8 #3): pdfjs-dist is heavy and only needed
+    // when a PDF artifact viewer is actually initialized.
+    pdfJsModulePromise = import('pdfjs-dist');
+  }
+  return pdfJsModulePromise;
+}
+
 /**
  * Viewer plugin for PDF artifact versions stored in MJStorage (ContentMode = 'File')
  * or as inline base64 content (ContentMode = 'Inline').
@@ -45,12 +57,12 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
       <div class="pdf-viewer__body">
         @if (isLoading) {
           <div class="pdf-viewer__state">
-            <i class="fas fa-spinner fa-spin"></i>
+            <i class="fa-solid fa-spinner fa-spin"></i>
             <span>Loading PDF…</span>
           </div>
         } @else if (errorMessage) {
           <div class="pdf-viewer__state pdf-viewer__state--error">
-            <i class="fas fa-exclamation-triangle"></i>
+            <i class="fa-solid fa-triangle-exclamation"></i>
             <span>{{ errorMessage }}</span>
           </div>
         } @else {
@@ -171,6 +183,7 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   private pdfDoc: PdfDocumentProxy | null = null;
   private renderTask: PdfRenderTask | null = null;
   private downloadUrl = '';
+  private isObjectUrl = false;
   private _pdfjsLib: PdfJsLib | null = null;
 
   /** Discrete zoom steps — 50 % to 400 %. */
@@ -225,6 +238,14 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     this.cancelCurrentRender();
     this.pdfDoc?.destroy();
     this.pdfDoc = null;
+    this.revokeObjectUrl();
+  }
+
+  private revokeObjectUrl(): void {
+    if (this.isObjectUrl && this.downloadUrl) {
+      URL.revokeObjectURL(this.downloadUrl);
+    }
+    this.isObjectUrl = false;
   }
 
   // ─── Navigation ─────────────────────────────────────────────────────────────
@@ -328,7 +349,7 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
       return;
     }
     // Open the PDF in a new tab so the browser's native print dialog handles it
-    window.open(this.downloadUrl, '_blank');
+    window.open(this.downloadUrl, '_blank', 'noopener,noreferrer');
   }
 
   /** @deprecated Use {@link OnPrint}. */
@@ -348,9 +369,10 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
       await this.initPdfJs();
       let pdfDoc: PdfDocumentProxy;
 
+      this.revokeObjectUrl();
       if (this.artifactVersion.ContentMode === 'File') {
         // File-backed: download from storage via pre-auth URL
-        this.downloadUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
+        this.downloadUrl = await this.fileService.GetDownloadUrl(this.artifactVersion.ID, false, this.Provider);
         pdfDoc = await this.loadPdfDocument(this.downloadUrl);
       } else {
         // Inline: content is a base64 data URL stored in the artifact version
@@ -359,10 +381,11 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
           this.showError('Artifact has no content.');
           return;
         }
-        const arrayBuffer = this.fileService.dataUrlToArrayBuffer(content);
+        const arrayBuffer = this.fileService.DataUrlToArrayBuffer(content);
         pdfDoc = await this.loadPdfFromData(new Uint8Array(arrayBuffer));
         // Create an object URL for download/print support
-        this.downloadUrl = this.fileService.dataUrlToObjectUrl(content, this.artifactVersion.MimeType || 'application/pdf');
+        this.downloadUrl = this.fileService.DataUrlToObjectUrl(content, this.artifactVersion.MimeType || 'application/pdf');
+        this.isObjectUrl = true;
       }
 
       this.pdfDoc = pdfDoc;
@@ -401,7 +424,12 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
 
   /** Dynamically import pdfjs-dist and point it at the bundled worker. */
   private async initPdfJs(): Promise<void> {
-    const pdfjsLib = (await import('pdfjs-dist')) as unknown as PdfJsLib;
+    const pdfjsModule = await loadPdfJsModule();
+    const pdfjsLib: PdfJsLib = {
+      GlobalWorkerOptions: pdfjsModule.GlobalWorkerOptions,
+      getDocument: (source) =>
+        pdfjsModule.getDocument(source) as { promise: Promise<PdfDocumentProxy> },
+    };
     // pdfjs-dist v4 requires an explicit workerSrc. The worker file is copied to
     // /assets/pdf.worker.min.mjs via the angular.json assets config in MJExplorer.
     pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/pdf.worker.min.mjs';

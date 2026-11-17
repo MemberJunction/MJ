@@ -1,12 +1,14 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { ReplaySubject } from 'rxjs';
 import {
     BaseEntity,
     LocalCacheManager,
+    Metadata,
     ProviderBase,
     ProviderConfigDataBase,
     SetProvider,
+    type DatabaseProviderBase,
 } from '@memberjunction/core';
 import {
     GetReadOnlyProvider,
@@ -17,6 +19,8 @@ import {
     RunWithRequestSessionId,
     StampProviderOriginSessionId,
 } from '../requestSessionContext.js';
+import { AuthCache, HashAuthToken } from '../cache.js';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import type { ProviderInfo } from '../types.js';
 
 class TestStubProvider extends ProviderBase {
@@ -154,5 +158,65 @@ describe('Wave 4.1b — ProviderBase DetachInvalidationListeners & OriginSession
         expect(GetReadWriteProvider(providers)).toBeDefined();
         expect(rwConstructed).toBe(1);
         rwInstance?.DetachInvalidationListeners();
+    });
+});
+
+describe('Wave 6A — AuthCache SHA-256 keying and O(1) UserByID lookup', () => {
+    let previousGlobalProvider: DatabaseProviderBase;
+
+    beforeEach(async () => {
+        previousGlobalProvider = Metadata.Provider as unknown as DatabaseProviderBase;
+        await LocalCacheManager.Instance.Initialize();
+    });
+
+    afterEach(() => {
+        SetProvider(previousGlobalProvider);
+        AuthCache.clear();
+    });
+
+    it('HashAuthToken produces fixed 64-char SHA-256 hex digests and isolates near-identical JWTs in AuthCache', () => {
+        const sharedPrefix = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.' + 'a'.repeat(2048);
+        const rawJwtA = sharedPrefix + '.sigA';
+        const rawJwtB = sharedPrefix + '.sigB';
+        const digestA = HashAuthToken(rawJwtA);
+        const digestB = HashAuthToken(rawJwtB);
+
+        expect(digestA).toMatch(/^[a-f0-9]{64}$/);
+        expect(digestB).toMatch(/^[a-f0-9]{64}$/);
+        expect(digestA).toBe(HashAuthToken(rawJwtA));
+        expect(digestA).not.toBe(digestB);
+        expect(digestA).not.toContain('eyJhbGci');
+        expect(digestB).not.toContain('sigB');
+
+        AuthCache.set(digestA, { sub: 'user-A' });
+        AuthCache.set(digestB, { sub: 'user-B' });
+        expect(AuthCache.get(digestA)).toEqual({ sub: 'user-A' });
+        expect(AuthCache.get(digestB)).toEqual({ sub: 'user-B' });
+        expect(AuthCache.get(rawJwtA)).toBeUndefined();
+        expect(AuthCache.get(rawJwtB)).toBeUndefined();
+        expect(AuthCache.size).toBe(2);
+        for (const key of AuthCache.keys()) {
+            expect(key.length).toBe(64);
+        }
+    });
+
+    it('UserCache.Instance.UserByID resolves users in O(1) regardless of UUID casing/whitespace', () => {
+        const targetId = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
+        const fakeUser = { ID: targetId, Email: 'u@example.com', Name: 'U', IsActive: true } as unknown as UserCache['Users'][number];
+        const cache = UserCache.Instance as unknown as {
+            _users: Array<UserCache['Users'][number]>;
+            _indexDirty: boolean;
+        };
+        const prevUsers = cache._users;
+        try {
+            cache._users = [fakeUser];
+            cache._indexDirty = true;
+            expect(UserCache.Instance.UserByID(targetId.toLowerCase())).toBe(fakeUser);
+            expect(UserCache.Instance.UserByID(`  ${targetId.toUpperCase()}  `)).toBe(fakeUser);
+            expect(UserCache.Instance.UserByID('00000000-0000-0000-0000-000000000000')).toBeUndefined();
+        } finally {
+            cache._users = prevUsers;
+            cache._indexDirty = true;
+        }
     });
 });

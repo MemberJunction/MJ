@@ -1,7 +1,12 @@
 # MemberJunction Productivity Suite — Right-Click Context Menu System Design
 
-**Status:** Implementation-Ready Technical & UX Specification  
-**Target Branch / Worktree:** `feat/unified-agent-artifacts` (`/Users/amith/mj-worktrees/unified-agent-artifacts`)  
+**Status:** Implemented (`@memberjunction/ng-artifacts`) — Historical Design Spec Below with Shipped Addenda  
+**Implementation Addendum (2026-11-15):**
+- **Implemented:** Shared `<mj-context-menu>` (`MjContextMenuComponent` + `context-menu-position.util.ts` + `docs-context-menu.helper.ts` + `slides-context-menu.helper.ts` + `sheets-context-menu.helper.ts`) is shipped across Docs, Slides, and Sheets.
+- **Merged Cells ARE Shipped (`NW-4`):** The historical note in § 0.6 stating merged cells do not exist in `SpreadsheetEngine` is superseded — `MergeRanges`, `merge_cells`, and `unmerge_cells` are now implemented in `SpreadsheetEngine`, `SpreadsheetToolLibrary`, and the Sheets viewer.
+- **Inline Ask AI Disabled (`ARTIFACT_AI_ASSISTANT_ENABLED = false`):** The `Ask AI About Section…`, `Ask AI About Block…`, `Ask AI for This Slide…`, and `Ask AI About Range…` menu entries listed in sections below are gated off in production via `ARTIFACT_AI_ASSISTANT_ENABLED = false` (`packages/Angular/Generic/artifacts/src/lib/services/artifact-ai-assistant-bridge.ts`) and do not render or dispatch.
+
+**Target Branch / Worktree:** `feat/artifacts-adversarial-next-wave` (`/Users/amith/mj-worktrees/unified-agent-artifacts`)  
 **Target Package:** `@memberjunction/ng-artifacts` (`packages/Angular/Generic/artifacts`)  
 **Scope:** Shared `<mj-context-menu>` infrastructure + complete context menu coverage for **MJ Docs** (`MarkdownArtifactViewerComponent`), **MJ Slides** (`SlideDeckArtifactViewerComponent`), **MJ Sheets** (`SpreadsheetArtifactViewerComponent`), plus embedded **Whiteboard / Canvas** (`WhiteboardBoardComponent`) and shared container (`ArtifactViewerPanelComponent`) integration.
 

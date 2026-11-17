@@ -242,6 +242,12 @@ describe('BuildRelatedRowsLoadSQL — one to many', () => {
         expect(p.relatedSQL(oneToMany(), employeeEntity(), 7, false, undefined))
             .toBe(`SELECT * FROM [dbo].[vwEmployees] WHERE [DepartmentID] = 7`);
     });
+
+    it('refuses a value that is not a number for a key that takes no quotes', () => {
+        const p = new RelatedRowsTestProvider();
+        expect(() => p.relatedSQL(oneToMany(), employeeEntity(), '7 OR 1=1', false, hr()))
+            .toThrow('Invalid non-numeric value provided for numeric key field DepartmentID on entity Employees');
+    });
 });
 
 describe('BuildRelatedRowsLoadSQL — many to many', () => {

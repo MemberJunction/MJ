@@ -23,6 +23,9 @@ vi.mock('../generic/ResolverBase.js', () => ({
         protected GetUserFromPayload(payload?: { userRecord?: UserInfo }): UserInfo | undefined {
             return payload?.userRecord;
         }
+        protected async CheckAPIKeyScopeAuthorization(): Promise<void> {
+            return;
+        }
     },
 }));
 

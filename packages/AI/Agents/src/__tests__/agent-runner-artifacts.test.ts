@@ -70,8 +70,8 @@ interface ArtifactWorld {
 
 function world(overrides: Partial<ArtifactWorld> = {}): ArtifactWorld {
     const defaultOwners = new Map<string, string>([
-        [SOURCE_UUID.toLowerCase(), 'user-1'],
-        [PRIOR_UUID.toLowerCase(), 'user-1'],
+        [SOURCE_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001'],
+        [PRIOR_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001'],
     ]);
     return {
         owners: overrides.owners ?? defaultOwners,
@@ -211,7 +211,7 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-const contextUser = { ID: 'user-1', Email: 'u@example.com' } as unknown as UserInfo;
+const contextUser = { ID: '11111111-0001-4000-8000-000000000001', Email: 'u@example.com' } as unknown as UserInfo;
 
 function makeResult(overrides: Partial<ExecuteAgentResult> = {}): ExecuteAgentResult {
     return {
@@ -243,7 +243,7 @@ describe('AgentRunner.ProcessAgentArtifacts — conversationDetailId-optional wi
         // The artifact header and version were still created.
         expect(artifact.Save).toHaveBeenCalledTimes(1);
         expect(artifact.Visibility).toBe('Always');
-        expect(artifact.UserID).toBe('user-1');
+        expect(artifact.UserID).toBe('11111111-0001-4000-8000-000000000001');
         expect(version.Save).toHaveBeenCalledTimes(1);
         expect(version.ArtifactID).toBe('art-1');
         expect(version.VersionNumber).toBe(1);
@@ -426,7 +426,7 @@ describe('AgentRunner.ProcessAgentArtifacts — duplicate content reuses the ver
                     const id = filterValue(params.ExtraFilter as string, 'ID');
                     return {
                         Success: true,
-                        Results: [{ ID: id, UserID: 'user-1' }],
+                        Results: [{ ID: id, UserID: '11111111-0001-4000-8000-000000000001' }],
                     } as unknown as RunViewResult;
                 }
                 if (params.EntityName !== 'MJ: Conversation Detail Artifacts') {
@@ -443,7 +443,7 @@ describe('AgentRunner.ProcessAgentArtifacts — duplicate content reuses the ver
                         const id = filterValue(view.ExtraFilter as string, 'ID');
                         return {
                             Success: true,
-                            Results: [{ ID: id, UserID: 'user-1' }],
+                            Results: [{ ID: id, UserID: '11111111-0001-4000-8000-000000000001' }],
                         } as unknown as RunViewResult;
                     }
                     return { Success: true, Results: [] } as unknown as RunViewResult;
@@ -564,7 +564,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
         const version = makeEntity('ver-9');
         const { provider, requested, runViewsCalls } = makeProvider(
             () => version,
-            world({ owners: new Map([[TARGET_UUID, 'user-1']]) })
+            world({ owners: new Map([[TARGET_UUID, '11111111-0001-4000-8000-000000000001']]) })
         );
         const runner = new TestableAgentRunner(provider);
         runner.MaxVersion = 4;
@@ -696,10 +696,10 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
 
     it("falls back to the run's sourceArtifactId when the directive-named target does not exist", async () => {
         const version = makeEntity('ver-12');
-        // Target id resolves to no row; sourceArtifactId belongs to user-1.
+        // Target id resolves to no row; sourceArtifactId belongs to 11111111-0001-4000-8000-000000000001.
         const { provider, requested, runViewsCalls } = makeProvider(
             () => version,
-            world({ owners: new Map([[SOURCE_UUID.toLowerCase(), 'user-1']]) })
+            world({ owners: new Map([[SOURCE_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001']]) })
         );
         const runner = new TestableAgentRunner(provider);
         runner.MaxVersion = 6;
@@ -763,7 +763,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             expect(permQuery).toBeDefined();
             const grantFilter = permQuery?.ExtraFilter as string;
             expect(grantFilter).toContain(`ArtifactID='${TARGET_UUID}'`);
-            expect(grantFilter).toContain("UserID='user-1'");
+            expect(grantFilter).toContain("UserID='11111111-0001-4000-8000-000000000001'");
             expect(permQuery?.Fields).toContain('CanEdit');
         });
 
@@ -774,7 +774,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
                 world({
                     owners: new Map([
                         [TARGET_UUID.toLowerCase(), 'somebody-else'],
-                        [SOURCE_UUID.toLowerCase(), 'user-1'],
+                        [SOURCE_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001'],
                     ]),
                 })
             );
@@ -852,15 +852,15 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
                           : permGrant,
                 world({
                     owners: new Map([
-                        [SOURCE_UUID.toLowerCase(), 'user-owner-a'],
-                        [PRIOR_UUID.toLowerCase(), 'user-owner-a'],
+                        [SOURCE_UUID.toLowerCase(), '11111111-0002-4000-8000-000000000002'],
+                        [PRIOR_UUID.toLowerCase(), '11111111-0002-4000-8000-000000000002'],
                     ]),
                 })
             );
             const runner = new TestableAgentRunner(provider);
             runner.PreviousArtifact = { artifactId: PRIOR_UUID, versionNumber: 2 };
 
-            // Both sourceArtifactId AND legacy previousArtifact are owned by user-owner-a without CanEdit -> creates new artifact!
+            // Both sourceArtifactId AND legacy previousArtifact are owned by 11111111-0002-4000-8000-000000000002 without CanEdit -> creates new artifact!
             const info = await runner.ProcessAgentArtifacts(
                 makeResult(),
                 'detail-shared',
@@ -884,7 +884,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             const version = makeEntity('ver-24');
             const { provider, runViewsCalls } = makeProvider(
                 () => version,
-                world({ owners: new Map([[TARGET_UUID, 'user-1']]) })
+                world({ owners: new Map([[TARGET_UUID, '11111111-0001-4000-8000-000000000001']]) })
             );
             const runner = new TestableAgentRunner(provider);
             runner.MaxVersion = 0;
@@ -1140,7 +1140,7 @@ describe('AgentRunner.ProcessAgentArtifacts — unrecognized directive behavior 
         const version = makeEntity('ver-2');
         const { provider } = makeProvider(
             () => version,
-            world({ owners: new Map([[TARGET_UUID.toLowerCase(), 'user-1']]) })
+            world({ owners: new Map([[TARGET_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001']]) })
         );
         const runner = new TestableAgentRunner(provider);
         runner.MaxVersion = 1;
@@ -1228,7 +1228,7 @@ describe('AgentRunner.ProcessAgentArtifacts — payload title/description fallba
 
     it('populates version.Name and version.Description when versioning an existing artifact', async () => {
         const version = makeEntity('ver-2');
-        const { provider } = makeProvider(() => version, world({ owners: new Map([[TARGET_UUID.toLowerCase(), 'user-1']]) }));
+        const { provider } = makeProvider(() => version, world({ owners: new Map([[TARGET_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001']]) }));
         const runner = new TestableAgentRunner(provider);
         runner.MaxVersion = 1;
 
@@ -1456,7 +1456,7 @@ describe('AgentRunner.ProcessAgentArtifacts — touchedArtifacts clobber guard',
     it('skips versioning an artifact already persisted via governed artifact tools in touchedArtifacts', async () => {
         const version = makeEntity('ver-should-not-save');
         const { provider } = makeProvider(() => version, world({
-            owners: new Map([[SOURCE_UUID.toLowerCase(), 'user-1']]),
+            owners: new Map([[SOURCE_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001']]),
         }));
         const runner = new TestableAgentRunner(provider);
         runner.MaxVersion = 5;

@@ -64,6 +64,7 @@ import { NotificationsResource } from './lib/resource-wrappers/notifications-res
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { OfficeConnectComponent } from './lib/office/office-connect.component';
+import { PublicArtifactGuestComponent } from './lib/public-guest/public-artifact-guest.component';
 import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
@@ -74,6 +75,7 @@ import { ConversationFeedbackResource } from './lib/conversation-feedback';
     OAuthCallbackComponent,
     ClaimRedeemComponent,
     OfficeConnectComponent,
+    PublicArtifactGuestComponent,
     ResourceContainerComponent,
     DashboardResource,
     DashboardAddToMenuComponent,
@@ -162,7 +164,8 @@ import { ConversationFeedbackResource } from './lib/conversation-feedback';
     ConversationFeedbackResource,
     LibraryResource,
     LibraryDriveResource,
-    ChatCollectionsResource
+    ChatCollectionsResource,
+    PublicArtifactGuestComponent
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },

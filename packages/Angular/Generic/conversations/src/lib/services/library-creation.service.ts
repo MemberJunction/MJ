@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { IMetadataProvider, Metadata, RemoteOpProgress, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
+  ArtifactPermissionEngine,
   ArtifactSynthesisTargetKind,
   BuildArtifactVersionConfigurationWithPreview,
   ConnectedDriveLinkMetadata,
@@ -20,7 +21,7 @@ import {
   SynthesizeArtifactFromSourcesInput,
   SynthesizeArtifactFromSourcesOperation,
 } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { ArtifactFileService, DocumentImportExportService, SlideDeckExportService } from '@memberjunction/ng-artifacts';
 import { CollectionPermissionService } from './collection-permission.service';
@@ -389,8 +390,9 @@ export class LibraryCreationService {
           '-- Author your analytical SQL query below',
           'SELECT TOP 25',
           '    Name,',
+          '    SchemaName,',
           '    __mj_UpdatedAt',
-          'FROM [__mj].[vwArtifacts]',
+          'FROM [__mj].[vwEntities]',
           'ORDER BY __mj_UpdatedAt DESC;',
         ].join('\n');
 
@@ -478,6 +480,10 @@ export class LibraryCreationService {
     options: ImportLocalFileOptions,
   ): Promise<CreatedLibraryArtifactResult> {
     const md = options.Provider ?? Metadata.Provider;
+    if (options.CollectionID) {
+      await this.assertCanWriteCollection(options.CollectionID, options.CurrentUser, md);
+    }
+
     const types = await this.LoadEnabledArtifactTypes(options.CurrentUser, md);
     const ext = this.extractExtension(options.File.name);
     const defaultTitle = options.Title?.trim() || this.stripExtension(options.File.name) || 'Uploaded File';
@@ -502,10 +508,15 @@ export class LibraryCreationService {
       });
     }
 
+    const mimeType = options.File.type || this.inferMimeFromExtension(ext);
+    const fileType = this.resolveBinaryArtifactType(mimeType, ext, types);
+    if (!fileType) {
+      throw new Error(`No Artifact Type is available for MIME type "${mimeType}".`);
+    }
+
     // Binary file path: upload bytes to MJ Storage (creates governed MJ: Files record for Native Library)
     const buffer = await options.File.arrayBuffer();
     const base64Data = this.arrayBufferToBase64(buffer);
-    const mimeType = options.File.type || this.inferMimeFromExtension(ext);
     const store = this.blobStoreOverride ?? new GraphQLAttachmentBlobStore();
     const uploadResult = await store.Upload(
       {
@@ -519,11 +530,6 @@ export class LibraryCreationService {
 
     if (!uploadResult.Success || !uploadResult.FileID) {
       throw new Error(uploadResult.Error || `Failed to upload "${options.File.name}" to MJ Storage.`);
-    }
-
-    const fileType = this.resolveBinaryArtifactType(mimeType, ext, types);
-    if (!fileType) {
-      throw new Error(`No Artifact Type is available for MIME type "${mimeType}".`);
     }
 
     return this.persistArtifactAndVersion({
@@ -553,6 +559,9 @@ export class LibraryCreationService {
     options: ConvertRemoteDriveObjectOptions,
   ): Promise<CreatedLibraryArtifactResult> {
     const md = options.Provider ?? Metadata.Provider;
+    if (options.CollectionID) {
+      await this.assertCanWriteCollection(options.CollectionID, options.CurrentUser, md);
+    }
     const ext = this.extractExtension(options.FileName);
     if (!CONVERTIBLE_EXTENSIONS.has(ext)) {
       throw new Error(
@@ -627,6 +636,15 @@ export class LibraryCreationService {
       throw new Error(`Artifact "${options.ArtifactID}" was not found.`);
     }
 
+    const permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+      md,
+      artifact.ID,
+      options.CurrentUser,
+    );
+    if (!permissions.CanEdit) {
+      throw new Error(`Permission denied: you do not have Edit access to "${artifact.Name}".`);
+    }
+
     const versions = await this.loadArtifactVersionsDesc(artifact.ID, options.CurrentUser, md);
     const targetVersion =
       (options.VersionID ? versions.find((v) => UUIDsEqual(v.ID, options.VersionID)) : undefined) ??
@@ -644,7 +662,10 @@ export class LibraryCreationService {
 
     const storageClient =
       options.StorageClientOverride ?? this.createGraphQLFileStorageClient(md);
-    const remoteBefore = await this.findRemoteObjectMetadata(storageClient, accountId, objectPath);
+    const mustVerifyEtag = !options.ForceOverwrite && Boolean(existingLink?.ETag);
+    const remoteBefore = await this.findRemoteObjectMetadata(storageClient, accountId, objectPath, {
+      throwOnError: mustVerifyEtag,
+    });
     if (
       !options.ForceOverwrite &&
       existingLink?.ETag &&
@@ -744,6 +765,15 @@ export class LibraryCreationService {
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', options.CurrentUser);
     if (!(await artifact.Load(options.ArtifactID))) {
       throw new Error(`Artifact "${options.ArtifactID}" was not found.`);
+    }
+
+    const permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+      md,
+      artifact.ID,
+      options.CurrentUser,
+    );
+    if (!permissions.CanEdit) {
+      throw new Error(`Permission denied: you do not have Edit access to "${artifact.Name}".`);
     }
 
     const versions = await this.loadArtifactVersionsDesc(artifact.ID, options.CurrentUser, md);
@@ -955,11 +985,22 @@ export class LibraryCreationService {
       options.TargetFileName?.trim() ||
       (isFileMode && options.VersionFileName ? this.stripExtension(options.VersionFileName) : '') ||
       this.sanitizeFileName(options.ArtifactName);
-    const baseFileName = extension
-      ? rawBaseName.replace(new RegExp(`\\.${extension}$`, 'i'), '')
-      : rawBaseName;
+    const cleanExt = extension ? `.${extension.toLowerCase()}` : '';
+    const baseFileName =
+      cleanExt && rawBaseName.toLowerCase().endsWith(cleanExt)
+        ? rawBaseName.slice(0, rawBaseName.length - cleanExt.length)
+        : rawBaseName;
     const finalFileName = extension ? `${baseFileName}.${extension}` : baseFileName;
-    const cleanPrefix = (options.TargetFolderPrefix ?? '').replace(/^\/+|\/+$/g, '');
+    const rawPrefix = options.TargetFolderPrefix ?? '';
+    let prefixStart = 0;
+    while (prefixStart < rawPrefix.length && rawPrefix[prefixStart] === '/') {
+      prefixStart++;
+    }
+    let prefixEnd = rawPrefix.length;
+    while (prefixEnd > prefixStart && rawPrefix[prefixEnd - 1] === '/') {
+      prefixEnd--;
+    }
+    const cleanPrefix = rawPrefix.slice(prefixStart, prefixEnd);
     const objectPath = cleanPrefix ? `${cleanPrefix}/${finalFileName}` : finalFileName;
 
     const storageClient =
@@ -1546,7 +1587,7 @@ export class LibraryCreationService {
     const res = await rv.RunView<MJArtifactVersionEntity>(
       {
         EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID='${artifactId}'`,
+        ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
         OrderBy: 'VersionNumber DESC',
         ResultType: 'entity_object',
       },
@@ -1593,35 +1634,51 @@ export class LibraryCreationService {
     storageClient: Partial<Pick<GraphQLFileStorageClient, 'ListObjects'>>,
     accountId: string,
     objectPath: string,
+    options?: { throwOnError?: boolean },
   ): Promise<{ ETag?: string; LastModified?: string } | null> {
     if (typeof storageClient.ListObjects !== 'function') {
       return null;
     }
-    try {
-      const { prefix, fileName } = this.splitObjectPath(objectPath);
-      const folderPrefix = prefix ? `${prefix}/` : '';
-      const listing = await storageClient.ListObjects(accountId, folderPrefix, '/');
-      const match = (listing.objects ?? []).find(
-        (obj) =>
-          !obj.isDirectory &&
-          (obj.fullPath.toLowerCase() === objectPath.toLowerCase() ||
-            obj.name.toLowerCase() === fileName.toLowerCase()),
-      );
-      if (!match) {
-        return null;
+    const normalizedPath = objectPath.replace(/^\/+/, '');
+    const { prefix, fileName } = this.splitObjectPath(normalizedPath);
+    const folderPrefix = prefix ? `${prefix}/` : '';
+    const prefixesToProbe =
+      normalizedPath && normalizedPath !== folderPrefix
+        ? [normalizedPath, folderPrefix]
+        : [folderPrefix];
+
+    let lastError: Error | null = null;
+    let succeededOnce = false;
+    for (const probePrefix of prefixesToProbe) {
+      try {
+        const listing = await storageClient.ListObjects(accountId, probePrefix, '/');
+        succeededOnce = true;
+        const match = (listing.objects ?? []).find(
+          (obj) =>
+            !obj.isDirectory &&
+            (obj.fullPath.replace(/^\/+/, '').toLowerCase() === normalizedPath.toLowerCase() ||
+              obj.name.toLowerCase() === fileName.toLowerCase()),
+        );
+        if (match) {
+          return {
+            ETag: match.etag || undefined,
+            LastModified:
+              match.lastModified instanceof Date
+                ? match.lastModified.toISOString()
+                : typeof match.lastModified === 'string'
+                  ? match.lastModified
+                  : undefined,
+          };
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
       }
-      return {
-        ETag: match.etag || undefined,
-        LastModified:
-          match.lastModified instanceof Date
-            ? match.lastModified.toISOString()
-            : typeof match.lastModified === 'string'
-              ? match.lastModified
-              : undefined,
-      };
-    } catch {
-      return null;
     }
+
+    if (!succeededOnce && lastError && options?.throwOnError) {
+      throw lastError;
+    }
+    return null;
   }
 
   private async recordConnectedDriveAuditLog(params: {
