@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, from } from 'rxjs';
 import { Metadata } from '@memberjunction/core';
-import { ReleaseRecordingShardsAtLogout } from '@memberjunction/realtime-runtime';
 import { IAngularAuthProvider, AngularAuthProviderConfig } from './IAuthProvider';
 import {
   StandardUserInfo,
@@ -254,6 +253,9 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    * nor re-sent from the next user's session.
    */
   protected async clearClientCaches(): Promise<void> {
+    // Genuine bundle-size deferral: realtime-runtime (and @google/genai) is only needed
+    // to flush call-recording shards at logout, keeping it out of the initial login bundle.
+    const { ReleaseRecordingShardsAtLogout } = await import('@memberjunction/realtime-runtime');
     await ReleaseRecordingShardsAtLogout(Metadata.Provider); // global-provider-ok: logout ends the single signed-in Explorer session, whose provider is the global one
 
     const preserved = this.preservedLocalStorageKeys;

@@ -1,0 +1,57 @@
+[
+  {
+    "fields": {
+      "Name": "Artifact Block Frozen",
+      "Description": "A live MJ block in a Document, Presentation, or Spreadsheet artifact was frozen into a static snapshot (recording FrozenByUserID, Timestamp, and SnapshotContentHash).",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000001"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifact Connected Drive Sync",
+      "Description": "An artifact version was pushed to or pulled from a linked external Connected Drive (OneDrive, SharePoint, or Google Drive), recording ExternalFileID, VersionNumber, and ETag.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000002"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifact Exported",
+      "Description": "An artifact was exported to an external file format (.docx, .pptx, .xlsx, or PDF).",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000003"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifact Permission Changed",
+      "Description": "Sharing permissions on an artifact were granted, updated, or revoked.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000004"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifact Guest Share Link",
+      "Description": "A Frozen-only expiring read-only external guest share link was created, resolved, or revoked for an artifact version.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "B8E4F120-7C1D-4A2B-9D11-300000000005"
+    }
+  }
+]

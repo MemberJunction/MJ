@@ -71,7 +71,7 @@ const loadNgDashboardsIntegrationModule = {
   load: () => import('@memberjunction/ng-dashboards/integration.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./lists-dashboards.module (5 entries) ---
+// --- @memberjunction/ng-dashboards → ./lists-dashboards.module (6 entries) ---
 const loadNgDashboardsListsDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/lists-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/lists-dashboards.module').then(() => {})
@@ -273,6 +273,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::ListsCategoriesResource': loadNgDashboardsListsDashboardsModule,
   'BaseResourceComponent::ListsMyListsResource': loadNgDashboardsListsDashboardsModule,
   'BaseResourceComponent::ListsOperationsResource': loadNgDashboardsListsDashboardsModule,
+  'BaseResourceComponent::ListsRefreshesResource': loadNgDashboardsListsDashboardsModule,
   'BaseResourceComponent::ListsSharedWithMeResource': loadNgDashboardsListsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./mcp.module
@@ -341,4 +342,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 141;
+export const LAZY_FEATURE_CONFIG_COUNT = 142;

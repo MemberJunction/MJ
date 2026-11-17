@@ -837,6 +837,75 @@ export class AgentRunner {
                 return [];
             };
 
+            // Step 6c: Link any governed collaborative artifacts touched/created mid-run
+            // (Docs, Sheets, Slides created via workspace tools or CoreActions) so the
+            // conversation message shows artifact cards even when `payload` is empty.
+            const processTouchedArtifacts = async (): Promise<CreatedArtifactInfo[]> => {
+                if (suppressArtifacts || !agentResult.success || !agentResponseDetailId || !agentResult.touchedArtifacts?.length) {
+                    return [];
+                }
+                const rv = RunView.FromMetadataProvider(md);
+                const existingLinksRes = await rv.RunView<{ ArtifactVersionID?: string | null }>(
+                    {
+                        EntityName: 'MJ: Conversation Detail Artifacts',
+                        ExtraFilter: `ConversationDetailID='${EscapeSQLString(agentResponseDetailId)}'`,
+                        Fields: ['ArtifactVersionID'],
+                        MaxRows: 100,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple'
+                    },
+                    contextUser
+                );
+                const linkedVersionIds = new Set<string>(
+                    (existingLinksRes.Success && existingLinksRes.Results ? existingLinksRes.Results : [])
+                        .map(r => (r.ArtifactVersionID ?? '').trim().toLowerCase())
+                        .filter(Boolean)
+                );
+
+                const linked: CreatedArtifactInfo[] = [];
+                for (const touched of agentResult.touchedArtifacts) {
+                    let versionId = (touched.ArtifactVersionID ?? '').trim();
+                    let versionNumber = touched.VersionNumber ?? 1;
+                    if (!versionId) {
+                        const latestVer = await rv.RunView<{ ID: string; VersionNumber?: number | null }>(
+                            {
+                                EntityName: 'MJ: Artifact Versions',
+                                ExtraFilter: `ArtifactID='${EscapeSQLString(touched.ArtifactID)}'`,
+                                OrderBy: 'VersionNumber DESC',
+                                Fields: ['ID', 'VersionNumber'],
+                                MaxRows: 1,
+                                SkipTotalRowCount: true,
+                                ResultType: 'simple'
+                            },
+                            contextUser
+                        );
+                        if (latestVer.Success && latestVer.Results?.length) {
+                            versionId = latestVer.Results[0].ID;
+                            versionNumber = latestVer.Results[0].VersionNumber ?? versionNumber;
+                        }
+                    }
+                    if (!versionId) continue;
+                    if (!linkedVersionIds.has(versionId.toLowerCase())) {
+                        const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
+                            'MJ: Conversation Detail Artifacts',
+                            contextUser
+                        );
+                        junction.ConversationDetailID = agentResponseDetailId;
+                        junction.ArtifactVersionID = versionId;
+                        junction.Direction = 'Output';
+                        if (await junction.Save()) {
+                            linkedVersionIds.add(versionId.toLowerCase());
+                        }
+                    }
+                    linked.push({
+                        artifactId: touched.ArtifactID,
+                        versionId,
+                        versionNumber
+                    });
+                }
+                return linked;
+            };
+
             // Step 7: Save media outputs to AIAgentRunMedia (audit) and create artifacts (display)
             const saveMedia = async () => {
                 if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
@@ -931,19 +1000,18 @@ export class AgentRunner {
                 } else {
                     await runDespiteFailedReply('Step 6 (payload artifacts)', processArtifacts);
                     await runDespiteFailedReply('Step 6b (file artifacts)', processFileArtifacts);
+                    await runDespiteFailedReply('Step 6c (touched workspace artifacts)', processTouchedArtifacts);
                     await runDespiteFailedReply('Step 7 (media)', saveMedia);
                 }
                 throw replySaveError;
             }
             const payloadArtifact = await processArtifacts();
             const fileArtifacts = await processFileArtifacts();
+            const touchedArtifacts = await processTouchedArtifacts();
             await saveMedia();
 
-            // A file artifact wins: it is the thing the user asked for. The payload artifact is a
-            // snapshot of the agent's internal state, useful when the payload IS the deliverable
-            // (a report agent) and misleading when it is not — a document run reported the
-            // payload, so "open the artifact" opened raw JSON instead of the document.
-            const artifactInfo = SelectPrimaryArtifact(fileArtifacts, payloadArtifact);
+            // A file or workspace-touched collaborative artifact wins over raw JSON payload state.
+            const artifactInfo = SelectPrimaryArtifact([...fileArtifacts, ...touchedArtifacts], payloadArtifact);
 
             return {
                 agentResult,
@@ -1850,6 +1918,24 @@ export class AgentRunner {
                 return undefined;
             }
 
+            // Governed collaborative artifacts created/mutated mid-run via ArtifactToolManager or
+            // GovernedArtifactService already persisted their authoritative MJ: Artifact Versions row.
+            // Never overwrite those artifacts with JSON.stringify(agentResult.payload), and do not emit
+            // a legacy payload artifact when the run's deliverable was produced via artifact tools without
+            // an explicit create-new directive.
+            const touchedArtifactIds = new Set<string>(
+                (agentResult.touchedArtifacts ?? [])
+                    .map((item) => (item.ArtifactID ?? '').trim().toLowerCase())
+                    .filter(Boolean)
+            );
+            if (plan.kind === 'legacy' && touchedArtifactIds.size > 0) {
+                LogStatus(
+                    `Skipping legacy payload artifact creation for agent "${agent?.Name}" - ` +
+                    `${touchedArtifactIds.size} governed artifact(s) already persisted via artifact tools`
+                );
+                return undefined;
+            }
+
             // Vet whatever artifact we are about to version, then walk DOWN the fallback ladder on
             // failure: a directive-named target degrades to the caller's sourceArtifactId, and a bad
             // sourceArtifactId degrades to the historical chain. Each rung is re-vetted, so a value
@@ -1862,6 +1948,13 @@ export class AgentRunner {
                 const candidateId = typeof plan.artifactId === 'string' && IsValidUUID(plan.artifactId)
                     ? plan.artifactId.trim()
                     : undefined;
+                if (candidateId && touchedArtifactIds.has(candidateId.toLowerCase())) {
+                    LogStatus(
+                        `Skipping payload artifact version for ${candidateId} - ` +
+                        `artifact was already persisted via governed artifact tools in this run`
+                    );
+                    return undefined;
+                }
                 const vetted = await this.VetArtifactVersionTarget(plan, contextUser, md, agent?.Name, rejectedIds);
                 if (vetted) {
                     plan = vetted;
@@ -1923,6 +2016,13 @@ export class AgentRunner {
                 }
 
                 if (previousArtifact) {
+                    if (touchedArtifactIds.has(previousArtifact.artifactId.trim().toLowerCase())) {
+                        LogStatus(
+                            `Skipping payload artifact version for ${previousArtifact.artifactId} - ` +
+                            `artifact was already persisted via governed artifact tools in this run`
+                        );
+                        return undefined;
+                    }
                     artifactId = previousArtifact.artifactId;
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);

@@ -25,7 +25,7 @@ import {
     MJGraphEntity,
     MJGraphTypeEntity,
 } from '../generated/entity_subclasses';
-import type { MJGraphEdgeEntityType } from '../generated/entities/__mj';
+import type { MJGraphEdgeEntityType, MJGraphEntityType, MJGraphTypeEntityType } from '../generated/entities/__mj';
 import { QueryEngine } from '../engines/QueryEngine';
 import {
     BaseGraphEdgeProvider,
@@ -66,7 +66,17 @@ const HOP_DECAY = 0.85;
 
 const GRAPH_EDGES_ENTITY = 'MJ: Graph Edges';
 const GRAPHS_ENTITY = 'MJ: Graphs';
+const GRAPH_TYPES_ENTITY = 'MJ: Graph Types';
 const GRAPH_CONCEPTS_ENTITY = 'MJ: Graph Concepts';
+const CANON_PRIMARY_GRAPH_NAME_LOWER = 'mj canon';
+
+type GraphProbeRow = Pick<MJGraphEntityType, 'ID' | 'Name' | 'GraphTypeID' | 'Status'>;
+type GraphTypeProbeRow = Pick<MJGraphTypeEntityType, 'ID' | 'IsCanon'>;
+
+/** True when a graph belongs to a Canon graph type or carries the primary Canon graph name. */
+export function IsCanonGraph(graph: Pick<MJGraphEntityType, 'Name' | 'GraphTypeID'>, canonTypeIds: UUIDSet): boolean {
+    return canonTypeIds.Has(graph.GraphTypeID) || graph.Name.trim().toLowerCase() === CANON_PRIMARY_GRAPH_NAME_LOWER;
+}
 
 /** The stored-edge columns traversal reads. */
 type StoredEdgeRow = Pick<
@@ -209,6 +219,12 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
     private preloadGeneration = 0;
     /** Field and alternate-view lookups for metadata nodes; rebuilt when the provider's entity list changes. */
     private metadataNodeIndex: MetadataNodeIndex | null = null;
+    /** Cached result of the lightweight unloaded Canon-graph existence probe, keyed by provider. */
+    private activeCanonGraphCache = new WeakMap<IMetadataProvider, boolean>();
+    /** In-flight lightweight Canon-graph probes so concurrent callers share one query per provider. */
+    private activeCanonGraphInFlight = new WeakMap<IMetadataProvider, Promise<boolean>>();
+    /** Monotonic counter incremented when graph/type metadata changes so stale probes do not cache. */
+    private activeCanonProbeGeneration = 0;
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
@@ -224,6 +240,94 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         await this.Load(configs, provider, forceRefresh, contextUser);
     }
 
+    /**
+     * Returns `true` when at least one active Canon graph exists. When `GraphEngine` is already
+     * loaded for the resolved provider, evaluates strictly in memory; otherwise runs a single
+     * lightweight `RunView` probe cached per provider so callers can skip loading all 8 graph entities
+     * on deployments with no active Canon graphs.
+     */
+    public async HasActiveCanonGraphs(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<boolean> {
+        const resolvedProvider = provider ?? this.ProviderToUse;
+        if (this.Loaded && resolvedProvider === this.ProviderToUse) {
+            const canonTypeIds = new UUIDSet(this.GraphTypes.filter((gt) => gt.IsCanon).map((gt) => gt.ID));
+            return this.Graphs.some((g) => g.Status === 'Active' && IsCanonGraph(g, canonTypeIds));
+        }
+
+        const cached = this.activeCanonGraphCache.get(resolvedProvider);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        const pending = this.activeCanonGraphInFlight.get(resolvedProvider);
+        if (pending) {
+            return pending;
+        }
+
+        const probe = this.probeActiveCanonGraphs(resolvedProvider, contextUser).finally(() => {
+            this.activeCanonGraphInFlight.delete(resolvedProvider);
+        });
+        this.activeCanonGraphInFlight.set(resolvedProvider, probe);
+        return probe;
+    }
+
+    private async probeActiveCanonGraphs(resolvedProvider: IMetadataProvider, contextUser?: UserInfo): Promise<boolean> {
+        const graphsMeta = resolvedProvider.EntityByName(GRAPHS_ENTITY);
+        if (!graphsMeta) {
+            return false;
+        }
+
+        await this.SetupGlobalEventListener();
+        const generation = this.activeCanonProbeGeneration;
+
+        const rv = RunView.FromMetadataProvider(resolvedProvider);
+        const graphsRes = await rv.RunView<GraphProbeRow>(
+            {
+                EntityName: GRAPHS_ENTITY,
+                ExtraFilter: "[Status] = 'Active'",
+                Fields: ['ID', 'Name', 'GraphTypeID', 'Status'],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        if (!graphsRes.Success) {
+            // Fail open without caching so callers fall back to Config().
+            return true;
+        }
+
+        const activeGraphs = (graphsRes.Results ?? []).filter((g) => g.Status === 'Active');
+        let hasActive = false;
+        if (activeGraphs.length > 0) {
+            if (activeGraphs.some((g) => IsCanonGraph(g, new UUIDSet()))) {
+                hasActive = true;
+            } else {
+                const typesRes = await rv.RunView<GraphTypeProbeRow>(
+                    {
+                        EntityName: GRAPH_TYPES_ENTITY,
+                        Fields: ['ID', 'IsCanon'],
+                        ResultType: 'simple',
+                    },
+                    contextUser,
+                );
+                if (!typesRes.Success) {
+                    return true;
+                }
+                const canonTypeIds = new UUIDSet((typesRes.Results ?? []).filter((gt) => Boolean(gt.IsCanon)).map((gt) => gt.ID));
+                hasActive = activeGraphs.some((g) => IsCanonGraph(g, canonTypeIds));
+            }
+        }
+
+        const rlsExempt = !contextUser || graphsMeta.UserExemptFromRowLevelSecurity(contextUser, EntityPermissionType.Read);
+        if (rlsExempt && generation === this.activeCanonProbeGeneration) {
+            this.activeCanonGraphCache.set(resolvedProvider, hasActive);
+        }
+        return hasActive;
+    }
+
+    private invalidateActiveCanonGraphCache(): void {
+        this.activeCanonProbeGeneration++;
+        this.activeCanonGraphCache = new WeakMap<IMetadataProvider, boolean>();
+    }
+
     /** A first or forced (re)load also drops every preloaded graph; each reloads on its next traversal. */
     protected override async Load(
         configs: Partial<BaseEnginePropertyConfig>[],
@@ -233,6 +337,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
     ): Promise<void> {
         if (forceRefresh || !this.Loaded) {
             this.invalidatePreloadedEdges(null);
+            this.invalidateActiveCanonGraphCache();
         }
         return super.Load(configs, provider, forceRefresh, contextUser);
     }
@@ -258,6 +363,9 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         } else if (changed && entityName === GRAPHS_ENTITY.toLowerCase()) {
             const graphRow = event.baseEntity instanceof MJGraphEntity ? event.baseEntity : null;
             this.invalidatePreloadedEdges(graphRow ? (graph) => UUIDsEqual(graph, graphRow.ID) : null);
+            this.invalidateActiveCanonGraphCache();
+        } else if (changed && entityName === GRAPH_TYPES_ENTITY.toLowerCase()) {
+            this.invalidateActiveCanonGraphCache();
         }
         return super.HandleIndividualBaseEntityEvent(event);
     }

@@ -180,6 +180,24 @@ describe('Phase 1 list actions', () => {
       await (action as any).InternalRunAction(params);
       expect(refreshMock).toHaveBeenCalledWith('l1', 'Sync', { ConfirmDrops: true });
     });
+
+    it("leaves Mode unset when it isn't passed, so the list's own RefreshMode applies", async () => {
+      refreshMock.mockResolvedValue({ Success: true, ResultCode: 'SUCCESS', Message: 'ok' });
+      const action = new RefreshListFromSourceAction();
+      const params = buildParams([['ListID', 'l1']]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (action as any).InternalRunAction(params);
+      expect(refreshMock).toHaveBeenCalledWith('l1', undefined, { ConfirmDrops: false });
+    });
+
+    it('rejects a Mode other than Additive or Sync', async () => {
+      const action = new RefreshListFromSourceAction();
+      const params = buildParams([['ListID', 'l1'], ['Mode', 'Bogus']]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (action as any).InternalRunAction(params);
+      expect(result.ResultCode).toBe('INVALID_PARAMETER');
+      expect(refreshMock).not.toHaveBeenCalled();
+    });
   });
 
   describe('ComposeListsAction', () => {

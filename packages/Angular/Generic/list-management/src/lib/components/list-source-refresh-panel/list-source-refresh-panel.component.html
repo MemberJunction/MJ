@@ -1,0 +1,154 @@
+<section class="srp-card" aria-labelledby="srp-title">
+  <header class="srp-header">
+    <h3 id="srp-title" class="srp-title"><i class="fa-solid fa-rotate"></i> Source &amp; refresh</h3>
+    @if (HasSource && CanEdit) {
+      <button mjButton variant="primary" size="sm" [disabled]="IsBusy || NeedsReview" (click)="OnRefreshNow()"
+              [title]="NeedsReview ? 'Review the source change first' : 'Preview what a refresh would change'">
+        <i class="fa-solid fa-arrows-rotate"></i> Refresh now
+      </button>
+    }
+  </header>
+
+  @if (IsLoading) {
+    <mj-loading text="Loading refresh settings..." size="small"></mj-loading>
+  } @else if (Summary) {
+    @if (!HasSource) {
+      <div class="srp-empty">
+        <p>This list doesn't refresh from a source. Its records are added and removed by hand.</p>
+        @if (IsOwner) {
+          <button mjButton variant="outline" size="sm" (click)="ChangeSource.emit()">
+            <i class="fa-solid fa-link"></i> Link a view or query
+          </button>
+        }
+      </div>
+    } @else {
+      <div class="srp-row">
+        <div class="srp-label">Source</div>
+        <div class="srp-value">
+          <div class="srp-source">
+            <span class="srp-kind">{{ SourceKindLabel }}</span>
+            <button type="button" class="srp-link" (click)="OnOpenSource()">{{ Summary.SourceName }}</button>
+            @if (NeedsReview) {
+              <span class="srp-pill srp-pill--warn"><i class="fa-solid fa-triangle-exclamation"></i> Source changed</span>
+            } @else if (Summary.UseSnapshot) {
+              <span class="srp-pill">Frozen snapshot</span>
+            } @else if (NeverRefreshed) {
+              <span class="srp-pill srp-pill--warn"><i class="fa-solid fa-circle-info"></i> Not refreshed yet</span>
+            } @else {
+              <span class="srp-pill srp-pill--ok"><i class="fa-solid fa-check"></i> Matches approved version</span>
+            }
+          </div>
+          @if (NeedsReview) {
+            <p class="srp-help">
+              The {{ SourceKindLabel.toLowerCase() }} changed since it was approved for this list, so refreshes stop until the owner reviews the change.
+            </p>
+            <button mjButton variant="warning" size="sm" (click)="ReviewSourceChange.emit()">
+              <i class="fa-solid fa-magnifying-glass"></i> Review source change
+            </button>
+          } @else if (Summary.UseSnapshot) {
+            <p class="srp-help">Refreshes re-run the filter captured when this list was made, even if the view has changed since.</p>
+          } @else if (NeverRefreshed) {
+            <p class="srp-help srp-help--warn">
+              This list hasn't been filled from its {{ SourceKindLabel.toLowerCase() }} yet, or the first fill failed.
+              @if (CanEdit) { Use Refresh now to preview what it would add. }
+            </p>
+          } @else {
+            <p class="srp-help">Each refresh first checks that the {{ SourceKindLabel.toLowerCase() }}'s definition is unchanged since it was approved.</p>
+          }
+          @if (IsOwner) {
+            <div class="srp-actions">
+              <button mjButton variant="flat" size="sm" [disabled]="IsBusy" (click)="ChangeSource.emit()">
+                <i class="fa-solid fa-link"></i> Change source
+              </button>
+              <button mjButton variant="flat" size="sm" [disabled]="IsBusy" (click)="OnUnlink()">
+                <i class="fa-solid fa-link-slash"></i> Unlink
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="srp-row">
+        <div class="srp-label">Mode</div>
+        <div class="srp-value">
+          <div class="srp-segmented" role="radiogroup" aria-label="Refresh mode">
+            <button type="button" role="radio" [attr.aria-checked]="Summary.RefreshMode === 'Additive'"
+                    [class.srp-segmented__on]="Summary.RefreshMode === 'Additive'"
+                    [disabled]="!CanEdit || IsBusy" (click)="OnModeChange('Additive')">Additive</button>
+            <button type="button" role="radio" [attr.aria-checked]="Summary.RefreshMode === 'Sync'"
+                    [class.srp-segmented__on]="Summary.RefreshMode === 'Sync'"
+                    [disabled]="!CanEdit || IsBusy" (click)="OnModeChange('Sync')">Sync</button>
+          </div>
+          <p class="srp-help">{{ ModeHelp }}</p>
+        </div>
+      </div>
+
+      <div class="srp-row">
+        <div class="srp-label">Refresh automatically</div>
+        <div class="srp-value">
+          <mj-switch [ngModel]="Summary.AutoRefresh" (ngModelChange)="OnAutoRefreshChange($event)"
+                     [Disabled]="!CanToggleAutoRefresh" OnLabel="On" OffLabel="Off"
+                     aria-label="Refresh automatically"></mj-switch>
+          @if (Summary.AutoRefresh) {
+            <div class="srp-schedule">
+              <span>{{ ScheduleText }}</span>
+              @if (RoutineIsPaused) {
+                <span class="srp-pill srp-pill--warn">Paused</span>
+              } @else if (LastRunFailed) {
+                <span class="srp-pill srp-pill--warn">Last run failed</span>
+              }
+            </div>
+            @if (LastRunFailed) {
+              <p class="srp-help srp-help--warn">
+                The last scheduled refresh failed{{ Summary.Routine?.LastRunAt ? ' on ' + (Summary.Routine?.LastRunAt | date: 'MMM d, h:mm a') : '' }}. Open the routine to see why.
+              </p>
+            }
+            @if (Summary.Routine) {
+              <p class="srp-help">
+                Runs as the User Routine
+                <button type="button" class="srp-link" (click)="OnOpenRoutine()">{{ Summary.Routine.Name }}</button>,
+                owned by {{ Summary.OwnerName }}. It was created from the Lists app default schedule; open the routine to change when it runs.
+              </p>
+            }
+          } @else if (!IsOwner) {
+            <p class="srp-help">Only the list's owner can turn this on.</p>
+          } @else {
+            <p class="srp-help">Turn on to refresh this list on the Lists app's default schedule. You can change the schedule afterwards.</p>
+          }
+        </div>
+      </div>
+
+      <div class="srp-facts">
+        <div>
+          <div class="srp-label">Last refreshed</div>
+          <div>{{ Summary.LastRefreshedAt ? (Summary.LastRefreshedAt | date: 'MMM d, h:mm a') : 'Never' }}
+            @if (Summary.LastRefreshedBy) { <span class="srp-muted">by {{ Summary.LastRefreshedBy }}</span> }
+          </div>
+        </div>
+        <div>
+          <div class="srp-label">Next refresh</div>
+          <div>
+            @if (RoutineIsPaused) { Paused }
+            @else if (Summary.AutoRefresh && Summary.Routine?.NextRunAt) { {{ Summary.Routine?.NextRunAt | date: 'MMM d, h:mm a' }} }
+            @else { Manual only }
+          </div>
+        </div>
+      </div>
+    }
+  }
+
+  @if (ResultMessage) {
+    <mj-alert Variant="success">{{ ResultMessage }}</mj-alert>
+  }
+  @if (ErrorMessage) {
+    <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
+  }
+</section>
+
+<mj-list-delta-confirm
+  [Visible]="PreviewVisible"
+  [Delta]="PreviewDelta"
+  [SourceLabel]="Summary?.SourceName ?? null"
+  (Confirm)="OnPreviewConfirmed()"
+  (Cancel)="OnPreviewCancelled()">
+</mj-list-delta-confirm>

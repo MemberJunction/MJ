@@ -760,4 +760,89 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         expect(staleRes.success).toBe(false);
         expect(staleRes.errorMessage).toContain('Revision conflict');
     });
+
+    it('supports non-contiguous comma-separated sourceRange and chart metadata updates in upsert_chart, and resolves short artifact IDs in embed_artifact', async () => {
+        const engine = SpreadsheetEngine.Instance;
+        const sheetLib = new SpreadsheetToolLibrary();
+        const wb = engine.CreateEmptyWorkbook('UnionChartWb', ['Trade'], 10, 6);
+        const ws = wb.Worksheets[0];
+        engine.SetCell(wb, ws.SheetID, 'A1', { Value: 'City' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B1', { Value: 'Region' }, false);
+        engine.SetCell(wb, ws.SheetID, 'C1', { Value: 'Index' }, false);
+        engine.SetCell(wb, ws.SheetID, 'D1', { Value: 'TradeVolume' }, false);
+        engine.SetCell(wb, ws.SheetID, 'A2', { Value: 'Samarkand' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B2', { Value: 'Central Asia' }, false);
+        engine.SetCell(wb, ws.SheetID, 'C2', { Value: 1 }, false);
+        engine.SetCell(wb, ws.SheetID, 'D2', { Value: 950 }, false);
+        engine.SetCell(wb, ws.SheetID, 'A3', { Value: 'Kashgar' }, false);
+        engine.SetCell(wb, ws.SheetID, 'B3', { Value: 'Tarim Basin' }, false);
+        engine.SetCell(wb, ws.SheetID, 'C3', { Value: 2 }, false);
+        engine.SetCell(wb, ws.SheetID, 'D3', { Value: 720 }, true);
+
+        const initialJson = engine.SerializeWorkbook(wb);
+
+        const chartRes = await sheetLib.InvokeTool(
+            'upsert_chart',
+            {
+                sheet: 'Trade',
+                chartId: 'chart-union',
+                title: 'City Trade Volume',
+                chartType: 'bar',
+                sourceRange: 'A1:A3,D1:D3',
+                placement: 'sheet',
+                showDataLabels: true,
+                widthPx: 460
+            },
+            initialJson
+        );
+        expect(chartRes.success).toBe(true);
+        const chartData = chartRes.data as {
+            chart: { Placement?: string; ShowDataLabels?: boolean; WidthPx?: number };
+            dataset: { Categories: string[]; Series: Array<{ Name: string; Values: number[] }> } | null;
+            updatedContent: string;
+        };
+        expect(chartData.chart.Placement).toBe('sheet');
+        expect(chartData.chart.ShowDataLabels).toBe(true);
+        expect(chartData.chart.WidthPx).toBe(460);
+        expect(chartData.dataset?.Categories).toEqual(['Samarkand', 'Kashgar']);
+        expect(chartData.dataset?.Series[0].Values).toEqual([950, 720]);
+
+        // embed_artifact resolves session short IDs ("D" -> artifactId, "E" -> versionId) when context resolvers are provided and rejects unresolved IDs
+        const targetUuid = '5b83b8fc-0c19-4584-bc21-b7dfcdc518dd';
+        const targetVersionUuid = 'ba9af0c9-1b00-40ea-a206-425f38fab36b';
+        const ctx = {
+            resolveArtifactId: (id: string) => (id === 'D' ? targetUuid : undefined),
+            resolveVersionId: (id: string) => (id === 'E' ? targetVersionUuid : undefined)
+        };
+        const embedResolved = await sheetLib.InvokeTool(
+            'embed_artifact',
+            { sheet: 'Trade', artifactId: 'D', versionId: 'E', title: 'Linked Trade Sheet' },
+            chartData.updatedContent,
+            ctx
+        );
+        expect(embedResolved.success).toBe(true);
+        const embedPayload = embedResolved.data as {
+            embeddedArtifact: { ArtifactID: string; ArtifactVersionID?: string | null };
+        };
+        expect(embedPayload.embeddedArtifact.ArtifactID).toBe(targetUuid);
+        expect(embedPayload.embeddedArtifact.ArtifactVersionID).toBe(targetVersionUuid);
+
+        const embedInvalid = await sheetLib.InvokeTool(
+            'embed_artifact',
+            { sheet: 'Trade', artifactId: 'Z' },
+            chartData.updatedContent,
+            ctx
+        );
+        expect(embedInvalid.success).toBe(false);
+        expect(embedInvalid.errorMessage).toContain('Unable to resolve artifactId');
+
+        const embedInvalidVersion = await sheetLib.InvokeTool(
+            'embed_artifact',
+            { sheet: 'Trade', artifactId: 'D', versionId: 'Z' },
+            chartData.updatedContent,
+            ctx
+        );
+        expect(embedInvalidVersion.success).toBe(false);
+        expect(embedInvalidVersion.errorMessage).toContain('Unable to resolve versionId');
+    });
 });

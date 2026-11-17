@@ -6,6 +6,7 @@ import {
   OnDestroy,
   OnInit,
   Output,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -22,11 +23,19 @@ import {
   MJCollectionEntity,
   MJCollectionPermissionEntity,
   MJEnvironmentEntityExtended,
+  ParseArtifactVersionConfiguration,
+  ResolveArtifactTypeThumbnailPolicy,
+  ResolveGuestShareLinkOperation,
+  type ResolveGuestShareLinkOutput,
   UserInfoEngine,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
-import { ArtifactIconService } from '@memberjunction/ng-artifacts';
+import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
+import {
+  ArtifactIconService,
+  ArtifactViewerPanelComponent,
+  type ArtifactVersionSavedEvent,
+} from '@memberjunction/ng-artifacts';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
   FilterFieldConfig,
@@ -38,10 +47,14 @@ import {
 import { CollectionPermission } from '../../services/collection-permission.service';
 import {
   CreatedLibraryArtifactResult,
+  LibraryCreationService,
   LibraryStarterKind,
+  RemoteDriveConflictError,
+  SynthesizeArtifactFromSourcesResult,
 } from '../../services/library-creation.service';
 import { LibraryCreateDialogTab } from './library-create-dialog.component';
 import {
+  LibraryBreadcrumbSegment,
   LibraryCategoryFilter,
   LibraryCollectionNode,
   LibraryDriveSummary,
@@ -52,6 +65,8 @@ import {
   LibraryNavigatorSection,
   LibraryOwnershipFilter,
   LibrarySurfaceMode,
+  LibraryUnifiedLayout,
+  LibraryUnifiedScope,
   LibraryWorkspaceState,
 } from './library.models';
 
@@ -64,6 +79,7 @@ interface VersionSummaryRow {
   ContentMode: MJArtifactVersionEntity['ContentMode'];
   MimeType: string | null;
   FileName: string | null;
+  Configuration?: string | null;
   __mj_UpdatedAt: Date | string;
 }
 
@@ -107,6 +123,9 @@ const PERMISSION_PAGE_BATCH_SIZE = 4;
 const SETTING_SURFACE_MODE = 'Library.SurfaceMode';
 const SETTING_LIST_STYLE = 'Library.ListStyle';
 const SETTING_STARRED_IDS = 'Library.StarredArtifactIDs';
+const SETTING_LEFT_RAIL_COLLAPSED = 'MJ.Library.LeftRailCollapsed';
+const SETTING_ITEM_VIEW_MODE = 'MJ.Library.ItemViewMode';
+const SETTING_SHOW_CARD_THUMBNAILS = 'Library/ShowCardThumbnails';
 
 const VERSION_SUMMARY_FIELDS: string[] = [
   'ID',
@@ -117,6 +136,7 @@ const VERSION_SUMMARY_FIELDS: string[] = [
   'ContentMode',
   'MimeType',
   'FileName',
+  'Configuration',
   '__mj_UpdatedAt',
 ];
 
@@ -141,6 +161,7 @@ export interface LibraryExternalRouteParams {
   version?: string | number | null;
   canvas?: string | boolean | null;
   q?: string | null;
+  guestToken?: string | null;
 }
 
 @Component({
@@ -168,6 +189,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public NavigatorSection: LibraryNavigatorSection = 'all';
   public ListStyle: LibraryListStyle = 'cards';
   public LeftRailCollapsed = false;
+  public PreferredItemViewMode: 'split' | 'full' = 'split';
+  public ShowCardThumbnails = true;
 
   // Selection & Studio state
   public SelectedCollectionId: string | null = null;
@@ -211,6 +234,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public IsCreateDialogOpen = false;
   public CreateDialogTab: LibraryCreateDialogTab = 'blank';
   public CreateDialogStarter: LibraryStarterKind = 'document';
+  public DefaultSynthesisArtifactIds: string[] = [];
 
   public IsExportDriveDialogOpen = false;
   public ExportingItem: LibraryItemSummary | null = null;
@@ -232,6 +256,17 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public SaveToCollectionExcludedIds: string[] = [];
 
   public readonly RefreshViewerSubject = new Subject<{ artifactId: string; versionNumber: number }>();
+
+  @ViewChild('fullCanvasViewerPanel') public FullCanvasViewerPanel?: ArtifactViewerPanelComponent;
+  @ViewChild('splitViewerPanel') public SplitViewerPanel?: ArtifactViewerPanelComponent;
+
+  // Frozen-only External Guest Share Link state (§6.3)
+  public ActiveGuestToken: string | null = null;
+  public IsGuestShareLoading = false;
+  public GuestShareLoadError: string | null = null;
+  public ActiveGuestShareSnapshot: ResolveGuestShareLinkOutput | null = null;
+  public GuestShareVersionEntity: MJArtifactVersionEntity | null = null;
+  public IsDriveSyncing = false;
 
   public readonly SurfaceToggleOptions: ViewToggleOption[] = [
     { key: 'hub', icon: 'fa-solid fa-compass', label: 'Hub', title: 'Hub Landing View' },
@@ -288,6 +323,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   private readonly iconService = inject(ArtifactIconService);
   private readonly notifications = inject(MJNotificationService);
   private readonly confirmService = inject(MJConfirmService);
+  private readonly creationService = inject(LibraryCreationService);
 
   public ngOnInit(): void {
     this.restoreUserPreferences();
@@ -389,7 +425,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }
 
   public get ContinueWorkingItems(): LibraryItemSummary[] {
-    return this.FilteredItems.slice(0, 8);
+    return this.FilteredItems;
   }
 
   public get HighlightCollections(): LibraryCollectionNode[] {
@@ -424,23 +460,105 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     return this.AllItems.find((i) => UUIDsEqual(i.Id, this.ActiveArtifactId)) ?? null;
   }
 
+  public get UnifiedScope(): LibraryUnifiedScope {
+    if (
+      this.SelectedDriveId ||
+      (this.SurfaceMode === 'hub' && this.HubTab === 'drives') ||
+      (this.SurfaceMode === 'navigator' && this.NavigatorSection === 'drive')
+    ) {
+      return 'drive';
+    }
+    if (this.SelectedCollectionId) {
+      return 'collection';
+    }
+    if (this.SurfaceMode === 'navigator') {
+      if (this.NavigatorSection === 'shared') return 'shared';
+      if (this.NavigatorSection === 'starred') return 'starred';
+      return 'home';
+    }
+    if (this.HubTab === 'shared') return 'shared';
+    return 'home';
+  }
+
+  public get UnifiedLayout(): LibraryUnifiedLayout {
+    if (this.SurfaceMode === 'navigator') return 'split';
+    return this.ListStyle === 'list' ? 'list' : 'grid';
+  }
+
+  public get LibraryBreadcrumbs(): LibraryBreadcrumbSegment[] {
+    const segments: LibraryBreadcrumbSegment[] = [{ Label: 'Library', Scope: 'home' }];
+    const scope = this.UnifiedScope;
+    if (scope === 'all') {
+      segments.push({ Label: 'All Items', Scope: 'all' });
+    } else if (scope === 'shared') {
+      segments.push({ Label: 'Shared with Me', Scope: 'shared' });
+    } else if (scope === 'starred') {
+      segments.push({ Label: 'Starred', Scope: 'starred' });
+    } else if (scope === 'collection') {
+      segments.push({ Label: 'Collections', Scope: 'home' });
+      for (const anc of this.SelectedCollectionAncestors) {
+        segments.push({ Label: anc.Name, Scope: 'collection', CollectionId: anc.Id });
+      }
+    } else if (scope === 'drive') {
+      segments.push({
+        Label: this.SelectedDrive?.AccountName || 'Connected Drives',
+        Scope: 'drive',
+      });
+    }
+    return segments;
+  }
+
+  public get CurrentScopeLabel(): string {
+    const scope = this.UnifiedScope;
+    if (scope === 'collection' && this.SelectedCollectionNode) {
+      return this.SelectedCollectionNode.Name;
+    }
+    if (scope === 'drive') {
+      return this.SelectedDrive?.AccountName || 'Connected Drives';
+    }
+    if (scope === 'shared') return 'Shared with Me';
+    if (scope === 'starred') return 'Starred Items';
+    if (scope === 'all') return 'All Items';
+    return 'Library Home';
+  }
+
+  public get CurrentScopeSubtitle(): string {
+    const scope = this.UnifiedScope;
+    if (scope === 'collection' && this.SelectedCollectionNode) {
+      return this.SelectedCollectionNode.Description || 'Collection items and nested folders';
+    }
+    if (scope === 'drive' && this.SelectedDrive) {
+      return `${this.SelectedDrive.ProviderName} · Dynamic remote browsing`;
+    }
+    if (scope === 'shared') {
+      return 'Documents, spreadsheets, slides, and collections shared with you';
+    }
+    if (scope === 'starred') {
+      return 'Pinned items for instant access';
+    }
+    if (scope === 'all') {
+      return 'All native documents, spreadsheets, presentations, components, queries, and files';
+    }
+    return 'Your documents, spreadsheets, presentations, and collections in one unified workspace';
+  }
+
+  public get SubCollectionsOfSelected(): LibraryCollectionNode[] {
+    if (!this.SelectedCollectionId) return [];
+    return this.SelectedCollectionNode?.Children ?? [];
+  }
+
   public get FilteredItems(): LibraryItemSummary[] {
     let items = this.AllItems;
 
-    // Scope by active surface view
-    if (this.SurfaceMode === 'hub') {
-      if (this.HubTab === 'shared') {
-        items = items.filter((i) => i.IsSharedWithMe);
-      }
-    } else {
-      if (this.NavigatorSection === 'shared') {
-        items = items.filter((i) => i.IsSharedWithMe);
-      } else if (this.NavigatorSection === 'starred') {
-        items = items.filter((i) => i.IsStarred);
-      } else if (this.NavigatorSection === 'collection' && this.SelectedCollectionId) {
-        const targetId = NormalizeUUID(this.SelectedCollectionId);
-        items = items.filter((i) => i.CollectionIds.some((cid) => NormalizeUUID(cid) === targetId));
-      }
+    // Scope by unified scope (preserved across Grid / List / Split layouts)
+    const scope = this.UnifiedScope;
+    if (scope === 'shared') {
+      items = items.filter((i) => i.IsSharedWithMe);
+    } else if (scope === 'starred') {
+      items = items.filter((i) => i.IsStarred);
+    } else if (scope === 'collection' && this.SelectedCollectionId) {
+      const targetId = NormalizeUUID(this.SelectedCollectionId);
+      items = items.filter((i) => i.CollectionIds.some((cid) => NormalizeUUID(cid) === targetId));
     }
 
     // Category filter
@@ -529,6 +647,10 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
   public SwitchSurfaceMode(mode: LibrarySurfaceMode, persistPreference = true): void {
     this.IsFullCanvasOpen = false;
+    if (mode === 'hub') {
+      this.ActiveArtifactId = null;
+      this.ActiveVersionNumber = undefined;
+    }
     this.SurfaceMode = mode;
     if (persistPreference) {
       this.preferredSurfaceMode = mode;
@@ -566,7 +688,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }
 
   public OpenCollectionById(collectionId: string): void {
-    this.SurfaceMode = 'navigator';
     this.NavigatorSection = 'collection';
     this.SelectedCollectionId = collectionId;
     this.SelectedDriveId = null;
@@ -577,9 +698,83 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.cdr.detectChanges();
   }
 
+  public SetUnifiedScope(scope: LibraryUnifiedScope, collectionId?: string | null): void {
+    this.IsFullCanvasOpen = false;
+    if (this.UnifiedLayout !== 'split') {
+      this.ActiveArtifactId = null;
+      this.ActiveVersionNumber = undefined;
+    }
+    if (scope === 'collection') {
+      const targetId = collectionId ?? this.SelectedCollectionId;
+      if (!targetId) {
+        this.SetUnifiedScope('home');
+        return;
+      }
+      this.NavigatorSection = 'collection';
+      this.SelectedCollectionId = targetId;
+      this.SelectedDriveId = null;
+      this.DriveFolderPrefix = '';
+      this.expandAncestorsOf(targetId);
+    } else if (scope === 'drive') {
+      this.HubTab = 'drives';
+      this.NavigatorSection = 'drive';
+      this.SelectedCollectionId = null;
+      if (!this.SelectedDriveId && this.ConnectedDrives.length > 0) {
+        this.SelectedDriveId = this.ConnectedDrives[0].AccountId;
+      }
+    } else {
+      this.SelectedCollectionId = null;
+      this.SelectedDriveId = null;
+      this.DriveFolderPrefix = '';
+      if (scope === 'shared') {
+        this.HubTab = 'shared';
+        this.NavigatorSection = 'shared';
+      } else if (scope === 'starred') {
+        this.HubTab = 'all';
+        this.NavigatorSection = 'starred';
+      } else if (scope === 'all') {
+        this.HubTab = 'all';
+        this.NavigatorSection = 'all';
+      } else {
+        this.HubTab = 'overview';
+        this.NavigatorSection = 'all';
+      }
+    }
+    this.emitWorkspaceState();
+    this.cdr.detectChanges();
+  }
+
+  public SetUnifiedLayout(layout: LibraryUnifiedLayout): void {
+    this.IsFullCanvasOpen = false;
+    if (layout === 'split') {
+      this.ListStyle = 'cards';
+      if (!this.ActiveArtifactId && this.FilteredItems.length > 0 && this.UnifiedScope !== 'drive') {
+        this.ActiveArtifactId = this.FilteredItems[0].Id;
+        this.ActiveVersionNumber = undefined;
+      }
+      this.PreferredItemViewMode = 'split';
+      this.saveSettingSafe(SETTING_ITEM_VIEW_MODE, 'split');
+      this.SwitchSurfaceMode('navigator', true);
+      return;
+    }
+    this.ActiveArtifactId = null;
+    this.ActiveVersionNumber = undefined;
+    const nextListStyle: LibraryListStyle = layout === 'list' ? 'list' : 'cards';
+    this.ListStyle = nextListStyle;
+    this.saveSettingSafe(SETTING_LIST_STYLE, nextListStyle);
+    this.SwitchSurfaceMode('hub', true);
+  }
+
+  public ToggleLeftRail(): void {
+    this.LeftRailCollapsed = !this.LeftRailCollapsed;
+    this.saveSettingSafe(SETTING_LEFT_RAIL_COLLAPSED, this.LeftRailCollapsed ? '1' : '0');
+    this.cdr.detectChanges();
+  }
+
   public OpenConnectedDrive(accountId: string, folderPrefix = ''): void {
     this.SelectedDriveId = accountId;
     this.DriveFolderPrefix = folderPrefix;
+    this.SelectedCollectionId = null;
     this.ActiveArtifactId = null;
     this.IsFullCanvasOpen = false;
     if (this.SurfaceMode === 'hub') {
@@ -611,18 +806,22 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.ActiveArtifactId = artifactId;
     this.ActiveVersionNumber = options?.versionNumber;
 
-    if (options?.forceNavigatorSplit) {
+    const openInFullCanvas = options?.forceNavigatorSplit
+      ? false
+      : options?.fullCanvas !== undefined
+        ? options.fullCanvas
+        : this.PreferredItemViewMode === 'full';
+
+    if (openInFullCanvas) {
+      this.FullCanvasOriginMode = this.SurfaceMode;
+      this.IsFullCanvasOpen = true;
+    } else {
       this.IsFullCanvasOpen = false;
       this.SurfaceMode = 'navigator';
       if (this.NavigatorSection === 'drive') {
         this.NavigatorSection = 'all';
         this.SelectedDriveId = null;
       }
-    } else if (options?.fullCanvas ?? this.SurfaceMode === 'hub') {
-      this.FullCanvasOriginMode = this.SurfaceMode;
-      this.IsFullCanvasOpen = true;
-    } else {
-      this.IsFullCanvasOpen = false;
     }
 
     this.emitWorkspaceState();
@@ -633,6 +832,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.IsFullCanvasOpen = false;
     if (this.FullCanvasOriginMode === 'hub') {
       this.ActiveArtifactId = null;
+      this.ActiveVersionNumber = undefined;
     }
     this.SurfaceMode = this.FullCanvasOriginMode;
     this.emitWorkspaceState();
@@ -643,6 +843,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     if (!this.ActiveArtifactId) return;
     this.IsFullCanvasOpen = false;
     this.SurfaceMode = 'navigator';
+    this.PreferredItemViewMode = 'split';
+    this.saveSettingSafe(SETTING_ITEM_VIEW_MODE, 'split');
     if (this.NavigatorSection === 'drive') {
       this.NavigatorSection = 'all';
       this.SelectedDriveId = null;
@@ -655,6 +857,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.ActiveArtifactId = null;
     this.ActiveVersionNumber = undefined;
     this.IsFullCanvasOpen = false;
+    this.SurfaceMode = 'hub';
+    this.saveSettingSafe(SETTING_SURFACE_MODE, 'hub');
     this.emitWorkspaceState();
     this.cdr.detectChanges();
   }
@@ -666,6 +870,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     } else {
       this.FullCanvasOriginMode = this.SurfaceMode;
       this.IsFullCanvasOpen = true;
+      this.PreferredItemViewMode = 'full';
+      this.saveSettingSafe(SETTING_ITEM_VIEW_MODE, 'full');
       this.emitWorkspaceState();
       this.cdr.detectChanges();
     }
@@ -734,12 +940,29 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public OpenCreateBlankDialog(kind: LibraryStarterKind = 'document'): void {
     this.CreateDialogTab = 'blank';
     this.CreateDialogStarter = kind;
+    this.DefaultSynthesisArtifactIds = [];
     this.IsCreateDialogOpen = true;
     this.cdr.detectChanges();
   }
 
   public OpenUploadConvertDialog(): void {
     this.CreateDialogTab = 'upload';
+    this.DefaultSynthesisArtifactIds = [];
+    this.IsCreateDialogOpen = true;
+    this.cdr.detectChanges();
+  }
+
+  public OpenSynthesizeDialog(sourceArtifactIds?: ReadonlyArray<string>): void {
+    this.CreateDialogTab = 'synthesize';
+    if (sourceArtifactIds && sourceArtifactIds.length > 0) {
+      this.DefaultSynthesisArtifactIds = Array.from(sourceArtifactIds);
+    } else if (this.SelectedCollectionId) {
+      this.DefaultSynthesisArtifactIds = this.FilteredItems.map((i) => i.Id);
+    } else if (this.ActiveArtifactId) {
+      this.DefaultSynthesisArtifactIds = [this.ActiveArtifactId];
+    } else {
+      this.DefaultSynthesisArtifactIds = [];
+    }
     this.IsCreateDialogOpen = true;
     this.cdr.detectChanges();
   }
@@ -749,7 +972,14 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     await this.ReloadWorkspaceData();
     this.OpenArtifactStudio(result.Artifact.ID, {
       fullCanvas: true,
-      versionNumber: result.Version.VersionNumber,
+    });
+  }
+
+  public async OnArtifactSynthesized(result: SynthesizeArtifactFromSourcesResult): Promise<void> {
+    this.IsCreateDialogOpen = false;
+    await this.ReloadWorkspaceData();
+    this.OpenArtifactStudio(result.ArtifactID, {
+      fullCanvas: true,
     });
   }
 
@@ -757,7 +987,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     await this.ReloadWorkspaceData();
     this.OpenArtifactStudio(event.ArtifactId, {
       fullCanvas: true,
-      versionNumber: event.VersionNumber,
     });
   }
 
@@ -1003,6 +1232,211 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       EntityName: event.entityName,
       CompositeKey: event.compositeKey,
     });
+  }
+
+  public OnViewerVersionSaved(event: ArtifactVersionSavedEvent): void {
+    const idx = this.AllItems.findIndex((i) => UUIDsEqual(i.Id, event.ArtifactID));
+    if (idx < 0) {
+      return;
+    }
+    const existing = this.AllItems[idx];
+    const parsedConfig = ParseArtifactVersionConfiguration(event.Configuration);
+    const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+    const typeEntity = allTypes.find((t) => UUIDsEqual(t.ID, existing.TypeId)) ?? existing.TypeName;
+    const thumbPolicy = ResolveArtifactTypeThumbnailPolicy(typeEntity, allTypes, existing.DriverClass);
+    const allowPreview = thumbPolicy.Enabled && thumbPolicy.Mode === 'Rendered';
+    const nextSnapshot = allowPreview
+      ? event.PreviewSnapshot ?? parsedConfig?.previewSnapshot ?? existing.PreviewSnapshot ?? null
+      : null;
+    const nextThumb = allowPreview
+      ? event.ThumbnailDataUrl ?? parsedConfig?.thumbnailDataUrl ?? existing.ThumbnailDataUrl ?? null
+      : null;
+    const updated: LibraryItemSummary = {
+      ...existing,
+      LatestVersionId: event.VersionID ?? existing.LatestVersionId,
+      LatestVersionNumber: Math.max(existing.LatestVersionNumber, event.VersionNumber),
+      VersionCount: Math.max(existing.VersionCount, event.VersionNumber),
+      PreviewSnapshot: nextSnapshot,
+      ThumbnailDataUrl: nextThumb,
+      ThumbnailPolicyMode: thumbPolicy.Mode,
+      UpdatedAt: event.UpdatedAt,
+    };
+    this.AllItems = [
+      ...this.AllItems.slice(0, idx),
+      updated,
+      ...this.AllItems.slice(idx + 1),
+    ];
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handles 1-Click Connected Drive Round-Trip Sync (`push` / `pull`) triggered from
+   * `ArtifactViewerPanelComponent`'s header sync controls (§6.1).
+   */
+  public async OnConnectedDriveSyncRequested(event: {
+    artifactId: string;
+    versionId?: string;
+    direction: 'push' | 'pull';
+  }): Promise<void> {
+    if (this.IsDriveSyncing || !this.EffectiveUser) {
+      return;
+    }
+    const user = this.EffectiveUser;
+    const provider = this.ProviderToUse;
+    const storageOverride = this.StorageClientOverride ?? undefined;
+    this.IsDriveSyncing = true;
+    this.cdr.detectChanges();
+
+    try {
+      if (event.direction === 'push') {
+        try {
+          const pushed = await this.creationService.PushVersionToConnectedDrive({
+            ArtifactID: event.artifactId,
+            VersionID: event.versionId ?? null,
+            CurrentUser: user,
+            Provider: provider,
+            StorageClientOverride: storageOverride,
+          });
+          this.notifications.CreateSimpleNotification(
+            `Pushed v${pushed.VersionNumber} to Connected Drive (${pushed.ObjectPath})`,
+            'success',
+            3500,
+          );
+          this.RefreshViewerSubject.next({
+            artifactId: pushed.ArtifactID,
+            versionNumber: pushed.VersionNumber,
+          });
+        } catch (err) {
+          if (err instanceof RemoteDriveConflictError) {
+            const confirmed = await this.confirmService.Confirm({
+              title: 'Connected Drive File Changed',
+              message: `${err.message} Overwrite the remote Connected Drive copy with this MJ version?`,
+              confirmText: 'Overwrite Remote',
+              cancelText: 'Cancel',
+              type: 'warning',
+            });
+            if (confirmed) {
+              const forced = await this.creationService.PushVersionToConnectedDrive({
+                ArtifactID: event.artifactId,
+                VersionID: event.versionId ?? null,
+                ForceOverwrite: true,
+                CurrentUser: user,
+                Provider: provider,
+                StorageClientOverride: storageOverride,
+              });
+              this.notifications.CreateSimpleNotification(
+                `Overwrote remote Connected Drive copy (${forced.ObjectPath})`,
+                'success',
+                3500,
+              );
+              this.RefreshViewerSubject.next({
+                artifactId: forced.ArtifactID,
+                versionNumber: forced.VersionNumber,
+              });
+            }
+            return;
+          }
+          throw err;
+        }
+        return;
+      }
+
+      const pulled = await this.creationService.PullLatestFromConnectedDriveAsNewVersion({
+        ArtifactID: event.artifactId,
+        VersionID: event.versionId ?? null,
+        CurrentUser: user,
+        Provider: provider,
+        StorageClientOverride: storageOverride,
+      });
+      this.ActiveVersionNumber = pulled.NewVersionNumber;
+      this.notifications.CreateSimpleNotification(
+        `Pulled Connected Drive update as v${pulled.NewVersionNumber} (comparing v${pulled.PreviousVersionNumber} vs v${pulled.NewVersionNumber})`,
+        'success',
+        4000,
+      );
+      await this.ReloadWorkspaceData();
+      this.RefreshViewerSubject.next({
+        artifactId: pulled.ArtifactID,
+        versionNumber: pulled.NewVersionNumber,
+      });
+      const panel = this.IsFullCanvasOpen ? this.FullCanvasViewerPanel : this.SplitViewerPanel;
+      if (panel) {
+        await panel.OpenVersionCompare(pulled.PreviousVersionNumber, pulled.NewVersionNumber);
+      }
+    } catch (err) {
+      this.notifications.CreateSimpleNotification(
+        err instanceof Error ? err.message : 'Connected Drive sync failed.',
+        'error',
+        4500,
+      );
+    } finally {
+      this.IsDriveSyncing = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  public ExitGuestShareView(): void {
+    this.ActiveGuestToken = null;
+    this.ActiveGuestShareSnapshot = null;
+    this.GuestShareVersionEntity = null;
+    this.GuestShareLoadError = null;
+    this.IsGuestShareLoading = false;
+    this.emitWorkspaceState();
+    this.cdr.detectChanges();
+  }
+
+  private async loadGuestShareSnapshot(token: string): Promise<void> {
+    const cleanToken = token.trim();
+    if (!cleanToken) {
+      this.ExitGuestShareView();
+      return;
+    }
+    this.IsGuestShareLoading = true;
+    this.GuestShareLoadError = null;
+    this.ActiveGuestShareSnapshot = null;
+    this.GuestShareVersionEntity = null;
+    this.cdr.detectChanges();
+
+    try {
+      const op = new ResolveGuestShareLinkOperation();
+      const res = await op.Execute(
+        { Token: cleanToken },
+        { provider: this.ProviderToUse ?? GraphQLDataProvider.Instance },
+      );
+      if (!res.Success || !res.Output?.Valid) {
+        this.GuestShareLoadError =
+          res.Output?.Reason ||
+          res.ErrorMessage ||
+          'This guest link is invalid, expired, or revoked.';
+        return;
+      }
+
+      const snapshot = res.Output;
+      const syntheticVersion = await this.ProviderToUse.GetEntityObject<MJArtifactVersionEntity>(
+        'MJ: Artifact Versions',
+        this.EffectiveUser,
+      );
+      if (snapshot.VersionID) {
+        syntheticVersion.ID = snapshot.VersionID;
+      }
+      if (snapshot.ArtifactID) {
+        syntheticVersion.ArtifactID = snapshot.ArtifactID;
+      }
+      syntheticVersion.VersionNumber = snapshot.VersionNumber ?? 1;
+      syntheticVersion.Name = snapshot.Title ?? 'Shared Artifact Snapshot';
+      syntheticVersion.ContentMode = 'Text';
+      syntheticVersion.Content = snapshot.Content ?? '';
+      syntheticVersion.Configuration = snapshot.Configuration ?? null;
+
+      this.ActiveGuestShareSnapshot = snapshot;
+      this.GuestShareVersionEntity = syntheticVersion;
+    } catch (err) {
+      this.GuestShareLoadError =
+        err instanceof Error ? err.message : 'Failed to load external guest snapshot.';
+    } finally {
+      this.IsGuestShareLoading = false;
+      this.cdr.detectChanges();
+    }
   }
 
   public OnViewerNavigateToLink(event: {
@@ -2211,6 +2645,15 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         .map((cid) => readableColById.get(cid))
         .filter((c): c is MJCollectionEntity => !!c);
 
+      const parsedConfig = ParseArtifactVersionConfiguration(latest?.Configuration);
+      const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+      const thumbPolicy = ResolveArtifactTypeThumbnailPolicy(
+        typeEntity ?? typeName,
+        allTypes.length > 0 ? allTypes : Array.from(typeById.values()),
+        driverClass,
+      );
+      const allowPreview = thumbPolicy.Enabled && thumbPolicy.Mode === 'Rendered';
+
       items.push({
         Id: art.ID,
         Name: art.Name,
@@ -2228,6 +2671,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         MimeType: latest?.MimeType ?? typeEntity?.ContentType ?? null,
         FileName: latest?.FileName ?? null,
         ContentSnippet: art.Description || latest?.Description || typeEntity?.Description || '',
+        PreviewSnapshot: allowPreview ? parsedConfig?.previewSnapshot ?? null : null,
+        ThumbnailDataUrl: allowPreview ? parsedConfig?.thumbnailDataUrl ?? null : null,
+        ThumbnailPolicyMode: thumbPolicy.Mode,
         UpdatedAt: art.__mj_UpdatedAt instanceof Date ? art.__mj_UpdatedAt : new Date(art.__mj_UpdatedAt),
         OwnerUserId: art.UserID,
         OwnerName: art.User || (isOwner ? 'You' : 'Shared'),
@@ -2389,16 +2835,19 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       ['all', 'collections', 'shared', 'starred', 'collection', 'drive'].includes(params.section)
     ) {
       this.NavigatorSection = params.section as LibraryNavigatorSection;
-    } else {
+    } else if (params.mode !== 'hub') {
       this.NavigatorSection = fallbackSection;
     }
 
-    if (params.collectionId) {
+    if (
+      params.collectionId &&
+      !params.driveId &&
+      (!params.section || params.section === 'collection')
+    ) {
       this.SelectedCollectionId = params.collectionId;
-      this.SurfaceMode = 'navigator';
       this.NavigatorSection = 'collection';
       this.expandAncestorsOf(params.collectionId);
-    } else {
+    } else if (!params.section || params.section !== 'collection') {
       this.SelectedCollectionId = null;
     }
 
@@ -2419,26 +2868,63 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
     if (params.artifactId) {
       this.ActiveArtifactId = params.artifactId;
-      const parsedVer = params.version ? Number(params.version) : undefined;
-      this.ActiveVersionNumber = parsedVer && Number.isFinite(parsedVer) ? parsedVer : undefined;
+      const rawVersion =
+        params.version != null ? String(params.version).trim().toLowerCase() : undefined;
+      const parsedVer =
+        rawVersion && rawVersion !== 'latest' ? Number(rawVersion) : undefined;
+      this.ActiveVersionNumber =
+        parsedVer !== undefined && Number.isFinite(parsedVer) && parsedVer > 0
+          ? Math.floor(parsedVer)
+          : undefined;
       this.IsFullCanvasOpen =
         params.canvas === '1' || params.canvas === 'true' || params.canvas === true || this.SurfaceMode === 'hub';
     } else {
       this.ActiveArtifactId = null;
       this.ActiveVersionNumber = undefined;
       this.IsFullCanvasOpen = false;
+      if (params.mode !== 'navigator' && this.SurfaceMode === 'navigator') {
+        this.SurfaceMode = 'hub';
+      }
+    }
+
+    const nextGuestToken = params.guestToken?.trim() || null;
+    if (nextGuestToken && nextGuestToken !== this.ActiveGuestToken) {
+      this.ActiveGuestToken = nextGuestToken;
+      void this.loadGuestShareSnapshot(nextGuestToken);
+    } else if (!nextGuestToken && this.ActiveGuestToken) {
+      this.ActiveGuestToken = null;
+      this.ActiveGuestShareSnapshot = null;
+      this.GuestShareVersionEntity = null;
+      this.GuestShareLoadError = null;
     }
   }
 
   private restoreUserPreferences(): void {
     const mode = UserInfoEngine.Instance.GetSetting(SETTING_SURFACE_MODE);
     if (mode === 'hub' || mode === 'navigator') {
-      this.SurfaceMode = mode;
       this.preferredSurfaceMode = mode;
+      // Only keep Navigator/Split active on startup if an artifact is already open
+      this.SurfaceMode = mode === 'navigator' && !this.ActiveArtifactId ? 'hub' : mode;
+    }
+    const itemViewMode = UserInfoEngine.Instance.GetSetting(SETTING_ITEM_VIEW_MODE);
+    if (itemViewMode === 'full' || itemViewMode === 'split') {
+      this.PreferredItemViewMode = itemViewMode;
     }
     const listStyle = UserInfoEngine.Instance.GetSetting(SETTING_LIST_STYLE);
     if (listStyle === 'cards' || listStyle === 'list') {
       this.ListStyle = listStyle;
+    }
+    const railCollapsed = UserInfoEngine.Instance.GetSetting(SETTING_LEFT_RAIL_COLLAPSED);
+    if (railCollapsed === '1' || railCollapsed === 'true') {
+      this.LeftRailCollapsed = true;
+    } else if (railCollapsed === '0' || railCollapsed === 'false') {
+      this.LeftRailCollapsed = false;
+    }
+    const showThumbPref = UserInfoEngine.Instance.GetSetting(SETTING_SHOW_CARD_THUMBNAILS);
+    if (showThumbPref === 'false' || showThumbPref === '0') {
+      this.ShowCardThumbnails = false;
+    } else if (showThumbPref === 'true' || showThumbPref === '1') {
+      this.ShowCardThumbnails = true;
     }
     const starredRaw = UserInfoEngine.Instance.GetSetting(SETTING_STARRED_IDS);
     if (starredRaw) {
@@ -2451,6 +2937,12 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         LogError(`LibraryWorkspaceComponent: failed to parse ${SETTING_STARRED_IDS}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+  }
+
+  public ToggleCardThumbnails(): void {
+    this.ShowCardThumbnails = !this.ShowCardThumbnails;
+    this.saveSettingSafe(SETTING_SHOW_CARD_THUMBNAILS, this.ShowCardThumbnails ? 'true' : 'false');
+    this.cdr.detectChanges();
   }
 
   private saveSettingSafe(key: string, value: string): void {
