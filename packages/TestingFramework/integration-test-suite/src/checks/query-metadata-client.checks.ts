@@ -113,7 +113,7 @@ async function checkQm3SavedQueryLeavesMetadataCurrent(): Promise<void> {
     }
     AssertEqual(await f.Reader.CheckToSeeIfRefreshNeeded(undefined, true), false, 'QM3 precondition: the reader is current');
 
-    const tag = `it175-${Date.now()}`;
+    const tag = `it177-${Date.now()}`;
     const category = await f.Writer.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', f.User);
     category.NewRecord();
     category.Name = `${tag} (safe to delete)`;
