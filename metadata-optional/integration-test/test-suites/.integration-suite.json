@@ -197,6 +197,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT176 - Open App Install From a Local Folder",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AE89BD61-438C-4D5B-AE9A-62E6BF8DA7BC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT22 - User Routines Dispatcher",
             "Sequence": 16,
             "Status": "Active"
