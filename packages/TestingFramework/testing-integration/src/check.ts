@@ -301,6 +301,17 @@ export interface ListsFixture {
 }
 
 /**
+ * Shared fixture for the `list-refresh` bundle: a throwaway User View on `MJ: Roles` and a list on the
+ * same entity, created in setup, linked and refreshed across the ordered LR checks, deleted after.
+ */
+export interface ListRefreshFixture {
+    ViewID: string;
+    ListID: string;
+    /** The routine the list's Refresh automatically created, once a check has turned it on. */
+    RoutineID: string | null;
+}
+
+/**
  * Shared fixture for the `entity-writes` bundle: the resolved entity IDs the write-side checks need
  * plus the FK-safe teardown accumulators. Nothing is created in Setup — each mutating check creates
  * exactly the throwaway rows it needs and appends their IDs here, so teardown can delete them in
@@ -709,6 +720,8 @@ export interface IntegrationCheckContext {
     RemoteOpWireProgressFixture?: RemoteOpWireProgressFixture;
     /** Shared fixture for the `lists` bundle. */
     ListsFixture?: ListsFixture;
+    /** Shared fixture for the `list-refresh` bundle. */
+    ListRefreshFixture?: ListRefreshFixture;
     /** Shared fixture for the `open-app-teardown` bundle. */
     OpenAppTeardownFixture?: OpenAppTeardownFixture;
     /** Shared fixture for the `entity-writes` bundle (client transport, mutating). */

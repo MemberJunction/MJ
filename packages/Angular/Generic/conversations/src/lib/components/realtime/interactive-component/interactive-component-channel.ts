@@ -23,6 +23,10 @@ import { SummarizeDataState, ToBoundedJson } from './component-data-state';
 import { ComponentInstanceEngine, InstanceLimitError, type ComponentInstanceRecord } from './component-instance-engine';
 import { ParseInteractiveComponentConfig } from './interactive-component-config';
 import { ChannelFrameCapture } from '@memberjunction/ng-realtime-channels';
+import {
+    IsCollaborativeArtifactDescriptor,
+    IsComponentArtifactDescriptor,
+} from '../artifact-workspace/artifact-workspace-types';
 import { RealtimeInteractiveComponentSurfaceComponent } from './realtime-interactive-component-surface.component';
 import { RunViewComponentArtifactSource } from './run-view-component-artifact-source';
 import {
@@ -492,7 +496,8 @@ export class InteractiveComponentChannel extends BaseRealtimeChannelClient<Realt
         if (artifacts.some((a) => this.Engine.FindByArtifact(a.ArtifactID))) {
             return true;
         }
-        return artifacts.length > 0 && ParseInteractiveComponentConfig(config).Config.AutoOpenDelegatedComponents;
+        const candidateArtifacts = artifacts.filter((a) => this.isDelegatedArtifactCandidate(a));
+        return candidateArtifacts.length > 0 && ParseInteractiveComponentConfig(config).Config.AutoOpenDelegatedComponents;
     }
 
     /**
@@ -504,10 +509,25 @@ export class InteractiveComponentChannel extends BaseRealtimeChannelClient<Realt
             const open = this.Engine.FindByArtifact(artifact.ArtifactID);
             if (open) {
                 await this.takeNewerVersion(open, artifact);
-            } else if (this.Config.AutoOpenDelegatedComponents) {
+                continue;
+            }
+            if (!this.isDelegatedArtifactCandidate(artifact)) {
+                continue;
+            }
+            if (this.Config.AutoOpenDelegatedComponents) {
                 await this.autoOpen(artifact);
             }
         }
+    }
+
+    private isDelegatedArtifactCandidate(artifact: ParsedDelegationArtifact): boolean {
+        if (IsCollaborativeArtifactDescriptor(artifact.ArtifactTypeName, artifact.DriverClass)) {
+            return false;
+        }
+        return (
+            IsComponentArtifactDescriptor(artifact.ArtifactTypeName, artifact.DriverClass) ||
+            (!artifact.ArtifactTypeName?.trim() && !artifact.DriverClass?.trim())
+        );
     }
 
     /** Opens a delegated artifact; one that is not a component is ignored (expected), anything else is logged. */

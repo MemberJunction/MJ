@@ -1,0 +1,162 @@
+<mj-page-layout>
+  <mj-page-header Title="Refreshes" Icon="fa-solid fa-rotate"
+    Subtitle="Every list that refreshes from a view or query, in one place. Schedules run as User Routines owned by each list's owner.">
+    @if (Attention.length > 0) {
+      <div meta>
+        <mj-stat-badge [Count]="Attention.length" Label="need attention" Variant="warning"></mj-stat-badge>
+      </div>
+    }
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()"></mj-refresh-button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (IsLoading && Summaries.length === 0) {
+      <div class="rf-loading"><mj-loading text="Loading self-updating lists..." size="medium"></mj-loading></div>
+    } @else if (ErrorMessage) {
+      <mj-alert Variant="error" Title="Couldn't load refreshes" [Message]="ErrorMessage"></mj-alert>
+    } @else if (Summaries.length === 0) {
+      <mj-empty-state Size="large" Icon="fa-solid fa-rotate"
+        Title="No self-updating lists yet"
+        Message="Link a list to a saved view or query from its Settings, and it shows up here.">
+      </mj-empty-state>
+    } @else {
+      <div class="rf-page">
+        <div class="rf-stats">
+          <div class="rf-stat">
+            <span class="rf-stat__value">{{ Stats.SelfUpdating }}</span>
+            <span class="rf-stat__label">Self-updating lists</span>
+          </div>
+          <div class="rf-stat">
+            <span class="rf-stat__value">{{ Stats.Scheduled }}</span>
+            <span class="rf-stat__label">On a schedule @if (Stats.ManualOnly > 0) {<span class="rf-muted">({{ Stats.ManualOnly }} manual only)</span>}</span>
+          </div>
+          <div class="rf-stat" [class.rf-stat--warning]="Stats.SourceChanged > 0">
+            <span class="rf-stat__value">{{ Stats.SourceChanged }}</span>
+            <span class="rf-stat__label">Source changed</span>
+          </div>
+          <div class="rf-stat" [class.rf-stat--danger]="Stats.Failed > 0">
+            <span class="rf-stat__value">{{ Stats.Failed }}</span>
+            <span class="rf-stat__label">Failed last run</span>
+          </div>
+        </div>
+
+        <div class="rf-columns">
+          <div class="rf-main">
+            @if (Attention.length > 0) {
+              <section class="rf-card">
+                <h3 class="rf-card__title">Needs attention</h3>
+                @for (s of Attention; track s.ListID) {
+                  <div [class]="'rf-attention rf-attention--' + StatusTone(s)">
+                    <div class="rf-attention__body">
+                      <span class="rf-pill" [class]="'rf-pill rf-pill--' + StatusTone(s)">{{ StatusLabel(s) }}</span>
+                      <div class="rf-attention__title">
+                        <strong>{{ s.ListName }}</strong>
+                        <span class="rf-muted"> · {{ s.EntityName }} · {{ SourceText(s) }}</span>
+                      </div>
+                      <p class="rf-attention__text">{{ AttentionText(s) }}</p>
+                    </div>
+                    <div class="rf-attention__actions">
+                      @if (IsSourceChange(s)) {
+                        <button mjButton variant="primary" size="sm" (click)="OpenList(s.ListID, s.ListName)">Review change</button>
+                      } @else {
+                        <button mjButton variant="secondary" size="sm" (click)="OpenList(s.ListID, s.ListName)">Open list</button>
+                        @if (s.Routine) {
+                          <button mjButton variant="outline" size="sm" (click)="OpenRoutine(s)">Open routine</button>
+                        }
+                      }
+                    </div>
+                  </div>
+                }
+              </section>
+            }
+
+            <section class="rf-card">
+              <div class="rf-card__header">
+                <h3 class="rf-card__title">All self-updating lists</h3>
+                <div class="rf-owner-filter" role="group" aria-label="Owner">
+                  <span class="rf-muted">Owner</span>
+                  <mj-filter-chip Label="Anyone" [Active]="OwnerFilter === 'anyone'" (Clicked)="SetOwnerFilter('anyone')"></mj-filter-chip>
+                  <mj-filter-chip Label="Me" [Active]="OwnerFilter === 'me'" (Clicked)="SetOwnerFilter('me')"></mj-filter-chip>
+                </div>
+              </div>
+              @if (VisibleSummaries.length === 0) {
+                <p class="rf-muted rf-empty">You don't own any self-updating lists.</p>
+              } @else {
+                <div class="rf-table-wrap">
+                  <table class="rf-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">List</th>
+                        <th scope="col">Source</th>
+                        <th scope="col">Mode</th>
+                        <th scope="col">Schedule</th>
+                        <th scope="col">Last refresh</th>
+                        <th scope="col">Next</th>
+                        <th scope="col">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (s of VisibleSummaries; track s.ListID) {
+                        <tr tabindex="0" (click)="OpenList(s.ListID, s.ListName)" (keydown.enter)="OpenList(s.ListID, s.ListName)">
+                          <td>
+                            <div class="rf-strong">{{ s.ListName }}</div>
+                            <div class="rf-muted">{{ s.EntityName }} · {{ s.OwnerName }}</div>
+                          </td>
+                          <td>
+                            <div>{{ s.SourceName || '—' }}</div>
+                            <div class="rf-muted">{{ s.SourceKind === 'query' ? 'Query' : 'View' }}{{ s.UseSnapshot ? ' (snapshot)' : '' }}</div>
+                          </td>
+                          <td>{{ s.RefreshMode }}</td>
+                          <td>{{ ScheduleText(s) }}</td>
+                          <td>{{ FormatWhen(s.LastRefreshedAt) }}</td>
+                          <td>{{ NextText(s) }}</td>
+                          <td><span [class]="'rf-pill rf-pill--' + StatusTone(s)">{{ StatusLabel(s) }}</span></td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </section>
+          </div>
+
+          <aside class="rf-side">
+            <section class="rf-card">
+              <h3 class="rf-card__title">Defaults for new lists</h3>
+              <p class="rf-muted rf-note">
+                Lists app settings. A new list's routine copies these when it's created; changing them later doesn't touch existing routines.
+              </p>
+              <dl class="rf-defaults">
+                <dt>Refresh frequency</dt><dd>{{ DefaultSchedule }}</dd>
+                <dt>Time zone</dt><dd>{{ DefaultTimezone }}</dd>
+                <dt>Mode</dt><dd>The list's own Refresh mode</dd>
+                <dt>Notify owner on</dt><dd>Failure (in-app)</dd>
+              </dl>
+              <p class="rf-muted rf-note">Only Lists app admins can edit these.</p>
+            </section>
+
+            <section class="rf-card">
+              <h3 class="rf-card__title">Next 24 hours</h3>
+              @if (Upcoming.length === 0) {
+                <p class="rf-muted rf-empty">No scheduled refreshes in the next 24 hours.</p>
+              } @else {
+                <ul class="rf-upcoming">
+                  @for (u of Upcoming; track u.ListID) {
+                    <li>
+                      <span class="rf-upcoming__when" [class.rf-upcoming__when--paused]="u.Paused">
+                        {{ u.Paused ? 'Paused' : (u.RunsAt | date: 'shortTime') }}
+                      </span>
+                      <button type="button" class="rf-link" (click)="OpenList(u.ListID, u.ListName)">{{ u.ListName }}</button>
+                    </li>
+                  }
+                </ul>
+              }
+            </section>
+          </aside>
+        </div>
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>

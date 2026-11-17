@@ -386,6 +386,9 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       // This is critical for plugins like ComponentArtifactViewerComponent that
       // need to process the artifactVersion in ngOnChanges before pluginLoaded fires
       this.componentRef.setInput('artifactVersion', this.artifactVersion);
+      if (this.Provider) {
+        this.componentRef.setInput('Provider', this.Provider);
+      }
       if (this.height !== undefined) {
         this.componentRef.setInput('height', this.height);
       }

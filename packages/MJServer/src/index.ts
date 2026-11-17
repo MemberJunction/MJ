@@ -6,7 +6,7 @@ import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, SetTypedQueryDriftMode } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
-import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
+import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { ResolveOriginSessionId } from './requestSessionContext.js';
@@ -44,7 +44,7 @@ import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, Postgr
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
-import { requireSystemUserDirective, publicDirective } from './directives/index.js';
+import { requireSystemUserDirective, publicDirective, ApplyBuiltInDirectivesTransformer } from './directives/index.js';
 import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
@@ -99,7 +99,8 @@ import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
-import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
+import { CronExpressionHelper, SchedulingEngine } from '@memberjunction/scheduling-engine';
+import { EventLoopStallMonitor } from './eventLoopStallMonitor.js';
 import {
   MJCompanyIntegrationEntity,
   MJIntegrationEntity,
@@ -277,6 +278,16 @@ export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/DocumentCollaborationResolver.js';
+export { SynthesizeArtifactFromSourcesServerOperation, LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
+export { ArtifactComplianceAuditServerOperation, LoadArtifactComplianceAuditOperation, WriteArtifactComplianceAudit } from './operations/ArtifactComplianceAuditHelper.js';
+export { ArtifactEvaluateAiFormulaServerOperation, LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
+export {
+    CreateGuestShareLinkServerOperation,
+    RevokeGuestShareLinkServerOperation,
+    ResolveGuestShareLinkServerOperation,
+    LoadArtifactGuestShareOperations,
+    SetGuestShareSigningSecret,
+} from './operations/ArtifactGuestShareServerOperations.js';
 export * from './collaboration/index.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
@@ -311,6 +322,14 @@ export * from './middleware/index.js';
 
 import { RegisterDataHook } from '@memberjunction/core';
 import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/core-entities-server';
+import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
+import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactComplianceAuditHelper.js';
+import { LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
+import { LoadArtifactGuestShareOperations } from './operations/ArtifactGuestShareServerOperations.js';
+LoadSynthesizeArtifactFromSourcesOperation();
+LoadArtifactComplianceAuditOperation();
+LoadArtifactEvaluateAiFormulaOperation();
+LoadArtifactGuestShareOperations();
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
@@ -375,6 +394,21 @@ function resolveServerVersion(): string | undefined {
   }
 }
 
+/**
+ * Labels for the background work executing in THIS process — the suspects named when the event
+ * loop stalls (MJ #5510). Agent runs come from the run watchdog, which tracks every run it guards;
+ * scheduled jobs from the scheduling engine's in-flight set, named where the engine has the job.
+ */
+function describeBackgroundWorkInFlight(): string[] {
+  const agentRuns = AgentRunWatchdog.Instance.TrackedRunIDs.map((id) => `agent run ${id}`);
+  const engine = SchedulingEngine.Instance;
+  const jobsByID = IndexByUUID(engine.ScheduledJobs);
+  const jobs = engine.InflightJobIDs.map((id) => {
+    const job = jobsByID.Get(id);
+    return job ? `scheduled job "${job.Name}" (${id})` : `scheduled job ${id}`;
+  });
+  return [...agentRuns, ...jobs];
+}
 
 /**
  * Replicate handoff-offer updates across server instances over Redis.
@@ -591,8 +625,11 @@ const setupComplete$ = new ReplaySubject(1);
     testClient.release();
     startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
 
-    // A read-only pool opened with the read-only login, as SQL Server has. Read-only per-request
-    // providers (TestQuerySQL and other caller-supplied SQL) share it instead of the primary pool.
+    // Two distinct read-only pools on the read-only login when configured:
+    // 1. Application read-only pool ('read-only'): sized up to apiMax / connectionPool.readOnlyMax
+    //    so concurrent RunView* traffic is never squeezed through a 10-connection bottleneck.
+    // 2. Bounded ad-hoc read-only pool ('adhoc-read-only'): capped at ADHOC_READ_ONLY_MAX_CONNECTIONS
+    //    for untrusted caller-supplied SQL (ExecuteAdhocQuery, TestQuerySQL, GetDataContextData).
     const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
     if (pgReadOnlyCredentials) {
       // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
@@ -611,7 +648,15 @@ const setupComplete$ = new ReplaySubject(1);
         readOnlyTestClient.release();
       }
       PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
-      startupLog.LogIf('verbose', 'Read-only PostgreSQL pool has been initialized.');
+
+      const adhocReadOnlyPgPool = new pg.default.Pool({
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'adhoc-read-only')),
+        types: MJPostgresTypes,
+      });
+      adhocReadOnlyPgPool.on('error', (err) => console.error('[PostgreSQL adhoc read-only pool] Idle connection error (connection evicted):', err.message));
+      PostgreSQLReadOnlyPool.Instance.AdhocPool = adhocReadOnlyPgPool;
+
+      startupLog.LogIf('verbose', 'Read-only PostgreSQL pools (application & ad-hoc) have been initialized.');
     }
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
@@ -1267,7 +1312,7 @@ const setupComplete$ = new ReplaySubject(1);
     resolvers: allResolvers,
     validate: false,
     scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
-    emitSchemaFile: websiteRunFromPackage !== 1,
+    emitSchemaFile: process.env.MJ_EMIT_SCHEMA_GQL === '1' && websiteRunFromPackage !== 1,
     pubSub,
   });
   const buildMs = performance.now() - tBuild;
@@ -1296,8 +1341,7 @@ const setupComplete$ = new ReplaySubject(1);
 
   const tTransform = performance.now();
   schema = ApplyRootVariablesLoggingMiddleware(schema);
-  schema = requireSystemUserDirective.transformer(schema);
-  schema = publicDirective.transformer(schema);
+  schema = ApplyBuiltInDirectivesTransformer(schema);
 
   // Apply middleware-contributed schema transformers (after built-in directive transformers)
   for (const transformer of mwSchemaTransformers) {
@@ -1478,7 +1522,18 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
   // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
-  MountHealthcheckRoute(app);
+  //
+  // The body carries the latest event-loop sample (MJ #5510) so a probe or poller can tell a server
+  // that just stalled from one that is fine. It cannot answer DURING a stall — nothing on a blocked
+  // loop can — so a timed-out probe is itself the stall signal.
+  const eventLoopMonitor = configInfo.eventLoopMonitor.enabled
+    ? new EventLoopStallMonitor({
+        SampleIntervalMs: configInfo.eventLoopMonitor.sampleIntervalMs,
+        WarnThresholdMs: configInfo.eventLoopMonitor.warnThresholdMs,
+        GetInFlightWork: describeBackgroundWorkInFlight,
+      })
+    : null;
+  MountHealthcheckRoute(app, eventLoopMonitor);
 
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
   for (const mw of mwPreAuth) {
@@ -1854,6 +1909,16 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.SetScheduledJobCount(scheduledJobsService.GetStatus().activeJobs);
   }
   startupLog.PrintSummary();
+
+  // Watch for event-loop stalls (MJ #5510). Started after boot so the synchronous work of startup
+  // itself is not reported as a stall; stopped by the gracefulShutdown drain below.
+  if (eventLoopMonitor) {
+    eventLoopMonitor.Start();
+    ShutdownRegistry.Instance.Register({
+      ShutdownName: 'EventLoopStallMonitor',
+      Shutdown: () => eventLoopMonitor.Stop(),
+    });
+  }
 
   const resumeUser = UserCache.Instance.GetSystemUser();
 

@@ -15,7 +15,6 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
 // MJ
 import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
@@ -136,7 +135,6 @@ import {
     DashboardViewerModule,
     AngularSplitModule,
     ExplorerSettingsModule,
-    FileStorageModule,
     EntityFormDialogModule,
     RecordSelectorModule,
     ResourcePermissionsModule,

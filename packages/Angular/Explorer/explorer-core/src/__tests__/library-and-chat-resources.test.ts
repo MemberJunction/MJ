@@ -84,7 +84,7 @@ vi.mock('@memberjunction/ai-engine-base', () => ({ AIEngineBase: { Instance: {} 
 
 import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
-import type { LibraryWorkspaceState, SearchResult } from '@memberjunction/ng-conversations';
+import type { LibraryExternalRouteParams, LibraryWorkspaceState, SearchResult } from '@memberjunction/ng-conversations';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ArtifactResource } from '../lib/resource-wrappers/artifact-resource.component';
 import { ChatCollectionsResource } from '../lib/resource-wrappers/chat-collections-resource.component';
@@ -181,6 +181,34 @@ describe('LibraryResource, ChatCollectionsResource & FileBrowserResource isolati
       collectionId: 'col-99',
       artifactId: 'art-77',
       version: '2',
+    });
+  });
+
+  it('forwards guestToken query parameter cleanly to LibraryWorkspaceComponent for Frozen external sharing', () => {
+    const resource = Object.create(LibraryResource.prototype) as LibraryResource;
+    const appliedExternal: LibraryExternalRouteParams[] = [];
+
+    Object.assign(resource as object, {
+      Data: { Configuration: {} },
+      hasHydratedOnce: false,
+      pendingRouteParams: null,
+      isApplyingExternalParams: false,
+      hasNotifiedLoadComplete: false,
+      Workspace: {
+        ApplyExternalRouteState: (params: LibraryExternalRouteParams) => appliedExternal.push(params),
+      },
+      NotifyLoadComplete: vi.fn(),
+    });
+
+    (
+      resource as unknown as {
+        OnQueryParamsChanged: (p: Record<string, string>, s: 'popstate' | 'deeplink') => void;
+      }
+    ).OnQueryParamsChanged({ guestToken: 'tok-frozen-42' }, 'deeplink');
+
+    expect(appliedExternal).toHaveLength(1);
+    expect(appliedExternal[0]).toMatchObject({
+      guestToken: 'tok-frozen-42',
     });
   });
 });

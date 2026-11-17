@@ -27,6 +27,8 @@ import {
     GetDiagnosticContext,
     IsDiagnosticCaptureSuppressed,
     RunViewWithCacheCheckParams,
+    Metadata,
+    LocalCacheManager,
 } from '@memberjunction/core';
 
 
@@ -217,7 +219,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const fkField = relatedEntityInfo.Fields.find(f => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
             if (fkField?.EntityIDFieldName && fkField.EntityIDFieldName.trim().length > 0) continue;
 
-            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
             const pksToProject = relatedEntityInfo.PrimaryKeys?.length ? relatedEntityInfo.PrimaryKeys : entityInfo.PrimaryKeys;
             const pkParts: string[] = [];
             for (const pk of pksToProject) {
@@ -225,8 +226,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             }
             const primaryKeySelectString = pkParts.join(" || '" + CompositeKey.DefaultFieldDelimiter + "' || ");
             const sourceObject = this.resolveDependencySourceObject(relatedEntityInfo, [dep.FieldName]);
-            const rawVal = String(compositeKey.GetValueByIndex(0) ?? '');
-            const escapedVal = quotes.length > 0 ? rawVal.replace(/'/g, "''") : rawVal;
+            const pkLiteral = this.RenderPrimaryKeyLiteral(entityInfo.FirstPrimaryKey, compositeKey.GetValueByIndex(0), entityInfo.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
 
             if (sSQL.length > 0) sSQL += ' UNION ALL ';
             sSQL += 'SELECT '
@@ -237,7 +237,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + 'false AS "IsSoftLink", '
                 + 'NULL AS "EntityIDFieldName" '
                 + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, sourceObject) + ' '
-                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + escapedVal + quotes;
+                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + pkLiteral;
         }
         return sSQL;
     }
@@ -421,6 +421,36 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             && ka.Database === kb.Database
             && ka.User === kb.User
             && ka.Password === kb.Password;
+    }
+
+    /**
+     * Returns `true` when global metadata and `LocalCacheManager` are warm in memory and `pool`
+     * is non-null so {@link ConfigureFromGlobalSync} can configure a per-request provider without I/O.
+     */
+    public static CanConfigureFromGlobalSync(pool: pg.Pool | null | undefined): boolean {
+        if (!pool || !Metadata.Provider || !LocalCacheManager.Instance.IsInitialized) { // global-provider-ok: fast-path readiness check for global metadata
+            return false;
+        }
+        return (Metadata.Provider.AllMetadata?.AllEntities?.length ?? 0) > 0; // global-provider-ok: verifies global metadata entities are warm
+    }
+
+    /**
+     * Synchronously configures a per-request `PostgreSQLDataProvider` sharing `existingPool` when
+     * global metadata and `LocalCacheManager` are already warm in memory. Returns `false` if any
+     * dependency is not yet warm, allowing callers to fall back to async {@link ConfigWithSharedPool}.
+     */
+    public ConfigureFromGlobalSync(configData: PostgreSQLProviderConfigData, existingPool: pg.Pool): boolean {
+        if (!existingPool) {
+            return false;
+        }
+        if (!this.ConfigureFromGlobalMetadataSync(configData)) {
+            return false;
+        }
+        this._configData = configData;
+        this._schemaName = configData.MJCoreSchemaName || '__mj';
+        this._connectionManager.InitializeWithExistingPool(existingPool, configData.ConnectionConfig);
+        RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
+        return true;
     }
 
     /**

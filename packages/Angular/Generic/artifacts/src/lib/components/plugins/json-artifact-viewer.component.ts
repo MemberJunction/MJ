@@ -19,22 +19,34 @@ import { CreateJsonSnapshot } from '../../snapshot-helpers';
     <div class="json-artifact-viewer" [ngClass]="cssClass">
       <!-- Display toolbar -->
       <div class="display-toolbar">
-        <button class="btn-icon" title="Copy Content" (click)="onCopy()">
-          <i class="fas fa-copy"></i> Copy
-        </button>
-        @if (displayHtml) {
-          <button class="btn-icon" title="Open in New Window" (click)="openInNewWindow()">
-            <i class="fas fa-external-link-alt"></i> New Window
-          </button>
-          <button class="btn-icon" title="Print" (click)="printHtml()">
-            <i class="fas fa-print"></i> Print
-          </button>
+        @if (displayHtml && displayMarkdown) {
+          <div class="display-mode-toggle">
+            <button class="btn-icon" [class.active]="ActiveDisplayMode === 'html'" (click)="SetDisplayMode('html')">
+              <i class="fas fa-desktop"></i> Interactive Mockup
+            </button>
+            <button class="btn-icon" [class.active]="ActiveDisplayMode === 'markdown'" (click)="SetDisplayMode('markdown')">
+              <i class="fas fa-file-alt"></i> Plan &amp; Architecture
+            </button>
+          </div>
         }
+        <div class="display-toolbar-actions">
+          <button class="btn-icon" title="Copy Content" (click)="onCopy()">
+            <i class="fas fa-copy"></i> Copy
+          </button>
+          @if (displayHtml && (!displayMarkdown || ActiveDisplayMode === 'html')) {
+            <button class="btn-icon" title="Open in New Window" (click)="openInNewWindow()">
+              <i class="fas fa-external-link-alt"></i> New Window
+            </button>
+            <button class="btn-icon" title="Print" (click)="printHtml()">
+              <i class="fas fa-print"></i> Print
+            </button>
+          }
+        </div>
       </div>
 
       <!-- Display content: priority order = displayHtml > displayMarkdown > JSON editor -->
       <div class="display-content">
-        @if (displayHtml && htmlBlobUrl) {
+        @if (displayHtml && htmlBlobUrl && (!displayMarkdown || ActiveDisplayMode === 'html')) {
           <!-- Sandboxed iframe for rich HTML using blob URL.
                SECURITY: never add allow-same-origin here — a blob: URL inherits the app origin,
                so allow-same-origin + allow-scripts on LLM-produced HTML is in-origin XSS
@@ -47,7 +59,7 @@ import { CreateJsonSnapshot } from '../../snapshot-helpers';
             class="html-iframe"
             (load)="onIframeLoad()">
           </iframe>
-        } @else if (displayMarkdown) {
+        } @else if (displayMarkdown && (!displayHtml || ActiveDisplayMode === 'markdown')) {
           <div class="markdown-content">
             <mj-markdown [data]="displayMarkdown"
                          [enableCollapsibleHeadings]="true"
@@ -77,11 +89,23 @@ import { CreateJsonSnapshot } from '../../snapshot-helpers';
 
     .display-toolbar {
       display: flex;
-      justify-content: flex-end;
+      justify-content: space-between;
+      align-items: center;
       gap: 8px;
       padding: 8px;
       background: var(--mj-bg-surface-sunken);
       border-bottom: 1px solid var(--mj-border-default);
+    }
+
+    .display-mode-toggle {
+      display: flex;
+      gap: 6px;
+    }
+
+    .display-toolbar-actions {
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
     }
 
     .btn-icon {
@@ -96,6 +120,13 @@ import { CreateJsonSnapshot } from '../../snapshot-helpers';
       align-items: center;
       gap: 6px;
       transition: all 0.2s;
+    }
+
+    .btn-icon.active {
+      background: var(--mj-brand-primary, #2563eb);
+      border-color: var(--mj-brand-primary, #2563eb);
+      color: var(--mj-text-inverse, #ffffff);
+      font-weight: 600;
     }
 
     .btn-icon:hover {
@@ -190,6 +221,13 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public set htmlBlobUrl(value: SafeResourceUrl | null) {
     this.HtmlBlobUrl = value;
   }
+  public ActiveDisplayMode: 'html' | 'markdown' = 'html';
+
+  public SetDisplayMode(mode: 'html' | 'markdown'): void {
+    this.ActiveDisplayMode = mode;
+    this.cdr.detectChanges();
+  }
+
   private versionAttributes: MJArtifactVersionAttributeEntity[] = [];
   private unsafeBlobUrl: string | null = null; // Keep unsafe URL for cleanup
 
@@ -278,6 +316,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         // Parse attribute values - fix "null" string bug
         this.DisplayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
         this.DisplayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
+        this.ActiveDisplayMode = this.DisplayHtml ? 'html' : 'markdown';
 
         // Clean up double-escaped characters in HTML (from LLM generation)
         if (this.DisplayHtml) {
@@ -472,8 +511,11 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   OnCopy(): void {
-    // Copy based on what's being displayed - prioritize displayHtml
-    const content = this.DisplayHtml || this.DisplayMarkdown || this.JsonContent;
+    // Copy based on what's currently active in the display view
+    const content =
+      (this.ActiveDisplayMode === 'markdown' && this.DisplayMarkdown)
+        ? this.DisplayMarkdown
+        : (this.DisplayHtml || this.DisplayMarkdown || this.JsonContent);
     if (content) {
       navigator.clipboard.writeText(content).then(() => {
         console.log('✅ Copied content to clipboard');

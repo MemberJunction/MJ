@@ -1,5 +1,5 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef, HostListener } from '@angular/core';
-import { RegisterClass , UUIDsEqual, MJGlobal } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual, MJGlobal, IndexByUUID } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJListCategoryEntity } from '@memberjunction/core-entities';
 import { MJListEntity, MJListEntityExtended, MJListDetailEntity, MJUserFavoriteEntity, UserInfoEngine } from '@memberjunction/core-entities';
@@ -8,11 +8,23 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
+import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult, ListRefreshService } from '@memberjunction/ng-list-management';
+import type { ListRefreshSummary } from '@memberjunction/ng-list-management';
 import { CapabilitiesForLevel, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists-base';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
 import { buildListBrowseAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
+import {
+  AttentionMessage,
+  CountRefreshFilters,
+  MatchesRefreshFilter,
+  NeedsAttention,
+  RefreshFilterCounts,
+  RefreshStatusLabel,
+  RefreshStatusTone,
+  SourceLabel,
+  type ListRefreshFilter,
+} from '../lists-refresh-status';
 interface BrowseListItem {
   list: MJListEntity;
   itemCount: number;
@@ -20,6 +32,8 @@ interface BrowseListItem {
   ownerName: string;
   isOwner: boolean;
   sharingInfo?: ListSharingSummary;
+  /** Set for a list linked to a source view or query, once loaded. */
+  refreshSummary?: ListRefreshSummary;
 }
 
 interface CategoryNode {
@@ -37,7 +51,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
   selector: 'mj-lists-browse-resource',
   template: `
     <mj-page-layout>
-      <mj-page-header Title="Lists" Icon="fa-solid fa-list-check">
+      <mj-page-header Title="Lists" Icon="fa-solid fa-list-check" [Subtitle]="BrowseSubtitle">
         <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
         <div meta>
           <mj-stat-badge
@@ -130,6 +144,29 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           (Action)="clearFilters()" />
       }
     
+      <!-- Self-updating lists that need the owner's attention -->
+      @if (!isLoading && AttentionItems.length > 0) {
+        <div class="refresh-attention">
+          <mj-alert Variant="warning"
+            [Title]="AttentionItems.length + (AttentionItems.length === 1 ? ' list needs' : ' lists need') + ' your attention'">
+            <ul class="refresh-attention__list">
+              @for (item of AttentionItems; track item.list.ID) {
+                <li>
+                  <button type="button" class="refresh-attention__name" (click)="openList(item)">{{item.list.Name}}</button>:
+                  {{AttentionText(item)}}
+                </li>
+              }
+            </ul>
+            <div class="refresh-attention__actions">
+              <button mjButton variant="secondary" size="sm" (click)="OpenRefreshesPage()">
+                <i class="fa-solid fa-rotate"></i> Review in Refreshes
+              </button>
+              <button mjButton variant="flat" size="sm" (click)="ShowAttentionLists()">Show only these</button>
+            </div>
+          </mj-alert>
+        </div>
+      }
+
       <!-- Results Content -->
       @if (!isLoading && filteredLists.length > 0) {
         <div class="browse-content">
@@ -179,6 +216,12 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                             <span class="list-name">{{item.list.Name}}</span>
                             @if (item.list.Description) {
                               <span class="list-desc">{{item.list.Description}}</span>
+                            }
+                            @if (IsSelfUpdating(item)) {
+                              <span class="refresh-line">
+                                <span [class]="'refresh-pill refresh-pill--' + RefreshTone(item)">{{RefreshLabel(item)}}</span>
+                                <span class="refresh-source">{{RefreshSource(item)}}</span>
+                              </span>
                             }
                           </div>
                         </div>
@@ -270,6 +313,12 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                         {{item.itemCount}} item{{item.itemCount !== 1 ? 's' : ''}}
                       </span>
                     </div>
+                    @if (IsSelfUpdating(item)) {
+                      <div class="refresh-line refresh-line--card">
+                        <span [class]="'refresh-pill refresh-pill--' + RefreshTone(item)">{{RefreshLabel(item)}}</span>
+                        <span class="refresh-source">{{RefreshSource(item)}}</span>
+                      </div>
+                    }
                     <!-- Tag chips (Phase 4). Read-only on cards; click adds the
                          tag to the filter row above. We stop propagation on
                          the wrapper so clicks on chips don't also fire the
@@ -362,6 +411,10 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                       {{item.entityName}} &middot; {{item.itemCount}} items
                       @if (!item.isOwner) {
                         <span> &middot; {{item.ownerName}}</span>
+                      }
+                      @if (IsSelfUpdating(item)) {
+                        <span> &middot; </span>
+                        <span [class]="'refresh-pill refresh-pill--' + RefreshTone(item)">{{RefreshLabel(item)}}</span>
                       }
                     </span>
                   </div>
@@ -616,6 +669,81 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
     </mj-page-layout>
     `,
   styles: [`
+    /* Self-updating lists: attention banner and refresh status pills */
+    .refresh-attention {
+      margin-bottom: 16px;
+    }
+    .refresh-attention__list {
+      margin: 6px 0 10px;
+      padding-left: 18px;
+      font-size: 13px;
+    }
+    .refresh-attention__list li + li {
+      margin-top: 4px;
+    }
+    .refresh-attention__name {
+      padding: 0;
+      border: none;
+      background: none;
+      font: inherit;
+      font-weight: 600;
+      color: var(--mj-text-link);
+      cursor: pointer;
+    }
+    .refresh-attention__name:hover {
+      text-decoration: underline;
+    }
+    .refresh-attention__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .refresh-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      min-width: 0;
+    }
+    .refresh-line--card {
+      margin-top: 8px;
+    }
+    .refresh-source {
+      font-size: 12px;
+      color: var(--mj-text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .refresh-pill {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .refresh-pill--success {
+      color: var(--mj-status-success-text);
+      background: var(--mj-status-success-bg);
+      border-color: var(--mj-status-success-border);
+    }
+    .refresh-pill--warning {
+      color: var(--mj-status-warning-text);
+      background: var(--mj-status-warning-bg);
+      border-color: var(--mj-status-warning-border);
+    }
+    .refresh-pill--danger {
+      color: var(--mj-status-error-text);
+      background: var(--mj-status-error-bg);
+      border-color: var(--mj-status-error-border);
+    }
+
     :host {
       display: flex;
       flex-direction: column;
@@ -2254,7 +2382,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     private tabService: TabService,
     private notificationService: MJNotificationService,
     private elementRef: ElementRef,
-    private listSharingService: ListSharingService
+    private listSharingService: ListSharingService,
+    private listRefreshService: ListRefreshService
   ) {
     super();
   }
@@ -2333,7 +2462,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
    * what the user is looking at.
    */
   private publishAgentContext(): void {
-    this.navigationService.SetAgentContext(this, buildListBrowseAgentContext({
+    this.navigationService.SetAgentContext(this, {
+      ...buildListBrowseAgentContext({
       SearchTerm: this.SearchTerm,
       ViewMode: this.ViewMode,
       AllListCount: this.AllLists.length,
@@ -2346,7 +2476,12 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       SelectedOwner: this.SelectedOwner,
       SelectedEntity: this.SelectedEntity,
       ShowOnlyFavorites: this.ShowOnlyFavorites,
-    }));
+      }),
+      // Self-updating lists: the refresh filter and the owner's lists that need attention.
+      RefreshFilter: this.RefreshFilter,
+      SelfUpdatingListCount: this.RefreshCounts.SelfUpdating,
+      AttentionListNames: this.AttentionItems.slice(0, 25).map(i => `${i.list.Name} (${this.RefreshLabel(i)})`),
+    });
   }
 
   /**
@@ -2617,6 +2752,9 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
       // Load sharing info in the background
       this.loadSharingInfo();
+
+      // Refresh status of self-updating lists, in the background
+      void this.loadRefreshSummaries();
     } catch (error) {
       console.error('Error loading lists:', error);
     } finally {
@@ -2721,6 +2859,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       selectedOwner: this.SelectedOwner,
       selectedEntity: this.SelectedEntity,
       favorites: this.ShowOnlyFavorites ? 'favorites' : 'all',
+      refresh: this.RefreshFilter,
     };
   }
 
@@ -2756,6 +2895,17 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
           { text: 'Favorites only', value: 'favorites' },
         ],
       },
+      {
+        key: 'refresh',
+        type: 'chips',
+        label: 'Refresh',
+        chipOptions: [
+          { text: `All (${this.RefreshCounts.All})`, value: 'all' },
+          { text: `Self-updating (${this.RefreshCounts.SelfUpdating})`, value: 'self-updating' },
+          { text: `Static (${this.RefreshCounts.Static})`, value: 'static' },
+          { text: `Needs attention (${this.RefreshCounts.Attention})`, value: 'attention' },
+        ],
+      },
     ];
   }
 
@@ -2769,6 +2919,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.SelectedOwner  = (values['selectedOwner']  as string) ?? 'mine';
     this.SelectedEntity = (values['selectedEntity'] as string) ?? 'all';
     this.ShowOnlyFavorites = values['favorites'] === 'favorites';
+    this.RefreshFilter = toRefreshFilter(values['refresh']);
     this.persistFavoritesFilter();
     this.applyFilters();
     this.buildCategoryTree();
@@ -2785,6 +2936,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.SelectedOwner = 'mine';
     this.SelectedEntity = 'all';
     this.ShowOnlyFavorites = false;
+    this.RefreshFilter = 'all';
     this.persistFavoritesFilter();
     this.applyFilters();
     this.buildCategoryTree();
@@ -2800,6 +2952,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     let n = 0;
     if (this.SelectedOwner  && this.SelectedOwner  !== 'mine') n++;
     if (this.SelectedEntity && this.SelectedEntity !== 'all')  n++;
+    if (this.RefreshFilter !== 'all') n++;
     return n;
   }
 
@@ -2813,6 +2966,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.SelectedOwner = 'mine';
     this.SelectedEntity = 'all';
     this.ShowOnlyFavorites = false;
+    this.RefreshFilter = 'all';
     this.persistFavoritesFilter();
     this.TagFilters = [];
     void this.recomputeTagMembership();
@@ -2887,6 +3041,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.SelectedEntity = 'all';
     this.SelectedOwner = 'mine';
     this.ShowOnlyFavorites = false;
+    this.RefreshFilter = 'all';
     this.persistFavoritesFilter();
     this.TagFilters = [];
     void this.recomputeTagMembership(); // empty tagFilters → clears tagFilteredListIds + re-applies
@@ -2896,6 +3051,88 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   /** @deprecated Use {@link ClearFilters}. */
   clearFilters() {
     return this.ClearFilters();
+  }
+
+  // ================================================================
+  // Self-updating lists: refresh status, filter and attention banner
+  // ================================================================
+
+  /** The browse page's refresh filter (Filter panel → Refresh). */
+  public RefreshFilter: ListRefreshFilter = 'all';
+
+  /** Counts for the Refresh filter's chips, over every list the user can see. */
+  public RefreshCounts: RefreshFilterCounts = { All: 0, SelfUpdating: 0, Static: 0, Attention: 0 };
+
+  /** The user's own lists whose source changed or whose last refresh failed. */
+  public AttentionItems: BrowseListItem[] = [];
+
+  /** "24 lists you own or can edit. 9 refresh from a view or query." */
+  public get BrowseSubtitle(): string {
+    const total = this.AllLists.length;
+    const linked = this.RefreshCounts.SelfUpdating;
+    const lists = `${total} list${total === 1 ? '' : 's'} you own or can see.`;
+    return linked > 0 ? `${lists} ${linked} refresh${linked === 1 ? 'es' : ''} from a view or query.` : lists;
+  }
+
+  public RefreshLabel(item: BrowseListItem): string {
+    return item.refreshSummary ? RefreshStatusLabel(item.refreshSummary.Status) : '';
+  }
+
+  public RefreshTone(item: BrowseListItem): string {
+    return item.refreshSummary ? RefreshStatusTone(item.refreshSummary.Status) : 'neutral';
+  }
+
+  public RefreshSource(item: BrowseListItem): string {
+    return item.refreshSummary ? SourceLabel(item.refreshSummary) : '';
+  }
+
+  public AttentionText(item: BrowseListItem): string {
+    return item.refreshSummary ? AttentionMessage(item.refreshSummary) : '';
+  }
+
+  /** True for a list linked to a source, which shows a refresh status pill. */
+  public IsSelfUpdating(item: BrowseListItem): boolean {
+    return !!item.refreshSummary && item.refreshSummary.Status !== 'Static';
+  }
+
+  /** Banner action: open the Lists app's Refreshes page. */
+  public async OpenRefreshesPage(): Promise<void> {
+    const appId = this.Data?.Configuration?.applicationId || undefined;
+    await this.navigationService.OpenNavItemByName('Refreshes', undefined, appId);
+  }
+
+  /** Banner action: show only the lists that need attention. */
+  public ShowAttentionLists(): void {
+    this.SelectedOwner = 'all';
+    this.RefreshFilter = 'attention';
+    this.applyFilters();
+    this.buildCategoryTree();
+    this.publishAgentContext();
+    this.cdr.detectChanges();
+  }
+
+  /** Loads the refresh status of every self-updating list and attaches it to its row. */
+  private async loadRefreshSummaries(): Promise<void> {
+    try {
+      this.listRefreshService.Provider = this.ProviderToUse;
+      const summaries = await this.listRefreshService.LoadSummariesAsync();
+      const byListID = IndexByUUID(summaries, (s: ListRefreshSummary) => s.ListID);
+      for (const item of this.AllLists) {
+        item.refreshSummary = byListID.Get(item.list.ID);
+      }
+      this.recomputeRefreshState();
+      this.applyFilters();
+      this.buildCategoryTree();
+    } catch (error) {
+      console.error('Error loading list refresh status:', error);
+    } finally {
+      this.cdr.detectChanges();
+    }
+  }
+
+  private recomputeRefreshState(): void {
+    this.RefreshCounts = CountRefreshFilters(this.AllLists.map(i => i.refreshSummary?.Status ?? null));
+    this.AttentionItems = this.AllLists.filter(i => i.isOwner && !!i.refreshSummary && NeedsAttention(i.refreshSummary.Status));
   }
 
   private applyFilters() {
@@ -2934,6 +3171,11 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     if (this.ShowOnlyFavorites) {
       const favs = this.FavoriteListIds;
       result = result.filter(item => favs.has(item.list.ID));
+    }
+
+    // Refresh filter: self-updating / static / needs attention.
+    if (this.RefreshFilter !== 'all') {
+      result = result.filter(item => MatchesRefreshFilter(this.RefreshFilter, item.refreshSummary?.Status ?? null));
     }
 
     // Sort
@@ -3830,4 +4072,9 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   async GetResourceIconClass(_data: ResourceData): Promise<string> {
     return 'fa-solid fa-list-check';
   }
+}
+
+/** A Filter panel value as a refresh filter; anything unknown means all. */
+function toRefreshFilter(value: unknown): ListRefreshFilter {
+  return value === 'self-updating' || value === 'static' || value === 'attention' ? value : 'all';
 }
