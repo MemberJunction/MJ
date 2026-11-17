@@ -11,9 +11,13 @@ import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { AgentRunner } from '@memberjunction/ai-agents';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import {
+    BaseRemotableOperation,
+    DispatchRemoteOperationInProcess,
     type EntityInfo,
     type IMetadataProvider,
     type IRunViewProvider,
@@ -24,6 +28,7 @@ import {
     WellKnownUserSource,
 } from '@memberjunction/core';
 import {
+    ARTIFACT_EVALUATE_AI_FORMULA_KEY,
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
     BuildBlockIdentityBinding,
@@ -42,12 +47,25 @@ import {
 } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { Base64ToBytes, BytesToBase64, UUIDsEqual } from '@memberjunction/global';
+import { Base64ToBytes, BytesToBase64, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     LoadArtifactFileStorageBytes,
     RegisterServerArtifactFileBytesLoader,
 } from '../resolvers/ArtifactFileResolver.js';
-import { ListArtifactGuestShareLinksForOwner } from '../operations/ArtifactGuestShareServerOperations.js';
+import {
+    ArtifactEvaluateAiFormulaServerOperation,
+} from '../operations/ArtifactEvaluateAiFormulaServerOperation.js';
+import {
+    ArtifactComplianceAuditServerOperation,
+} from '../operations/ArtifactComplianceAuditHelper.js';
+import {
+    CreateGuestShareLinkServerOperation,
+    ListArtifactGuestShareLinksForOwner,
+    RevokeGuestShareLinkServerOperation,
+} from '../operations/ArtifactGuestShareServerOperations.js';
+import {
+    SynthesizeArtifactFromSourcesServerOperation,
+} from '../operations/SynthesizeArtifactFromSourcesServerOperation.js';
 import { configInfo } from '../config.js';
 
 vi.mock('../config.js', () => ({
@@ -1613,6 +1631,483 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             } else {
                 process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = prevSecret;
             }
+        }
+    });
+
+    it('N1, N2, N5, S2, S3, S6, S9b: enforces per-op Magic Link flags, cross-replica API key ticket fidelity, pendingStructs delta check, AI formula prompt-model allowlist + per-cell rate quota, S3 binding check, Consumed guest invite continuity, and S9b fast-path + room cap', async () => {
+        // 1. N1: All 5 artifact remote operations opt into DisallowMagicLinkScope === true
+        for (const Cls of [
+            ArtifactComplianceAuditServerOperation,
+            ArtifactEvaluateAiFormulaServerOperation,
+            SynthesizeArtifactFromSourcesServerOperation,
+            CreateGuestShareLinkServerOperation,
+            RevokeGuestShareLinkServerOperation,
+        ]) {
+            const inst = new Cls();
+            expect(inst.DisallowMagicLinkScope).toBe(true);
+        }
+
+        // 2. N2: Cross-replica ticket replay via RedisTicketReplayStore-compatible store preserves ApiKeyHash and fails closed when missing
+        const prevSecret = process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+        process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = '0123456789abcdef0123456789abcdef';
+        try {
+            const nonceSet = new Set<string>();
+            const metaMap = new Map<string, string>();
+            const sharedStore = {
+                ConsumeNonce: (n: string) => {
+                    if (nonceSet.has(n)) return false;
+                    nonceSet.add(n);
+                    return true;
+                },
+                SetTicketData: (n: string, dataJson: string) => {
+                    metaMap.set(n, dataJson);
+                },
+                GetAndDeleteTicketData: (n: string) => {
+                    const v = metaMap.get(n) ?? null;
+                    metaMap.delete(n);
+                    return v;
+                },
+            };
+            const nodeA = new ArtifactCollaborationServer();
+            const nodeB = new ArtifactCollaborationServer();
+            nodeA.SetTicketReplayStore(sharedStore);
+            nodeB.SetTicketReplayStore(sharedStore);
+
+            const ticketUser = {
+                ID: '11111111-1111-4111-8111-111111111111',
+                Name: 'API Key User',
+                Email: 'apikey@example.com',
+                IsActive: true,
+            } as UserInfo;
+            vi.spyOn(UserCache.Instance, 'Users', 'get').mockReturnValue([ticketUser]);
+
+            const sharedArtId = 'abab1111-2222-4333-8444-555566668888';
+            const issued = nodeA.IssueTicket({
+                ArtifactID: sharedArtId,
+                User: ticketUser,
+                ApiKeyHash: 'cross-replica-key-hash-abc',
+            });
+            // Simulate cross-replica consumption where Node B did not mint the ticket locally
+            (nodeA as unknown as { _tickets: Map<string, object> })._tickets.clear();
+            const nodeBConsumed = await nodeB.ConsumeTicket(issued.Ticket, sharedArtId);
+            expect(nodeBConsumed).not.toBeNull();
+            expect(nodeBConsumed?.ApiKeyHash).toBe('cross-replica-key-hash-abc');
+
+            // If metadata store lacks SetTicketData/GetAndDeleteTicketData on cross-replica, fail closed!
+            const legacyStore = { ConsumeNonce: () => true };
+            const nodeC = new ArtifactCollaborationServer();
+            nodeC.SetTicketReplayStore(legacyStore);
+            const issuedNoMeta = nodeA.IssueTicket({
+                ArtifactID: sharedArtId,
+                User: ticketUser,
+                ApiKeyHash: 'must-not-downgrade',
+            });
+            (nodeA as unknown as { _tickets: Map<string, object> })._tickets.clear();
+            const downgradedRes = await nodeC.ConsumeTicket(issuedNoMeta.Ticket, sharedArtId);
+            expect(downgradedRes).toBeNull();
+
+            // 3. N5 + S9b: Unlocked room fast-path allows normal edits; room.Doc with pre-existing pendingStructs accepts normal updates while rejecting new out-of-order frames
+            const collab = new ArtifactCollaborationServer();
+            const roomDoc = new Y.Doc();
+            roomDoc.getText('content').insert(0, 'Hello unlocked world');
+            const fakeRoom = {
+                ArtifactID: sharedArtId,
+                RoomKey: sharedArtId,
+                ProviderKey: 'default',
+                Provider: {} as IMetadataProvider,
+                HasActiveLocks: false,
+                DelegateEntityID: null,
+                DelegateRecordID: null,
+                Doc: roomDoc,
+                Awareness: { setLocalState: () => undefined } as never,
+                Connections: new Set(),
+                DirtyWorkingState: false,
+                DirtyVersion: false,
+                CompactionRetryCount: 0,
+                LastModifiedByUser: ticketUser,
+                BaseVersionID: null,
+                BaseVersionNumber: 1,
+                BaseVersionText: 'Hello unlocked world',
+                BaseConfiguration: null,
+                LastAppliedRestoreVersionID: null,
+                LastAppliedRestoreVersionNumber: 0,
+                LastReconciledOobVersionID: null,
+                LastReconciledOobContent: null,
+                LastReconciledOobMergeResult: null,
+                RoomEpoch: 'e1',
+                FlushQueue: Promise.resolve(true),
+                CompactionQueue: Promise.resolve({ Saved: false }),
+                WorkingStateTimer: null,
+                IdleDisposeTimer: null,
+                UnsubscribeRelay: null,
+                DocUpdateListener: () => undefined,
+                AwarenessUpdateListener: () => undefined,
+                ProtectedAgentClientIDs: new Set<number>(),
+                AgentPresenceEntries: new Map(),
+                RelayedAgentPresenceTimers: new Map(),
+            };
+            const fakeConn = {
+                User: ticketUser,
+                CanEdit: true,
+                IsOwner: false,
+                ControlledClientIDs: new Set<number>(),
+                Alive: true,
+            };
+
+            // Fast-path write on unlocked doc
+            const peerDoc = new Y.Doc();
+            Y.applyUpdate(peerDoc, Y.encodeStateAsUpdate(roomDoc));
+            const svBefore = Y.encodeStateVector(peerDoc);
+            peerDoc.getText('content').insert(0, 'Prefix ');
+            const normalUpdate = Y.encodeStateAsUpdate(peerDoc, svBefore);
+            const isBlockedFn = collab as unknown as {
+                isIncomingUpdateBlockedByLocks: (r: typeof fakeRoom, c: typeof fakeConn, u: Uint8Array) => { Allowed: boolean; Reason?: string };
+            };
+            expect(isBlockedFn.isIncomingUpdateBlockedByLocks(fakeRoom, fakeConn, normalUpdate).Allowed).toBe(true);
+
+            // Inject pre-existing pendingStructs into roomDoc (simulating out-of-order relay arrival)
+            const missingClientDoc = new Y.Doc();
+            missingClientDoc.getText('content').insert(0, 'A');
+            const missingSv1 = Y.encodeStateVector(missingClientDoc);
+            missingClientDoc.getText('content').insert(1, 'B');
+            const gappedUpdate = Y.encodeStateAsUpdate(missingClientDoc, missingSv1);
+            Y.applyUpdate(roomDoc, gappedUpdate);
+            fakeRoom.HasActiveLocks = true; // Force full probeDoc verification path
+            // Normal in-order frame from peerDoc MUST STILL SUCCEED despite roomDoc having pendingStructs!
+            expect(isBlockedFn.isIncomingUpdateBlockedByLocks(fakeRoom, fakeConn, normalUpdate).Allowed).toBe(true);
+            // A second gapped frame adding NEW pendingStructs MUST BE REJECTED!
+            const anotherMissingDoc = new Y.Doc();
+            anotherMissingDoc.getText('content').insert(0, 'X');
+            const anotherSv1 = Y.encodeStateVector(anotherMissingDoc);
+            anotherMissingDoc.getText('content').insert(1, 'Y');
+            const secondGappedUpdate = Y.encodeStateAsUpdate(anotherMissingDoc, anotherSv1);
+            const gappedRes = isBlockedFn.isIncomingUpdateBlockedByLocks(fakeRoom, fakeConn, secondGappedUpdate);
+            expect(gappedRes.Allowed).toBe(false);
+            expect(gappedRes.Reason).toMatch(/out-of-order/i);
+        } finally {
+            if (prevSecret === undefined) {
+                delete process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+            } else {
+                process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = prevSecret;
+            }
+        }
+
+        // 4. S2: ArtifactEvaluateAiFormulaServerOperation via real AIPromptRunner (no SetCompletionRunnerForTest):
+        // rejects unlinked ModelOverride, allows linked PromptModels override, and enforces per-cell quota (>200 cells)
+        ArtifactEvaluateAiFormulaServerOperation.ResetRateLimitForTest();
+        ArtifactEvaluateAiFormulaServerOperation.SetCompletionRunnerForTest(null);
+        const promptId = 'aaaa1111-1111-4111-8111-111111111111';
+        const allowedModelId = 'bbbb1111-1111-4111-8111-111111111111';
+        const unlinkedModelId = 'cccc1111-1111-4111-8111-111111111111';
+        const s2ArtId = 'dddd1111-1111-4111-8111-111111111111';
+        const s2User = { ID: 'eeee1111-1111-4111-8111-111111111111', Name: 'S2 Tester', Email: 's2@example.com', IsActive: true } as UserInfo;
+        const mockS2Provider = {
+            Entities: [],
+            RouteOperation: async () => ({ Success: false }),
+        } as unknown as IMetadataProvider;
+
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: s2ArtId,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+            Reason: 'Test',
+        });
+        vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue();
+        vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([
+            { ID: promptId, Name: 'Spreadsheet MJ.AI Formula Evaluator' } as never,
+        ]);
+        vi.spyOn(AIEngine.Instance, 'Models', 'get').mockReturnValue([
+            { ID: allowedModelId, Name: 'Allowed-Mini', APIName: 'allowed-mini', IsActive: true, AIModelType: 'LLM' } as never,
+            { ID: unlinkedModelId, Name: 'Expensive-Opus', APIName: 'expensive-opus', IsActive: true, AIModelType: 'LLM' } as never,
+        ]);
+        vi.spyOn(AIEngine.Instance, 'PromptModels', 'get').mockReturnValue([
+            { ID: 'pm-1', PromptID: promptId, ModelID: allowedModelId, Status: 'Active' } as never,
+        ]);
+        const promptExecSpy = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockResolvedValue({
+            success: true,
+            rawResult: '42',
+        } as never);
+
+        // Unlinked ModelOverride fails per-cell error while linked PromptModels override succeeds
+        const badOverrideOut = await DispatchRemoteOperationInProcess<
+            { ArtifactID: string; ModelOverride?: string; Cells: Array<{ SheetID: string; Address: string; Prompt: string; ContextValuesJSON: string; InputHash: string }> },
+            { Results: Array<{ Value: string; ErrorMessage?: string | null }> }
+        >(
+            ARTIFACT_EVALUATE_AI_FORMULA_KEY,
+            {
+                ArtifactID: s2ArtId,
+                ModelOverride: 'Expensive-Opus',
+                Cells: [{ SheetID: 's1', Address: 'A1', Prompt: 'Sum', ContextValuesJSON: '[1]', InputHash: 'h1' }],
+            },
+            {},
+            mockS2Provider,
+            s2User,
+        );
+        expect(badOverrideOut.ErrorMessage).toBeUndefined();
+        expect(badOverrideOut.Success).toBe(true);
+        expect(badOverrideOut.Output?.Results[0]?.ErrorMessage).toContain('not configured for prompt');
+        expect(promptExecSpy).not.toHaveBeenCalled();
+
+        const goodOverrideOut = await DispatchRemoteOperationInProcess<
+            { ArtifactID: string; ModelOverride?: string; Cells: Array<{ SheetID: string; Address: string; Prompt: string; ContextValuesJSON: string; InputHash: string }> },
+            { Results: Array<{ Value: string; ErrorMessage?: string | null }> }
+        >(
+            ARTIFACT_EVALUATE_AI_FORMULA_KEY,
+            {
+                ArtifactID: s2ArtId,
+                ModelOverride: 'Allowed-Mini',
+                Cells: [{ SheetID: 's1', Address: 'A1', Prompt: 'Sum', ContextValuesJSON: '[1]', InputHash: 'h2' }],
+            },
+            {},
+            mockS2Provider,
+            s2User,
+        );
+        expect(goodOverrideOut.ErrorMessage).toBeUndefined();
+        expect(goodOverrideOut.Success).toBe(true);
+        expect(goodOverrideOut.Output?.Results[0]?.Value).toBe('42');
+        expect(promptExecSpy).toHaveBeenCalledTimes(1);
+
+        // Per-cell quota blocks bursts >200 cells/min even with <30 requests!
+        for (let b = 0; b < 3; b++) {
+            const batch45 = Array.from({ length: 45 }, (_v, i) => ({
+                SheetID: 's1',
+                Address: `B${i + 1}`,
+                Prompt: `Batch ${b}-${i}`,
+                ContextValuesJSON: '[]',
+                InputHash: `hb-${b}-${i}`,
+            }));
+            await DispatchRemoteOperationInProcess(
+                ARTIFACT_EVALUATE_AI_FORMULA_KEY,
+                { ArtifactID: s2ArtId, Cells: batch45 },
+                {},
+                mockS2Provider,
+                s2User,
+            );
+        }
+        const exceededBatch = Array.from({ length: 45 }, (_v, i) => ({
+            SheetID: 's1',
+            Address: `C${i + 1}`,
+            Prompt: `Overflow ${i}`,
+            ContextValuesJSON: '[]',
+            InputHash: `ho-${i}`,
+        }));
+        const quotaOut = await DispatchRemoteOperationInProcess(
+            ARTIFACT_EVALUATE_AI_FORMULA_KEY,
+            { ArtifactID: s2ArtId, Cells: exceededBatch },
+            {},
+            mockS2Provider,
+            s2User,
+        );
+        expect(quotaOut.Success).toBe(true);
+        // After exceeding 200 cells (1 + 1 + 45*3 + 45 = 182; one more 25-cell batch pushes >200)
+        const finalBatch = Array.from({ length: 25 }, (_v, i) => ({
+            SheetID: 's1',
+            Address: `D${i + 1}`,
+            Prompt: `Overflow2 ${i}`,
+            ContextValuesJSON: '[]',
+            InputHash: `ho2-${i}`,
+        }));
+        const rateRes = await DispatchRemoteOperationInProcess(
+            ARTIFACT_EVALUATE_AI_FORMULA_KEY,
+            { ArtifactID: s2ArtId, Cells: finalBatch },
+            {},
+            mockS2Provider,
+            s2User,
+        );
+        expect(rateRes.Success).toBe(false);
+        expect(rateRes.ResultCode).toBe('RATE_LIMITED');
+
+        // 5. S3: VerifyFrozenBlockSnapshot binds hostArtifactId cleanly
+        const prevFrozenSecret = process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+        process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = '0123456789abcdef0123456789abcdef';
+        try {
+            const docResolver = new DocumentCollaborationResolver();
+            const hostArtA = '11112222-3333-4444-8555-666677778888';
+            const hostArtB = '99992222-3333-4444-8555-666677778888';
+            vi.spyOn(docResolver as unknown as { CheckAPIKeyScopeAuthorization: () => Promise<void> }, 'CheckAPIKeyScopeAuthorization').mockResolvedValue(undefined);
+            vi.spyOn(docResolver as unknown as { resolveProvider: () => IMetadataProvider }, 'resolveProvider').mockReturnValue(mockS2Provider);
+            vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+                ArtifactID: hostArtA,
+                CanRead: true,
+                CanEdit: false,
+                CanDelete: false,
+                CanShare: false,
+                Source: 'Owner',
+                Reason: 'Test',
+            });
+            vi.spyOn(DocumentLiveBlockEngine.Instance, 'ExecuteBlock').mockResolvedValueOnce({
+                BlockID: 'b-s3',
+                Success: true,
+                Columns: ['ID'],
+                Rows: [{ ID: '1' }],
+                RowCount: 1,
+                RenderedMarkdown: '| ID |\n| --- |\n| 1 |',
+                RefreshedAt: new Date().toISOString(),
+            });
+            const snapPayload = await DocumentLiveBlockEngine.Instance.FreezeBlock(
+                {
+                    BlockID: 'b-s3',
+                    Kind: 'Query',
+                    Mode: 'Live',
+                    Title: 'Test',
+                    QueryName: 'Q',
+                },
+                s2User,
+                true,
+                undefined,
+                undefined,
+                hostArtA,
+            );
+            expect(snapPayload.Success).toBe(true);
+            const snapJson = JSON.stringify(snapPayload.UpdatedSpec);
+            const verifyCtx = {
+                userPayload: { email: s2User.Email, userRecord: s2User, sessionId: 's-s3' },
+                providers: [{ type: 'Read-Write', provider: mockS2Provider }],
+            } as AppContext;
+            const okHostVerify = await docResolver.VerifyFrozenBlockSnapshot(snapJson, verifyCtx, hostArtA);
+            expect(okHostVerify.Valid).toBe(true);
+            const crossHostVerify = await docResolver.VerifyFrozenBlockSnapshot(snapJson, verifyCtx, hostArtB);
+            expect(crossHostVerify.Valid).toBe(false);
+            expect(crossHostVerify.ErrorMessage).toMatch(/different artifact|binding/i);
+        } finally {
+            if (prevFrozenSecret === undefined) {
+                delete process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+            } else {
+                process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = prevFrozenSecret;
+            }
+        }
+
+        // 6. S6: ResolveGuestArtifactSnapshotForSession allows Status === 'Consumed' for already-issued guest session JWTs
+        const prevGuestEnabled = configInfo.magicLink.artifactGuestSharing.enabled;
+        const prevSecretS6 = process.env.MJ_MAGIC_LINK_JWT_SECRET;
+        configInfo.magicLink.artifactGuestSharing.enabled = true;
+        process.env.MJ_MAGIC_LINK_JWT_SECRET = 'test-magic-secret-0123456789abcdef0123456789';
+        try {
+            const guestArtId = 'f1111111-2222-4333-8444-555566667777';
+            const guestVerId = 'f2222222-2222-4333-8444-555566667777';
+            const inviteId = 'f3333333-2222-4333-8444-555566667777';
+            const guestUser = {
+                ID: 'f4444444-2222-4333-8444-555566667777',
+                Name: 'Guest',
+                Email: 'guest@magic-link.local',
+                IsActive: true,
+                IsMagicLinkAnonymous: true,
+                MagicLinkScope: {
+                    InviteID: inviteId,
+                    ResourceType: 'Artifacts',
+                    ResourceID: guestArtId,
+                },
+            } as UserInfo;
+            const consumedProvider = {
+                Entities: [],
+                RunViews: vi.fn(async (batch: RunViewParams[]) => {
+                    if (batch[0]?.EntityName === 'MJ: Artifact Versions') {
+                        return [
+                            {
+                                Success: true,
+                                Results: [{ ID: guestVerId, ArtifactID: guestArtId, VersionNumber: 1, Content: '# Frozen Guest Report', Configuration: '{}' }],
+                            },
+                            {
+                                Success: true,
+                                Results: [{ ID: guestArtId, Name: 'Report', TypeID: 'type-md' }],
+                            },
+                        ];
+                    }
+                    return [
+                        {
+                            Success: true,
+                            Results: [{
+                                ID: inviteId,
+                                Kind: 'resource-share',
+                                IdentityMode: 'anonymous',
+                                ResourceID: guestArtId,
+                                Status: 'Consumed',
+                                ExpiresAt: new Date(Date.now() + 60_000),
+                                CreatedByUserID: s2User.ID,
+                            }],
+                        },
+                        {
+                            Success: true,
+                            Results: [{ ID: 'link-1', MagicLinkInviteID: inviteId, ArtifactID: guestArtId, ArtifactVersionID: guestVerId }],
+                        },
+                    ];
+                }),
+            } as unknown as IMetadataProvider;
+            vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(s2User);
+            vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(s2User);
+            vi.spyOn(UserCache.Instance, 'Users', 'get').mockReturnValue([s2User]);
+            vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue();
+            vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue([
+                { ID: 'type-md', Name: 'Markdown Document', DriverClass: 'MarkdownArtifactViewerPlugin' } as never,
+            ]);
+            vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+                ArtifactID: guestArtId,
+                CanRead: true,
+                CanEdit: false,
+                CanDelete: false,
+                CanShare: true,
+                Source: 'Owner',
+                Reason: 'Inviter',
+            });
+            const guestRes = await ResolveGuestArtifactSnapshotForSession(
+                {
+                    email: 'guest@magic-link.local',
+                    userRecord: guestUser,
+                    sessionId: 'guest-s1',
+                    magicLinkScopes: [{ resourceType: 'Artifacts', resourceId: guestArtId, inviteId }],
+                },
+                consumedProvider,
+            );
+            expect(guestRes.ErrorMessage).toBeUndefined();
+            expect(guestRes.Valid).toBe(true);
+            expect(guestRes.Content).toContain('Frozen Guest Report');
+        } finally {
+            configInfo.magicLink.artifactGuestSharing.enabled = prevGuestEnabled;
+            if (prevSecretS6 === undefined) {
+                delete process.env.MJ_MAGIC_LINK_JWT_SECRET;
+            } else {
+                process.env.MJ_MAGIC_LINK_JWT_SECRET = prevSecretS6;
+            }
+        }
+
+        // 7. S9b: Per-user active room quota rejects >50 simultaneous non-idle rooms for the same user
+        const quotaServer = new ArtifactCollaborationServer();
+        const roomsMap = (quotaServer as unknown as { _rooms: Map<string, Record<string, unknown>> })._rooms;
+        const quotaUser = {
+            ID: '90909090-1111-4111-8111-111111111111',
+            Name: 'Quota Tester',
+            Email: 'quota@example.com',
+            IsActive: true,
+        } as UserInfo;
+        const createdRoomKeys: string[] = [];
+        for (let i = 0; i < 50; i++) {
+            const rk = `quota-art-${i}`;
+            createdRoomKeys.push(rk);
+            roomsMap.set(rk, {
+                ArtifactID: rk,
+                RoomKey: rk,
+                ProviderKey: 'default',
+                CreatedByUserID: quotaUser.ID,
+                DirtyWorkingState: true,
+                DirtyVersion: true,
+                Connections: new Set(),
+                Doc: new Y.Doc(),
+                Awareness: { setLocalState: () => undefined },
+            });
+        }
+        const createAndHydrate = quotaServer as unknown as {
+            createAndHydrateRoom: (id: string, user: UserInfo, prov: IMetadataProvider) => Promise<unknown>;
+        };
+        await expect(
+            createAndHydrate.createAndHydrateRoom('quota-art-51', quotaUser, mockS2Provider),
+        ).rejects.toThrow(/per-user active collaboration room limit/i);
+        for (const rk of createdRoomKeys) {
+            const r = roomsMap.get(rk) as { Doc?: Y.Doc } | undefined;
+            r?.Doc?.destroy();
+            roomsMap.delete(rk);
         }
     });
 });

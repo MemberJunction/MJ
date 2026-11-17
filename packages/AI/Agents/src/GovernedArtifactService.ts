@@ -1538,6 +1538,13 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
     if (ops.length === 0) {
       return { success: false, errorMessage: 'MutateGovernedArtifact requires either tool or operations.' };
     }
+    if (ops.length > 100) {
+      return {
+        success: false,
+        artifactId: state.artifactId,
+        errorMessage: `MutateGovernedArtifact operations exceed the maximum allowed 100 operations per request (received ${ops.length}).`,
+      };
+    }
 
     if (state.contentMode === 'File' || Boolean(state.originalXlsxBytes)) {
       const refusedOp = ops.find((op) => STRUCTURAL_SPREADSHEET_TOOLS.has(op.tool));
@@ -2666,10 +2673,11 @@ export class GovernedArtifactService extends BaseSingleton<GovernedArtifactServi
         }
       }
 
-      // fls-guard: fullCellEntries hashed for digest ONLY; highlightLines use persisted sheet structure & static non-=MJ cells (`B7`).
+      // fls-guard: fullCellEntries hashed for digest ONLY; highlightLines use sanitized workbook without viewer-scoped live/AI data (`B7b`).
       const fullCellEntries = this.buildSpreadsheetCellDigestEntries(wb);
+      const sanitizedWb = engine.CloneWorkbookWithoutViewerScopedData(wb);
       const highlightLines: string[] = [];
-      for (const ws of wb.Worksheets) {
+      for (const ws of sanitizedWb.Worksheets) {
         highlightLines.push(`Sheet[${ws.Name}]: liveTables=${ws.LiveTables.length}`);
         const liveCellCoords = new Set<string>();
         for (const tbl of ws.LiveTables) {

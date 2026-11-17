@@ -1030,4 +1030,74 @@ describe('MJCollectionEntityServer, Permissions, Attributes & Paged TotalRowCoun
         expect(await authorizedDetach.entity.Save()).toBe(true);
         expect(superSaveSpy).toHaveBeenCalledTimes(1);
     });
+
+    it('S7: allows ancestor tree owner to move collaborator-created sub-collection within their owned tree', async () => {
+        const COL_ROOT_ID = 'ffffffff-ffff-4fff-8fff-fffffffffff1';
+        const COL_NEW_PARENT_ID = 'ffffffff-ffff-4fff-8fff-fffffffffff2';
+        const COL_COLLAB_SUB_ID = 'ffffffff-ffff-4fff-8fff-fffffffffff3';
+
+        const provider = createMockSecurityProvider(async (params) => {
+            if (params.EntityName === 'MJ: Collections') {
+                const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+                if (filter.includes(COL_COLLAB_SUB_ID)) {
+                    return {
+                        Success: true,
+                        Results: [{ ID: COL_COLLAB_SUB_ID, OwnerID: OTHER_USER_ID, ParentID: COL_ROOT_ID }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: ''
+                    };
+                }
+                if (filter.includes(COL_NEW_PARENT_ID)) {
+                    return {
+                        Success: true,
+                        Results: [{ ID: COL_NEW_PARENT_ID, OwnerID: OWNER_ID, ParentID: COL_ROOT_ID }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: ''
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: [{ ID: COL_ROOT_ID, OwnerID: OWNER_ID, ParentID: null }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+        });
+
+        const superSaveSpy = vi
+            .spyOn(Object.getPrototypeOf(MJCollectionEntityServer.prototype), 'Save')
+            .mockResolvedValue(true);
+
+        // Even though the child sub-collection's direct OwnerID is OTHER_USER_ID (a collaborator who created it)
+        // and ResolveCollectionAncestryPermissions on the child says Source='CollectionPermission',
+        // OWNER_ID owns both the ancestor root (COL_ROOT_ID) and target parent (COL_NEW_PARENT_ID).
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolveCollectionAncestryPermissions').mockResolvedValue({
+            CollectionID: COL_COLLAB_SUB_ID,
+            CanRead: true,
+            CanEdit: true,
+            CanDelete: true,
+            CanShare: true,
+            Source: 'CollectionPermission',
+            Reason: 'Inherited collaborator permission'
+        });
+
+        const treeOwner = makeUser(OWNER_ID, 'owner@example.com');
+        const ownerMoveAttempt = createCollectionEntity(provider, treeOwner, {
+            id: COL_COLLAB_SUB_ID,
+            ownerId: OTHER_USER_ID,
+            parentId: COL_NEW_PARENT_ID,
+            oldOwnerId: OTHER_USER_ID,
+            oldParentId: COL_ROOT_ID,
+            isSaved: true
+        });
+        expect(await ownerMoveAttempt.entity.Save()).toBe(true);
+        expect(superSaveSpy).toHaveBeenCalledTimes(1);
+    });
 });

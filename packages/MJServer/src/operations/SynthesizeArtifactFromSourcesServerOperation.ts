@@ -64,6 +64,10 @@ function getSynthesisScopeCache(): WeakMap<object, CachedSynthesisScopeEntry> {
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY)
 export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArtifactFromSourcesOperation {
+    public override get DisallowMagicLinkScope(): boolean {
+        return true;
+    }
+
     public override async GetScopeResourceIds(
         input: SynthesizeArtifactFromSourcesInput,
         context?: { provider?: IMetadataProvider; user?: UserInfo },
@@ -89,6 +93,9 @@ export class SynthesizeArtifactFromSourcesServerOperation extends SynthesizeArti
         user: UserInfo,
         context?: RemoteOpServerContext,
     ): Promise<boolean> {
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            throw new RemoteOperationError('FORBIDDEN', 'Magic Link sessions cannot synthesize artifacts.');
+        }
         const provider = context?.provider;
         if (!provider) {
             throw new RemoteOperationError('NO_PROVIDER', 'Metadata provider is required.');

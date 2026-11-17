@@ -20,7 +20,7 @@ import {
     ArtifactPermissionEngine,
     MAX_AI_FORMULA_BATCH_CELLS,
 } from '@memberjunction/core-entities';
-import { GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass } from '@memberjunction/global';
+import { GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Pluggable LLM completion callback used by {@link ArtifactEvaluateAiFormulaServerOperation}
@@ -42,10 +42,12 @@ const MAX_AI_FORMULA_BATCH_TOTAL_BYTES = 262_144;
 const MAX_AI_FORMULA_CONCURRENCY = 6;
 const AI_FORMULA_RATE_WINDOW_MS = 60_000;
 const AI_FORMULA_MAX_REQUESTS_PER_USER = 30;
+const AI_FORMULA_MAX_CELLS_PER_USER = 200;
 const AI_FORMULA_MAX_RATE_KEYS = 5_000;
 
 interface AiFormulaRateLimitEntry {
-    Count: number;
+    RequestCount: number;
+    CellCount: number;
     ResetAt: number;
 }
 
@@ -57,10 +59,11 @@ function getAiFormulaRateLimitMap(): Map<string, AiFormulaRateLimitEntry> {
     return store[GLOBAL_KEY_AI_FORMULA_RATE_LIMIT] as Map<string, AiFormulaRateLimitEntry>;
 }
 
-function consumeAiFormulaUserRateQuota(userId: string): boolean {
+function consumeAiFormulaUserRateQuota(userId: string, cellCount: number): boolean {
     const key = NormalizeUUID(userId);
     const map = getAiFormulaRateLimitMap();
     const now = Date.now();
+    const normalizedCells = Math.max(1, cellCount);
     if (map.size >= AI_FORMULA_MAX_RATE_KEYS) {
         for (const [k, entry] of map.entries()) {
             if (entry.ResetAt <= now) {
@@ -77,13 +80,24 @@ function consumeAiFormulaUserRateQuota(userId: string): boolean {
     }
     const existing = map.get(key);
     if (!existing || existing.ResetAt <= now) {
-        map.set(key, { Count: 1, ResetAt: now + AI_FORMULA_RATE_WINDOW_MS });
+        if (normalizedCells > AI_FORMULA_MAX_CELLS_PER_USER) {
+            return false;
+        }
+        map.set(key, {
+            RequestCount: 1,
+            CellCount: normalizedCells,
+            ResetAt: now + AI_FORMULA_RATE_WINDOW_MS,
+        });
         return true;
     }
-    if (existing.Count >= AI_FORMULA_MAX_REQUESTS_PER_USER) {
+    if (
+        existing.RequestCount >= AI_FORMULA_MAX_REQUESTS_PER_USER ||
+        existing.CellCount + normalizedCells > AI_FORMULA_MAX_CELLS_PER_USER
+    ) {
         return false;
     }
-    existing.Count += 1;
+    existing.RequestCount += 1;
+    existing.CellCount += normalizedCells;
     return true;
 }
 
@@ -106,6 +120,10 @@ function computeServerAiFormulaInputHash(
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_EVALUATE_AI_FORMULA_KEY)
 export class ArtifactEvaluateAiFormulaServerOperation extends ArtifactEvaluateAiFormulaOperation {
+    public override get DisallowMagicLinkScope(): boolean {
+        return true;
+    }
+
     public override GetScopeResourceIds(input: ArtifactEvaluateAiFormulaInput): string[] {
         return input?.ArtifactID ? [input.ArtifactID] : [];
     }
@@ -133,6 +151,9 @@ export class ArtifactEvaluateAiFormulaServerOperation extends ArtifactEvaluateAi
         user: UserInfo,
         context?: RemoteOpServerContext,
     ): Promise<boolean> {
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            throw new RemoteOperationError('FORBIDDEN', 'Magic Link sessions cannot evaluate =MJ.AI() spreadsheet formulas.');
+        }
         const provider = context?.provider;
         if (!provider) {
             throw new RemoteOperationError('NO_PROVIDER', 'Metadata provider is required.');
@@ -183,10 +204,10 @@ export class ArtifactEvaluateAiFormulaServerOperation extends ArtifactEvaluateAi
                 perms.Reason || `Edit permission on artifact '${artifactId}' is required to evaluate =MJ.AI() formulas.`,
             );
         }
-        if (!user?.ID || !consumeAiFormulaUserRateQuota(user.ID)) {
+        if (!user?.ID || !consumeAiFormulaUserRateQuota(user.ID, input.Cells.length)) {
             throw new RemoteOperationError(
                 'RATE_LIMITED',
-                'Too many =MJ.AI() formula evaluation requests. Please wait a minute before retrying.',
+                'Too many =MJ.AI() formula evaluation requests or cells. Please wait a minute before retrying.',
             );
         }
         return true;
@@ -307,15 +328,23 @@ export class ArtifactEvaluateAiFormulaServerOperation extends ArtifactEvaluateAi
 
             const requestedName = (modelOverride ?? '').trim().toLowerCase();
             if (requestedName) {
+                const allowedModelIds = new UUIDSet(
+                    (AIEngine.Instance.PromptModels ?? [])
+                        .filter((pm) => UUIDsEqual(pm.PromptID, promptEntity.ID) && pm.Status === 'Active')
+                        .map((pm) => pm.ModelID),
+                );
                 const matchedModel = (AIEngine.Instance.Models ?? []).find(
                     (m) =>
                         m.IsActive &&
                         m.AIModelType?.trim().toLowerCase() === 'llm' &&
                         ((m.Name ?? '').trim().toLowerCase() === requestedName ||
-                            (m.APIName ?? '').trim().toLowerCase() === requestedName),
+                            (m.APIName ?? '').trim().toLowerCase() === requestedName) &&
+                        allowedModelIds.Has(m.ID),
                 );
                 if (!matchedModel) {
-                    throw new Error(`Requested model override '${modelOverride}' is not an active, configured LLM.`);
+                    throw new Error(
+                        `Requested model override '${modelOverride}' is not configured for prompt '${AI_FORMULA_PROMPT_NAME}'.`,
+                    );
                 }
                 params.override = { modelId: matchedModel.ID };
             }

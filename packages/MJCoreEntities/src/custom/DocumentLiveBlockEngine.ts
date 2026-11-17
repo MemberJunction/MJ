@@ -2207,12 +2207,14 @@ export function ValidateFrozenBlockSnapshot(
                     ErrorMessage: 'FrozenSnapshot is missing required identity Binding metadata.'
                 };
             }
-            if (normExpected.ArtifactID && normActual.ArtifactID && !UUIDsEqual(normExpected.ArtifactID, normActual.ArtifactID)) {
-                return {
-                    Valid: false,
-                    SnapshotVerified: false,
-                    ErrorMessage: 'FrozenSnapshot ArtifactID binding mismatch.'
-                };
+            if (normExpected.ArtifactID) {
+                if (!normActual.ArtifactID || !UUIDsEqual(normExpected.ArtifactID, normActual.ArtifactID)) {
+                    return {
+                        Valid: false,
+                        SnapshotVerified: false,
+                        ErrorMessage: 'FrozenSnapshot ArtifactID binding mismatch.'
+                    };
+                }
             }
             if (normExpected.BlockID && normActual.BlockID !== normExpected.BlockID) {
                 return {

@@ -11,6 +11,7 @@ import {
 } from '@memberjunction/core-entities';
 import { GovernedArtifactService, LoadedGovernedArtifactState } from '../GovernedArtifactService';
 import { ArtifactToolManager } from '../ArtifactToolManager';
+import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
 import { RealtimeClientSessionService } from '../realtime/realtime-client-session-service';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -582,6 +583,123 @@ describe('Audit 178 & Live Voice Bug Regressions', () => {
                     options: expect.objectContaining({ rerankerName: 'Cohere Rerank v3' }),
                 }),
             );
+        });
+    });
+
+    describe('[B7b + Mutate cap] GovernedArtifactService highlightLines sanitization & op cap', () => {
+        it('scrubs =MJ.* spill children and transitive formula outputs from RefreshArtifactPayloadInMemory highlightLines (B7b)', async () => {
+            const service = GovernedArtifactService.Instance;
+            const user = makeUser();
+            const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('SensitiveSheet', ['Data']);
+            const ws = wb.Worksheets[0];
+            // Static non-MJ cell MUST stay visible
+            SpreadsheetEngine.Instance.SetCell(wb, ws.SheetID, 'A1', { Value: 'PublicQuarter' }, false);
+            // Dynamic =MJ.QUERY cell, its spilled output row A3/B3, and transitive dependent C1 MUST be scrubbed
+            SpreadsheetEngine.Instance.SetCell(
+                wb,
+                ws.SheetID,
+                'A2',
+                { Formula: '=MJ.QUERY("SensitiveSalaries", A1)', CachedResult: [['Alice'], ['195000']] },
+                false,
+            );
+            SpreadsheetEngine.Instance.SetCell(wb, ws.SheetID, 'A3', { Value: 'SecretSalarySpill' }, false);
+            SpreadsheetEngine.Instance.SetCell(wb, ws.SheetID, 'B3', { Value: 195000 }, false);
+            SpreadsheetEngine.Instance.SetCell(
+                wb,
+                ws.SheetID,
+                'C1',
+                { Formula: '=B3*2', Value: 390000, CachedResult: 390000 },
+                false,
+            );
+
+            // Wire SpillRange onto A2 via Cells map so CloneWorkbookWithoutViewerScopedData sees its spill origin
+            ws.Cells['A2'] = {
+                ...ws.Cells['A2'],
+                SpillRange: { Rows: 2, Cols: 2, EndAddress: 'B3' },
+            };
+            ws.Cells['A3'] = {
+                ...ws.Cells['A3'],
+                SpilledFrom: 'A2',
+            };
+            ws.Cells['B3'] = {
+                ...ws.Cells['B3'],
+                SpilledFrom: 'A2',
+            };
+
+            const content = SpreadsheetEngine.Instance.SerializeWorkbook(wb, { preserveTimestamps: true });
+            const provider = { Entities: [], EntityByName: () => null } as never as IMetadataProvider;
+            const refreshed = await service.RefreshArtifactPayloadInMemory({
+                provider,
+                contextUser: user,
+                artifactId: ART_ID,
+                typeName: 'Excel Spreadsheet',
+                content,
+            });
+            const joinedHighlights = refreshed.highlightLines.join('\n');
+            expect(joinedHighlights).toContain('PublicQuarter');
+            expect(joinedHighlights).not.toContain('SecretSalarySpill');
+            expect(joinedHighlights).not.toContain('195000');
+            expect(joinedHighlights).not.toContain('390000');
+        });
+
+        it('rejects MutateGovernedArtifact when operations array exceeds 100 items', async () => {
+            const service = GovernedArtifactService.Instance;
+            const user = makeUser();
+            const provider = { Entities: [], EntityByName: () => null } as never as IMetadataProvider;
+            vi.spyOn(service, 'LoadReadableArtifactState').mockResolvedValueOnce({
+                state: {
+                    artifactId: ART_ID,
+                    ownerUserId: USER_ID,
+                    name: 'Test',
+                    typeName: 'Markdown Document',
+                    driverClass: 'MarkdownArtifactViewerPlugin',
+                    versionId: VER_ID,
+                    versionNumber: 1,
+                    dbVersionNumber: 1,
+                    contentMode: 'Text',
+                    content: '# Hello',
+                    mimeType: 'text/markdown',
+                    permissions: {
+                        ArtifactID: ART_ID,
+                        UserID: USER_ID,
+                        IsOwner: true,
+                        CanRead: true,
+                        CanEdit: true,
+                        CanDelete: true,
+                        CanShare: true,
+                        HasDirectPermissions: true,
+                        GrantedBy: 'owner',
+                    },
+                    liveRoomHydrated: false,
+                },
+            });
+            const tooManyOps = Array.from({ length: 101 }, () => ({
+                tool: 'append_markdown',
+                input: { markdown: 'x' },
+            }));
+            const res = await service.MutateGovernedArtifact({
+                provider,
+                contextUser: user,
+                artifactId: ART_ID,
+                operations: tooManyOps,
+            });
+            expect(res.success).toBe(false);
+            expect(res.errorMessage).toContain('100');
+        });
+
+        it('fails closed in DocumentToolLibrary embed_artifact_block when contextUser is missing', async () => {
+            const docLib = new DocumentToolLibrary();
+            const res = await docLib.InvokeTool(
+                'embed_artifact_block',
+                {
+                    artifactId: ART_ID,
+                    title: 'Unauthenticated Embed',
+                },
+                '# Header',
+                {},
+            );
+            expect(res.success).toBe(false);
+            expect(res.errorMessage).toMatch(/authenticated user context/i);
         });
     });
 });

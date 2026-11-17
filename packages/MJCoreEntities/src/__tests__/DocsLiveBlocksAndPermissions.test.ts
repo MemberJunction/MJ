@@ -1486,9 +1486,54 @@ describe('Security & Hardening Regression Coverage (SavedQuery, Component, Artif
           BuildBlockIdentityBinding(sourceSpec, 'bbbbbbbb-2222-2222-2222-222222222222')
         ).Valid
       ).toBe(false);
+
+      // Snapshot without Binding.ArtifactID fails when expectedBinding specifies ArtifactID (`S3`)
+      const snapNoArt = await engine.FreezeBlock(sourceSpec, actorUser, true, provider);
+      expect(snapNoArt.Success).toBe(true);
+      expect(
+        ValidateFrozenBlockSnapshot(
+          snapNoArt.UpdatedSpec!.FrozenSnapshot!,
+          undefined,
+          BuildBlockIdentityBinding(sourceSpec, hostArtifactId)
+        ).Valid
+      ).toBe(false);
     } finally {
       RunView.prototype.RunView = origRunView;
     }
+  });
+
+  it('B3: ValidateArtifactContentMutationAgainstLocks validates Configuration workbook protected ranges too', () => {
+    const lockedWb = JSON.stringify({
+      WorkbookID: 'wb-1',
+      Title: 'Locked',
+      Worksheets: [
+        {
+          SheetID: 's-1',
+          Name: 'Sheet1',
+          Rows: [{ RowID: 'r1' }],
+          Columns: [{ ColumnID: 'c1' }],
+          Cells: {
+            A1: { Address: 'A1', RowID: 'r1', ColumnID: 'c1', RawValue: 100 },
+          },
+          LiveTables: [],
+          ProtectedRanges: [
+            {
+              RangeID: 'pr-1',
+              Range: 'A1:A1',
+              LockedByUserID: actorUser.ID,
+              AllowEditors: false,
+            },
+          ],
+        },
+      ],
+      NamedRanges: [],
+    });
+    const tamperedConfig = lockedWb.replace('"RawValue":100', '"RawValue":999').replace('"RawValue": 100', '"RawValue": 999');
+    const res = ValidateArtifactContentMutationAgainstLocks(lockedWb, lockedWb, otherUser.ID, false, {
+      currentConfiguration: lockedWb,
+      nextConfiguration: tamperedConfig,
+    });
+    expect(res.Allowed).toBe(false);
   });
 
   it('B3: ValidateArtifactContentMutationAgainstLocks enforces markdown locks for non-owners while allowing owners', () => {

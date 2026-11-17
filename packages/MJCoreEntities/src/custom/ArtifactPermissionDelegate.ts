@@ -1041,6 +1041,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             EntityName: 'MJ: Collections',
             ExtraFilter: `OwnerID='${safeUserId}'`,
             Fields: ['ID'],
+            IgnoreMaxRows: true,
             SkipTotalRowCount: true,
             ResultType: 'simple'
         };
@@ -1056,6 +1057,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             EntityName: 'MJ: Collection Permissions',
             ExtraFilter: `UserID='${safeUserId}' AND (CanRead=1 OR CanEdit=1 OR CanDelete=1 OR CanShare=1)`,
             Fields: ['CollectionID'],
+            IgnoreMaxRows: true,
             SkipTotalRowCount: true,
             ResultType: 'simple'
         };
@@ -1075,6 +1077,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     EntityName: 'MJ: Collections',
                     ExtraFilter: `ParentID IN (${buildQuotedInList(chunk)})`,
                     Fields: ['ID'],
+                    IgnoreMaxRows: true,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 };
@@ -1139,6 +1142,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 EntityName: 'MJ: Artifacts',
                 ExtraFilter: `UserID='${safeUserId}'`,
                 Fields: ['ID'],
+                IgnoreMaxRows: true,
                 SkipTotalRowCount: true,
                 ResultType: 'simple'
             };
@@ -1155,6 +1159,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 EntityName: 'MJ: Artifact Permissions',
                 ExtraFilter: `UserID='${safeUserId}' AND (CanRead=1 OR CanEdit=1 OR CanDelete=1 OR CanShare=1)`,
                 Fields: ['ArtifactID'],
+                IgnoreMaxRows: true,
                 SkipTotalRowCount: true,
                 ResultType: 'simple'
             };
@@ -1177,6 +1182,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                         EntityName: 'MJ: Collection Artifacts',
                         ExtraFilter: `CollectionID IN (${buildQuotedInList(colChunk)})`,
                         Fields: ['ArtifactVersionID'],
+                        IgnoreMaxRows: true,
                         SkipTotalRowCount: true,
                         ResultType: 'simple'
                     };
@@ -1201,6 +1207,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                         EntityName: 'MJ: Artifact Versions',
                         ExtraFilter: `ID IN (${buildQuotedInList(verChunk)})`,
                         Fields: ['ID', 'ArtifactID'],
+                        IgnoreMaxRows: true,
                         SkipTotalRowCount: true,
                         ResultType: 'simple'
                     };
@@ -1226,6 +1233,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                             EntityName: 'MJ: Artifacts',
                             ExtraFilter: `DelegateEntityID='${safeArtifactsEntityId}' AND DelegateRecordID IN (${buildQuotedInList(parentChunk)})`,
                             Fields: ['ID'],
+                            IgnoreMaxRows: true,
                             SkipTotalRowCount: true,
                             ResultType: 'simple'
                         };
@@ -1257,7 +1265,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 EntityName: 'MJ: Artifacts',
                 ExtraFilter: delegFilter,
                 Fields: ['ID'],
-                MaxRows: 2000,
+                IgnoreMaxRows: true,
                 SkipTotalRowCount: true,
                 ResultType: 'simple'
             };
@@ -1269,13 +1277,14 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 }
             }
 
-            // 4. Verify each candidate through ResolvePermissions so delegate 'Deny' overrides are honored
+            // 4. Verify each candidate through ResolvePermissions (with shared memo) so delegate 'Deny' overrides are honored
+            const resolveMemo = new Map<string, Promise<ResolvedArtifactPermissions>>();
             const candidateValues = Array.from(candidates.entries());
             for (const batch of chunkArray(candidateValues, 20)) {
                 const resolvedBatch = await Promise.all(
                     batch.map(async ([normId, rawId]) => ({
                         normId,
-                        perms: await this.ResolvePermissions(provider, rawId, user)
+                        perms: await this.ResolvePermissions(provider, rawId, user, 0, undefined, resolveMemo)
                     }))
                 );
                 for (const entry of resolvedBatch) {

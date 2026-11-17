@@ -140,29 +140,34 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
             if (opDecl?.RequiresSystemUser && !ctx.userPayload?.isSystemUser) {
                 return fail('FORBIDDEN', `Operation '${key}' may only be invoked by the system user`);
             }
-            // (2) Resolve the acting user (works for OAuth/JWT and API-key sessions alike) and reject Magic Link / guest sessions.
+            // (2) Resolve the acting user (works for OAuth/JWT and API-key sessions alike).
+            // Operations with DisallowMagicLinkScope=true (e.g. artifact ops) reject Magic Link sessions;
+            // visitor-facing Open App operations opt in safely by leaving DisallowMagicLinkScope=false.
             const user = this.GetUserFromPayload(ctx.userPayload);
             if (!user) {
                 return fail('NO_USER', 'Not authenticated');
             }
-            if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
-                return fail('FORBIDDEN', 'Magic Link sessions cannot invoke remote operations.');
+            if (opDecl?.DisallowMagicLinkScope && (user.IsMagicLinkAnonymous || user.MagicLinkScope)) {
+                return fail('FORBIDDEN', `Magic Link sessions cannot invoke remote operation '${key}'.`);
             }
 
             const provider = GetReadWriteProvider(ctx.providers);
 
             // (3) API-key scope gate — consult operation's GetScopeResourceIds (e.g. collection-expanded sources)
-            // when available, falling back to single-resource hint / operation key.
+            // when available, never falling back to a synthetic operation-key target when an operation overrides
+            // GetScopeResourceIds and returns empty (`S4`).
             if (opDecl?.RequiredScope) {
-                const opInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRemotableOperation>(
-                    BaseRemotableOperation,
-                    key,
-                );
-                const declaredScopeIds = opInstance
-                    ? (await opInstance.GetScopeResourceIds(parsedInput, { provider, user }))
-                          .map((id) => id.trim())
-                          .filter((id) => id.length > 0)
-                    : [];
+                const overridesGetScopeIds =
+                    opDecl.GetScopeResourceIds !== BaseRemotableOperation.prototype.GetScopeResourceIds;
+                const declaredScopeIds = (await opDecl.GetScopeResourceIds(parsedInput, { provider, user }))
+                    .map((id) => id.trim())
+                    .filter((id) => id.length > 0);
+                if (overridesGetScopeIds && declaredScopeIds.length === 0) {
+                    return fail(
+                        'INVALID_INPUT',
+                        `Operation '${key}' requires at least one valid target resource identifier.`,
+                    );
+                }
                 const targets = declaredScopeIds.length > 0
                     ? declaredScopeIds
                     : [extractRemoteOpResourceId(parsedInput, key)];

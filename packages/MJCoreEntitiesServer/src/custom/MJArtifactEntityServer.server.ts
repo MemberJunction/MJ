@@ -29,6 +29,7 @@ import {
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
+    BuildSqlArtifactReadablePredicate,
     CascadeDeleteArtifactGuestShareLinks,
     ConsumePreResolvedIdsForParams,
     EmptyPostRunViewResult,
@@ -36,6 +37,7 @@ import {
     GetGlobalOriginalFieldsMap,
     GetGlobalWeakSet,
     PrepareScopedPreRunView,
+    QualifyOuterEntityColumn,
     ShouldBypassPostRunViewAsync,
     StripSyntheticFieldsFromRow
 } from './ArtifactSecurityHookHelpers';
@@ -178,8 +180,12 @@ export const ArtifactPreRunViewHook: PreRunViewHook = async (
             InternalParams: getInternalArtifactQueryParamsSet(),
             OriginalFieldsMap: getOriginalArtifactFieldsMap(),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_ARTIFACT_PARAMS),
-            ResolveReadableIds: (prov, user) =>
-                ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(prov, user),
+            BuildSqlPredicate: (prov, user, entityInfo) =>
+                BuildSqlArtifactReadablePredicate(
+                    QualifyOuterEntityColumn(entityInfo, 'vwArtifacts', 'ID', prov),
+                    prov,
+                    user
+                ),
             CheckSingleIdReadable: async (prov, artifactId, user) => {
                 const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(prov, artifactId, user);
                 return perms.CanRead;

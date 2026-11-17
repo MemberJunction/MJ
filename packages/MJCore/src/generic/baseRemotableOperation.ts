@@ -183,6 +183,16 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
     }
 
     /**
+     * When `true`, {@link ExecuteRemoteOperationResolver} refuses scoped/anonymous Magic Link
+     * sessions (`IsMagicLinkAnonymous || MagicLinkScope`) before invoking this operation.
+     * Defaults to `false` so Open Apps visitor operations can execute over scoped Magic Links;
+     * artifact and other high-privilege operations override this to `true`.
+     */
+    public get DisallowMagicLinkScope(): boolean {
+        return false;
+    }
+
+    /**
      * Optional allow-list of entity names (or `['*']`) that this Remote Operation is authorized
      * to mutate when `GrantsServerWriteAuthority` is `true`. Forwarded into the active
      * `ServerOperationScopeFrame.allowedEntities` by `DispatchRemoteOperationInProcess`.

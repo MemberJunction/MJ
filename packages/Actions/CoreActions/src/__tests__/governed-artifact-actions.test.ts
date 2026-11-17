@@ -456,7 +456,7 @@ describe('Governed Artifact CoreActions', () => {
         expect(badInputRes.Message).toContain("Tool parameter is required when invoking a single tool with Input");
     });
 
-    it('B7: RefreshAndSnapshotArtifactAction rejects FreezeRefreshedBlocks when invoked by an agent without UserConfirmedFreezeSecurityWarning', async () => {
+    it('B7a: RefreshAndSnapshotArtifactAction unconditionally rejects FreezeRefreshedBlocks when invoked by an agent (even with UserConfirmedFreezeSecurityWarning=true)', async () => {
         const refreshSpy = vi.spyOn(GovernedArtifactService.Instance, 'RefreshAndSnapshotArtifact');
         const action = new RefreshAndSnapshotArtifactAction();
         const params: RunActionParams = {
@@ -467,6 +467,7 @@ describe('Governed Artifact CoreActions', () => {
             Params: [
                 { Name: 'ArtifactID', Type: 'Input', Value: 'art-100' },
                 { Name: 'FreezeRefreshedBlocks', Type: 'Input', Value: true },
+                { Name: 'UserConfirmedFreezeSecurityWarning', Type: 'Input', Value: true },
             ],
         };
         (params as { Provider?: IMetadataProvider }).Provider = provider;

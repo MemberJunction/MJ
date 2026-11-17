@@ -41,11 +41,14 @@ import {
 } from '@memberjunction/global';
 import { createHash } from 'crypto';
 import {
+    BuildSqlArtifactReadablePredicate,
     CascadeDeleteArtifactGuestShareLinks,
+    CascadeDeleteArtifactVersionAttributes,
     ConsumePreResolvedIdsForParams,
     EmptyPostRunViewResult,
     FinalizePostRunViewResult,
     PrepareScopedPreRunView,
+    QualifyOuterEntityColumn,
     ShouldBypassPostRunViewAsync,
     StripSyntheticFieldsFromRow
 } from './ArtifactSecurityHookHelpers';
@@ -71,6 +74,7 @@ export interface ArtifactVersionSavedEventPayload {
 const ARTIFACT_VERSION_ENTITY_NAME = 'MJ: Artifact Versions';
 const GLOBAL_KEY_TRUSTED_RESTORE = '__MJ_TRUSTED_SERVER_RESTORE_ENTITIES__';
 const GLOBAL_KEY_TRUSTED_AGENT_DRAFT = '__MJ_TRUSTED_AGENT_DRAFT_VERSION_ENTITIES__';
+const GLOBAL_KEY_TRUSTED_COMPACTION = '__MJ_TRUSTED_COMPACTION_VERSION_ENTITIES__';
 const GLOBAL_KEY_INTERNAL_VERSION_PARAMS = '__MJ_INTERNAL_VERSION_SECURITY_QUERY_PARAMS__';
 const GLOBAL_KEY_ORIGINAL_VERSION_FIELDS = '__MJ_ORIGINAL_VERSION_FIELDS_BY_PARAMS__';
 const GLOBAL_KEY_SQL_SCOPED_VERSION_PARAMS = '__MJ_SQL_SCOPED_VERSION_PARAMS__';
@@ -83,6 +87,17 @@ const GLOBAL_KEY_SQL_SCOPED_VERSION_PARAMS = '__MJ_SQL_SCOPED_VERSION_PARAMS__';
 export function MarkTrustedAgentRunDraftVersionSave(entity: object): void {
     if (entity && typeof entity === 'object') {
         getGlobalWeakSet(GLOBAL_KEY_TRUSTED_AGENT_DRAFT).add(entity);
+    }
+}
+
+/**
+ * Marks an in-process `ArtifactCollaborationServer` room compaction save (`N3`). Every frame
+ * admitted into the Yjs room already passed per-connection lock checks, so compaction can persist
+ * the combined room state without attributing an owner's earlier locked edits to the triggering user.
+ */
+export function MarkTrustedCompactionVersionSave(entity: MJArtifactVersionEntity): void {
+    if (entity && typeof entity === 'object') {
+        getGlobalWeakSet(GLOBAL_KEY_TRUSTED_COMPACTION).add(entity);
     }
 }
 
@@ -311,8 +326,12 @@ export const ArtifactVersionPreRunViewHook: PreRunViewHook = async (
             InternalParams: getGlobalWeakSet(GLOBAL_KEY_INTERNAL_VERSION_PARAMS),
             OriginalFieldsMap: getOriginalVersionFieldsMap(),
             SqlScopedParams: getGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_VERSION_PARAMS),
-            ResolveReadableIds: (prov, user) =>
-                ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(prov, user),
+            BuildSqlPredicate: (prov, user, entityInfo) =>
+                BuildSqlArtifactReadablePredicate(
+                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactVersions', 'ArtifactID', prov),
+                    prov,
+                    user
+                ),
             CheckSingleIdReadable: async (prov, artifactId, user) => {
                 const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(prov, artifactId, user);
                 return perms.CanRead;
@@ -587,8 +606,10 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         const actor = this.ContextCurrentUser;
         const trustedRestoreSet = getGlobalWeakSet(GLOBAL_KEY_TRUSTED_RESTORE);
         const trustedDraftSet = getGlobalWeakSet(GLOBAL_KEY_TRUSTED_AGENT_DRAFT);
+        const trustedCompactionSet = getGlobalWeakSet(GLOBAL_KEY_TRUSTED_COMPACTION);
         const isTrustedRestore = trustedRestoreSet.has(this);
         const isTrustedAgentDraft = trustedDraftSet.has(this);
+        const isTrustedCompaction = trustedCompactionSet.has(this);
         const provider = resolveMetadataProvider(this.ProviderToUse, actor);
 
         try {
@@ -677,7 +698,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                             EntityName: ARTIFACT_VERSION_ENTITY_NAME,
                             ExtraFilter: `ArtifactID='${EscapeSQLString(authArtifactId)}'`,
                             OrderBy: 'VersionNumber DESC',
-                            Fields: ['ID', 'VersionNumber', 'Content', 'ContentMode'],
+                            Fields: ['ID', 'VersionNumber', 'Content', 'Configuration', 'ContentMode', 'FileID'],
                             MaxRows: 1,
                             SkipTotalRowCount: true,
                             ResultType: 'simple'
@@ -688,6 +709,9 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                             ID?: string;
                             VersionNumber?: number | null;
                             Content?: string | null;
+                            Configuration?: string | null;
+                            ContentMode?: string | null;
+                            FileID?: string | null;
                         }>(priorParams, systemActor);
                         if (!priorRes.Success && provider.ProviderType === 'Database') {
                             return this.recordPermissionFailure(
@@ -695,8 +719,14 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                 'Permission denied: unable to verify prior artifact version locks before creating version.'
                             );
                         }
+                        const nextContent = this.safeReadStringProp('Content') ?? '';
+                        const nextConfig = this.safeReadStringProp('Configuration');
+                        const rawFileId = this.safeReadStringProp('FileID');
+                        const nextFileId = rawFileId ? rawFileId.trim() : null;
+                        const nextContentMode = this.safeReadStringProp('ContentMode');
+                        const priorRow = priorRes.Success ? priorRes.Results?.[0] : undefined;
+
                         if (priorRes.Success) {
-                            const priorRow = priorRes.Results?.[0];
                             if (priorRow) {
                                 const priorVer =
                                     typeof priorRow.VersionNumber === 'number' && Number.isFinite(priorRow.VersionNumber)
@@ -705,20 +735,40 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                 if (this.hasInitializedFields()) {
                                     this.VersionNumber = priorVer + 1;
                                 }
-                                const nextContent = typeof this.Content === 'string' ? this.Content : '';
-                                const priorContent = typeof priorRow.Content === 'string' ? priorRow.Content : '';
-                                if (priorContent.length > 0 && priorContent !== nextContent) {
+                                if (!isTrustedRestore && !isTrustedCompaction) {
+                                    const priorContent = typeof priorRow.Content === 'string' ? priorRow.Content : '';
+                                    const priorConfig = typeof priorRow.Configuration === 'string' ? priorRow.Configuration : null;
                                     const lockCheck = ValidateArtifactContentMutationAgainstLocks(
                                         priorContent,
                                         nextContent,
                                         actor.ID,
-                                        isArtifactOwner
+                                        isArtifactOwner,
+                                        { currentConfiguration: priorConfig, nextConfiguration: nextConfig }
                                     );
                                     if (!lockCheck.Allowed) {
                                         return this.recordPermissionFailure(
                                             saveType,
                                             lockCheck.Reason ?? 'Write rejected: new version content modifies a locked region.'
                                         );
+                                    }
+                                    const priorFileId = typeof priorRow.FileID === 'string' ? priorRow.FileID.trim() : null;
+                                    const isFileModeSwap =
+                                        (priorRow.ContentMode === 'File' || nextContentMode === 'File') &&
+                                        priorFileId !== nextFileId;
+                                    if (isFileModeSwap && !isArtifactOwner && !isTrustedAgentDraft && priorConfig) {
+                                        const wipeCheck = ValidateArtifactContentMutationAgainstLocks(
+                                            priorContent,
+                                            '',
+                                            actor.ID,
+                                            false,
+                                            { currentConfiguration: priorConfig, nextConfiguration: '{}' }
+                                        );
+                                        if (!wipeCheck.Allowed) {
+                                            return this.recordPermissionFailure(
+                                                saveType,
+                                                'Write rejected: File-mode artifact with protected ranges cannot be overwritten directly via FileID replacement.'
+                                            );
+                                        }
                                     }
                                 }
                             } else if (
@@ -728,12 +778,49 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                                 this.VersionNumber = 1;
                             }
                         }
+
+                        if (!isTrustedRestore && !isTrustedCompaction) {
+                            const wsParams: RunViewParams = {
+                                EntityName: 'MJ: Artifact Working States',
+                                ExtraFilter: `ArtifactID='${EscapeSQLString(authArtifactId)}'`,
+                                Fields: ['ID', 'Content'],
+                                MaxRows: 1,
+                                SkipTotalRowCount: true,
+                                ResultType: 'simple'
+                            };
+                            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(wsParams);
+                            const wsRes = await RunView.FromMetadataProvider(provider).RunView<{
+                                ID?: string;
+                                Content?: string | null;
+                            }>(wsParams, systemActor);
+                            const wsContent =
+                                wsRes.Success && typeof wsRes.Results?.[0]?.Content === 'string'
+                                    ? wsRes.Results[0].Content
+                                    : '';
+                            if (wsContent && wsContent !== (priorRow?.Content ?? '')) {
+                                const wsLockCheck = ValidateArtifactContentMutationAgainstLocks(
+                                    wsContent,
+                                    nextContent,
+                                    actor.ID,
+                                    isArtifactOwner,
+                                    { currentConfiguration: priorRow?.Configuration ?? null, nextConfiguration: nextConfig }
+                                );
+                                if (!wsLockCheck.Allowed) {
+                                    return this.recordPermissionFailure(
+                                        saveType,
+                                        wsLockCheck.Reason ??
+                                            'Write rejected: new version content conflicts with a locked region in the active working state.'
+                                    );
+                                }
+                            }
+                        }
                     }
                 } else {
                     const userIdField = this.safeGetField('UserID');
                     if (userIdField?.Dirty) {
                         const oldUserId = typeof userIdField.OldValue === 'string' ? userIdField.OldValue.trim() : '';
-                        const curUserId = typeof this.UserID === 'string' ? this.UserID.trim() : '';
+                        const rawUserId = this.safeReadStringProp('UserID');
+                        const curUserId = rawUserId ? rawUserId.trim() : '';
                         if (!oldUserId || !UUIDsEqual(oldUserId, curUserId)) {
                             return this.recordPermissionFailure(
                                 'update',
@@ -742,7 +829,10 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                         }
                     }
                     const verNumField = this.safeGetField('VersionNumber');
-                    if (verNumField?.Dirty && verNumField.OldValue !== undefined && verNumField.OldValue !== this.VersionNumber) {
+                    const curVerNum = this.hasInitializedFields()
+                        ? this.VersionNumber
+                        : Object.getOwnPropertyDescriptor(this, 'VersionNumber')?.value;
+                    if (verNumField?.Dirty && verNumField.OldValue !== undefined && verNumField.OldValue !== curVerNum) {
                         return this.recordPermissionFailure(
                             'update',
                             'Permission denied: VersionNumber on a saved artifact version is immutable.'
@@ -750,18 +840,20 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                     }
 
                     const contentField = this.safeGetField('Content');
+                    const configurationField = this.safeGetField('Configuration');
                     const contentModeField = this.safeGetField('ContentMode');
                     const fileIdField = this.safeGetField('FileID');
                     const contentHashField = this.safeGetField('ContentHash');
                     const mutatesVersionContent = Boolean(
                         contentField?.Dirty ||
+                        configurationField?.Dirty ||
                         contentModeField?.Dirty ||
                         fileIdField?.Dirty ||
                         contentHashField?.Dirty
                     );
 
                     if (mutatesVersionContent) {
-                        if (!isTrustedAgentDraft) {
+                        if (!isTrustedAgentDraft && !isTrustedCompaction) {
                             return this.recordPermissionFailure(
                                 'update',
                                 'Permission denied: saved artifact versions are immutable; create a new version instead.'
@@ -797,13 +889,16 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                             }
                         }
                         const oldContent = typeof contentField?.OldValue === 'string' ? contentField.OldValue : '';
-                        const nextContent = typeof this.Content === 'string' ? this.Content : '';
-                        if (oldContent.length > 0 && oldContent !== nextContent) {
+                        const nextContent = this.safeReadStringProp('Content') ?? '';
+                        const oldConfig = typeof configurationField?.OldValue === 'string' ? configurationField.OldValue : null;
+                        const nextConfig = this.safeReadStringProp('Configuration');
+                        if (!isTrustedCompaction && ((oldContent.length > 0 && oldContent !== nextContent) || (oldConfig && oldConfig !== nextConfig))) {
                             const lockCheck = ValidateArtifactContentMutationAgainstLocks(
                                 oldContent,
                                 nextContent,
                                 actor.ID,
-                                isArtifactOwner
+                                isArtifactOwner,
+                                { currentConfiguration: oldConfig, nextConfiguration: nextConfig }
                             );
                             if (!lockCheck.Allowed) {
                                 return this.recordPermissionFailure(
@@ -823,12 +918,19 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
             const currentContentMode = this.hasInitializedFields() ? this.ContentMode : null;
 
             if (contentDirty && currentContentMode !== 'File') {
-                const effectiveContent = typeof this.Content === 'string' ? this.Content : '';
+                const effectiveContent = this.safeReadStringProp('Content') ?? '';
                 // 1. Always recompute server-side ContentHash & ContentSizeBytes when content changes (`B3`).
                 const currentHash = this.hasInitializedFields() ? this.ContentHash : Object.getOwnPropertyDescriptor(this, 'ContentHash')?.value;
                 if (effectiveContent.length > 0 || (typeof currentHash === 'string' && currentHash.length > 0)) {
-                    this.ContentHash = effectiveContent.length > 0 ? this.CalculateContentHash(effectiveContent) : '';
-                    this.ContentSizeBytes = CalculateContentSizeBytes(effectiveContent);
+                    const nextHash = effectiveContent.length > 0 ? this.CalculateContentHash(effectiveContent) : '';
+                    const nextBytes = CalculateContentSizeBytes(effectiveContent);
+                    if (this.hasInitializedFields()) {
+                        this.ContentHash = nextHash;
+                        this.ContentSizeBytes = nextBytes;
+                    } else {
+                        this.safeWriteStubProp('ContentHash', nextHash);
+                        this.safeWriteStubProp('ContentSizeBytes', nextBytes);
+                    }
                 }
 
                 // 2. Extract attributes when content is non-empty
@@ -902,6 +1004,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         } finally {
             trustedRestoreSet.delete(this);
             trustedDraftSet.delete(this);
+            trustedCompactionSet.delete(this);
         }
     }
 
@@ -953,6 +1056,101 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                     `Permission denied: user '${actor.Email || actor.ID}' does not hold Delete permission on artifact '${authArtifactId}'.`
                 );
             }
+
+            const canQueryDb = typeof (provider as { RunView?: unknown }).RunView === 'function';
+            let isArtifactOwner = perms.Source === 'Owner';
+            const systemActor = (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? actor;
+            if (canQueryDb && IsValidUUID(authArtifactId)) {
+                const artParams: RunViewParams = {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID='${EscapeSQLString(authArtifactId)}'`,
+                    Fields: ['ID', 'UserID'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                };
+                getGlobalWeakSet(GLOBAL_KEY_INTERNAL_VERSION_PARAMS).add(artParams);
+                ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(artParams);
+                const artRes = await RunView.FromMetadataProvider(provider).RunView<{ ID?: string; UserID?: string | null }>(
+                    artParams,
+                    systemActor
+                );
+                if (!artRes.Success && provider.ProviderType === 'Database') {
+                    return this.recordPermissionFailure(
+                        'delete',
+                        'Permission denied: unable to verify parent artifact ownership before deleting version.'
+                    );
+                }
+                const artRow = artRes.Results?.[0];
+                if (artRow?.UserID && UUIDsEqual(artRow.UserID, actor.ID)) {
+                    isArtifactOwner = true;
+                }
+
+                if (!isArtifactOwner) {
+                    const versionsParams: RunViewParams = {
+                        EntityName: ARTIFACT_VERSION_ENTITY_NAME,
+                        ExtraFilter: `ArtifactID='${EscapeSQLString(authArtifactId)}'`,
+                        OrderBy: 'VersionNumber DESC',
+                        Fields: ['ID', 'VersionNumber', 'Content', 'Configuration'],
+                        IgnoreMaxRows: true,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple'
+                    };
+                    getGlobalWeakSet(GLOBAL_KEY_INTERNAL_VERSION_PARAMS).add(versionsParams);
+                    ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(versionsParams);
+                    const verRes = await RunView.FromMetadataProvider(provider).RunView<{
+                        ID?: string;
+                        VersionNumber?: number | null;
+                        Content?: string | null;
+                        Configuration?: string | null;
+                    }>(versionsParams, systemActor);
+                    if (!verRes.Success && provider.ProviderType === 'Database') {
+                        return this.recordPermissionFailure(
+                            'delete',
+                            'Permission denied: unable to verify artifact version locks before deleting version.'
+                        );
+                    }
+                    const versionRows = verRes.Results ?? [];
+                    const deletingId = this.safeReadId();
+                    const targetRow = deletingId
+                        ? versionRows.find((r) => r.ID && UUIDsEqual(r.ID, deletingId))
+                        : undefined;
+                    const isLatestVersion =
+                        Boolean(targetRow && versionRows[0]?.ID && UUIDsEqual(targetRow.ID!, versionRows[0].ID!)) ||
+                        versionRows.length === 0;
+                    const deletedContent =
+                        typeof targetRow?.Content === 'string'
+                            ? targetRow.Content
+                            : this.safeReadStringProp('Content') ?? '';
+                    const deletedConfig =
+                        typeof targetRow?.Configuration === 'string'
+                            ? targetRow.Configuration
+                            : this.safeReadStringProp('Configuration');
+                    const remainingLatest = versionRows.find((r) => !deletingId || !r.ID || !UUIDsEqual(r.ID, deletingId));
+                    if (isLatestVersion && (deletedContent.length > 0 || (deletedConfig && deletedConfig.length > 0))) {
+                        const deleteLockCheck = ValidateArtifactContentMutationAgainstLocks(
+                            deletedContent,
+                            typeof remainingLatest?.Content === 'string' ? remainingLatest.Content : '',
+                            actor.ID,
+                            false,
+                            {
+                                currentConfiguration: deletedConfig,
+                                nextConfiguration:
+                                    typeof remainingLatest?.Configuration === 'string'
+                                        ? remainingLatest.Configuration
+                                        : null
+                            }
+                        );
+                        if (!deleteLockCheck.Allowed) {
+                            return this.recordPermissionFailure(
+                                'delete',
+                                deleteLockCheck.Reason ??
+                                    'Permission denied: cannot delete a locked artifact version as a non-owner.'
+                            );
+                        }
+                    }
+                }
+            }
         }
 
         const versionIdForCascade = this.safeReadId();
@@ -966,6 +1164,17 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                 return this.recordPermissionFailure(
                     'delete',
                     cascadeRes.ErrorMessage ?? 'Failed to clean up guest share links before deleting artifact version.'
+                );
+            }
+            const attrCascadeRes = await CascadeDeleteArtifactVersionAttributes(
+                provider,
+                versionIdForCascade,
+                actor
+            );
+            if (!attrCascadeRes.Success) {
+                return this.recordPermissionFailure(
+                    'delete',
+                    attrCascadeRes.ErrorMessage ?? 'Failed to clean up artifact version attributes before deleting artifact version.'
                 );
             }
         }
@@ -983,6 +1192,24 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         }
         const own = Object.getOwnPropertyDescriptor(this, 'ID')?.value;
         return typeof own === 'string' && own.trim().length > 0 ? own.trim() : null;
+    }
+
+    private safeReadStringProp(propName: 'Content' | 'Configuration' | 'FileID' | 'ContentMode' | 'UserID'): string | null {
+        const val = this.hasInitializedFields()
+            ? this[propName]
+            : Object.getOwnPropertyDescriptor(this, propName)?.value;
+        return typeof val === 'string' ? val : null;
+    }
+
+    private safeWriteStubProp(propName: 'ContentHash' | 'ContentSizeBytes', value: string | number): void {
+        const desc = Object.getOwnPropertyDescriptor(this, propName);
+        if (desc) {
+            if (desc.writable) {
+                Reflect.set(this, propName, value);
+            }
+            return;
+        }
+        Object.defineProperty(this, propName, { value, writable: true, configurable: true });
     }
 
     private safeGetField(fieldName: string) {

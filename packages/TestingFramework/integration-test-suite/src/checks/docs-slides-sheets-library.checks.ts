@@ -17,9 +17,13 @@
  *   - `docs-slides-sheets-library.DSL10` — `NW-5` `ArtifactSynthesisEngine` prompt-injection strip (`SavedQuery`/`EntityView`/`Frozen` removal, backtick fence normalization) and deterministic fallback synthesis
  */
 
+import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import * as http from 'node:http';
 import * as https from 'node:https';
+import { createServer as createNetServer } from 'node:net';
+import { resolve as resolvePath } from 'node:path';
 import { DatabaseProviderBase, IMetadataProvider, Metadata, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -3589,9 +3593,173 @@ async function checkDslc12StartRealtimeSessionConversationIdor(ctx: IntegrationC
                 await ownerOwnedConv.Delete();
             }
         }
-    } finally {
+        } finally {
         if (foreignConv?.IsSaved) {
             await foreignConv.Delete();
+        }
+    }
+}
+
+// ─── DSLC13: B4 Default-off guest sharing refusal against ephemeral MJAPI ─────
+
+async function allocateFreeTcpPort(): Promise<number> {
+    return new Promise<number>((res, rej) => {
+        const srv = createNetServer();
+        srv.unref();
+        srv.on('error', rej);
+        srv.listen(0, '127.0.0.1', () => {
+            const addr = srv.address();
+            const port = typeof addr === 'object' && addr ? addr.port : 0;
+            srv.close(() => (port > 0 ? res(port) : rej(new Error('Failed to allocate ephemeral TCP port'))));
+        });
+    });
+}
+
+async function waitForHealthcheck(baseUrl: string, childExited: () => string | null, timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const exitMsg = childExited();
+        if (exitMsg !== null) {
+            throw new Error(`Ephemeral MJAPI exited before healthcheck became ready: ${exitMsg}`);
+        }
+        try {
+            const resp = await fetch(`${baseUrl}/healthcheck`);
+            if (resp.ok) {
+                return;
+            }
+        } catch {
+            // Still booting
+        }
+        await new Promise((r) => setTimeout(r, 250));
+    }
+    throw new Error(`Ephemeral MJAPI did not become healthy within ${timeoutMs}ms`);
+}
+
+async function checkDslc13GuestShareDisabledRefusal(_ctx: IntegrationCheckContext): Promise<void> {
+    const fx = requireDslClientFixture();
+    const mjapiDir = resolvePath(process.cwd(), 'packages/MJAPI');
+    const mjapiEntry = resolvePath(mjapiDir, 'dist/index.js');
+    if (!existsSync(mjapiEntry)) {
+        SkipCheck(`Built MJAPI entrypoint not found at ${mjapiEntry}; build mj_api to verify B4 default-off refusal.`);
+    }
+
+    const clientCfg = LoadClientConfig();
+    const apiKey = (process.env.MJ_API_KEY || clientCfg.MJAPIKey || '').trim();
+    if (!apiKey) {
+        SkipCheck('MJ_API_KEY is required to invoke ExecuteRemoteOperation against ephemeral MJAPI for DSLC13.');
+    }
+
+    const port = await allocateFreeTcpPort();
+    const childEnv: NodeJS.ProcessEnv = { ...process.env };
+    delete childEnv.MJ_ARTIFACT_GUEST_SHARING_ENABLED;
+    childEnv.GRAPHQL_PORT = String(port);
+    childEnv.MJ_API_KEY = apiKey;
+    childEnv.MJ_DISABLE_TASK_GRAPH_DISPATCHER = '1';
+    childEnv.MJ_REST_API_ENABLED = 'false';
+    childEnv.MJ_TELEMETRY_ENABLED = 'false';
+
+    const logs: string[] = [];
+    let exitedMsg: string | null = null;
+    const child = spawn(process.execPath, [mjapiEntry], {
+        cwd: mjapiDir,
+        env: childEnv,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const appendLog = (chunk: Buffer): void => {
+        logs.push(chunk.toString('utf8'));
+        if (logs.length > 40) {
+            logs.shift();
+        }
+    };
+    child.stdout?.on('data', appendLog);
+    child.stderr?.on('data', appendLog);
+    child.on('exit', (code, signal) => {
+        exitedMsg = `code=${code}, signal=${signal}, tail=${logs.join('').slice(-800)}`;
+    });
+
+    const baseUrl = `http://127.0.0.1:${port}`;
+    try {
+        await waitForHealthcheck(baseUrl, () => exitedMsg, 60_000);
+
+        const gqlResp = await fetch(`${baseUrl}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-mj-api-key': apiKey,
+            },
+            body: JSON.stringify({
+                query: `mutation TryCreateDisabledGuestShare($input: ExecuteRemoteOperationInput!) {
+                    ExecuteRemoteOperation(input: $input) {
+                        success
+                        resultCode
+                        errorMessage
+                    }
+                }`,
+                variables: {
+                    input: {
+                        operationKey: 'Artifact.CreateGuestShareLink',
+                        inputJSON: JSON.stringify({
+                            ArtifactID: fx.ParentDocID!,
+                            VersionID: fx.ParentVerID!,
+                            ExpiresInHours: 1,
+                            Label: 'DSLC13 Disabled Check',
+                        }),
+                        invokeMode: 'sync',
+                    },
+                },
+            }),
+        });
+        AssertEqual(gqlResp.status, 200, 'GraphQL ExecuteRemoteOperation HTTP status on default-off MJAPI');
+        const gqlJson = (await gqlResp.json()) as {
+            data?: {
+                ExecuteRemoteOperation?: {
+                    success?: boolean;
+                    resultCode?: string | null;
+                    errorMessage?: string | null;
+                };
+            };
+        };
+        const opRes = gqlJson.data?.ExecuteRemoteOperation;
+        AssertEqual(
+            opRes?.success,
+            false,
+            'Artifact.CreateGuestShareLink must refuse when magicLink.artifactGuestSharing.enabled is default-off',
+        );
+        AssertEqual(
+            opRes?.resultCode,
+            'GUEST_SHARING_DISABLED',
+            `Expected resultCode=GUEST_SHARING_DISABLED, got ${opRes?.resultCode ?? ''} (${opRes?.errorMessage ?? ''})`,
+        );
+        Assert(
+            (opRes?.errorMessage ?? '').includes('magicLink.artifactGuestSharing.enabled must be true'),
+            `Expected B4 errorMessage explanation, got: ${opRes?.errorMessage ?? ''}`,
+        );
+
+        const redeemResp = await fetch(`${baseUrl}/magic-link/redeem?format=json`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: 'mlt_disabled_check' }),
+        });
+        AssertEqual(
+            redeemResp.status,
+            404,
+            'POST /magic-link/redeem must remain unmounted (HTTP 404) when both magicLink.enabled and artifactGuestSharing.enabled are false',
+        );
+    } finally {
+        if (child.exitCode === null && child.signalCode === null) {
+            child.kill('SIGTERM');
+            await new Promise<void>((res) => {
+                const timer = setTimeout(() => {
+                    if (child.exitCode === null && child.signalCode === null) {
+                        child.kill('SIGKILL');
+                    }
+                    res();
+                }, 3000);
+                child.once('exit', () => {
+                    clearTimeout(timer);
+                    res();
+                });
+            });
         }
     }
 }
@@ -3656,6 +3824,11 @@ export const DocsSlidesSheetsLibraryClientChecks: NamedCheck[] = [
         Id: 'docs-slides-sheets-library-client.DSLC12',
         Name: 'DSLC12: StartRealtimeClientSession cross-user conversationId IDOR rejection (P1-5)',
         Fn: checkDslc12StartRealtimeSessionConversationIdor,
+    },
+    {
+        Id: 'docs-slides-sheets-library-client.DSLC13',
+        Name: 'DSLC13: Default-off magicLink.artifactGuestSharing.enabled refuses CreateGuestShareLink and leaves /magic-link/redeem unmounted (B4)',
+        Fn: checkDslc13GuestShareDisabledRefusal,
     },
 ];
 

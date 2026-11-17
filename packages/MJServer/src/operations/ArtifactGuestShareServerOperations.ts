@@ -1091,7 +1091,9 @@ export async function ResolveGuestArtifactSnapshotForSession(
         if (status === 'Expired') {
             return buildFailedPublicResolution('EXPIRED', 'Guest share link has expired.');
         }
-        if (status !== 'Active') {
+        // S6: Once an invite reaches MaxUses, MagicLinkService sets Status = 'Consumed',
+        // which blocks NEW redemptions while already-issued guest session JWTs MUST still load the snapshot.
+        if (status !== 'Active' && status !== 'Consumed') {
             return buildFailedPublicResolution('ACCESS_DENIED', `Guest share invite status '${status}' is not active.`);
         }
 
@@ -1247,6 +1249,10 @@ export async function ResolveGuestArtifactSnapshotForSession(
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_CREATE_GUEST_SHARE_LINK_KEY)
 export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOperation {
+    public override get DisallowMagicLinkScope(): boolean {
+        return true;
+    }
+
     public override GetScopeResourceIds(input: CreateGuestShareLinkInput): string[] {
         return input?.ArtifactID ? [input.ArtifactID] : [];
     }
@@ -1256,6 +1262,9 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
         user: UserInfo,
         context?: RemoteOpServerContext,
     ): Promise<boolean> {
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            throw new RemoteOperationError('FORBIDDEN', 'Magic Link sessions cannot create guest share links.');
+        }
         assertArtifactGuestSharingEnabled();
         const provider = context?.provider ?? Metadata.Provider;
         if (!IsValidUUID(input.ArtifactID)) {
@@ -1463,6 +1472,10 @@ export class CreateGuestShareLinkServerOperation extends CreateGuestShareLinkOpe
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_REVOKE_GUEST_SHARE_LINK_KEY)
 export class RevokeGuestShareLinkServerOperation extends RevokeGuestShareLinkOperation {
+    public override get DisallowMagicLinkScope(): boolean {
+        return true;
+    }
+
     public override GetScopeResourceIds(input: RevokeGuestShareLinkInput): string[] {
         return input?.ArtifactID ? [input.ArtifactID] : [];
     }
@@ -1472,6 +1485,9 @@ export class RevokeGuestShareLinkServerOperation extends RevokeGuestShareLinkOpe
         user: UserInfo,
         context?: RemoteOpServerContext,
     ): Promise<boolean> {
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            throw new RemoteOperationError('FORBIDDEN', 'Magic Link sessions cannot revoke guest share links.');
+        }
         const provider = context?.provider ?? Metadata.Provider;
         if (!IsValidUUID(input.ArtifactID) || !IsValidUUID(input.LinkID)) {
             throw new RemoteOperationError('INVALID_INPUT', 'ArtifactID and LinkID must be valid UUIDs.');

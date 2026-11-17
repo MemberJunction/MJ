@@ -6,7 +6,7 @@ import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunctio
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
@@ -312,7 +312,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
     @Query(() => VerifyFrozenBlockSnapshotOutput)
     async VerifyFrozenBlockSnapshot(
         @Arg('specJson') specJson: string,
-        @Ctx() context?: AppContext
+        @Ctx() context?: AppContext,
+        @Arg('hostArtifactId', { nullable: true }) hostArtifactId?: string
     ): Promise<VerifyFrozenBlockSnapshotOutput> {
         const user = this.GetUserFromPayload(context?.userPayload);
         if (!user || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
@@ -322,7 +323,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 ErrorMessage: user ? 'Magic Link sessions cannot verify snapshots directly.' : 'Authentication required.'
             };
         }
-        await this.CheckAPIKeyScopeAuthorization('artifact:read', '*', context?.userPayload);
+        const normalizedHostId = (hostArtifactId ?? '').trim();
+        await this.CheckAPIKeyScopeAuthorization('artifact:read', normalizedHostId || '*', context?.userPayload);
         if (typeof specJson !== 'string' || specJson.length > MAX_FROZEN_SPEC_JSON_CHARS) {
             return {
                 Valid: false,
@@ -330,7 +332,29 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 ErrorMessage: 'Frozen block specification exceeds maximum allowed size.'
             };
         }
+        if (normalizedHostId && !IsValidUUID(normalizedHostId)) {
+            return {
+                Valid: false,
+                SnapshotVerified: false,
+                ErrorMessage: 'hostArtifactId must be a valid UUID.'
+            };
+        }
         try {
+            if (normalizedHostId && context) {
+                const provider = this.resolveProvider(context);
+                const hostPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                    provider,
+                    normalizedHostId,
+                    user
+                );
+                if (!hostPerms.CanRead) {
+                    return {
+                        Valid: false,
+                        SnapshotVerified: false,
+                        ErrorMessage: hostPerms.Reason || 'Permission denied on host artifact.'
+                    };
+                }
+            }
             const spec = JSON.parse(specJson) as DocumentBlockSpec;
             if (!spec || spec.Mode !== 'Frozen' || !spec.FrozenSnapshot) {
                 return {
@@ -339,7 +363,11 @@ export class DocumentCollaborationResolver extends ResolverBase {
                     ErrorMessage: 'Block is not a frozen snapshot.'
                 };
             }
-            const validation = ValidateFrozenBlockSnapshot(spec.FrozenSnapshot);
+            const validation = ValidateFrozenBlockSnapshot(
+                spec.FrozenSnapshot,
+                undefined,
+                normalizedHostId ? { ArtifactID: normalizedHostId } : undefined
+            );
             return {
                 Valid: validation.Valid,
                 SnapshotVerified: validation.SnapshotVerified,
@@ -460,7 +488,9 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 spec,
                 user,
                 acknowledgeSecurityWarning,
-                provider
+                provider,
+                undefined,
+                normalizedHostId
             );
             if (res.Success) {
                 void WriteArtifactComplianceAudit(provider, user, {

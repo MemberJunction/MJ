@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { SpreadsheetEngine } from '@memberjunction/core-entities';
+import { describe, it, expect, vi } from 'vitest';
+import type { IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { ArtifactPermissionEngine, SpreadsheetEngine } from '@memberjunction/core-entities';
 import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
 import { SpreadsheetToolLibrary } from '../artifact-tools/SpreadsheetToolLibrary';
 
@@ -812,22 +813,50 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         // embed_artifact resolves session short IDs ("D" -> artifactId, "E" -> versionId) when context resolvers are provided and rejects unresolved IDs
         const targetUuid = '5b83b8fc-0c19-4584-bc21-b7dfcdc518dd';
         const targetVersionUuid = 'ba9af0c9-1b00-40ea-a206-425f38fab36b';
+        const permSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: targetUuid,
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+            Reason: 'Test'
+        });
+        const mockEmbedProvider = {
+            RunView: async (params: RunViewParams) => ({
+                Success: true,
+                Results:
+                    params.EntityName === 'MJ: Artifact Versions'
+                        ? [{ ID: targetVersionUuid, ArtifactID: targetUuid }]
+                        : [{ ID: targetUuid, TypeID: '' }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            })
+        } as unknown as IMetadataProvider & IRunViewProvider;
         const ctx = {
+            contextUser: { ID: 'test-user-sheet', Name: 'Test' } as UserInfo,
+            provider: mockEmbedProvider,
             resolveArtifactId: (id: string) => (id === 'D' ? targetUuid : undefined),
             resolveVersionId: (id: string) => (id === 'E' ? targetVersionUuid : undefined)
         };
-        const embedResolved = await sheetLib.InvokeTool(
-            'embed_artifact',
-            { sheet: 'Trade', artifactId: 'D', versionId: 'E', title: 'Linked Trade Sheet' },
-            chartData.updatedContent,
-            ctx
-        );
-        expect(embedResolved.success).toBe(true);
-        const embedPayload = embedResolved.data as {
-            embeddedArtifact: { ArtifactID: string; ArtifactVersionID?: string | null };
-        };
-        expect(embedPayload.embeddedArtifact.ArtifactID).toBe(targetUuid);
-        expect(embedPayload.embeddedArtifact.ArtifactVersionID).toBe(targetVersionUuid);
+        try {
+            const embedResolved = await sheetLib.InvokeTool(
+                'embed_artifact',
+                { sheet: 'Trade', artifactId: 'D', versionId: 'E', title: 'Linked Trade Sheet' },
+                chartData.updatedContent,
+                ctx
+            );
+            expect(embedResolved.success).toBe(true);
+            const embedPayload = embedResolved.data as {
+                embeddedArtifact: { ArtifactID: string; ArtifactVersionID?: string | null };
+            };
+            expect(embedPayload.embeddedArtifact.ArtifactID).toBe(targetUuid);
+            expect(embedPayload.embeddedArtifact.ArtifactVersionID).toBe(targetVersionUuid);
+        } finally {
+            permSpy.mockRestore();
+        }
 
         const embedInvalid = await sheetLib.InvokeTool(
             'embed_artifact',

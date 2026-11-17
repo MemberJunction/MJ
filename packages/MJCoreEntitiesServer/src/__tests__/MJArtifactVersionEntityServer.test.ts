@@ -28,6 +28,7 @@ import {
     ArtifactVersionSavedEventPayload,
     CalculateContentSizeBytes,
     EnsureArtifactVersionReadHookRegistered,
+    MarkTrustedCompactionVersionSave,
     MarkTrustedServerRestoreSave,
     MJArtifactVersionEntityServer
 } from '../custom/MJArtifactVersionEntityServer.server';
@@ -636,6 +637,20 @@ class TestServerVersionProvider extends DatabaseProviderBase {
                 'ArtifactGuestShareLink',
                 'vwArtifactGuestShareLinks',
                 ['ArtifactID', 'ArtifactVersionID', 'MagicLinkInviteID']
+            ),
+            buildSupportEntityInfo(
+                '99999999-9999-4999-8999-999999999999',
+                'MJ: Artifact Working States',
+                'ArtifactWorkingState',
+                'vwArtifactWorkingStates',
+                ['ArtifactID', 'Content', 'UserID']
+            ),
+            buildSupportEntityInfo(
+                'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+                'MJ: Artifact Version Attributes',
+                'ArtifactVersionAttribute',
+                'vwArtifactVersionAttributes',
+                ['ArtifactVersionID', 'Name', 'Value']
             )
         ];
     }
@@ -1718,7 +1733,10 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             ResultType: 'simple'
         };
         const hooked = await ArtifactVersionPreRunViewHook(mixedParams, reader, provider);
-        expect(String(hooked.ExtraFilter)).toContain(`ArtifactID IN ('${targetArtifactId}')`);
+        expect(String(hooked.ExtraFilter)).toContain('EXISTS (');
+        expect(String(hooked.ExtraFilter)).toContain('vwArtifacts');
+        expect(String(hooked.ExtraFilter)).toContain('ArtifactID');
+        expect(String(hooked.ExtraFilter)).toContain(reader.ID);
 
         // When SQL-scoped and removedCount === 0 under MaxRows: 1, TotalRowCount (42) is preserved!
         const pagedRes = await ArtifactVersionPostRunViewHook(
@@ -1797,6 +1815,16 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
                     ErrorMessage: ''
                 };
             }
+            if (params.EntityName === 'MJ: Artifact Version Attributes') {
+                return {
+                    Success: true,
+                    Results: [{ ID: '33333333-3333-4333-8333-333333333399' }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
             return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
         });
 
@@ -1858,14 +1886,23 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             expect(hist2[0]?.Message).toContain('immutable');
             expect(superSaveSpy).not.toHaveBeenCalled();
 
-            // 3. Deleting a version cascades guest share link deletion prior to super.Delete() (S8)
+            // 3. Deleting a version as owner cascades guest share link and version attribute deletion prior to super.Delete() (S8 + FK_ArtifactVersionAttribute_ArtifactVersion)
+            const ownerActor = makeRoleUser(ownerUserId, 'owner@example.com', provider);
             const linkDeleted = vi.fn().mockResolvedValue(true);
+            const attrDeleted = vi.fn().mockResolvedValue(true);
             const getEntitySpy = vi.spyOn(provider, 'GetEntityObject').mockImplementation(async (name: string) => {
                 if (name === 'MJ: Artifact Guest Share Links') {
                     return {
                         Load: vi.fn().mockResolvedValue(true),
                         Delete: linkDeleted,
                         LatestResult: { Message: '' }
+                    } as never;
+                }
+                if (name === 'MJ: Artifact Version Attributes') {
+                    return {
+                        Load: vi.fn().mockResolvedValue(true),
+                        Delete: attrDeleted,
+                        LatestResult: { Message: '', CompleteMessage: '' }
                     } as never;
                 }
                 return null as never;
@@ -1875,7 +1912,7 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             Object.defineProperty(verToDelete, 'IsSaved', { value: true, writable: true });
             Object.defineProperty(verToDelete, 'ID', { value: targetVersionId, writable: true });
             Object.defineProperty(verToDelete, 'ArtifactID', { value: targetArtifactId, writable: true });
-            Object.defineProperty(verToDelete, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(verToDelete, 'ContextCurrentUser', { value: ownerActor, writable: true });
             Object.defineProperty(verToDelete, 'ProviderToUse', { value: provider, configurable: true });
             Object.defineProperty(verToDelete, 'GetFieldByName', {
                 value: () => ({ Dirty: false, OldValue: targetArtifactId }),
@@ -1883,8 +1920,126 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             });
             expect(await verToDelete.Delete()).toBe(true);
             expect(linkDeleted).toHaveBeenCalledTimes(1);
+            expect(attrDeleted).toHaveBeenCalledTimes(1);
             expect(superDeleteSpy).toHaveBeenCalledTimes(1);
             getEntitySpy.mockRestore();
+
+            // 4. B3: non-owner creating new version that clears protected Configuration (Slides/Worksheets) is denied
+            const configViolator = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            const histConfig: MJArtifactVersionEntityServer['ResultHistory'] = [];
+            Object.defineProperty(configViolator, 'ResultHistory', { value: histConfig, writable: true });
+            Object.defineProperty(configViolator, 'IsSaved', { value: false, writable: true });
+            Object.defineProperty(configViolator, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(configViolator, 'Content', {
+                value: `<!-- mj-lock: owner-only user=${ownerUserId} -->\n## Locked Header\nImmutable owner copy.\n`,
+                writable: true
+            });
+            Object.defineProperty(configViolator, 'Configuration', {
+                value: JSON.stringify({ ProtectedRanges: [{ Range: 'A1', OwnerUserID: ownerUserId }] }),
+                writable: true
+            });
+            Object.defineProperty(configViolator, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(configViolator, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(configViolator, 'GetFieldByName', {
+                value: () => ({ Dirty: true, OldValue: null }),
+                configurable: true
+            });
+            // Mock prior version with locked Slide inside Configuration while Content is identical
+            const origRunView = provider.RunView.bind(provider);
+            const runViewConfigSpy = vi.spyOn(provider, 'RunView').mockImplementation(async (params, cu) => {
+                if (params.EntityName === 'MJ: Artifact Versions') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: targetVersionId,
+                                ArtifactID: targetArtifactId,
+                                VersionNumber: 3,
+                                Content: `<!-- mj-lock: owner-only user=${ownerUserId} -->\n## Locked Header\nImmutable owner copy.\n`,
+                                Configuration: JSON.stringify({
+                                    SchemaVersion: 1,
+                                    Slides: [
+                                        {
+                                            SlideID: 's1',
+                                            Title: 'Owner Slide',
+                                            Locked: true,
+                                            LockedByUserID: ownerUserId,
+                                            Regions: [
+                                                {
+                                                    RegionID: 'r1',
+                                                    Role: 'body',
+                                                    MarkdownContent: 'Owner locked slide'
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                })
+                            }
+                        ],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: ''
+                    };
+                }
+                return origRunView(params, cu);
+            });
+            Object.defineProperty(configViolator, 'Configuration', {
+                value: JSON.stringify({
+                    SchemaVersion: 1,
+                    Slides: [
+                        {
+                            SlideID: 's1',
+                            Title: 'Owner Slide',
+                            Locked: true,
+                            LockedByUserID: ownerUserId,
+                            Regions: [
+                                {
+                                    RegionID: 'r1',
+                                    Role: 'body',
+                                    MarkdownContent: 'Tampered slide body by non-owner'
+                                }
+                            ]
+                        }
+                    ]
+                }),
+                writable: true
+            });
+            expect(await configViolator.Save()).toBe(false);
+            expect(histConfig[0]?.Message).toMatch(/lock|slide/i);
+
+            // 5. N3: trusted compaction bypasses non-owner lock error even when prior version is owner-locked
+            const compactionSave = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            Object.defineProperty(compactionSave, 'ResultHistory', { value: [], writable: true });
+            Object.defineProperty(compactionSave, 'IsSaved', { value: false, writable: true });
+            Object.defineProperty(compactionSave, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(compactionSave, 'Content', { value: 'Compacted doc', writable: true });
+            Object.defineProperty(compactionSave, 'Configuration', { value: '{}', writable: true });
+            Object.defineProperty(compactionSave, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(compactionSave, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(compactionSave, 'GetFieldByName', {
+                value: () => ({ Dirty: true, OldValue: null }),
+                configurable: true
+            });
+            MarkTrustedCompactionVersionSave(compactionSave);
+            expect(await compactionSave.Save()).toBe(true);
+
+            // 6. B3 Delete(): non-owner deleting latest locked version is denied
+            const lockedDeleteAttempt = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            const histDelete: MJArtifactVersionEntityServer['ResultHistory'] = [];
+            Object.defineProperty(lockedDeleteAttempt, 'ResultHistory', { value: histDelete, writable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'IsSaved', { value: true, writable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'ID', { value: targetVersionId, writable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'ContextCurrentUser', { value: editor, writable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(lockedDeleteAttempt, 'GetFieldByName', {
+                value: () => ({ Dirty: false, OldValue: targetArtifactId }),
+                configurable: true
+            });
+            expect(await lockedDeleteAttempt.Delete()).toBe(false);
+            expect(histDelete[0]?.Message).toMatch(/lock|slide/i);
+            runViewConfigSpy.mockRestore();
         } finally {
             superSaveSpy.mockRestore();
             superDeleteSpy.mockRestore();

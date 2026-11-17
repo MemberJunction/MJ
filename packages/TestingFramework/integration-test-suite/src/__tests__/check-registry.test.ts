@@ -294,7 +294,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
         ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 10], // DSL1-DSL10 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, NW-2/NW-5 ACL & synthesis, and engine security guards (IT170)
-        ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 12], // DSLC1-DSLC12 Client-transport GraphQL, Remote Ops, Pre-auth Guest Share, Collaboration Resolver, WS meta/lock rejection, API-key scope, ClientClauseScreen, Collection ACL, and Realtime IDOR enforcement (IT171)
+        ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 13], // DSLC1-DSLC13 Client-transport GraphQL, Remote Ops, Pre-auth Guest Share, Collaboration Resolver, WS meta/lock rejection, API-key scope, ClientClauseScreen, Collection ACL, Realtime IDOR, and B4 default-off guest share refusal (IT171)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
@@ -405,7 +405,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'dataset-cache': 4,
         'diagnostics': 4,
         'docs-slides-sheets-library': 10,
-        'docs-slides-sheets-library-client': 12,
+        'docs-slides-sheets-library-client': 13,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,

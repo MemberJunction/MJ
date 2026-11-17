@@ -127,14 +127,13 @@ export class RefreshAndSnapshotArtifactAction extends BaseAction {
 
         if (
             freezeRefreshedBlocks &&
-            (attribution.agentRunId || attribution.agentName) &&
-            !this.getBooleanParam(params, 'UserConfirmedFreezeSecurityWarning', false)
+            (attribution.agentRunId || attribution.agentName)
         ) {
             return {
                 Success: false,
                 ResultCode: 'PERMISSION_DENIED',
                 Message:
-                    'Agents cannot freeze live artifact blocks without explicit out-of-band user confirmation (UserConfirmedFreezeSecurityWarning = true) of the RLS/FLS snapshot security warning.',
+                    'Agents cannot freeze live artifact blocks via RefreshAndSnapshotArtifact. Freezing snapshots requires a direct human action in the UI (FreezeDocumentLiveBlock) so RLS/FLS data cannot be frozen autonomously.',
                 Params: params.Params,
             };
         }

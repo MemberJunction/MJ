@@ -111,6 +111,10 @@ export async function WriteArtifactComplianceAudit(
  */
 @RegisterClass(BaseRemotableOperation, ARTIFACT_LOG_COMPLIANCE_AUDIT_KEY)
 export class ArtifactComplianceAuditServerOperation extends ArtifactComplianceAuditOperation {
+    public override get DisallowMagicLinkScope(): boolean {
+        return true;
+    }
+
     public override GetScopeResourceIds(input: ArtifactComplianceAuditInput): string[] {
         return input?.ArtifactID ? [input.ArtifactID] : [];
     }
@@ -120,6 +124,9 @@ export class ArtifactComplianceAuditServerOperation extends ArtifactComplianceAu
         user: UserInfo,
         context?: RemoteOpServerContext,
     ): Promise<boolean> {
+        if (user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+            throw new RemoteOperationError('FORBIDDEN', 'Magic Link sessions cannot log artifact compliance audits.');
+        }
         const provider = context?.provider;
         if (!provider) {
             throw new RemoteOperationError('NO_PROVIDER', 'Metadata provider is required.');

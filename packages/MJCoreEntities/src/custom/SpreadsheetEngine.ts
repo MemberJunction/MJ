@@ -2245,6 +2245,7 @@ const MAX_DENSE_ROWS = 10_000;
 const MAX_DENSE_COLS = 512;
 const EXCEL_MAX_ROWS = 1_048_576;
 const EXCEL_MAX_COLS = 16_384;
+const MAX_DYNAMIC_ARRAY_CELLS = 200_000;
 
 /**
  * Zero-regex ASCII coordinate parser for canonical or `$`-prefixed A1 cell keys (`'B2'`, `'$AA$100'`).
@@ -2379,16 +2380,26 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
     }
 
-    private consumeEvalBudget(): void {
+    private consumeEvalBudget(cost = 1): void {
         const budget = this.activeEvalBudget;
-        if (!budget) return;
+        if (!budget) {
+            throw new EvalBudgetExceededError();
+        }
         if (budget.exceeded) {
             throw new EvalBudgetExceededError();
         }
-        budget.ops++;
-        if (budget.ops > budget.maxOps || ((budget.ops & 1023) === 0 && Date.now() > budget.deadlineMs)) {
-            budget.exceeded = true;
-            throw new EvalBudgetExceededError();
+        const units = Number.isFinite(cost) && cost > 1 ? Math.trunc(cost) : 1;
+        const prevOps = budget.ops;
+        budget.ops += units;
+        if (
+            budget.ops > budget.maxOps ||
+            units > 64 ||
+            (budget.ops >>> 10) !== (prevOps >>> 10)
+        ) {
+            if (budget.ops > budget.maxOps || Date.now() > budget.deadlineMs) {
+                budget.exceeded = true;
+                throw new EvalBudgetExceededError();
+            }
         }
     }
 
@@ -2563,6 +2574,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
         const sanitized = this.cloneWorkbookWithoutViewerScopedData(workbook);
         return JSON.stringify(sanitized, null, 2);
+    }
+
+    /**
+     * Returns a deep-cloned workbook with all viewer-scoped data (`=MJ.*` cells/spills,
+     * `Mode === 'Live'` tables, and transitively dependent formula cells) stripped (`B7b`).
+     */
+    public CloneWorkbookWithoutViewerScopedData(workbook: WorkbookSpec): WorkbookSpec {
+        return this.cloneWorkbookWithoutViewerScopedData(workbook);
     }
 
     private isCellInLiveTableFootprint(ws: WorksheetSpec, rowIndex: number, colIndex: number): string | null {
@@ -2783,6 +2802,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         const cellCopy: SpreadsheetCellSpec = {
                             ...cell,
                             Formula: resolvedFormula,
+                            RawValue: null,
                             ComputedValue: null,
                             DisplayValue: '',
                             Style: cell.Style ? { ...cell.Style } : undefined
@@ -6435,11 +6455,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             let endRow = desc.endRow;
             let endCol = desc.endCol;
             const rawArea = (endRow - desc.startRow + 1) * (endCol - desc.startCol + 1);
-            if (rawArea > 200_000) {
+            if (rawArea > MAX_DYNAMIC_ARRAY_CELLS) {
                 const dims = getEffectiveSheetDimensions(desc.targetSheet);
                 endRow = Math.min(endRow, Math.max(desc.startRow, dims.maxRow));
                 endCol = Math.min(endCol, Math.max(desc.startCol, dims.maxCol));
             }
+            const clampedArea = (endRow - desc.startRow + 1) * (endCol - desc.startCol + 1);
+            if (clampedArea > MAX_DYNAMIC_ARRAY_CELLS || !Number.isFinite(clampedArea)) {
+                return [['#NUM!']];
+            }
+            this.consumeEvalBudget(clampedArea);
             const matrix: SpreadsheetCellValue[][] = [];
             for (let r = desc.startRow; r <= endRow; r++) {
                 const rowVals: SpreadsheetCellValue[] = [];
@@ -6542,6 +6567,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 ) {
                     return [['#VALUE!']];
                 }
+                const broadcastArea = outRows * outCols;
+                if (broadcastArea > MAX_DYNAMIC_ARRAY_CELLS || !Number.isFinite(broadcastArea)) {
+                    return [['#NUM!']];
+                }
+                this.consumeEvalBudget(broadcastArea);
 
                 const out: SpreadsheetCellValue[][] = [];
                 for (let r = 0; r < outRows; r++) {
@@ -7266,6 +7296,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (!desc) return resolveFlattenedRange(arg);
             const area = (desc.endRow - desc.startRow + 1) * (desc.endCol - desc.startCol + 1);
             if (area <= 4096) {
+                this.consumeEvalBudget(area);
                 const denseVals: SpreadsheetCellValue[] = [];
                 if (desc.startCol === desc.endCol) {
                     const colLetter = ColumnIndexToLetter(desc.startCol);
@@ -7293,6 +7324,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 return denseVals;
             }
             const cellKeys = Object.keys(desc.targetSheet.Cells);
+            this.consumeEvalBudget(Math.max(1, cellKeys.length));
             const hits: Array<{ row: number; col: number; val: SpreadsheetCellValue }> = [];
             let sawError = false;
             for (let k = 0; k < cellKeys.length; k++) {
@@ -10849,7 +10881,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         if (rhsVal !== '#NAME?' || ParseCellAddress(rhsRaw)) {
                             return `${paramName}=${rhsVal ?? ''}`;
                         }
-                    } catch {
+                    } catch (err) {
+                        if (err instanceof EvalBudgetExceededError) {
+                            throw err;
+                        }
                         // Fall through to raw assignment token
                     }
                     return trimmedTok;
@@ -10862,12 +10897,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     return trimmedTok;
                 }
                 return val;
-            } catch {
+            } catch (err) {
+                if (err instanceof EvalBudgetExceededError) {
+                    throw err;
+                }
                 return trimmedTok;
             }
         };
 
-        const evaluatedArgs = rawArgs.map(evalTokenScalar);
+        let evaluatedArgs: SpreadsheetCellValue[];
+        try {
+            evaluatedArgs = this.runWithEvalBudget(() => rawArgs.map(evalTokenScalar));
+        } catch (err) {
+            if (err instanceof EvalBudgetExceededError) {
+                return null;
+            }
+            throw err;
+        }
         const primaryTarget = String(evaluatedArgs[0] ?? '').trim();
         if (!primaryTarget) return null;
 
@@ -11567,7 +11613,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         return c ? (c.ComputedValue ?? c.RawValue ?? null) : null;
                     };
                     if (this.nodeContainsArray(exprAst, workbook)) {
-                        const evaluatedMatrix = this.evalAstMatrix(exprAst, workbook, sheet, getVal, getVal);
+                        const evaluatedMatrix = this.runWithEvalBudget(() =>
+                            this.evalAstMatrix(exprAst, workbook, sheet, getVal, getVal)
+                        );
                         for (const rowArr of evaluatedMatrix) {
                             for (const v of rowArr) {
                                 if (v === '#MJ_ACCESS_DENIED!') accessDenied = true;
@@ -11581,12 +11629,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                     : evaluatedMatrix
                         });
                     } else {
-                        const evaluatedVal = this.evalAstNode(exprAst, workbook, sheet, getVal);
+                        const evaluatedVal = this.runWithEvalBudget(() =>
+                            this.evalAstNode(exprAst, workbook, sheet, getVal)
+                        );
                         if (evaluatedVal === '#MJ_ACCESS_DENIED!') accessDenied = true;
                         resolvedArgs.push({ Ref: ref, Value: evaluatedVal === '#NAME?' ? ref : evaluatedVal });
                     }
-                } catch {
-                    resolvedArgs.push({ Ref: ref, Value: ref });
+                } catch (err) {
+                    if (err instanceof EvalBudgetExceededError) {
+                        resolvedArgs.push({ Ref: ref, Value: '#CALC!' });
+                    } else {
+                        resolvedArgs.push({ Ref: ref, Value: ref });
+                    }
                 }
             }
         }

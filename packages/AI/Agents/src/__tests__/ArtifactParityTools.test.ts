@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import type { ArtifactToolExecutionContext } from '@memberjunction/ai-core-plus';
 import {
+    ArtifactPermissionEngine,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
     SlideDeckEngine,
@@ -16,7 +17,49 @@ describe('Artifact Tool Libraries — SLICE B Parity & Security Suite', () => {
     const VALID_WB_UUID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const VALID_SHEET_UUID = '11111111-2222-4333-8444-555555555555';
     const VALID_VERSION_UUID = '99999999-8888-4777-8666-555555555555';
+    const testUser = { ID: 'test-user-parity', Name: 'Test User' } as UserInfo;
+    let lastArtifactId = VALID_WB_UUID;
+    const mockEmbedProvider = {
+        RunView: async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: Artifact Versions') {
+                return {
+                    Success: true,
+                    Results: [{ ID: VALID_VERSION_UUID, ArtifactID: lastArtifactId }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            const id = String(params.ExtraFilter ?? '').includes(VALID_WB_UUID) ? VALID_WB_UUID : VALID_SHEET_UUID;
+            lastArtifactId = id;
+            return {
+                Success: true,
+                Results: [{ ID: id, TypeID: '' }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            };
+        }
+    } as unknown as IMetadataProvider & IRunViewProvider;
+    beforeEach(() => {
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
+            ArtifactID: VALID_WB_UUID,
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'Owner',
+            Reason: 'Test'
+        });
+    });
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
     const shortIdContext = {
+        contextUser: testUser,
+        provider: mockEmbedProvider,
         resolveArtifactId: (ref: string): string | null => {
             if (ref === 'D') return VALID_WB_UUID;
             if (ref === 'S') return VALID_SHEET_UUID;

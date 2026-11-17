@@ -35,10 +35,12 @@ import {
 } from '@memberjunction/global';
 import { randomUUID } from 'crypto';
 import {
+    BuildSqlArtifactReadablePredicate,
     EmptyPostRunViewResult,
     FinalizePostRunViewResult,
     GetGlobalWeakSet,
     PrepareScopedPreRunView,
+    QualifyOuterEntityColumn,
     ShouldBypassPostRunViewAsync,
     StripSyntheticFieldsFromRow
 } from './ArtifactSecurityHookHelpers';
@@ -160,8 +162,12 @@ export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_WS_PARAMS),
             OriginalFieldsMap: getOriginalWorkingStateFieldsMap(),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_WS_PARAMS),
-            ResolveReadableIds: (prov, user) =>
-                ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(prov, user)
+            BuildSqlPredicate: (prov, user, entityInfo) =>
+                BuildSqlArtifactReadablePredicate(
+                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactWorkingStates', 'ArtifactID', prov),
+                    prov,
+                    user
+                )
         },
         contextUser,
         hookProvider

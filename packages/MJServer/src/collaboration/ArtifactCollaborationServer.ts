@@ -45,6 +45,7 @@ import {
     type WorkbookSpec,
     type WorksheetSpec
 } from '@memberjunction/core-entities';
+import { MarkTrustedCompactionVersionSave } from '@memberjunction/core-entities-server';
 import { ApiRoute } from '../apiRoot.js';
 import { configInfo } from '../config.js';
 import { getUserPayload } from '../context.js';
@@ -146,6 +147,7 @@ const WORKING_STATE_FLUSH_DEBOUNCE_MS = 2500;
 const MAX_COLLAB_FRAME_BYTES = 16 * 1024 * 1024; // 16 MB
 const MAX_AWARENESS_FRAME_BYTES = 16_384; // 16 KB
 const MAX_ACTIVE_COLLAB_ROOMS = 2_000;
+const MAX_ACTIVE_ROOMS_PER_USER = 50;
 const MAX_ROOM_DOC_BYTES = 8 * 1024 * 1024; // 8 MB
 const MAX_RETAINED_DIRTY_ROOMS = 250;
 const RETAINED_DIRTY_ROOM_TTL_MS = 15 * 60_000; // 15 minutes
@@ -264,6 +266,10 @@ export interface TicketReplayStore {
      * Returns `true` if `nonce` had not been seen before; returns `false` on replay.
      */
     ConsumeNonce(nonce: string, ttlMs: number): Promise<boolean> | boolean;
+    /** Optional cross-replica ticket metadata store (used to persist `ApiKeyHash` server-side across nodes, `N2`). */
+    SetTicketData?(nonce: string, dataJson: string, ttlMs: number): Promise<void> | void;
+    /** Optional cross-replica ticket metadata lookup & cleanup (`N2`). */
+    GetAndDeleteTicketData?(nonce: string): Promise<string | null> | string | null;
 }
 
 /**
@@ -342,6 +348,10 @@ export interface CollaborationRoom {
     Provider: IMetadataProvider;
     /** `MJ: Artifacts.ID` represented by this room. */
     ArtifactID: string;
+    /** Authoritative `MJ: Artifacts.UserID` owner of the artifact (used for OOB lock conflict checks, `B3`). */
+    ArtifactOwnerUserID?: string | null;
+    /** Normalized user ID that hydrated this room (used for per-user active room quota, `S9b`). */
+    CreatedByUserID?: string | null;
     /** Optional delegating entity ID (`MJ: Artifacts.DelegateEntityID`) if this artifact inherits permissions. */
     DelegateEntityID: string | null;
     /** Optional delegating record ID (`MJ: Artifacts.DelegateRecordID`) if this artifact inherits permissions. */
@@ -555,6 +565,7 @@ interface PendingSyncWaiterEntry {
 
 interface ArtifactDelegateProjection {
     ID: string;
+    UserID?: string | null;
     DelegateEntityID?: string | null;
     DelegateRecordID?: string | null;
 }
@@ -1141,6 +1152,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const issuedAtMs = Date.now();
         const expiresAtMs = issuedAtMs + ttlSeconds * 1000;
         const nonce = randomBytes(18).toString('base64url');
+        const hasApiKeyHash = typeof params.ApiKeyHash === 'string' && params.ApiKeyHash.trim().length > 0;
         const payloadJson = JSON.stringify({
             n: nonce,
             a: artifactId,
@@ -1148,6 +1160,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             u: params.User.ID,
             i: issuedAtMs,
             e: expiresAtMs,
+            ...(hasApiKeyHash ? { ak: true } : {}),
             ...(typeof params.TokenExpiresAtMs === 'number' && Number.isFinite(params.TokenExpiresAtMs)
                 ? { te: params.TokenExpiresAtMs }
                 : {})
@@ -1157,6 +1170,31 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             .update(payloadB64, 'utf8')
             .digest('base64url');
         const ticket = `${payloadB64}.${sigB64}`;
+
+        if (hasApiKeyHash && this._ticketReplayStore?.SetTicketData) {
+            try {
+                const pendingSet = this._ticketReplayStore.SetTicketData(
+                    nonce,
+                    JSON.stringify({ ApiKeyHash: params.ApiKeyHash }),
+                    (ttlSeconds + 5) * 1000
+                );
+                if (pendingSet && typeof (pendingSet as Promise<void>).catch === 'function') {
+                    void (pendingSet as Promise<void>).catch((err) => {
+                        LogError(
+                            `ArtifactCollaborationServer.IssueTicket failed to store ticket metadata in replay store: ${
+                                err instanceof Error ? err.message : String(err)
+                            }`
+                        );
+                    });
+                }
+            } catch (err) {
+                LogError(
+                    `ArtifactCollaborationServer.IssueTicket failed to store ticket metadata in replay store: ${
+                        err instanceof Error ? err.message : String(err)
+                    }`
+                );
+            }
+        }
 
         this._tickets.set(ticket, {
             Nonce: nonce,
@@ -1226,6 +1264,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 i?: number;
                 e?: number;
                 te?: number;
+                ak?: boolean;
             };
             if (
                 !parsed ||
@@ -1304,9 +1343,27 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (typeof tokenExpiresAtMs === 'number' && Number.isFinite(tokenExpiresAtMs) && tokenExpiresAtMs <= now) {
                 return null;
             }
+            let apiKeyHash = entry?.ApiKeyHash;
+            if (!apiKeyHash && parsed.ak && this._ticketReplayStore?.GetAndDeleteTicketData) {
+                try {
+                    const metaRaw = await this._ticketReplayStore.GetAndDeleteTicketData(parsed.n);
+                    if (metaRaw) {
+                        const metaParsed = JSON.parse(metaRaw) as { ApiKeyHash?: string };
+                        if (typeof metaParsed?.ApiKeyHash === 'string' && metaParsed.ApiKeyHash.trim().length > 0) {
+                            apiKeyHash = metaParsed.ApiKeyHash;
+                        }
+                    }
+                } catch {
+                    apiKeyHash = undefined;
+                }
+            }
+            // Fail closed on cross-replica API-key tickets if ApiKeyHash cannot be recovered (`N2`).
+            if (parsed.ak && !apiKeyHash) {
+                return null;
+            }
             return {
                 User: user,
-                ApiKeyHash: entry?.ApiKeyHash,
+                ApiKeyHash: apiKeyHash,
                 TokenExpiresAtMs: tokenExpiresAtMs,
                 ProviderKey: ticketProviderKey ?? currentProviderKey,
                 Provider: resolvedTicketProvider
@@ -1994,6 +2051,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
             const normPendingVersionId = NormalizeUUID(versionEntity.ID);
             sharedState.InFlightCompactionVersionIds.add(normPendingVersionId);
+            MarkTrustedCompactionVersionSave(versionEntity);
             let saved = false;
             try {
                 saved = await versionEntity.Save();
@@ -4819,6 +4877,45 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             room.LastCompactedStateVector = null;
         }
 
+        // B3: Ensure out-of-band version reconciliation never silently overwrites live room locks
+        // created/held inside the active room when the OOB merge was authored by a non-owner.
+        let oobLockConflict = false;
+        if (!isRestore && this.computeContentHasActiveLocks(liveText)) {
+            const candidateText = this.extractRoomSerializedContent(room.Doc);
+            if (candidateText !== liveText) {
+                const oobActorId = options?.actorUserId ?? version.UserID ?? null;
+                const isOobOwner = Boolean(
+                    oobActorId &&
+                    room.ArtifactOwnerUserID &&
+                    UUIDsEqual(oobActorId, room.ArtifactOwnerUserID)
+                );
+                const oobLockCheck = ValidateArtifactContentMutationAgainstLocks(
+                    liveText,
+                    candidateText,
+                    oobActorId,
+                    isOobOwner,
+                    {
+                        currentConfiguration: room.BaseConfiguration ?? null,
+                        nextConfiguration: version.Configuration ?? null
+                    }
+                );
+                if (!oobLockCheck.Allowed) {
+                    oobLockConflict = true;
+                    room.Doc.transact(() => {
+                        this.applyMinimalTextDiff(yText, yText.toString(), liveText);
+                        this.syncSlideDeckStructuresIfPresent(room.Doc, liveText);
+                        this.syncSpreadsheetStructuresIfPresent(
+                            room.Doc,
+                            liveText,
+                            room.BaseConfiguration ?? null
+                        );
+                    }, 'server-oob-version');
+                    room.DirtyVersion = true;
+                    room.LastCompactedStateVector = null;
+                }
+            }
+        }
+
         room.LastReconciledBaselineText = baselineText;
         room.BaseVersionID = version.ID;
         room.BaseVersionNumber = version.VersionNumber;
@@ -4840,11 +4937,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         room.LastReconciledOobVersionID = version.ID;
         room.LastReconciledOobContent = targetText;
         room.LastReconciledOobMergeResult = !isStructuredSlideOrSheet ? resolvedOobMerge : null;
-        if (!isStructuredSlideOrSheet && resolvedOobMerge?.HadConflict) {
+        if ((!isStructuredSlideOrSheet && resolvedOobMerge?.HadConflict) || oobLockConflict) {
             this.broadcastMergeConflictFrame(room, {
                 action: 'merge-conflict',
                 versionId: version.ID,
-                rejectedHunkCount: resolvedOobMerge.RejectedAgentHunks.length,
+                rejectedHunkCount: resolvedOobMerge?.RejectedAgentHunks.length ?? (oobLockConflict ? 1 : 0),
                 roomEpoch: room.RoomEpoch,
                 actorUserId: options?.actorUserId ?? version.UserID
             });
@@ -5387,6 +5484,36 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (this._rooms.size >= MAX_ACTIVE_COLLAB_ROOMS) {
             throw new Error(`Collaboration server active room limit (${MAX_ACTIVE_COLLAB_ROOMS}) reached.`);
         }
+        const normalizedCreatorId = contextUser?.ID ? NormalizeUUID(contextUser.ID) : '';
+        if (normalizedCreatorId) {
+            const countUserRooms = (): number => {
+                let n = 0;
+                for (const existing of this._rooms.values()) {
+                    if (existing.CreatedByUserID === normalizedCreatorId) {
+                        n++;
+                    }
+                }
+                return n;
+            };
+            if (countUserRooms() >= MAX_ACTIVE_ROOMS_PER_USER) {
+                for (const [rKey, r] of this._rooms.entries()) {
+                    if (
+                        r.CreatedByUserID === normalizedCreatorId &&
+                        r.Connections.size === 0 &&
+                        !r.DirtyWorkingState &&
+                        !r.DirtyVersion
+                    ) {
+                        this._rooms.delete(rKey);
+                        this.teardownRoomResources(r);
+                    }
+                }
+                if (countUserRooms() >= MAX_ACTIVE_ROOMS_PER_USER) {
+                    throw new Error(
+                        `Per-user active collaboration room limit (${MAX_ACTIVE_ROOMS_PER_USER}) reached.`
+                    );
+                }
+            }
+        }
         const resolvedProvider = provider ?? this.activeProvider();
         const providerKey = this.resolveProviderKey(resolvedProvider, contextUser);
         if (resolvedProvider) {
@@ -5401,6 +5528,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         const room: CollaborationRoom = {
             ArtifactID: artifactId,
+            ArtifactOwnerUserID: null,
+            CreatedByUserID: normalizedCreatorId || null,
             RoomKey: key,
             ProviderKey: providerKey,
             Provider: resolvedProvider ?? null,
@@ -5553,7 +5682,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     {
                         EntityName: 'MJ: Artifacts',
                         ExtraFilter: `ID='${safeId}'`,
-                        Fields: ['ID', 'DelegateEntityID', 'DelegateRecordID'],
+                        Fields: ['ID', 'UserID', 'DelegateEntityID', 'DelegateRecordID'],
                         MaxRows: 1,
                         SkipTotalRowCount: true,
                         ResultType: 'simple'
@@ -5571,6 +5700,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
             if (artifactRes?.Success && artifactRes.Results && artifactRes.Results.length > 0) {
                 const artRow = artifactRes.Results[0] as ArtifactDelegateProjection;
+                room.ArtifactOwnerUserID = artRow.UserID ?? null;
                 room.DelegateEntityID = artRow.DelegateEntityID ?? null;
                 room.DelegateRecordID = artRow.DelegateRecordID ?? null;
             }
@@ -6208,10 +6338,82 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     Reason: 'Forbidden: clients cannot mutate server collaboration metadata.'
                 };
             }
+
+            // S9b O(update) fast path: when an unlocked plain-text/Markdown document receives
+            // an in-order update targeting only `yText('content')` with no `mj-lock` markers and
+            // no deletes (which would need current lock verification only if locks existed, here !HasActiveLocks),
+            // skip cloning/re-encoding the full room Y.Doc.
+            if (!room.HasActiveLocks && !currentContent.trimStart().startsWith('{')) {
+                const expectedNextClockByClient = new Map<number, number>(serverStateVector);
+                let safeFastPath = decodedUpdate.ds.clients.size === 0 || decodedUpdate.structs.length > 0;
+                if (decodedUpdate.ds.clients.size > 0) {
+                    // Deletions on an already-unlocked room cannot violate locks, provided no client/clock gap exists
+                    for (const clientId of decodedUpdate.ds.clients.keys()) {
+                        if (!serverStateVector.has(clientId)) {
+                            safeFastPath = false;
+                            break;
+                        }
+                    }
+                }
+                if (safeFastPath) {
+                    for (const struct of decodedUpdate.structs) {
+                        if (!(struct instanceof Y.Item)) {
+                            safeFastPath = false;
+                            break;
+                        }
+                        if (readStructParent(struct) !== 'content') {
+                            safeFastPath = false;
+                            break;
+                        }
+                        if (struct.content instanceof Y.ContentString && /[<>{}]|mj-lock|-->/i.test(struct.content.str)) {
+                            safeFastPath = false;
+                            break;
+                        }
+                        const expectedClock = expectedNextClockByClient.get(struct.id.client) ?? 0;
+                        if (struct.id.clock > expectedClock) {
+                            safeFastPath = false;
+                            break;
+                        }
+                        if (struct.id.clock + struct.length > expectedClock) {
+                            expectedNextClockByClient.set(struct.id.client, struct.id.clock + struct.length);
+                        }
+                    }
+                }
+                if (safeFastPath) {
+                    return { Allowed: true };
+                }
+            }
+
             Y.applyUpdate(probeDoc, Y.encodeStateAsUpdate(room.Doc));
+            const probeStore = probeDoc.store as {
+                pendingStructs: { missing: Map<number, number>; update: Uint8Array } | null;
+                pendingDs: Uint8Array | null;
+            };
+            const beforePendingLen = probeStore.pendingStructs?.update?.byteLength ?? 0;
+            const beforePendingDsLen = probeStore.pendingDs?.byteLength ?? 0;
+            const beforeMissing = new Map<number, number>(probeStore.pendingStructs?.missing ?? []);
+
             Y.applyUpdate(probeDoc, incomingUpdateBytes);
-            const probeStore = probeDoc.store as { pendingStructs?: object | null; pendingDs?: object | null };
-            if (probeStore.pendingStructs != null || probeStore.pendingDs != null) {
+
+            // N5: Only reject if `incomingUpdateBytes` itself introduced NEW pending out-of-order
+            // structs or delete sets — never fail because `room.Doc` already held pre-existing relay gaps.
+            const afterPendingLen = probeStore.pendingStructs?.update?.byteLength ?? 0;
+            const afterPendingDsLen = probeStore.pendingDs?.byteLength ?? 0;
+            const afterMissing = probeStore.pendingStructs?.missing;
+            let introducedNewMissing = false;
+            if (afterMissing) {
+                for (const [clientId, missingClock] of afterMissing.entries()) {
+                    if (beforeMissing.get(clientId) !== missingClock) {
+                        introducedNewMissing = true;
+                        break;
+                    }
+                }
+            }
+            if (
+                afterPendingLen > beforePendingLen ||
+                afterPendingDsLen > beforePendingDsLen ||
+                introducedNewMissing
+            ) {
                 return {
                     Allowed: false,
                     Reason: 'Write rejected: incomplete out-of-order Yjs update cannot be lock-verified.'

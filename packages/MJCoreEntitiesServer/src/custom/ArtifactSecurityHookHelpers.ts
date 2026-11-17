@@ -1,7 +1,6 @@
 import {
     BaseEntity,
     BaseEntityResult,
-    CompositeKey,
     EntityInfo,
     GetDataHooks,
     IEntityDataProvider,
@@ -22,6 +21,8 @@ import {
 import {
     ArtifactPermissionEngine,
     MJArtifactGuestShareLinkEntity,
+    MJArtifactVersionAttributeEntity,
+    MJMagicLinkInviteEntity,
     UserViewEngine,
     type MJUserViewEntity
 } from '@memberjunction/core-entities';
@@ -271,26 +272,28 @@ export async function ResolveTargetEntityNameAsync(
             : params.ViewName
                 ? `Name='${EscapeSQLString(params.ViewName.trim())}'`
                 : '';
-        if (filter) {
-            try {
-                const lookupParams: RunViewParams = {
-                    EntityName: 'MJ: User Views',
-                    ExtraFilter: filter,
-                    Fields: ['ID', 'Entity'],
-                    MaxRows: 1,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple'
-                };
-                internalSet.add(lookupParams);
-                ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(lookupParams);
-                const rv = RunView.FromMetadataProvider(provider);
-                const res = await rv.RunView<{ ID?: string; Entity?: string }>(lookupParams, queryActor);
-                if (res.Success && res.Results?.[0]?.Entity) {
-                    viewEntityName = res.Results[0].Entity.trim();
-                }
-            } catch {
-                // Fall back to sync resolution if view lookup is unavailable in mocked providers
-            }
+        if (!filter) {
+            throw new Error('Permission denied: RunView view reference could not be resolved.');
+        }
+        const lookupParams: RunViewParams = {
+            EntityName: 'MJ: User Views',
+            ExtraFilter: filter,
+            Fields: ['ID', 'Entity'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple'
+        };
+        internalSet.add(lookupParams);
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(lookupParams);
+        const rv = RunView.FromMetadataProvider(provider);
+        const res = await rv.RunView<{ ID?: string; Entity?: string }>(lookupParams, queryActor);
+        if (!res.Success) {
+            throw new Error(
+                `Permission denied: unable to resolve target entity for RunView view reference (${res.ErrorMessage || 'view lookup failed'}).`
+            );
+        }
+        if (res.Results?.[0]?.Entity) {
+            viewEntityName = res.Results[0].Entity.trim();
         }
     }
 
@@ -300,7 +303,11 @@ export async function ResolveTargetEntityNameAsync(
         );
     }
 
-    return syncResolved ?? (viewEntityName ? canonicalizeEntityName(viewEntityName, provider) : null);
+    const resolved = syncResolved ?? (viewEntityName ? canonicalizeEntityName(viewEntityName, provider) : null);
+    if (!resolved && (params.EntityName || params.ViewID || params.ViewName || params.ViewEntity)) {
+        throw new Error('Permission denied: target entity for RunView could not be resolved.');
+    }
+    return resolved;
 }
 
 /**
@@ -370,10 +377,15 @@ export function BuildUuidInScopeClause(columnName: string, ids: ReadonlySet<stri
 
 export interface ScopedPreRunViewPredicate {
     IdColumnName: string;
-    ResolveReadableIds: (
+    ResolveReadableIds?: (
         provider: IMetadataProvider,
         contextUser: UserInfo
     ) => Promise<ReadonlySet<string> | null>;
+    BuildSqlPredicate?: (
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        targetEntityInfo: EntityInfo | null
+    ) => string;
     CheckSingleIdReadable?: (
         provider: IMetadataProvider,
         id: string,
@@ -388,10 +400,15 @@ export interface ScopedPreRunViewConfig {
     InternalParams: WeakSet<object>;
     OriginalFieldsMap: WeakMap<RunViewParams, string[]>;
     SqlScopedParams: WeakSet<object>;
-    ResolveReadableIds: (
+    ResolveReadableIds?: (
         provider: IMetadataProvider,
         contextUser: UserInfo
     ) => Promise<ReadonlySet<string> | null>;
+    BuildSqlPredicate?: (
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        targetEntityInfo: EntityInfo | null
+    ) => string;
     CheckSingleIdReadable?: (
         provider: IMetadataProvider,
         id: string,
@@ -400,12 +417,152 @@ export interface ScopedPreRunViewConfig {
     ExtraPredicates?: readonly ScopedPreRunViewPredicate[];
 }
 
+const MAX_SQL_COLLECTION_ANCESTRY_HOPS = 16;
+
+function sqlPlatformHelpers(provider: IMetadataProvider | null | undefined) {
+    const platformKey =
+        provider && 'PlatformKey' in provider
+            ? (provider as IMetadataProvider & { PlatformKey?: string }).PlatformKey
+            : undefined;
+    const isPg = platformKey === 'postgresql';
+    const q = (ident: string): string => (isPg ? `"${ident}"` : `[${ident}]`);
+    const vw = (viewName: string): string => (isPg ? `__mj."${viewName}"` : `[__mj].[${viewName}]`);
+    const bTrue = isPg ? 'true' : '1';
+    return { isPg, q, vw, bTrue };
+}
+
+/**
+ * Qualifies an outer-query column with its entity schema & base view so correlated `EXISTS`
+ * subqueries can never accidentally bind to an inner table's identically named column (e.g. `ID`).
+ */
+export function QualifyOuterEntityColumn(
+    entityInfo: EntityInfo | null | undefined,
+    defaultBaseView: string,
+    columnName: string,
+    provider: IMetadataProvider | null | undefined
+): string {
+    const { isPg, q } = sqlPlatformHelpers(provider);
+    const schema = (entityInfo?.SchemaName ?? '').trim() || '__mj';
+    const baseView = (entityInfo?.BaseView ?? '').trim() || defaultBaseView;
+    return isPg
+        ? `"${schema}"."${baseView}".${q(columnName)}`
+        : `${q(schema)}.${q(baseView)}.${q(columnName)}`;
+}
+
+/**
+ * Builds a dialect-aware SQL `EXISTS` predicate verifying that `collectionIdExpr` is readable
+ * (or share/delete-capable when `requireShareOrDelete` is true) by `user` via collection ownership
+ * or `MJ: Collection Permissions` across up to 16 ancestor levels (`B2`). Never returns `null`.
+ */
+export function BuildSqlCollectionReadablePredicate(
+    collectionIdExpr: string,
+    provider: IMetadataProvider | null | undefined,
+    user: UserInfo | null | undefined,
+    options?: { requireShareOrDelete?: boolean; aliasPrefix?: string }
+): string {
+    if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+        return '1 = 0';
+    }
+    const { q, vw, bTrue } = sqlPlatformHelpers(provider);
+    const safeUser = EscapeSQLString(user.ID.trim());
+    const prefix = options?.aliasPrefix ?? '_sc';
+    const joins: string[] = [];
+    const ownerChecks: string[] = [`${q(`${prefix}0`)}.${q('OwnerID')} = '${safeUser}'`];
+    const colIds: string[] = [`${q(`${prefix}0`)}.${q('ID')}`];
+
+    for (let hop = 1; hop < MAX_SQL_COLLECTION_ANCESTRY_HOPS; hop++) {
+        const prev = q(`${prefix}${hop - 1}`);
+        const cur = q(`${prefix}${hop}`);
+        joins.push(`LEFT JOIN ${vw('vwCollections')} ${cur} ON ${prev}.${q('ParentID')} = ${cur}.${q('ID')}`);
+        ownerChecks.push(`${cur}.${q('OwnerID')} = '${safeUser}'`);
+        colIds.push(`${cur}.${q('ID')}`);
+    }
+
+    const cpAlias = q(`${prefix}_cp`);
+    const permMatch = options?.requireShareOrDelete
+        ? `(${cpAlias}.${q('CanShare')} = ${bTrue} OR ${cpAlias}.${q('CanDelete')} = ${bTrue})`
+        : `(${cpAlias}.${q('CanRead')} = ${bTrue} OR ${cpAlias}.${q('CanEdit')} = ${bTrue} OR ${cpAlias}.${q('CanDelete')} = ${bTrue} OR ${cpAlias}.${q('CanShare')} = ${bTrue})`;
+
+    return `EXISTS (SELECT 1 FROM ${vw('vwCollections')} ${q(`${prefix}0`)} ${joins.join(' ')} WHERE ${q(`${prefix}0`)}.${q('ID')} = ${collectionIdExpr} AND (${ownerChecks.join(' OR ')} OR EXISTS (SELECT 1 FROM ${vw('vwCollectionPermissions')} ${cpAlias} WHERE ${cpAlias}.${q('UserID')} = '${safeUser}' AND ${permMatch} AND ${cpAlias}.${q('CollectionID')} IN (${colIds.join(',')}))))`;
+}
+
+/**
+ * Builds a dialect-aware SQL `EXISTS` predicate verifying that `artifactIdExpr` is readable (or
+ * share/delete-capable when `requireShareOrDelete` is true) by `user` via ownership,
+ * `MJ: Artifact Permissions`, `MJ: Collection Artifacts` + collection ancestry, or `DelegateEntityID`
+ * (`B2`, fail closed — never returns `null` or drops rows above 5,000).
+ */
+export function BuildSqlArtifactReadablePredicate(
+    artifactIdExpr: string,
+    provider: IMetadataProvider | null | undefined,
+    user: UserInfo | null | undefined,
+    options?: { requireShareOrDelete?: boolean; aliasPrefix?: string }
+): string {
+    if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+        return '1 = 0';
+    }
+    const { isPg, q, vw, bTrue } = sqlPlatformHelpers(provider);
+    const safeUser = EscapeSQLString(user.ID.trim());
+    const prefix = options?.aliasPrefix ?? '_sa';
+    const artAlias = q(`${prefix}_art`);
+    const apAlias = q(`${prefix}_ap`);
+    const caAlias = q(`${prefix}_ca`);
+    const avAlias = q(`${prefix}_av`);
+    const convAlias = q(`${prefix}_conv`);
+
+    const apPermCheck = options?.requireShareOrDelete
+        ? `(${apAlias}.${q('CanShare')} = ${bTrue} OR ${apAlias}.${q('CanDelete')} = ${bTrue})`
+        : `(${apAlias}.${q('CanRead')} = ${bTrue} OR ${apAlias}.${q('CanEdit')} = ${bTrue} OR ${apAlias}.${q('CanDelete')} = ${bTrue} OR ${apAlias}.${q('CanShare')} = ${bTrue})`;
+
+    const colClause = BuildSqlCollectionReadablePredicate(
+        `${caAlias}.${q('CollectionID')}`,
+        provider,
+        user,
+        { requireShareOrDelete: options?.requireShareOrDelete, aliasPrefix: `${prefix}_c` }
+    );
+
+    const convEntityId = provider?.EntityByName?.('MJ: Conversations')?.ID;
+    let delegateClause = `${artAlias}.${q('DelegateEntityID')} IS NOT NULL`;
+    if (convEntityId && IsValidUUID(convEntityId)) {
+        const safeConvId = EscapeSQLString(convEntityId);
+        const convIdCast = isPg
+            ? `LOWER(CAST(${convAlias}.${q('ID')} AS TEXT))`
+            : `LOWER(CAST(${convAlias}.${q('ID')} AS NVARCHAR(36)))`;
+        const convMatch = `EXISTS (SELECT 1 FROM ${vw('vwConversations')} ${convAlias} WHERE ${convIdCast} = LOWER(${artAlias}.${q('DelegateRecordID')}) AND (${convAlias}.${q('UserID')} = '${safeUser}' OR ${convAlias}.${q('AnchorType')} IS NOT NULL))`;
+        delegateClause = `((${artAlias}.${q('DelegateEntityID')} = '${safeConvId}' AND ${convMatch}) OR (${artAlias}.${q('DelegateEntityID')} IS NOT NULL AND ${artAlias}.${q('DelegateEntityID')} <> '${safeConvId}'))`;
+    }
+
+    return `EXISTS (SELECT 1 FROM ${vw('vwArtifacts')} ${artAlias} WHERE ${artAlias}.${q('ID')} = ${artifactIdExpr} AND (${artAlias}.${q('UserID')} = '${safeUser}' OR EXISTS (SELECT 1 FROM ${vw('vwArtifactPermissions')} ${apAlias} WHERE ${apAlias}.${q('ArtifactID')} = ${artAlias}.${q('ID')} AND ${apAlias}.${q('UserID')} = '${safeUser}' AND ${apPermCheck}) OR EXISTS (SELECT 1 FROM ${vw('vwCollectionArtifacts')} ${caAlias} INNER JOIN ${vw('vwArtifactVersions')} ${avAlias} ON ${caAlias}.${q('ArtifactVersionID')} = ${avAlias}.${q('ID')} WHERE ${avAlias}.${q('ArtifactID')} = ${artAlias}.${q('ID')} AND ${colClause}) OR ${delegateClause}))`;
+}
+
+/**
+ * Builds a dialect-aware SQL `EXISTS` predicate verifying that an `ArtifactVersionID` expression
+ * belongs to an artifact readable by `user` (`B2`).
+ */
+export function BuildSqlArtifactVersionIdReadablePredicate(
+    artifactVersionIdExpr: string,
+    provider: IMetadataProvider | null | undefined,
+    user: UserInfo | null | undefined,
+    options?: { aliasPrefix?: string }
+): string {
+    if (!user?.ID || !IsValidUUID(user.ID) || user.IsMagicLinkAnonymous || user.MagicLinkScope) {
+        return '1 = 0';
+    }
+    const { q, vw } = sqlPlatformHelpers(provider);
+    const prefix = options?.aliasPrefix ?? '_sv';
+    const verAlias = q(`${prefix}_ver`);
+    const innerArt = BuildSqlArtifactReadablePredicate(`${verAlias}.${q('ArtifactID')}`, provider, user, {
+        aliasPrefix: `${prefix}_a`
+    });
+    return `EXISTS (SELECT 1 FROM ${vw('vwArtifactVersions')} ${verAlias} WHERE ${verAlias}.${q('ID')} = ${artifactVersionIdExpr} AND ${innerArt})`;
+}
+
 /**
  * Shared `PreRunView` implementation for protected artifact/collection entities (`B1`, `B2`):
  * - Resolves target entity case-insensitively and across `ViewID`/`ViewName`/`ViewEntity` (rejecting mismatches).
  * - Augments narrow `Fields` with ACL-required columns (shallow-copied, never mutating caller object).
- * - Injects a SQL `ExtraFilter` predicate scoping `IdColumnName` BEFORE `TOP` / `COUNT(*)` so
- *   `MaxRows` paging and `ResultType: 'count_only'` are exact.
+ * - Injects a SQL `EXISTS` (or single-UUID) `ExtraFilter` predicate BEFORE `TOP` / `COUNT(*)` so
+ *   `MaxRows` paging and `ResultType: 'count_only'` are exact at any scale without a 5,000-ID limit.
  */
 export async function PrepareScopedPreRunView(
     params: RunViewParams,
@@ -452,10 +609,17 @@ export async function PrepareScopedPreRunView(
     }
 
     if (resolvedProvider && typeof (resolvedProvider as { RunView?: unknown }).RunView === 'function') {
+        const targetEntityInfo =
+            resolvedProvider.EntityByName?.(config.TargetEntityName) ??
+            resolvedProvider.Entities?.find(
+                (e) => e.Name.trim().toLowerCase() === config.TargetEntityName.trim().toLowerCase()
+            ) ??
+            null;
         const predicates: ScopedPreRunViewPredicate[] = [
             {
                 IdColumnName: config.IdColumnName,
                 ResolveReadableIds: config.ResolveReadableIds,
+                BuildSqlPredicate: config.BuildSqlPredicate,
                 CheckSingleIdReadable: config.CheckSingleIdReadable
             },
             ...(config.ExtraPredicates ?? [])
@@ -481,15 +645,31 @@ export async function PrepareScopedPreRunView(
                 continue;
             }
 
-            const readableIds = await pred.ResolveReadableIds(resolvedProvider, contextUser);
-            if (readableIds === null) {
-                allClausesBuilt = false;
+            if (pred.BuildSqlPredicate) {
+                const sqlClause = pred.BuildSqlPredicate(resolvedProvider, contextUser, targetEntityInfo);
+                clauses.push(sqlClause || '1 = 0');
+                if (sqlClause === '1 = 0') {
+                    break;
+                }
                 continue;
             }
-            const scopeClause = BuildUuidInScopeClause(pred.IdColumnName, readableIds);
-            if (scopeClause) {
-                clauses.push(scopeClause);
-                if (scopeClause === '1 = 0') {
+
+            if (pred.ResolveReadableIds) {
+                const readableIds = await pred.ResolveReadableIds(resolvedProvider, contextUser);
+                if (readableIds === null) {
+                    // Fail closed: never fall back to unscoped post-filter only (`B2`).
+                    clauses.push('1 = 0');
+                    break;
+                }
+                const scopeClause = BuildUuidInScopeClause(pred.IdColumnName, readableIds);
+                if (scopeClause) {
+                    clauses.push(scopeClause);
+                    if (scopeClause === '1 = 0') {
+                        break;
+                    }
+                } else {
+                    // Fail closed when materialized list exceeds limit rather than dropping SQL scope (`B2`).
+                    clauses.push('1 = 0');
                     break;
                 }
             } else {
@@ -575,6 +755,17 @@ export function FinalizePostRunViewResult<T extends object>(
     };
 }
 
+async function resolveCascadeSystemUser(
+    provider: IMetadataProvider,
+    actor: UserInfo | undefined
+): Promise<UserInfo | undefined> {
+    return (
+        (IsServerSystemUser(actor) ? actor : undefined) ??
+        (await WellKnownUserSource.Instance.GetSystemUser(provider)) ??
+        actor
+    );
+}
+
 /**
  * Cascades deletion of any `MJ: Artifact Guest Share Links` matching `extraFilter` (and revokes linked
  * `MJ: Magic Link Invites`) prior to deleting an `MJ: Artifacts` or `MJ: Artifact Versions` record (`S8`).
@@ -584,13 +775,10 @@ export async function CascadeDeleteArtifactGuestShareLinks(
     extraFilter: string,
     actor: UserInfo | undefined
 ): Promise<{ Success: boolean; ErrorMessage?: string }> {
-    if (!provider || typeof (provider as { RunView?: unknown }).RunView !== 'function') {
+    if (!provider || typeof (provider as { RunView?: object }).RunView !== 'function') {
         return { Success: true };
     }
-    const systemUser =
-        (IsServerSystemUser(actor) ? actor : undefined) ??
-        (await WellKnownUserSource.Instance.GetSystemUser(provider)) ??
-        actor;
+    const systemUser = await resolveCascadeSystemUser(provider, actor);
     if (!systemUser) {
         return { Success: true };
     }
@@ -616,24 +804,28 @@ export async function CascadeDeleteArtifactGuestShareLinks(
     for (const row of res.Results ?? []) {
         if (row.MagicLinkInviteID && IsValidUUID(row.MagicLinkInviteID)) {
             try {
-                const inviteEntity = await provider.GetEntityObject('MJ: Magic Link Invites', systemUser);
-                if (inviteEntity && (await inviteEntity.InnerLoad(CompositeKey.FromID(row.MagicLinkInviteID)))) {
-                    const status = inviteEntity.Get('Status');
-                    if (status === 'Active') {
-                        inviteEntity.Set('Status', 'Revoked');
-                        inviteEntity.Set('RevokedAt', new Date());
-                        if (actor?.ID) {
-                            inviteEntity.Set('RevokedByUserID', actor.ID);
+                const inviteEntity = await provider.GetEntityObject<MJMagicLinkInviteEntity>(
+                    'MJ: Magic Link Invites',
+                    systemUser
+                );
+                if (inviteEntity && (await inviteEntity.Load(row.MagicLinkInviteID))) {
+                    if (inviteEntity.Status === 'Active' || inviteEntity.Status === 'Consumed') {
+                        inviteEntity.Status = 'Revoked';
+                        const savedInvite = await inviteEntity.Save();
+                        if (!savedInvite) {
+                            const msg =
+                                inviteEntity.LatestResult?.CompleteMessage ??
+                                `Failed to revoke referencing Magic Link invite '${row.MagicLinkInviteID}'.`;
+                            return { Success: false, ErrorMessage: msg };
                         }
-                        await inviteEntity.Save();
                     }
                 }
             } catch (err) {
-                LogError(
-                    `CascadeDeleteArtifactGuestShareLinks warning revoking invite '${row.MagicLinkInviteID}': ${
-                        err instanceof Error ? err.message : String(err)
-                    }`
-                );
+                const msg = `CascadeDeleteArtifactGuestShareLinks failed revoking invite '${row.MagicLinkInviteID}': ${
+                    err instanceof Error ? err.message : String(err)
+                }`;
+                LogError(msg);
+                return { Success: false, ErrorMessage: msg };
             }
         }
         if (row.ID && IsValidUUID(row.ID)) {
@@ -645,6 +837,67 @@ export async function CascadeDeleteArtifactGuestShareLinks(
                 const deleted = await linkEntity.Delete();
                 if (!deleted) {
                     const msg = linkEntity.LatestResult?.Message ?? `Failed to delete referencing guest share link '${row.ID}'.`;
+                    return { Success: false, ErrorMessage: msg };
+                }
+            }
+        }
+    }
+    return { Success: true };
+}
+
+/**
+ * Cascades deletion of any `MJ: Artifact Version Attributes` belonging to `artifactVersionId`
+ * before `MJArtifactVersionEntityServer.Delete()` removes the version row so `FK_ArtifactVersionAttribute_ArtifactVersion`
+ * does not reject valid version deletions (caller `CanDelete` and lock guards already ran).
+ */
+export async function CascadeDeleteArtifactVersionAttributes(
+    provider: IMetadataProvider | null,
+    artifactVersionId: string,
+    actor: UserInfo | undefined
+): Promise<{ Success: boolean; ErrorMessage?: string }> {
+    if (
+        !provider ||
+        !IsValidUUID(artifactVersionId) ||
+        typeof (provider as { RunView?: object }).RunView !== 'function'
+    ) {
+        return { Success: true };
+    }
+    const systemUser = await resolveCascadeSystemUser(provider, actor);
+    if (!systemUser) {
+        return { Success: true };
+    }
+    const internalSet = GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_HELPER_PARAMS);
+    const queryParams: RunViewParams = {
+        EntityName: 'MJ: Artifact Version Attributes',
+        ExtraFilter: `ArtifactVersionID='${EscapeSQLString(artifactVersionId)}'`,
+        Fields: ['ID'],
+        SkipTotalRowCount: true,
+        ResultType: 'simple'
+    };
+    internalSet.add(queryParams);
+    ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(queryParams);
+    const rv = RunView.FromMetadataProvider(provider);
+    const res = await rv.RunView<{ ID?: string }>(queryParams, systemUser);
+    if (!res.Success) {
+        return {
+            Success: false,
+            ErrorMessage: res.ErrorMessage || 'Failed to check referencing artifact version attributes before delete.'
+        };
+    }
+
+    for (const row of res.Results ?? []) {
+        if (row.ID && IsValidUUID(row.ID)) {
+            const attrEntity = await provider.GetEntityObject<MJArtifactVersionAttributeEntity>(
+                'MJ: Artifact Version Attributes',
+                systemUser
+            );
+            if (attrEntity && (await attrEntity.Load(row.ID))) {
+                const deleted = await attrEntity.Delete();
+                if (!deleted) {
+                    const msg =
+                        attrEntity.LatestResult?.CompleteMessage ??
+                        attrEntity.LatestResult?.Message ??
+                        `Failed to delete referencing artifact version attribute '${row.ID}'.`;
                     return { Success: false, ErrorMessage: msg };
                 }
             }

@@ -29,10 +29,12 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 import { GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { randomUUID } from 'crypto';
 import {
+    BuildSqlArtifactReadablePredicate,
     EmptyPostRunViewResult,
     FinalizePostRunViewResult,
     GetGlobalWeakSet,
     PrepareScopedPreRunView,
+    QualifyOuterEntityColumn,
     ShouldBypassPostRunViewAsync
 } from './ArtifactSecurityHookHelpers';
 
@@ -172,11 +174,12 @@ export const ArtifactGuestShareLinkPreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_GUEST_LINK_PARAMS),
             OriginalFieldsMap: getOriginalGuestLinkFieldsMap(),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_GUEST_LINK_PARAMS),
-            ResolveReadableIds: (prov, user) =>
-                ArtifactPermissionEngine.Instance.BuildReadableArtifactIdSet(
+            BuildSqlPredicate: (prov, user, entityInfo) =>
+                BuildSqlArtifactReadablePredicate(
+                    QualifyOuterEntityColumn(entityInfo, 'vwArtifactGuestShareLinks', 'ArtifactID', prov),
                     prov,
                     user,
-                    (perms) => perms.CanShare || perms.CanDelete
+                    { requireShareOrDelete: true }
                 )
         },
         contextUser,

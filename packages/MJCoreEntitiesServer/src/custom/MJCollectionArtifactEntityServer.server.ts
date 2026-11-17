@@ -26,11 +26,13 @@ import {
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
+    BuildSqlArtifactVersionIdReadablePredicate,
+    BuildSqlCollectionReadablePredicate,
     EmptyPostRunViewResult,
     FinalizePostRunViewResult,
     GetGlobalWeakSet,
     PrepareScopedPreRunView,
-    ResolveReadableArtifactVersionIdsForUser,
+    QualifyOuterEntityColumn,
     ShouldBypassPostRunViewAsync
 } from './ArtifactSecurityHookHelpers';
 
@@ -357,12 +359,21 @@ export const CollectionArtifactPreRunViewHook: PreRunViewHook = async (
             InternalParams: getInternalCollectionArtifactQueryParamsSet(),
             OriginalFieldsMap: getOriginalCollectionArtifactFieldsMap(),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_COLLECTION_ARTIFACT_PARAMS),
-            ResolveReadableIds: (prov, user) => ResolveReadableArtifactVersionIdsForUser(prov, user),
+            BuildSqlPredicate: (prov, user, entityInfo) =>
+                BuildSqlArtifactVersionIdReadablePredicate(
+                    QualifyOuterEntityColumn(entityInfo, 'vwCollectionArtifacts', 'ArtifactVersionID', prov),
+                    prov,
+                    user
+                ),
             ExtraPredicates: [
                 {
                     IdColumnName: 'CollectionID',
-                    ResolveReadableIds: (prov, user) =>
-                        ArtifactPermissionEngine.Instance.BuildReadableCollectionIdSet(prov, user)
+                    BuildSqlPredicate: (prov, user, entityInfo) =>
+                        BuildSqlCollectionReadablePredicate(
+                            QualifyOuterEntityColumn(entityInfo, 'vwCollectionArtifacts', 'CollectionID', prov),
+                            prov,
+                            user
+                        )
                 }
             ]
         },

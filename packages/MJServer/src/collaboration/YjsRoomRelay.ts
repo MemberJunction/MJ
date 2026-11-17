@@ -257,6 +257,32 @@ export class RedisTicketReplayStore implements TicketReplayStore {
         }
         return await this._redisProvider.TryAcquireLease(`yjs:ticket:${nonce}`, safeTtlMs);
     }
+
+    public async SetTicketData(nonce: string, dataJson: string, ttlMs: number): Promise<void> {
+        const client = this._redisProvider.Client;
+        const safeTtlMs = Math.max(1000, Math.floor(ttlMs));
+        const key = `yjs:ticketmeta:${nonce}`;
+        if (client && typeof client.set === 'function') {
+            await client.set(key, dataJson, 'PX', safeTtlMs);
+            return;
+        }
+        await this._redisProvider.SetItem(key, dataJson);
+    }
+
+    public async GetAndDeleteTicketData(nonce: string): Promise<string | null> {
+        const client = this._redisProvider.Client;
+        const key = `yjs:ticketmeta:${nonce}`;
+        if (client && typeof client.get === 'function') {
+            const raw = await client.get(key);
+            if (typeof client.del === 'function') {
+                await client.del(key);
+            }
+            return typeof raw === 'string' ? raw : null;
+        }
+        const raw = await this._redisProvider.GetItem(key);
+        await this._redisProvider.Remove(key);
+        return typeof raw === 'string' ? raw : null;
+    }
 }
 
 /**

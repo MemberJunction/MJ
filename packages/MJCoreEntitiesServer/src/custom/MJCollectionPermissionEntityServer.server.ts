@@ -22,6 +22,7 @@ import {
     RegisterClass
 } from '@memberjunction/global';
 import {
+    BuildSqlCollectionReadablePredicate,
     ChunkUuidList,
     EmptyPostRunViewResult,
     EnsureHooksRegistered,
@@ -31,6 +32,7 @@ import {
     GetGlobalWeakSet,
     IsServerSystemUser,
     PrepareScopedPreRunView,
+    QualifyOuterEntityColumn,
     ResolveMetadataProvider,
     ShouldBypassPostRunViewAsync,
     StripSyntheticFieldsFromRow
@@ -111,8 +113,12 @@ export const CollectionPermissionPreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS),
             OriginalFieldsMap: GetGlobalOriginalFieldsMap(GLOBAL_KEY_ORIGINAL_FIELDS),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_PARAMS),
-            ResolveReadableIds: (prov, user) =>
-                ArtifactPermissionEngine.Instance.BuildReadableCollectionIdSet(prov, user)
+            BuildSqlPredicate: (prov, user, entityInfo) =>
+                BuildSqlCollectionReadablePredicate(
+                    QualifyOuterEntityColumn(entityInfo, 'vwCollectionPermissions', 'CollectionID', prov),
+                    prov,
+                    user
+                )
         },
         contextUser,
         provider

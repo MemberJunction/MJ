@@ -136,7 +136,10 @@ export async function ValidateEmbeddedArtifactAccess(params: {
 
     const user = params.context?.contextUser;
     if (!user) {
-        return { Ok: true };
+        return {
+            Ok: false,
+            ErrorMessage: 'Authenticated user context is required to validate embedded artifact access.',
+        };
     }
 
     const provider: IMetadataProvider = params.context?.provider ?? Metadata.Provider;

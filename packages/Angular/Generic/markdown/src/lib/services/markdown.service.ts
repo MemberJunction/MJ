@@ -418,6 +418,8 @@ export class MarkdownService {
       theme: effectiveTheme,
       securityLevel: 'strict',
       fontFamily: 'inherit',
+      htmlLabels: false,
+      flowchart: { htmlLabels: false },
       suppressErrorRendering: true // Suppress visual error diagrams - errors go to console only
     });
 

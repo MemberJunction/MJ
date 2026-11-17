@@ -3,7 +3,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, CompositeKey } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
-import type { MJQueryEntity, QueryDiagnosticLine } from '@memberjunction/core-entities';
+import type { MJArtifactVersionEntity, MJQueryEntity, QueryDiagnosticLine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, IArtifactVersionDiffViewer, NavigationRequest } from '../base-artifact-viewer.component';
@@ -700,8 +700,8 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       const saved = await query.Save();
 
       if (saved) {
-        // Update spec with new version tracking
-        this.spec.savedAtVersionNumber = this.CurrentVersionNumber;
+        // Persist query metadata on a new immutable artifact version (`N4`)
+        this.spec.savedAtVersionNumber = this.CurrentVersionNumber + 1;
         await this.persistArtifactContent();
 
         // Refresh caches so future lookups see the updated data
@@ -755,10 +755,10 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     this.cdr.detectChanges();
 
     try {
-      // Update spec with saved query info and version tracking
+      // Persist query metadata on a new immutable artifact version (`N4`)
       this.spec!.savedQueryId = event.queryId;
       this.spec!.savedQueryName = event.queryName;
-      this.spec!.savedAtVersionNumber = this.CurrentVersionNumber;
+      this.spec!.savedAtVersionNumber = this.CurrentVersionNumber + 1;
 
       // Persist and refresh caches
       await this.persistArtifactContent();
@@ -777,11 +777,42 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     }
   }
 
-  /** Persist updated spec back to the artifact version entity */
+  /** Persist updated spec as a new immutable artifact version (`N4`). */
   private async persistArtifactContent(): Promise<void> {
     if (!this.artifactVersion || !this.spec) return;
-    this.artifactVersion.Content = JSON.stringify(this.spec);
-    await this.artifactVersion.Save();
+    const md = this.ProviderToUse;
+    if (!md) {
+      throw new Error('Metadata provider is unavailable to persist artifact version.');
+    }
+    const currentUser = md.CurrentUser;
+    const nextVersion = await md.GetEntityObject<MJArtifactVersionEntity>(
+      'MJ: Artifact Versions',
+      currentUser,
+    );
+    nextVersion.NewRecord();
+    nextVersion.ArtifactID = this.artifactVersion.ArtifactID;
+    nextVersion.VersionNumber = this.CurrentVersionNumber + 1;
+    if (this.artifactVersion.Name) {
+      nextVersion.Name = this.artifactVersion.Name;
+    }
+    if (currentUser?.ID) {
+      nextVersion.UserID = currentUser.ID;
+    }
+    nextVersion.ContentMode = this.artifactVersion.ContentMode || 'Text';
+    if (this.artifactVersion.MimeType) {
+      nextVersion.MimeType = this.artifactVersion.MimeType;
+    }
+    nextVersion.Content = JSON.stringify(this.spec);
+    nextVersion.Comments = 'Updated saved query metadata';
+    const saved = await nextVersion.Save();
+    if (!saved) {
+      const msg =
+        nextVersion.LatestResult?.CompleteMessage ||
+        nextVersion.LatestResult?.Message ||
+        'Failed to save new artifact version.';
+      throw new Error(msg);
+    }
+    this.artifactVersion = nextVersion;
   }
 
   /**

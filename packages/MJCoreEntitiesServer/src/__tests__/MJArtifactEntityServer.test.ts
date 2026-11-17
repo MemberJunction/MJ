@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BaseEntityResult, EntityDeleteOptions, EntitySaveOptions, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { BaseEntityResult, EntityDeleteOptions, EntitySaveOptions, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import {
     ArtifactDelegateContext,
     ArtifactPermissionEngine,
     BaseArtifactPermissionDelegate,
     DelegatePermissionDecision
 } from '@memberjunction/core-entities';
+import {
+    ARTIFACT_POST_RUN_VIEW_PROTECTED_ENTITIES,
+    BuildSqlArtifactVersionIdReadablePredicate,
+    BuildSqlCollectionReadablePredicate,
+    ResolveTargetEntityNameAsync
+} from '../custom/ArtifactSecurityHookHelpers';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -620,7 +626,10 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
             sharedEditorUser,
             scopedProvider
         );
-        expect(String(hooked.ExtraFilter)).toContain(`ID IN ('${ARTIFACT_ID}')`);
+        expect(String(hooked.ExtraFilter)).toContain('EXISTS (');
+        expect(String(hooked.ExtraFilter)).toContain('vwArtifacts');
+        expect(String(hooked.ExtraFilter)).toContain('vwArtifactPermissions');
+        expect(String(hooked.ExtraFilter)).toContain(sharedEditorUser.ID);
         expect(hooked.Fields).toEqual(['Name', 'ID']);
 
         const post = await ArtifactPostRunViewHook(
@@ -638,5 +647,91 @@ describe('MJArtifactEntityServer (B2 delegate takeover guard + C2 live permissio
         );
         expect(post.Results).toEqual([{ Name: 'Paged Item' }]);
         expect(post.TotalRowCount).toBe(42);
+    });
+
+    it('B1 / B2: ViewID/ViewName fail-closed resolution and SQL EXISTS scoping for >5,000 artifacts across SQL dialects', async () => {
+        const provider = {
+            ProviderType: 'Database',
+            PlatformKey: 'sqlserver',
+            Entities: [{ ID: 'ent-art', Name: 'MJ: Artifacts', BaseView: 'vwArtifacts', SchemaName: '__mj' }],
+            EntityByName: (name: string) =>
+                name.trim().toLowerCase() === 'mj: artifacts'
+                    ? { ID: 'ent-art', Name: 'MJ: Artifacts', BaseView: 'vwArtifacts', SchemaName: '__mj' }
+                    : undefined,
+            RunView: vi.fn().mockImplementation(async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: User Views') {
+                    if (String(params.ExtraFilter).includes('00000000-0000-4000-8000-000000000404')) {
+                        return { Success: false, Results: [], ErrorMessage: 'DB timeout' };
+                    }
+                    return { Success: true, Results: [{ Entity: 'MJ: Artifacts' }] };
+                }
+                return { Success: true, Results: [] };
+            })
+        } as unknown as IMetadataProvider;
+
+        // ViewID resolving to MJ: Artifacts matches cleanly
+        const viewIdResolved = await ResolveTargetEntityNameAsync(
+            { ViewID: '11111111-1111-4111-8111-111111111222' },
+            provider,
+            sharedEditorUser
+        );
+        expect(viewIdResolved).toBe('MJ: Artifacts');
+
+        // Fail-closed when User Views lookup fails
+        await expect(
+            ResolveTargetEntityNameAsync(
+                { ViewID: '00000000-0000-4000-8000-000000000404' },
+                provider,
+                sharedEditorUser
+            )
+        ).rejects.toThrow(/unable to resolve target entity/i);
+
+        // Fail-closed when EntityName and ViewName disagree
+        await expect(
+            ResolveTargetEntityNameAsync(
+                { EntityName: 'Users', ViewName: 'Artifacts View' },
+                provider,
+                sharedEditorUser
+            )
+        ).rejects.toThrow(/does not match/i);
+
+        // SQL EXISTS predicate has no 5,000-ID truncation limit and covers both dialects
+        const bigSet = new Set<string>();
+        for (let i = 0; i < 5500; i++) {
+            bigSet.add(`00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+        }
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'BuildReadableArtifactIdSet').mockResolvedValue(bigSet);
+        const sqlScoped = await ArtifactPreRunViewHook(
+            { EntityName: 'MJ: Artifacts', ResultType: 'simple' },
+            sharedEditorUser,
+            provider
+        );
+        expect(String(sqlScoped.ExtraFilter)).toContain('EXISTS (');
+        expect(String(sqlScoped.ExtraFilter)).toContain('[__mj].[vwArtifacts].[ID]');
+        expect(String(sqlScoped.ExtraFilter)).not.toContain('ID IN (');
+
+        // Also check PostgreSQL quoting for ArtifactVersion + Collection predicates
+        const pgEntities = [
+            { ID: 'ent-art', Name: 'MJ: Artifacts', BaseView: 'vwArtifacts', SchemaName: '__mj' },
+            { ID: 'ent-ver', Name: 'MJ: Artifact Versions', BaseView: 'vwArtifactVersions', SchemaName: '__mj' },
+            { ID: 'ent-attr', Name: 'MJ: Artifact Version Attributes', BaseView: 'vwArtifactVersionAttributes', SchemaName: '__mj' },
+            { ID: 'ent-ca', Name: 'MJ: Collection Artifacts', BaseView: 'vwCollectionArtifacts', SchemaName: '__mj' },
+            { ID: 'ent-col', Name: 'MJ: Collections', BaseView: 'vwCollections', SchemaName: '__mj' },
+            { ID: 'ent-cp', Name: 'MJ: Collection Permissions', BaseView: 'vwCollectionPermissions', SchemaName: '__mj' },
+            { ID: 'ent-ap', Name: 'MJ: Artifact Permissions', BaseView: 'vwArtifactPermissions', SchemaName: '__mj' }
+        ];
+        const pgProvider = {
+            ...provider,
+            PlatformKey: 'postgresql',
+            Entities: pgEntities,
+            EntityByName: (name: string) =>
+                pgEntities.find((e) => e.Name.trim().toLowerCase() === name.trim().toLowerCase())
+        } as unknown as IMetadataProvider;
+        const pgColSql = BuildSqlCollectionReadablePredicate('CollectionID', pgProvider, sharedEditorUser);
+        const pgVerSql = BuildSqlArtifactVersionIdReadablePredicate('ArtifactVersionID', pgProvider, sharedEditorUser);
+        expect(pgColSql).toContain('EXISTS (');
+        expect(pgColSql).toContain('vwCollections');
+        expect(pgVerSql).toContain('vwArtifactVersions');
+        expect(ARTIFACT_POST_RUN_VIEW_PROTECTED_ENTITIES).toHaveLength(9);
     });
 });

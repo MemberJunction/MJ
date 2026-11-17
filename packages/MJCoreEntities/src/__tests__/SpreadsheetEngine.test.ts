@@ -3918,5 +3918,36 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const sparseWs = sparseWb.Worksheets[0];
         sparseWs.Cells['GR5000'] = { Address: 'GR5000', RowID: 'r-5000', ColumnID: 'c-gr', RawValue: 'edge' };
         expect(() => engine.ExportToCsv(sparseWb)).toThrow(/exceeds maximum allowed/);
+
+        // 4. Matrix broadcast and XFD1048576 range resolution stay bounded without DoS loops
+        const matrixDosWb = engine.CreateEmptyWorkbook('Matrix DoS', ['Guard', 'Calc'], 5, 5);
+        const matrixDosWs = matrixDosWb.Worksheets[0];
+        const matrixCalcWs = matrixDosWb.Worksheets[1];
+        matrixDosWs.Cells['XFD1048576'] = { Address: 'XFD1048576', RowID: 'r-max', ColumnID: 'c-max', RawValue: 7 };
+        engine.SetCell(matrixDosWb, matrixDosWs.SheetID, 'A1', { Value: 5 });
+        engine.SetCell(matrixDosWb, matrixCalcWs.SheetID, 'B1', {
+            Formula: '=SUM(SEQUENCE(200000)*SEQUENCE(1,200000))',
+        });
+        engine.SetCell(matrixDosWb, matrixCalcWs.SheetID, 'C1', {
+            Formula: '=UNIQUE(Guard!A1:XFD1048576)',
+        });
+        engine.SetCell(matrixDosWb, matrixCalcWs.SheetID, 'D1', {
+            Formula: '=SUM(Guard!A1:XFD1048576)',
+        });
+        const dosStart = performance.now();
+        engine.EvaluateWorkbook(matrixDosWb);
+        expect(performance.now() - dosStart).toBeLessThan(1500);
+        expect(matrixCalcWs.Cells['B1']?.ComputedValue).toBe('#NUM!');
+        expect(matrixCalcWs.Cells['C1']?.ComputedValue).toBe('#NUM!');
+        expect(matrixCalcWs.Cells['D1']?.ComputedValue).toBe(12);
+
+        // 5. ParseMjCustomFunctionFormula enforces EvalBudget on recursive LET/LAMBDA arguments
+        const mjParsed = engine.ParseMjCustomFunctionFormula(
+            '=MJ.VIEW(LET(f,LAMBDA(f,n,IF(n<=0,"Users",f(f,n-1)&f(f,n-1))),f(f,25)))',
+            matrixDosWb,
+            matrixDosWs,
+            'E1',
+        );
+        expect(mjParsed).toBeNull();
     });
 });

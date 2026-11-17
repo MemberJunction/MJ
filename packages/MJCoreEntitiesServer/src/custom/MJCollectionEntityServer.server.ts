@@ -25,6 +25,7 @@ import {
     UUIDsEqual
 } from '@memberjunction/global';
 import {
+    BuildSqlCollectionReadablePredicate,
     ChunkUuidList,
     EmptyPostRunViewResult,
     EnsureHooksRegistered,
@@ -37,6 +38,7 @@ import {
     IsServerSystemUser,
     NormalizeNullableGuidOrString,
     PrepareScopedPreRunView,
+    QualifyOuterEntityColumn,
     ResolveMetadataProvider,
     ShouldBypassPostRunViewAsync,
     StripSyntheticFieldsFromRow,
@@ -102,8 +104,12 @@ export const CollectionPreRunViewHook: PreRunViewHook = async (
             InternalParams: GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS),
             OriginalFieldsMap: GetGlobalOriginalFieldsMap(GLOBAL_KEY_ORIGINAL_FIELDS),
             SqlScopedParams: GetGlobalWeakSet(GLOBAL_KEY_SQL_SCOPED_PARAMS),
-            ResolveReadableIds: (prov, user) =>
-                ArtifactPermissionEngine.Instance.BuildReadableCollectionIdSet(prov, user)
+            BuildSqlPredicate: (prov, user, entityInfo) =>
+                BuildSqlCollectionReadablePredicate(
+                    QualifyOuterEntityColumn(entityInfo, 'vwCollections', 'ID', prov),
+                    prov,
+                    user
+                )
         },
         contextUser,
         provider
@@ -216,6 +222,53 @@ export function EnsureCollectionReadHookRegistered(): void {
 }
 
 EnsureCollectionReadHookRegistered();
+
+async function isActorOwnerInAncestry(
+    provider: IMetadataProvider,
+    startCollectionId: string,
+    actorUserId: string
+): Promise<boolean> {
+    if (!IsValidUUID(startCollectionId) || !IsValidUUID(actorUserId)) {
+        return false;
+    }
+    const systemUser = UserCache.Instance.GetSystemUser();
+    if (!systemUser) {
+        return false;
+    }
+    const rv = RunView.FromMetadataProvider(provider);
+    const internalParams = GetGlobalWeakSet(GLOBAL_KEY_INTERNAL_PARAMS);
+    const visited = new Set<string>();
+    let currentId: string | null = startCollectionId.trim();
+
+    for (let depth = 0; depth < MAX_ANCESTRY_DEPTH && currentId; depth++) {
+        const norm = NormalizeUUID(currentId);
+        if (visited.has(norm)) {
+            return false;
+        }
+        visited.add(norm);
+
+        const colParams: RunViewParams = {
+            EntityName: ENTITY_NAME,
+            ExtraFilter: `ID='${EscapeSQLString(currentId)}'`,
+            Fields: ['ID', 'OwnerID', 'ParentID'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple'
+        };
+        internalParams.add(colParams);
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(colParams);
+        const colRes = await rv.RunView<CollectionRowProjection>(colParams, systemUser);
+        if (!colRes.Success || !colRes.Results || colRes.Results.length === 0) {
+            return false;
+        }
+        const row = colRes.Results[0];
+        if (row.OwnerID && UUIDsEqual(row.OwnerID, actorUserId)) {
+            return true;
+        }
+        currentId = row.ParentID && row.ParentID.trim().length > 0 ? row.ParentID.trim() : null;
+    }
+    return false;
+}
 
 async function verifyParentAndComputeMaxGrants(
     provider: IMetadataProvider,
@@ -593,13 +646,19 @@ export class MJCollectionEntityServer extends MJCollectionEntity {
                     const isDirectOwner = Boolean(oldOwnerId && UUIDsEqual(oldOwnerId, actor.ID));
                     if (newParentId !== null) {
                         // S7: Reparenting a collection under a non-null ParentID exposes the collection
-                        // (and its descendant artifacts) to the target parent's permission tree; restrict
-                        // non-null reparenting strictly to the direct collection owner.
-                        if (!isDirectOwner) {
+                        // (and its descendant artifacts) to the target parent's permission tree. Allow
+                        // the direct collection owner, OR an owner of an ancestor tree moving a sub-collection
+                        // within their own owned tree.
+                        const isOwnedTreeMove =
+                            !isDirectOwner &&
+                            oldParentId !== null &&
+                            (await isActorOwnerInAncestry(provider, oldParentId, actor.ID)) &&
+                            (await isActorOwnerInAncestry(provider, newParentId, actor.ID));
+                        if (!isDirectOwner && !isOwnedTreeMove) {
                             return FailEntityOperation(
                                 this,
                                 'update',
-                                `Permission denied: only the direct owner of collection '${this.ID}' may reparent it under another collection.`
+                                `Permission denied: only the direct owner of collection '${this.ID}' (or its owning ancestor tree owner) may reparent it under another collection.`
                             );
                         }
                     } else {
