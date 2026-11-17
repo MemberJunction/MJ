@@ -50,7 +50,7 @@ export class SchemaEvolution {
         const removed: string[] = [];
         const warnings: string[] = [];
 
-        // Build set of PK column names — changes are warned but not executed
+        // Build set of PK column names — changes to existing ones are warned but not executed
         const pkNames = new Set(
             (targetConfig.PrimaryKeyFields ?? []).map(f => f.toLowerCase())
         );
@@ -60,13 +60,19 @@ export class SchemaEvolution {
             const lowerName = col.TargetColumnName.toLowerCase();
             if (standardCols.has(lowerName)) continue;
 
-            // PK columns: detect changes but only warn, never alter
+            // PK columns: an existing one is never altered (a change only warns). A missing one is
+            // added as nullable, because the rows already stored have no value for it. A sync cannot
+            // match those rows to incoming records, so they must be cleared and the object fully re-synced.
             if (pkNames.has(lowerName)) {
                 if (existingNames.has(lowerName)) {
                     const existingCol = existing.Columns.find(c => c.Name.toLowerCase() === lowerName);
-                    if (existingCol && this.hasColumnChanged(existingCol, col)) {
+                    // Only the type is compared: an added key column is nullable on purpose.
+                    if (existingCol && this.hasColumnChanged(existingCol, { ...col, IsNullable: existingCol.IsNullable })) {
                         warnings.push(`PK column '${col.TargetColumnName}' type changed from ${existingCol.SqlType} to ${col.TargetSqlType} — skipped (requires manual constraint drop/recreate)`);
                     }
+                } else {
+                    added.push({ ...col, IsNullable: true });
+                    warnings.push(`PK column '${col.TargetColumnName}' added to existing table ${targetConfig.SchemaName}.${targetConfig.TableName} as nullable — rows stored before this change have no value in it, so a sync cannot match them. Clear this object's rows and record maps, then run a full sync (6.2 and later do this automatically)`);
                 }
                 continue;
             }
