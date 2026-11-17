@@ -218,14 +218,16 @@ describe('RenderCalibrationFitReport', () => {
         const result = FitDecisionCalibrations([
             ...overlappingPoints('routing', 'continues', JEV),
             ...overlappingPoints('routing', 'few|ish', LLM, 3, 3),
+            ...overlappingPoints('routing', 'back\\|slash', LLM, 3, 3),
             { Use: 'routing', Question: 'continues', ...JEV, RawProbability: 2, Label: true }
         ], { FittedAt: new Date('2026-11-12T00:00:00Z') });
         const report = RenderCalibrationFitReport(result);
         expect(report).toContain('| Use | Question | Model | Resolved model |');
         expect(report).toMatch(/\| routing \| continues \| Jev \| typesafe\/jev-1\.13-20260917 \| 100 \| 40 \|/);
         expect(report).toContain('few\\|ish');
+        expect(report).toContain('back\\\\\\|slash');
         expect(report).toContain('refused: 6 points, fewer than the 30 a fit needs');
         expect(report).toContain('## Skipped points (1)');
-        expect(report).toContain('- point 106: RawProbability must be a finite number in [0, 1], got 2');
+        expect(report).toContain('- point 112: RawProbability must be a finite number in [0, 1], got 2');
     });
 });

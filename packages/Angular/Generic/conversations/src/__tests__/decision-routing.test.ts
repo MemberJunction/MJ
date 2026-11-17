@@ -319,7 +319,11 @@ describe('decision routing', () => {
         });
 
         it('applies only to the turn of the agent that made the version', () => {
-            const outcome = InterpretRoutingAnswers(withArtifacts(), leaves(WRITER.ID, { artifact: choice(VERSION_2, 0.9) }));
+            const outcome = InterpretRoutingAnswers(
+                withArtifacts(),
+                leaves(WRITER.ID, { artifact: choice(VERSION_2, 0.9) }),
+                SHIPPED_ROUTING_CALIBRATIONS['Jev'][0],
+            );
             expect(ArtifactVersionForTurn(outcome, WRITER.ID)).toBe(VERSION_2);
             expect(ArtifactVersionForTurn(outcome, RESEARCH.ID)).toBeNull();
             expect(ArtifactVersionForTurn(null, WRITER.ID)).toBeNull();
