@@ -13,7 +13,9 @@ import { BuildOrchestratorContext } from '../../utils/open-app-context.js';
  * and data. Prompts for confirmation unless `--yes` is passed.
  */
 export default class AppRemove extends Command {
-  static description = 'Remove an installed MJ Open App';
+  static description = `Remove an installed MJ Open App.
+
+An app installed from a folder in this repository is removed with the migrations and teardown scripts in that folder, so the folder must be at the installed version, also with --keep-data. If the folder was deleted or changed, restore it from git first (for example: git checkout <commit> -- openapps/<name>), then run remove again. Nothing is changed until the folder is at the installed version.`;
 
   static examples = [
     '<%= config.bin %> app remove acme-crm',

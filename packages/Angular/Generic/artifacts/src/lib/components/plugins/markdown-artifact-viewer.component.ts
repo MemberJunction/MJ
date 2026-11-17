@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef, ViewChild, ElementRef, NgZone, Renderer2, Type, inject } from '@angular/core';
-import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
   ArtifactMetadataEngine,
@@ -22,6 +22,7 @@ import {
   type MJArtifactVersionEntity,
   type MJConversationEntity,
   type MJConversationDetailEntity,
+  QueryEngine,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
@@ -10607,7 +10608,8 @@ export class MarkdownArtifactViewerComponent
     if (!md) {
       return [];
     }
-    const queries: QueryInfo[] = md.Queries ?? [];
+    // The QueryEngine bound to this viewer's provider; it loads at client startup.
+    const queries = (QueryEngine.GetProviderInstance(md, QueryEngine) as QueryEngine).Queries ?? [];
     if (queries.length === 0) {
       return [];
     }

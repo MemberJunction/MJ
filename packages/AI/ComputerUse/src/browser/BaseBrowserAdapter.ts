@@ -234,6 +234,20 @@ export abstract class BaseBrowserAdapter {
         // No-op default — adapters with an active screencast override this.
     }
 
+    /**
+     * Resize the browser viewport in place without navigating or reloading the page.
+     *
+     * Default implementation is a no-op resolve so callers can invoke it safely across adapters.
+     * Adapters backed by a live browser page (e.g. {@link PlaywrightBrowserAdapter}) override this
+     * to update their viewport configuration and resize the open page.
+     *
+     * @param _width - Target viewport width in CSS pixels.
+     * @param _height - Target viewport height in CSS pixels.
+     */
+    public async SetViewportSize(_width: number, _height: number): Promise<void> {
+        // No-op default — adapters with a live page override this.
+    }
+
     // ─── Audio capture (in-page tab-audio feed) ────────────
 
     /**
