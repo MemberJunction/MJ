@@ -180,7 +180,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, active$, progress$, calls, sharedPanels, narration$ };
+  return { service, channels$, focus$, activity$, usedChannels, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, active$, progress$, calls, sharedPanels, narration$ };
 }
 
 /**
@@ -2477,6 +2477,43 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(query(f, '.rb-open-btn')?.getAttribute('href')).toBe('https://example.com/final');
       expect(queryAll(f, '.rb-history__item')).toHaveLength(1);
       expect(query(f, '.rb-history__detail')?.textContent?.trim()).toBe('Loaded final page');
+    });
+
+    it('labels the review resume pill "Resume session" and auto-opens restored prior tabs on resume', async () => {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
+      try {
+        const review: RealtimeSessionReview = {
+          ...emptyReview(),
+          AgentName: 'Sage',
+          ChannelStates: [{ ChannelName: 'Whiteboard', StateJson: '{}' }],
+        };
+        const session = fakeSession();
+        const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+          providers: [
+            { provide: RealtimeSessionService, useValue: session.service },
+            { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+          ],
+          inputs: { Chrome: 'console', ReviewData: review },
+          autoDetect: true,
+        });
+        await settle();
+
+        expect(query(f, '.start-live-pill')?.textContent?.trim()).toContain('Resume session');
+
+        // Transition review → resumed live call where PriorChannelStatesJson marked Whiteboard used.
+        click(f, '.start-live-pill');
+        session.active$.next(true);
+        f.componentRef.setInput('ReviewData', null);
+        const restoredBoard = new TestWhiteboardChannel();
+        session.usedChannels.add('Whiteboard');
+        session.channels$.next([restoredBoard]);
+        await settle();
+
+        expect(f.componentInstance.DetailsPeek).toBe(true);
+        expect(queryAll(f, '.s-tab').map(el => el.textContent?.trim())).toContain('Whiteboard');
+      } finally {
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+      }
     });
   });
 });

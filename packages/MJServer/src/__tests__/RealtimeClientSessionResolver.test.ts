@@ -1812,6 +1812,53 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         expect(Object.keys(states)).toEqual(['First']);
     });
 
+    it('merges channel states across a multi-leg LastSessionID chain (newest non-empty state wins, earlier-leg channels preserved)', async () => {
+        setupHappyStart();
+        const sessionA = makeSessionEntity({ ID: PRIOR_1, UserID: 'user-1', LastSessionID: null });
+        const sessionB = makeSessionEntity({ ID: PRIOR_2, UserID: 'user-1', LastSessionID: PRIOR_1 });
+        const conversation = makeSessionEntity({ ExternalID: 'scope-res-1' });
+        const runView = vi.fn(async () => ({
+            Success: true,
+            Results: [
+                // Returned out of order by DB — resolver must sort newest leg (PRIOR_2) ahead of PRIOR_1.
+                { AgentSessionID: PRIOR_1, Channel: 'Remote Browser', Config: '{"url":"https://leg1.example"}' },
+                { AgentSessionID: PRIOR_1, Channel: 'ArtifactWorkspace', Config: '{"active":"leg1"}' },
+                { AgentSessionID: PRIOR_2, Channel: 'ArtifactWorkspace', Config: '{"active":"leg2"}' },
+                { AgentSessionID: PRIOR_2, Channel: 'Media', Config: '{"items":[1]}' },
+            ],
+        }));
+        const resolver = makeResolver();
+
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name?: string) => {
+                if (name === 'MJ: Conversations') {
+                    return conversation;
+                }
+                const wrapper = makeSessionEntity({ ID: PRIOR_2, UserID: 'user-1', LastSessionID: PRIOR_1 });
+                wrapper.Load = vi.fn(async (id: string) => {
+                    if (id === PRIOR_2) {
+                        Object.assign(wrapper, sessionB);
+                        return true;
+                    }
+                    if (id === PRIOR_1) {
+                        Object.assign(wrapper, sessionA);
+                        return true;
+                    }
+                    return false;
+                });
+                return wrapper;
+            }),
+            RunView: runView,
+        };
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_2);
+        expect(JSON.parse(result.PriorChannelStatesJson as string)).toEqual({
+            ArtifactWorkspace: '{"active":"leg2"}',
+            Media: '{"items":[1]}',
+            'Remote Browser': '{"url":"https://leg1.example"}',
+        });
+    });
+
     it('tolerates a failed restore query (start succeeds, field omitted)', async () => {
         setupHappyStart();
         const { provider } = makeRestoreProvider({ runViewResult: { Success: false, ErrorMessage: 'db down' } });

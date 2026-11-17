@@ -724,6 +724,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Presenter channel keys already auto-revealed this session (avoid re-placing video on repeat frames). */
   private revealedPresenterKeys = new Set<string>();
 
+  /** Interactive surface channel keys already surfaced in the live panel during this session. */
+  private surfacedLiveChannelKeys = new Set<string>();
+
   /** Auto-reveal that arrived before the (disclosure-gated) panel rendered. */
   private pendingRevealKey: string | null = null;
 
@@ -1757,6 +1760,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.DetailsPeek = false;
       this.ComposerOpen = false; // typing is opt-in per session (voice-first)
       this.revealedPresenterKeys.clear();
+      this.surfacedLiveChannelKeys.clear();
       this.pendingRevealKey = null;
       this.revealSequence++;
       this.startAudioVisualLoop();
@@ -2083,6 +2087,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   private registerChannelTabs(channels: BaseRealtimeChannelClient[]): void {
     this.cleanupStaleReviewChannelTabs(channels);
+    let newlyUsedSurface = false;
     for (const plugin of channels) {
       if (!plugin.HasSurface()) {
         continue; // server-only channel — no surface to tab.
@@ -2090,7 +2095,18 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       if (!ShouldRegisterChannelTabUpFront(plugin.ChannelName, this.realtime.HasChannelBeenUsed(plugin.ChannelName))) {
         continue; // not the whiteboard and not used yet — it earns its tab on first activity.
       }
+      if (!this.surfacedLiveChannelKeys.has(plugin.ChannelName)) {
+        this.surfacedLiveChannelKeys.add(plugin.ChannelName);
+        newlyUsedSurface = true;
+      }
       this.registerPluginChannelTab(plugin);
+    }
+    // Resuming a prior session restores used channels before live tools fire; auto-open the
+    // surface panel once per newly-surfaced channel so restored tabs (Workspace/Browser/Media)
+    // pick up visibly where the previous session left off.
+    if (newlyUsedSurface && this.realtime.IsActive && !this.IsReviewing && !this.DetailsPeek) {
+      this.DetailsPeek = true;
+      this.recomputeUi();
     }
     this.cdr.markForCheck();
   }

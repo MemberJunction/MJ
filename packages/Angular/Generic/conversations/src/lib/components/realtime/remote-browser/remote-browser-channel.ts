@@ -369,7 +369,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   private static readonly MAX_HISTORY_ENTRIES = 50;
-  private static readonly MAX_SAVED_SCREENSHOT_BYTES = 2 * 1024 * 1024;
+  private static readonly MAX_SAVED_SCREENSHOT_BYTES = 1_500_000;
   private static readonly SCREENSHOT_SAVE_DEBOUNCE_MS = 1500;
 
   /**
