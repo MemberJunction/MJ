@@ -1,0 +1,127 @@
+<div class="lumen">
+  <header class="lumen-nav">
+    <div class="lumen-wrap lumen-nav__inner">
+      <a class="lumen-brand" href="/p/lumen" aria-label="Lumen home">
+        @if (LogoURL(); as logo) {
+          <img [src]="logo" alt="" class="lumen-brand__logo" />
+        } @else {
+          <span class="lumen-brand__mark" aria-hidden="true"><i class="fa-solid fa-sun"></i></span>
+        }
+        <span class="lumen-brand__name">Lumen</span>
+      </a>
+      <nav class="lumen-nav__links" aria-label="Page sections">
+        <a href="/p/lumen#features">Features</a>
+        <a href="/p/lumen#pricing">Pricing</a>
+        <a href="/p/lumen#faq">Questions</a>
+      </nav>
+      <div class="lumen-nav__actions">
+        <button type="button" class="lumen-btn lumen-btn--ghost" (click)="OnSignIn()">Sign in</button>
+        <button type="button" class="lumen-btn lumen-btn--primary" (click)="OnCreateAccount()">Create account</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="lumen-hero">
+      <div class="lumen-wrap lumen-hero__inner">
+        <div class="lumen-hero__copy">
+          <p class="lumen-eyebrow">New: shared dashboards</p>
+          <h1>See your numbers clearly. Together.</h1>
+          <p class="lumen-lede">Lumen turns the data your team already has into dashboards that everyone can read, from the first meeting of the day to the board report.</p>
+          <div class="lumen-hero__cta">
+            <button type="button" class="lumen-btn lumen-btn--primary lumen-btn--lg" (click)="OnCreateAccount()">Create free account</button>
+            <a class="lumen-btn lumen-btn--outline lumen-btn--lg" href="/p/lumen#pricing">See pricing</a>
+          </div>
+          <p class="lumen-note"><i class="fa-solid fa-check" aria-hidden="true"></i> Free for up to 5 people. No credit card.</p>
+        </div>
+
+        <figure class="lumen-shot" aria-label="A Lumen dashboard with a revenue chart and three summary numbers">
+          <div class="lumen-shot__bar"><span></span><span></span><span></span></div>
+          <div class="lumen-shot__body">
+            <div class="lumen-shot__stats">
+              <div><span>Revenue</span><b>$48.2k</b><em>+12%</em></div>
+              <div><span>Active users</span><b>1,904</b><em>+8%</em></div>
+              <div><span>Churn</span><b>1.9%</b><em>−0.4</em></div>
+            </div>
+            <div class="lumen-shot__chart">
+              @for (height of Bars; track $index) {
+                <span [style.height.%]="height"></span>
+              }
+            </div>
+          </div>
+        </figure>
+      </div>
+    </section>
+
+    <section id="features" class="lumen-section">
+      <div class="lumen-wrap">
+        <h2>Everything a team needs to read its data</h2>
+        <div class="lumen-features">
+          @for (feature of Features; track feature.Title) {
+            <article class="lumen-card">
+              <span class="lumen-card__icon" aria-hidden="true"><i [class]="feature.Icon"></i></span>
+              <h3>{{ feature.Title }}</h3>
+              <p>{{ feature.Text }}</p>
+            </article>
+          }
+        </div>
+      </div>
+    </section>
+
+    <section id="pricing" class="lumen-section lumen-section--tinted">
+      <div class="lumen-wrap">
+        <h2>Simple pricing</h2>
+        <p class="lumen-section__lede">Start free. Upgrade when your team grows.</p>
+        <div class="lumen-plans">
+          @for (plan of Plans; track plan.Key) {
+            <article class="lumen-plan" [class.lumen-plan--highlight]="plan.Key === HighlightedPlan">
+              @if (plan.Key === HighlightedPlan) {
+                <span class="lumen-plan__badge">Most popular</span>
+              }
+              <h3>{{ plan.Name }}</h3>
+              <p class="lumen-plan__summary">{{ plan.Summary }}</p>
+              <p class="lumen-plan__price"><b>{{ plan.Price }}</b> <span>{{ plan.Unit }}</span></p>
+              <ul>
+                @for (item of plan.Items; track item) {
+                  <li><i class="fa-solid fa-check" aria-hidden="true"></i> {{ item }}</li>
+                }
+              </ul>
+              <button type="button" class="lumen-btn lumen-btn--block"
+                      [class.lumen-btn--primary]="plan.Key === HighlightedPlan"
+                      [class.lumen-btn--outline]="plan.Key !== HighlightedPlan"
+                      (click)="OnPlanAction(plan)">
+                {{ plan.Action === 'signup' ? 'Create account' : 'Contact sales' }}
+              </button>
+            </article>
+          }
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="lumen-section">
+      <div class="lumen-wrap lumen-faq">
+        <h2>Questions</h2>
+        @for (item of Questions; track item.Question) {
+          <details>
+            <summary>{{ item.Question }}</summary>
+            <p>{{ item.Answer }}</p>
+          </details>
+        }
+      </div>
+    </section>
+
+    <section class="lumen-cta">
+      <div class="lumen-wrap lumen-cta__inner">
+        <h2>Ready to see your numbers?</h2>
+        <button type="button" class="lumen-btn lumen-btn--inverse lumen-btn--lg" (click)="OnCreateAccount()">Create free account</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="lumen-footer">
+    <div class="lumen-wrap lumen-footer__inner">
+      <span>© {{ Year }} Acme Lumen. A fictional product for an MJ demo.</span>
+      <button type="button" class="lumen-link" (click)="OnSignIn()">Sign in</button>
+    </div>
+  </footer>
+</div>
