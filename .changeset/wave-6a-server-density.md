@@ -1,0 +1,15 @@
+---
+"@memberjunction/core": patch
+"@memberjunction/generic-database-provider": patch
+"@memberjunction/postgresql-dataprovider": patch
+"@memberjunction/server": patch
+"@memberjunction/search-engine": patch
+---
+
+Wave 6A server and core density improvements:
+
+- **Preserve `FrozenRowSerializationCache` hits across `Fields` projections (`@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/server`)**: Add `ProjectRowsToFieldsOptions.PreserveFrozen` and `CanonicalFieldsKey` in `ProviderBase` so read-only server wire paths (`GenericDatabaseProvider.RunViewsWithCacheCheck`) keep full-coverage frozen L1/CoW arrays untouched without cloning and memoize frozen subset-projected rows across equivalent field lists (`WeakMap`). `RunViewResolver.processRawData` indexes `FrozenRowSerializationCache` by `${entityId}|${canonicalFieldsKey}` when `Fields` is present, restoring serialization cache hits on narrow `Fields` queries while keeping default `ProjectRowsToFields` mutable for in-process callers.
+- **Uncap PostgreSQL application read-only pool & isolate ad-hoc SQL (`@memberjunction/server`)**: Separate `PostgreSQLPoolPurpose` into `'read-only'` (application `RunView*` reads sized up to `connectionPool.readOnlyMax ?? apiMax`) and `'adhoc-read-only'` (untrusted caller-supplied SQL in `AdhocQueryResolver`, `TestQuerySQLResolver`, and `GetDataContextDataResolver`, bounded at `ADHOC_READ_ONLY_MAX_CONNECTIONS = 10`), backed by separate `PostgreSQLReadOnlyPool.Pool` and `PostgreSQLReadOnlyPool.AdhocPool` handles and `GetReadOnlyProvider(..., { purpose: 'adhoc' })`.
+- **Lazy per-request `PostgreSQLDataProvider` configuration (`@memberjunction/postgresql-dataprovider`, `@memberjunction/server`)**: Add `PostgreSQLDataProvider.CanConfigureFromGlobalSync()` and `ConfigureFromGlobalSync()` mirroring `SQLServerDataProvider`, and enable `tryBuildLazyPostgresProviders()` in `context.ts` so cache/AI requests no longer eagerly construct unused RW/RO/Adhoc providers.
+- **`BGEReRanker` worker-thread isolation (`@memberjunction/search-engine`)**: Move `@huggingface/transformers` text-classification loading and ONNX inference off the main Node.js event loop into a reusable `worker_threads` worker (`BGERerankerWorkerHost`, `BGERerankerWorker`, `BGERerankerWorkerHandler`, `bgeRuntime`), with bounded candidate capping (`DEFAULT_BGE_MAX_CANDIDATES = 100`), mini-batch chunking (`DEFAULT_BGE_BATCH_SIZE = 32`), and a per-call timeout budget (`DEFAULT_BGE_RERANKER_TIMEOUT_MS = 30_000`) with automatic worker recycling and top-N fallback.
+- **Server density & streaming coalescing quick wins (`@memberjunction/server`)**: Replace the O(U) `UserCache.Instance.Users.find(...)` scan on API-key auth in `context.ts` with O(1) `UserCache.Instance.UserByID(...)`, key `AuthCache` by SHA-256 hex digest via `HashAuthToken()` in `cache.ts` instead of raw multi-KB JWT strings, and add leading-edge 25ms coalescing (`DEFAULT_STREAMING_COALESCE_MS = 25`) with ordered concatenation, `runSummary` memoization, and synchronous flush on completion/step change/progress/`Dispose` in `AgentRunStatusPublisher`.

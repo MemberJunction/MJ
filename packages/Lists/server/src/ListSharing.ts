@@ -6,15 +6,14 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import {
-  AuditLogTypeEngine,
   CreateShareNotification,
-  MJAuditLogEntity,
   MJListEntity,
   MJListInvitationEntity,
   MJResourcePermissionEntity,
   MJUserEntity,
   ResourceTypeEngine,
 } from '@memberjunction/core-entities';
+import { EmitListAuditLog, type ListAuditLogEntry } from './listAuditLog';
 import type {
   AcceptInvitationResult,
   InviteResult,
@@ -530,59 +529,11 @@ export class ListSharing {
   }
 
   /**
-   * Resolve an `MJ: Audit Log Types.ID` by row name via the shared
-   * `AuditLogTypeEngine`. Same fail-loud contract as
-   * {@link getListResourceTypeId}.
+   * Best-effort audit-log emit through the shared List audit writer. It never fails the parent
+   * operation; a failure is logged so the discrepancy is observable.
    */
-  private async getAuditLogTypeId(name: string): Promise<string> {
-    await AuditLogTypeEngine.Instance.Config(false, this.contextUser, this.provider);
-    const t = AuditLogTypeEngine.Instance.ByName(name);
-    if (!t) {
-      throw new Error(
-        `MJ: Audit Log Types row "${name}" not found. ` +
-          `Seed metadata/audit-log-types/ via 'mj sync push' before using ListSharing.`,
-      );
-    }
-    return t.ID;
-  }
-
-  /**
-   * Best-effort audit-log emit. We never fail the parent operation on
-   * an audit-log failure; instead we LogError so the discrepancy is
-   * observable. Cross-cutting reliability concern.
-   *
-   * Takes the audit-log-type by NAME so call sites are grep-able and
-   * resilient to seed-UUID changes. Name → ID resolution goes through the
-   * `AuditLogTypeEngine`.
-   */
-  private async emitAuditLog(args: {
-    Type: string;
-    ListID: string;
-    Description: string;
-    Details: Record<string, unknown>;
-  }): Promise<void> {
-    try {
-      const typeId = await this.getAuditLogTypeId(args.Type);
-      const md = this.metadata();
-      const log = await md.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', this.contextUser);
-      log.NewRecord();
-      log.UserID = this.contextUser.ID;
-      log.AuditLogTypeID = typeId;
-      log.Status = 'Success';
-      log.Description = args.Description;
-      log.Details = JSON.stringify(args.Details);
-      // EntityID for MJ: Lists via the O(1) by-name map. Entities.find
-      // is an O(N) scan and the documented anti-pattern.
-      const listEntity = md.EntityByName('MJ: Lists');
-      if (listEntity) log.EntityID = listEntity.ID;
-      log.RecordID = args.ListID;
-      const ok = await log.Save();
-      if (!ok) {
-        LogError(`Audit log save failed: ${log.LatestResult?.CompleteMessage ?? 'unknown'}`);
-      }
-    } catch (e) {
-      LogError(`emitAuditLog threw: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  private async emitAuditLog(args: ListAuditLogEntry): Promise<void> {
+    await EmitListAuditLog(args, this.metadata(), this.contextUser, this.provider);
   }
 
   /**

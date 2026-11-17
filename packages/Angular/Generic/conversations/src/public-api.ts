@@ -219,6 +219,10 @@ export * from './lib/components/realtime/interactive-component/component-spec-co
 export * from './lib/components/realtime/interactive-component/run-view-component-artifact-source';
 export * from './lib/components/realtime/interactive-component/interactive-component-channel';
 export * from './lib/components/realtime/interactive-component/realtime-interactive-component-surface.component';
+export * from './lib/components/realtime/artifact-workspace/artifact-workspace-types';
+export * from './lib/components/realtime/artifact-workspace/artifact-workspace-engine';
+export * from './lib/components/realtime/artifact-workspace/artifact-workspace-channel';
+export * from './lib/components/realtime/artifact-workspace/realtime-artifact-workspace-surface.component';
 // Time-aligned Evidence Playback component (recorded session audio synced to the transcript).
 export * from './lib/components/realtime/evidence-playback/realtime-evidence-playback.component';
 export * from './lib/services/composer-draft-store';

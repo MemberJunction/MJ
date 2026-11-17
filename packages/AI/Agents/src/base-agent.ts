@@ -23,7 +23,9 @@ import { AgentToolCircuitBreaker } from './native-tools/agent-tool-circuit-break
 import { BuildFrameworkTools, type FrameworkToolAvailability, type FrameworkToolHost } from './native-tools/framework-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactAnsweredToolCallArguments, CompactToolResultContent, CompactToolResultContentAsync, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
-import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd, GovernedRunArtifactSummary, type ArtifactJsonValue, type ArtifactToolArgs } from "@memberjunction/ai-core-plus";
+import { GovernedArtifactService, MergeTouchedArtifactSummary } from './GovernedArtifactService';
+import { CollectDelegatedRunArtifactsSafely, ExtractDirectActionArtifacts } from './realtime/realtime-artifact-helpers';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON, ServerOperationScopeManager } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPrefixFingerprint } from '@memberjunction/ai-prompts';
@@ -2615,7 +2617,8 @@ export class BaseAgent {
             const preloadedResult = await AgentDataPreloader.Instance.PreloadAgentData(
                 params.agent.ID,
                 params.contextUser,
-                this._agentRun?.ID
+                this._agentRun?.ID,
+                params.provider || this._activeProvider
             );
 
             const totalSources =
@@ -2676,40 +2679,37 @@ export class BaseAgent {
                 return; // No step needed when there are no data sources at all
             }
 
-            // Create a step entity to track data preloading in the agent run
-            const stepEntity = await this.createStepEntity({
-                stepType: 'Validation',
-                stepName: 'Data Source Preloading',
-                contextUser: params.contextUser
-            });
-
-            // Surface any data source failures in the agent run step and agent run record
-            if (preloadedResult.failedSources.length > 0) {
+            const hasFailures = preloadedResult.failedSources.length > 0;
+            let warningMessage: string | undefined;
+            if (hasFailures) {
                 const failureDetails = preloadedResult.failedSources
                     .map(f => `${f.name}${f.entityName ? ` (Entity: ${f.entityName})` : ''}: ${f.errorMessage}`)
                     .join('; ');
 
-                const warningMessage = `${preloadedResult.failedSources.length} data source(s) failed to load: ${failureDetails}`;
+                warningMessage = `${preloadedResult.failedSources.length} data source(s) failed to load: ${failureDetails}`;
+            }
 
-                // Finalize step as completed but with error details captured
-                await this.finalizeStepEntity(stepEntity, true, warningMessage, {
-                    loadedSources: preloadedResult.loadedSources,
-                    failedSources: preloadedResult.failedSources
-                });
-
-                // Append warning to the agent run's ErrorMessage for top-level visibility
-                if (this._agentRun) {
-                    const existing = this._agentRun.ErrorMessage || '';
-                    this._agentRun.ErrorMessage = existing
-                        ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
-                        : `[Data Preloading Warning] ${warningMessage}`;
-                    await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            // Record data preloading in a single INSERT now that its outcome is already known
+            await this.createStepEntity({
+                stepType: 'Validation',
+                stepName: 'Data Source Preloading',
+                contextUser: params.contextUser,
+                completed: {
+                    success: true,
+                    errorMessage: warningMessage,
+                    outputData: hasFailures
+                        ? { loadedSources: preloadedResult.loadedSources, failedSources: preloadedResult.failedSources }
+                        : { loadedSources: preloadedResult.loadedSources }
                 }
-            } else {
-                // All sources loaded successfully
-                await this.finalizeStepEntity(stepEntity, true, undefined, {
-                    loadedSources: preloadedResult.loadedSources
-                });
+            });
+
+            // Append warning to the agent run's ErrorMessage for top-level visibility
+            if (hasFailures && this._agentRun && warningMessage) {
+                const existing = this._agentRun.ErrorMessage || '';
+                this._agentRun.ErrorMessage = existing
+                    ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
+                    : `[Data Preloading Warning] ${warningMessage}`;
+                await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -2820,7 +2820,11 @@ export class BaseAgent {
         // `RunActionParams.AbortSignal` (see ActionEngine.RunAction) and are
         // unaffected by this wrapper — their timeout budget is independent.
         // =====================================================================================
-        const agentTimeoutMS = params.maxExecutionTimeMs ?? this.DefaultAgentTimeoutMS;
+        const configuredMaxTimeMs =
+            params.agent?.MaxTimePerRun != null && params.agent.MaxTimePerRun > 0
+                ? params.agent.MaxTimePerRun * 1000
+                : undefined;
+        const agentTimeoutMS = params.maxExecutionTimeMs ?? configuredMaxTimeMs ?? this.DefaultAgentTimeoutMS;
         const upstreamToken = params.cancellationToken;
         const timeoutController = new AbortController();
         const relayUpstreamAbort = () => {
@@ -2942,16 +2946,17 @@ export class BaseAgent {
             // would otherwise serialize artifact bodies into the LLM payload. Only
             // the manifest (injected via _ARTIFACT_MANIFEST below) reaches the LLM.
             const inputArtifacts: InputArtifact[] | undefined = wrappedParams.inputArtifacts;
+            this._artifactToolManager.Initialize(inputArtifacts ?? [], {
+                contextUser: params.contextUser,
+                provider: this.ProviderToUse,
+                getAgentRun: () => this._agentRun,
+                agentName: params.agent?.Name ?? undefined,
+                workspaceEnabled: true,
+            });
             if (inputArtifacts?.length) {
-                this._artifactToolManager.Initialize(inputArtifacts, {
-                    contextUser: params.contextUser,
-                    provider: this.ProviderToUse,
-                    getAgentRun: () => this._agentRun,
-                    agentName: params.agent?.Name ?? undefined,
-                });
                 this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
             } else {
-                this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);
+                this.logStatus(`[ArtifactTools] Workspace enabled with 0 initial input artifacts`, true, params);
             }
 
             // Initialize starting payload — must complete before AgentRun creation since the
@@ -3011,7 +3016,7 @@ export class BaseAgent {
                 if (this._agentRun) {
                     this._agentRun.Status = 'Failed';
                     this._agentRun.ErrorMessage = bindingError;
-                    await this._agentRun.Save();
+                    this.releaseFinishedRun(await this._agentRun.Save());
                 }
                 throw new Error(bindingError);
             }
@@ -3288,6 +3293,11 @@ export class BaseAgent {
         // requests unasked. The terminate path has already logged and cleared its own.
         this.skipHeldDecisions(params, this.runEndForHeldDecisions());
         this.releasePerRunDataCache();
+        try {
+            await this._artifactToolManager.NotifyRunCompleted();
+        } catch (presenceErr) {
+            this.logError(presenceErr, { category: 'ArtifactPresenceExit' });
+        }
         await this.finalizeRun(this.deriveRunOutcome());
         // The run is over: a later direct ExecuteSingleAction resolves the scope and the audience from its own params.
         this.clearRunBoundState();
@@ -4284,7 +4294,8 @@ export class BaseAgent {
 
         try {
             const requestText = this.parseDelegateRequestText(request.Arguments);
-            const runner = new AgentRunner(params.provider || this._activeProvider);
+            const effectiveProvider = params.provider || this._activeProvider;
+            const runner = new AgentRunner(effectiveProvider);
             const result = await runner.RunAgent({
                 agent: targetAgent,
                 conversationMessages: [{ role: 'user', content: requestText }],
@@ -4310,12 +4321,23 @@ export class BaseAgent {
                 onProgress: this.combineProgressCallbacks(request.OnProgress, params.onProgress)
             });
 
+            const artifacts = await CollectDelegatedRunArtifactsSafely({
+                Result: result,
+                ContextUser: params.contextUser,
+                Provider: effectiveProvider,
+                ProcessPayloadArtifacts: (r) =>
+                    runner.ProcessAgentArtifacts(r, undefined, undefined, params.contextUser, effectiveProvider),
+                logLabel: 'BaseAgent.delegateRealtimeToTarget',
+            });
+
             return {
                 CallID: request.CallID,
                 Success: result.success,
                 Output: result.success
                     ? (result.agentRun?.Message || 'The target agent completed the request.')
-                    : (result.agentRun?.ErrorMessage || 'The target agent failed to complete the request.')
+                    : (result.agentRun?.ErrorMessage || 'The target agent failed to complete the request.'),
+                ...(result.agentRun?.ID ? { RunID: result.agentRun.ID } : {}),
+                ...(artifacts ? { Artifacts: artifacts } : {}),
             };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -4375,8 +4397,8 @@ export class BaseAgent {
      */
     private parseDelegateRequestText(argumentsJson: string): string {
         try {
-            const parsed = JSON.parse(argumentsJson) as { request?: unknown };
-            if (typeof parsed.request === 'string') {
+            const parsed = JSON.parse(argumentsJson) as ArtifactToolArgs;
+            if (parsed && typeof parsed === 'object' && typeof parsed.request === 'string') {
                 return parsed.request;
             }
         } catch {
@@ -4410,10 +4432,12 @@ export class BaseAgent {
         try {
             const agentAction: AgentAction = { name: action.Name, params: this.parseRealtimeToolParams(call.Arguments) };
             const result = await this.ExecuteSingleAction(params, agentAction, action, params.contextUser);
+            const actionArtifacts = ExtractDirectActionArtifacts(action.Name, result.Success, result.Params);
             return {
                 CallID: call.CallID,
                 Success: result.Success,
-                Output: result.Message || (result.Success ? 'Tool completed.' : 'Tool failed.')
+                Output: result.Message || (result.Success ? 'Tool completed.' : 'Tool failed.'),
+                ...(actionArtifacts ? { Artifacts: actionArtifacts } : {}),
             };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -4427,11 +4451,11 @@ export class BaseAgent {
      * @param argumentsJson The raw arguments string.
      * @returns A record of parameter name → value (empty when not parseable).
      */
-    private parseRealtimeToolParams(argumentsJson: string): Record<string, unknown> {
+    private parseRealtimeToolParams(argumentsJson: string): ArtifactToolArgs {
         try {
-            const parsed = JSON.parse(argumentsJson);
-            if (parsed && typeof parsed === 'object') {
-                return parsed as Record<string, unknown>;
+            const parsed = JSON.parse(argumentsJson) as ArtifactJsonValue;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return parsed;
             }
         } catch {
             /* ignore — return empty params */
@@ -6294,7 +6318,7 @@ export class BaseAgent {
             // Each gate matches the one that renders the tool's docs, so a tool is never taught but undeclared.
             Scratchpad: p?.includeScratchpadDocs !== false,
             MemoryWrites: p?.includeMemoryWritesDocs !== false && this.memoryWriteSkip(params) === null,
-            ArtifactTools: p?.includeArtifactToolsDocs !== false && this._artifactToolManager.HasArtifacts(),
+            ArtifactTools: p?.includeArtifactToolsDocs !== false && this._artifactToolManager.IsWorkspaceEnabled(),
             ConversationTools: p?.includeConversationToolsDocs !== false && this._conversationToolManager.IsAvailable,
             Decisions: this.DecisionsEnabled(p) && p?.includeDecisionsDocs !== false
         };
@@ -6334,7 +6358,7 @@ export class BaseAgent {
             : { Content: stored.result.errorMessage ?? `Artifact tool '${call.tool}' failed.`, IsError: true };
     }
 
-    private async runConversationToolFromTool(tool: string, input: Record<string, unknown>): Promise<AgentToolResult> {
+    private async runConversationToolFromTool(tool: string, input: ArtifactToolArgs): Promise<AgentToolResult> {
         const name = ConversationToolNames.find((n) => n === tool);
         if (!name) {
             return { Content: `'${tool}' is not a conversation tool. Use one of: ${ConversationToolNames.join(', ')}.`, IsError: true };
@@ -6746,7 +6770,7 @@ export class BaseAgent {
             // via pruneAndCompactExpiredMessages — same lifecycle as action results.
             const artifactToolsEnabled = agentTypePromptParams?.includeArtifactToolsDocs !== false;
             promptParams.data['_ARTIFACTS_ENABLED'] = this.isArtifactSupportEnabled(params.agent);
-            if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
+            if (artifactToolsEnabled && this._artifactToolManager.IsWorkspaceEnabled()) {
                 promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
                 if (this.GetNativeControlConfig(params).NativeOnly) {
                     // The native-only prompt (picked at render time) names the artifact_tool tool instead of artifactToolCalls.
@@ -6754,7 +6778,7 @@ export class BaseAgent {
                 }
                 promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
                 promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
-                this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
+                this.logStatus(`[ArtifactTools] Injected workspace/manifest into prompt: ${this._artifactToolManager.GetSummary() || 'workspace tools ready'}`, true, params);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`, true, params);
             }
@@ -6962,7 +6986,7 @@ export class BaseAgent {
             this._lastVolatileStateMessage = rebuilt;
             // The fingerprints were taken before the swap; without this, an append-only history
             // reads the swapped message as changed next turn and drops the reasoning after it.
-            if (promptParams.conversationMessages) {
+            if (this._lastSentFingerprints !== undefined && promptParams.conversationMessages) {
                 this._lastSentFingerprints = promptParams.conversationMessages.map(BaseAgent.messageFingerprint);
             }
         } catch (error) {
@@ -6983,6 +7007,10 @@ export class BaseAgent {
      * are not a change.
      */
     private dropReasoningBehindChangedHistory(params: ExecuteAgentParams, outgoing: ChatMessage[], promptParams: AIPromptParams): ChatMessage[] {
+        if (!this.shouldTrackSentFingerprints(outgoing)) {
+            this._lastSentFingerprints = undefined;
+            return outgoing;
+        }
         const fingerprints = outgoing.map(BaseAgent.messageFingerprint);
         const previous = this._lastSentFingerprints;
         this._lastSentFingerprints = fingerprints;
@@ -7025,6 +7053,21 @@ export class BaseAgent {
     }
 
     /**
+     * Returns `true` when outgoing message fingerprinting is needed to detect prefix changes
+     * for replayed reasoning blocks. Skips hashing on envelope runs (`_nativeToolBindings === undefined`)
+     * and on subsequent turns once a non-prefix-bound model is selected and no message carries reasoning.
+     */
+    private shouldTrackSentFingerprints(outgoing: ChatMessage[]): boolean {
+        if (this._nativeToolBindings === undefined) {
+            return false;
+        }
+        if (this._lastModelSelectionInfo === undefined || this.replaysPrefixBoundReasoning()) {
+            return true;
+        }
+        return outgoing.some((m) => Boolean((m as AgentChatMessage).reasoning?.length));
+    }
+
+    /**
      * Keeps the system-prompt-and-tools fingerprint of the request just sent, for the next one. When
      * it changed, the runner sent this request without replayed reasoning; the history drops it too,
      * so no later request replays a block made under the old prompt or tools.
@@ -7052,9 +7095,31 @@ export class BaseAgent {
         });
     }
 
+    private static readonly _messageFingerprintCache = new WeakMap<
+        ChatMessage,
+        {
+            role: ChatMessage['role'];
+            content: ChatMessage['content'];
+            toolCalls: AgentChatMessage['toolCalls'];
+            fingerprint: string;
+        }
+    >();
+
     /** What makes a message the same message to a provider — reasoning aside, which only this check removes. */
     private static messageFingerprint(m: ChatMessage): string {
-        return JSON.stringify([m.role, m.content, (m as AgentChatMessage).toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
+        const toolCalls = (m as AgentChatMessage).toolCalls;
+        const cached = BaseAgent._messageFingerprintCache.get(m);
+        if (cached && cached.role === m.role && cached.content === m.content && cached.toolCalls === toolCalls) {
+            return cached.fingerprint;
+        }
+        const fingerprint = JSON.stringify([m.role, m.content, toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
+        BaseAgent._messageFingerprintCache.set(m, {
+            role: m.role,
+            content: m.content,
+            toolCalls,
+            fingerprint,
+        });
+        return fingerprint;
     }
 
     /**
@@ -11876,7 +11941,7 @@ The context is now within limits. Please retry your request with the recovered c
                     const stored = await this._artifactToolManager.ExecuteSingleToolCall({
                         artifactId: String(p.artifactId ?? ''),
                         tool,
-                        input: p,
+                        input: p as ArtifactToolArgs,
                     });
                     return stored.result;
                 }),
@@ -13853,6 +13918,12 @@ The context is now within limits. Please retry your request with the recovered c
     private stampActionContext(params: ExecuteAgentParams): Record<string, unknown> {
         const actionContext = (typeof params.context === 'object' && params.context ? params.context : {}) as Record<string, unknown>;
         actionContext.AgentID = params.agent.ID;
+        if (this._agentRun?.ID) {
+            actionContext.AgentRunID = this._agentRun.ID;
+        }
+        if (params.agent?.Name) {
+            actionContext.AgentName = params.agent.Name;
+        }
         // The skills active in THIS run, as a fact the action can trust. An action that takes a
         // skill principal (Scoped Search's AISkillID) must not have to believe a parameter the model
         // authored: with this it can default the principal to the run's active skill and refuse a
@@ -14487,7 +14558,7 @@ The context is now within limits. Please retry your request with the recovered c
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
                 CredentialScope: params.CredentialScope, // a sub-agent may not spend keys its parent could not
                 Audience: params.Audience, // a sub-agent's output reaches the same room; it re-hydrates the IDs itself
-                inputArtifacts: params.inputArtifacts, // propagate input artifacts so sub-agents inherit the parent's artifact manifest + tools (e.g. a Codesmith delegate can read a Data Snapshot the parent references)
+                inputArtifacts: this._artifactToolManager.ExportInputArtifacts(params.inputArtifacts), // propagate input + workspace-created artifacts so sub-agents inherit the parent's manifest + tools
                 data: {
                         ...params.data,
                         ...templateParameters,
@@ -14517,6 +14588,9 @@ The context is now within limits. Please retry your request with the recovered c
             // Every sub-agent path (child, related, parallel) comes through here, so the child's taint reaches
             // the parent whichever path ran it.
             this.absorbSubAgentTaint(subAgentRequest.name, result, stepEntity?.StepNumber ?? (stepCount + 1));
+            if (result.touchedArtifacts?.length) {
+                this._artifactToolManager.AbsorbTouchedArtifacts(result.touchedArtifacts);
+            }
 
             // Check if execution was successful
             if (result.success) {
@@ -17018,7 +17092,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // needs one more turn to see the results and incorporate them into its response.
                 // Without this, the tool results are wasted because the run exits before
                 // the LLM ever sees them.
-                if (artifactToolsExecutedThisTurn && this._artifactToolManager.HasArtifacts()) {
+                if (artifactToolsExecutedThisTurn && this._artifactToolManager.IsWorkspaceEnabled()) {
                     this.logStatus(`[ArtifactTools] Chat step included tool calls — forcing one more turn so LLM can use results`, true, params);
                     return { ...updatedNextStep, terminate: false, step: 'Retry' as BaseAgentNextStep<P>['step'] };
                 }
@@ -20655,6 +20729,10 @@ The context is now within limits. Please retry your request with the recovered c
         stepEntity: MJAIAgentRunStepEntityExtended,
         previousDecision: BaseAgentNextStep
     ): Promise<void> {
+        // The step's INSERT is fire-and-forget (createStepEntity), and the request row has a foreign key to it
+        // (FK_AIAgentRequest_OriginatingStep). Without this wait the request's INSERT can reach the database
+        // first and fail; the coordinator logs that and returns null, and the run pauses with no request to answer.
+        await this._stepSaveQueue.Settled(stepEntity);
         const requestId = await this._feedbackCoordinator.CreateFeedbackRequest({
             Params: params,
             StepEntity: stepEntity,
@@ -21805,8 +21883,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
 
         return {
@@ -21864,8 +21942,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
         
         return {
@@ -21941,6 +22019,19 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
         return null;
+    }
+
+    /**
+     * Stops the watchdog guarding this run once its final state is saved. MJAPI's event-loop
+     * stall warning names the runs "in flight" from the watchdog's tracked set, and the periodic
+     * prune only drops finished runs every few minutes, so without this the warning would name
+     * runs that ended long before the stall (MJ #5510). A failed save keeps the run tracked: the
+     * watchdog's heartbeat and sweep still own a run whose final state never reached the database.
+     */
+    private releaseFinishedRun(saved: boolean): void {
+        if (saved && this._agentRun?.ID && this._agentRun.Status !== 'Running') {
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+        }
     }
 
     /**
@@ -22034,7 +22125,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            this.releaseFinishedRun(ok);
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
@@ -22087,6 +22178,17 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Return unified media outputs — all items are persisted by AgentRunner.
         // Sub-agents pass their mediaOutputs to parent for merging and placeholder resolution.
+        const touchedMap = new Map<string, GovernedRunArtifactSummary>();
+        for (const item of this._artifactToolManager.GetTouchedArtifacts()) {
+            const key = item.ArtifactID.trim().toLowerCase();
+            touchedMap.set(key, MergeTouchedArtifactSummary(touchedMap.get(key), item));
+        }
+        for (const item of GovernedArtifactService.Instance.ConsumeTouchedArtifacts(this._agentRun?.ID)) {
+            const key = item.ArtifactID.trim().toLowerCase();
+            touchedMap.set(key, MergeTouchedArtifactSummary(touchedMap.get(key), item));
+        }
+        const touchedArtifacts = touchedMap.size > 0 ? Array.from(touchedMap.values()) : undefined;
+
         return {
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload: resolvedPayload,
@@ -22103,7 +22205,8 @@ The context is now within limits. Please retry your request with the recovered c
             feedbackRequestId: this._feedbackRequestId || undefined,
             taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
             handoff: this._handoffResult || undefined,
-            resolvedStorageAccountId: this._resolvedStorageAccountId || undefined
+            resolvedStorageAccountId: this._resolvedStorageAccountId || undefined,
+            ...(touchedArtifacts ? { touchedArtifacts } : {})
         };
     }
 
@@ -23239,17 +23342,29 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Provides an improved heuristic token count when tokenizer is unavailable.
+     * Zero-allocation scan over character codes to prevent multi-megabyte match arrays on large tool outputs.
      * @param text - The text to estimate tokens for
      * @returns Estimated token count
      * @private
      */
     private heuristicTokenCount(text: string): number {
-        // More sophisticated heuristic
         const charCount = text.length;
 
-        // Count structural tokens (JSON syntax adds overhead)
-        const structuralChars = (text.match(/[\{\}\[\],:]/g) || []).length;
-        const whitespaceChars = (text.match(/\s/g) || []).length;
+        // Count structural tokens ({, }, [, ], ,, :) and whitespace characters without regex match arrays
+        let structuralChars = 0;
+        let whitespaceChars = 0;
+
+        for (let i = 0; i < charCount; i++) {
+            const code = text.charCodeAt(i);
+            // Structural characters: { (123), } (125), [ (91), ] (93), , (44), : (58)
+            if (code === 123 || code === 125 || code === 91 || code === 93 || code === 44 || code === 58) {
+                structuralChars++;
+            } else if (code === 32 || (code >= 9 && code <= 13)) {
+                whitespaceChars++;
+            } else if (code >= 0x00a0 && /\s/.test(text[i])) {
+                whitespaceChars++;
+            }
+        }
 
         // Effective character count (whitespace counts less)
         const effectiveChars = charCount - (whitespaceChars * 0.5);

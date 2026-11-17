@@ -3,7 +3,37 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, RunViewParams, RunViewResult, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
 import { EscapeSQLString, ParseJSONRecursive, ParseJSONOptions, UUIDsEqual } from '@memberjunction/global';
-import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity, ConversationEngine, type ConversationScope } from '@memberjunction/core-entities';
+import {
+  ArtifactMetadataEngine,
+  BuildArtifactPreviewSnapshot,
+  BuildArtifactVersionConfigurationWithPreview,
+  BuildSvgThumbnailDataUrl,
+  ConversationEngine,
+  CreateGuestShareLinkOperation,
+  GetConnectedDriveLinkFromConfig,
+  GetGuestShareLinksFromConfig,
+  MarkGuestShareLinkRevokedInConfig,
+  MergeArtifactVersionPreviewConfig,
+  MJArtifactEntity,
+  MJArtifactTypeEntity,
+  MJArtifactUseEntity,
+  MJArtifactVersionAttributeEntity,
+  MJArtifactVersionEntity,
+  MJCollectionArtifactEntity,
+  MJCollectionEntity,
+  MJConversationDetailArtifactEntity,
+  MJConversationDetailEntity,
+  MJConversationEntity,
+  ParseArtifactVersionConfiguration,
+  ResolveArtifactTypeThumbnailPolicy,
+  RevokeGuestShareLinkOperation,
+  UpsertGuestShareLinkInConfig,
+  type ArtifactPreviewSnapshot,
+  type ArtifactTypeThumbnailPolicy,
+  type ConnectedDriveLinkMetadata,
+  type ConversationScope,
+  type GuestShareLinkRecord,
+} from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subject } from 'rxjs';
@@ -15,6 +45,17 @@ import { ArtifactFileService } from '../services/artifact-file.service';
 import { DocumentCollaborationService } from '../services/document-collaboration.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
+/** Emitted after any plugin save, server collaboration save, or version restore produces a persisted version. */
+export interface ArtifactVersionSavedEvent {
+  ArtifactID: string;
+  VersionID?: string;
+  VersionNumber: number;
+  Configuration?: string | null;
+  PreviewSnapshot?: ArtifactPreviewSnapshot | null;
+  ThumbnailDataUrl?: string | null;
+  UpdatedAt: Date;
+}
+
 /** Fields of the version list query: version metadata without Content. */
 const VERSION_LIST_FIELDS = [
   'ID',
@@ -23,6 +64,7 @@ const VERSION_LIST_FIELDS = [
   'Name',
   'Description',
   'Comments',
+  'Configuration',
   'UserID',
   'User',
   'ContentHash',
@@ -204,6 +246,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   @Input() canShare?: boolean; // Whether user can share this artifact
   @Input() canEdit = false; // Default read-only unless explicitly granted edit permission
   @Input() IsMaximized: boolean = false;
+  @Input() HasConnectedDriveLink = false;
 
   /** @deprecated Use {@link IsMaximized}. */
   @Input() set isMaximized(value: boolean) {
@@ -253,6 +296,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() shareRequested = this.ShareRequested; // Emits artifactId when share is clicked
+  @Output() VersionSaved = new EventEmitter<ArtifactVersionSavedEvent>();
+  @Output() ConnectedDriveSyncRequested = new EventEmitter<{
+    artifactId: string;
+    versionId?: string;
+    direction: 'push' | 'pull';
+  }>();
   @Output() MaximizeToggled = new EventEmitter<void>();
 
   /**
@@ -1482,6 +1531,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           this.applyVersionScope(this.activeScope);
           this.SelectedVersionNumber = newestInDb.VersionNumber || dbMaxVersion;
           this.JsonContent = this.formatJSON(serializedContent);
+          this.emitVersionSavedEvent(
+            newestInDb.ID,
+            newestInDb.VersionNumber || dbMaxVersion,
+            serializedContent,
+            newestInDb.Configuration,
+          );
           this.cdr.detectChanges();
           return;
         }
@@ -1496,6 +1551,28 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       newVer.VersionNumber = nextVersionNum;
       newVer.Name = this.artifactVersion?.Name || this.Artifact.Name;
       newVer.Content = serializedContent;
+      const { TypeEntity, AllTypes, Policy } = this.resolveCurrentThumbnailPolicy();
+      const capturedThumb =
+        Policy.Enabled && Policy.Mode === 'Rendered'
+          ? await (this.PluginViewer?.PluginInstance?.CaptureRenderedThumbnail({
+              maskLiveDataBlocks: Policy.MaskLiveDataBlocks,
+            }) ?? Promise.resolve(null))
+          : null;
+      const mergedConfig = BuildArtifactVersionConfigurationWithPreview(
+        this.artifactVersion?.Configuration,
+        serializedContent,
+        TypeEntity?.DriverClass ?? null,
+        newVer.Name,
+        {
+          Policy,
+          ArtifactType: TypeEntity,
+          AllArtifactTypes: AllTypes,
+          CapturedThumbnailDataUrl: capturedThumb,
+        },
+      );
+      if (mergedConfig !== null) {
+        newVer.Configuration = mergedConfig;
+      }
       const saved = await newVer.Save();
       if (saved) {
         if (newVer.ID) {
@@ -1505,6 +1582,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         this.SelectedVersionNumber = nextVersionNum;
         this.AllVersions = [newVer, ...this.AllVersions];
         this.JsonContent = this.formatJSON(serializedContent);
+        this.emitVersionSavedEvent(
+          newVer.ID,
+          nextVersionNum,
+          serializedContent,
+          newVer.Configuration,
+        );
         this.cdr.detectChanges();
       } else {
         LogError(newVer.LatestResult?.Message || 'Failed to save new artifact version.');
@@ -1517,6 +1600,72 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     } catch (err) {
       LogError(err);
     }
+  }
+
+  private resolveCurrentThumbnailPolicy(): {
+    TypeEntity: MJArtifactTypeEntity | null;
+    AllTypes: ReadonlyArray<MJArtifactTypeEntity>;
+    Policy: ArtifactTypeThumbnailPolicy;
+  } {
+    const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+    const typeEntity =
+      (this.Artifact?.TypeID
+        ? allTypes.find((t) => UUIDsEqual(t.ID, this.Artifact?.TypeID))
+        : undefined) ??
+      (this.Artifact?.Type ? ArtifactMetadataEngine.Instance.FindArtifactType(this.Artifact.Type) : undefined) ??
+      null;
+    const policy = ResolveArtifactTypeThumbnailPolicy(
+      typeEntity ?? this.Artifact?.Type ?? null,
+      allTypes,
+      typeEntity?.DriverClass ?? null,
+    );
+    return { TypeEntity: typeEntity, AllTypes: allTypes, Policy: policy };
+  }
+
+  private emitVersionSavedEvent(
+    versionId: string | undefined,
+    versionNumber: number,
+    serializedContent: string | null | undefined,
+    rawConfig?: string | null,
+  ): void {
+    if (!this.Artifact?.ID) {
+      return;
+    }
+    const { TypeEntity, Policy } = this.resolveCurrentThumbnailPolicy();
+    if (!Policy.Enabled || Policy.Mode !== 'Rendered') {
+      const sanitizedConfig = MergeArtifactVersionPreviewConfig(rawConfig, null, null, true);
+      this.VersionSaved.emit({
+        ArtifactID: this.Artifact.ID,
+        VersionID: versionId,
+        VersionNumber: versionNumber,
+        Configuration: sanitizedConfig,
+        PreviewSnapshot: null,
+        ThumbnailDataUrl: null,
+        UpdatedAt: new Date(),
+      });
+      return;
+    }
+
+    const driverClass = TypeEntity?.DriverClass;
+    const parsedConfig = ParseArtifactVersionConfiguration(rawConfig);
+    const previewSnapshot =
+      parsedConfig?.previewSnapshot ??
+      BuildArtifactPreviewSnapshot(serializedContent, driverClass, this.Artifact.Name);
+    const thumbnailDataUrl =
+      parsedConfig?.thumbnailDataUrl ?? BuildSvgThumbnailDataUrl(previewSnapshot);
+    const mergedConfig =
+      rawConfig && parsedConfig?.previewSnapshot && parsedConfig?.thumbnailDataUrl
+        ? rawConfig
+        : MergeArtifactVersionPreviewConfig(rawConfig, previewSnapshot, thumbnailDataUrl);
+    this.VersionSaved.emit({
+      ArtifactID: this.Artifact.ID,
+      VersionID: versionId,
+      VersionNumber: versionNumber,
+      Configuration: mergedConfig,
+      PreviewSnapshot: previewSnapshot,
+      ThumbnailDataUrl: thumbnailDataUrl,
+      UpdatedAt: new Date(),
+    });
   }
 
   /** @deprecated Use {@link OnPluginLoaded}. */
@@ -2074,8 +2223,22 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       restoredVer.Description = `Restored from v${versionNumber}`;
       restoredVer.Comments = `Restored from v${versionNumber}`;
       restoredVer.Content = sourceVersion.Content;
-      if (sourceVersion.Configuration) {
-        restoredVer.Configuration = sourceVersion.Configuration;
+      const { TypeEntity, AllTypes, Policy } = this.resolveCurrentThumbnailPolicy();
+      const sourceParsedConfig = ParseArtifactVersionConfiguration(sourceVersion.Configuration);
+      const restoredConfig = BuildArtifactVersionConfigurationWithPreview(
+        sourceVersion.Configuration,
+        sourceVersion.Content,
+        TypeEntity?.DriverClass ?? null,
+        restoredVer.Name,
+        {
+          Policy,
+          ArtifactType: TypeEntity,
+          AllArtifactTypes: AllTypes,
+          CapturedThumbnailDataUrl: sourceParsedConfig?.thumbnailDataUrl ?? null,
+        },
+      );
+      if (restoredConfig !== null && restoredConfig !== undefined) {
+        restoredVer.Configuration = restoredConfig;
       }
 
       const saved = await restoredVer.Save();
@@ -2089,6 +2252,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         this.applyVersionScope(this.activeScope);
         this.JsonContent = this.formatJSON(restoredVer.Content || '{}');
         this.IsCompareMode = false;
+        this.emitVersionSavedEvent(
+          restoredVer.ID,
+          nextVersionNum,
+          restoredVer.Content,
+          restoredVer.Configuration,
+        );
         this.notificationService.CreateSimpleNotification(
           `Restored v${versionNumber} as new version v${nextVersionNum}`,
           'success',
@@ -2726,5 +2895,158 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   public GetCurrentStateSnapshot(): DataSnapshot | null {
     return this.PluginViewer?.pluginInstance?.GetCurrentStateSnapshot() ?? null;
+  }
+
+  public ShowGuestShareModal = false;
+  public GuestShareLabel = '';
+  public GuestShareExpiresHours = 168;
+  public GuestShareBusy = false;
+  public GuestShareError = '';
+  public LatestCreatedGuestShareUrl = '';
+
+  public get ActiveConnectedDriveLink(): ConnectedDriveLinkMetadata | null {
+    return GetConnectedDriveLinkFromConfig(this.artifactVersion?.Configuration);
+  }
+
+  public get ShowConnectedDriveSyncControls(): boolean {
+    return Boolean(this.HasConnectedDriveLink || this.ActiveConnectedDriveLink);
+  }
+
+  public get ActiveGuestShareLinks(): GuestShareLinkRecord[] {
+    return GetGuestShareLinksFromConfig(this.artifactVersion?.Configuration).filter(
+      (link) => !link.RevokedAt,
+    );
+  }
+
+  public OnConnectedDriveSync(direction: 'push' | 'pull'): void {
+    if (!this.artifactId) {
+      return;
+    }
+    this.ConnectedDriveSyncRequested.emit({
+      artifactId: this.artifactId,
+      versionId: this.artifactVersion?.ID,
+      direction,
+    });
+  }
+
+  public OpenGuestShareModal(): void {
+    this.ShowGuestShareModal = true;
+    this.GuestShareError = '';
+    this.LatestCreatedGuestShareUrl = '';
+    this.cdr.markForCheck();
+  }
+
+  public CloseGuestShareModal(): void {
+    this.ShowGuestShareModal = false;
+    this.GuestShareError = '';
+    this.cdr.markForCheck();
+  }
+
+  public async CreateGuestShareLink(): Promise<void> {
+    if (!this.artifactId || this.GuestShareBusy) {
+      return;
+    }
+    this.GuestShareBusy = true;
+    this.GuestShareError = '';
+    this.cdr.markForCheck();
+    try {
+      const op = new CreateGuestShareLinkOperation();
+      const res = await op.Execute(
+        {
+          ArtifactID: this.artifactId,
+          VersionID: this.artifactVersion?.ID ?? null,
+          ExpiresInHours: this.GuestShareExpiresHours,
+          Label: this.GuestShareLabel.trim() || null,
+        },
+        { provider: this.ProviderToUse },
+      );
+      if (!res.Success || !res.Output) {
+        this.GuestShareError =
+          res.ErrorMessage ||
+          'Guest share links require all Live data blocks to be Frozen first.';
+        return;
+      }
+      const created = res.Output;
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      this.LatestCreatedGuestShareUrl = `${origin}${created.ShareUrlPath}`;
+      if (this.artifactVersion) {
+        this.artifactVersion.Configuration = UpsertGuestShareLinkInConfig(
+          this.artifactVersion.Configuration,
+          {
+            LinkID: created.LinkID,
+            ArtifactID: created.ArtifactID,
+            VersionID: created.VersionID,
+            VersionNumber: created.VersionNumber,
+            ShareMode: 'Frozen',
+            CreatedByUserID: this.CurrentUser?.ID ?? '',
+            CreatedAt: new Date().toISOString(),
+            ExpiresAt: created.ExpiresAt,
+            Label: created.Label,
+          },
+        );
+      }
+      this.GuestShareLabel = '';
+      this.CopyGuestShareUrl(this.LatestCreatedGuestShareUrl);
+    } catch (err) {
+      this.GuestShareError =
+        err instanceof Error ? err.message : 'Failed to create guest share link.';
+    } finally {
+      this.GuestShareBusy = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public async RevokeGuestShareLink(link: GuestShareLinkRecord): Promise<void> {
+    if (!this.artifactId || !this.artifactVersion?.ID || this.GuestShareBusy) {
+      return;
+    }
+    this.GuestShareBusy = true;
+    this.GuestShareError = '';
+    this.cdr.markForCheck();
+    try {
+      const op = new RevokeGuestShareLinkOperation();
+      const res = await op.Execute(
+        {
+          ArtifactID: this.artifactId,
+          VersionID: this.artifactVersion.ID,
+          LinkID: link.LinkID,
+        },
+        { provider: this.ProviderToUse },
+      );
+      if (!res.Success || !res.Output?.Revoked) {
+        this.GuestShareError = res.ErrorMessage || 'Failed to revoke guest link.';
+        return;
+      }
+      const revoked = MarkGuestShareLinkRevokedInConfig(
+        this.artifactVersion.Configuration,
+        link.LinkID,
+        this.CurrentUser?.ID ?? '',
+      );
+      if (revoked.Found) {
+        this.artifactVersion.Configuration = revoked.UpdatedConfigJson;
+      }
+      this.notificationService.CreateSimpleNotification(
+        'Guest share link revoked.',
+        'success',
+        2500,
+      );
+    } catch (err) {
+      this.GuestShareError =
+        err instanceof Error ? err.message : 'Failed to revoke guest share link.';
+    } finally {
+      this.GuestShareBusy = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public CopyGuestShareUrl(url: string): void {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText && url) {
+      void navigator.clipboard.writeText(url).catch(() => undefined);
+    }
+    this.notificationService.CreateSimpleNotification(
+      'Frozen guest share link copied to clipboard.',
+      'success',
+      2500,
+    );
   }
 }

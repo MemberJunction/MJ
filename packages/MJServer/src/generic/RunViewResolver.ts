@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase, type RunViewResultWithResolvedView } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewParameters, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewParameters, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues, CanonicalFieldsKey } from '@memberjunction/core';
 import { GraphQLJSONObject } from 'graphql-type-json';
 
 import { ReplaceByteArraysWithBase64, UUIDsEqual } from '@memberjunction/global';
@@ -852,6 +852,8 @@ export class RunViewGenericResultRow {
   Data: string;
 }
 
+export const FrozenRowSerializationCache = new WeakMap<object, Map<string, RunViewResultRow>>();
+
 @ObjectType()
 export class RunViewResult {
   @Field(() => [RunViewResultRow])
@@ -1104,7 +1106,7 @@ export class RunViewResolver extends ResolverBase {
         // EntityName is backfilled by RunViewsGeneric when ViewID/ViewName was used
         const entity = input[index].EntityName ? provider.EntityByName(input[index].EntityName) : null;
 
-        const returnData: any[] = this.processRawData(data.Results, entity ? entity.ID : null, entity);
+        const returnData = this.processRawData(data.Results, entity ? entity.ID : null, entity);
 
         results.push({
           Results: returnData,
@@ -1468,7 +1470,8 @@ export class RunViewResolver extends ResolverBase {
             const processedUpdatedRows = this.processRawData(
               filteredUpdatedRows,
               entity.ID,
-              entity
+              entity,
+              inputItem.params.Fields
             );
             return {
               viewIndex: result.viewIndex,
@@ -1487,7 +1490,7 @@ export class RunViewResolver extends ResolverBase {
           if (result.status === 'stale' && result.results && entity) {
             // Apply API encryption filtering before serializing full refresh rows
             const filteredRows = await protectRawRows(entity, result.results as object[]);
-            const processedRows = this.processRawData(filteredRows, entity.ID, entity);
+            const processedRows = this.processRawData(filteredRows, entity.ID, entity, inputItem.params.Fields);
             return {
               viewIndex: result.viewIndex,
               status: result.status,
@@ -1529,24 +1532,61 @@ export class RunViewResolver extends ResolverBase {
     }
   }
 
-  protected processRawData(rawData: any[], entityId: string, entityInfo: EntityInfo): RunViewResultRow[] {
-    const returnResult = [];
+  /**
+   * Serializes raw view rows into GraphQL `RunViewResultRow` entries, memoizing frozen
+   * cached rows in {@link FrozenRowSerializationCache} keyed by `entityId` (or
+   * `${entityId}|${CanonicalFieldsKey(fields)}` when `fields` is specified on pre-projected
+   * frozen rows).
+   */
+  protected processRawData(
+    rawData: Record<string, unknown>[],
+    entityId: string,
+    entityInfo: EntityInfo,
+    fields?: string[] | null
+  ): RunViewResultRow[] {
+    const returnResult: RunViewResultRow[] = [];
+    const pkFields = entityInfo?.PrimaryKeys ?? [];
+    const hasBinaryFields = entityInfo?.Fields ? entityInfo.Fields.some((f) => f.IsBinaryFieldType) : false;
+    const fieldsKey = CanonicalFieldsKey(fields);
+    const cacheKey = fieldsKey.length > 0 ? `${entityId}|${fieldsKey}` : entityId;
+
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
 
+      if (row !== null && typeof row === 'object' && Object.isFrozen(row)) {
+        const cached = FrozenRowSerializationCache.get(row)?.get(cacheKey);
+        if (cached) {
+          returnResult.push(cached);
+          continue;
+        }
+      }
+
       // Build the primary key array from the entity's primary key fields
-      const primaryKey: KeyValuePairOutputType[] = entityInfo.PrimaryKeys.map(pk => ({
+      const primaryKey: KeyValuePairOutputType[] = pkFields.map(pk => ({
         FieldName: pk.Name,
-        Value: row[pk.Name]?.toString() || ''
+        Value: row[pk.Name] !== null && row[pk.Name] !== undefined ? String(row[pk.Name]) : ''
       }));
 
-      returnResult.push({
+      // Binary columns arrive as base64 from the providers; this is the safety net for any
+      // row that still holds a byte array, which JSON.stringify would emit as {type,data}.
+      // Non-binary entities bypass ReplaceByteArraysWithBase64 entirely to avoid per-row clone allocations.
+      const rowForJson = hasBinaryFields ? ReplaceByteArraysWithBase64(row) : row;
+      const resultRow: RunViewResultRow = {
         PrimaryKey: primaryKey,
         EntityID: entityId,
-        // Binary columns arrive as base64 from the providers; this is the safety net for any
-        // row that still holds a byte array, which JSON.stringify would emit as {type,data}.
-        Data: JSON.stringify(ReplaceByteArraysWithBase64(row)),
-      });
+        Data: JSON.stringify(rowForJson),
+      };
+
+      if (row !== null && typeof row === 'object' && Object.isFrozen(row)) {
+        let entityMap = FrozenRowSerializationCache.get(row);
+        if (!entityMap) {
+          entityMap = new Map<string, RunViewResultRow>();
+          FrozenRowSerializationCache.set(row, entityMap);
+        }
+        entityMap.set(cacheKey, resultRow);
+      }
+
+      returnResult.push(resultRow);
     }
     return returnResult;
   }

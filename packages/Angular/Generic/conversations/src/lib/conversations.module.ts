@@ -122,6 +122,8 @@ import { LoadRealtimeAvatarChannel } from './components/realtime/avatar/realtime
 import { RealtimeMediaSurfaceComponent } from './components/realtime/media/realtime-media-surface.component';
 import { LoadRealtimeInteractiveComponentChannel } from './components/realtime/interactive-component/interactive-component-channel';
 import { RealtimeInteractiveComponentSurfaceComponent } from './components/realtime/interactive-component/realtime-interactive-component-surface.component';
+import { LoadRealtimeArtifactWorkspaceChannel } from './components/realtime/artifact-workspace/artifact-workspace-channel';
+import { RealtimeArtifactWorkspaceSurfaceComponent } from './components/realtime/artifact-workspace/realtime-artifact-workspace-surface.component';
 import { RealtimeEvidencePlaybackComponent } from './components/realtime/evidence-playback/realtime-evidence-playback.component';
 
 // Directives
@@ -150,6 +152,8 @@ LoadRealtimeRemoteBrowserChannel();
 LoadRealtimeMediaChannel();
 // Interactive Component channel plugin — ClientPluginClass 'RealtimeInteractiveComponentChannel'.
 LoadRealtimeInteractiveComponentChannel();
+// Artifact Workspace channel plugin — ClientPluginClass 'RealtimeArtifactWorkspaceChannel'.
+LoadRealtimeArtifactWorkspaceChannel();
 LoadClientContextChannel();
 LoadIdentityVerificationChannel();
 // The Camera and Screen Share channel plugins (ClientPluginClass 'RealtimeCameraChannel' / 'RealtimeScreenShareChannel').
@@ -280,6 +284,7 @@ const COMPONENTS = [
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
     RealtimeInteractiveComponentSurfaceComponent,
+    RealtimeArtifactWorkspaceSurfaceComponent,
     RealtimeEvidencePlaybackComponent,
     AgentHandoffCardComponent
   ],

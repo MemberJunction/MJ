@@ -25,6 +25,7 @@ export * from './rerankers/CohereReRanker';
 export * from './rerankers/VoyageReRanker';
 export * from './rerankers/OpenAIReRanker';
 export * from './rerankers/BGEReRanker';
+export { BGERerankerWorkerHost, BGE_RERANKER_IN_PROCESS_ENV } from './rerankers/BGERerankerWorkerHost';
 export * from './rerankers/DecisionReRanker';
 export * from './rerankers/RerankerBudgetGuard';
 

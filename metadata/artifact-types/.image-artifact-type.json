@@ -11,14 +11,21 @@
       "Priority": 0,
       "DefaultDeliveryMode": "Inline",
       "SystemSupplied": true,
-      "Icon": "fa-solid fa-image"
+      "Icon": "fa-solid fa-image",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": true,
+          "Mode": "Rendered",
+          "MaskLiveDataBlocks": true
+        }
+      }
     },
     "primaryKey": {
       "ID": "0C39419D-DE0C-4269-8D68-37FDE9A2075E"
     },
     "sync": {
-      "lastModified": "2026-05-29T19:48:49.737Z",
-      "checksum": "c9df033983300d9a91f2986283fd9a3f199cec02da17629495abf503044b1fe8"
+      "lastModified": "2026-11-13T23:26:26.368Z",
+      "checksum": "5fc72b762348dcf4f07ef1fe668a6e42138b955288ea6f5332db09f965c41dfb"
     }
   }
 ]

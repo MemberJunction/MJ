@@ -209,12 +209,12 @@ describe('GeminiDecision', () => {
   });
 
   describe('the response', () => {
-    it('maps every answer kind, leaves ResolvedModel undefined when Google omits model, and records usage', async () => {
+    it('maps every answer kind, falls back ResolvedModel to the requested model when Google omits model, and records usage', async () => {
       fakeFetch(() => jsonResponse(RESPONSE));
       const result = await new GeminiDecision(API_KEY).Decide(params());
 
       expect(result.success).toBe(true);
-      expect(result.ResolvedModel).toBeUndefined();
+      expect(result.ResolvedModel).toBe('gemini-decision-1');
       expect(result.Usage?.promptTokens).toBe(418);
       expect(result.Usage?.completionTokens).toBe(0);
 
@@ -236,7 +236,15 @@ describe('GeminiDecision', () => {
       expect(severity.Probabilities['Minor localized spill.']).toBeCloseTo(0.75, 6);
     });
 
-    it('records the resolved model when a proxy or later revision names one', async () => {
+    it('falls back ResolvedModel to DEFAULT_MODEL when DecisionParams.Model is empty and Google omits model', async () => {
+      fakeFetch(() => jsonResponse(RESPONSE));
+      const result = await new GeminiDecision(API_KEY).Decide(params({ Model: '' }));
+
+      expect(result.success).toBe(true);
+      expect(result.ResolvedModel).toBe('gemini-decision-1');
+    });
+
+    it('records the wire resolved model when a proxy or later revision names one', async () => {
       fakeFetch(() => jsonResponse({ ...RESPONSE, model: 'gemini-decision-1-2026-11' }));
       const result = await new GeminiDecision(API_KEY).Decide(params());
 
