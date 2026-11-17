@@ -944,6 +944,7 @@ export function TryBuildLazyPostgresProviders(
     );
     pgConfig.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     pgConfig.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    pgConfig.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const pgProvider = new PostgreSQLDataProvider();
     if (!pgProvider.ConfigureFromGlobalSync(pgConfig, primaryPool!)) {
       throw new Error('PostgreSQLDataProvider.ConfigureFromGlobalSync failed after readiness check');

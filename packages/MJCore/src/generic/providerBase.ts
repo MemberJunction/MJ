@@ -1052,10 +1052,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Whether this provider loads the saved-query metadata into its metadata object (see
      * {@link ProviderConfigDataBase.LoadQueryMetadata}). False unless the configuration says true.
+     * A provider that adopted the global provider's metadata reports the global provider's
+     * setting instead, since that is what decided whether the adopted metadata holds queries.
      */
     public get LoadsQueryMetadata(): boolean {
-        return this._ConfigData?.LoadQueryMetadata === true;
+        return this._adoptedLoadsQueryMetadata ?? this._ConfigData?.LoadQueryMetadata === true;
     }
+
+    /**
+     * The global provider's {@link LoadsQueryMetadata}, recorded when this provider adopts its
+     * metadata; undefined while this provider's metadata is its own.
+     */
+    private _adoptedLoadsQueryMetadata: boolean | undefined;
 
     /**
      * The item filters every read of the MJ_Metadata dataset uses — the data, its status, and the
@@ -6279,12 +6287,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return false;
         }
         this._ConfigData = data;
+        this._adoptedLoadsQueryMetadata = undefined;
         this._configLoadedFromServer = false;
         return this.CopyMetadataFromGlobalProvider();
     }
 
     public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
+        this._adoptedLoadsQueryMetadata = undefined;
         // Describes THIS Config only: a flag left by an earlier Refresh() must not make the
         // pre-validation that follows a Config which loaded nothing skip its check.
         this._configLoadedFromServer = false;
@@ -7048,6 +7058,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     this._entityMapByID = globalProvider._entityMapByID;
                 } else {
                     this.UpdateLocalMetadata(adopted);
+                }
+                if (globalProvider instanceof ProviderBase) {
+                    this._adoptedLoadsQueryMetadata = globalProvider.LoadsQueryMetadata;
                 }
                 return true;
             }
